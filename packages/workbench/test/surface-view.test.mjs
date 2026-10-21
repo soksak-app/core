@@ -144,3 +144,26 @@ test("a view responsiveness notice is the state of its surface until the surface
     dom.window.close();
   }
 });
+
+// The start values of a view (docs/spec/native-surfaces.md#view-surfaces): the host injects them as window.sokSurface before the
+// page of the view runs. origin is the directory that the tab that opened the tab recorded, and project is the project that the
+// window shows, or null.
+test("the start values of a view carry its params, origin, project and declarations", async () => {
+  const { viewStartValues } = await import("../surface-modules.js?view-start");
+  const { recordOrigin, reportDirectory } = await import("../tab-reports.js");
+  reportDirectory("tab-with-directory", "/work/one");
+  recordOrigin("tab-of-directory", "tab-with-directory");
+  const surface = { surfaceId: "tab-of-directory", params: { path: "a.md" }, declarations: { commands: [] } };
+  assert.deepEqual(viewStartValues(surface, { root: "/work/one" }), {
+    params: { path: "a.md" },
+    origin: { directory: "/work/one" },
+    project: { root: "/work/one" },
+    declarations: { commands: [] },
+  });
+  assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {} }, null), {
+    params: null,
+    origin: { directory: null },
+    project: null,
+    declarations: {},
+  });
+});

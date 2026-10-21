@@ -18,10 +18,16 @@ function fakes() {
     on: register("sidecar.on"),
     onFailure: register("sidecar.onFailure"),
   };
+  const listen = (kind) => (fn) => {
+    listeners.set(`${kind}:change`, fn);
+    return Promise.resolve(() => { off.push(`${kind}:change`); });
+  };
+  const textSize = listen("textSize");
+  const settings = listen("settings");
   const push = async (event, data) => {
     pushed.push({ event, data });
   };
-  return { listeners, off, pushed, failures, native, sidecar, push };
+  return { listeners, off, pushed, failures, native, sidecar, textSize, settings, push };
 }
 
 test("a native subscription is registered once and pushes each event of its name with its data", async () => {
@@ -59,6 +65,31 @@ test("a push that the host refuses is reported with its text", async () => {
   listeners.get("native:probe.changed")({ surface: "probe-surface" });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(reports, ["view event probe.changed: probe-surface has no ready document"]);
+});
+
+test("a text size subscription is registered once and pushes each change of the scale", async () => {
+  const { listeners, textSize, pushed } = fakes();
+  const subs = createViewSubscriptions({ native: null, sidecar: null, textSize, settings: null, push: async (event, data) => { pushed.push({ event, data }); }, report: () => {} });
+  const first = subs.textSize();
+  const second = subs.textSize();
+  assert.equal(await first, null);
+  assert.equal(await second, null);
+  const deliver = listeners.get("textSize:change");
+  assert.equal(typeof deliver, "function");
+  deliver(1.5);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pushed, [{ event: "textSize", data: 1.5 }]);
+  await subs.close();
+});
+
+test("a settings subscription is registered once and pushes each change of the settings", async () => {
+  const { listeners, settings, pushed } = fakes();
+  const subs = createViewSubscriptions({ native: null, sidecar: null, textSize: null, settings, push: async (event, data) => { pushed.push({ event, data }); }, report: () => {} });
+  assert.equal(await subs.settings(), null);
+  listeners.get("settings:change")({ home: "" });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pushed, [{ event: "settings", data: { home: "" } }]);
+  await subs.close();
 });
 
 test("closing the surface ends every subscription, and an event after it is pushed to nothing", async () => {

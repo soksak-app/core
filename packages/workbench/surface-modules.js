@@ -182,6 +182,20 @@ function tabStates() {
 }
 
 /**
+ * The start values of the view of surface (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
+ * the page receives at start, which the host injects as window.sokSurface before the page of the view runs. project is the
+ * project that the window shows, or null in a window without one.
+ */
+export function viewStartValues(surface, project) {
+  return {
+    params: surface.params ?? null,
+    origin: tabOrigin(surface.surfaceId),
+    project: project === null ? null : { root: project.root },
+    declarations: surface.declarations,
+  };
+}
+
+/**
  * context.tab.state of a surface whose plugin declares surface.unload as {format, maxBytes} (docs/spec/plugins.md#memory-saver).
  * isDisposed tells whether the surface of this context was disposed; a write after it is refused and reported once.
  */
@@ -222,10 +236,11 @@ function tabState(surface, isDisposed) {
 /**
  * Answers the call requests and the cancels of the view of surface with the handlers of its context, and sends each reply to the view
  * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers. page is the runtime of the
- * surface, whose sidecar send ends with its place; isDisposed tells whether the surface was disposed.
+ * surface, whose sidecar send ends with its place.
  */
-function answerViewCalls(surface, scoped, page, isDisposed, exposure) {
-  const tab = surface.unload ? tabState(surface, isDisposed) : null;
+function answerViewCalls(surface, scoped, page, context) {
+  // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
+  const { tab } = context;
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   const pending = new Map();
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
@@ -236,6 +251,8 @@ function answerViewCalls(surface, scoped, page, isDisposed, exposure) {
       on: (id, listener) => page.sidecar().on(id, listener),
       onFailure: (id, listener) => page.sidecar().onFailure(id, listener),
     },
+    textSize: (listener) => context.runtime.textSize.on(listener),
+    settings: (listener) => context.runtime.settings.on(listener),
     push: (event, data) => scoped.native.call("viewEvent", { event, data }),
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
   });
@@ -259,14 +276,20 @@ function answerViewCalls(surface, scoped, page, isDisposed, exposure) {
       sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
       clipboard: scoped.clipboard,
       links: scoped.links,
+      // The log levels of the surface context: the level gate of the page applies at delivery, and a gated record is counted there.
+      log: context.runtime.log,
+      textSize: context.runtime.textSize,
+      settings: context.runtime.settings,
       subscribe: {
         native: (name) => subscriptions.native(name),
         sidecarMessage: (id) => subscriptions.sidecarMessage(id),
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
+        textSize: () => subscriptions.textSize(),
+        settings: () => subscriptions.settings(),
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
-        register: (name) => exposure.command(name, (params) => viewCommands.run(name, params)),
+        register: (name) => context.exposure.command(name, (params) => viewCommands.run(name, params)),
       },
     },
   };
@@ -450,7 +473,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
     if (viewSurface) {
-      const answering = answerViewCalls(surface, scoped, page, () => entry.disposed, context.exposure);
+      const answering = answerViewCalls(surface, scoped, page, context);
       // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
       const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.

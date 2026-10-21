@@ -5,13 +5,23 @@ import test from "node:test";
 import { answerViewCall, viewStopState } from "../view-calls.js";
 
 function fakes() {
-  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [] };
+  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
+    reports: [], log: [], textSize: [], settings: [] };
   const options = {
     plugin: "probe",
     pending: new Map(),
     tab: {
-      read: () => ({ count: 2 }),
-      write: (value) => { ran.writes.push(value); },
+      state: {
+        read: () => ({ count: 2 }),
+        write: (value) => { ran.writes.push(value); },
+      },
+      title: (text) => { ran.reports.push({ title: text }); },
+      footer: (text) => { ran.reports.push({ footer: text }); },
+      directory: (path) => { ran.reports.push({ directory: path }); },
+      notify: (text, policy) => { ran.reports.push({ notify: text, policy }); },
+      modified: (value) => { ran.reports.push({ modified: value }); },
+      error: (text) => { ran.reports.push({ error: text }); },
+      keep: (reason, on) => { ran.reports.push({ keep: reason, on }); },
     },
     runCore: async (name, params) => { ran.core.push({ name, params }); return { core: true }; },
     runOwned: async (name, params, owner) => { ran.owned.push({ name, params, owner }); return { owned: true }; },
@@ -27,9 +37,21 @@ function fakes() {
         native: async (name) => { ran.subscribed.push({ native: name }); return null; },
         sidecarMessage: async (id) => { ran.subscribed.push({ sidecarMessage: id }); return null; },
         sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
+        textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
+        settings: async () => { ran.subscribed.push({ settings: true }); return null; },
       },
       command: {
         register: async (name) => { ran.declared.push(name); return null; },
+      },
+      log: Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level,
+        (event, fields) => { ran.log.push({ level, event, fields }); }])),
+      textSize: {
+        read: () => { ran.textSize.push("read"); return 1.5; },
+        on: (listener) => { ran.textSize.push("on"); return () => {}; },
+      },
+      settings: {
+        read: () => { ran.settings.push("read"); return { home: "https://example.test" }; },
+        on: (listener) => { ran.settings.push("on"); return () => {}; },
       },
     },
   };
@@ -44,6 +66,7 @@ test("a forwarded tab.state.read returns the tab state of its surface", async ()
 test("tab.state.read is refused when the surface declares no tab state", async () => {
   const { options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...options, tab: null }), /tab state is not declared/);
+  await assert.rejects(answerViewCall({ id: 2, command: "tab.state.read", params: null }, { ...options, tab: { ...options.tab, state: undefined } }), /tab state is not declared/);
 });
 
 test("a command of another plugin is refused and runs nothing", async () => {
@@ -76,6 +99,7 @@ test("tab.state.write stores the params as the tab state of its surface", async 
 test("tab.state.write is refused when the surface declares no tab state", async () => {
   const { ran, options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "tab.state.write", params: {} }, { ...options, tab: null }), /tab state is not declared/);
+  await assert.rejects(answerViewCall({ id: 2, command: "tab.state.write", params: {} }, { ...options, tab: { ...options.tab, state: undefined } }), /tab state is not declared/);
   assert.deepEqual(ran.writes, []);
 });
 
@@ -117,6 +141,64 @@ test("runtime.links.open opens the link of its params", async () => {
   const { ran, options } = fakes();
   assert.equal(await answerViewCall({ id: 1, command: "runtime.links.open", params: "https://example.test" }, options), null);
   assert.deepEqual(ran.links, ["https://example.test"]);
+});
+
+test("the tab reports of a view reach the handlers of its surface and reply null", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "tab.title", params: "문서" }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "tab.footer", params: "1 of 3" }, options), null);
+  assert.equal(await answerViewCall({ id: 3, command: "tab.directory", params: "/tmp" }, options), null);
+  assert.equal(await answerViewCall({ id: 4, command: "tab.modified", params: true }, options), null);
+  assert.equal(await answerViewCall({ id: 5, command: "tab.error", params: "저장하지 못했습니다" }, options), null);
+  assert.deepEqual(ran.reports, [
+    { title: "문서" }, { footer: "1 of 3" }, { directory: "/tmp" }, { modified: true }, { error: "저장하지 못했습니다" },
+  ]);
+});
+
+test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the params", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "tab.notify", params: { text: "끝났습니다", policy: "system" } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "tab.keep", params: { reason: "busy", on: true } }, options), null);
+  assert.deepEqual(ran.reports, [{ notify: "끝났습니다", policy: "system" }, { keep: "busy", on: true }]);
+});
+
+test("tab.notify and tab.keep refuse params that are not the recorded objects and run nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "tab.notify", params: "끝났습니다" }, options), /requires an object/);
+  await assert.rejects(answerViewCall({ id: 2, command: "tab.keep", params: null }, options), /requires an object/);
+  assert.deepEqual(ran.reports, []);
+});
+
+test("runtime.log sends the record of the level through the writer of the page and replies null", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 } } }, options), null);
+  assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 } }]);
+});
+
+test("runtime.log refuses a level that the writer does not serve and writes nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(
+    answerViewCall({ id: 1, command: "runtime.log", params: { level: "loud", event: "saved", fields: {} } }, options),
+    /log level must be one of error, warn, info, debug, trace/,
+  );
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.log", params: "info" }, options), /requires an object/);
+  assert.deepEqual(ran.log, []);
+});
+
+test("runtime.textSize.read returns the scale of the surface and runtime.textSize.on subscribes once", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.textSize.read", params: null }, options), 1.5);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.textSize.on", params: null }, options), null);
+  assert.deepEqual(ran.textSize, ["read"]);
+  assert.deepEqual(ran.subscribed, [{ textSize: true }]);
+});
+
+test("runtime.settings.read returns the settings of the plugin and runtime.settings.on subscribes once", async () => {
+  const { ran, options } = fakes();
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.settings.read", params: null }, options), { home: "https://example.test" });
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.settings.on", params: null }, options), null);
+  assert.deepEqual(ran.settings, ["read"]);
+  assert.deepEqual(ran.subscribed, [{ settings: true }]);
 });
 
 test("a runtime or tab entry that the route does not serve is refused as not served", async () => {
@@ -212,11 +294,11 @@ test("a restarted view reads the tab state of its surface as it was saved before
     write: (value) => { store.set("probe-surface", value); },
   };
   const { options: before } = fakes();
-  await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, { ...before, tab: surfaceTab });
+  await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, { ...before, tab: { ...before.tab, state: surfaceTab } });
   assert.deepEqual(store.get("probe-surface"), { page: 3 });
   const { options: restarted } = fakes();
   assert.deepEqual(
-    await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: surfaceTab }),
+    await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: { ...restarted.tab, state: surfaceTab } }),
     { page: 3 },
   );
 });

@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value, json};
@@ -650,7 +650,9 @@ fn drag(host: &Host, window: &Window, mut params: Map<String, Value>) -> Result<
                 "frames".into(),
                 Value::String(frames.to_string_lossy().into_owned()),
             );
-            let ticks = sent.lock().map_err(internal)?.clone();
+            // default: a lock that a panicking thread poisoned still holds the pointer ticks of the drag, which are
+            // only read; the panic hook records the panic.
+            let ticks = sent.lock().unwrap_or_else(PoisonError::into_inner).clone();
             merged.insert("ticks".into(), serde_json::json!(ticks));
             merged.insert(
                 "layouts".into(),
@@ -850,9 +852,16 @@ fn delivered_notifications(window: &Window) -> Result<Value, Failure> {
 fn modal_held(window: &str) -> Result<Value, Failure> {
     let hold = modal_hold_of(window)
         .ok_or_else(|| internal("modal content answers are not held in this window"))?;
-    let mut state = hold.state.lock().map_err(internal)?;
+    // default: a lock that a panicking thread poisoned still holds the held answer of the modal, and the wait loses no
+    // notification it was not waiting for; the panic hook records the panic.
+    let mut state = hold.state.lock().unwrap_or_else(PoisonError::into_inner);
     while state.1 == 0 && !state.0 {
-        state = hold.changed.wait(state).map_err(internal)?;
+        state = hold
+            .changed
+            .wait(state)
+            // default: the same recovery holds for the wait of the condition, which ends with the lock of the same
+            // held answer; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
     }
     Ok(Value::Null)
 }

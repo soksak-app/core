@@ -445,7 +445,9 @@ impl Relay {
         let (tx, rx) = mpsc::channel();
         self.pending
             .lock()
-            .map_err(|e| Failure::new(-32603, e.to_string()))?
+            // default: a lock that a panicking thread poisoned still holds the request, which this call registers; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .insert(id, (target.to_string(), tx));
         let sent = std::time::Instant::now();
         if let Err(error) = send(id) {
@@ -465,7 +467,9 @@ impl Relay {
                 let taken = self
                     .pending
                     .lock()
-                    .map_err(|e| Failure::new(-32603, e.to_string()))?
+                    // default: a lock that a panicking thread poisoned still holds the request, which the time limit
+                    // removes; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
                     .remove(&id)
                     .is_none();
                 if taken {
@@ -477,7 +481,9 @@ impl Relay {
                 let mut expired = self
                     .expired
                     .lock()
-                    .map_err(|e| Failure::new(-32603, e.to_string()))?;
+                    // default: a lock that a panicking thread poisoned still holds the expired requests, which the time
+                    // limit records; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
                 if expired.len() == EXPIRED_LIMIT {
                     // The oldest entry is forgotten: a late reply to it has no matching request. The loss is counted.
                     expired.pop_front();
@@ -520,7 +526,9 @@ impl Relay {
             serde_json::from_str::<Answer>(payload.get()).map_err(|error| error.to_string())?;
         let id = id.ok_or("exposure reply has no id")?;
         let waiting = {
-            let mut pending = self.pending.lock().map_err(|e| e.to_string())?;
+            // default: a lock that a panicking thread poisoned still holds the request, which the reply removes; the
+            // panic hook records the panic.
+            let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
             if pending.get(&id).is_some_and(|(target, _)| target == from) {
                 pending.remove(&id)
             } else {
@@ -550,7 +558,9 @@ impl Relay {
     /// The error of a reply id that no request waits for. For a request that timed out, it states the delay after
     /// sending and the time limit.
     fn unmatched(&self, id: u64, from: &str) -> Result<String, String> {
-        let mut expired = self.expired.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the expired requests, which the reply reads; the
+        // panic hook records the panic.
+        let mut expired = self.expired.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(index) = expired
             .iter()
             .position(|held| held.id == id && held.target == from)
@@ -836,7 +846,9 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
     let call = window_data(&window)?
         .surface_plugins
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface plugins, which are only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(&request.surface)
         .map(|plugin| RelayCall {
             plugin: plugin.clone(),
@@ -901,7 +913,12 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
     );
     {
         let data = window_data(&window)?;
-        let mut registrations = data.registrations.lock().map_err(|e| e.to_string())?;
+        let mut registrations = data
+            .registrations
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the registrations, which this call amends; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
         if !registrations.contains(&entry) {
             registrations.push(entry);
         }
@@ -1295,10 +1312,14 @@ fn trace_window_notify(window: &str, decision: &WindowNotify) {
 /// Called when the last connection stops watching host.window of a window: the record of the value sent last for the
 /// window is removed.
 pub(crate) fn window_unwatched(app: &AppHandle, window: &str) {
-    match app.state::<Exposure>().reported.lock() {
-        Ok(mut reported) => forget_window_notify(&mut reported, window),
-        Err(error) => log_error("host.window unwatch", error),
-    }
+    let exposure = app.state::<Exposure>();
+    let mut reported = exposure
+        .reported
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the record of the value sent last for the window,
+        // which this call removes; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    forget_window_notify(&mut reported, window);
 }
 
 #[cfg(test)]
@@ -1462,7 +1483,9 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
         let named: HashMap<_, _> = context
             .surface_hosts
             .lock()
-            .map_err(|e| e.to_string())?
+            // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only
+            // read; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .iter()
             .map(|(id, handle)| (*handle, id.clone()))
             .collect();
@@ -1508,7 +1531,13 @@ fn window_status(window: &Window) -> Result<Value, Failure> {
     // The lock of the modal webviews is released before waiting for main-thread work. The modal placement on the main
     // thread waits for the same lock, so waiting for with_view while holding the lock would make the two threads wait
     // for each other.
-    let modal_webview = overlay.view.lock().map_err(internal)?.clone();
+    let modal_webview = overlay
+        .view
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the modal webview, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
     // A closing modal webview discards the task without running it. That modal has no view to draw, so it is reported
     // without a frame.
     let modal_view = modal_webview
@@ -1657,7 +1686,9 @@ fn reload(host: &Host, window: &Window) -> Result<Value, Failure> {
         .map_err(internal)?
         .readied
         .lock()
-        .map_err(internal)?
+        // default: a lock that a panicking thread poisoned still holds the readiness senders, which this call fills;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .push(tx);
     if ready {
         // A ready page reloads itself after all the calls it sent have received their answers. If the host reloaded it,
@@ -1839,7 +1870,14 @@ fn hit(window: &Window, x: f64, y: f64) -> Result<Value, Failure> {
         (None, None) => Value::Null,
         _ => return Err(internal("window hit view class and frame are inconsistent")),
     };
-    let modal = context.overlay.view.lock().map_err(internal)?.clone();
+    let modal = context
+        .overlay
+        .view
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the modal webview, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
     if let (Some(view), Some((id, _, _))) = (modal, context.overlay.open_state()) {
         let handle = with_view(&view, move |view| platform.view_id(view)).map_err(internal)?;
         if found.chain.contains(&handle) {

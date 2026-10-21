@@ -44,6 +44,50 @@ type Surface struct {
 	Plugin      string             `json:"plugin"`
 	Composition SurfaceComposition `json:"composition"`
 	Rect
+	// Start holds the start values of the view of a view surface, which the host injects as window.sokSurface before the page
+	// runs (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
+	Start *ViewStart `json:"start,omitempty"`
+}
+
+// SurfaceOrigin is the working directory that the tab that opened the surface recorded at that moment
+// (docs/spec/plugins.md#tab-reports).
+type SurfaceOrigin struct {
+	Directory *string `json:"directory"`
+}
+
+// SurfaceProject is the root of the project that the window shows, or the window shows no project
+// (docs/spec/plugins.md#tab-reports).
+type SurfaceProject struct {
+	Root string `json:"root"`
+}
+
+// ViewStart is the start values of a view (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
+// the page receives at start, which the host injects as window.sokSurface before the page of the view runs.
+type ViewStart struct {
+	Params       json.RawMessage `json:"params,omitempty"`
+	Origin       *SurfaceOrigin  `json:"origin,omitempty"`
+	Project      *SurfaceProject `json:"project,omitempty"`
+	Declarations json.RawMessage `json:"declarations,omitempty"`
+}
+
+// validateViewStart checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
+func validateViewStart(surface string, start *ViewStart) error {
+	if start.Params != nil && !json.Valid(start.Params) {
+		return fmt.Errorf("surface %q: view start params are not JSON", surface)
+	}
+	if start.Origin != nil && start.Origin.Directory != nil && *start.Origin.Directory == "" {
+		return fmt.Errorf("surface %q: view start origin directory is empty", surface)
+	}
+	if start.Project != nil && start.Project.Root == "" {
+		return fmt.Errorf("surface %q: view start project root is empty", surface)
+	}
+	if start.Declarations != nil {
+		var declarations map[string]json.RawMessage
+		if err := json.Unmarshal(start.Declarations, &declarations); err != nil {
+			return fmt.Errorf("surface %q: view start declarations are not an object", surface)
+		}
+	}
+	return nil
 }
 
 type SurfaceRegion struct {
@@ -534,6 +578,14 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if declared, exists := held[surface.ID]; exists && (!reflect.DeepEqual(declared, surface.Composition) || plugins[surface.ID] != surface.Plugin) {
 			return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
 		}
+		if surface.Start != nil {
+			if surface.Composition.Kind != "view" {
+				return nil, fmt.Errorf("surface %q: only a view surface carries start values", surface.ID)
+			}
+			if err := validateViewStart(surface.ID, surface.Start); err != nil {
+				return nil, err
+			}
+		}
 	}
 	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
 	for _, overlay := range req.Overlays {
@@ -968,7 +1020,11 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.images.SetSurfaceVisible(item.id, item.visible)
 		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
 		if item.decl.Composition.Kind == "view" {
-			if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible); err != nil {
+			start := ViewStart{}
+			if item.decl.Start != nil {
+				start = *item.decl.Start
+			}
+			if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
 				return nil, nil, err
 			}
 		}

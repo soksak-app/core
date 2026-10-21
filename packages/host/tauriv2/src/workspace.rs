@@ -6,7 +6,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -339,7 +339,9 @@ impl Workspace {
     /// missing project returns false, move out of range returns null, and the others return true. When a file cannot be
     /// read, it returns an error without changing the file.
     pub fn apply(&self, req: Request) -> Result<Value, String> {
-        let _writing = self.writing.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds nothing, and each file write of the workspace
+        // is atomic beside it; the panic hook records the panic.
+        let _writing = self.writing.lock().unwrap_or_else(PoisonError::into_inner);
         match req.kind.as_str() {
             "tabState" => return read_tab_state(&self.directory.join("tab-state.json")),
             "tabStatePut" => {
@@ -550,3 +552,7 @@ pub(crate) fn handle(app: &AppHandle, mut request: Request) -> Result<Value, Str
     }
     Ok(result)
 }
+
+#[cfg(test)]
+#[path = "workspace_lock_test.rs"]
+mod lock_test;

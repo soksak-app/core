@@ -9,6 +9,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use crate::platform::Handle;
+use crate::surfaces::ViewStart;
 
 /// The restart limit of a view surface: the fourth failure within VIEW_RESTART_WINDOW stops its restarts (docs/plans/plugin-processes.md,
 /// rule 5, pass value (vi)).
@@ -18,12 +19,14 @@ pub const VIEW_RESTART_LIMIT: usize = 4;
 pub const VIEW_RESTART_WINDOW: Duration = Duration::from_secs(300);
 
 /// The record of a view surface that the host needs to create its view again.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct ViewSpec {
     pub surface_handle: Handle,
     pub plugin: String,
     pub page: String,
     pub visible: bool,
+    /// The start values of the view, which the host injects again when it creates the view again.
+    pub start: ViewStart,
 }
 
 #[derive(Default)]
@@ -55,12 +58,14 @@ impl ViewLifecycle {
         plugin: &str,
         page: &str,
         visible: bool,
+        start: ViewStart,
     ) -> ViewSpec {
         let spec = ViewSpec {
             surface_handle,
             plugin: plugin.to_string(),
             page: page.to_string(),
             visible,
+            start,
         };
         self.lock().specs.insert(surface.to_string(), spec.clone());
         spec

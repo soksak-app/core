@@ -5,6 +5,51 @@ import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { clockAnswer } from "./support/records.mjs";
 
+test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      calls.push({ name, request });
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "syncSurfaces") {
+        return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
+      }
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?start");
+  const start = {
+    params: { path: "a.md" },
+    origin: { directory: "/work/one" },
+    project: { root: "/work/one" },
+    declarations: { commands: [] },
+  };
+  const record = {
+    surfaces: [
+      { id: "view", dim: false, visible: true,
+        surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" },
+          params: { path: "a.md" }, declarations: { commands: [] } },
+        applied: { x: 0, y: 0, w: 3, h: 4 }, start },
+      { id: "dom", dim: false, visible: true,
+        surface: { module: "surface-module", pluginId: "other", composition: { kind: "dom" } },
+        applied: { x: 0, y: 4, w: 3, h: 4 } },
+    ],
+    settled: true, drawn: false, titlebar: 40,
+  };
+  try {
+    await surfaces.place(record);
+    assert.deepEqual(calls[0].request.surfaces[0].start, start);
+    assert.equal("start" in calls[0].request.surfaces[1], false);
+  } finally {
+    dom.window.close();
+  }
+});
+
 test("the preparation carries the title bar height and the presented chrome is the committed one", async () => {
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;

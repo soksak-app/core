@@ -62,7 +62,7 @@ func TestEachEndWithoutPresentationAbandonsTheViewJoin(t *testing.T) {
 			case "process-ended":
 				endView(t, s, fake)
 			case "hidden":
-				if err := s.syncView("probe-surface", native, "probe", "ui/page.html", false); err != nil {
+				if err := s.syncView("probe-surface", native, "probe", "ui/page.html", false, ViewStart{}); err != nil {
 					t.Fatalf("hide the view: %v", err)
 				}
 			case "unresponsive":

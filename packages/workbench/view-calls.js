@@ -9,16 +9,23 @@
  *     event     {id, command, params} of a call request, or {id, cancel: true} of a cancel
  *     options   plugin: the plugin id of the view
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
- *               tab: {read(), write(value)} of the tab state of the surface, or null when the plugin declares no surface.unload
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
+ *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
+ *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), and state with
+ *                 {read, write} only when the plugin declares surface.unload
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
  *                 sidecar.send(id, body, cids): the send to the declared sidecar, as runtime.sidecar().send
  *                 clipboard: {read(type), writeText(text)}, the clipboard bridge without the PNG bytes
  *                 links.open(url): opens a link, as runtime.links.open
- *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id): register the page subscriptions
- *                   of the view (view-events.js); each resolves when it is registered
+ *                 log: the log levels of the page, as runtime.log of the surface context has; the level gate of the page
+ *                   applies at delivery, and a gated record is counted there
+ *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
+ *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
+ *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
+ *                   subscribe.settings(): register the page subscriptions of the view (view-events.js); each resolves when it is
+ *                   registered
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
  */
@@ -59,11 +66,11 @@ function untilCancelled(promise, signal) {
 async function run(command, params, { plugin, tab, runCore, runOwned, runtime }) {
   switch (command) {
     case "tab.state.read":
-      if (!tab) throw new Error(`view call ${command}: the tab state is not declared`);
-      return tab.read();
+      if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
+      return tab.state.read();
     case "tab.state.write":
-      if (!tab) throw new Error(`view call ${command}: the tab state is not declared`);
-      tab.write(params);
+      if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
+      tab.state.write(params);
       return null;
     case "runtime.native.call": {
       const fields = objectOf(command, params);
@@ -105,6 +112,52 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);
+      return null;
+    case "tab.title":
+      tab.title(params);
+      return null;
+    case "tab.footer":
+      tab.footer(params);
+      return null;
+    case "tab.directory":
+      tab.directory(params);
+      return null;
+    case "tab.modified":
+      tab.modified(params);
+      return null;
+    case "tab.error":
+      tab.error(params);
+      return null;
+    case "tab.notify": {
+      const fields = objectOf(command, params);
+      tab.notify(fields.text, fields.policy);
+      return null;
+    }
+    case "tab.keep": {
+      const fields = objectOf(command, params);
+      tab.keep(fields.reason, fields.on);
+      return null;
+    }
+    case "runtime.log": {
+      // The page builds the fields before the send, and the level gate of the page applies at delivery: a gated record is
+      // counted by the gate of the event writer, and none is dropped silently.
+      const fields = objectOf(command, params);
+      const send = runtime.log?.[fields.level];
+      if (typeof send !== "function") {
+        throw new TypeError(`view call ${command} log level must be one of error, warn, info, debug, trace`);
+      }
+      send(fields.event, fields.fields);
+      return null;
+    }
+    case "runtime.textSize.read":
+      return runtime.textSize.read();
+    case "runtime.textSize.on":
+      await runtime.subscribe.textSize();
+      return null;
+    case "runtime.settings.read":
+      return runtime.settings.read();
+    case "runtime.settings.on":
+      await runtime.subscribe.settings();
       return null;
     default:
       break;

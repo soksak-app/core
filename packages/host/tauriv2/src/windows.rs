@@ -98,7 +98,9 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let surfaces: Vec<_> = data
         .surface_hosts
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .iter()
         .map(|(id, handle)| (id.clone(), *handle))
         .collect();
@@ -137,7 +139,9 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     }
     data.composition_revisions
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the composition revisions, which this call
+        // clears; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .clear();
     crate::exposure::window_changed(&window);
     Ok(())
@@ -183,7 +187,9 @@ pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
         .state::<Windows>()
         .windows
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(window.label())
         .cloned()
         .ok_or_else(|| "project window is closed".into())
@@ -262,7 +268,9 @@ fn open_owner(window: &Window) -> Result<Option<Handle>, String> {
         .state::<Windows>()
         .windows
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(window.label())
         .is_some_and(|data| !data.closing.load(Ordering::Relaxed));
     if !open {
@@ -406,7 +414,9 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
         .state::<Windows>()
         .windows
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .iter()
         .map(|(label, data)| (label.clone(), data.clone()))
         .collect();
@@ -419,7 +429,13 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
         windows,
         |step| crate::exposure::app_on_main(app, step),
         |(window, data)| {
-            let root = data.root.lock().map_err(|e| e.to_string())?.clone();
+            let root = data
+                .root
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the root webview of the window, which is
+                // only read; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .clone();
             window_entry(
                 window.label(),
                 data.closing.load(Ordering::Relaxed),
@@ -484,7 +500,9 @@ pub(crate) fn opened(app: &AppHandle) -> Result<Vec<String>, String> {
         .state::<Windows>()
         .owners
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .keys()
         .cloned()
         .collect())
@@ -553,7 +571,9 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         .state::<Windows>()
         .windows
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the window records, which this call fills; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(window.label().into(), context.clone());
     let reading = window.clone();
     crate::performance::window_add(
@@ -648,13 +668,14 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     dispose_plugin_hosts(&closing);
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
                     // content process remain.
-                    let surfaces = match natives.surface_hosts.lock() {
-                        Ok(mut surfaces) => std::mem::take(&mut *surfaces),
-                        Err(error) => {
-                            log_error("window close", error);
-                            return;
-                        }
-                    };
+                    let surfaces = std::mem::take(
+                        &mut *natives
+                            .surface_hosts
+                            .lock()
+                            // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                            // which the close of the window takes and closes; the panic hook records the panic.
+                            .unwrap_or_else(PoisonError::into_inner),
+                    );
                     log_failure(
                         "window close",
                         crate::surfaces::close_window_surfaces(
@@ -770,11 +791,18 @@ fn project_open_on_main(
     }
     let folder = project_folder(window.app_handle(), request.root)?;
     let registry = window.state::<Windows>();
-    let _opening = registry.opening.lock().map_err(|e| e.to_string())?;
+    let _opening = registry
+        .opening
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the open flag of the project open, which this call
+        // holds again; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
     let owner = registry
         .owners
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(&request.id)
         .cloned();
     if let Some(label) = owner {
@@ -784,7 +812,9 @@ fn project_open_on_main(
         *window_data(&owner)?
             .root
             .lock()
-            .map_err(|e| e.to_string())? = folder.root;
+            // default: a lock that a panicking thread poisoned still holds the root webview of the window, which this call
+            // replaces; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner) = folder.root;
         owner
             .set_title(&format!("{} / Tauri v2", request.title))
             .map_err(|e| e.to_string())?;
@@ -799,7 +829,9 @@ fn project_open_on_main(
     let occupied = registry
         .owners
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .values()
         .any(|label| label == window.label());
     let owner = if request.separate && occupied {
@@ -816,12 +848,16 @@ fn project_open_on_main(
     registry
         .owners
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the owner record, which this call fills; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(request.id, owner.label().into());
     *window_data(&owner)?
         .root
         .lock()
-        .map_err(|e| e.to_string())? = folder.root;
+        // default: a lock that a panicking thread poisoned still holds the root webview of the window, which this call
+        // replaces; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = folder.root;
     owner
         .set_title(&format!("{} / Tauri v2", request.title))
         .map_err(|e| e.to_string())?;
@@ -842,19 +878,16 @@ fn project_open_on_main(
 /// project root and the title are cleared.
 pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String> {
     let registry = window.state::<Windows>();
-    let mut owners = registry.owners.lock().map_err(|e| e.to_string())?;
-    let released = owners.remove(&id);
-    let empty = released
-        .as_ref()
-        .is_some_and(|label| !owners.values().any(|other| other == label));
-    drop(owners);
+    let (released, empty) = release_owner(&registry.owners, &id);
     if let (Some(label), true) = (released, empty) {
         // When the window is already closed, there is no state to clear.
         if let Some(owner) = window.app_handle().get_window(&label) {
             window_data(&owner)?
                 .root
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the root webview of the window, which
+                // this call clears; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .clear();
             owner.set_title(WINDOW_TITLE).map_err(|e| e.to_string())?;
             crate::exposure::windows_changed(window.app_handle());
@@ -864,6 +897,21 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
     Ok(())
 }
 
+/// Removes the link of the project id from the owner record, and returns the released window label and whether no other
+/// project shows that window.
+fn release_owner(owners: &Mutex<HashMap<String, String>>, id: &str) -> (Option<String>, bool) {
+    let mut owners = owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which this call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    let released = owners.remove(id);
+    let empty = released
+        .as_ref()
+        .is_some_and(|label| !owners.values().any(|other| other == label));
+    (released, empty)
+}
+
 /// Asks the window that shows the project whether the project may be removed and returns its answer; returns true at
 /// once when no other window shows the project (docs/spec/projects.md).
 pub(crate) fn project_remove_ask(window: &Window, id: &str) -> Result<bool, String> {
@@ -871,7 +919,9 @@ pub(crate) fn project_remove_ask(window: &Window, id: &str) -> Result<bool, Stri
     let owner = registry
         .owners
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(id)
         .cloned();
     let Some(label) = owner.filter(|label| label != window.label()) else {
@@ -1071,7 +1121,14 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
     data.ready.store(true, Ordering::Relaxed);
     crate::exposure::replay_registrations(window);
     crate::exposure::windows_changed(window.app_handle());
-    for ready in data.readied.lock().map_err(|e| e.to_string())?.drain(..) {
+    for ready in data
+        .readied
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the readiness senders, which the readiness drains;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .drain(..)
+    {
         if ready.send(()).is_err() {
             crate::application_log::log_info(
                 "window",

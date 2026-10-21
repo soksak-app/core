@@ -2,6 +2,8 @@
 //! registry of the host, and the Go host (packages/host/wailsv3/src/object_counts.go) uses the same names and definitions.
 //! It is included only in diagnostic builds.
 
+use std::sync::PoisonError;
+
 use serde_json::{Value, json};
 
 use crate::endpoint::Failure;
@@ -116,7 +118,9 @@ pub fn objects_reply(counter: &dyn ObjectCounter, window: &str) -> Result<Value,
 impl crate::surfaces::Views {
     /// Returns the number of surfaces of the window, which is the number of their native views.
     pub(crate) fn count(&self) -> Result<usize, String> {
-        Ok(self.0.lock().map_err(|e| e.to_string())?.len())
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read;
+        // the panic hook records the panic.
+        Ok(self.0.lock().unwrap_or_else(PoisonError::into_inner).len())
     }
 }
 

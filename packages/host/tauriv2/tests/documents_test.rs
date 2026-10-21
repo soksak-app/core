@@ -7,6 +7,7 @@ use soksak_host_tauriv2::documents::{
     Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
     parse_report, remove_surface_for_reload, stream_ack_refusal,
 };
+use soksak_host_tauriv2::surfaces::ViewStart;
 use soksak_host_tauriv2::view_lifecycle::{
     ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event,
 };
@@ -633,7 +634,14 @@ fn view_restart_stops_at_the_fourth_failure_within_the_window() {
     // The failures are passed with their instants, so the window is measured without a timer.
     let lifecycle = ViewLifecycle::default();
     let start = Instant::now();
-    let spec = lifecycle.track("probe-surface", 7, "probe", "ui/page.html", true);
+    let spec = lifecycle.track(
+        "probe-surface",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
     assert_eq!(
         spec.surface_handle, 7,
         "the record keeps the native surface of the view"
@@ -680,7 +688,14 @@ fn view_restart_stops_at_the_fourth_failure_within_the_window() {
 fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
     let lifecycle = ViewLifecycle::default();
     let start = Instant::now();
-    lifecycle.track("probe-surface", 7, "probe", "ui/page.html", true);
+    lifecycle.track(
+        "probe-surface",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
     assert!(
         lifecycle.fail("probe-surface", start),
         "the failure restarts the view"
