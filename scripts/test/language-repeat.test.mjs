@@ -1,4 +1,4 @@
-// Verifies that the Go and Rust repeat targets pass the build tag and the feature, and do not count a run in which no test ran as a pass.
+// Verifies that the Go repeat target passes the build tag, and does not count a run in which no test ran as a pass. The Rust repeat target is verified in rust-repeat.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdirSync,mkdtempSync,writeFileSync,readFileSync,rmSync} from 'node:fs';
@@ -61,9 +61,3 @@ test('go repeat passes its build tags to go list and go test',{timeout:30000},t=
  for(const call of result.calls)assert.ok(call.includes('-tags')&&call[call.indexOf('-tags')+1]==='diagnostics',JSON.stringify(call));
 });
 
-test('rust repeat passes its features to every cargo test',{timeout:30000},t=>{
- const result=repeat(t,'cargo','running 1 test\ntest probe ... ok\n\ntest result: ok. 1 passed; 0 failed\n',['rust-repeat','PACKAGE=fixture','COUNT=1','TEST=probe','FEATURES=diagnostics']);
- assert.equal(result.status,0,result.stdout+result.stderr);
- assert.equal(result.calls.length,2,JSON.stringify(result.calls));
- for(const call of result.calls)assert.ok(call.includes('--features')&&call[call.indexOf('--features')+1]==='diagnostics',JSON.stringify(call));
-});

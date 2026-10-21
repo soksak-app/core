@@ -3722,7 +3722,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a package whose test files are not built" },
       { file: "scripts/test/language-repeat.test.mjs", id: "go repeat passes a run whose tested package passed while a support package has no test files" },
       { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a run in which no test matched" },
-      { file: "scripts/test/language-repeat.test.mjs", id: "rust repeat passes its features to every cargo test" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat passes its features to every cargo test call" },
     ],
     expected: "The Go and Rust repeat targets run tests behind build tags and features and fail when no test ran.",
     levels: ["unit"],

@@ -3,7 +3,7 @@
 // the cargo of `$(HOME)/.cargo/bin` does not shadow the fake.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -27,6 +27,7 @@ printf 'running 1 test\\ntest %s ... ok\\n\\ntest result: ok. 1 passed; 0 failed
   chmodSync(executable, 0o755);
   const cargo = join(directory, 'cargo');
   writeFileSync(cargo, `#!/bin/sh
+printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
 case "$*" in
   *message-format=json*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture"},"executable":"${executable}"}\\n'; exit 0 ;;
   metadata*) printf '{"packages":[{"name":"fixture","manifest_path":"${join(directory, 'Cargo.toml')}"}]}\\n'; exit 0 ;;
@@ -52,4 +53,15 @@ test('make rust-repeat names each test when it starts, reports its result and el
   // make exits with status 2 when a recipe fails; the run fails with the FAIL line of the runner.
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /^FAIL: fixture run 1 of 1; load /m, result.stdout + result.stderr);
+});
+
+test('make rust-repeat passes its features to every cargo test call', (t) => {
+  const directory = fakeCargo(t);
+  const result = spawnSync('make', ['rust-repeat', 'PACKAGE=fixture', 'COUNT=1', 'FEATURES=diagnostics', 'TEST=fixture::alpha'], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((call) => call.startsWith('test '));
+  assert.equal(calls.length, 2, JSON.stringify(calls));
+  for (const call of calls) assert.match(call, /--features diagnostics/, call);
 });
