@@ -265,10 +265,10 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
   const bodies = [];
   const reasons = [];
-  const onMessage = runtime.sidecar().on("probe-surface", (body) => bodies.push(body));
-  const onFailure = runtime.sidecar().onFailure("probe-surface", (reason) => reasons.push(reason));
-  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface" } });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface" } });
+  const onMessage = runtime.sidecar("fixture-sidecar").on("probe-surface", (body) => bodies.push(body));
+  const onFailure = runtime.sidecar("fixture-sidecar").onFailure("probe-surface", (reason) => reasons.push(reason));
+  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
   host({ sok: 1, id: 1, result: null });
   host({ sok: 1, id: 2, result: null });
   await onMessage;
@@ -278,6 +278,25 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   host({ sok: 1, event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } });
   assert.deepEqual(bodies, [{ n: 1 }]);
   assert.deepEqual(reasons, ["exited"]);
+});
+
+test("runtime.sidecar(name) sends to the named sidecar and its requests carry the name and the id", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.throws(() => runtime.sidecar(), TypeError);
+  assert.throws(() => runtime.sidecar(""), TypeError);
+  const port = runtime.sidecar("fixture-sidecar");
+  const sent = port.send("probe-surface", '{"operation":"list"}', ["c1"]);
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.sidecar.send", params: { id: "probe-surface", sidecar: "fixture-sidecar", body: '{"operation":"list"}', cids: ["c1"] } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, null);
+  const bodies = [];
+  const onMessage = port.on("probe-surface", (body) => bodies.push(body));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  host({ sok: 1, id: 2, result: null });
+  await onMessage;
+  host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", body: { n: 1 } } });
+  assert.deepEqual(bodies, [{ n: 1 }]);
 });
 
 test("runtime.theme gives the listener the last theme that the host sent, then each later theme", (t) => {

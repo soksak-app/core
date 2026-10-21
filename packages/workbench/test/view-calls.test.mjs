@@ -27,7 +27,7 @@ function fakes() {
     runOwned: async (name, params, owner) => { ran.owned.push({ name, params, owner }); return { owned: true }; },
     runtime: {
       native: { call: async (name, payload) => { ran.native.push({ name, payload }); return { native: true }; } },
-      sidecar: { send: async (id, body, cids) => { ran.sidecar.push({ id, body, cids }); return { sidecar: true }; } },
+      sidecar: { send: async (id, body, cids, sidecar) => { ran.sidecar.push({ id, body, cids, sidecar }); return { sidecar: true }; } },
       clipboard: {
         read: async (type) => { ran.clipboard.push({ read: type }); return "text value"; },
         writeText: async (text) => { ran.clipboard.push({ write: text }); },
@@ -119,11 +119,14 @@ test("runtime.native.call refuses a missing or empty name and runs nothing", asy
   assert.deepEqual(ran.native, []);
 });
 
-test("runtime.sidecar.send sends the body with its correlation identifiers through the declared sidecar", async () => {
+test("runtime.sidecar.send sends the body with its correlation identifiers through the named sidecar", async () => {
   const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.sidecar.send", params: { id: "probe", body: { n: 1 }, cids: ["c1"] } }, options),
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 1 }, cids: ["c1"] } }, options),
     { sidecar: true });
-  assert.deepEqual(ran.sidecar, [{ id: "probe", body: { n: 1 }, cids: ["c1"] }]);
+  assert.deepEqual(ran.sidecar, [{ id: "probe", body: { n: 1 }, cids: ["c1"], sidecar: "fixture-sidecar" }]);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options), /requires a non-empty sidecar/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "", body: 1, cids: [] } }, options), /requires a non-empty sidecar/);
+  assert.equal(ran.sidecar.length, 1, "a send without a sidecar name reached the runtime");
 });
 
 test("runtime.clipboard.read returns the text of the clipboard and refuses the png type", async () => {
@@ -214,7 +217,7 @@ test("a runtime or tab entry that the route does not serve is refused as not ser
 test("a cancel ends the pending call, which replies cancelled, and the pending call is removed", async () => {
   const { options } = fakes();
   options.runtime.sidecar.send = () => new Promise(() => {});
-  const call = answerViewCall({ id: 5, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options);
+  const call = answerViewCall({ id: 5, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: 1, cids: [] } }, options);
   // The rejection is observed below; this handler only keeps a failed earlier step from being reported as unhandled.
   call.catch(() => {});
   assert.equal(options.pending.size, 1);
@@ -234,7 +237,7 @@ test("a cancel of a call that has no pending call ends nothing", async () => {
 test("a call whose id is pending is refused", async () => {
   const { options } = fakes();
   options.runtime.sidecar.send = () => new Promise(() => {});
-  const first = answerViewCall({ id: 6, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options);
+  const first = answerViewCall({ id: 6, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: 1, cids: [] } }, options);
   first.catch(() => {});
   await assert.rejects(answerViewCall({ id: 6, command: "runtime.links.open", params: "https://example.test" }, options), /view call 6 is already pending/);
   await answerViewCall({ id: 6, cancel: true }, options);

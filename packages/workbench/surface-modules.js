@@ -278,7 +278,13 @@ function answerViewCalls(surface, scoped, page, context) {
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
     runtime: {
       native: { call: (name, payload) => scoped.native.call(name, payload) },
-      sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
+      sidecar: {
+        // A view names the sidecar of its send; the name must be the one the surface declares, so no other sidecar is reached.
+        send: (id, body, cids, name) => {
+          if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
+          return page.sidecar().send(id, body, cids);
+        },
+      },
       clipboard: scoped.clipboard,
       links: scoped.links,
       // The log levels of the surface context: the level gate of the page applies at delivery, and a gated record is counted there.
