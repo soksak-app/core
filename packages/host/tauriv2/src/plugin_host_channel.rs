@@ -78,6 +78,20 @@ struct NavigationState {
 
 /// Returns true when the channel forwards the call command to the main page: the registration calls of exposure
 /// (docs/spec/plugin-host.md#channel).
+/// Returns the plugin, the project and the sidecar of a plugin session id plugin:<plugin>:<project>:<sidecar>, or None for an id
+/// that is not one (docs/plans/plugin-host-routes.md rule 2). No id contains a colon, so the split is unambiguous.
+pub(crate) fn parse_session(id: &str) -> Option<(&str, &str, &str)> {
+    let parts: Vec<&str> = id.strip_prefix("plugin:")?.split(':').collect();
+    match parts.as_slice() {
+        [plugin, project, sidecar]
+            if !plugin.is_empty() && !project.is_empty() && !sidecar.is_empty() =>
+        {
+            Some((plugin, project, sidecar))
+        }
+        _ => None,
+    }
+}
+
 pub fn forwarded_call(command: &str) -> bool {
     matches!(
         command,

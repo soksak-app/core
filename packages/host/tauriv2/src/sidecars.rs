@@ -832,6 +832,9 @@ struct Core<O> {
     started: Condvar,
     /// The upper limit of the time until a newly started persistent service prints its endpoint.
     ready_timeout: Duration,
+    /// Called with the name of each persistent service after retain has started it and before retain reads the sessions to
+    /// keep (docs/plans/plugin-host-routes.md rule 7). A check injects a session here.
+    retain_sending: Option<Box<dyn Fn(&str) + Send + Sync>>,
 }
 
 /// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
@@ -996,6 +999,7 @@ impl<O: Owner> Sidecars<O> {
                 })),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
+                retain_sending: None,
             }),
             stop_timeout: Duration::from_secs(5),
         };
@@ -1129,6 +1133,15 @@ impl<O: Owner> Sidecars<O> {
         Arc::get_mut(&mut self.core)
             .expect("the ready timeout is set before the sidecars are shared")
             .ready_timeout = limit;
+        self
+    }
+
+    /// Sets the hook that retain calls after it starts a persistent service and before it reads the sessions to keep.
+    /// Call it only right after creation, before another reference exists.
+    pub fn with_retain_sending(mut self, hook: impl Fn(&str) + Send + Sync + 'static) -> Self {
+        Arc::get_mut(&mut self.core)
+            .expect("the retain hook is set before the sidecars are shared")
+            .retain_sending = Some(Box::new(hook));
         self
     }
 
@@ -1387,6 +1400,13 @@ impl<O: Owner> Sidecars<O> {
 
     /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
+        self.close_owned(owner, &|surface| !alive(surface))
+    }
+
+    /// Closes the surfaces that owner holds and for which selected returns true, with the close of each running sidecar
+    /// (docs/spec/sidecars.md#messages). A plugin session ends this way with its host, its project or its window
+    /// (docs/plans/plugin-host-routes.md rule 7).
+    pub fn close_owned(&self, owner: &O, selected: &dyn Fn(&str) -> bool) -> Result<(), String> {
         let mut state = self
             .core
             .state
@@ -1398,7 +1418,7 @@ impl<O: Owner> Sidecars<O> {
         let gone: Vec<String> = state
             .owners
             .iter()
-            .filter(|(surface, current)| current.key() == key && !alive(surface))
+            .filter(|(surface, current)| current.key() == key && selected(surface))
             .map(|(surface, _)| surface.clone())
             .collect();
 
@@ -1713,15 +1733,6 @@ impl<O: Owner> Sidecars<O> {
                 if state.stopped {
                     return Err("sidecars are stopped".into());
                 }
-                let mut keep: Vec<serde_json::Value> = surfaces
-                    .iter()
-                    .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root}))
-                    .collect();
-                keep.extend(
-                    state.roots.iter().map(
-                        |(surface, root)| serde_json::json!({"surface": surface, "root": root}),
-                    ),
-                );
                 if !state.running.contains_key(&name) {
                     let (program, _) = self
                         .core
@@ -1748,7 +1759,36 @@ impl<O: Owner> Sidecars<O> {
                     }
                     state = Core::ensure(&self.core, state, &name, None)?.0;
                 }
-                let process = state.running.get(&name).expect("started above");
+            }
+            // The hook runs after the service started and before the sessions to keep are read, so a session first sent during
+            // the start is kept (docs/plans/plugin-host-routes.md rule 7).
+            if let Some(hook) = &self.core.retain_sending {
+                hook(&name);
+            }
+            {
+                let state = self
+                    .core
+                    .state
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the retain reads and
+                    // amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                if state.stopped {
+                    return Err("sidecars are stopped".into());
+                }
+                let mut keep: Vec<serde_json::Value> = surfaces
+                    .iter()
+                    .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root}))
+                    .collect();
+                keep.extend(
+                    state.roots.iter().map(
+                        |(surface, root)| serde_json::json!({"surface": surface, "root": root}),
+                    ),
+                );
+                let process = state
+                    .running
+                    .get(&name)
+                    .ok_or_else(|| format!("sidecar {name} is not running"))?;
                 let connection = process
                     .persistent
                     .as_ref()

@@ -2744,3 +2744,151 @@ fn persistent_protocol_violations_stop_the_restarts() {
     );
     sidecars.stop();
 }
+
+/// A fake persistent service of ECHO. It answers hello, retain, close-owner and shutdown, and sends each retain request and
+/// each closed line to the channels of the fixture.
+struct FixtureService {
+    retains: Receiver<serde_json::Value>,
+    closes: Receiver<serde_json::Value>,
+    thread: std::thread::JoinHandle<()>,
+}
+
+fn fixture_service(config_directory: &Path, socket: &str) -> FixtureService {
+    let service_directory = config_directory.join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join(socket);
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "fixture-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let (retain_sent, retains) = channel();
+    let (close_sent, closes) = channel();
+    let thread = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            if request["closed"] == serde_json::json!(true) {
+                close_sent.send(request).unwrap();
+                continue;
+            }
+            let reply = match request["operation"].as_str() {
+                Some("hello") => {
+                    serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
+                }
+                Some("retain") => {
+                    retain_sent.send(request.clone()).unwrap();
+                    serde_json::json!({"operation": "retained", "request": request["request"], "ok": true, "closed": 0})
+                }
+                Some("close-owner") => {
+                    serde_json::json!({"operation": "closed-owner", "request": request["request"], "ok": true})
+                }
+                Some("shutdown") => {
+                    let reply = serde_json::json!({"operation": "shutdown", "request": request["request"], "ok": true});
+                    writeln!(stream, "{}", reply).unwrap();
+                    return;
+                }
+                _ => continue,
+            };
+            writeln!(stream, "{}", reply).unwrap();
+        }
+    });
+    FixtureService {
+        retains,
+        closes,
+        thread,
+    }
+}
+
+// contract: sidecars.retain.keeps-session-first-sent-during-start
+#[test]
+fn persistent_retain_keeps_a_session_first_sent_during_the_start() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = fixture_service(config_directory.path(), "retain-start.sock");
+    let (started_sent, started) = channel::<String>();
+    let (ack_sent, ack) = channel::<()>();
+    let (started_sent, ack) = (Mutex::new(started_sent), Mutex::new(ack));
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap()
+    .with_retain_sending(move |name| {
+        started_sent.lock().unwrap().send(name.to_string()).unwrap();
+        ack.lock().unwrap().recv().unwrap();
+    });
+    let (owner, _events) = owner("retain-start", "/live");
+    let session = "plugin:probe:project-a:fixture-sidecar";
+    let retained = std::thread::scope(|scope| {
+        let retain = scope
+            .spawn(|| sidecars.retain_sessions(&[("listed".to_string(), "/project".to_string())]));
+        // The hook runs after the service started, so the session is sent while retain holds back its list.
+        assert_eq!(started.recv_timeout(STALL).unwrap(), ECHO);
+        sidecars
+            .send(&owner, ECHO, session, &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        ack_sent.send(()).unwrap();
+        retain.join().unwrap()
+    });
+    assert_eq!(retained.unwrap(), 0, "the service's closed count");
+    let request = service.retains.recv_timeout(STALL).unwrap();
+    let surfaces = request["surfaces"].as_array().unwrap();
+    assert!(
+        surfaces.contains(&serde_json::json!({"surface": session, "root": "/live"})),
+        "the retain keeps {surfaces:?}, want the session first sent during the start"
+    );
+    sidecars.stop();
+    service.thread.join().unwrap();
+}
+
+// contract: sidecars.close-owned.selects-the-closed-surfaces
+#[test]
+fn persistent_close_owned_closes_only_the_selected_surfaces() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = fixture_service(config_directory.path(), "close-owned.sock");
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, _events) = owner("close-owned", "/live");
+    for surface in ["plugin:probe:project-a:fixture-sidecar", "plain-surface"] {
+        sidecars
+            .send(&owner, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+    }
+    sidecars
+        .close_owned(&owner, &|surface| surface.starts_with("plugin:"))
+        .unwrap();
+    let closed = service.closes.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        closed["surface"], "plugin:probe:project-a:fixture-sidecar",
+        "the selected plugin session is closed"
+    );
+    sidecars
+        .close_owned(&owner, &|surface| surface == "plain-surface")
+        .unwrap();
+    let closed = service.closes.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        closed["surface"], "plain-surface",
+        "the first close after the plugin selection is the plain surface, so the plugin selection closed nothing else"
+    );
+    sidecars.stop();
+    service.thread.join().unwrap();
+}

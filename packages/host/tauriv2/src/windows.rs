@@ -883,18 +883,28 @@ fn project_open_on_main(
 pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String> {
     let registry = window.state::<Windows>();
     let (released, empty) = release_owner(&registry.owners, &id);
-    if let (Some(label), true) = (released, empty) {
+    if let Some(label) = released {
         // When the window is already closed, there is no state to clear.
         if let Some(owner) = window.app_handle().get_window(&label) {
-            window_data(&owner)?
-                .root
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the root webview of the window, which
-                // this call clears; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .clear();
-            owner.set_title(WINDOW_TITLE).map_err(|e| e.to_string())?;
-            crate::exposure::windows_changed(window.app_handle());
+            // The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md
+            // rule 7).
+            window
+                .state::<crate::sidecars::WindowSidecars>()
+                .close_owned(&owner, &|surface| {
+                    crate::plugin_host_channel::parse_session(surface)
+                        .is_some_and(|(_, project, _)| project == id)
+                })?;
+            if empty {
+                window_data(&owner)?
+                    .root
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the root webview of the window, which
+                    // this call clears; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clear();
+                owner.set_title(WINDOW_TITLE).map_err(|e| e.to_string())?;
+                crate::exposure::windows_changed(window.app_handle());
+            }
         }
     }
     notify_workspace(window.app_handle());
@@ -989,6 +999,13 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     crate::exposure::page_reloaded(window);
     reload_surface_documents(window)?;
     dispose_plugin_hosts(window);
+    // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
+    // rule 7).
+    window
+        .state::<crate::sidecars::WindowSidecars>()
+        .close_owned(window, &|surface| {
+            crate::plugin_host_channel::parse_session(surface).is_some()
+        })?;
     data.overlay.discard()
 }
 
