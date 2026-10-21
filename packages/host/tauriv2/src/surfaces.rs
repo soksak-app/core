@@ -629,13 +629,13 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
     let overlays = check_sync_request(
         &request,
-        &*context
+        &context
             .compositions
             .lock()
             // default: a lock that a panicking thread poisoned still holds the composition declarations and the surface plugins,
             // which the check reads; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner),
-        &*context
+        &context
             .surface_plugins
             .lock()
             // default: a lock that a panicking thread poisoned still holds the surface plugins, which the check reads;

@@ -1,6 +1,6 @@
 //! Checks that a poisoned write lock of the workspace is recovered and the workspace still answers.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde_json::Value;
 

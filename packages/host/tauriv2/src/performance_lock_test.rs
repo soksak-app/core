@@ -1,6 +1,6 @@
 //! Checks that a poisoned switch lock of the performance trace is recovered and the switch still answers.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde_json::json;
 

@@ -1,6 +1,6 @@
 //! Checks that a poisoned state lock of the sidecar transport is recovered and the transport still answers.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde_json::value::RawValue;
 
