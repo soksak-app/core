@@ -2,6 +2,7 @@
 //! the window and answers the chosen file relative to that root.
 
 use std::path::{Component, Path};
+use std::sync::PoisonError;
 
 use serde::{Deserialize, Serialize};
 use tauri::Window;
@@ -73,7 +74,9 @@ pub fn place(window: &Window, request: FilePlaceRequest) -> Result<FilePlaced, S
     let root = context
         .root
         .lock()
-        .map_err(|error| error.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the root of the window, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .clone();
     if root.is_empty() {
         return Err("file place: the window shows no project".to_string());
