@@ -2214,6 +2214,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F225",
+    implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
+    tests: [
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a manifest with a status-form section and a module-form section is checked by the form of each section" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a status-form section carries no module source, and a module violation is still reported" },
+    ],
+    expected: "The exposure check collects the module sources of a module-form section and none of a status-form section, so a manifest with a status section is checked instead of crashing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F226",
+    implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "mountDeclared" }],
+    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section draws the value of its source, shows its rejection, and reports mounted, error, text and controls" }],
+    expected: "The workbench uses the declared full status name of a section for the registry and the display, so a declared section of a view matches its registration and draws.",
+    levels: ["unit"],
+  },
+  {
     id: "F223",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],

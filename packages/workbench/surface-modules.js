@@ -1,6 +1,6 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
-import { registry } from "./exposure.js";
+import { registry, registerSurfacePort } from "./exposure.js";
 import { answerViewCall, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
@@ -266,6 +266,10 @@ function answerViewCalls(surface, scoped, page, context) {
   });
   // The declared UI pull of a declared section sends through this layer, so it is kept by surface until the answers end.
   const forgetCommands = keepViewCommands(surface.surfaceId, viewCommands);
+  // The exposure of the view. A forwarded exposure request reaches the view through its exposure-request subscription and is
+  // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the port
+  // only consumes the request: without it the page would forward the request to the view again (docs/spec/exposure.md#relay).
+  const removeExposurePort = registerSurfacePort(surface.surfaceId, () => {});
   const options = {
     plugin: surface.pluginId,
     pending,
@@ -291,6 +295,15 @@ function answerViewCalls(surface, scoped, page, context) {
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
         register: (name) => context.exposure.command(name, (params) => viewCommands.run(name, params)),
+      },
+      exposure: {
+        // A status or dom registration of the view: the registry validates the declaration and applies it, then the host
+        // records it, so a reloaded main page receives it again (docs/spec/exposure.md#relay).
+        registered: async ({ kind, name }) => {
+          registry.registered({ surface: surface.surfaceId, kind, name });
+          await scoped.native.call("exposureRegister", { kind, name });
+          return null;
+        },
       },
     },
   };
@@ -323,6 +336,7 @@ function answerViewCalls(surface, scoped, page, context) {
     offCall();
     offReply();
     forgetCommands();
+    removeExposurePort();
     viewCommands.close();
     return subscriptions.close();
   });

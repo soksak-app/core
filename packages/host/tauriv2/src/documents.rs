@@ -755,6 +755,11 @@ impl ViewChannels {
         self.lock().remove(surface);
     }
 
+    /// Whether the surface has a view.
+    pub fn has(&self, surface: &str) -> bool {
+        self.lock().contains_key(surface)
+    }
+
     /// Returns the surfaces that have a view, in order.
     pub fn surfaces(&self) -> Vec<String> {
         let mut surfaces: Vec<String> = self.lock().keys().cloned().collect();

@@ -129,8 +129,12 @@ export function checkPluginRepository(root, core = coreExposure()) {
     // default: exposes and its entries are optional fields of plugin.json; when missing, there is no declaration.
     [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
   // default: sections is an optional field of plugin.json; when missing, there are no section modules.
+  // A section declares exactly one of module and status (docs/spec/plugins.md#sections), and each form carries its
+  // orientation with the module: one shared path, or the path of each orientation. A status section is drawn by the
+  // workbench from the declared UI value of its status, so it contributes no module source.
   const sections = new Set((manifest.sections ?? []).flatMap((section) =>
-    (typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical])));
+    section.status !== undefined ? []
+      : typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical]));
   return auditExposure({
     owner: manifest.id, where: `plugin ${manifest.id}`, exposes,
     sources: paths.map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") })),

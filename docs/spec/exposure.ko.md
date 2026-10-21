@@ -229,11 +229,11 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 호스트 → 메인 페이지 | 이벤트 `exposure-request` | 코어와 플러그인 이름에 대한 `exposure.list`, `status.*`, `command.run`, `dom.*`의 `{id, method, params}`. 호스트는 답을 10초 기다린다. `command.run`은 예외이며, 메인 페이지는 명령을 전달하든 스스로 답하든 그 명령의 제한 시간 안에 답한다. 준비되지 않은 메인 페이지는 1003을 반환하고, 다시 읽히거나 닫히는 메인 페이지에 보낸 요청은 1003으로 끝난다 |
 | 메인 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error: {code, message}}` |
 | 메인 페이지 → 호스트 | 호출 `exposureChanged` | 감시 중인 상태의 `{name, surface?, value}`. 감시가 표면을 지정했으면 `surface`가 있다. 호스트는 `host.`로 시작하는 이름을 `the page cannot change host status <name>`으로 거부한다. host 상태는 호스트만 바꾼다 |
-| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}` |
+| 표면 페이지 → 호스트 | 호출 `exposureRegister` | `{surface, kind, name}`. view의 페이지는 surface 브리지가 없다. view 채널을 통해 `runtime.native.call`에 `{name: "registered", payload: {kind, name}}`로 호출하고([view surfaces](native-surfaces.ko.md#view-표면)), 메인 페이지가 이 호출로 전달한다. 메인 페이지가 전달한 등록은 view를 가진 surface에만 허용된다 |
 | 호스트 → 메인 페이지 | 이벤트 `exposure-registered` | `{surface, kind, name}`. 표면이 제거되면 `{surface, closed: true}`. 표면은 메인 페이지를 다시 읽어도 남으므로 메인 페이지가 준비를 알린 뒤 호스트가 살아 있는 등록을 모두 다시 보낸다 |
 | 메인 페이지 → 호스트 | 호출 `exposureForward` | 표면 페이지가 등록한 이름에 대한 `{id, surface, method, params, timeout?}`. `timeout`은 명령 선언에서 가져온 1 이상 600000 이하의 정수 밀리초이며, 없으면 호스트는 10초를 기다린다. `status.next`는 `timeout`을 받지 않는다. 올바르지 않은 `timeout`은 -32602를 반환한다 |
-| 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}` |
-| 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다 |
+| 호스트 → 표면 페이지 | 이벤트 `exposure-request` | `{id, method, params}`. view의 경우 이벤트는 `surface`를 담고, 메인 페이지가 view의 `exposure-request` 구독(`runtime.native.on`)을 통해 view에 전달하며, `data`는 `{id, surface, method, params}`다 |
+| 표면 페이지 → 호스트 | 호출 `exposureReply` | `{id, result}` 또는 `{id, error}`. 호스트는 이 값을 `exposureForward`의 결과로 메인 페이지에 반환한다. view의 페이지는 `runtime.native.call`에 `{name: "exposureReply", payload: {id, result|error}}`로 답하며, 메인 페이지가 view의 surface와 함께 이 호출로 보낸다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.watch`, `status.unwatch` | `{name}`. 표면 페이지가 값 추적을 시작하거나 멈춘다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.next` | `{name, version}`. 표면 페이지는 값이 `version`보다 새로우면 `{version, value}`를, `status.unwatch` 뒤에는 `{closed: true}`를 응답한다. 호스트는 이 요청에 제한 시간을 두지 않으며, 표면이 닫히면 1003으로 실패한다 |
 | 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
@@ -249,7 +249,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `exposureReply` | `ExposureReply` | `exposure_reply` |
 | `exposureChanged` | `ExposureChanged` | `exposure_changed` |
 | `exposureForward` | `ExposureForward` | `exposure_forward` |
-| `exposureRegister` | `ExposureRegister` (표면 브리지) | `exposure_register` |
+| `exposureRegister` | `ExposureRegister` (표면 브리지와 메인 페이지) | `exposure_register` |
 
 표면 페이지의 페이지 인터페이스는 `page.exposure`이며 `register(kind, name)`, 전달된 요청마다 `fn({id, method, params})`를 호출하는 `onRequest(fn)`, `reply(id, payload)`로 구성된다. 메인 페이지는 `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, 그리고 위 호출을 담은 `host.call(...)`을 사용한다. `surface`가 없는 응답은 창의 메인 문서 요청에 대한 답이고, `surface`가 있는 응답은 그 표면 문서 요청에 대한 답이며 비어 있지 않은 문자열로 표면을 가리킨다. `surface`가 `null`, 빈 값, 문자열이 아니면 메인 문서 응답으로 처리하지 않고 오류로 거부한다.
 

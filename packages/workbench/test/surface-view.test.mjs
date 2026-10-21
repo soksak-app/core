@@ -167,3 +167,65 @@ test("the start values of a view carry its params, origin, project and declarati
     declarations: {},
   });
 });
+
+// contract: view.exposure.register
+// A registered call of the view applies the entry through the exposure registry, relays it to the host, and the view's port
+// consumes the forwarded exposure requests so the page never forwards them twice (docs/spec/exposure.md#relay).
+test("a view registers its exposure through the page and its port consumes forwarded requests", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        // The surface runtime scopes every host call with the surface id, as surfaceContextRuntime.invoke does.
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        return null;
+      } } };
+    },
+  } });
+  // The registry and the port live in the shared exposure module, which the query-suffixed surface-modules instance imports too.
+  const { registry, dispatchSurfaceRequest } = await import("../exposure.js");
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-exp");
+  const pluginId = "fixture-exp";
+  const surfaceId = "fixture-exp-surface";
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, {
+    status: [{ name: `${pluginId}.lines`, description: "Lines.", schema: { type: "array" } }],
+    commands: [], dom: [],
+  });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 1, command: "runtime.native.call",
+      params: { name: "registered", payload: { kind: "status", name: `${pluginId}.lines` } } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(registry.registrants("status", `${pluginId}.lines`), [surfaceId], "the registration did not reach the registry");
+    assert.deepEqual(calls.filter(({ name }) => name === "exposureRegister"), [{
+      name: "exposureRegister", payload: { kind: "status", name: `${pluginId}.lines`, surface: surfaceId },
+    }], "the registration was not relayed to the host");
+    assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 7, method: "status.get", params: { name: `${pluginId}.lines` } }),
+      true, "the forwarded request was not consumed by the view's port");
+    await disposeSurface(surfaceId);
+    assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 8, method: "status.get", params: {} }),
+      false, "the port survived the surface");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
