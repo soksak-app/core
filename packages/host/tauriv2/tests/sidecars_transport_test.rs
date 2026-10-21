@@ -1759,6 +1759,11 @@ impl ReplaceService {
 
 impl Drop for ReplaceService {
     fn drop(&mut self) {
+        // The installed service is a process that the host started and that outlives the sessions, so the fixture ends it.
+        // The kill fails when the process has already ended, which the check of the installed service does not need to know.
+        if let Some(installed) = self.installed_process_id() {
+            let _ = unsafe { libc::kill(installed as i32, libc::SIGKILL) };
+        }
         let mut process = self.process.lock().unwrap();
         // The process may have ended after the shutdown answer already; then the kill fails and the wait returns its status.
         let _ = process.kill();
