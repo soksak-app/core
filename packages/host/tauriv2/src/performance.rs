@@ -5,7 +5,7 @@ use crate::platform;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 static ON: AtomicBool = AtomicBool::new(false);
@@ -46,9 +46,9 @@ pub fn command(request: Value) -> Result<Value, String> {
     if !["on", "off"].contains(&action) {
         return Err(format!("action must be on or off, not {action}"));
     }
-    let _switching = SWITCHING
-        .lock()
-        .map_err(|error| format!("performance switch lock: {error}"))?;
+    // default: a lock that a panicking thread poisoned still holds nothing, and the switch of the trace is an atomic
+    // store beside it; the panic hook records the panic.
+    let _switching = SWITCHING.lock().unwrap_or_else(PoisonError::into_inner);
     match action {
         "on" => {
             if !ON.swap(true, Ordering::AcqRel) {
@@ -308,3 +308,7 @@ fn resident_kb(pid: u32) -> Result<u64, String> {
             )
         })
 }
+
+#[cfg(test)]
+#[path = "performance_lock_test.rs"]
+mod lock_test;
