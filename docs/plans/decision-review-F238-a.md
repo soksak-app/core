@@ -75,6 +75,14 @@ These decisions are binding. Each states its reason. The Decision items below ap
 
 There is no migration of persisted data for D7. A persisted tab whose state lacks the origin form of item 4 is refused per tab with its named error: the error is reported in the log and shown on that tab, and the tab is not dropped silently. The user reopens the tab. Reason: Core is 0.0.x and unreleased views have no installed state to preserve; the binding rules forbid backward compatibility, compatibility layers, fallbacks and migrations, and forbid turning bad input into a plausible value. A migrated `{directory: null}` would be such a value, so the migration and its round 11 and round 14 argument are removed. The format number of `projects.json` stays 1 (item 7). Only the upgrade part of item 7 changes.
 
+### Supervisor decision on non-view tabs (binding, supersedes R1 for the read of a non-view tab)
+
+1. Storing. Every tab written from now on stores its origin as `{directory}`, view and non-view tabs alike (F238-a-9 and F238-a-10). `capture()` writes it for each content-card tab.
+2. Reading, view tabs. A view tab without a valid origin member is refused per tab, with the item 4 text, as decided (round 16).
+3. Reading, non-view tabs. A non-view tab without an origin member is a released format-1 shape. Its released reading rule stays exactly as released: its origin is `{directory: null}`. Changing it would change the reading of a released shape and trigger the format rule of AGENTS.md. The rule is one named function in `packages/workbench/tab-reports.js`, `releasedNonViewOrigin()`, and it is stated as the reading rule of format 1 for non-view tabs in `docs/spec/projects.md` (and the ko mirror). It is not a new fallback. Every other fallback is removed, including the general fallback of `tabOrigin` (F238-a-12).
+4. Tests. One test covers the branch of a non-view tab without the member (it reads `{directory: null}` through `releasedNonViewOrigin()`) and the branch of a view tab without the member (it is refused with the item 4 missing-origin text).
+5. Reason. The released shape must keep its reading, because a changed reading of a released shape triggers the format rule. A refusal of a non-view tab would show an error with no view to protect (R1). The one named function keeps the released rule visible and the rest of the code free of fallbacks.
+
 ### Decision
 
 1. `origin` is always the object `{directory}`, with exactly one member named `directory`.
