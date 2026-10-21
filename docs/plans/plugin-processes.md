@@ -66,7 +66,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 ## Rules
 
 1. Plugin code does not run on the workbench page.
-2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests one snapshot for each declared status of each view and host that its surfaces declare (pull). The workbench also pulls the current value of a declared status once when its source changes, because a running view has no other way to send its last value to a new reader. No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
+2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests one snapshot for each declared status of each view and host that its surfaces declare (pull). The workbench also pulls the current value of a declared status once when its source changes, and once when the section changes orientation. A running view has no other way to send its last value to a new reader, and a value discarded for the previous orientation may be valid for the new one, which only the source holds. No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
    - A status has at most one snapshot in transit.
    - A change made while a snapshot is in transit marks the status dirty. When the acknowledgement arrives, the next snapshot carries the latest value.
    - The number of skipped values is counted in `losses.skipped` of the core status `core.plugin.losses`. The count reaches the main page as the field `skipped` of each snapshot message: the number of values of the status that were overwritten while a snapshot was in transit, since the previous snapshot of the status was sent. While the performance trace is on, the main page writes `page.trace.declared-ui.snapshot.skipped {plugin, status, count}` for each overwritten value. The host relays no snapshot and writes no event for it, because `host.*` events are written only by host code.
@@ -142,7 +142,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 |---|---|---|---|
 | `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`; `skipped` is the count of values overwritten since the previous snapshot of the status | the push of rule 2 |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | confirms receipt; releases the in-transit slot |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}` | the one pull of load time |
+| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}` | the load pull of rule 2. `value` is `null` when the source has no value yet |
 
 The RPC protocol number is 1 in the 0.0 series.
 
@@ -518,7 +518,7 @@ The objections below are the answers of the fifth adversarial review of [declare
 - R5-5: the array of the expand command's path was not typed in its message. Verdict: accepted. Resolution: `<path>` is a JSON array of strings.
 - R5-6: the elements that carry the native button were not listed. Verdict: accepted. Resolution: the specification lists them: the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch.
 - R5-7: the terms paragraph omitted three terms, and "declared UI value" was not a term. Verdict: accepted. Resolution: the terms paragraph lists them, and "declared UI value" is added to the term list. The control character range is U+0000 to U+001F, U+007F, and U+0080 to U+009F, in the declared UI specification. The plugin specification states no range, so there is no conflict.
-- R5-8: the timing of the expand command was in the specification, and some "snapshot" uses were bare. Verdict: accepted. Resolution: the timing is moved to the layer rule of this plan (F212.8-2). The bare uses at the lines named by the objection are replaced by "declared UI snapshot", and the two further bare uses of the same kind, in the rule for a request without a registration and in the rule for the previous process, are replaced too.
+- R5-8: the timing of the expand command was in the specification, and some "snapshot" uses were bare. Verdict: accepted. Resolution: only the implementation timing of the expand command moved to the layer rule of this plan (F212.8-2). The requirement that the command is declared together with its handler stays in the specification. The bare uses at the lines named by the objection are replaced by "declared UI snapshot", and the two further bare uses of the same kind, in the rule for a request without a registration and in the rule for the previous process, are replaced too.
 - R5-9: the row `requires command` also applied to buttons, where a missing command is already a missing field. Verdict: accepted. Resolution: the row is limited to list items and tree nodes.
 
 **Declared UI schema review round 6**
@@ -534,3 +534,16 @@ The objections below are the answers of the sixth adversarial review of [declare
 - R6-7: the address of an element had no role, although a tree node has two controls. Verdict: accepted. Resolution: the address is the section id, the path of keys, and the role (`label` or `expand`), in the declared UI specification and in the exposure specification, in both languages.
 - R6-8: a rejection leaves no value to draw again, and a change of orientation had no pull from the source. Verdict: accepted. Resolution: a rejection discards the value. A change of orientation is a third pull moment in rule 2, because a value discarded for the previous orientation may be valid for the new one, and only the source holds it.
 - R6-9: a pull reply with `value: null` was not defined. Verdict: accepted. Resolution: `value: null` means that the source has no value yet, and the section stays cleared until the first push. The message table of this plan and the declared UI specification define it.
+
+**Declared UI schema review round 7**
+
+The objections below are the answers of the seventh adversarial review of [declared UI](../spec/declared-ui.md). All eight are accepted.
+
+- R7-1: the round 6 record reported three plan changes as done: the orientation pull of rule 2, the `null` value in the message table, and the order of the `unknown kind` row. The files did not contain the first two. The cause is that the round 6 write of the plan appended its record to a fresh read of the file, which dropped the three plan edits made earlier in that round, including the amendment of R5-8. Verdict: accepted. Resolution: the orientation pull is in rule 2, the message row names the load pull of rule 2, and R5-8 is restored. Each change is checked by search in both languages before the commit.
+- R7-2: the message table did not say that `value` is `null` when the source has no value yet. Verdict: accepted. Resolution: the last column of the `declared-ui.snapshot.request` row says so, in both languages.
+- R7-3: the `unknown kind` row was not above the row that depends on the kind. Verdict: accepted. Resolution: the row is above the list-items row in both tables, because the kind decides which limits and field rows apply to an element.
+- R7-4: the owner of a command name was not defined where the rejection rows use `<owner>`. Verdict: accepted. Resolution: `<owner>` is the plugin id of the status, defined beside the rejection template.
+- R7-5: a change of source, a process end, and a surface close did not clear the error of a status. Verdict: accepted. Resolution: each calls `hideError` for the status and sets `error` to null.
+- R7-6: the idempotence paragraph described the next request as carrying the kept state. Verdict: accepted. Resolution: the request carries the `expanded` value that the control requests, which is the opposite of the kept state when the workbench draws it.
+- R7-7: "serialized value" did not define its length. Verdict: accepted. Resolution: it is the UTF-8 byte length of `JSON.stringify` of the value.
+- R7-8: pointers were not identified with a standard. Verdict: accepted. Resolution: pointers are JSON Pointers (RFC 6901).

@@ -66,7 +66,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
-2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 그 페이지의 표면이 선언한 plugin view와 host의 각 status에 대해 snapshot을 한 번 요청한다(pull). 메인 페이지가 load될 때 pull하는 것 외에, 상태의 출처가 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
+2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 그 페이지의 표면이 선언한 plugin view와 host의 각 status에 대해 snapshot을 한 번 요청한다(pull). 상태의 출처가 바뀌거나 section의 방향이 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없고, 이전 방향에서 버린 값은 새 방향에서 유효할 수 있으며 그 값을 가진 것은 출처뿐이기 때문이다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
    - status 하나에는 전송 중인 snapshot이 최대 1개다.
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
    - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
@@ -142,7 +142,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 |---|---|---|---|
 | `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`. `skipped`는 status의 이전 snapshot이 보내진 뒤 덮어쓴 값의 수다 | 규칙 2의 push |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | 수신을 확인하고 전송 슬롯을 비운다 |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}` | 메인 페이지 load 때의 유일한 pull |
+| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}` | rule 2의 load pull. 출처에 아직 값이 없으면 `value`는 `null`이다 |
 
 RPC protocol 번호는 0.0 계열에서 1이다.
 
@@ -519,7 +519,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R5-5: 펼침 명령의 path 배열이 거부 메시지에서 타입으로 적혀 있지 않았다. 판정: 수용. 해결: `<path>`는 문자열의 JSON 배열이다.
 - R5-6: 네이티브 button을 가지는 요소가 나열되지 않았다. 판정: 수용. 해결: 명세가 나열한다. `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어.
 - R5-7: 용어 문단이 세 용어를 빠뜨렸고, "선언된 UI 값"이 용어가 아니었다. 판정: 수용. 해결: 용어 문단이 세 용어를 나열하며, "선언된 UI 값"을 용어 목록에 더한다. 제어 문자는 선언된 UI 명세에서 U+0000에서 U+001F, U+007F, U+0080에서 U+009F다. plugin 명세는 범위를 적지 않으므로 충돌이 없다.
-- R5-8: 펼침 명령의 시기가 명세에 있었고, "snapshot"이 일부 맨 말로 쓰였다. 판정: 수용. 해결: 시기는 이 계획의 계층 규칙으로 옮긴다(F212.8-2). 이의가 지정한 줄의 맨 "snapshot"을 "선언된 UI snapshot"으로 바꾸며, 같은 종류의 맨 말 두 곳(등록이 없는 요청 규칙과 이전 프로세스 규칙)도 바꾼다.
+- R5-8: 펼침 명령의 시기가 명세에 있었고, "snapshot"이 일부 맨 말로 쓰였다. 판정: 수용. 해결: 펼침 명령의 구현 시기만 이 계획의 계층 규칙으로 옮긴다(F212.8-2). 명령은 처리기와 함께 선언한다는 요구는 명세에 남는다. 이의가 지정한 줄의 맨 "snapshot"을 "선언된 UI snapshot"으로 바꾸며, 같은 종류의 맨 말 두 곳(등록이 없는 요청 규칙과 이전 프로세스 규칙)도 바꾼다.
 - R5-9: `command`가 없음 행이 버튼에도 적용되었으나, 버튼의 명령이 없으면 이미 필드 누락이다. 판정: 수용. 해결: 행을 list 항목과 tree 노드로 한정한다.
 
 **선언된 UI 스키마 검토 6차**
@@ -535,3 +535,16 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R6-7: 요소의 주소에 역할이 없었으나 tree 노드에는 두 제어가 있다. 판정: 수용. 해결: 주소는 section id, key 경로, 역할(`label` 또는 `expand`)이다. 선언된 UI 명세와 노출 명세에 두 언어 모두 적는다.
 - R6-8: 거부는 다시 그릴 값을 남기지 않으며, 방향 변경에는 출처에서의 pull이 없었다. 판정: 수용. 해결: 거부는 값을 버린다. 방향이 바뀌는 것은 규칙 2의 세 번째 pull 시점이다. 이전 방향에서 버린 값은 새 방향에서 유효할 수 있고, 그 값을 가진 것은 출처뿐이기 때문이다.
 - R6-9: `value`가 `null`인 pull 응답이 정해지지 않았다. 판정: 수용. 해결: `value`가 `null`이면 출처에 아직 값이 없으며, section은 첫 push까지 비워진 채로 남는다. 이 계획의 메시지 표와 선언된 UI 명세가 그렇게 정한다.
+
+**선언된 UI 스키마 검토 7차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 일곱 번째 적대적 검토에 대한 답변이다. 여덟 건을 모두 수용한다.
+
+- R7-1: 6차 기록은 계획의 세 변경을 적용되었다고 보고했다. 규칙 2의 방향 pull, 메시지 표의 `null` 값, `unknown kind` 행의 순서다. 파일에는 앞의 두 가지가 없었다. 원인은 6차에서 계획의 기록을 덧붙일 때 파일을 다시 읽었는데, 그 전에 같은 차수에서 한 계획의 세 변경(R5-8 정정 포함)을 버린 것이다. 판정: 수용. 해결: 규칙 2에 방향 pull이 있고, 메시지 행은 rule 2의 load pull을 말하며, R5-8을 되살린다. 각 변경은 커밋 전에 두 언어의 검색으로 확인한다.
+- R7-2: 메시지 표가 출처에 아직 값이 없을 때 `value`가 `null`이라고 말하지 않았다. 판정: 수용. 해결: `declared-ui.snapshot.request` 행의 마지막 열이 두 언어 모두 그렇게 말한다.
+- R7-3: `unknown kind` 행이 종류에 따라 달라지는 행보다 위에 있지 않았다. 판정: 수용. 해결: 두 표 모두 list 항목 행보다 위에 둔다. 종류가 요소에 어떤 한도와 필드 행이 적용되는지를 정하기 때문이다.
+- R7-4: 거부 행이 쓰는 `<owner>`의 소유자가 정의되지 않았다. 판정: 수용. 해결: `<owner>`는 status의 plugin id다. 거부 템플릿 옆에 정의한다.
+- R7-5: 출처가 바뀌거나, 프로세스가 끝나거나, surface가 닫힐 때 status의 오류가 지워지지 않았다. 판정: 수용. 해결: 셋 모두 그 status에 `hideError`를 부르고 `error`를 null로 둔다.
+- R7-6: 멱등성 문단이 다음 요청이 유지된 상태를 담는다고 적었다. 판정: 수용. 해결: 요청은 제어가 요청하는 `expanded` 값을 담으며, 이는 workbench가 그릴 때의 유지 상태와 반대다.
+- R7-7: "직렬화한 값"의 길이가 정의되지 않았다. 판정: 수용. 해결: `JSON.stringify`한 값의 UTF-8 바이트 길이다.
+- R7-8: 포인터가 표준과 연결되지 않았다. 판정: 수용. 해결: 포인터는 JSON Pointer(RFC 6901)다.

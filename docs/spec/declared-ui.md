@@ -77,7 +77,7 @@ Each limit is chosen by this document. Its reason is the work that the main page
 
 | Limit | Value | Reason |
 | --- | --- | --- |
-| Serialized value | 1048576 bytes | The whole value is parsed and validated on the UI thread for each declared UI snapshot. |
+| Serialized value | 1048576 bytes | The UTF-8 byte length of `JSON.stringify` of the value. It is parsed and validated on the UI thread for each declared UI snapshot. |
 | Root elements | 64 | One section body holds this many separate blocks. |
 | List items | 1000 per list | Bounds the rows that one list draws per declared UI snapshot. |
 | Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per declared UI snapshot. |
@@ -116,7 +116,7 @@ A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is 
 
 `core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from a root node to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`. In that message, `<path>` is a JSON array of strings.
 
-The control's next request carries the state that the kept state has when the workbench draws the control. A repeated request before the workbench draws again sends the same arguments, so it sets the same state. A request after the redraw carries the state of the redrawn branch.
+The request carries the `expanded` value that the control requests, which is the opposite of the kept state when the workbench draws it. Repeating the request sets the same state.
 
 A disabled element (`enabled: false`) is rendered with the `disabled` attribute, so no click reaches its binding.
 The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button.
@@ -186,9 +186,10 @@ The receiver acknowledges the declared UI snapshot. The acknowledgement confirms
 The display path is `showError(element, where, text)`. For a rejected value, `where` is `declared UI <owner>.<status>` and `text` is `<pointer>: <reason>`. The section body is the element that `showError` shows, so the text in the section is the display of the rejection. The application log line that the same call writes is the record: `error: declared UI <owner>.<status>: <pointer>: <reason>`. The section does not show the error in a second display.
 
 `showError` writes the log line once for the same `where` and the same `text`. It keeps the shown text, so a repeated rejection with the same text shows the same text and writes nothing more. A rejection with a different text writes its own line. The next accepted value of the status calls `hideError` for its `where`, which withdraws the display, so the same text is written again if it recurs after that.
+A change of source, a process end, and a surface close call `hideError` for the status and set `error` to null.
 
-Every rejection text has the form `<pointer>: <reason>`. The pointer of each row of the table is the value that breaks the row, as its Pointer column states. A count or size limit points to the array, object, or string that exceeds it. A field-presence row (`unknown field`, `missing`, `requires command`) points to the object that holds the field. A field-value row points to the field. A duplicate key points to the second key. `/` is the root and the whole serialized value. `<field>` is the JSON field name.
-Field rows of an element use the field list of its kind, which its `kind` value selects, so the `unknown kind` row comes before the field rows. When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
+Every rejection text has the form `<pointer>: <reason>`. The pointer of each row of the table is the value that breaks the row, as its Pointer column states. A count or size limit points to the array, object, or string that exceeds it. A field-presence row (`unknown field`, `missing`, `requires command`) points to the object that holds the field. A field-value row points to the field. A duplicate key points to the second key. `/` is the root and the whole serialized value. `<field>` is the JSON field name. Pointers are JSON Pointers (RFC 6901). `<owner>` is the plugin id of the status.
+Field rows of an element use the field list of its kind, which its `kind` value selects, so the `unknown kind` row comes before the rows that depend on the kind. When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
 
 | Condition | Reason | Pointer |
 | --- | --- | --- |
@@ -196,6 +197,7 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | `elements` is not an array | `elements must be an array` | `/elements` |
 | The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` | `/` |
 | More than 64 root elements | `exceeds 64 elements` | `/elements` |
+| A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
 | More than 1000 items in a list | `exceeds 1000 items` | `/elements/<i>/items` |
 | More than 5000 nodes in a tree | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
 | A tree node deeper than 16 levels | `exceeds 16 levels` | the node |
@@ -206,7 +208,6 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | A parameter key longer than 64 characters | `exceeds 64 characters` | the parameter key |
 | A parameter string value longer than 1000 characters | `exceeds 1000 characters` | the parameter value |
 | A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` | the parameter value |
-| A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
 | A field that the object does not list: a root, an element, a list item, or a tree node | `unknown field <field>` | the object |
 | A required field is missing | `missing <field>` | the object |
 | A `params` or `enabled` field in a list item or a tree node with no `command` field | `<field> requires command` | the object |

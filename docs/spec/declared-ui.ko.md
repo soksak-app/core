@@ -77,7 +77,7 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 
 | 한도 | 값 | 이유 |
 | --- | --- | --- |
-| 직렬화한 값 | 1048576바이트 | 선언된 UI snapshot마다 값 전체를 UI thread에서 파싱하고 검사한다. |
+| 직렬화한 값 | 1048576바이트 | `JSON.stringify`한 값의 UTF-8 바이트 길이다. 선언된 UI snapshot마다 UI thread에서 파싱하고 검사한다. |
 | 루트 요소 | 64 | section 본문 하나가 담는 별도 블록의 수다. |
 | list 항목 | list마다 1000 | list 하나가 선언된 UI snapshot마다 그리는 행을 제한한다. |
 | tree 노드 | tree마다 5000 | tree 하나가 선언된 UI snapshot마다 그리는 노드를 제한한다. |
@@ -116,7 +116,7 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 
 `core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 그 처리기와 함께 선언한다. 이 명령은 설정 연산이다. 같은 인수로 다시 실행해도 한 번 실행한 것과 같은 결과다. `expanded` 인수는 제어가 요청하는 상태이며, 그릴 때 가지가 보이던 상태의 반대다. 명령은 `status`의 트리 `tree`에서 `path`에 있는 가지의 유지 상태를 설정하며, plugin에는 전달하지 않는다. `path`는 루트 노드에서 가지까지의 노드 key 배열이다. 그려진 가지가 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다. 그 메시지의 `<path>`는 문자열의 JSON 배열이다.
 
-제어의 다음 요청은 workbench가 제어를 그릴 때의 유지 상태 값을 담는다. workbench가 다시 그리기 전의 반복 요청은 같은 인수를 보내므로 같은 상태를 설정한다. 다시 그린 뒤의 요청은 다시 그린 가지의 상태를 담는다.
+요청은 제어가 요청하는 `expanded` 값을 담으며, 이는 workbench가 그릴 때의 유지 상태와 반대다. 같은 요청을 되풀이하면 같은 상태를 설정한다.
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
 네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다.
@@ -187,9 +187,10 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 표시 경로는 `showError(element, where, text)`다. 거부한 값에서 `where`는 `declared UI <owner>.<status>`이고 `text`는 `<포인터>: <이유>`다. section 본문이 `showError`가 보이는 요소이므로, section의 텍스트가 거부의 표시다. 같은 호출이 쓰는 응용 프로그램 로그 줄이 기록이다: `error: declared UI <owner>.<status>: <포인터>: <이유>`. section은 같은 오류를 두 번째 표시로 보이지 않는다.
 
 `showError`는 같은 `where`와 같은 `text`에 대해 로그 줄을 한 번만 쓴다. 보이는 텍스트를 유지하므로, 같은 텍스트의 거부가 반복되면 같은 텍스트를 보이고 아무것도 더 쓰지 않는다. 다른 텍스트의 거부는 자기 줄을 쓴다. status의 다음 받아들인 값은 그 `where`에 대해 `hideError`를 부른다. 이는 표시를 거두므로, 그 뒤에 같은 텍스트가 다시 나오면 다시 쓴다.
+출처가 바뀌거나, 프로세스가 끝나거나, surface가 닫히면 그 status에 대해 `hideError`를 부르고 `error`를 null로 둔다.
 
-모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 표의 각 행의 포인터는 그 행을 어기는 값이며, 포인터 열이 이를 정한다. 개수나 크기 한도는 초과한 배열, 객체, 문자열을 가리킨다. 필드의 존재를 다루는 행(`unknown field`, `missing`, `requires command`)은 그 필드를 가진 객체를 가리킨다. 필드 값을 다루는 행은 그 필드를 가리킨다. 중복 키는 두 번째 키를 가리킨다. `/`는 루트와 직렬화한 값 전체다. `<field>`는 JSON 필드 이름이다.
-요소의 필드 행은 `kind` 값이 고른 그 종류의 필드 목록을 쓰므로, `unknown kind` 행이 필드 행보다 앞에 있다. 값이 여러 행을 어기면 표의 순서에서 첫 행이 적용된다. 이름 행은 소유자 행보다 앞에 있으므로, 소유자가 없는 이름은 이름이 잘못되었다고 보고된다.
+모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 표의 각 행의 포인터는 그 행을 어기는 값이며, 포인터 열이 이를 정한다. 개수나 크기 한도는 초과한 배열, 객체, 문자열을 가리킨다. 필드의 존재를 다루는 행(`unknown field`, `missing`, `requires command`)은 그 필드를 가진 객체를 가리킨다. 필드 값을 다루는 행은 그 필드를 가리킨다. 중복 키는 두 번째 키를 가리킨다. `/`는 루트와 직렬화한 값 전체다. `<field>`는 JSON 필드 이름이다. 포인터는 JSON Pointer(RFC 6901)다. `<owner>`는 status의 plugin id다.
+요소의 필드 행은 `kind` 값이 고른 그 종류의 필드 목록을 쓰므로, `unknown kind` 행은 종류에 따라 달라지는 행보다 앞에 있다. 값이 여러 행을 어기면 표의 순서에서 첫 행이 적용된다. 이름 행은 소유자 행보다 앞에 있으므로, 소유자가 없는 이름은 이름이 잘못되었다고 보고된다.
 
 | 조건 | 이유 | 포인터 |
 | --- | --- | --- |
@@ -197,6 +198,7 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 | `elements`가 배열이 아님 | `elements must be an array` | `/elements` |
 | 직렬화한 값이 1048576바이트보다 큼 | `exceeds 1048576 bytes` | `/` |
 | 루트 요소가 64개를 넘음 | `exceeds 64 elements` | `/elements` |
+| 표에 없는 `kind` 값 | `unknown kind <value>` | `kind` 값 |
 | list의 항목이 1000개를 넘음 | `exceeds 1000 items` | `/elements/<i>/items` |
 | tree의 노드가 5000개를 넘음 | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
 | tree 노드가 16단계를 넘음 | `exceeds 16 levels` | 그 노드 |
@@ -207,7 +209,6 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 | 매개변수 키가 64자를 넘음 | `exceeds 64 characters` | 그 매개변수 키 |
 | 매개변수 문자열 값이 1000자를 넘음 | `exceeds 1000 characters` | 그 매개변수 값 |
 | 매개변수 값이 문자열, 유한한 숫자, 불리언, `null`이 아님 | `params values must be string, number, boolean or null` | 그 매개변수 값 |
-| 표에 없는 `kind` 값 | `unknown kind <value>` | `kind` 값 |
 | 객체가 나열하지 않은 필드(루트, 요소, list 항목, tree 노드) | `unknown field <field>` | 그 객체 |
 | 필수 필드가 없음 | `missing <field>` | 그 객체 |
 | list 항목이나 tree 노드에 `command` 필드 없이 `params` 또는 `enabled` 필드가 있음 | `<field> requires command` | 그 객체 |
