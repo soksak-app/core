@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commitMessageErrors, recordKind, repositoryRecordViolations, recordViolations, termChecked, termViolations } from "../records-check.js";
+import { checklistViolations, commitMessageErrors, recordKind, repositoryRecordViolations, recordViolations, termChecked, termViolations } from "../records-check.js";
 import { execSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+test("a checklist that states one identifier on two lines is refused, in any identifier form", () => {
+  assert.deepEqual(checklistViolations("- [o] F218-2.4 — P2: a\n- [ ] F218-2.4 — P2: b\n", "docs/features.md"), ["docs/features.md:2: duplicate checklist identifier F218-2.4 (first stated on line 1)"]);
+  assert.deepEqual(checklistViolations("- [o] F212.7b-1 — P0: a\n  - [ ] F212.7b-1 — P0: b\n", "docs/features.ko.md"), ["docs/features.ko.md:2: duplicate checklist identifier F212.7b-1 (first stated on line 1)"]);
+  assert.deepEqual(checklistViolations("- [o] F1-1 — P0: a\n- [o] F1-2 — P0: b\n", "docs/features.md"), []);
+});
 
 test("record checks report each statement that is not a fact about the repository", () => {
   const cases = [

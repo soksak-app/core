@@ -5,7 +5,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checkChangelogTranslations, checkSpecificationIds, retiredChecklistItems } from "../checklist.mjs";
+import { checkChangelogTranslations, checkSpecificationIds, checklist, retiredChecklistItems } from "../checklist.mjs";
+
+test("a checklist identifier that two lines of one file state is refused with both lines, in any identifier form", () => {
+  const errors = [];
+  checklist("- [o] F218-2.4 — P2: first\n- [ ] F218-2.4 — P2: second\n", "docs/features.md", errors);
+  assert.deepEqual(errors, ["docs/features.md:2: duplicate checklist identifier F218-2.4 (first stated on line 1)"]);
+  const plain = [];
+  checklist("- [o] F9-1 — P2: first\n- [ ] F9-1 — P2: second\n", "docs/features.md", plain);
+  assert.deepEqual(plain, ["docs/features.md:2: duplicate checklist identifier F9-1 (first stated on line 1)"]);
+});
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";

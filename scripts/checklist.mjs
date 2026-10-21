@@ -1,13 +1,13 @@
 // Compares task ID, depth, and state instead of translated sentences.
 export function checklist(text, file, errors) {
-  const entries = [], identifiers = new Set();
+  const entries = [], identifiers = new Map();
   const lines = text.split("\n");
   for (const [index, line] of lines.entries()) {
     const match = line.match(/^(\s*)- \[([^\]]*)\] (.*)$/);
     if (!match) continue;
     const [, indent, state, label] = match;
     if (![" ", "~", "o", "!", "-"].includes(state)) errors.push(`${file}:${index + 1}: invalid checklist state [${state}]`);
-    const id = label.match(/^([A-Z]\d+(?:\.\d+)*(?:-\d+)*)\s+—\s+/)?.[1] ?? null;
+    const id = label.match(/^([A-Z]\d+(?:[.-]\d+[a-z]?)*)\s+—\s+/)?.[1] ?? null;
     if (state === "!") {
       const korean = file.endsWith(".ko.md");
       const cause = korean ? /원인:\s*(.*?)\s+재시도 조건:/u : /Cause:\s*(.*?)\s+Retry when:/i;
@@ -26,8 +26,9 @@ export function checklist(text, file, errors) {
         errors.push(`${file}:${index + 1}: not reproduced checklist item ${id ?? "without an identifier"} requires a nonempty ${korean ? "재현되지 않음" : "Not reproduced"} record`);
       }
     }
-    if (id && identifiers.has(id)) errors.push(`${file}:${index + 1}: duplicate checklist identifier ${id}`);
-    if (id) identifiers.add(id);
+    // An identifier that two lines state is refused whatever its form, with the line of its first statement.
+    if (id && identifiers.has(id)) errors.push(`${file}:${index + 1}: duplicate checklist identifier ${id} (first stated on line ${identifiers.get(id)})`);
+    if (id && !identifiers.has(id)) identifiers.set(id, index + 1);
     entries.push({ id, indent: indent.length, state });
   }
   return entries;

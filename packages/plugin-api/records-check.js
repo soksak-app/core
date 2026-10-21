@@ -85,6 +85,22 @@ export function recordViolations(text, file, kind = "document") {
   return errors;
 }
 
+/**
+ * The checklist lines of a features file that state an identifier which an earlier line of the same file states, as
+ * `file:line: duplicate checklist identifier <id> (first stated on line <n>)`. The identifier grammar matches scripts/checklist.mjs.
+ */
+export function checklistViolations(text, file) {
+  const errors = [];
+  const first = new Map();
+  text.split("\n").forEach((line, index) => {
+    const id = line.match(/^\s*- \[[^\]]*\] ([A-Z]\d+(?:[.-]\d+[a-z]?)*)\s+—\s+/)?.[1];
+    if (!id) return;
+    if (first.has(id)) errors.push(`${file}:${index + 1}: duplicate checklist identifier ${id} (first stated on line ${first.get(id)})`);
+    else first.set(id, index + 1);
+  });
+  return errors;
+}
+
 /** The kind of a file to check. A document is `.md`, and a configuration is a workflow or a Makefile. Any other file is null. */
 export function recordKind(file) {
   if (file.endsWith(".md")) return "document";
@@ -135,7 +151,11 @@ export function repositoryRecordViolations(repository) {
   const files = declaredFiles(repository, tracked).filter((file) => recordKind(file) !== null || termChecked(file));
   return { files, errors: files.flatMap((file) => {
     const text = readFileSync(join(repository, file), "utf8");
-    return [...(recordKind(file) ? recordViolations(text, file, recordKind(file)) : []), ...(termChecked(file) ? termViolations(text, file) : [])];
+    return [
+      ...(recordKind(file) ? recordViolations(text, file, recordKind(file)) : []),
+      ...(termChecked(file) ? termViolations(text, file) : []),
+      ...(/(?:^|\/)features(?:\.[a-z]+)?\.md$/.test(file) ? checklistViolations(text, file) : []),
+    ];
   }) };
 }
 
