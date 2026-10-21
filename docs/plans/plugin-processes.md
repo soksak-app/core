@@ -142,7 +142,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 |---|---|---|---|
 | `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`; `skipped` is the count of values overwritten since the previous snapshot of the status | the push of rule 2 |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | confirms receipt; releases the in-transit slot |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}` | the load pull of rule 2. `value` is `null` when the source has no value yet |
+| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}`, where `seq` is the seq of the source's last declared UI snapshot, or 0 when `value` is `null` | the pull of rule 2 (load, source change, orientation). `value` is `null` when the source has no value yet |
 
 The RPC protocol number is 1 in the 0.0 series.
 
@@ -547,3 +547,14 @@ The objections below are the answers of the seventh adversarial review of [decla
 - R7-6: the idempotence paragraph described the next request as carrying the kept state. Verdict: accepted. Resolution: the request carries the `expanded` value that the control requests, which is the opposite of the kept state when the workbench draws it.
 - R7-7: "serialized value" did not define its length. Verdict: accepted. Resolution: it is the UTF-8 byte length of `JSON.stringify` of the value.
 - R7-8: pointers were not identified with a standard. Verdict: accepted. Resolution: pointers are JSON Pointers (RFC 6901).
+
+**Declared UI schema review round 8**
+
+The objections below are the answers of the eighth adversarial review of [declared UI](../spec/declared-ui.md). All six are accepted.
+
+- R8-1: the command rejection rows at the end of the table still named the plugin placeholder, while the rule defines `<owner>`. Verdict: accepted. Resolution: the two rows use `<owner>`, in both languages.
+- R8-2: the `seq` of a pull reply was not defined, and the pull trigger was named only as the load pull. Verdict: accepted. Resolution: the `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. The message row names the pull of rule 2 at load, at a source change, and at an orientation change.
+- R8-3: the validation of a non-null pull reply was not stated. Verdict: accepted. Resolution: a non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot, stated at the pull-reply rule and at transition (c).
+- R8-4: the baseline of the `expanded` comparison was not defined. Verdict: accepted. Resolution: the baseline is the last accepted value. A rejection and a change of source remove it. With no baseline, the kept state wins for every path that it holds.
+- R8-5: the path had one form in the command and another in the address. Verdict: accepted. Resolution: `path` is the keys below the root element, which for a tree node is the node keys from the root node of the tree. The address is the section id, the element key, the path, and the role. This applies to the command, to the address in the declared UI specification, and to the address in the exposure specification, in both languages.
+- R8-6: a missing `kind` and a `kind` that is not a string had no rows. Verdict: accepted. Resolution: the rows `missing kind` and `kind must be a string` point to the element and sit above `unknown kind`, in both languages.

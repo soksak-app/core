@@ -142,7 +142,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 |---|---|---|---|
 | `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`. `skipped`는 status의 이전 snapshot이 보내진 뒤 덮어쓴 값의 수다 | 규칙 2의 push |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | 수신을 확인하고 전송 슬롯을 비운다 |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}` | rule 2의 load pull. 출처에 아직 값이 없으면 `value`는 `null`이다 |
+| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}`이며 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이고, `value`가 `null`이면 0이다 | 규칙 2의 pull(load, 출처 변경, 방향 변경). 출처에 아직 값이 없으면 `value`는 `null`이다 |
 
 RPC protocol 번호는 0.0 계열에서 1이다.
 
@@ -548,3 +548,14 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R7-6: 멱등성 문단이 다음 요청이 유지된 상태를 담는다고 적었다. 판정: 수용. 해결: 요청은 제어가 요청하는 `expanded` 값을 담으며, 이는 workbench가 그릴 때의 유지 상태와 반대다.
 - R7-7: "직렬화한 값"의 길이가 정의되지 않았다. 판정: 수용. 해결: `JSON.stringify`한 값의 UTF-8 바이트 길이다.
 - R7-8: 포인터가 표준과 연결되지 않았다. 판정: 수용. 해결: 포인터는 JSON Pointer(RFC 6901)다.
+
+**선언된 UI 스키마 검토 8차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 여덟 번째 적대적 검토에 대한 답변이다. 여섯 건을 모두 수용한다.
+
+- R8-1: 표 끝의 명령 거부 행이 규칙이 정한 `<owner>` 대신 plugin 자리 표시자를 썼다. 판정: 수용. 해결: 두 행이 두 언어 모두 `<owner>`를 쓴다.
+- R8-2: pull 응답의 `seq`가 정해지지 않았고, pull의 시점이 load pull로만 적혔다. 판정: 수용. 해결: pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. 메시지 행은 규칙 2의 pull이 load, 출처 변경, 방향 변경 때 일어난다고 적는다.
+- R8-3: `null`이 아닌 pull 응답의 검사가 정해지지 않았다. 판정: 수용. 해결: `null`이 아닌 pull 응답은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다. pull 응답 규칙과 (c) 전이에 적는다.
+- R8-4: `expanded` 비교의 기준이 정해지지 않았다. 판정: 수용. 해결: 기준은 마지막으로 받아들인 값이다. 거부와 출처 변경은 기준을 없앤다. 기준이 없으면 유지된 상태가 그 상태를 가진 모든 경로에서 이긴다.
+- R8-5: path의 형식이 명령과 주소에서 달랐다. 판정: 수용. 해결: `path`는 루트 요소 아래의 key들이며, tree 노드는 tree의 루트 노드에서 그 노드까지의 노드 key들이다. 주소는 section id, 요소 key, path, 역할이다. 이는 명령, 선언된 UI 명세의 주소, 노출 명세의 주소에 두 언어 모두 적용한다.
+- R8-6: `kind`가 없는 요소와 문자열이 아닌 `kind`에 대한 행이 없었다. 판정: 수용. 해결: `missing kind`와 `kind must be a string` 행을 요소에 가리키게 하고 `unknown kind` 위에 두며, 두 언어 모두 그렇게 한다.

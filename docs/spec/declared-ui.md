@@ -114,7 +114,7 @@ Declared UI elements bind to these commands:
 
 A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is the plugin of the status. A name of core, or of another plugin, is rejected, because a plugin value names only commands of its own plugin. A name that is not declared is rejected when the declared UI snapshot is received, not when the user presses the element, because the binder refuses an undeclared name at mark time ([exposure](exposure.md#user-interface)).
 
-`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from a root node to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`. In that message, `<path>` is a JSON array of strings.
+`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from the root node of the tree to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`. In that message, `<path>` is a JSON array of strings.
 
 The request carries the `expanded` value that the control requests, which is the opposite of the kept state when the workbench draws it. Repeating the request sets the same state.
 
@@ -124,7 +124,7 @@ The elements that carry the native `button` element are the `button`, a list ite
 
 Dom names. Every interactive element that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with its `key`. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
 
-A request addresses an interactive element of a declared section by the section id, the path of keys from the root element to it, and its role: `label` for the label control of a button, of a list item with `command`, or of a tree node with `command`, and `expand` for the expand control of a tree branch. The path is unique, because keys are unique among siblings, and the role tells the two controls of one tree node apart.
+A request addresses an interactive element of a declared section by the section id, the element key, the path, and the role. The element key is the key of the root element that holds the control. The path is the keys below the root element: empty for a button, the item key for a list item, and the node keys from the root node of the tree to the node for a tree node. The role is `label` for the label control of a button, of a list item with `command`, or of a tree node with `command`, and `expand` for the expand control of a tree branch. The address is unique, because keys are unique among siblings and the role tells the two controls of one tree node apart.
 
 Native keyboard operation uses the native `button` element, so Enter and Space reach the command through the same binding. A declared UI element has no key handler of its own.
 
@@ -135,9 +135,9 @@ A declared UI status is drawn through its declared UI snapshots, as follows:
 - Each accepted declared UI snapshot replaces the tree of its status. Elements are matched by their path of keys to keep workbench state.
 - The workbench keeps the expanded state of each branch, keyed by the status, the tree key, and the path of node keys from the root. A kept state is set by `core.declared-ui.tree.expand` only.
 - In an accepted value, a branch whose `expanded` differs from its `expanded` in the previous accepted value, or that is new, takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A new branch with no kept state takes the plugin's value.
-- A rejected value does not change the kept state. The comparison above uses the last accepted value.
+- A rejected value does not change the kept state. The baseline of the `expanded` comparison is the last accepted value. A rejection and a change of source remove the baseline. With no baseline, the kept state wins for every path that it holds.
 - A path that is a leaf in an accepted value loses its kept state. A branch with no kept state takes the plugin's `expanded` value.
-- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source.
+- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
 - A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the declared UI snapshot of the previous process.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
@@ -147,7 +147,7 @@ The source changes by these rules:
 
 - (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes.
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
-- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page, at a change of source, and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader.
+- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page, at a change of source, and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
@@ -189,7 +189,7 @@ The display path is `showError(element, where, text)`. For a rejected value, `wh
 A change of source, a process end, and a surface close call `hideError` for the status and set `error` to null.
 
 Every rejection text has the form `<pointer>: <reason>`. The pointer of each row of the table is the value that breaks the row, as its Pointer column states. A count or size limit points to the array, object, or string that exceeds it. A field-presence row (`unknown field`, `missing`, `requires command`) points to the object that holds the field. A field-value row points to the field. A duplicate key points to the second key. `/` is the root and the whole serialized value. `<field>` is the JSON field name. Pointers are JSON Pointers (RFC 6901). `<owner>` is the plugin id of the status.
-Field rows of an element use the field list of its kind, which its `kind` value selects, so the `unknown kind` row comes before the rows that depend on the kind. When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
+Field rows of an element use the field list of its kind, which its `kind` value selects, so the `missing kind`, `kind must be a string`, and `unknown kind` rows come before the rows that depend on the kind. When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
 
 | Condition | Reason | Pointer |
 | --- | --- | --- |
@@ -197,6 +197,8 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | `elements` is not an array | `elements must be an array` | `/elements` |
 | The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` | `/` |
 | More than 64 root elements | `exceeds 64 elements` | `/elements` |
+| An element with no `kind` field | `missing kind` | the element |
+| A `kind` that is not a string | `kind must be a string` | the element |
 | A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
 | More than 1000 items in a list | `exceeds 1000 items` | `/elements/<i>/items` |
 | More than 5000 nodes in a tree | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
@@ -214,8 +216,8 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | A field has the wrong type | `<field> must be <type>` | the field |
 | A text field contains a control character | `<field> contains a control character` | the field |
 | Two keys are equal among their siblings, or among the items of a list | `duplicate key <key>` | the second key |
-| A `command` name with no owner, that is, with no `.` | `command <name> must be named <plugin>.<name>` | the `command` field |
-| A `command` name whose owner is core or another plugin | `command <name> is not a command of plugin <plugin>` | the `command` field |
+| A `command` name with no owner, that is, with no `.` | `command <name> must be named <owner>.<name>` | the `command` field |
+| A `command` name whose owner is core or another plugin | `command <name> is not a command of plugin <owner>` | the `command` field |
 | A `command` name that is not declared | `undeclared command <name>` | the `command` field |
 | An icon name that is not in the core icon table | `unknown icon <name>` | the `icon` field |
 | `expanded` on a leaf node | `expanded is allowed only on a branch` | the `expanded` field |
