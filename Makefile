@@ -53,13 +53,14 @@ page-memory:
 	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
-# Repeats the fixed operations of scripts/measure-object-counts.mjs REPETITIONS times against a running diagnostic build and prints the object counts
-# and footprints per repetition (docs/plans/document-streams-and-memory.md). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
+# Repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a running diagnostic build and prints
+# the object counts and footprints per repetition (docs/plans/document-streams-and-memory.md). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
 object-counts:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...' [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(strip $(PLUGINS))" in '') echo "object-counts requires PLUGINS='ID...', the surface plugins whose tabs it opens" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
-	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
+	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20)
 
 # Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
 # them and after a collection (scripts/measure-host-calls.mjs); MINUTES=M waits M minutes without input instead of the calls;
@@ -83,7 +84,7 @@ hidden-tab-memory:
 # Measures the share of the diagnostics in the memory of a running host: with the debug switch on and then off, it runs five repetitions of
 # object-counts and prints the footprint of the host process (docs/operations/examples.md).
 trace-share:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "trace-share requires CONFIG=DIR" >&2; exit 2;; esac
 	@sok=target/debug/soksak-$(APP).app/Contents/MacOS/sok; \
 	  pid=$$(pgrep -f "soksak-$(APP).app/Contents/MacOS/soksak-$(APP) --config-dir $(CONFIG)" | head -1); \
@@ -91,7 +92,7 @@ trace-share:
 	  for on in true false; do \
 	    echo "start debug=$$on"; \
 	    $$sok core.settings.debug --config-dir "$(CONFIG)" --params "{\"on\":$$on}" > /dev/null || exit 1; \
-	    $(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" BUILD=debug REPETITIONS=5 > /dev/null 2>&1 || exit 1; \
+	    $(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" BUILD=debug REPETITIONS=5 > /dev/null 2>&1 || exit 1; \
 	    echo "end debug=$$on host $$pid $$(footprint -p $$pid | grep -o 'Footprint: [0-9.]* [KMG]*B' | head -1)"; \
 	  done
 
