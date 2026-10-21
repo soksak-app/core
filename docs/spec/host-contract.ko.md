@@ -19,7 +19,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`의 테스트 모듈에 있는 모든 테스트 함수는 사례를 하나 이상 선언한다. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로의 모든 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다.
 
 ## 검사
 
@@ -30,6 +30,10 @@ fn invalid_json_closes_connection() {
 - 테스트가 사례를 선언하지 않았거나, 정의되지 않은 사례나 호스트 범위 밖의 사례를 선언했다.
 - 선언이 테스트 함수에 붙어 있지 않다.
 - 호스트 실행이 테스트 0개를 보고했다.
+- Rust 잎 이름(테스트 모듈 경로의 마지막 조각)이 한 실행에서 한 크레이트의 테스트 두 개에 나타난다. 어느 타깃에 있는지는 묻지 않으므로, 선언이 테스트 하나를 가리킨다.
+- 선언의 속성 블록에 `#[test]`, `#[tokio::test]`, `#[cfg(feature = "...")]`, `#[cfg(not(feature = "..."))]` 이외의 속성이 있다. 블록은 선언과 `fn` 위아래로 이어지는 속성과 주석 줄이며, 실패 메시지는 파일, 줄, 속성을 밝힌다.
+
+소유자 규칙: 선언된 테스트는 자기 소유자의 항목에서만 결과를 얻는다. Go 테스트의 소유자는 패키지 디렉터리이고, Rust 테스트의 소유자는 크레이트 디렉터리(파일 위쪽에서 가장 가까운 `Cargo.toml`이 있는 폴더)다. 결과는 실행, 소유자, 테스트 이름으로 묶으며, 호스트의 결과가 sok 선언에 쓰이거나 그 반대가 되지 않는다. Rust 선언은 이름이 같은 잎 이름을 가진 테스트 하나와 일치한다.
 
 범위 열은 `both`이거나, 한 호스트에만 있는 동작이면 `<host> only: <이유>`다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 

@@ -19,7 +19,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-A test function may declare several cases, separated by commas. Every test function in `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, and the test modules in `packages/host/tauriv2/src/` declares at least one case. A test declares a case only when its assertions check the case's outcome.
+A test function may declare several cases, separated by commas. Every test function in the eight declaration paths declares at least one case: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/` and `packages/sok/tauriv2/src/`. A test declares a case only when its assertions check the case's outcome.
 
 ## Check
 
@@ -29,7 +29,11 @@ A test function may declare several cases, separated by commas. Every test funct
 - a declared test ran in no configuration, or failed or was skipped in one;
 - a test declares no case, an undefined case, or a case outside its host's scope;
 - a declaration is not attached to a test function;
-- a host run reports zero tests.
+- a host run reports zero tests;
+- a Rust leaf name (the last segment of a test's module path) appears twice among the tests of one crate in one run, whatever targets hold them, so that a declaration names one test;
+- a declaration's attribute block holds an attribute other than `#[test]`, `#[tokio::test]`, `#[cfg(feature = "...")]` or `#[cfg(not(feature = "..."))]`. The block is the contiguous attribute and comment lines above and below the declaration, and the failure names the file, the line and the attribute.
+
+Owner rule: a declared test takes its result only from the items of its own owner. The owner of a Go test is its package directory, and the owner of a Rust test is its crate directory (the nearest ancestor folder of the file that holds `Cargo.toml`). Results are keyed by run, owner and test name, and a host's results never count for a sok declaration, or the other way round. A Rust declaration matches the one test whose leaf name equals its name.
 
 The scope column is `both`, or `<host> only: <reason>` for behavior that exists in one host. The check runs on macOS, the only platform that both hosts implement; Windows and Linux entry points return `not implemented` errors and have no cases. The unit tests of the check (`scripts/test/check-host-contract.test.mjs`) inject each failure and run in `pnpm test`.
 
