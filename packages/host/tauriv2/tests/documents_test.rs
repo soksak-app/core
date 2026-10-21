@@ -715,6 +715,36 @@ fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
 }
 
 // contract: view.restart.limit-shows-error
+// Each process end sends view-process-ended (native-surfaces.md, process end), so the failures before the fourth send no
+// view-stopped event, and only the fourth failure sends one, once.
+#[test]
+fn view_stop_event_is_sent_once_at_the_fourth_failure() {
+    let lifecycle = ViewLifecycle::default();
+    let start = Instant::now();
+    lifecycle.track(
+        "probe-surface",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
+    for offset in [0, 10, 20] {
+        assert!(
+            lifecycle.fail("probe-surface", seconds_after(start, offset)),
+            "the failure at {offset} seconds restarts the view and sends no view-stopped event"
+        );
+    }
+    assert!(
+        !lifecycle.fail("probe-surface", seconds_after(start, 30)),
+        "the fourth failure stops the restarts, which sends the view-stopped event"
+    );
+    let event = view_stopped_event("probe-surface", "probe");
+    assert_eq!(event["surface"], "probe-surface", "the stop event names the surface");
+    assert_eq!(event["reason"], view_stop_reason(), "the stop event carries the stop reason");
+}
+
+// contract: view.restart.limit-shows-error
 #[test]
 fn view_stop_event_names_the_surface_plugin_and_reason() {
     assert_eq!(
