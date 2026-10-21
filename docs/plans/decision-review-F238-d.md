@@ -228,7 +228,51 @@ Round 3 auditors (two fresh subagents, read-only): auditor E returned six object
 - D9.3 (expansion, revised): for a declared tree whose source is a plugin host or a view, the plugin's `expanded` value is authoritative. `declared-ui.md:137-144` gains that case. The expand command posts `declared-ui.expanded` to the source; the sidecar updates its expanded set and sends the new value. The tree shows the new state after that round trip, not before. A kept state is used only for a tree whose source is not a plugin value. Contract case `declared-ui.expanded` in both hosts.
 - D9.9 (costs, revised): restarting the files sidecar resets its expanded sets and selection (`sidecars.md:67`). Bookmarks persist in the sidecar state, so they are not lost. The new sidecar operations `expand`, `collapse` and `select` (with replies) are added to the files sidecar's protocol in its repository. Arrow-key navigation between rows stays lost, as before.
 
-The round-4 auditors review these texts, the new layer rule, and the sidecar protocol change.
+## Round 4 answers and revised texts
+
+Round 4 auditors (two fresh subagents, read-only): auditor G returned twelve objections (D9 only; D2 and D8 read once, no objection in the scope checked, D8.2 to D8.5 not re-verified in depth); auditor H returned seven (D9.2 and D9.7) and no objection for D2 and D8. Each was checked. Where this section and earlier text differ, this section governs.
+
+### Answers
+
+- H-D9.2-1 and H-D9.2-2, bookmarks and migration: accepted. `installation.md:120` says a plugin persists values as keys of `projects.json`, and `plugins.md:126` gives project data by id. Moving the list into a sidecar would cross files with no migration definition. The bookmark list stays in project data, and no migration is needed because its key does not change.
+- G-D9.2-6, sidecar persistence: accepted with the bookmark answer above. No sidecar state directory exists for a standard-IO sidecar, so none is assumed.
+- H-D9.2-3 and G-D9.2-3, stop clearing: accepted. `sidecars.md:67` says only the person's open of a surface clears the stop. Route creation on a project change is not a person's open, so it does not clear the stop. Refresh does not clear the stop either. A stopped sidecar stays stopped until the application restarts; this is an accepted cost, stated in D9.9.
+- H-D9.2-4, sidecar-built presentation: accepted. Presentation (labels, the no-project text, the cut, action layout) is plugin functionality. AGENTS says plugin functionality does not move into core, and a sidecar holds native functionality for one domain. The sidecar supplies data only, and the host page builds the declared value. The host therefore holds presentation logic. That is a standard change, so it is recorded in D9.2 with its reason and goes to review.
+- H-D9.2-5 and G layer-rule objection, criterion: accepted in part. The original criterion, a host only when logic cannot be held by a view or a sidecar, is kept as the base. The host is needed for a status that must be served while no view is open. A view cannot serve it, and a sidecar cannot register a status (`declared-ui.md:145`). The host holds the DOM-free presentation that serves that status. The new text states both facts.
+- H-D9.2-6 and G-D9.2-9, missing spec sentences: accepted. `plugins.md:58`, `:154`, `:259`, `:264` and `installation.md:134` gain `host` where they name `surface` or `state`. The sentence "no sidecar send" named for `plugin-host.md:59` is absent from the main text: a search of that file returned no match. The replacement rule applies only if the sentence exists, and the Round-4 check item records that.
+- H-D9.7, DOM test target: accepted. The target is the host page presentation module that D9.2 now names.
+- G-D9.1e, action key collision: accepted. `declared-ui.md:128` fixes the address to five fields, with `key` the root key. The action is addressed by an `action` field, required with role `action`.
+- G-D9.1b, keydown binding: accepted. The binder allows only `click` (`declared-ui.md:103`). `exposure.md` gains the keydown event for declared tree nodes, and the Red case is Enter on a node without `open`, which does nothing.
+- G-D9.1h, `branch` term: accepted. `declared-ui.md:62` and `packages/plugin-api/terms.json:304` define a branch by its children. The term changes to two terms: `branch` (children present) and `unloaded branch` (the new term, added to `terms.json` before use). The `branch` field row is added to the table, and a non-boolean `branch` is rejected.
+- G-D9.1a, `:230`: accepted. `declared-ui.md:230` is in the change list.
+- G-D9.2-5, route generation: accepted. The route key is `plugin-host:<plugin>:<window>:<n>`, where `n` is the root generation. Each root is a new surface.
+- G-D9.2-7, stop: answered above.
+- G-D9.2-8, snapshot after restart: accepted. A sidecar request `snapshot` returns the full data, and the host sends it on every route open and every host page start.
+- G-D9.2-9, channel: accepted. The native host routes `plugin-host:` sidecar messages to the host web view and not to the main page. The host page sends through `sidecar.send {sidecar, body, cids}`.
+- G-D9.2-10, failure alert: accepted. `sidecars.md:85` shows the application error alert when no handler is registered. The workbench registers a handler for `plugin-host:` routes that forwards `{sok: 1, sidecar, failure}` to the host page, and no alert is shown for it.
+- G-D9.2-11, command replies: accepted. A command request carries `cids`. The sidecar echoes them on its value, and the host completes the command on the matching value.
+- G-D9.2-12, state keying: accepted. The expanded set and selection are keyed by route, which is per window and root generation. Two windows on one project keep separate state; that cost is stated in D9.9 and tested.
+
+### Revised texts
+
+- D9.1e: the action address is `{sidebar, section, key, path?, role?, action?}`. `action` is required with `role: "action"` and names the action key that is unique among the actions of its node. `declared-ui.md:126` and `:128` gain the `action` field.
+- D9.1b: the binder declares a `keydown` event for declared tree nodes in `exposure.md` and in the binder (`declared-ui.md:103`). Enter keydown on a node with `open` runs `open` and prevents the native click. Enter on a node without `open` does nothing. Red and Green cases are in the workbench tests.
+- D9.1h: `branch: true` is a boolean field on a tree node. `declared-ui.md:59-62` gains the row. `:62` defines a branch as a node with children, or with `branch: true`. `packages/plugin-api/terms.json` gains the term `unloaded branch` for a node with `branch: true` and no children, and the term `branch` is kept for a node with children.
+- D9.1a: `declared-ui.md:56`, `:171` and `:230` are all changed to allow a horizontal tree, so the table and the rules agree.
+- D9.2 (round-4 text, governs):
+  - Route: `plugin-host:<plugin id>:<window id>:<n>`, where `n` is the root generation. A project change closes the route and opens `n+1`. Each root is a new surface; `sidecars.md:41` applies per surface.
+  - Stop: route creation and refresh do not clear a sidecar stop (`sidecars.md:67`, `plugin-host.md:80`). A stopped sidecar stays stopped until the application restarts. Contract case `plugin-host.sidecar.project-switch-after-stop` shows that a project switch after the fourth failure does not restart the sidecar.
+  - Data: the files sidecar supplies data only: the listing, the git status per path, the expanded set, the selection, and the directory `detail` values. It answers a `snapshot` request with the full data, and each route open and host page start requests it. It answers each command request with the new data and echoes its `cids`.
+  - Presentation: the host page builds the declared value from the data: rows, the flattening, the cut, `detail`, `actions`, header buttons, the no-project status, and the bookmark list. The host page then sends that value unchanged to the main page as a declared snapshot. This moves presentation into plugin code, which is the plugin's own page, not core. The criterion is the one stated in the answers above; this is a standard change that goes to the review in this round.
+  - Bookmarks: the list stays in project data by project id (`plugins.md:126`), and the host page reads and writes it through the project data calls. `plugin-host.md:59` gains those calls as served calls, with a contract case in both hosts. No migration is needed because the key does not change.
+  - Channel: the native host routes `plugin-host:` sidecar messages to the host web view, not the main page. The host page sends commands through `sidecar.send {sidecar, body, cids}`. `plugin-host.md:59` is checked and its "no sidecar send" sentence, if present, is replaced. Contract cases in both hosts.
+  - Failure: the workbench handles `plugin-host:` failures by forwarding `{sok: 1, sidecar, failure}` to the host page, so no application error alert is shown for them (`sidecars.md:85`).
+  - Layer rule (replaces the round-3 text): `plugin-processes.md:28`: "**Plugin host:** created only when a declared sidebar status must be served while no view of the plugin is open. The host serves its declared statuses and holds the DOM-free presentation of them, and it relays its plugin's sidecar messages and command requests; it holds no logic that a sidecar can hold." `plugin-host.md:5` takes the same condition.
+- D9.3: unchanged from round 3, with the route key of D9.2 and the state keyed by route.
+- D9.7 (test target): the DOM-free test reads the host page presentation module, the module of D9.2 that builds the declared value. Red: the test fails on a copy with `document.createElement("div")` added. Green on the module as written.
+- D9.9 (costs, revised): a stopped files sidecar stays stopped until the application restarts. Each window's expanded and selection state is separate. Arrow-key navigation stays lost. Sidecar restart resets expansion and selection.
+
+The round-5 auditors review these texts, the presentation-placement standard change, and the layer-rule text.
 
 ## To record elsewhere
 

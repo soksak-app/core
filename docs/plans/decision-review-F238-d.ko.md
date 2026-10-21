@@ -231,6 +231,52 @@
 
 라운드 4 감사자는 이 본문, 새 층 규칙, 사이드카 프로토콜 변경을 검토한다.
 
+## 라운드 4 답변과 수정된 본문
+
+라운드 4 감사자(새 하위 에이전트 두 명, 읽기 전용): 감사자 G는 열두 개(D9만, D2와 D8은 읽었으나 검토한 범위에서 반론 없음, D8.2~D8.5는 깊이 재확인하지 않음), 감사자 H는 일곱 개(D9.2와 D9.7)를 냈고 D2와 D8에는 반론이 없었다. 각 항목은 파일에서 확인했다. 이 절과 앞의 본문이 다르면 이 절이 우선한다.
+
+### 답변
+
+- H-D9.2-1과 H-D9.2-2, 북마크와 마이그레이션: 수락. `installation.md:120`은 플러그인이 값을 `projects.json`의 키로 저장한다고 하고, `plugins.md:126`은 프로젝트 데이터를 id로 준다. 목록을 사이드카로 옮기면 마이그레이션 정의 없이 files 경계를 넘는다. 북마크 목록은 프로젝트 데이터에 남고, 키가 바뀌지 않으므로 마이그레이션은 필요 없다.
+- G-D9.2-6, 사이드카 영속성: 위 북마크 답변과 함께 수락. 표준 IO 사이드카에는 상태 디렉터리가 없으므로 가정하지 않는다.
+- H-D9.2-3과 G-D9.2-3, 정지 해제: 수락. `sidecars.md:67`은 사람이 표면을 여는 것만 정지를 푼다고 말한다. 프로젝트 변경에 따른 라우트 생성은 사람의 열기가 아니므로 정지를 풀지 않는다. 새로 고침도 정지를 풀지 않는다. 정지된 사이드카는 앱을 재시작할 때까지 정지된 채 있다. 이는 D9.9에 적은 비용이다.
+- H-D9.2-4, 사이드카가 만드는 표현: 수락. 표현(라벨, 프로젝트 없음 문구, 잘라내기, 동작 배치)은 플러그인 기능이다. AGENTS는 플러그인 기능을 core로 옮기지 않으며, 사이드카는 한 도메인의 네이티브 기능을 담는다. 사이드카는 데이터만 주고 호스트 페이지가 선언값을 만든다. 따라서 호스트는 표현 로직을 가진다. 이는 기준 변경이므로 D9.2에 이유와 함께 기록하고 이번 라운드에서 검토한다.
+- H-D9.2-5와 G의 층 규칙 기준: 일부 수락. 원래 기준(뷰나 사이드카가 로직을 가질 수 없을 때만 호스트)을 기반으로 둔다. 호스트는 뷰가 열려 있지 않을 때도 제공되어야 하는 status를 위해 필요하다. 뷰는 그것을 제공할 수 없고, 사이드카는 status를 등록할 수 없다(`declared-ui.md:145`). 호스트는 그 status를 제공하는 DOM 없는 표현을 가진다. 새 문장이 두 사실을 모두 말한다.
+- H-D9.2-6과 G-D9.2-9, 누락된 명세 문장: 수락. `plugins.md:58`, `:154`, `:259`, `:264`와 `installation.md:134`에 `surface`나 `state`를 적은 곳마다 `host`를 더한다. `plugin-host.md:59`에 적힌 "no sidecar send" 문장은 본문에 없다. 그 파일을 검색해도 일치하는 줄이 없었다. 교체 규칙은 그 문장이 있을 때만 적용하며, 라운드 4 확인 항목에 그 점을 적는다.
+- H-D9.7, DOM 테스트 대상: 수락. 대상은 D9.2가 이제 이름 붙인 호스트 페이지 표현 모듈이다.
+- G-D9.1e, 동작 키 충돌: 수락. `declared-ui.md:128`은 주소를 다섯 필드로 고정하며 `key`는 루트 키다. 동작은 역할 `action`이 필요로 하는 `action` 필드로 주소를 갖는다.
+- G-D9.1b, keydown 바인딩: 수락. 바인더는 `click`만 허용한다(`declared-ui.md:103`). `exposure.md`에 선언형 tree 노드의 keydown 이벤트를 더한다. 빨간 사례는 `open`이 없는 노드에서 Enter를 누르면 아무 일도 없어야 함이다.
+- G-D9.1h, `branch` 용어: 수락. `declared-ui.md:62`와 `packages/plugin-api/terms.json:304`는 분기를 자식으로 정의한다. 용어를 둘로 나눈다. `branch`(자식이 있음)와 `unloaded branch`(새 용어, 사용 전에 `terms.json`에 추가). `branch` 필드 행을 표에 더하고, boolean이 아닌 `branch`는 거부한다.
+- G-D9.1a, `:230`: 수락. `declared-ui.md:230`은 변경 목록에 있다.
+- G-D9.2-5, 라우트 생성: 수락. 라우트 키는 `plugin-host:<plugin>:<window>:<n>`이며, `n`은 root 세대다. 각 root는 새 표면이다.
+- G-D9.2-7, 정지: 위에서 답했다.
+- G-D9.2-8, 재시작 뒤 스냅샷: 수락. 사이드카 요청 `snapshot`이 전체 데이터를 돌려주고, 호스트는 라우트가 열릴 때마다, 호스트 페이지가 시작할 때마다 이를 보낸다.
+- G-D9.2-9, 채널: 수락. 네이티브 호스트는 `plugin-host:` 사이드카 메시지를 메인 페이지가 아니라 호스트 web view로 보낸다. 호스트 페이지는 `sidecar.send {sidecar, body, cids}`로 보낸다.
+- G-D9.2-10, 실패 경고: 수락. `sidecars.md:85`는 핸들러가 없으면 앱 오류 경고를 보인다. 워크벤치는 `plugin-host:` 라우트용 핸들러를 등록해 `{sok: 1, sidecar, failure}`를 호스트 페이지로 전달하고, 이 경우 경고를 보이지 않는다.
+- G-D9.2-11, 명령 응답: 수락. 명령 요청은 `cids`를 가진다. 사이드카는 이를 자신의 값에 되돌려 주고, 호스트는 일치하는 값에서 명령을 완료한다.
+- G-D9.2-12, 상태 키: 수락. 펼친 집합과 선택은 라우트(창과 root 세대별)로 키를 둔다. 한 프로젝트의 두 창은 별도 상태를 가진다. 그 비용은 D9.9에 적고 시험한다.
+
+### 수정된 본문
+
+- D9.1e: 동작 주소는 `{sidebar, section, key, path?, role?, action?}`이다. `action`은 역할이 `action`일 때 필수이며, 노드의 동작들 사이에서 유일한 동작 키를 이름으로 준다. `declared-ui.md:126`과 `:128`에 `action` 필드를 더한다.
+- D9.1b: 바인더는 선언형 tree 노드에 `keydown` 이벤트를 선언한다(`exposure.md`와 바인더, `declared-ui.md:103`). `open`이 있는 노드에서 Enter keydown은 `open`을 실행하고 네이티브 click을 막는다. `open`이 없는 노드에서 Enter는 아무 일도 하지 않는다. 빨간 사례와 초록 사례는 워크벤치 테스트에 둔다.
+- D9.1h: `branch: true`는 tree 노드의 boolean 필드다. `declared-ui.md:59-62`에 행을 더한다. `:62`는 분기를 자식이 있는 노드, 또는 `branch: true`인 노드로 정의한다. `packages/plugin-api/terms.json`에 용어 `unloaded branch`(`branch: true`이고 자식이 없는 노드)를 더하고, `branch`는 자식이 있는 노드에 둔다.
+- D9.1a: `declared-ui.md:56`, `:171`, `:230`을 모두 바꿔 가로 tree를 허용하므로, 표와 규칙이 맞는다.
+- D9.2(라운드 4 문장, 우선함):
+  - 라우트: `plugin-host:<plugin id>:<window id>:<n>`이며 `n`은 root 세대다. 프로젝트 변경은 라우트를 닫고 `n+1`을 연다. 각 root는 새 표면이며, `sidecars.md:41`이 표면별로 적용된다.
+  - 정지: 라우트 생성과 새로 고침은 사이드카 정지를 풀지 않는다(`sidecars.md:67`, `plugin-host.md:80`). 정지된 사이드카는 앱을 재시작할 때까지 정지된 채다. 사례 `plugin-host.sidecar.project-switch-after-stop`는 네 번째 실패 뒤 프로젝트 전환이 사이드카를 다시 시작하지 않음을 보인다.
+  - 데이터: files 사이드카는 데이터만 준다. 목록, 경로별 git 상태, 펼친 집합, 선택, 디렉터리 `detail` 값이다. `snapshot` 요청에 전체 데이터로 답하며, 각 라우트 열기와 호스트 페이지 시작 때 요청된다. 각 명령 요청에 새 데이터로 답하고 `cids`를 되돌린다.
+  - 표현: 호스트 페이지가 데이터로 선언값을 만든다. 행, 평탄화, 잘라내기, `detail`, `actions`, 헤더 버튼, 프로젝트 없음 status, 북마크 목록이다. 호스트 페이지는 그 값을 declared snapshot으로 메인 페이지에 수정 없이 보낸다. 이는 표현을 플러그인 코드(플러그인 자신의 페이지)로 옮기는 것이며 core가 아니다. 기준은 위 답변에서 말한 것이고, 이는 이번 라운드에서 검토할 기준 변경이다.
+  - 북마크: 목록은 프로젝트 id별 프로젝트 데이터에 남고(`plugins.md:126`), 호스트 페이지는 프로젝트 데이터 호출로 읽고 쓴다. `plugin-host.md:59`에 그 호출을 served call로 더하고, 두 호스트에 사례를 둔다. 키가 바뀌지 않으므로 마이그레이션은 필요 없다.
+  - 채널: 네이티브 호스트는 `plugin-host:` 사이드카 메시지를 메인 페이지가 아니라 호스트 web view로 보낸다. 호스트 페이지는 명령을 `sidecar.send {sidecar, body, cids}`로 보낸다. `plugin-host.md:59`는 확인하며, "no sidecar send" 문장이 있으면 교체한다. 두 호스트에 사례를 둔다.
+  - 실패: 워크벤치는 `plugin-host:` 실패를 `{sok: 1, sidecar, failure}`로 호스트 페이지에 전달하므로 이 경우 앱 오류 경고를 보이지 않는다(`sidecars.md:85`).
+  - 층 규칙(라운드 3 문장을 대체), `plugin-processes.md:28`: "**Plugin host:** created only when a declared sidebar status must be served while no view of the plugin is open. The host serves its declared statuses and holds the DOM-free presentation of them, and it relays its plugin's sidecar messages and command requests; it holds no logic that a sidecar can hold." `plugin-host.md:5`도 같은 조건을 받는다.
+- D9.3: 라운드 3과 같다. 라우트 키는 D9.2의 것을, 상태는 라우트별 키를 쓴다.
+- D9.7(테스트 대상): DOM 없는 테스트는 D9.2의 호스트 페이지 표현 모듈(선언값을 만드는 모듈)을 읽는다. 빨간 사례: `document.createElement("div")`를 더한 사본에서 실패. 초록: 쓴 그대로의 모듈에서 통과.
+- D9.9(비용, 수정): 정지된 files 사이드카는 앱을 재시작할 때까지 정지된 채다. 창마다 펼침과 선택 상태는 따로 둔다. 화살표 키 탐색은 여전히 잃는다. 사이드카 재시작은 펼침과 선택을 초기화한다.
+
+라운드 5 감사자는 이 본문, 표현 배치의 기준 변경, 층 규칙 문장을 검토한다.
+
 ## 다른 곳에 기록할 것
 
 이 검토는 아래를 바꾸지 않는다. 각 항목은 소유 저장소나 브랜치에 기록된다. 라운드 2가 더한 항목: `docs/spec/plugin-host.md`(Channel의 D9.2 경로와 `:5`의 층 문장), `docs/spec/plugin-processes.md:26-28`(D9.2의 호스트 규칙), `docs/spec/native-surfaces.md`(D9.3의 view `declared-ui.expanded` 메시지), `docs/spec/sidecars.md:41,46,65,67`(호스트 경로 키).
