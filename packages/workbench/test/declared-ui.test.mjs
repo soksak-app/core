@@ -684,6 +684,56 @@ test("a redraw keeps the element of a status line", async () => {
   assert.equal(line.textContent, "Done", "the text was not updated");
 });
 
+test("a branch flag declares an unloaded branch without children", async () => {
+  const module = await load("unloaded-branch");
+  const value = tree([leaf("folder", { branch: true })]);
+  const error = rejectionOf(value, OPTIONS, module);
+  assert.equal(error, null, error?.reason ?? "an unloaded branch was rejected");
+  const s = section(module);
+  s.show(value);
+  assert.ok(s.body.querySelector('[data-role="expand"]'), "an unloaded branch has no expand control");
+});
+
+test("an expanded unloaded branch keeps its state until children arrive", async () => {
+  const module = await load("unloaded-branch-children");
+  const s = section(module);
+  s.show(tree([leaf("folder", { branch: true })]));
+  assert.ok(s.body.querySelector('[data-role="expand"]'), "the unloaded branch has no expand control");
+  s.expand(["folder"], true);
+  s.show(tree([branch("folder", [leaf("child")], { branch: true })]));
+  assert.deepEqual(s.labels(), ["folder", "child"], "children did not draw after they arrived for an expanded branch");
+});
+
+test("the node limit counts unloaded branches", async () => {
+  const module = await load("unloaded-branch-limit");
+  const nodes = (count) => Array.from({ length: count }, (_, index) => leaf("f" + index, { branch: true }));
+  assert.equal(rejectionOf(tree(nodes(5000)), OPTIONS, module), null, "5000 unloaded branches were rejected");
+  const error = rejectionOf(tree(nodes(5001)), OPTIONS, module);
+  assert.ok(error, "5001 unloaded branches were accepted");
+  assert.equal(error.pointer, "/elements/0/nodes");
+  assert.equal(error.reason, "exceeds 5000 nodes");
+});
+
+test("the branch flag must be boolean", async () => {
+  const module = await load("branch-type");
+  const error = rejectionOf(tree([leaf("folder", { branch: "yes" })]), OPTIONS, module);
+  assert.ok(error, "a non-boolean branch flag was accepted");
+  assert.equal(error.pointer, "/elements/0/nodes/0/branch");
+  assert.equal(error.reason, '"branch" must be boolean');
+});
+
+test("root header buttons stay before a tree and run their declared command", async () => {
+  const module = await load("tree-header-button");
+  const s = section(module);
+  s.show({ elements: [
+    { kind: "button", key: "add", label: "Add", command: "demo.open" },
+    ...tree([leaf("file")]).elements,
+  ] });
+  assert.deepEqual([...s.body.children].map(({ className }) => className), ["declared-button", "declared-tree"]);
+  s.body.firstElementChild.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 1 }));
+  assert.deepEqual(s.runs.map(({ name }) => name), ["demo.open"]);
+});
+
 test("tree node actions are bounded and have unique keys", async () => {
   const module = await load("tree-action-validation");
   const action = (key) => ({ key, label: key, command: "demo.open" });

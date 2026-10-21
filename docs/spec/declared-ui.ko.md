@@ -28,7 +28,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 ## 루트
 
-값은 `elements` 필드를 가진 객체이며, `elements`는 0개에서 64개 요소의 배열이다. 각 요소는 아래 요소 종류 가운데 하나를 고르는 `kind` 필드를 가진 객체다. 각 요소는 루트 요소들 사이에서 유일한 `key`를 가진다. 루트에서 다른 필드는 받지 않는다.
+값은 `elements` 필드를 가진 객체이며, `elements`는 0개에서 64개 요소의 배열이다. 각 요소는 아래 요소 종류 가운데 하나를 고르는 `kind` 필드를 가진 객체다. 각 요소는 루트 요소들 사이에서 유일한 `key`를 가진다. 루트 요소는 배열 순서대로 그리므로, tree section은 tree 앞에 button 요소를 둘 수 있다. 루트에서 다른 필드는 받지 않는다.
 
 ## 요소 종류
 
@@ -58,11 +58,12 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | `tree` 노드 | `label` | 문자열 | 예 | 평문, 500 코드 포인트 이하. |
 | `tree` 노드 | `command`, `params`, `icon`, `enabled` | `button`과 같음 | 아니오 | `command`가 있는 노드는 한 번 누르면 그 명령을 실행한다. `open`이 있으면 두 번 누르기의 두 번째 클릭은 `command` 대신 `open`을 실행한다. |
 | `tree` 노드 | `open` | 문자열 | 아니오 | plugin의 명령. 이 노드에서 Enter keydown은 `open`을 실행하고 native click을 막는다. `event.detail === 2`인 클릭은 `open`을 실행한다. 노드의 `params`는 `command`와 `open` 모두에 적용한다. |
+| `tree` 노드 | `branch` | 불리언 | 아니오 | `true`이면 자식 노드가 아직 없어도 가지로 선언한다. 불리언이 아니면 거부한다. |
 | `tree` 노드 | `expanded` | 불리언 | 아니오 | 가지에 대한 plugin의 값. 가지에만 허용하므로, 잎에 두면 거부한다. 기본값 `false`. [status 대응](#status-대응)이 우선순위를 정한다. |
 | `tree` 노드 | `selected` | 불리언 | 아니오 | 노드를 선택된 것으로 그린다. 기본값 `false`. plugin의 값은 받아들인 모든 값에 적용된다. |
 | `tree` 노드 | `detail` | 문자열 | 아니오 | 평문, 최대 500 코드 포인트. 라벨 뒤에 `list` 항목의 `detail`과 같이 그린다. |
 | `tree` 노드 | `actions` | 배열 | 아니오 | 최대 2개의 `button` 객체이며 `button` 규칙을 따른다. 라벨과 detail 뒤에 그린다. 각 action key는 노드 안에서 유일하다. |
-| `tree` 노드 | `children` | 배열 | 아니오 | 하위 노드. 같은 규칙을 따른다. `children`이 있고 비어 있지 않은 노드는 가지이며, 그 밖의 노드는 잎이다. |
+| `tree` 노드 | `children` | 배열 | 아니오 | 하위 노드. 같은 규칙을 따른다. 비어 있지 않은 `children` 또는 `branch: true`가 있는 노드는 가지이며, 그 밖의 노드는 잎이다. |
 | `status-line` | `key` | 문자열 | 예 | 아래 키 규칙. |
 | `status-line` | `text` | 문자열 | 예 | 평문, 500 코드 포인트 이하. 한 줄로 그린다. |
 
@@ -72,7 +73,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 `status-line`에는 tone과 오류 값이 없다. 오류는 응용 프로그램 로그에 기록하는 표시 경로([AGENTS](../../AGENTS.ko.md))를 거쳐야 사용자에게 보이므로, 선언된 요소는 오류를 그릴 수 없다.
 
-`list`는 행의 열이며, 행이 없으면 `empty` 텍스트를 그린다. `tree`는 들여쓴 개요이며, 노드가 없으면 `empty` 텍스트를 그린다. 가지는 펼쳐져 있을 때만 자식을 그린다. `button`은 한 개의 버튼이다. `status-line`은 한 줄의 텍스트다.
+`list`는 행의 열이며, 행이 없으면 `empty` 텍스트를 그린다. `tree`는 들여쓴 개요이며, 노드가 없으면 `empty` 텍스트를 그린다. 비어 있지 않은 `children`이 있는 노드는 가지이며, `branch: true`도 아직 자식이 제공되지 않은 가지(미적재 가지)를 선언한다. 가지는 제공된 자식이 펼쳐져 있을 때만 그린다. 미적재 가지는 펼침 제어를 가지지만, 나중에 받아들인 값이 자식을 제공하기 전까지 하위 행은 없다. `button`은 한 개의 버튼이다. `status-line`은 한 줄의 텍스트다.
 
 ## 한도
 

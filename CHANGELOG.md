@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-d-13: Tree values may place root header buttons before the tree; `branch: true` now identifies a branch before children arrive. The unloaded-branch term is defined, branch limits include unloaded nodes, and its expand state survives until children arrive. Owning workbench tests pass 88/88 and term tests pass 3/3.
+
 - F238-d-12: Declared tree nodes accept up to two uniquely keyed button actions, rendered after the label and detail. Action controls carry path, action role, and action-key address data; the resolver accepts and validates those addresses. Red rejected the new field and address. Owning workbench tests pass 83/83; the `detail` field was already covered by F230.
 
 - F238-d-12: Declared tree nodes accept up to two uniquely keyed button actions, rendered after the label and detail. Action controls carry path, action role, and action-key address data; the resolver accepts and validates those addresses. Red rejected the new field and address. Owning workbench tests pass 83/83; the `detail` field was already covered by F230.

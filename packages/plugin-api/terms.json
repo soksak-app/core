@@ -302,7 +302,13 @@
     },
     {
       "term": "branch",
-      "definition": "A tree node with a children array that is not empty, which the workbench draws with an expand control (docs/spec/declared-ui.md).",
+      "definition": "A tree node with a nonempty children array or `branch: true`, which the workbench draws with an expand control (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "unloaded branch",
+      "definition": "A tree node with `branch: true` and no child nodes in the current value; it has an expand control while its children are absent (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },

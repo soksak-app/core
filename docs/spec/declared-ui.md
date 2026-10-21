@@ -28,7 +28,7 @@ Each pushed declared UI snapshot carries the full value of the status, not a cha
 
 ## Root
 
-A value is an object with the field `elements`, an array of 0 to 64 elements. Each element is an object with a `kind` field that selects one of the element kinds below. Each element has a `key` that is unique among the root elements. No other field is accepted at the root.
+A value is an object with the field `elements`, an array of 0 to 64 elements. Each element is an object with a `kind` field that selects one of the element kinds below. Each element has a `key` that is unique among the root elements. Root elements are drawn in array order; a tree section may therefore put button elements before its tree. No other field is accepted at the root.
 
 ## Element kinds
 
@@ -58,11 +58,12 @@ The field `kind` names each element's kind. `kind` is accepted on every root ele
 | `tree` node | `label` | string | yes | Plain text, at most 500 code points. |
 | `tree` node | `command`, `params`, `icon`, `enabled` | as `button` | no | A single click on a node with `command` runs it. If `open` is present, the second click of a double press runs `open` instead of `command`. |
 | `tree` node | `open` | string | no | A command of the plugin. Enter keydown on this node runs `open` and prevents the native click; a click with `event.detail === 2` runs `open`. The node's `params` apply to both `command` and `open`. |
+| `tree` node | `branch` | boolean | no | `true` declares a branch even before it has child nodes. A non-boolean value is rejected. |
 | `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Allowed only on a branch, so a leaf that carries it is rejected. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
 | `tree` node | `selected` | boolean | no | Draws the node as selected. Default `false`. The plugin's value applies in every accepted value. |
 | `tree` node | `detail` | string | no | Plain text, at most 500 code points, drawn after the label as a list item's `detail` is drawn. |
 | `tree` node | `actions` | array | no | At most two `button` objects, with the rules of `button`, drawn after the label and detail. Each action key is unique within the node. |
-| `tree` node | `children` | array | no | Child nodes, with the same rules. A node whose `children` is present and not empty is a branch; any other node is a leaf. |
+| `tree` node | `children` | array | no | Child nodes, with the same rules. A node with nonempty `children` or `branch: true` is a branch; any other node is a leaf. |
 | `status-line` | `key` | string | yes | Key rules below. |
 | `status-line` | `text` | string | yes | Plain text, at most 500 code points. Drawn as one line. |
 
@@ -72,7 +73,7 @@ Text rules: a text field is plain text. The workbench draws it as text content, 
 
 The `status-line` has no tone and no error value. An error reaches the user only through the display path that writes it to the application log ([AGENTS](../../AGENTS.md)), so a declared element cannot draw an error.
 
-A `list` is a column of rows, with its `empty` text when it has none. A `tree` is an indented outline, with its `empty` text when it has none. A branch draws its children only while it is expanded. A `button` is one button. A `status-line` is one line of text.
+A `list` is a column of rows, with its `empty` text when it has none. A `tree` is an indented outline, with its `empty` text when it has none. A node with nonempty `children` is a branch; `branch: true` also declares a branch whose children have not been supplied yet (an unloaded branch). A branch draws supplied children only while it is expanded; an unloaded branch has an expand control but no child rows until a later accepted value supplies them. A `button` is one button. A `status-line` is one line of text.
 
 ## Limits
 

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-d-13: tree 값은 tree 앞에 root header button을 둘 수 있으며, `branch: true`는 자식이 도착하기 전에도 가지로 식별한다. unloaded-branch 용어를 정의하고, 가지 한도에 미적재 노드를 포함하며, 자식이 도착할 때까지 펼침 상태를 유지한다. 소유 workbench 테스트 88/88, 용어 테스트 3/3 통과.
+
 - F238-d-12: 선언 tree 노드는 고유 key를 가진 button action을 최대 2개 선언하고 label과 detail 뒤에 그린다. action control은 path, action role, action key 주소 데이터를 가지며 resolver가 그 주소를 검사한다. Red에서는 새 field와 주소가 거부됐다. 소유 workbench 테스트가 83/83 통과하며 `detail` 필드는 F230에서 이미 검사했다.
 
 - F238-d-12: 선언 tree 노드는 고유 key를 가진 button action을 최대 2개 선언하고 label과 detail 뒤에 그린다. action control은 path, action role, action key 주소 데이터를 가지며 resolver가 그 주소를 검사한다. Red에서는 새 field와 주소가 거부됐다. 소유 workbench 테스트가 83/83 통과하며 `detail` 필드는 F230에서 이미 검사했다.

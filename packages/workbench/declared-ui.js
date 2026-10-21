@@ -77,6 +77,7 @@ const NODE_SPEC = {
   params: { type: "params", needsCommand: true, needsOpen: true },
   icon: ICON,
   enabled: { type: "boolean", needsCommand: true, needsOpen: true },
+  branch: BOOLEAN,
   expanded: { type: "boolean", branchOnly: true },
   selected: BOOLEAN,
   detail: { type: "text" },
@@ -102,7 +103,8 @@ function slot(text) {
 const token = (key) => String(key).replace(/~/g, "~0").replace(/\//g, "~1");
 
 const isPlainObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-const isBranch = (node) => Array.isArray(node.children) && node.children.length > 0;
+// An unloaded branch has no child rows in the current value but retains the expand control.
+const isBranch = (node) => node.branch === true || (Array.isArray(node.children) && node.children.length > 0);
 
 function countNodes(nodes) {
   let count = 0;
@@ -527,7 +529,7 @@ function paintNode(wrap, node, path, ctx) {
       children.className = "declared-children";
       wrap.append(children);
     }
-    drawList(children, node.children, {
+    drawList(children, node.children ?? [], {
       key: entryKey,
       create: createNode,
       update: (child, entry) => paintNode(child, entry, [...path, entry.key], ctx),
@@ -638,7 +640,7 @@ function settle(source, elements) {
         }
         keptBranches.set(key, value);
         pluginBranches.set(key, planned);
-        visit(node.children, path);
+        if (Array.isArray(node.children)) visit(node.children, path);
       }
     };
     visit(element.nodes, []);
