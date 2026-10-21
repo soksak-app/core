@@ -148,15 +148,14 @@ e2e-registry-tls:
 browser-example-check: browser-frontend
 	@pnpm -F @soksak/browser check
 
-# The browser example has no host, so BROWSER_PLUGINS are installed into BROWSER_CONFIG and the staging provides that installation as a host does
-# (the staging layout of docs/spec/plugins.md).
+# The browser example has no host, so the plugins of the pack that apps/browser/environment.json names in `install` are installed into
+# BROWSER_CONFIG and the staging provides that installation as a host does (the staging layout of docs/spec/plugins.md).
 BROWSER_CONFIG = target/browser-config
-BROWSER_PLUGINS = terminal browser
 
 browser-frontend: registry
 	@rm -rf $(BROWSER_CONFIG)
 	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir $(BROWSER_CONFIG)
-	@for id in $(BROWSER_PLUGINS); do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
+	@ids=$$(node -e "const env = require('$(CURDIR)/apps/browser/environment.json'); const pack = require('$(CURDIR)/$(REGISTRY)/index.json').packs.find((p) => p.name === env.install); if (!pack) throw new Error('apps/browser/environment.json install names no pack: ' + env.install); console.log(pack.plugins.join(' '))") || exit 1; for id in $$ids; do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
 	@pnpm -F @soksak/browser exec soksak-stage build --installed $(CURDIR)/$(BROWSER_CONFIG)
 
 browser-example: browser-frontend

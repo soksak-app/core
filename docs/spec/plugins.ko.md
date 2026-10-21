@@ -260,6 +260,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
 | `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경에서 설치된 플러그인의 상태 모듈이 사이드카를 쓰면 로드가 실패한다. 기본값은 `true`다 |
 | `starter` | 선택. [첫 실행](installation.ko.md#첫-실행)이 설치하는 registry pack |
+| `install` | 선택. host가 없는 빌드가 애플리케이션을 스테이징하기 전에 설정 폴더에 설치하는 registry pack. browser 예제(`make browser-frontend`)는 pack `browser-example`의 plugin을 설치한다 |
 | `registry` | 선택. registry가 정해지지 않았을 때 첫 실행이 정하는 기본 registry index의 `https:` 또는 절대 `file:` URL([첫 실행](installation.ko.md#첫-실행)) |
 | `sidebars.links` | 기본 사이드바 선택: 일반 left/right 연결, 카드 네 변 연결, window-left/window-right 연결. 플러그인 left/right 형식, null 세트, 레일 연결은 거부한다. |
 

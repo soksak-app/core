@@ -259,6 +259,7 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | `sidebars.sets` | Optional explicit override of plugin defaults: section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
 | `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example; the load fails when an installed plugin's `state` module uses sidecars in such an environment. The default is `true` |
 | `starter` | Optional. The registry pack that the [first run](installation.md#first-run) installs |
+| `install` | Optional. The registry pack that a build without a host installs into its configuration folder before it stages the application: the browser example (`make browser-frontend`) installs the plugins of the pack `browser-example` |
 | `registry` | Optional. The `https:` or absolute `file:` URL of the default registry index that the first run sets when no registry is set ([first run](installation.md#first-run)) |
 | `sidebars.links` | Default sidebar choices: general left/right links, four card-side links, and window-left/window-right links. Plugin left/right forms, null sets and rail links are rejected. |
 
