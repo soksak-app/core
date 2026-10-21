@@ -150,6 +150,15 @@ test("plugin-host-ended removes the registrations of the host and ends its open 
   pluginHost.close();
 });
 
+// The main page asks the host to close the sessions that its window owns, when the host ends (docs/plans/plugin-host-routes.md rule 7).
+test("plugin-host-ended asks the host to close the plugin sessions of its window", () => {
+  const pluginHost = listen();
+  const posted = calls.length;
+  emit("plugin-host-ended", { plugin: "probe" });
+  assert.deepEqual(calls.slice(posted).filter((call) => call.name === "pluginHostSidecarClose"), [{ name: "pluginHostSidecarClose", arg: { plugin: "probe" } }]);
+  pluginHost.close();
+});
+
 test("keepHostCommands keeps the layer that a later listener of the same plugin receives", () => {
   const layer = { run: () => Promise.resolve(null), receive: () => {}, close: () => {} };
   const forget = keepHostCommands("other", layer);

@@ -183,6 +183,10 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	delete(h.owners, id)
 	empty := owner != nil && len(owner.projects) == 0
 	h.mu.Unlock()
+	// The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md rule 7).
+	if owner != nil {
+		owner.sidecars.closePluginSessions(owner, func(session pluginSession) bool { return session.project == id })
+	}
 	// A window that has no project left shows the library, so the project root and the title are cleared.
 	if empty {
 		owner.mu.Lock()

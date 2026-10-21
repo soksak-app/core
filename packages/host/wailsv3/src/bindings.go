@@ -308,6 +308,21 @@ func (h *Host) PluginHostSidecarSend(ctx context.Context, reqJSON json.RawMessag
 	return s.pluginHostSidecarSend(req)
 }
 
+// PluginHostSidecarClose closes the plugin sessions of a plugin host that the calling window owns, when the main page receives
+// plugin-host-ended (docs/plans/plugin-host-routes.md rule 7). Like PluginHostSidecarSend, the caller is the main page whose window
+// the host call resolves to.
+func (h *Host) PluginHostSidecarClose(ctx context.Context, pluginJSON json.RawMessage) error {
+	plugin, err := argument[string]("plugin", pluginJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.pluginHostSidecarClose(plugin)
+}
+
 // PluginHostEvent receives an event that the main page pushes to a plugin host, such as the acknowledgement of a declared
 // UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
 func (h *Host) PluginHostEvent(ctx context.Context, reqJSON json.RawMessage) error {

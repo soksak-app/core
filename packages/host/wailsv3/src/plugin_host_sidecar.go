@@ -64,6 +64,33 @@ func (s *Surfaces) pluginHostSidecarSend(req PluginHostSidecarSendRequest) error
 	return s.sidecars.SendPluginWithCids(s, req.Sidecar, req.ID, root, req.Body, req.Cids)
 }
 
+// closePluginSessions closes, through the close of a sidecar session, the plugin sessions that owner holds and that match
+// (docs/plans/plugin-host-routes.md rule 7). The ids are collected under c.mu, which is released before each close, since
+// Close takes the lock itself (sidecars.go closeSurface).
+func (c *Sidecars) closePluginSessions(owner SidecarOwner, match func(pluginSession) bool) {
+	c.mu.Lock()
+	ids := make([]string, 0)
+	for id, current := range c.owners {
+		if current != owner {
+			continue
+		}
+		if session, ok := parsePluginSession(id); ok && match(session) {
+			ids = append(ids, id)
+		}
+	}
+	c.mu.Unlock()
+	for _, id := range ids {
+		c.Close(id)
+	}
+}
+
+// pluginHostSidecarClose closes the plugin sessions of plugin that this window owns. The main page calls it when the host of
+// the plugin ends (docs/plans/plugin-host-routes.md rule 7); a session of another window is not closed.
+func (s *Surfaces) pluginHostSidecarClose(plugin string) error {
+	s.sidecars.closePluginSessions(s, func(session pluginSession) bool { return session.plugin == plugin })
+	return nil
+}
+
 // projectRoot returns the folder root that this window records for the project id, and whether the window holds the project.
 // The record is written and removed under the host lock (projects.go).
 func (s *Surfaces) projectRoot(id string) (string, bool) {

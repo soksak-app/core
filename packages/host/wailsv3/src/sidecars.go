@@ -1023,13 +1023,11 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	if surfaces == nil {
 		return 0, errors.New("retain requires a surfaces list")
 	}
-	c.mu.Lock()
-	// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
-	keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
-	for surface, root := range c.roots {
-		keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+	for _, item := range surfaces {
+		if item.Surface == "" || item.Root == "" {
+			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
+		}
 	}
-	c.mu.Unlock()
 	c.declarations.RLock()
 	names := make([]string, 0, len(c.persistent))
 	for name, persistent := range c.persistent {
@@ -1038,19 +1036,9 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 	}
 	c.declarations.RUnlock()
-	for _, item := range keep {
-		if item.Surface == "" || item.Root == "" {
-			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
-		}
-	}
 	total := 0
 	for _, name := range names {
 		request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
-		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
-		if err != nil {
-			return total, err
-		}
-		line = append(line, '\n')
 		waiter := make(chan error, 1)
 		c.mu.Lock()
 		if c.stopped {
@@ -1092,6 +1080,24 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 			c.mu.Unlock()
 			return total, fmt.Errorf("sidecar %s is not running", name)
 		}
+		// The keep list is built here, after the service started, so a plugin session first sent during the start is kept (F229-7).
+		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
+		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
+		for surface, root := range c.roots {
+			keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+		}
+		for _, item := range keep {
+			if item.Surface == "" || item.Root == "" {
+				c.mu.Unlock()
+				return total, fmt.Errorf("retain surface entry is invalid: %+v", item)
+			}
+		}
+		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
+		if err != nil {
+			c.mu.Unlock()
+			return total, err
+		}
+		line = append(line, '\n')
 		process.closeWaiters[request] = waiter
 		select {
 		case process.outbox <- queue(line):

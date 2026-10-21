@@ -252,6 +252,8 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
     const commands = hostCommandsOf(event.plugin);
     layers.delete(event.plugin);
     forgetSessions(event.plugin);
+    // The host closes the plugin sessions that this window owns (docs/plans/plugin-host-routes.md rule 7).
+    bridge.call("pluginHostSidecarClose", { plugin: event.plugin }).catch((error) => report(error));
     commands?.close();
     try {
       unregister(event.plugin);

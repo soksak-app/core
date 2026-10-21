@@ -73,3 +73,112 @@ func TestSurfaceSidecarSendRefusesThePluginSessions(t *testing.T) {
 		t.Fatalf("a surface send to a plugin session: %v, want the reserved refusal", err)
 	}
 }
+
+// A plugin session first sent while the service of a retain starts is kept by that retain (docs/plans/plugin-host-routes.md
+// rule 7, F229-7). The test answers the retain line that it reads from the outbox of the running fixture service.
+func TestRetainKeepsASessionFirstSentDuringTheStart(t *testing.T) {
+	const session = "plugin:probe:project-a:fixture-sidecar"
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	c.persistent["fixture-sidecar"] = true
+	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{}}
+	c.running["fixture-sidecar"] = service
+	// RetainSending runs after the service is ready, so the session is sent while the service starts.
+	c.RetainSending = func(string) {
+		c.mu.Lock()
+		c.roots[session] = "/fixture/root"
+		c.mu.Unlock()
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Retain([]RetainedSurface{{Surface: "fixture-surface", Root: "/fixture/surface"}})
+		done <- err
+	}()
+	line := <-service.outbox
+	var sent struct {
+		Request  string            `json:"request"`
+		Surfaces []RetainedSurface `json:"surfaces"`
+	}
+	if err := json.Unmarshal(line.bytes, &sent); err != nil {
+		t.Fatalf("the retain line: %v", err)
+	}
+	c.mu.Lock()
+	waiter := service.closeWaiters[sent.Request]
+	c.mu.Unlock()
+	waiter <- nil
+	if err := <-done; err != nil {
+		t.Fatalf("retain: %v", err)
+	}
+	for _, item := range sent.Surfaces {
+		if item.Surface == session {
+			return
+		}
+	}
+	t.Fatalf("the retain keeps %v, want the session %s that was first sent during the start", sent.Surfaces, session)
+}
+
+// Releasing a project closes the plugin sessions of that project that the holding window owns, and keeps the sessions of the
+// projects that it still holds (docs/plans/plugin-host-routes.md rule 7).
+func TestProjectReleaseClosesThePluginSessionsOfThatProject(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	s.projects["project-b"] = "/fixture/other"
+	h := &Host{owners: map[string]*Surfaces{"project-a": s, "project-b": s}, windows: map[uint]*Surfaces{}, sidecars: c}
+	released := "plugin:probe:project-a:fixture-sidecar"
+	held := "plugin:probe:project-b:fixture-sidecar"
+	c.owners[released] = s
+	c.owners[held] = s
+	c.roots[released] = "/fixture/root"
+	c.roots[held] = "/fixture/other"
+	if err := h.ProjectRelease(json.RawMessage(`"project-a"`)); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if _, ok := c.owners[released]; ok {
+		t.Fatalf("the session %s of the released project is still owned", released)
+	}
+	if _, ok := c.owners[held]; !ok {
+		t.Fatalf("the session %s of a project that is still held was closed", held)
+	}
+}
+
+// The close of a plugin host closes the plugin sessions of its plugin that the calling window owns, and no other session
+// (docs/plans/plugin-host-routes.md rule 7, pluginHostSidecarClose).
+func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	other := &Surfaces{projects: map[string]string{}, sidecars: c}
+	c.owners["plugin:probe:project-a:fixture-sidecar"] = s
+	c.owners["plugin:other:project-a:fixture-sidecar"] = s
+	c.owners["plugin:probe:project-a:fixture-sidecar-2"] = other
+	c.owners["fixture-surface"] = s
+	if err := s.pluginHostSidecarClose("probe"); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, ok := c.owners["plugin:probe:project-a:fixture-sidecar"]; ok {
+		t.Fatal("the plugin session of the caller was not closed")
+	}
+	for _, kept := range []string{"plugin:other:project-a:fixture-sidecar", "plugin:probe:project-a:fixture-sidecar-2", "fixture-surface"} {
+		if _, ok := c.owners[kept]; !ok {
+			t.Fatalf("the session %s was closed, want it kept", kept)
+		}
+	}
+}
+
+// The page start closes every plugin session of the window and keeps its surfaces (docs/plans/plugin-host-routes.md rule 7).
+func TestPageStartClosesThePluginSessionsOfTheWindow(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	c.owners["plugin:probe:project-a:fixture-sidecar"] = s
+	c.owners["fixture-surface"] = s
+	c.closePluginSessions(s, func(pluginSession) bool { return true })
+	if _, ok := c.owners["plugin:probe:project-a:fixture-sidecar"]; ok {
+		t.Fatal("the plugin session of the window was not closed at the page start")
+	}
+	if _, ok := c.owners["fixture-surface"]; !ok {
+		t.Fatal("a surface of the window was closed by the plugin session close")
+	}
+}
