@@ -13,6 +13,8 @@
 // macro.
 #![recursion_limit = "256"]
 
+use std::sync::PoisonError;
+
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -489,7 +491,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     .state::<windows::Windows>()
                     .update
                     .lock()
-                    .expect("pending update")
+                    // default: a lock that a panicking thread poisoned still holds the pending update, which the exit
+                    // takes; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
                     .take();
                 if let Some(pending) = update {
                     // The command waits for the end of this process, so it starts here, before the flush that stores its event
@@ -504,7 +508,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     .state::<LogIndexStop>()
                     .0
                     .lock()
-                    .expect("the stop of the log index")
+                    // default: a lock that a panicking thread poisoned still holds the stop of the log index, which the
+                    // exit takes; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
                     .take()
                 {
                     stop();
@@ -516,7 +522,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     app.state::<LogPolicyStop>()
                         .0
                         .lock()
-                        .expect("the stop of the policy watch")
+                        // default: a lock that a panicking thread poisoned still holds the stop of the policy watch,
+                        // which the exit takes; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner)
                         .take(),
                 );
                 if let Err(error) = event_log::flush_event_log(
