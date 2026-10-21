@@ -198,6 +198,56 @@ function isRange(range) {
   return VERSION.test(range.replace(/^[\^~]/, ""));
 }
 
+/**
+ * The operation names of a list that a plugin host may call on a sidecar: non-empty strings, each once
+ * (docs/spec/plugins.md#pluginjson, hostOperations; docs/spec/sidecars.md, hostReadOperations).
+ */
+const isOperationList = (value) => Array.isArray(value) && value.length > 0
+  && value.every((name) => isText(name)) && new Set(value).size === value.length;
+
+/** Checks the plugin host declaration `host`: a page inside the package and an optional state declaration. */
+function checkHost(where, host) {
+  if (!isObject(host)) throw new Error(`${where}: host must be an object`);
+  only(`${where} host`, host, ["page", "state"]);
+  if (!isText(host.page) || host.page.startsWith("/") || host.page.split("/").includes("..")) {
+    throw new Error(`${where}: host page must be a path inside the package`);
+  }
+  if (host.state !== undefined) {
+    if (!isObject(host.state)) throw new Error(`${where}: host state must be an object`);
+    only(`${where} host state`, host.state, ["format", "maxBytes"]);
+    for (const key of ["format", "maxBytes"]) {
+      if (!Number.isInteger(host.state[key]) || host.state[key] <= 0) throw new Error(`${where}: host state ${key} must be a positive integer`);
+    }
+  }
+}
+
+/**
+ * Checks hostOperations: each sidecar dependency maps to the distinct operations its plugin host may call. A declaration
+ * needs a plugin host, and each sidecar must be a dependency.
+ */
+function checkHostOperationsDeclaration(where, hostOperations, dependencies) {
+  if (!isObject(hostOperations)) throw new Error(`${where}: hostOperations must map sidecars to operations`);
+  for (const [name, operations] of Object.entries(hostOperations)) {
+    if (!Object.hasOwn(dependencies, name)) throw new Error(`${where}: hostOperations ${name} is not a dependency`);
+    if (!isOperationList(operations)) throw new Error(`${where}: hostOperations ${name} must be a list of distinct operation names`);
+  }
+}
+
+/**
+ * Checks that each operation a plugin host may call on a sidecar is one the sidecar declares in hostReadOperations, so a
+ * host names only read operations. sidecars maps each sidecar name to its validated sidecar.json.
+ */
+export function checkHostOperations(manifest, sidecars) {
+  for (const [name, operations] of Object.entries(manifest.hostOperations ?? {})) {
+    const sidecar = sidecars[name];
+    if (sidecar === undefined) throw new Error(`hostOperations ${name}: sidecar.json is missing`);
+    const readOperations = sidecar.hostReadOperations ?? [];
+    for (const operation of operations) {
+      if (!readOperations.includes(operation)) throw new Error(`hostOperations ${name}: operation ${operation} is not in hostReadOperations`);
+    }
+  }
+}
+
 /** Checks that dependencies give each sidecar or plugin a version range and returns their names. */
 function checkDependencies(where, dependencies) {
   if (!isObject(dependencies)) throw new Error(`${where}: dependencies must map sidecars and plugins to version ranges`);
@@ -541,7 +591,7 @@ export function validateReleaseFiles(pkg) {
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "state", "data", "sidebars", "extends", "contributes", "events"]);
+    "state", "data", "sidebars", "extends", "contributes", "events", "host", "hostOperations"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -581,10 +631,16 @@ export function validateManifest(manifest) {
   if (manifest.dependencies !== undefined) {
     // A sidecar dependency serves the surface or the state module, and a plugin dependency serves the contributions
     // (docs/spec/plugins.md#pluginjson).
-    if (manifest.surface === undefined && manifest.state === undefined && manifest.contributes === undefined) {
-      throw new Error(`${where}: dependencies require a surface, a state module or contributes`);
+    if (manifest.surface === undefined && manifest.state === undefined && manifest.host === undefined && manifest.contributes === undefined) {
+      throw new Error(`${where}: dependencies require a surface, a state module, a plugin host or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
+  }
+  if (manifest.host !== undefined) checkHost(where, manifest.host);
+  if (manifest.hostOperations !== undefined) {
+    // A plugin host calls the operations that its manifest declares for each sidecar dependency (docs/spec/plugin-host.md).
+    if (manifest.host === undefined) throw new Error(`${where}: hostOperations requires host`);
+    checkHostOperationsDeclaration(where, manifest.hostOperations, manifest.dependencies ?? {});
   }
   if (manifest.extends !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: extends requires a surface`);
@@ -782,7 +838,19 @@ function validateEventsPath(where, events) {
 
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events", "replay"]);
+  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events", "replay", "message", "hostReadOperations"]);
+  if (sidecar.message !== undefined) {
+    // The message form that a plugin host's body takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
+    if (!isObject(sidecar.message)) throw new Error("sidecar.json: message must be an object");
+    only("sidecar.json message", sidecar.message, ["form", "operationField"]);
+    if (sidecar.message.form !== "json-object") throw new Error("sidecar.json: message form must be json-object");
+    if (!isText(sidecar.message.operationField) || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(sidecar.message.operationField)) {
+      throw new Error("sidecar.json: message operationField must be a field name");
+    }
+  }
+  if (sidecar.hostReadOperations !== undefined && !isOperationList(sidecar.hostReadOperations)) {
+    throw new Error("sidecar.json: hostReadOperations must be a list of distinct operation names");
+  }
   validateEventsPath("sidecar.json", sidecar.events);
   const { executable } = sidecar;
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
