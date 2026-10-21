@@ -30,7 +30,9 @@ type lifecyclePlatform struct {
 	// createdFor is the native surface that each created view was given, in the order of created.
 	createdFor []unsafe.Pointer
 	closed     []unsafe.Pointer
-	ended      map[unsafe.Pointer]func()
+	// closedImages holds the image regions that were closed, in order.
+	closedImages []unsafe.Pointer
+	ended        map[unsafe.Pointer]func()
 	// joins holds the native joins of the views, in the order of their joins.
 	joins []*viewJoin
 }
@@ -97,6 +99,10 @@ func (p *lifecyclePlatform) CloseDocument(document unsafe.Pointer) {
 	p.closed = append(p.closed, document)
 }
 
+func (p *lifecyclePlatform) CloseImage(image unsafe.Pointer) {
+	p.closedImages = append(p.closedImages, image)
+}
+
 // newLifecycleSurfaces returns the surfaces of one view of plugin probe on surface probe-surface, created by its first sync, and the
 // platform that records its documents. The clock is the clock of the lifecycle.
 func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecyclePlatform, unsafe.Pointer) {
@@ -105,7 +111,7 @@ func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecycle
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments(), lifecycle: newViewLifecycle(clock.now), host: &Host{configDir: "/config"}}
+	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(clock.now), host: &Host{configDir: "/config"}}
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
@@ -286,5 +292,39 @@ func TestViewStoppedEventCarriesSurfaceAndReason(t *testing.T) {
 	payload := viewStoppedEvent("probe-surface", "probe", "the reason")
 	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["reason"] != "the reason" {
 		t.Fatalf("payload %v, want surface probe-surface, plugin probe and reason the reason", payload)
+	}
+}
+
+// contract: view.regions.close-with-process
+// The regions of a view belong to the composition of its ended document, so a process end closes the document and image regions of
+// the surface before the view is created again, and the new view can attach the same names again.
+func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	documentKey := DocumentKey{Surface: "probe-surface", Name: "doc"}
+	document := unsafe.Pointer(new(int))
+	if err := s.documents.Reserve(documentKey); err != nil || !s.documents.Set(documentKey, document) {
+		t.Fatalf("document region: %v", err)
+	}
+	imageKey := ImageKey{Surface: "probe-surface", Name: "picture"}
+	image := unsafe.Pointer(new(int))
+	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "@probe/sidecar"}); err != nil || !s.images.Set(imageKey, image) {
+		t.Fatalf("image region: %v", err)
+	}
+	ended := endView(t, s, fake)
+	if len(fake.closed) != 2 || fake.closed[0] != ended || fake.closed[1] != document {
+		t.Fatalf("closed documents after the process end: %v, want the ended view and the document region", fake.closed)
+	}
+	if len(fake.closedImages) != 1 || fake.closedImages[0] != image {
+		t.Fatalf("closed images after the process end: %v, want the image region", fake.closedImages)
+	}
+	if err := s.documents.Reserve(documentKey); err != nil {
+		t.Fatalf("the new view cannot attach the document region again: %v", err)
+	}
+	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "@probe/sidecar"}); err != nil {
+		t.Fatalf("the new view cannot attach the image region again: %v", err)
+	}
+	if len(fake.created) != 2 {
+		t.Fatalf("created views after the process end: %d, want the view created again", len(fake.created))
 	}
 }

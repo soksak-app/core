@@ -5,8 +5,9 @@ use std::time::{Duration, Instant};
 
 use soksak_host_tauriv2::documents::{
     Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
-    parse_report, remove_surface_for_reload, stream_ack_refusal,
+    parse_report, remove_surface_for_reload, remove_view_regions, stream_ack_refusal,
 };
+use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::ViewStart;
 use soksak_host_tauriv2::view_lifecycle::{
     ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event,
@@ -1100,4 +1101,35 @@ fn view_call_invalid_requests_are_errors_not_forwarded() {
             "message {message} is accepted, want an error"
         );
     }
+}
+
+// contract: view.regions.close-with-process
+#[test]
+fn a_view_process_end_removes_the_regions_of_its_surface() {
+    // The view itself is removed before the regions, as view_failed removes it, so only the regions remain to be closed.
+    let documents = Documents::default();
+    let streams = Streams::default();
+    let images = Images::default();
+    let document: Key = ("probe-surface".to_string(), "doc".to_string());
+    documents.reserve(&document).unwrap();
+    assert!(documents.set(&document, 11));
+    let other: Key = ("other-surface".to_string(), "doc".to_string());
+    documents.reserve(&other).unwrap();
+    assert!(documents.set(&other, 13));
+    let image = ("probe-surface".to_string(), "picture".to_string());
+    images.reserve(&image, "probe-surface", "@probe/sidecar").unwrap();
+    assert!(images.set(&image, 12));
+    let (closed_documents, closed_images) =
+        remove_view_regions(&documents, &streams, &images, "probe-surface");
+    assert_eq!(closed_documents, vec![11], "the document region of the surface is closed");
+    assert_eq!(closed_images, vec![12], "the image region of the surface is closed");
+    assert!(
+        documents.reserve(&document).is_ok(),
+        "the view created again attaches the document region again"
+    );
+    assert!(
+        images.reserve(&image, "probe-surface", "@probe/sidecar").is_ok(),
+        "the view created again attaches the image region again"
+    );
+    assert_eq!(documents.get(&other), Ok(13), "the regions of another surface stay");
 }

@@ -1329,6 +1329,20 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         record_view_call_peer_lost(plugin, command);
     }
     log_failure("view channel", platform.close_document(document));
+    // The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
+    // again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
+    let (region_documents, region_images) =
+        remove_view_regions(&data.documents, &data.streams, &data.images, surface);
+    let regions_closed = !region_documents.is_empty() || !region_images.is_empty();
+    for handle in region_documents {
+        log_failure("view channel", platform.close_document(handle));
+    }
+    for handle in region_images {
+        log_failure("view channel", platform.close_image(handle));
+    }
+    if regions_closed {
+        exposure::window_changed(window);
+    }
     let record = data.documents.lifecycle().spec(surface);
     if !data.documents.lifecycle().fail(surface, Instant::now()) {
         log_error("view channel", format!("{surface}: {}", view_stop_reason()));
@@ -1784,6 +1798,23 @@ pub fn remove_surface_for_reload(
 ) -> Vec<Handle> {
     streams.remove_surface(surface);
     documents.remove_surface(surface)
+}
+
+/// Removes the document and image regions of a view surface whose view process ended, after the view itself was removed, and
+/// returns their handles for the caller to close. The regions belong to the composition of the ended document, so the view that
+/// is created again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions). The image generation of the
+/// surface advances, so a frame of a closed region is stale.
+pub fn remove_view_regions(
+    documents: &Documents,
+    streams: &Streams,
+    images: &crate::images::Images,
+    surface: &str,
+) -> (Vec<Handle>, Vec<Handle>) {
+    // The regions close with the ended document, so their stream effects are not applied.
+    streams.remove_surface(surface);
+    let closed_documents = documents.remove_surface(surface);
+    images.begin_generation(surface);
+    (closed_documents, images.remove_surface(surface))
 }
 
 /// Ends every subscription of the main page of a window whose web content process ended, and turns off the streams that
