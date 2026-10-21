@@ -79,6 +79,7 @@ func TestSurfaceSidecarSendRefusesThePluginSessions(t *testing.T) {
 
 // A plugin session first sent while the service of a retain starts is kept by that retain (docs/plans/plugin-host-routes.md
 // rule 7, F229-7). The test answers the retain line that it reads from the outbox of the running fixture service.
+// contract: plugin-host.sidecar.retain-during-start
 func TestRetainKeepsASessionFirstSentDuringTheStart(t *testing.T) {
 	const session = "plugin:probe:project-a:fixture-sidecar"
 	s := sidecarSessionSurfaces(t)
@@ -123,6 +124,7 @@ func TestRetainKeepsASessionFirstSentDuringTheStart(t *testing.T) {
 
 // Releasing a project closes the plugin sessions of that project that the holding window owns, and keeps the sessions of the
 // projects that it still holds (docs/plans/plugin-host-routes.md rule 7).
+// contract: plugin-host.sidecar.project-release
 func TestProjectReleaseClosesThePluginSessionsOfThatProject(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	c := s.sidecars
@@ -172,6 +174,7 @@ func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testin
 }
 
 // The page start closes every plugin session of the window and keeps its surfaces (docs/plans/plugin-host-routes.md rule 7).
+// contract: plugin-host.sidecar.page-start
 func TestPageStartClosesThePluginSessionsOfTheWindow(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	c := s.sidecars

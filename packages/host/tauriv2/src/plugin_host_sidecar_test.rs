@@ -198,6 +198,7 @@ fn closing_surfaces(sidecars: &Sidecars<TestOwner>) -> Vec<String> {
 
 // A plugin session first sent while the service of a retain starts is kept by that retain (docs/plans/plugin-host-routes.md
 // rule 7, F229-7). The hook runs after the service started, and it sends the session before the sessions to keep are read.
+// contract: plugin-host.sidecar.retain-during-start
 #[test]
 fn a_retain_keeps_a_session_first_sent_during_its_start() {
     const SESSION: &str = "plugin:probe:project-a:fixture-sidecar";
@@ -244,6 +245,7 @@ fn a_retain_keeps_a_session_first_sent_during_its_start() {
 
 // Releasing a project closes the plugin sessions of that project that the holding window owns, and keeps the sessions of the
 // projects that it still holds (docs/plans/plugin-host-routes.md rule 7).
+// contract: plugin-host.sidecar.project-release
 #[test]
 fn a_project_release_closes_only_the_plugin_sessions_of_that_project() {
     const RELEASED: &str = "plugin:probe:project-a:fixture-sidecar";
@@ -383,6 +385,7 @@ fn a_plugin_host_close_from_another_webview_is_rejected_and_closes_nothing() {
 }
 
 // The page start closes every plugin session of the window and keeps its surfaces (docs/plans/plugin-host-routes.md rule 7).
+// contract: plugin-host.sidecar.page-start
 #[test]
 fn a_page_start_closes_the_plugin_sessions_of_the_window_and_keeps_its_surfaces() {
     const SESSION: &str = "plugin:probe:project-a:fixture-sidecar";
