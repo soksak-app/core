@@ -1008,7 +1008,9 @@ pub(crate) fn window_close_kept(window: &Window) -> Result<(), String> {
         .state::<Windows>()
         .update
         .lock()
-        .expect("pending update") = None;
+        // default: a lock that a panicking thread poisoned still holds the pending update, which the cancellation
+        // clears; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = None;
     // A request of the operating system waits for its answer; the application does not quit, so the answer is the
     // cancellation.
     window
@@ -1026,7 +1028,9 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     let waiting: Vec<_> = registry
         .windows
         .lock()
-        .expect("window registry")
+        // default: a lock that a panicking thread poisoned still holds the window registry, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .iter()
         .filter(|(_, context)| context.ready.load(Ordering::Relaxed))
         .map(|(label, _)| label.clone())

@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
 use serde_json::{Value, json};
 use soksak_sok::log_index::{IndexUpdate, update_log_index};
@@ -64,7 +64,7 @@ struct Pending {
 /// Starts the thread that brings the index of an event file up to date after the writer wrote to the file. The observer records the
 /// path and wakes the thread; the notices that arrive while it indexes become one more update of each path. `after` is called with
 /// the result of each update. The returned function stops the thread and waits until it returned.
-pub fn start_log_indexer(mut after: impl FnMut(&Path, IndexResult) + Send + 'static) -> LogIndexer {
+pub fn start_log_indexer(after: impl FnMut(&Path, IndexResult) + Send + 'static) -> LogIndexer {
     let shared = Arc::new((
         Mutex::new(Pending {
             paths: BTreeSet::new(),
@@ -72,14 +72,26 @@ pub fn start_log_indexer(mut after: impl FnMut(&Path, IndexResult) + Send + 'sta
         }),
         Condvar::new(),
     ));
+    start_log_indexer_on(shared, after)
+}
+
+/// Starts the thread of [start_log_indexer] on the pending paths `shared`, which a test can poison before the start.
+fn start_log_indexer_on(
+    shared: Arc<(Mutex<Pending>, Condvar)>,
+    mut after: impl FnMut(&Path, IndexResult) + Send + 'static,
+) -> LogIndexer {
     let worker_shared = Arc::clone(&shared);
     let worker = crate::routine::spawn_named("log-index", move || {
         loop {
             let paths = {
                 let (lock, wake) = &*worker_shared;
-                let mut pending = lock.lock().expect("the pending paths");
+                // default: a lock that a panicking thread poisoned still holds the pending paths, which the thread
+                // takes; the panic hook records the panic.
+                let mut pending = lock.lock().unwrap_or_else(PoisonError::into_inner);
                 while pending.paths.is_empty() && !pending.stopped {
-                    pending = wake.wait(pending).expect("the pending paths");
+                    // default: a wait that a poisoned lock ends still returns the guard of the pending paths, which the
+                    // thread takes; the panic hook records the panic.
+                    pending = wake.wait(pending).unwrap_or_else(PoisonError::into_inner);
                 }
                 if pending.stopped {
                     return;
@@ -104,14 +116,18 @@ pub fn start_log_indexer(mut after: impl FnMut(&Path, IndexResult) + Send + 'sta
     let observe = Box::new(move |path: &Path, _size: u64| {
         let (lock, wake) = &*observer_shared;
         lock.lock()
-            .expect("the pending paths")
+            // default: a lock that a panicking thread poisoned still holds the pending paths, which the notice amends;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .paths
             .insert(path.to_path_buf());
         wake.notify_one();
     });
     let stop = Box::new(move || {
         let (lock, wake) = &*shared;
-        lock.lock().expect("the pending paths").stopped = true;
+        // default: a lock that a panicking thread poisoned still holds the pending paths, which the stop amends; the
+        // panic hook records the panic.
+        lock.lock().unwrap_or_else(PoisonError::into_inner).stopped = true;
         wake.notify_one();
         if worker.join().is_err() {
             eprintln!("log index: the thread ended with a panic");
@@ -160,3 +176,7 @@ pub fn answer(
         Err(QueryError::Failed(text)) => Err(Failure::new(HANDLER_FAILED, text)),
     }
 }
+
+#[cfg(test)]
+#[path = "log_query_lock_test.rs"]
+mod lock_test;

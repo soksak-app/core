@@ -702,6 +702,7 @@ fn invalid_json_closes_connection() {
 | `cli.log.writer-options.refuses-a-negative-rotation-bound` | rotation 한도가 0 미만인 writer는 한도를 이름으로 가진 오류로 거부된다. | wailsv3 only: Rust writer의 rotation 한도는 부호 없는 수여서 음수일 수 없다 |
 | `cli.log.writer-options.stores-the-layer-the-clock-and-the-cids` | rotation이 없는 writer는 옵션이 주는 layer, 시계, correlation identifier를 저장하고 rotation하지 않는다. | both |
 | `cli.log.writer-options.rotates-at-its-bound` | rotation 한도가 있는 writer는 한도에서 새 파일을 쓰고, 새 파일은 `log.open`과 `log.rotated`로 시작한다. | both |
+| `cli.log.writer.poisoned-observer-lock-is-recovered` | panic한 thread가 poison한 write observer의 lock은 복구된다. observer는 여전히 설정되고 다음에 쓴 batch 뒤에 호출된다. panic hook이 panic을 기록한다. | tauriv2 only: Go mutex는 poison되지 않는다 |
 | `cli.log.writer-options.stores-the-events-and-the-loss-of-its-pull-source` | writer는 pull source가 돌려주는 event와 source가 보고한 손실을 저장한다. | both |
 | `cli.log.writer-options.records-refused-events-as-loss-before-the-next-accepted-event` | queue가 가득 찬 writer는 placed write의 event를 `its queue was full` 원인으로 거부하고, 다음 accepted event 앞에 개수, reason, queue 깊이를 담은 `log.dropped`를 저장한다. | both |
 | `cli.log.writer-options.refuses-a-placed-event-by-its-cause` | 정책이 거부한 placed event는 `the policy does not store it` 원인으로 실패하며, gated event로 저장되고 손실이 아니다. | both |
