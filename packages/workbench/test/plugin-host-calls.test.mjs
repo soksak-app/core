@@ -200,6 +200,20 @@ test("a sidecar call refuses a sidecar the plugin does not declare, a session of
   pluginHost.close();
 });
 
+test("a declared sidecar whose sidecar.json the page does not hold refuses every operation with the named error", async () => {
+  // The installed document carries no sidecar declarations, so the declaration of a declared sidecar is null (docs/plans/plugin-host-routes.md rule 8).
+  const pluginHost = listenPluginHostCalls({
+    register: () => {}, unregister: () => {}, timeoutOf: () => undefined, report: () => {},
+    sidecarsOf: (plugin) => (plugin === "probe" ? [{ name: "fixture-sidecar", declared: ["list"], declaration: null }] : []),
+  });
+  const count = calls.length;
+  emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: '{"operation":"list"}' } });
+  await tick();
+  assert.equal(calls.some((call, index) => index >= count && call.name === "pluginHostSidecarSend"), false);
+  assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin host probe: sidecar fixture-sidecar declares no message form" });
+  pluginHost.close();
+});
+
 test("a sidecar message of a plugin session reaches its host page only with a subscription, and the end of the host drops it", async () => {
   // An earlier test may have subscribed the same session; the host of this test starts with none.
   const pluginHost = listen();

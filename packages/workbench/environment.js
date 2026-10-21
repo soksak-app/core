@@ -4,6 +4,7 @@
 // (docs/spec/installation.md), and the layout of a new space and the sidebar defaults come from environment.json.
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
+import { declarePluginSidecars } from "./plugin-host.js";
 import { registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
@@ -69,6 +70,10 @@ export function installEnvironment(environmentDocument, installedDocument) {
   for (const { name, manifest } of manifests) {
     // default: the diagnostic module exists only in some plugins of a diagnostic build; without it the value is null.
     const diagnostics = diagnosticPlugins[name] ?? null;
+    // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecars. hostOperations is optional
+    // too; without it the plugin host calls no operation of a sidecar (docs/plans/plugin-host-routes.md rule 8).
+    declarePluginSidecars(manifest.id, manifestSidecars(manifest, pluginNames)
+      .map((sidecar) => ({ name: sidecar, declared: manifest.hostOperations?.[sidecar] ?? [], declaration: null })));
     // default: exposes is an optional field of plugin.json; without it there is no declaration (docs/spec/plugins.md).
     const exposes = diagnostics ? mergeExposes(manifest.exposes ?? {}, diagnostics.exposes) : manifest.exposes;
     if (manifest.surface) {

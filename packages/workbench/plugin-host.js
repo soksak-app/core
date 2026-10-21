@@ -57,6 +57,22 @@ export const servedPluginHostCall = (command) => command === "runtime.command.re
   || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure";
 
 /*
+ * The sidecars that each installed plugin declares as dependencies: plugin id -> [{name, declared, declaration}]. declared is the
+ * operations that the plugin manifest names for the sidecar (hostOperations), and declaration is the validated sidecar.json, or null
+ * when the page holds none. The installed document carries no sidecar declarations, so the sidecar check refuses every operation of
+ * such a sidecar (docs/plans/plugin-host-routes.md rule 8).
+ */
+const declaredSidecars = new Map();
+
+/** Records the sidecars that a plugin declares for its plugin host (docs/plans/plugin-host-routes.md rule 8). */
+export function declarePluginSidecars(plugin, sidecars) {
+  declaredSidecars.set(plugin, sidecars);
+}
+
+/** The sidecars that a plugin declares for its plugin host. default: a plugin that declared none has no sidecars (an empty list). */
+export const pluginSidecarsOf = (plugin) => declaredSidecars.get(plugin) ?? [];
+
+/*
  * The sessions of the sidecars that each plugin host subscribed to: plugin -> session id -> the event kinds (message, failure)
  * that the host page listens to. A reply to a session with no subscription of its kind is dropped (docs/plans/plugin-host-routes.md
  * rule 4), so the page subscribes before its first send.
