@@ -2230,6 +2230,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.9-3-3",
+    implementation: [{ file: "packages/workbench/declared-source.js", symbol: "createDeclaredSource" }],
+    tests: [
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "the channel of a plugin host source acknowledges through pluginHostEvent and delivers the snapshots of its plugin" },
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "the pull of a plugin host source runs the snapshot request through the layer of its host" },
+    ],
+    expected: "The source of a plugin host receives the snapshots of its plugin without a surface, acknowledges through pluginHostEvent and pulls through the request layer of the host.",
+    levels: ["unit"],
+  },
+  {
     id: "F227",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "answerViewCalls" }],
     tests: [

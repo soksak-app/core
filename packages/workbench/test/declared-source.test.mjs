@@ -65,9 +65,27 @@ test("the channel delivers each snapshot of its surface and plugin, and the unsu
   assert.deepEqual(received.length, 1, "the unsubscribe did not end the delivery");
 });
 
-test("the channel of a source without a view is null", () => {
+test("the channel of a plugin host source acknowledges through pluginHostEvent and delivers the snapshots of its plugin", async () => {
   const { channel } = createDeclaredSource({ plugin: "probe", status: "lines" });
-  assert.equal(channel({ id: "host:probe", surface: null }), null, "a source without a view got a channel");
+  const link = channel({ id: "plugin:probe", surface: null });
+  assert.notEqual(link, null, "a plugin host source has no channel");
+  link.send({ event: "declared-ui.snapshot.ack", plugin: "probe", status: "lines", seq: 3 });
+  assert.deepEqual(calls.at(-1), {
+    name: "pluginHostEvent",
+    arg: { plugin: "probe", event: "declared-ui.snapshot.ack", data: { plugin: "probe", status: "lines", seq: 3 } },
+  }, "the acknowledgement was not the plugin host event of the source");
+  const received = [];
+  const unsubscribe = link.onMessage((message) => received.push(message));
+  emit("declared-ui.snapshot", { plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
+  emit("declared-ui.snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 6, value: null, skipped: 0 });
+  emit("declared-ui.snapshot", { plugin: "other", status: "lines", seq: 7, value: null, skipped: 0 });
+  assert.deepEqual(received, [
+    { event: "declared-ui.snapshot", plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 },
+  ], "the channel delivered a snapshot of another source");
+  unsubscribe();
+  await new Promise((resolve) => setImmediate(resolve));
+  emit("declared-ui.snapshot", { plugin: "probe", status: "lines", seq: 8, value: null, skipped: 0 });
+  assert.deepEqual(received.length, 1, "the unsubscribe did not end the delivery");
 });
 
 test("the pull of a view source runs the snapshot request through the command layer of its view", async () => {
@@ -83,9 +101,19 @@ test("the pull of a view source runs the snapshot request through the command la
   forget();
 });
 
-test("the pull of a source without a view finds no value", async () => {
+test("the pull of a plugin host source runs the snapshot request through the layer of its host", async () => {
+  const { keepHostCommands } = await import("../plugin-host.js");
   const { pull } = createDeclaredSource({ plugin: "probe", status: "lines" });
-  assert.deepEqual(await pull({ id: "host:probe", surface: null }), { seq: 0, value: null });
+  const forget = keepHostCommands("probe", {
+    run: (command, params) => {
+      assert.equal(command, "declared-ui.snapshot.request");
+      assert.deepEqual(params, { status: "lines" });
+      return Promise.resolve({ seq: 4, value: { n: 1 } });
+    },
+  });
+  assert.deepEqual(await pull({ id: "plugin:probe", surface: null }), { seq: 4, value: { n: 1 } });
+  forget();
+  await assert.rejects(pull({ id: "plugin:probe", surface: null }), /probe.lines: the plugin host has no channel/);
 });
 
 test("the pull of a view without a command layer rejects with its surface", async () => {

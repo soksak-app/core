@@ -126,7 +126,13 @@ function mountDeclared(entry, record) {
     options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
     orientation: () => record.context.orientation,
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
-    choose: () => chooseSource({ active: record.context.surface ?? null, registrants: registry.registrants("status", statusId) }),
+    // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
+    // (docs/spec/declared-ui.md#declared-status).
+    choose: () => chooseSource({
+      active: record.context.surface ?? null,
+      registrants: registry.registrants("status", statusId),
+      host: registry.hostRegistrant("status", statusId),
+    }),
     channel: transport.channel,
     pull: transport.pull,
     // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
