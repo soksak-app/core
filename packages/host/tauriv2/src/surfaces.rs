@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, Webview, Window};
@@ -382,6 +382,35 @@ pub(crate) fn aligned(x: f64, y: f64, w: f64, h: f64, scale: f64) -> (f64, f64, 
     )
 }
 
+/// Returns the surface of the first view of chain that has one: a surface view by its registration in named, or a document
+/// view by the name that `documents` gives it. It returns None when no view of chain has a surface.
+fn pressed_surface(
+    named: &Mutex<HashMap<Handle, String>>,
+    chain: &[Handle],
+    documents: impl Fn(&Handle) -> Option<String>,
+) -> Option<String> {
+    // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the panic
+    // hook records the panic.
+    let map = named.lock().unwrap_or_else(PoisonError::into_inner);
+    chain.iter().find_map(|view| {
+        surface_owner_id(&map, *view)
+            .map(str::to_owned)
+            .or_else(|| documents(view))
+    })
+}
+
+/// Marks the first commit of the page of the window, and returns whether this call is that commit.
+fn mark_first_commit(running: &Running) -> bool {
+    // default: a lock that a panicking thread poisoned still holds the flag of the first commit, which is read and set; the
+    // panic hook records the panic.
+    let mut first = running.first.lock().unwrap_or_else(PoisonError::into_inner);
+    if *first {
+        return false;
+    }
+    *first = true;
+    true
+}
+
 /// Starts the press watch of the window once.
 ///
 /// A press on a surface is received by the surface view and not by the page, so the window is watched and the surface
@@ -404,16 +433,11 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
             return Ok(());
         }
         let pressed = Box::new(move |chain: Vec<Handle>| {
-            let Ok(map) = named.lock() else { return false };
-            let Some(id) = chain.iter().find_map(|view| {
-                surface_owner_id(&map, *view)
-                    .map(str::to_owned)
-                    .or_else(|| {
-                        data.documents
-                            .names()
-                            .get(view)
-                            .map(|(surface, _)| surface.clone())
-                    })
+            let Some(id) = pressed_surface(&named, &chain, |view| {
+                data.documents
+                    .names()
+                    .get(view)
+                    .map(|(surface, _)| surface.clone())
             }) else {
                 return false;
             };
@@ -579,10 +603,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
     }
     // The page committed, so the window is on the screen and the surfaces exist. The work to run after the app is drawn
     // starts here.
-    if let Ok(mut first) = running.first.lock()
-        && !*first
-    {
-        *first = true;
+    if mark_first_commit(running) {
         emit_window(window, "page-ready", ()).map_err(|e| e.to_string())?;
     }
     watch_presses(window, views, watching)?;
