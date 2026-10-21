@@ -78,7 +78,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | 한도 | 값 | 이유 |
 | --- | --- | --- |
 | 직렬화한 값 | 1048576바이트 | `JSON.stringify`한 값의 UTF-8 바이트 길이다. 선언된 UI snapshot마다 UI thread에서 파싱하고 검사한다. |
-| 루트 요소 | 64 | 다른 한도와 같이 main page가 선언된 UI snapshot 하나에 하는 일이다. 그리기 시간 측정으로 고칠 수 있다. |
+| 루트 요소 | 64 | 다른 한도와 같이 main page가 선언된 UI snapshot 하나에 하는 일이다. |
 | list 항목 | list마다 1000 | list 하나가 선언된 UI snapshot마다 그리는 행을 제한한다. |
 | tree 노드 | tree마다 5000 | tree 하나가 선언된 UI snapshot마다 그리는 노드를 제한한다. |
 | tree 단계 | 16 | section 안에서 tree의 들여쓰기를 제한한다. |
@@ -141,11 +141,11 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 - `selected`에는 유지된 상태가 없다. 이를 바꾸는 core 명령이 없으므로, plugin의 값이 받아들인 모든 값에 적용된다.
 - 유지된 상태는 받아들인 값에 그 경로가 없을 때 지운다. plugin 프로세스의 재시작은 프로세스 종료인 전이 (d)와, 새 프로세스의 등록인 전이 (a)로 처리하며, 그 출처 변경은 전이 (b)와 (c)로 처리한다. 유지된 상태는 경로별로 살아남는다.
 - 유지된 상태는 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 값으로 되돌아간다.
-- 선언된 status는 plugin 프로세스가 제공한다. workbench는 그 status를 등록한 첫 선언된 status 출처에서 값을 읽는다. 첫째, 사이드바를 가진 카드의 활성 탭의 view이며, 그 view의 페이지가 status를 등록했을 때다. 카드 사이드바에서는 그 사이드바를 가진 카드다. 고정 창 사이드바에서는 재정의가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이며, 재정의가 적용되지 않으면 이 단계를 건너뛴다. 둘째, plugin의 plugin host이며 plugin이 host를 가질 때만 있다. 그 밖에는 누군가 등록할 때까지 section을 비운다. 상태 모듈의 등록은 선언된 UI status를 제공하지 않는다. 상태 모듈만 등록하는 선언된 UI status는 출처가 없으며, 그 section은 비워진다. 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다. 선언된 status 출처는 프로세스와 그 프로세스의 status 등록의 짝이다. 출처가 바뀌는 것은 다른 짝이 되는 것이다. 같은 프로세스가 같은 status를 다시 등록하는 것은 바뀜이 아니다.
+- 선언된 status는 plugin 프로세스가 제공한다. workbench는 그 status를 등록한 첫 선언된 status 출처에서 값을 읽는다. 첫째, 사이드바를 가진 카드의 활성 탭의 view이며, 그 view의 페이지가 status를 등록했을 때다. 카드 사이드바에서는 그 사이드바를 가진 카드다. 고정 창 사이드바에서는 plugin override([외부 사이드바](external-sidebars.ko.md))가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이며, plugin override가 적용되지 않으면 이 단계를 건너뛴다. 둘째, plugin의 plugin host이며 plugin이 host를 가질 때만 있다. 그 밖에는 누군가 등록할 때까지 section을 비운다. 상태 모듈의 등록은 선언된 UI status를 제공하지 않는다. 상태 모듈만 등록하는 선언된 UI status는 출처가 없으며, 그 section은 비워진다. 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다. 선언된 status 출처는 프로세스와 그 프로세스의 status 등록의 짝이다. 출처가 바뀌는 것은 다른 짝이 되는 것이다. 같은 프로세스가 같은 status를 다시 등록하는 것은 바뀜이 아니다.
 
 출처가 바뀌는 규칙은 다음과 같다.
 
-- (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌면 출처를 다시 고른다.
+- (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌거나, 고정 창 사이드바의 plugin override가 적용되기 시작하거나 멈추면 출처를 다시 고른다.
 - (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 유지된 상태는 경로별로 살아남는다([status 대응](#status-대응)).
 - (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때, 방향이 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.

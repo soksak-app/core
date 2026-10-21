@@ -331,6 +331,12 @@
       "allowed": []
     },
     {
+      "term": "plugin override",
+      "definition": "A plugin's override of the content of a fixed window sidebar, which applies only while the focused card's active surface is that plugin's (docs/spec/external-sidebars.md, Override context and rail border).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "dirty mark",
       "definition": "The mark of a status whose value changed while its snapshot was in transit; the acknowledgement of that snapshot sends the latest value of the status and clears the mark.",
       "rejected": [],
