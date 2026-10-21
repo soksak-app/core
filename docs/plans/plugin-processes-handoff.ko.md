@@ -87,6 +87,7 @@ the opened surface recorded no host.trace.sidecar.restart-reset
 - CHANGELOG 충돌은 양쪽 항목을 모두 남긴다. `docs/operations/examples.md`의 기록된 수가 충돌하면 합친 tree에서 `make parity-check`가 출력하는 수를 쓴다.
 - worktree를 옮기면 Tauri build cache가 옛 경로를 갖고 있어 clippy가 실패한다. 그 worktree에서 `cargo clean -p tauri -p soksak-tauriv2`를 돌린다.
 - 명령은 `&&`로 잇는다. pipe나 grep은 이어진 명령을 멈추지 않는다.
+- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 `make host-contract-check`를 돌린다. 어떤 push 관문도 이 검사를 돌리지 않아서 돌리지 않으면 CI가 실패한다(F220).
 
 ### 시험 파일을 더할 때
 
