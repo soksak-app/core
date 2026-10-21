@@ -6,7 +6,7 @@ import { answerViewCall, viewStopState } from "../view-calls.js";
 
 function fakes() {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [] };
+    reports: [], log: [], textSize: [], settings: [], registered: [], composition: [] };
   const options = {
     plugin: "probe",
     pending: new Map(),
@@ -57,6 +57,18 @@ function fakes() {
         registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
       },
     },
+    // The page operations of the surface that a hybrid composition uses; each records its arguments.
+    composition: (() => {
+      const record = (name) => async (...args) => { ran.composition.push([name, ...args]); return { [name]: true }; };
+      return {
+        declaration: () => ({ kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] }),
+        place: record("place"),
+        report: record("report"),
+        document: Object.fromEntries(["attach", "load", "zoom", "go", "post", "subscribe", "unsubscribe", "detach"]
+          .map((name) => [name, record("document." + name)])),
+        image: Object.fromEntries(["attach", "focus", "caret", "text", "detach"].map((name) => [name, record("image." + name)])),
+      };
+    })(),
   };
   return { ran, options };
 }
@@ -108,9 +120,9 @@ test("tab.state.write is refused when the surface declares no tab state", async 
 
 test("runtime.native.call runs the host call of the surface with its name and payload", async () => {
   const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "documentAttach", payload: { document: "a" } } }, options),
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "probeCall", payload: { value: "a" } } }, options),
     { native: true });
-  assert.deepEqual(ran.native, [{ name: "documentAttach", payload: { document: "a" } }]);
+  assert.deepEqual(ran.native, [{ name: "probeCall", payload: { value: "a" } }]);
 });
 
 test("runtime.native.call refuses a missing or empty name and runs nothing", async () => {
@@ -320,4 +332,68 @@ test("a restarted view reads the tab state of its surface as it was saved before
     await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: { ...restarted.tab, state: surfaceTab } }),
     { page: 3 },
   );
+});
+
+test("the composition and region calls of a view run the page operations of its surface with their named fields", async () => {
+  const { ran, options } = fakes();
+  const requests = [
+    ["composition.declaration", null],
+    ["composition.place", { regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [], surface: "other" }],
+    ["composition.report", "surface composition failed: probe"],
+    ["document.attach", { name: "doc", surface: "other" }],
+    ["document.load", { name: "doc", url: "https://example.test/" }],
+    ["document.zoom", { name: "doc", zoom: 1.5 }],
+    ["document.go", { name: "doc", action: "back" }],
+    ["document.go", { name: "doc", action: "entry", offset: -2 }],
+    ["document.post", { name: "doc", message: { a: 1 } }],
+    ["document.subscribe", { name: "doc", stream: "elements" }],
+    ["document.unsubscribe", { name: "doc", handle: 3 }],
+    ["document.detach", { name: "doc" }],
+    ["image.attach", { name: "picture", sidecar: "@probe/sidecar" }],
+    ["image.focus", { name: "picture" }],
+    ["image.caret", { name: "picture", x: 1, y: 2, width: 3, height: 4 }],
+    ["image.text", { name: "picture", text: "probe" }],
+    ["image.detach", { name: "picture" }],
+  ];
+  const settled = await Promise.allSettled(requests.map(([command, params], index) => answerViewCall({ id: index + 1, command, params }, options)));
+  assert.deepEqual(settled.map((result) => result.status), requests.map(() => "fulfilled"),
+    settled.map((result) => result.reason?.message).filter(Boolean).join("; "));
+  assert.deepEqual(settled[0].value, { kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] });
+  assert.deepEqual(ran.composition, [
+    ["place", [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], []],
+    ["report", "surface composition failed: probe"],
+    ["document.attach", "doc"],
+    ["document.load", "doc", "https://example.test/"],
+    ["document.zoom", "doc", 1.5],
+    ["document.go", "doc", "back", undefined],
+    ["document.go", "doc", "entry", -2],
+    ["document.post", "doc", { a: 1 }],
+    ["document.subscribe", "doc", "elements"],
+    ["document.unsubscribe", "doc", 3],
+    ["document.detach", "doc"],
+    ["image.attach", "picture", "@probe/sidecar"],
+    ["image.focus", "picture"],
+    ["image.caret", "picture", 1, 2, 3, 4],
+    ["image.text", "picture", "probe"],
+    ["image.detach", "picture"],
+  ]);
+  assert.deepEqual(ran.native, []);
+});
+
+test("a region call without a region name or with params that are not its fields is refused and runs nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "document.attach", params: { name: "" } }, options), /document.attach requires a non-empty region name/);
+  await assert.rejects(answerViewCall({ id: 2, command: "image.focus", params: "picture" }, options), /image.focus requires an object/);
+  await assert.rejects(answerViewCall({ id: 3, command: "composition.place", params: { regions: {}, overlays: [] } }, options),
+    /composition.place requires the arrays regions and overlays/);
+  assert.deepEqual(ran.composition, []);
+});
+
+test("runtime.native.call of a composition or region host call is refused and runs nothing", async () => {
+  const { ran, options } = fakes();
+  for (const [index, name] of ["compositionDeclare", "compositionPlace", "documentAttach", "documentLoad", "imageAttach", "imagePlace"].entries()) {
+    await assert.rejects(answerViewCall({ id: index + 1, command: "runtime.native.call", params: { name, payload: {} } }, options),
+      { message: "view call runtime.native.call " + name + " is not served: a view operates its regions through its composition" });
+  }
+  assert.deepEqual(ran.native, []);
 });

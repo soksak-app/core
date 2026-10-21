@@ -306,6 +306,16 @@ function answerViewCalls(surface, scoped, page, context) {
         },
       },
     },
+    // The composition of the view runs the page operations of the surface that a hybrid composition uses: the revision of the
+    // document, the region lifetime of a place and the region record (docs/spec/native-surfaces.md#view-surfaces, regions).
+    composition: {
+      // default: a view without regions or overlays declares none of them.
+      declaration: () => ({ kind: surface.composition.kind, regions: surface.composition.regions ?? [], overlays: surface.composition.overlays ?? [] }),
+      place: (regions, overlays) => page.composition.place(0, regions, overlays),
+      report: (text) => page.surfaces.report(text),
+      document: page.document,
+      image: page.image,
+    },
   };
   const answering = scoped.native.on("view-call", (event) => {
     if (event?.cancel === true) {

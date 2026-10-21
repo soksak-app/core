@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F228-3: workbench가 view의 composition·영역 call을 표면의 page 동작으로 제공하므로, view 영역의 attach는 memory saver의 영역 기록을 거치고 배치는 document의 composition revision을 가진다. composition·영역 호스트 호출의 raw `runtime.native.call`은 거부된다. workbench 시험 넷이 바뀌지 않은 코드에서 실패하고 통과한다(`view-calls` 37/37, `surface-view`·`surface-modules` 16/16).
 - F228-2: plugin-api의 view bridge가 `composition.create({regions, overlays})`를 내보낸다. 이것은 view document에서 composition controller를 실행하고 각 영역 동작을 view call로 보내므로, view page가 선언된 document·image 영역의 composition을 만든다. `view.test.mjs` 시험 둘이 바뀌지 않은 코드에서 실패하고 통과한다(34/34).
 - F228-1: native-surfaces.md와 plugins.md(+ko)가 view의 composition을 명세한다: view bridge의 `composition.create`, 메인 page가 표면의 page 동작으로 제공하는 composition·영역 view call, composition·영역 raw 호스트 호출의 거부, 호출 envelope의 view에 대한 확인, view process 종료 시 영역 닫기.
 - F227: view가 다시 surface context의 `tab.state`로 자기 surface의 tab state를 읽고 쓴다. F212.7-11 이후 두 호출은 `tab.read is not a function`으로 실패했다. `view-calls` 시험 다섯이 바뀌지 않은 코드에서 실패하고 수정에서 통과한다(32/32, `surface-modules` 10/10).
