@@ -49,7 +49,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 
 개발이 먼저다. 항목은 바꾼 것의 소유 검사만 돌린다. 단위 시험(Red와 Green)과 그 항목이 건드리는 구조 검사다. 그다음 `[o]`로 표시하고 다음 항목으로 넘어간다. main에 합칠 때는 충돌 해결의 소유 검사와 pre-push hook이 도는 push 관문(`make push-check`)을 돌린다. 전체 모음(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 활성 체크리스트의 모든 항목이 끝났을 때 한 번 돌린다. 항목마다, 수정마다, 재귀적으로 돌리지 않는다.
 
-오래 걸리는 명령에는 전체 모음에 대한 일괄 제한을 두지 않는다. 시험마다 자기 제한을 둔다. 오래 걸리는 명령은 무엇을 돌리는지, 무엇이 끝나고 통과하거나 실패하는지, 경과 시간을 기록해서 진행과 오류를 관찰할 수 있게 한다. 시작과 끝만 찍는 시험은 허용하지 않는다. 어떤 시험도 수십 분 동안 돌지 않는다.
+시험 시간 한도와 긴 실행의 진행 출력은 [AGENTS.ko.md](../../AGENTS.ko.md)(검증)의 규칙을 따른다.
 
 1. `git fetch` 후 origin의 checklist를 먼저 읽는다.
 2. 요청을 분류하고 항목을 등록한다(EN과 KO). 계약이 바뀌면 명세를 먼저 고친다.
@@ -117,7 +117,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - 화면이나 시간 동작은 gesture 전체를 녹화하고, 잰 frame 간격과 좌표를 추적되는 증거로 만든다.
 - 검사 중 application 오류는 검사가 `expectError`로 선언하지 않으면 모두 실패다.
 - 입력기 검사(`make -C native/darwin test-activation`, `pnpm -F @soksak/e2e verify:activation`)는 사람의 승인을 받고만 돌린다.
-- 부하가 걸린 컴퓨터에서 기대 시간의 100배 안쪽으로 넘긴 시간 한도는 부하다. 부하와 시간을 기록하고 항목을 완료한다.
+- 시간 한도는 [AGENTS.md](../../AGENTS.ko.md)(검증)를 따른다.
 
 ### 검증이 필요한 결정
 

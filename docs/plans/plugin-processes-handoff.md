@@ -49,7 +49,7 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 
 Development comes first. An item runs only the owning checks of what it changed: its unit tests (Red and Green) and the structural checks it touches. Then it is marked `[o]` and the work moves to the next item. A merge into main runs the owning checks of the conflict resolution and the push gate that the pre-push hook runs (`make push-check`). The full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), the window checks and the measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run once, when every item of the active checklist is complete. They never run per fix, per item, or recursively.
 
-Long-running commands get no blanket limit over a whole suite. Each test has its own limit. A long command logs what runs, what finishes, what passes or fails, and the elapsed time, so its progress and its errors are observed. A test that prints only a start and an end is not acceptable. No test may run for tens of minutes.
+Time limits and the progress output of long runs follow the rules in [AGENTS.md](../../AGENTS.md) (Verification).
 
 1. `git fetch` and read the checklist on origin first.
 2. Classify the request, register the item (EN and KO), and update the specification first when the contract changes.
@@ -117,7 +117,7 @@ Window checks are end-to-end checks of the applications with installed plugins. 
 - For visual or time behavior, record the whole gesture and derive the measured frame gaps and coordinates as tracked evidence.
 - Every application error during a check fails it unless the check declares it with `expectError`.
 - The input method checks (`make -C native/darwin test-activation`, `pnpm -F @soksak/e2e verify:activation`) run only with the person's approval.
-- A time limit missed by less than 100 times its expected value on a loaded machine is load: record the load and the time, and complete the item.
+- Time limits follow [AGENTS.md](../../AGENTS.md) (Verification).
 
 ### Decisions that need a review
 

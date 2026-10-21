@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F240-1: 플러그인 프로세스 handoff는 시험 시간 한도와 긴 실행의 진행 출력을 다시 적지 않고 AGENTS.ko.md를 참조한다. AGENTS.ko.md는 시험마다 자기 한도, 경과 시간을 포함한 running, finished, passed, failed 출력, 체크리스트 완료 시 전체 suite 한 번 실행을 적는다.
 - F239-19: sidecar host의 hello test 두 개는 5.0초가 아니라 0.11초와 0.11초에, delay test는 5.6초가 아니라 0.51초에 끝난다. hello test는 hello 경계를 100ms로 설정하며 production 경계 5초는 그대로다. delay test의 fake service가 shutdown에 답하므로 Stop은 5초 기한을 더 기다리지 않는다. 변경 전 hello test는 5초 경계에서 실패했고 delay test의 stop은 5.002초였다.
 - F239-21: host의 writer 없는 panic test 두 개는 5.2초와 5.0초가 아니라 0.45초(Rust)와 0.12초(Go)에 끝난다. 각 test는 panic hook에 writer 기한 100ms를 주며, panic 기록은 그대로 standard error 전체에 나온다. production 기한 5초는 그대로다. 변경 전 자식은 그 기한 때문에 Rust 5.08초, Go 5.01초에 끝났다.
 - F239-13: sidecar host의 닫힌 surface 이미지 test(Go `TestAnImageOfAClosedSurfaceIsAnsweredClosed`, Rust `an_image_of_a_closed_surface_is_answered_closed`)가 5.3초 대신 0.37초와 0.35초에 끝난다. fixture가 입력이 닫히면 끝나므로 정리 단계의 stop이 5초 stop 기한을 기다리지 않는다. 변경 전에는 stop이 5.000초 걸려 assertion이 실패했다.
