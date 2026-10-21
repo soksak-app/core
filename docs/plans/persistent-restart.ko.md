@@ -11,14 +11,14 @@ F212.8a-4의 제안과 검증 기록이다. 규칙이 [터미널 런타임](../s
 ## 제안
 
 1. 재시작 한도가 세는 계속 연결 service의 실패는 다음 중 하나다.
-   - 호스트가 sidecar를 멈추고 있지 않을 때 service 프로세스가 끝나는 것. reader의 부활이 그 끝을 위해 돌 때 그 끝을 세고, 오래된 endpoint를 지운 뒤 또는 남은 것이 없을 때 단일 생성 경로로 service를 다시 낳는다. 아래의 멈춤이 그 spawn을 막아도 같다.
-   - 생성 경로의 시작 실패: `the service did not print its endpoint within 30s`, `service exited before endpoint`, `the service did not answer hello within 5s`;
-   - protocol 위반으로 연결이 끝나는 것. [터미널 런타임](../spec/terminal-runtime.ko.md) `### Service transport`가 적는 이유 중 하나다. reader가 연결을 끝낼 때 그것을 세고, service는 계속 돈다.
+   - 호스트가 sidecar를 멈추고 있지도 않고 그 sidecar의 교체도 진행 중이 아닐 때 service 프로세스가 끝나는 것. reader의 부활이 그 끝을 위해 돌 때 그 끝을 세는데, 아래의 멈춤이 spawn을 막아도 같다. 그 외에는 오래된 endpoint를 지운 뒤 또는 남은 것이 없을 때 단일 생성 경로로 service를 다시 낳는다.
+   - 호스트가 sidecar를 멈추고 있지도 않고 그 sidecar의 교체도 진행 중이 아닐 때 생성 경로의 시작 실패: `the service did not print its endpoint within 30s`, `service exited before endpoint`, `the service did not answer hello within 5s`;
+   - 호스트가 sidecar를 멈추고 있지 않을 때 protocol 위반으로 연결이 끝나는 것. 연결을 끝내는 이유 중 하나다. [터미널 런타임](../spec/terminal-runtime.ko.md) `### Service transport`가 적는 이유와 [사이드카](../spec/sidecars.ko.md) `## Failure`의 close 응답 이유다. reader가 연결을 끝낼 때 그것을 세고, service는 계속 돈다.
    부활이 살아 있는 service에 다시 붙는 끊김은 실패가 아니다. 끊김 하나는 부활이 무엇을 시도했든 실패를 하나만 센다. 연결이 거부되어 다시 시도하는 부활은 그 재시도와 함께 한 번으로 세고, service를 다시 낳은 부활의 시작이 실패하면 그 시작 실패로 한 번만 센다. 전송이 시작한 생성은 자신의 실패를 따로 센다.
 2. 세는 방식은 [사이드카](../spec/sidecars.ko.md) `## Failure`의 표준 입출력 규칙을 따른다. 각 실패가 도착한 시각으로 세고 timer는 없다. 새 실패보다 300초 앞선 실패는 세지 않는다. 300초 안의 네 번째 실패가 재시작을 멈추고 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 log에 쓰고 수준 error로 `host.sidecar.restart-limit` `{sidecar}` event를 쓴다.
 3. 멈춤은 네 번째 실패에서, 부활이나 전송이 생성 경로를 돌기 전에 시작한다. 네 번째 실패가 실패한 시작이면, 그 sidecar에 전송한 surface들은 어떤 실패한 시작과 같이 그 시작 오류를 담은 연결 알림을 받는다. service 프로세스의 끝이면 호스트는 그것을 세고 부활이 spawn하기 전에 멈추며, 전송한 surface들은 연결 알림 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 받는다. service가 멈춘 동안 호스트는 부활도 생성도 하지 않는다. 전송은 `sidecar <name>: restart limit`으로 실패하고, 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 log에 쓰고, 전송한 surface는 연결 알림 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 받는다. 멈춤을 풀 때까지 다른 연결 알림은 쓰지 않는다. 계속 연결 transport의 restart-limit 보고는 연결 알림으로만 간다. 멈춤은 `sidecar-failure` 전달을 더하지 않는다.
 4. 사람이 surface를 열 때만 멈춤을 푼다. 표준 입출력 transport와 같다. `plugin.json`의 `dependencies`가 그 sidecar를 적는 plugin의 surface를 호스트가 만들면 실패 기록을 지우고 수준 debug로 `host.trace.sidecar.restart-reset` `{sidecar, surface}` event를 쓰고, 다음 전송이 생성 경로를 돈다. 이미 열려 있는 surface의 요청은 멈춤을 풀지 않는다. 멈춤은 application 프로세스가 돌아 있는 동안만 유지되며, 새 application 프로세스는 빈 실패 기록으로 시작한다.
-5. [터미널 런타임](../spec/terminal-runtime.ko.md)은 끊김마다 한 번의 부활 시도를 유지하고 이 한도를 더한다. [사이드카](../spec/sidecars.ko.md) `## Failure`의 재시작 한도 문단은 첫 문장을, 재시작 한도가 두 transport의 sidecar에 적용되고 계속 연결 transport의 실패는 터미널 런타임이 적는 것이라는 문장으로 바꾸고, 계속 연결 한도를 정의하지 않았던 뒤의 문장을 지운다. 그리고 거부 문장의 `sidecar-failure` 전달은 표준 입출력 transport의 보고이며, 계속 연결 transport는 터미널 런타임이 적는 대로 거부된 전송을 연결 알림으로 보고한다는 것을 적는다. [이벤트](../spec/events.json)의 `host.sidecar.restart-limit` 설명은 "A sidecar of either transport failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."가 된다.
+5. [터미널 런타임](../spec/terminal-runtime.ko.md)은 끊김마다 한 번의 부활 시도를 유지하고 이 한도를 더한다. [사이드카](../spec/sidecars.ko.md) `## Failure`의 재시작 한도 문단은 첫 문장을, 재시작 한도가 두 transport의 sidecar에 적용되고 계속 연결 transport의 실패는 터미널 런타임이 적는 것이라는 문장으로 바꾸고, 계속 연결 한도를 정의하지 않았던 뒤의 문장을 지운다. 그리고 거부 문장의 `sidecar-failure` 전달은 표준 입출력 transport의 보고이며, 계속 연결 transport는 터미널 런타임이 적는 대로 거부된 전송을 연결 알림으로 보고한다는 것을 적는다. [이벤트](../spec/events.json)의 `host.sidecar.restart-limit` 설명은 "A sidecar of either transport failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."가 된다. `host.trace.sidecar.restart-reset` 설명은 "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record, and the next request starts the sidecar (docs/spec/sidecars.md#failure)."가 된다.
 
 ## 검증 범위
 
@@ -47,4 +47,17 @@ F212.8a-4의 제안과 검증 기록이다. 규칙이 [터미널 런타임](../s
 - R3-1: 재시작 한도 문단의 거부 문장이 `sidecar-failure` 전달을 명하므로, 첫 문장을 두 transport로 만들면 R2-4의 답과 어긋나게 계속 연결 거부 전송에도 전달을 명하게 된다. 수용: 명세 변경은 거부 문장의 `sidecar-failure` 전달이 표준 입출력 transport의 보고이고 계속 연결 transport는 거부된 전송을 연결 알림으로 보고한다고 적는다.
 - R3-2: protocol 위반으로 끝나는 연결은 프로세스의 끝도 시작 실패도 아니어서, 위반하는 계속 연결 service가 한 없이 재접속하고 실패한다. 같은 결함이 표준 transport에서는 네 번째에 멈춘다. 수용: protocol 위반 연결 끝을 실패로 센다. reader가 연결을 끝낼 때 세고 service는 계속 돌며, 위반의 `sidecar-failure` 전달은 그대로 둔다.
 
-4차가 열려 있다.
+### 4차
+
+- R4-1: 교체가 일으키는 service의 끝이 세질 수 있었다. 호스트는 멈추고 있지 않고 부활은 교체 상태를 예상된 것으로 다루는데, 300초 안에 네 번 갱신하면 sidecar가 멈출 수 있었다. 수용: 그 끝은 호스트가 sidecar를 멈추고 있지도 않고 교체도 진행 중이 아닐 때만 센다.
+- R4-2: 멈추는 동안의 protocol 위반 끝이 세질 수 있었다. 표준 transport는 그것을 event 없이 log에만 적고 두 호스트 모두 멈추는 동안 세지 않는다. 수용: 위반은 호스트가 sidecar를 멈추고 있지 않을 때만 센다.
+- R4-3: restart-reset 설명이 열림이 하지 않는 시작을 적고 있었다. 다음 요청이 sidecar를 시작한다. 수용: 설명은 기록을 지우고 다음 요청이 시작한다고 적는다.
+
+### 5차
+
+- R5-1: close 응답을 잘못해도 연결이 끝나는데 터미널 런타임은 자기 위반 이유만 적어, close 답을 잘못하는 service가 전송마다 재접속하며 세이지 않았다. 수용: 셋째 조항은 연결을 끝내는 모든 이유, 즉 터미널 런타임의 이유와 사이드카의 close 응답 이유를 센다.
+- R5-2: 생성 경로의 시작 실패에 교체 제외가 없어, 반복해서 실패하는 갱신이 sidecar를 멈추고 이후 모든 교체를 막을 수 있었다. 수용: 시작 실패는 호스트가 멈추고 있지도 교체 중이지도 않을 때만 센다.
+- R5-3: 멈춤이 spawn을 막아도 다시 낳는다고 읽혀, spawn 전 멈춤 규칙과 어긋났다. 수용: 그 조항을 세는 주장으로 옮겼다.
+- R5-4: 한국어 문서에 4차 기록과 항목 5의 restart-reset 설명 문장이 없었다. 수용: 둘 다 넣었다.
+
+검증은 마지막 허용 차례인 5차 뒤에 닫는다. 모든 차례의 반론은 위 글에 답했다. 남은 세부는 구현의 Red/Green 시험이 정한다.
