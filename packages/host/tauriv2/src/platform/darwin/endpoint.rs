@@ -309,6 +309,7 @@ pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
 mod tests {
     use super::listed_as_alive;
 
+    // contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
     #[test]
     fn a_process_that_ps_does_not_list_has_ended() {
         // A process reaped between kill(pid, 0) and ps leaves no row, so the state is empty.
@@ -316,6 +317,7 @@ mod tests {
         assert!(!listed_as_alive("  \n"));
     }
 
+    // contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
     #[test]
     fn a_zombie_has_ended_and_a_running_process_has_not() {
         assert!(!listed_as_alive("Z+\n"));
