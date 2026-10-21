@@ -104,7 +104,8 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
         send: link.send,
         onMessage: link.onMessage,
         onSnapshot: (received, seq, value, count) => {
-          if (received !== statusId || current === null || current.id !== next.id) return;
+          // The snapshot names the status inside the plugin; the channel is per plugin (docs/spec/declared-ui.md).
+          if (received !== status || current === null || current.id !== next.id) return;
           // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
           // default: a section without a skipped receiver writes no trace event of the overwritten values.
           if (count > 0) skipped?.(count);

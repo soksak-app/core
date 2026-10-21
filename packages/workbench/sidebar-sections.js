@@ -117,9 +117,12 @@ function mountModule(entry, context) {
  */
 function mountDeclared(entry, record) {
   const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
-  const statusId = `${owner}.${entry.section.status}`;
+  // The manifest holds the full status name in the section (validateManifest refuses a short name). The snapshot channel
+  // and the pull name the status inside the plugin (docs/spec/declared-ui.md, status mapping).
+  const statusId = entry.section.status;
+  const status = statusId.slice(owner.length + 1);
   const context = sectionContext(entry, record.context);
-  const transport = createDeclaredSource({ plugin: owner, status: entry.section.status });
+  const transport = createDeclaredSource({ plugin: owner, status });
   const declared = createDeclaredSection({
     statusId,
     body: entry.body,
@@ -130,7 +133,7 @@ function mountDeclared(entry, record) {
     channel: transport.channel,
     pull: transport.pull,
     // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
-    skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status: entry.section.status, count }),
+    skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status, count }),
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
   });
   entry.declared = declared;

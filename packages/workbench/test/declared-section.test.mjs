@@ -54,7 +54,8 @@ async function harness() {
     statusId, body, world, section,
     push(source, seq, value, skipped = 0) {
       assert.ok(world.channels.get(source), `no channel is subscribed for ${source}`);
-      world.channels.get(source)({ event: "declared-ui.snapshot", plugin: "demo", status: statusId, seq, value, skipped });
+      // The snapshot of a view names the status in its plugin; the channel is per plugin (docs/spec/declared-ui.md).
+      world.channels.get(source)({ event: "declared-ui.snapshot", plugin: "demo", status: name, seq, value, skipped });
     },
     expand(path, expanded) {
       assert.doesNotThrow(() => setTreeExpanded({ status: statusId, tree: "t1", path, expanded }), "the tree was not drawn");
@@ -120,7 +121,7 @@ test("a snapshot that arrives from a source that is no longer chosen is discarde
   h.section.reconcile();
   assert.equal(h.world.channels.has("view-a"), false, "the channel of the old source is still subscribed");
   // A delivery that races the unsubscription reaches the old listener; it must not draw.
-  staleListener({ event: "declared-ui.snapshot", plugin: "demo", status: h.statusId, seq: 9, value: list(["old"]), skipped: 0 });
+  staleListener({ event: "declared-ui.snapshot", plugin: "demo", status: h.statusId.slice("demo.".length), seq: 9, value: list(["old"]), skipped: 0 });
   assert.equal(h.body.textContent, "", "a snapshot of the old source was drawn");
 });
 
