@@ -1476,7 +1476,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         .unwrap();
         let writer = records::start_writer(std::path::Path::new(&config));
         let (sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec sleep 600\n",
+            "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec cat >/dev/null\n",
         );
         let (window, events, _failures) = failing_owner("a", "/projects/a");
         for surface in ["s1", "s2"] {
@@ -1493,6 +1493,15 @@ fn a_dropped_sidecar_message_is_recorded() {
             .expect("no sidecar event; the test stalled");
         assert_eq!(event.surface, "s1");
         writer.flush(STALL).unwrap();
+        // The sidecar ends when its input closes, so the stop does not wait for its deadline.
+        let stopping = std::time::Instant::now();
+        sidecars.stop();
+        let elapsed = stopping.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "stop took {elapsed:?}; the sidecar ends with its input and must not wait the stop deadline of {:?}",
+            sidecars.stop_timeout
+        );
         return;
     }
     let config = folder::Folder::new();
@@ -1888,7 +1897,7 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
     let (sidecars, _directory) = script_sidecars(concat!(
         "#!/bin/sh\nread open1\nread open2\nread closed2\n",
         "printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n",
-        "read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec sleep 600\n",
+        "read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec cat >/dev/null\n",
     ));
     let (window, events, _failures) = failing_owner("a", "/projects/a");
     for surface in ["s1", "s2"] {
@@ -1907,6 +1916,15 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
     assert_eq!(
         answer,
         serde_json::json!({"surface": "s2", "body": {"image": {"error": "closed", "name": "view", "generation": 3, "raster": 4, "sequence": 5}}})
+    );
+    // The sidecar ends when its input closes, so the stop does not wait for its deadline.
+    let stopping = std::time::Instant::now();
+    sidecars.stop();
+    let elapsed = stopping.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "stop took {elapsed:?} after the answer; the sidecar ends with its input and must not wait the stop deadline of {:?}",
+        sidecars.stop_timeout
     );
 }
 
@@ -2106,9 +2124,12 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
         dependents: vec!["plugin-a".to_string()],
     }];
     let clock = clock.clone();
-    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
+    let mut sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
         .unwrap()
         .with_clock(move || clock.read());
+    // The restarted sidecar runs the script that does not answer the shutdown, so the stop waits its stop timeout. The
+    // test sets a short timeout, as the other tests of a sidecar that ignores the shutdown do.
+    sidecars.stop_timeout = Duration::from_millis(100);
     (Stopping(sidecars), directory)
 }
 
@@ -2164,6 +2185,14 @@ fn restarts_after_three_failures_within_the_window() {
     assert!(
         failures.recv_timeout(Duration::from_millis(200)).is_err(),
         "the restarted sidecar failed"
+    );
+    // The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
+    let stopping = std::time::Instant::now();
+    sidecars.stop();
+    assert!(
+        stopping.elapsed() < Duration::from_secs(1),
+        "the stop took {:?}",
+        stopping.elapsed()
     );
 }
 
@@ -2254,7 +2283,14 @@ fn surface_open_clears_the_restart_limit() {
     sidecars.surface_opened("plugin-a", "s2");
     send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(42)).unwrap();
     send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(43)).unwrap();
+    // The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
+    let stopping = std::time::Instant::now();
     sidecars.stop();
+    assert!(
+        stopping.elapsed() < Duration::from_secs(1),
+        "the stop took {:?}",
+        stopping.elapsed()
+    );
     writer.flush(Duration::from_secs(5)).unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
     let reset = events

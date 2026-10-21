@@ -12,7 +12,9 @@ use std::time::{Duration, Instant};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host_tauriv2::application_log::{install_panic_hook, start_standard_error};
+use soksak_host_tauriv2::application_log::{
+    install_panic_hook, install_panic_hook_with_writer_deadline, start_standard_error,
+};
 use soksak_host_tauriv2::event_log::{self, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 
@@ -183,13 +185,15 @@ const NO_WRITER_CHILD: &str = "SOKSAK_PANIC_NO_WRITER_CHILD";
 #[test]
 fn a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full() {
     if std::env::var_os(NO_WRITER_CHILD).is_some() {
-        install_panic_hook();
+        // The writer never opens in this process; the thread that ends the process gives up after the short deadline.
+        install_panic_hook_with_writer_deadline(Duration::from_millis(100));
         let ended = std::panic::catch_unwind(|| panic!("the lock directory cannot be read"));
         assert!(ended.is_err());
         // The writer never opens, so the process ends by the bounded wait; reaching the end of the wait is the failure.
         std::thread::sleep(Duration::from_secs(10));
         std::process::exit(4);
     }
+    let started = Instant::now();
     let output = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -201,6 +205,11 @@ fn a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full() {
         .stdin(Stdio::null())
         .output()
         .unwrap();
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "the child ended after {elapsed:?}; the writer deadline of the test must not be waited in real time"
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(101), "stderr {stderr:?}");
     assert!(

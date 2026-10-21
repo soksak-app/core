@@ -20,9 +20,10 @@ import (
 // process ends.
 const panicFlushDeadline = 2 * time.Second
 
-// panicWriterDeadline is how long the entrance of the goroutines waits for the writer when the panic happened before the writer
+// PanicWriterDeadline is how long the entrance of the goroutines waits for the writer when the panic happened before the writer
 // was attached. The writer attaches during the start of the host; the bound ends a process whose start never attaches it.
-const panicWriterDeadline = 5 * time.Second
+// Default: 5 seconds. A test injects a shorter value.
+var PanicWriterDeadline = 5 * time.Second
 
 // writerAttached is closed when the writer of the host is attached for the first time.
 var writerAttached = make(chan struct{})
@@ -37,9 +38,9 @@ func init() {
 // the writer is attached waits for the writer, at most panicWriterDeadline, so the event enters the writer and not only the start
 // buffer that the process end would drop. A flush that fails is reported on the standard error, which holds the stack as well.
 func recordPanic(name, text, stack string) {
-	if !waitForWriter(panicWriterDeadline) {
+	if !waitForWriter(PanicWriterDeadline) {
 		// No writer exists to store the record, so the record is written to the standard error in full.
-		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: no writer opened within %s\nhost.panic name=%s text=%s\n%s", panicWriterDeadline, name, text, stack)
+		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: no writer opened within %s\nhost.panic name=%s text=%s\n%s", PanicWriterDeadline, name, text, stack)
 		return
 	}
 	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})

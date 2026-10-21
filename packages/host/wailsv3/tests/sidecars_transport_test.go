@@ -1238,7 +1238,33 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		close(helloSeen)
 		time.Sleep(500 * time.Millisecond)
 		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
-		_, _ = io.Copy(io.Discard, reader)
+		// The service answers close-owner and shutdown, so that Stop ends without its deadline.
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply map[string]any
+			switch request["operation"] {
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+			if request["operation"] == "shutdown" {
+				return
+			}
+		}
 	}()
 	folder := t.TempDir()
 	if err := os.WriteFile(filepath.Join(folder, "fast"), []byte("#!/bin/sh\ntee /dev/null\n"), 0o755); err != nil {
@@ -1271,6 +1297,11 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	if waited > 50*time.Millisecond {
 		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
 	}
+	stopping := time.Now()
+	sidecars.Stop()
+	if elapsed := time.Since(stopping); elapsed >= time.Second {
+		t.Fatalf("stop took %v; the service answers close-owner and shutdown, so the stop must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
+	}
 }
 
 // A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.
@@ -1300,10 +1331,14 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sidecars.HelloTimeout = 100 * time.Millisecond
 	owner := &harnessOwner{root: "/hello", seen: make(chan SidecarMessage, 1)}
 	begin := time.Now()
 	err = sendWithin(t, sidecars, owner, 30*time.Second)
-	if want := "sidecar fixture-service: the service did not answer hello within 5s"; err == nil || err.Error() != want {
+	if elapsed := time.Since(begin); elapsed >= time.Second {
+		t.Fatalf("the start failed after %v; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply", elapsed)
+	}
+	if want := "sidecar fixture-service: the service did not answer hello within 100ms"; err == nil || err.Error() != want {
 		t.Fatalf("unanswered hello = %v after %v, want %q", err, time.Since(begin), want)
 	}
 }
@@ -1707,6 +1742,16 @@ type replaceService struct {
 	secondAt   time.Time
 }
 
+// installedProcessRunning reports whether pid is a process that runs. A process that ended, or a zombie that is already ended (state Z), is not running.
+func installedProcessRunning(pid int) bool {
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return false
+	}
+	state := strings.TrimSpace(string(out))
+	return state != "" && !strings.HasPrefix(state, "Z")
+}
+
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
 	t.Helper()
 	socketDirectory := socketParent(t)
@@ -1739,10 +1784,34 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		t.Fatal(err)
 	}
 	folder := t.TempDir()
-	script := "#!/bin/sh\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
+	installedPID := filepath.Join(folder, "installed.pid")
+	script := "#!/bin/sh\necho $$ > " + installedPID + "\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// The installed service process that the host starts for the fixture ends with the test.
+	t.Cleanup(func() {
+		data, err := os.ReadFile(installedPID)
+		if err != nil {
+			return // default: the host started no installed service in this test, so no process remains.
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			t.Errorf("installed service pid file: %v", err)
+			return
+		}
+		// default: a process that already ended gives ESRCH, and the check below reports only a process that remains.
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
+		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z.
+		deadline := time.Now().Add(time.Second)
+		for installedProcessRunning(pid) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if installedProcessRunning(pid) {
+			t.Errorf("installed service process %d outlived the test", pid)
+		}
+	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
 	go func() {
 		for index := 0; ; index++ {
