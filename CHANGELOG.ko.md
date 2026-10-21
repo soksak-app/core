@@ -2134,4 +2134,5 @@
 - F8 native 활성화 Green: 명시적 활성화가 입력을 받을 수 없는 숨겨진 WebView를 더 이상 기다리지 않는다. 집중 실행한 `native/darwin/build/input_activate_test`가 새 숨김 WebView 케이스와 기존 활성화 케이스를 모두 통과했다. 전체 `make test-activation` lane은 기존 inspector 부착 실패를 별도로 보고하므로 전체 통과로 기록하지 않았다. host IME 확정 기준은 아직 열려 있으며, 재빌드 Wails probe에서 보이는 `나` preedit 뒤 PTY에 원시 `ㄱㅏ`가 남았다.
 - F8 protocol Green: focus와 compose ACK가 이제 `ack`만 포함한다. 집중 실행한 `native_input_ack_is_not_reported_as_an_unsolicited_event` 계약 검사가 1/1 통과해 정상 ACK가 terminal의 unsupported 이벤트 목록을 오염시키지 않는다. host IME 확정 기준은 계속 열어 둔다.
 
-- F238-c-27-1: `view.js`에 대한 요청/응답, 이벤트 전달, 지원하지 않는 페이지 거부의 producer 순서 사례를 공개하고 core view 테스트에서 실행한다.
+- F238-c-27-1: `packages/plugin-api/contract/view-bridge.json`에 `view.js`의 요청/응답, 이벤트 전달, 지원하지 않는 페이지 거부에 대한 producer 순서 사례를 공개하고 `packages/plugin-api/test/view.test.mjs`의 core view 테스트에서 실행한다.
+- F238-c-27-2: `packages/plugin-api/contract/view-bridge.json`의 view bridge 사례에 주입된 script를 통한 순서 있는 theme 이벤트 전달과 잘못된 host message 거부를 추가하고, `packages/plugin-api/test/view.test.mjs`에서 실행한다.

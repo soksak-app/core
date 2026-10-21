@@ -611,8 +611,16 @@ test("composition.create of a view refuses elements that do not match its declar
 // Published producer-side bridge vectors run against createViewBridge, not the consumer fixture.
 const BRIDGE_CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-bridge.json", import.meta.url), "utf8"));
 test("published view bridge cases match calls, replies, events, and refusals", async (t) => {
-  assert.equal(BRIDGE_CONTRACT.cases.length, 3);
+  assert.equal(new Set(BRIDGE_CONTRACT.cases.map(({ id }) => id)).size, BRIDGE_CONTRACT.cases.length);
+  const actionSequences = {
+    "view.bridge.ready-and-request-reply": ["create", "request", "host-reply"],
+    "view.bridge.events-delivered-in-order": ["subscribe", "host-event", "host-event"],
+    "view.bridge.refuses-malformed-host-message": ["create", "host-malformed"],
+    "view.bridge.refuses-unsupported-page": ["create"],
+  };
   for (const item of BRIDGE_CONTRACT.cases) {
+    assert.ok(actionSequences[item.id], `unsupported bridge case ${item.id}`);
+    assert.deepEqual(item.steps.map(({ action }) => action), actionSequences[item.id], `${item.id} ordered actions`);
     await t.test(item.id, async (subtest) => {
       if (item.id === "view.bridge.refuses-unsupported-page") {
         setup(subtest, { url: item.steps[0].input.url });
@@ -630,11 +638,19 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.deepEqual(posted.at(-1), item.steps[1].output);
         host(item.steps[2].input);
         assert.equal(await reply, item.steps[2].output);
+      } else if (item.id === "view.bridge.refuses-malformed-host-message") {
+        assert.equal(posted[0]?.event === "view.ready", item.steps[0].output.ready);
+        const before = posted.length;
+        host(item.steps[1].input);
+        assert.deepEqual(plain(posted.slice(before)), [item.steps[1].output]);
       } else {
         const received = [];
         const subscription = bridge.runtime.theme((value) => received.push(value));
-        host({ sok: 1, event: item.steps[1].input.event, data: item.steps[1].input.data });
-        assert.deepEqual(received, [item.steps[1].output]);
+        for (const step of item.steps.slice(1)) {
+          host({ sok: 1, event: step.input.event, data: step.input.data });
+          assert.equal(received.at(-1), step.output);
+        }
+        assert.deepEqual(received, item.steps.slice(1).map((step) => step.output));
         await subscription.dispose;
       }
     });

@@ -3,7 +3,8 @@
   "description": "Ordered producer-side examples for view bridge calls, replies, and events. Host routes are inputs to the bridge; page bridge exports are calls made by the view page.",
   "cases": [
     {"id":"view.bridge.ready-and-request-reply","steps":[{"action":"create","output":{"ready":true}},{"action":"request","input":{"command":"probe.run","params":{"x":1}},"output":{"sok":1,"id":1,"command":"probe.run","params":{"x":1}}},{"action":"host-reply","input":{"sok":1,"id":1,"result":"ok"},"output":"ok"}]},
-    {"id":"view.bridge.event-delivered","steps":[{"action":"subscribe","input":"theme"},{"action":"host-event","input":{"event":"theme","data":"dark"},"output":"dark"}]},
+    {"id":"view.bridge.events-delivered-in-order","steps":[{"action":"subscribe","input":"theme"},{"action":"host-event","input":{"event":"theme","data":"dark"},"output":"dark"},{"action":"host-event","input":{"event":"theme","data":"light"},"output":"light"}]},
+    {"id":"view.bridge.refuses-malformed-host-message","steps":[{"action":"create","output":{"ready":true}},{"action":"host-malformed","input":{"sok":2,"event":"theme","data":"invalid"},"output":{"event":"view.error","plugin":"probe","reason":"message without the sok marker for probe"}}]},
     {"id":"view.bridge.refuses-unsupported-page","steps":[{"action":"create","input":{"url":"https://example.test/"},"output":{"throws":"view channel requires a view page on sok://<plugin id>"}}]}
   ]
 }

@@ -2372,4 +2372,6 @@ macOS의 터미널 키보드 전달을 수정했다(2026-09-20). Tauri의 빈 �
 
 ### F238-c-27 producer bridge 후속
 
+- [o] F238-c-27-2 — P1: 소유자 core `main`, 완료된 F238-c-27-1의 연결 후속 항목. 공개 사례가 순서 있는 theme 이벤트 전달과 주입된 script를 통한 잘못된 host message 거부를 검증한다. 실행기는 고유 ID와 정확한 순서의 action 목록을 확인한다. Red: 잘못된 message 거부 이유를 `accept malformed message`로 바꾸자 소유 테스트가 이유 불일치로 실패했다. Green: 기대 이유를 복원한 뒤 집중 `view.test.mjs`가 46/46 통과한다. `make docs-check` 통과.
+
 - [o] F238-c-27-1 — P1: 소유자 core `main`; 완료된 F238-c-27의 연결 후속 항목이며 부모는 완료 상태로 둔다. `packages/plugin-api/contract/view-bridge.json`에 ready, 요청/응답, 이벤트 전달, 지원하지 않는 페이지 거부의 producer 순서 사례를 공개하고 `packages/plugin-api/test/view.test.mjs`에서 실제 view bridge로 실행한다. Host route는 입력이며 page bridge export는 호출이다. Red: 공개 reply 기대값을 `ok`에서 `wrong`으로 바꾸자 소유 테스트가 `ok !== wrong`으로 실패했다. Green: 계약을 복원한 뒤 `node --test packages/plugin-api/test/view.test.mjs`가 45/45 통과한다. `make docs-check`가 문서 110개와 record 검사 1608개를 통과한다.

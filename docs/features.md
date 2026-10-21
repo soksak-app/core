@@ -2372,4 +2372,6 @@ Recording completeness (2026-09-17): the capture writes frames on a separate que
 
 ### F238-c-27 producer bridge follow-up
 
+- [o] F238-c-27-2 — P1: Owner core `main`, linked follow-up to completed F238-c-27-1. Published cases now assert ordered theme event delivery and malformed host-message refusal through the injected script; the runner checks unique IDs and exact ordered action sequences. Red: changing the malformed-message refusal reason to `accept malformed message` failed the owning test on the reason mismatch. Green: restored expected reason; focused `view.test.mjs` passes 46/46. `make docs-check` passes.
+
 - [o] F238-c-27-1 — P1: Owner core `main`; linked follow-up to completed F238-c-27 (parent remains complete). Published ordered producer-side view bridge cases cover ready, request/reply, event delivery, and unsupported-page refusal in `packages/plugin-api/contract/view-bridge.json`; `packages/plugin-api/test/view.test.mjs` executes them against the real view bridge. Host routes are inputs; page bridge exports are calls. Red: changing the published reply expectation from `ok` to `wrong` makes the owning test fail on `ok !== wrong`. Green: restored contract; `node --test packages/plugin-api/test/view.test.mjs` passes 45/45. `make docs-check` passes 110 files and 1608 record checks.
