@@ -344,7 +344,9 @@ impl Notifier {
         self.0
             .peers
             .lock()
-            .expect("endpoint peers")
+            // default: a lock that a panicking thread poisoned still holds the connections of the endpoint, which are
+            // only read; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .values()
             .flat_map(|peer| peer.watches.iter())
             .filter(|watch| watch.window == window)
@@ -822,7 +824,9 @@ impl Endpoint {
         drop(
             self.process_lock
                 .lock()
-                .expect("the process lock mutex")
+                // default: a lock that a panicking thread poisoned still holds the process lock, which the stop takes;
+                // the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .take(),
         );
     }
