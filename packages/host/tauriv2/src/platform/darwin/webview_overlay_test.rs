@@ -3,6 +3,7 @@
 use super::overlay_values;
 use crate::platform::{DOMOverlay, Insets};
 
+// contract: view.overlays.native-mask-values
 #[test]
 fn a_view_overlay_sends_its_insets_and_visibility_to_the_native_mask() {
     // The native call reads the left, top, right and bottom insets and a visibility flag per overlay. A hidden overlay

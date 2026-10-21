@@ -7,6 +7,7 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
+// contract: view.overlays.reach-native-in-declared-order
 // The DOM overlays of a view surface keep their declared order, insets and visibility on their way to the native surface.
 func TestAViewOverlayReachesTheNativeSurfaceInItsDeclaredOrder(t *testing.T) {
 	// The overlays are declared as the toolbar then the sidebar, and the placements arrive in another order. The native

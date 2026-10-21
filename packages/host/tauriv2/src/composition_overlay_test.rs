@@ -20,6 +20,7 @@ fn placement(name: &str, insets: [f64; 4], visible: bool) -> (String, Compositio
     )
 }
 
+// contract: view.overlays.reach-native-in-declared-order
 #[test]
 fn a_view_overlay_reaches_the_native_surface_in_its_declared_order() {
     // The overlays are declared as the toolbar then the sidebar, and the placements arrive in another order. The

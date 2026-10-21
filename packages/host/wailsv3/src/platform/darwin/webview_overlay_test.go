@@ -9,6 +9,7 @@ import (
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
+// contract: view.overlays.native-mask-values
 // The values that a view surface sends to the native overlay mask: five per overlay, in the order of the native call.
 func TestAViewOverlaySendsItsInsetsAndVisibilityToTheNativeMask(t *testing.T) {
 	// The native call reads the left, top, right and bottom insets and a visibility flag per overlay. A hidden overlay

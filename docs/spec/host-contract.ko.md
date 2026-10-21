@@ -215,6 +215,8 @@ fn invalid_json_closes_connection() {
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `sok://<plugin>/<page>`를 load한다. | both |
 | `view.composition.page-and-regions` | 호스트는 surface의 합성 선언을 검증한다. `page`가 plugin의 하나의 `.html` 파일이고 `regions`와 `overlays`가 선택적인 `view` 합성은 받아들이고, `page`가 없는 `view`, plugin 밖의 `page`, 접미사가 `.html`이 아니거나 `.binary` 폴더 안의 `page`, `page`를 가진 `hybrid` 합성은 거절한다. | both |
 | `view.composition.dom-removed` | 제거된 `dom` 합성 kind는 `plugin <plugin> surface composition: kind dom is removed; the composition takes kind view or hybrid`으로 거절된다. | both |
+| `view.overlays.reach-native-in-declared-order` | view surface의 DOM overlay는 배치가 어떤 순서로 도착하든 선언된 순서대로, 선언한 overlay마다 하나씩 자신의 insets와 표시 여부를 가지고 native surface에 전달된다. | both |
+| `view.overlays.native-mask-values` | view surface의 native overlay mask는 native 호출 순서대로 overlay마다 다섯 값을 받는다. left, top, right, bottom insets와, 보이는 overlay는 1, 숨긴 overlay는 0인 표시 flag다. | both |
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | both |
 | `host.arguments.registry-ca-in-diagnostic-builds` | 진단 build는 `--registry-ca PATH`를 받고, 그 뒤 registry 받기는 그 PEM 파일의 인증 기관만 신뢰한다. 인증서 없는 파일은 `--registry-ca <path>: <reason>`으로 실패한다. | both |
 | `host.memory-pressure.relays-level-and-seq` | host는 시작할 때 platform의 memory pressure source를 시작하고, 각 보고를 그 보고의 `{level, seq}`를 가진 page event `memory-pressure`로 `seq` 순서대로, 보고하는 thread를 붙잡지 않고 모든 창에 보낸다. platform이 거부한 source는 `failed to start the memory pressure source`로 시작을 실패시킨다. | both |

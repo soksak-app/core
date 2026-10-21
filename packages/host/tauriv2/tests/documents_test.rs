@@ -1116,6 +1116,7 @@ fn a_view_process_end_sends_the_process_ended_event_of_its_surface() {
     );
 }
 
+// contract: view.regions.close-with-process
 #[test]
 fn a_view_process_end_removes_the_regions_of_its_surface() {
     // The view itself is removed before the regions, as view_failed removes it, so only the regions remain to be closed.
