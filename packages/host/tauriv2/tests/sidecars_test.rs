@@ -2165,6 +2165,14 @@ fn restarts_after_three_failures_within_the_window() {
         failures.recv_timeout(Duration::from_millis(200)).is_err(),
         "the restarted sidecar failed"
     );
+    // The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
+    let stopping = std::time::Instant::now();
+    sidecars.stop();
+    assert!(
+        stopping.elapsed() < Duration::from_secs(1),
+        "the stop took {:?}",
+        stopping.elapsed()
+    );
 }
 
 // contract: sidecars.restart.fourth-failure-stops
@@ -2254,7 +2262,14 @@ fn surface_open_clears_the_restart_limit() {
     sidecars.surface_opened("plugin-a", "s2");
     send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(42)).unwrap();
     send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(43)).unwrap();
+    // The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
+    let stopping = std::time::Instant::now();
     sidecars.stop();
+    assert!(
+        stopping.elapsed() < Duration::from_secs(1),
+        "the stop took {:?}",
+        stopping.elapsed()
+    );
     writer.flush(Duration::from_secs(5)).unwrap();
     let events = records::read_events(&records::event_log_path(writer_folder.path()));
     let reset = events
