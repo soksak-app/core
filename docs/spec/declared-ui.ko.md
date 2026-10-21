@@ -61,6 +61,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | `tree` 노드 | `expanded` | 불리언 | 아니오 | 가지에 대한 plugin의 값. 가지에만 허용하므로, 잎에 두면 거부한다. 기본값 `false`. [status 대응](#status-대응)이 우선순위를 정한다. |
 | `tree` 노드 | `selected` | 불리언 | 아니오 | 노드를 선택된 것으로 그린다. 기본값 `false`. plugin의 값은 받아들인 모든 값에 적용된다. |
 | `tree` 노드 | `detail` | 문자열 | 아니오 | 평문, 최대 500 코드 포인트. 라벨 뒤에 `list` 항목의 `detail`과 같이 그린다. |
+| `tree` 노드 | `actions` | 배열 | 아니오 | 최대 2개의 `button` 객체이며 `button` 규칙을 따른다. 라벨과 detail 뒤에 그린다. 각 action key는 노드 안에서 유일하다. |
 | `tree` 노드 | `children` | 배열 | 아니오 | 하위 노드. 같은 규칙을 따른다. `children`이 있고 비어 있지 않은 노드는 가지이며, 그 밖의 노드는 잎이다. |
 | `status-line` | `key` | 문자열 | 예 | 아래 키 규칙. |
 | `status-line` | `text` | 문자열 | 예 | 평문, 500 코드 포인트 이하. 한 줄로 그린다. |
@@ -112,6 +113,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | `command`가 있는 `list` 항목 | 그 `command` 필드 | 그 `params` 필드 |
 | `command`가 있는 `tree` 노드 | 그 `command` 필드 | 그 `params` 필드 |
 | `open`이 있는 `tree` 노드 | 그 `open` 필드 | 그 `params` 필드 |
+| `tree` 노드 action | 그 `command` 필드 | 그 `params` 필드 |
 | `tree` 가지의 펼침 제어 | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | 사이드바 section 머리 | `core.sidebar.section.fold` | `{sidebar, section}` |
 
@@ -123,12 +125,12 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
 다시 그릴 때 남는 address의 각 루트 요소, list 행, tree 노드, 펼침 제어는 같은 요소를 유지한다. [exposure](exposure.ko.md#사용자-인터페이스)가 모든 다시 그리기에 요구하는 규칙이며, 명령 실행 뒤에도 키보드 초점이 제어에 남게 한다. 그런 각 제어는 명령에 한 번만 묶이며, 다시 그릴 때는 매개변수만 갱신한다. `command`가 바뀐 list 행이나 tree 노드는 새 요소다. key에 명령이 포함되기 때문이다.
-네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다. 가지의 펼침 제어는 가지가 접혀 있으면 core의 chevron-right 아이콘을, 펼쳐 있으면 chevron-down 아이콘을 보인다.
+네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command` 또는 `open`이 있는 tree 노드, tree action, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다. 가지의 펼침 제어는 가지가 접혀 있으면 core의 chevron-right 아이콘을, 펼쳐 있으면 chevron-down 아이콘을 보인다.
 
 
-DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. `command`가 없는 잎 노드는 두 속성 집합을 모두 갖지 않는다. `command`가 없는 가지는 펼침 제어의 속성만 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
+DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label`, `expand`, `action`)도 가진다. action button은 action key를 담은 `data-action`도 가진다. `command`나 `open`이 없는 잎은 label control을 갖지 않는다. `command`가 없는 가지는 actions가 없을 때 펼침 제어의 속성만 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
 
-선언된 section의 control에 대한 요청은 control address `{sidebar, section, key, path?, role?}`로 지정한다. `sidebar`는 `core.sidebars`가 보고하는 사이드바 인스턴스(`left`, `right`, `cardId:side`)이고, `section`은 section id이며, `key`는 그 control을 가진 루트 요소의 key다. `sidebar`, `section`, `key`는 문자열이다. `path`는 루트 요소 아래의 key들로 이루어진 문자열 배열이고, `role`은 `label` 또는 `expand`다. control이 list 항목이나 tree 노드에 속하면 `path`와 `role`이 필수이고, button이면 둘 다 허용하지 않는다. 이 필드들로 주소는 유일하다. 한 사이드바 인스턴스는 section을 한 번 그리고, 키는 형제 사이에서 유일하며, path와 역할이 control 하나를 정한다. `core.sidebar.section.control` DOM 항목은 여러 요소가 그 이름을 공유하므로 `many`로 선언되어 있다. 다른 타입의 값은 [노출](exposure.ko.md#오류)이 정하는 대로 -32602로 거부하며, `address`의 다섯 필드가 아닌 필드도 -32602로 거부한다. 어느 control과도 맞지 않는 주소는 [노출](exposure.ko.md#오류)의 오류 코드로 실패한다.
+선언된 section의 control에 대한 요청은 control address `{sidebar, section, key, path?, role?, action?}`로 지정한다. `sidebar`는 `core.sidebars`가 보고하는 사이드바 인스턴스(`left`, `right`, `cardId:side`)이고, `section`은 section id이며, `key`는 그 control을 가진 루트 요소의 key다. `sidebar`, `section`, `key`는 문자열이다. `path`는 루트 요소 아래의 key들로 이루어진 문자열 배열이고, `role`은 `label`, `expand`, `action` 중 하나다. control이 list 항목이나 tree 노드에 속하면 `path`와 `role`이 필수이며, 루트 button에는 허용하지 않는다. `role`이 `action`일 때만 `action`이 필수이고 그 밖에는 금지한다. `action`은 노드 actions 안에서 유일한 key다. 이 필드들로 주소는 유일하다. 한 사이드바 인스턴스는 section을 한 번 그리고, 키는 형제 사이에서 유일하며, path, role, 선택적 action key가 control 하나를 정한다. `core.sidebar.section.control` DOM 항목은 여러 요소가 그 이름을 공유하므로 `many`로 선언되어 있다. 다른 타입의 값은 [노출](exposure.ko.md#오류)이 정하는 대로 -32602로 거부하며, `address`의 여섯 필드가 아닌 필드도 -32602로 거부한다. 어느 control과도 맞지 않는 주소는 [노출](exposure.ko.md#오류)의 오류 코드로 실패한다.
 
 네이티브 키보드 조작은 `button` 요소를 쓰므로 Enter와 Space가 같은 묶기를 거쳐 버튼 명령에 닿는다. `open`이 있는 tree 노드는 예외로 Enter keydown을 직접 처리한다. `open`을 실행하고 native click을 막는다. 다른 선언 UI 요소에는 키 처리기가 없다. `command`와 `open`이 모두 있는 노드에서 두 번 누르기의 첫 클릭은 `command`를 실행하고 두 번째 클릭(`event.detail === 2`)은 `command` 대신 `open`을 실행한다.
 
@@ -207,11 +209,13 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 | 요소가 객체가 아님 | `element must be an object` | 그 요소 |
 | list 항목이 객체가 아님 | `list item must be an object` | 그 항목 |
 | tree 노드가 객체가 아님 | `tree node must be an object` | 그 노드 |
+| action이 객체가 아님 | `tree action must be an object` | 그 action |
 | `kind`가 없는 요소 | `missing kind` | 그 요소 |
 | `kind`가 문자열이 아님 | `kind must be a string` | 그 요소 |
 | 표에 없는 `kind` 값 | `unknown kind <value>` | `kind` 값 |
 | list의 항목이 1000개를 넘음 | `exceeds 1000 items` | `/elements/<i>/items` |
 | tree의 노드가 5000개를 넘음 | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
+| tree 노드의 actions가 두 개를 넘음 | `exceeds 2 actions` | 그 `actions` 배열 |
 | tree 노드가 16단계를 넘음 | `exceeds 16 levels` | 그 노드 |
 | 텍스트 필드가 500 코드 포인트를 넘음 | `exceeds 500 code points` | 그 텍스트 필드 |
 | 키가 128 코드 포인트를 넘음 | `exceeds 128 code points` | 그 키 |

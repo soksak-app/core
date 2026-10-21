@@ -631,6 +631,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .set__section[data-folded=true] .set__body{display:none}
 /* Declared UI (docs/spec/declared-ui.md): a tree indents the children of an expanded branch, and the expand control and the icons draw the core icons at the text size. */
 .declared-row{display:flex;align-items:center;gap:.25em;min-width:0}
+.declared-actions{display:flex;flex:0 0 auto;align-items:center;gap:.25em}
 .declared-children{padding-left:1em}
 .declared-expand{display:flex;flex:0 0 1em;width:1em;height:1em;padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
 .declared-icon{display:flex;flex:0 0 1em;width:1em;height:1em}

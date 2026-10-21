@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F238-d-12: 선언 tree 노드는 고유 key를 가진 button action을 최대 2개 선언하고 label과 detail 뒤에 그린다. action control은 path, action role, action key 주소 데이터를 가지며 resolver가 그 주소를 검사한다. Red에서는 새 field와 주소가 거부됐다. 소유 workbench 테스트가 83/83 통과하며 `detail` 필드는 F230에서 이미 검사했다.
+
+- F238-d-12: 선언 tree 노드는 고유 key를 가진 button action을 최대 2개 선언하고 label과 detail 뒤에 그린다. action control은 path, action role, action key 주소 데이터를 가지며 resolver가 그 주소를 검사한다. Red에서는 새 field와 주소가 거부됐다. 소유 workbench 테스트가 83/83 통과하며 `detail` 필드는 F230에서 이미 검사했다.
+
 - F238-d-11: 선언 tree 노드는 `open`을 선언할 수 있다. Enter keydown은 `open`을 실행하고 native click을 막는다. 두 번 누르면 첫 클릭에서 `command`를 한 번 실행하고 detail 2 클릭에서 `open`을 실행한다. Red에서는 `open` 노드가 거부되었고 소유 workbench 테스트가 74/74 통과한다.
 
 - F238-d-9: F230이 가로 declared tree 동작을 영문·한국어로 이미 구현하고 명세했음을 확인했다. 소유 workbench 테스트가 72/72 통과하며 가로 허용, 노드 detail, 전체 너비 배치, 스크롤을 덮는다.

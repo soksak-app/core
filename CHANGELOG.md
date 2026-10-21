@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F238-d-12: Declared tree nodes accept up to two uniquely keyed button actions, rendered after the label and detail. Action controls carry path, action role, and action-key address data; the resolver accepts and validates those addresses. Red rejected the new field and address. Owning workbench tests pass 83/83; the `detail` field was already covered by F230.
+
+- F238-d-12: Declared tree nodes accept up to two uniquely keyed button actions, rendered after the label and detail. Action controls carry path, action role, and action-key address data; the resolver accepts and validates those addresses. Red rejected the new field and address. Owning workbench tests pass 83/83; the `detail` field was already covered by F230.
+
 - F238-d-11: Declared tree nodes may declare `open`. Enter keydown runs `open` and prevents the native click; a double press runs `command` once, then runs `open` on the detail-2 click. The Red rejected nodes with `open`; the owning workbench tests pass 74/74.
 
 - F238-d-9: Confirmed that F230 already implements and documents the horizontal declared-tree behavior in English and Korean. The owning workbench tests pass 72/72, covering horizontal acceptance, node detail, full-line placement, and scrolling.

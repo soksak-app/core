@@ -61,6 +61,7 @@ The field `kind` names each element's kind. `kind` is accepted on every root ele
 | `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Allowed only on a branch, so a leaf that carries it is rejected. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
 | `tree` node | `selected` | boolean | no | Draws the node as selected. Default `false`. The plugin's value applies in every accepted value. |
 | `tree` node | `detail` | string | no | Plain text, at most 500 code points, drawn after the label as a list item's `detail` is drawn. |
+| `tree` node | `actions` | array | no | At most two `button` objects, with the rules of `button`, drawn after the label and detail. Each action key is unique within the node. |
 | `tree` node | `children` | array | no | Child nodes, with the same rules. A node whose `children` is present and not empty is a branch; any other node is a leaf. |
 | `status-line` | `key` | string | yes | Key rules below. |
 | `status-line` | `text` | string | yes | Plain text, at most 500 code points. Drawn as one line. |
@@ -112,6 +113,7 @@ Declared UI elements bind to these commands:
 | `list` item with `command` | its `command` field | its `params` field |
 | `tree` node with `command` | its `command` field | its `params` field |
 | `tree` node with `open` | its `open` field | its `params` field |
+| `tree` node action | its `command` field | its `params` field |
 | `tree` branch expand control | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | sidebar section header | `core.sidebar.section.fold` | `{sidebar, section}` |
 
@@ -123,12 +125,12 @@ The request carries the `expanded` value that the control requests, which is the
 
 A disabled element (`enabled: false`) is rendered with the `disabled` attribute, so no click reaches its binding.
 A redraw keeps the element of each root element, list row, tree node, and expand control whose address stays, as [exposure](exposure.md#user-interface) requires of every redraw, so keyboard focus stays on a control after its command runs. Each such control is connected to its command once, and a redraw only updates its parameters. A list row or tree node whose `command` changes is a new element, because its key includes the command.
-The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button. The expand control of a branch shows the chevron-right icon of the core while the branch is collapsed, and the chevron-down icon while it is expanded.
+The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command` or `open`, a tree action, and the expand control of a tree branch. A static list row and a status line carry no button. The expand control of a branch shows the chevron-right icon of the core while the branch is collapsed, and the chevron-down icon while it is expanded.
 
 
-Dom names. Every control that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A leaf without `command` carries neither attribute set. A branch without `command` carries only the attributes of its expand control. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
+Dom names. Every control that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label`, `expand`, or `action`). An action button also carries `data-action` with its action key. A leaf without `command` or `open` carries no label control. A branch without `command` carries only the attributes of its expand control unless it has actions. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
 
-A request addresses a control of a declared section by a control address, `{sidebar, section, key, path?, role?}`. `sidebar` is the sidebar instance as `core.sidebars` reports it (`left`, `right`, or `cardId:side`), `section` is the section id, and `key` is the key of the root element that holds the control. `sidebar`, `section`, and `key` are strings. `path` is an array of strings, the keys below the root element, and `role` is `label` or `expand`. `path` and `role` are required for a control of a list item or a tree node and forbidden for a button. With these fields the address is unique: one sidebar instance draws a section once, keys are unique among their siblings, and the path plus the role name one control. The `core.sidebar.section.control` dom entry is declared `many` because several elements share that name. A value of another type is refused with -32602, as [exposure](exposure.md#errors) defines, and so is a field of `address` other than these five. An address that matches no control fails with the error code of [exposure](exposure.md#errors).
+A request addresses a control of a declared section by a control address, `{sidebar, section, key, path?, role?, action?}`. `sidebar` is the sidebar instance as `core.sidebars` reports it (`left`, `right`, or `cardId:side`), `section` is the section id, and `key` is the key of the root element that holds the control. `sidebar`, `section`, and `key` are strings. `path` is an array of strings, the keys below the root element, and `role` is `label`, `expand`, or `action`. `path` and `role` are required for a control of a list item or a tree node and forbidden for a root button. `action` is required exactly when `role` is `action`, and otherwise forbidden; it is the unique key among the node's actions. With these fields the address is unique: one sidebar instance draws a section once, keys are unique among their siblings, and the path, role, and optional action key name one control. The `core.sidebar.section.control` dom entry is declared `many` because several elements share that name. A value of another type is refused with -32602, as [exposure](exposure.md#errors) defines, and so is a field of `address` other than these six. An address that matches no control fails with the error code of [exposure](exposure.md#errors).
 
 Native keyboard operation uses the native `button` element, so Enter and Space reach a button's command through the same binding. A tree node with `open` handles Enter keydown itself: it runs `open` and prevents the native click. No other declared UI element has a key handler. For a node with both `command` and `open`, the first click of a double press runs `command`, and the second click (`event.detail === 2`) runs `open` instead of `command`.
 
@@ -206,11 +208,13 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | An element that is not an object | `element must be an object` | that element |
 | A list item that is not an object | `list item must be an object` | that list item |
 | A tree node that is not an object | `tree node must be an object` | that tree node |
+| An action that is not an object | `tree action must be an object` | that action |
 | An element with no `kind` field | `missing kind` | the element |
 | A `kind` that is not a string | `kind must be a string` | the element |
 | A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
 | More than 1000 items in a list | `exceeds 1000 items` | `/elements/<i>/items` |
 | More than 5000 nodes in a tree | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
+| More than two actions on a tree node | `exceeds 2 actions` | the `actions` array |
 | A tree node deeper than 16 levels | `exceeds 16 levels` | the node |
 | A text field longer than 500 code points | `exceeds 500 code points` | the text field |
 | A key longer than 128 code points | `exceeds 128 code points` | the key |

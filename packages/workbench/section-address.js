@@ -2,8 +2,8 @@
 // resolves an address among the elements of the dom entry, and refuses an address whose fields do not have the form of the spec.
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 
-const FIELDS = ["sidebar", "section", "key", "path", "role"];
-const ROLES = ["label", "expand"];
+const FIELDS = ["sidebar", "section", "key", "path", "role", "action"];
+const ROLES = ["label", "expand", "action"];
 
 const invalid = (message) => new ExposureError(EXPOSURE_ERRORS.invalidParams, message);
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -14,8 +14,8 @@ function placeOf(element) {
 }
 
 /**
- * Resolves the control address {sidebar, section, key, path?, role?} among elements. A control of a list item or a tree node has
- * data-path and data-role, so its address needs both path and role; a button has neither, so its address takes neither.
+ * Resolves the control address {sidebar, section, key, path?, role?, action?} among elements. A control of a list item or a tree node
+ * has data-path and data-role, so its address needs both path and role; a tree action also needs its data-action key.
  */
 export function resolveSectionControl(address, elements) {
   if (!isObject(address)) throw invalid("address must be an object");
@@ -29,7 +29,10 @@ export function resolveSectionControl(address, elements) {
   if (path !== undefined && (!Array.isArray(path) || !path.every((part) => typeof part === "string"))) {
     throw invalid("address path must be an array of strings");
   }
-  if (role !== undefined && !ROLES.includes(role)) throw invalid("address role must be label or expand");
+  if (role !== undefined && !ROLES.includes(role)) throw invalid("address role must be label, expand, or action");
+  if (address.action !== undefined && typeof address.action !== "string") throw invalid("address action must be a string");
+  if (role === "action" && address.action === undefined) throw invalid("action role requires action");
+  if (role !== "action" && address.action !== undefined) throw invalid("action is only valid with role action");
   const sameKey = elements.filter((element) => {
     const place = placeOf(element);
     return place.sidebar === sidebar && place.section === section && element.dataset.key === key;
@@ -39,9 +42,10 @@ export function resolveSectionControl(address, elements) {
   if (rowControl && (path === undefined || role === undefined)) {
     throw invalid("address of a control of a list item or a tree node requires path and role");
   }
-  if (!rowControl && (path !== undefined || role !== undefined)) throw invalid("address of a button takes no path or role");
+  if (!rowControl && (path !== undefined || role !== undefined || address.action !== undefined)) throw invalid("address of a button takes no path, role or action");
   const found = rowControl
-    ? sameKey.find((element) => element.dataset.path === JSON.stringify(path) && element.dataset.role === role)
+    ? sameKey.find((element) => element.dataset.path === JSON.stringify(path) && element.dataset.role === role &&
+      (role !== "action" || element.dataset.action === address.action))
     : sameKey[0];
   if (!found) throw new ExposureError(EXPOSURE_ERRORS.noControl, "no control matches the address");
   return found;

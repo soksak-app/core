@@ -288,6 +288,9 @@ function section(module, orientation = "vertical") {
   const runs = [];
   const bind = (el, name, params, options) => {
     const entry = { el, name, params: () => (typeof params === "function" ? params() : params), options };
+    el.dataset.command = name;
+    if (typeof params !== "function" && params && Object.keys(params).length) el.dataset.params = JSON.stringify(params);
+    else delete el.dataset.params;
     calls.push(entry);
     el.addEventListener(options.event ?? "click", (event) => {
       if (options.when && !options.when(event)) return;
@@ -679,6 +682,41 @@ test("a redraw keeps the element of a status line", async () => {
   s.show({ elements: [{ kind: "status-line", key: "st", text: "Done" }] });
   assert.equal(s.body.firstElementChild, line, "the status line was replaced");
   assert.equal(line.textContent, "Done", "the text was not updated");
+});
+
+test("tree node actions are bounded and have unique keys", async () => {
+  const module = await load("tree-action-validation");
+  const action = (key) => ({ key, label: key, command: "demo.open" });
+  const tooMany = rejectionOf(tree([leaf("n", { actions: [action("a"), action("b"), action("c")] })]), OPTIONS, module);
+  assert.ok(tooMany, "three node actions were accepted");
+  assert.equal(tooMany.pointer, "/elements/0/nodes/0/actions");
+  assert.equal(tooMany.reason, "exceeds 2 actions");
+  const duplicate = rejectionOf(tree([leaf("n", { actions: [action("a"), action("a")] })]), OPTIONS, module);
+  assert.ok(duplicate, "duplicate action keys were accepted");
+  assert.equal(duplicate.pointer, "/elements/0/nodes/0/actions/1/key");
+  assert.equal(duplicate.reason, 'duplicate key "a"');
+});
+
+test("tree node actions draw after detail and expose their action address", async () => {
+  const module = await load("tree-actions");
+  const s = section(module);
+  const actions = [
+    { key: "rename", label: "Rename", command: "demo.open", params: { id: "n" } },
+    { key: "copy", label: "Copy", command: "demo.select" },
+  ];
+  s.show(tree([leaf("n", { command: "demo.select", detail: "File", actions })]));
+  const row = s.body.querySelector(".declared-row");
+  assert.ok(row.querySelector(".declared-actions"), "tree actions were not drawn");
+  assert.deepEqual([...row.children].map((child) => child.className), ["declared-label", "declared-detail", "declared-actions"]);
+  const rename = row.querySelector('[data-role="action"][data-action="rename"]');
+  assert.ok(rename, "the rename action is missing");
+  assert.equal(rename.tagName, "BUTTON");
+  assert.equal(rename.dataset.key, "t1");
+  assert.equal(rename.dataset.path, '["n"]');
+  assert.equal(rename.dataset.expose, "core.sidebar.section.control");
+  assert.equal(rename.dataset.command, "demo.open");
+  rename.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 1 }));
+  assert.deepEqual(s.runs.map(({ name, params }) => [name, params]), [["demo.open", { id: "n" }]]);
 });
 
 test("a tree node with open handles Enter and double press separately from command", async () => {

@@ -15,6 +15,7 @@ const MAX_BYTES = 1048576;
 const MAX_ROOT_ELEMENTS = 64;
 const MAX_ITEMS = 1000;
 const MAX_NODES = 5000;
+const MAX_ACTIONS = 2;
 const MAX_LEVELS = 16;
 const MAX_TEXT = 500;
 const MAX_KEY = 128;
@@ -26,8 +27,8 @@ const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/;
 
 // The rows of the rejection table in table order. A row with a lower index takes precedence over a later row.
 const ROWS = [
-  "size", "root", "elements", "rootCount", "elementObject", "itemObject", "nodeObject", "missingKind", "kindString",
-  "unknownKind", "itemCount", "nodeCount", "levels", "textLength", "keyLength", "keyPattern", "paramKeys", "paramKeyLength",
+  "size", "root", "elements", "rootCount", "elementObject", "itemObject", "nodeObject", "actionObject", "missingKind", "kindString",
+  "unknownKind", "itemCount", "nodeCount", "actionCount", "levels", "textLength", "keyLength", "keyPattern", "paramKeys", "paramKeyLength",
   "paramStringLength", "paramValueType", "unknownField", "missing", "requiresCommand", "wrongType", "control", "duplicateKey",
   "commandNoOwner", "commandOwner", "commandUndeclared", "icon", "expandedLeaf",
 ];
@@ -60,6 +61,14 @@ const ITEM_SPEC = {
   selected: BOOLEAN,
   detail: { type: "text" },
 };
+const ACTION_SPEC = {
+  key: KEY,
+  label: TEXT,
+  command: { type: "command", required: true },
+  params: { type: "params", needsCommand: true },
+  icon: ICON,
+  enabled: { type: "boolean", needsCommand: true },
+};
 const NODE_SPEC = {
   key: KEY,
   label: TEXT,
@@ -71,6 +80,7 @@ const NODE_SPEC = {
   expanded: { type: "boolean", branchOnly: true },
   selected: BOOLEAN,
   detail: { type: "text" },
+  actions: { type: "actions" },
   children: { type: "children" },
 };
 const ELEMENT_SPECS = {
@@ -215,6 +225,20 @@ function checkField(violations, obj, pointer, name, rule, ctx, siblings, level) 
         const itemPath = `${path}/${index}`;
         if (!isPlainObject(item)) violations.fail("itemObject", itemPath, "list item must be an object");
         else checkObject(violations, item, itemPath, ITEM_SPEC, ctx, siblings, level, false);
+      });
+      return;
+    }
+    case "actions": {
+      if (!Array.isArray(value)) {
+        violations.fail("wrongType", path, `${slot(name)} must be array`);
+        return;
+      }
+      if (value.length > MAX_ACTIONS) violations.fail("actionCount", path, `exceeds ${MAX_ACTIONS} actions`);
+      const actionKeys = new Set();
+      value.forEach((action, index) => {
+        const actionPath = `${path}/${index}`;
+        if (!isPlainObject(action)) violations.fail("actionObject", actionPath, "tree action must be an object");
+        else checkObject(violations, action, actionPath, ACTION_SPEC, ctx, actionKeys, level, false);
       });
       return;
     }
@@ -419,6 +443,31 @@ function paintItem(row, item, listKey, bind) {
   paintDetail(row, Object.hasOwn(item, "detail") ? item.detail : undefined);
 }
 
+function paintActions(row, node, { tree, path, bind }) {
+  let container = childOf(row, "declared-actions");
+  if (!node.actions?.length) {
+    if (container) container.remove();
+    return;
+  }
+  if (!container) {
+    container = document.createElement("div");
+    container.className = "declared-actions";
+    row.append(container);
+  }
+  drawList(container, node.actions, {
+    key: entryKey,
+    create: () => document.createElement("button"),
+    update: (button, action) => {
+      paintButton(button, action, bind);
+      button.dataset.key = tree;
+      button.dataset.path = JSON.stringify(path);
+      button.dataset.role = "action";
+      button.dataset.action = action.key;
+      button.dataset.expose = CONTROL_NAME;
+    },
+  });
+}
+
 function createNode(node) {
   const wrap = document.createElement("div");
   wrap.className = "declared-node";
@@ -470,6 +519,7 @@ function paintNode(wrap, node, path, ctx) {
   }
   paintLabel(childWithout(row, ["declared-expand", "declared-detail"]), node, { key: ctx.tree, path, bind: ctx.bind });
   paintDetail(row, Object.hasOwn(node, "detail") ? node.detail : undefined);
+  paintActions(row, node, { tree: ctx.tree, path, bind: ctx.bind });
   let children = childOf(wrap, "declared-children");
   if (branch && expanded) {
     if (!children) {
