@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commitMessageErrors, recordKind, recordViolations, termChecked, termViolations } from "../records-check.js";
+import { commitMessageErrors, recordKind, repositoryRecordViolations, recordViolations, termChecked, termViolations } from "../records-check.js";
+import { execSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 test("record checks report each statement that is not a fact about the repository", () => {
   const cases = [
@@ -116,4 +120,16 @@ test("a commit message that uses a rejected synonym is refused", () => {
   const message = "docs(spec): Rename the plugin package (#R5.2)\n\nThe plugin package is a plugin.\n";
   assert.ok(commitMessageErrors(message).some((error) => error.includes('rejected term "plugin package", use "plugin"')),
     commitMessageErrors(message).join("\n"));
+});
+
+test("a file the census declaration excludes is not a record of the repository", () => {
+  const repository = mkdtempSync(join(tmpdir(), "records-exclude-"));
+  execSync("git init -q .", { cwd: repository });
+  writeFileSync(join(repository, "census.json"), JSON.stringify({ exclude: "^ui/vendor/" }));
+  mkdirSync(join(repository, "ui", "vendor"), { recursive: true });
+  writeFileSync(join(repository, "ui/vendor/bundle.js"), "// The plugin package holds pages.\n");
+  writeFileSync(join(repository, "own.md"), "The plugin package holds pages.\n");
+  execSync("git add .", { cwd: repository });
+  const { errors } = repositoryRecordViolations(repository);
+  assert.deepEqual(errors.map((error) => error.split(":")[0]), ["own.md"]);
 });

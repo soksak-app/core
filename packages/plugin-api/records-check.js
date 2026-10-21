@@ -121,10 +121,17 @@ export function commitMessageErrors(message) {
 }
 
 /** The violations of the record files that the repository tracks. */
+/** The tracked files of the repository that its census declaration does not exclude; an excluded file, a vendored third-party bundle, is not a record of the repository. */
+function declaredFiles(repository, tracked) {
+  const census = join(repository, "census.json");
+  const exclude = existsSync(census) ? new RegExp(JSON.parse(readFileSync(census, "utf8")).exclude ?? "") : null;
+  return exclude ? tracked.filter((file) => !exclude.test(file)) : tracked;
+}
+
 export function repositoryRecordViolations(repository) {
   const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: repository, encoding: "utf8" })
     .split("\0").filter((file) => file && existsSync(join(repository, file)));
-  const files = tracked.filter((file) => recordKind(file) !== null || termChecked(file));
+  const files = declaredFiles(repository, tracked).filter((file) => recordKind(file) !== null || termChecked(file));
   return { files, errors: files.flatMap((file) => {
     const text = readFileSync(join(repository, file), "utf8");
     return [...(recordKind(file) ? recordViolations(text, file, recordKind(file)) : []), ...(termChecked(file) ? termViolations(text, file) : [])];
