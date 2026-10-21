@@ -91,6 +91,7 @@ fn forget_removes_the_request_of_a_poisoned_lock() {
     assert_eq!(waiting(&relay), 0, "forget kept the request that ended");
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_pending_lock_still_answers_a_request() {
     let relay = Arc::new(Relay::default());

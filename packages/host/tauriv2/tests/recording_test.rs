@@ -273,7 +273,7 @@ impl Capture for Panicking {
     }
 }
 
-// contract: recording.state.poisoned-lock-is-recovered
+// contract: recording.state.poisoned-lock-is-recovered, host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_recording_state_is_recovered_when_it_ends() {
     let config = folder::Folder::new();

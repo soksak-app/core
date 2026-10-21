@@ -23,6 +23,7 @@ fn request(kind: &str) -> Request {
     serde_json::from_str(&format!(r#"{{"kind": "{kind}"}}"#)).unwrap()
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_workspace_answers_when_the_write_lock_is_poisoned() {
     let folder = crate::test_folder::Folder::new();

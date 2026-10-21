@@ -629,7 +629,7 @@ mod tests {
     use std::sync::PoisonError;
     use std::time::Duration;
 
-    // contract: modal.state.poisoned-lock-is-recovered
+    // contract: modal.state.poisoned-lock-is-recovered, host.locks.poisoned-state-is-recovered
     #[test]
     fn a_poisoned_modal_record_is_recovered_when_it_is_read() {
         let config = crate::test_folder::Folder::new();

@@ -15,6 +15,7 @@ fn poison<T: Send>(lock: &Mutex<T>) {
     });
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A panic while the requests are held poisons the lock; the next request is still registered and answered.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -34,6 +35,7 @@ fn a_poisoned_request_lock_still_registers_and_answers_a_request() {
     assert_eq!(asked.unwrap().try_recv(), Ok(true));
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // The end of a window answers its asked request when the lock of the requests is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]

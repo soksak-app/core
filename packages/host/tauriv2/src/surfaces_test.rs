@@ -101,6 +101,7 @@ fn the_first_commit_of_a_page_is_marked_when_the_running_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_surface_lock_still_creates_and_closes_a_surface() {
     let named = Mutex::new(HashMap::new());

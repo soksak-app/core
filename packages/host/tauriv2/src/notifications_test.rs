@@ -15,6 +15,7 @@ fn poison<T: Send>(lock: &Mutex<T>) {
     });
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A panic while the permission state is held poisons the lock; the page still reads the state when it starts.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]

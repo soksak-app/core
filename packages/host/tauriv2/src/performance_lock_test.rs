@@ -19,6 +19,7 @@ fn poison<T>(lock: &Mutex<T>) {
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_trace_switch_answers_when_the_switch_lock_is_poisoned() {
     poison(&super::SWITCHING);

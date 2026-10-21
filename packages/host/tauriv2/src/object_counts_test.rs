@@ -38,6 +38,7 @@ fn the_surface_count_follows_the_views_of_the_window() {
     assert_eq!(views.count().unwrap(), 1);
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_surface_count_is_read_when_the_views_lock_is_poisoned() {
     let views = Views::default();

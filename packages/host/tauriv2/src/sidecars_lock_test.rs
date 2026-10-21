@@ -33,6 +33,7 @@ fn poison<T>(lock: &Mutex<T>) {
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_state_lock_still_answers_the_transport() {
     let folder = crate::test_folder::Folder::new();

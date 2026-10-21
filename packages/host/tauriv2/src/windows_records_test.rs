@@ -79,6 +79,7 @@ fn the_last_window_of_a_quitting_application_ends_it_when_the_records_are_poison
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_owner_lock_releases_the_project_of_a_poisoned_lock() {
     let registry = Windows::default();

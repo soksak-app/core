@@ -130,6 +130,7 @@ fn recovered<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     lock.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // The watches of the window are read from the peer list when its lock is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -150,6 +151,7 @@ fn watches_are_read_when_the_peer_list_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A notification reaches a watching connection when the peer list lock is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -169,6 +171,7 @@ fn a_notification_is_written_when_the_peer_list_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A notification reaches a watching connection when the lock of its writer is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -189,6 +192,7 @@ fn a_notification_is_written_when_the_writer_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A connection that ends is removed from the peer list when the list lock is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -208,6 +212,7 @@ fn a_closed_connection_is_removed_when_the_peer_list_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A subscription change is applied when the lock of the subscription lines is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -229,6 +234,7 @@ fn a_subscription_change_is_applied_when_the_lines_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A subscription change is applied when the peer list lock is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -250,6 +256,7 @@ fn a_subscription_change_is_applied_when_the_peer_list_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A queued subscription change is sent to the page when the lines lock is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -286,6 +293,7 @@ fn a_queued_change_is_sent_to_the_page_when_the_lines_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A start that the page refuses is reverted when the peer list lock is poisoned.
 // contract: host.locks.poisoned-state-is-recovered
 #[test]
@@ -323,6 +331,7 @@ fn a_refused_start_is_reverted_when_the_peer_list_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A state notification reaches the watching connections when the peer list lock is poisoned.
 #[test]
 fn a_state_notification_is_written_when_the_peer_list_lock_is_poisoned() {
