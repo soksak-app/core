@@ -64,14 +64,14 @@ pub fn plugin_folder(config_dir: &Path, plugin: &str) -> Result<PathBuf, String>
         .ok_or_else(|| format!("plugin {plugin} is not installed and enabled"))
 }
 
+/// The sidecar facts of the installed plugins: plugin id, then sidecar name, then the kept fields of sidecar.json.
+type SidecarFacts = BTreeMap<String, BTreeMap<String, serde_json::Map<String, serde_json::Value>>>;
+
 /// The sidecar facts of each installed plugin, by plugin id and then by sidecar name: the message form and the host read
 /// operations of the sidecar.json of each sidecar dependency (docs/spec/sidecars.md#messages). Only those two fields are
 /// kept; the page validates them. A plugin without sidecar dependencies has no entry.
-fn sidecar_facts(
-    config_dir: &Path,
-) -> Result<BTreeMap<String, BTreeMap<String, serde_json::Map<String, serde_json::Value>>>, String> {
-    let mut facts: BTreeMap<String, BTreeMap<String, serde_json::Map<String, serde_json::Value>>> =
-        BTreeMap::new();
+fn sidecar_facts(config_dir: &Path) -> Result<SidecarFacts, String> {
+    let mut facts: SidecarFacts = BTreeMap::new();
     for declaration in installed_sidecars(config_dir)? {
         let file = declaration.folder.join("sidecar.json");
         let value: serde_json::Value = serde_json::from_slice(&declaration.data)
