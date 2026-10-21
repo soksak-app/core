@@ -24,7 +24,7 @@ A declared UI status declares its `schema` in `exposes.status` ([exposure](expos
 
 The subset cannot express the limits and the reference rules below. The receiver applies them to every declared UI snapshot before drawing.
 
-Each declared UI snapshot carries the full value of the status, not a change. Each accepted value replaces the whole drawn tree of the status.
+Each pushed declared UI snapshot carries the full value of the status, not a change. A pull reply carries the full value of the status too, but it is a reply, not a declared UI snapshot. Each accepted value replaces the whole drawn tree of the status.
 
 ## Root
 
@@ -122,9 +122,9 @@ A disabled element (`enabled: false`) is rendered with the `disabled` attribute,
 The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button.
 
 
-Dom names. Every interactive element that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with its `key`. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
+Dom names. Every control that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
 
-A request addresses an interactive element of a declared section by the section id, the element key, the path, and the role. The element key is the key of the root element that holds the control. The path is the keys below the root element: empty for a button, the item key for a list item, and the node keys from the root node of the tree to the node for a tree node. The role is `label` for the label control of a button, of a list item with `command`, or of a tree node with `command`, and `expand` for the expand control of a tree branch. The address is unique, because keys are unique among siblings and the role tells the two controls of one tree node apart.
+A request addresses a control of a declared section by the section id and its attributes: `data-key` (the key of the root element), `data-path` (for list items and tree nodes, the keys below the root element; a button control carries no `data-path`), and `data-role` (`label` or `expand`, for list items and tree nodes). The address is unique, because keys are unique among siblings and the role tells the two controls of one tree node apart.
 
 Native keyboard operation uses the native `button` element, so Enter and Space reach the command through the same binding. A declared UI element has no key handler of its own.
 
@@ -147,7 +147,7 @@ The source changes by these rules:
 
 - (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes.
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
-- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page, at a change of source, and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
+- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page and at load, from the source chosen at load, at a change of source, and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-0-9: 아홉 번째 검토 뒤 선언된 UI 명세를 고쳤다. load pull은 각 선언된 status를 그 출처에서 요청하고, 모든 control은 루트 요소의 `data-key`를 가지며, list 항목과 tree 노드는 `data-path`와 `data-role`도 가진다. pull 응답은 snapshot이 아니라 응답으로 적는다.
 - F212.8-0-8: 여덟 번째 검토 뒤 선언된 UI 명세를 고쳤다. pull 응답은 seq와 null 값을 정하고, `null`이 아닌 pull 응답은 push된 snapshot처럼 검사하며, `expanded` 비교는 기준을 가진다. 요소의 주소는 section, 요소 key, path, 역할이며, `kind`가 없거나 문자열이 아닌 경우의 거부 행을 더한다.
 - F212.8-0-7: 일곱 번째 검토 뒤 선언된 UI 명세를 고쳤다. 출처 변경, 프로세스 종료, surface 닫힘에서 status 오류를 지운다. 포인터는 JSON Pointer이고, 직렬화한 값은 바이트 길이를 가지며, `unknown kind` 행은 종류에 따라 달라지는 행보다 앞에 있다. 계획의 방향 pull과 `null` 메시지 설명을 복구한다.
 - F212.8-0-6: 여섯 번째 검토 뒤 선언된 UI 명세를 고쳤다. 거부는 값을 버리고, 방향 변경은 출처에서 한 번 pull하며, `value: null` pull 응답은 section을 비운 채로 둔다. 잎 경로는 유지된 상태를 잃는다. 요소의 주소는 역할을 포함하며, 거부 표는 루트와 elements 행을 나눈다. 뺀 모듈 형태 문장은 두 언어 검색으로 확인한다.

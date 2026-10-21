@@ -66,7 +66,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
-2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 그 페이지의 표면이 선언한 plugin view와 host의 각 status에 대해 snapshot을 한 번 요청한다(pull). 상태의 출처가 바뀌거나 section의 방향이 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없고, 이전 방향에서 버린 값은 새 방향에서 유효할 수 있으며 그 값을 가진 것은 출처뿐이기 때문이다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
+2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 각 선언된 status에 대해 그 status의 출처로 고른 곳에서 snapshot을 한 번 요청한다(pull). 상태의 출처가 바뀌거나 section의 방향이 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없고, 이전 방향에서 버린 값은 새 방향에서 유효할 수 있으며 그 값을 가진 것은 출처뿐이기 때문이다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
    - status 하나에는 전송 중인 snapshot이 최대 1개다.
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
    - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
@@ -559,3 +559,11 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R8-4: `expanded` 비교의 기준이 정해지지 않았다. 판정: 수용. 해결: 기준은 마지막으로 받아들인 값이다. 거부와 출처 변경은 기준을 없앤다. 기준이 없으면 유지된 상태가 그 상태를 가진 모든 경로에서 이긴다.
 - R8-5: path의 형식이 명령과 주소에서 달랐다. 판정: 수용. 해결: `path`는 루트 요소 아래의 key들이며, tree 노드는 tree의 루트 노드에서 그 노드까지의 노드 key들이다. 주소는 section id, 요소 key, path, 역할이다. 이는 명령, 선언된 UI 명세의 주소, 노출 명세의 주소에 두 언어 모두 적용한다.
 - R8-6: `kind`가 없는 요소와 문자열이 아닌 `kind`에 대한 행이 없었다. 판정: 수용. 해결: `missing kind`와 `kind must be a string` 행을 요소에 가리키게 하고 `unknown kind` 위에 두며, 두 언어 모두 그렇게 한다.
+
+**선언된 UI 스키마 검토 9차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 아홉 번째 적대적 검토에 대한 답변이다. 세 건을 모두 수용한다.
+
+- R9-1: load pull이 표면의 각 view와 host에 대한 pull로 적혀 있었고, 각 선언된 status에 대해 workbench가 고른 출처를 적지 않았다. 판정: 수용. 해결: load pull은 각 선언된 status에 대해 그 status의 출처로 고른 곳에서 snapshot을 한 번 요청한다. 계획의 규칙 2와 선언된 UI 명세에 적으며, 명세는 load pull이 load 때 고른 출처에서 이루어진다고도 적는다.
+- R9-2: element의 주소가 요소 key, path, 역할로 적혀 있었고, 그것들을 담는 속성이 이름으로 적혀 있지 않았다. 판정: 수용. 해결: 모든 control은 루트 요소의 key를 담은 `data-key`를 가진다. list 항목과 tree 노드의 control은 루트 요소 아래의 key들의 JSON 배열인 `data-path`와 `data-role`(`label` 또는 `expand`)도 가진다. 이것들이 section id와 함께 주소를 이룬다. 선언된 UI 명세와 노출 명세에 두 언어 모두 적는다.
+- R9-3: pull 응답을 snapshot이라고 부른 문장이 전체 값을 설명하는 자리에 있었고, 용어 선언된 UI snapshot이 workbench로 보내지는 메시지로 적혀 있었다. 판정: 수용. 해결: 문장은 pull 응답도 status의 전체 값을 싣지만 응답이지 선언된 UI snapshot이 아니라고 적는다. 용어는 plugin이 {plugin, status, seq, value, skipped}로 push하고 seq로 확인응답하는 snapshot이다. pull 응답은 같은 방식으로 검사한다(R8-3).

@@ -44,7 +44,7 @@
 
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다.
 
-dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 조작 가능한 요소는 그 요소의 key를 담은 `data-key="<key>"` 속성을 가진다. 요청은 그런 요소를 section id, 요소 key, 루트 요소 아래의 path(button은 빈 path, list 항목은 항목 key, tree 노드는 tree의 루트 노드에서 그 노드까지의 노드 key들), 역할(`label` 또는 `expand`)로 지정한다. 키는 형제 사이에서 유일하므로 주소는 유일하며, 역할은 tree 노드의 두 제어 가운데 하나를 가리킨다. 조작할 수 없는 요소는 `data-key`를 갖지 않는다.
+dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 조작 가능한 요소는 루트 요소의 key를 담은 `data-key="<key>"` 속성을 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. 요청은 그런 요소를 section id, `data-key`, `data-path`, `data-role`로 지정한다. 키는 형제 사이에서 유일하므로 주소는 유일하며, 역할은 tree 노드의 두 제어 가운데 하나를 가리킨다. 조작할 수 없는 요소는 `data-key`를 갖지 않는다.
 
 ## 사용자 인터페이스
 

@@ -24,7 +24,7 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 
 이 부분 집합은 아래의 한도와 참조 규칙을 나타내지 못한다. 수신자는 그리기 전에 모든 선언된 UI snapshot에 이 규칙들을 적용한다.
 
-각 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣는다. 받아들인 값마다 그 status가 그린 트리 전체를 대체한다.
+push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣는다. pull 응답도 status의 전체 값을 싣지만, 그것은 응답이지 선언된 UI snapshot이 아니다. 받아들인 값마다 그 status가 그린 트리 전체를 대체한다.
 
 ## 루트
 
@@ -122,9 +122,9 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다.
 
 
-DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 이름 `core.sidebar.section.control`과, 자기 `key`를 담은 속성 `data-key`를 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
+DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
 
-선언된 section의 조작 가능한 요소에 대한 요청은 section id, 요소 key, path, 역할로 그 요소를 지정한다. 요소 key는 그 제어를 가진 루트 요소의 key다. path는 루트 요소 아래의 key들이다. button은 빈 path, list 항목은 항목 key, tree 노드는 tree의 루트 노드에서 그 노드까지의 노드 key들이다. 역할은 button, `command`가 있는 list 항목, `command`가 있는 tree 노드의 label 제어에는 `label`, tree 가지의 펼침 제어에는 `expand`다. 키는 형제 사이에서 유일하므로 주소는 유일하며, 역할은 tree 노드의 두 제어를 구별한다.
+선언된 section의 control에 대한 요청은 section id와 그 속성으로 지정한다. `data-key`는 루트 요소의 key다. `data-path`(list 항목과 tree 노드)는 루트 요소 아래의 key들의 JSON 배열이며, button의 control은 `data-path`를 갖지 않는다. `data-role`(list 항목과 tree 노드)은 `label` 또는 `expand`다. 키는 형제 사이에서 유일하고 역할은 tree 노드의 두 control을 구별하므로, section id와 이 속성들은 유일한 주소다.
 
 키보드 조작은 네이티브 `button` 요소를 쓰므로, Enter와 Space가 같은 묶기를 거쳐 명령에 닿는다. 선언된 UI 요소는 자기 키 처리기를 가지지 않는다.
 
@@ -147,7 +147,7 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 
 - (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌면 출처를 다시 고른다.
 - (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 유지된 상태는 경로별로 살아남는다([status 대응](#status-대응)).
-- (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2는 메인 페이지 load 때, 출처가 바뀔 때, 방향이 바뀔 때만 pull을 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
+- (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2는 메인 페이지 load 때와 load 때 고른 출처에서의 load 때, 출처가 바뀔 때, 방향이 바뀔 때만 pull을 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
 
 - 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
