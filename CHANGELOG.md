@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-9: Reconciled the fixture scope with the D3 rule; the workbench tests already use `@scope/sidecar-probe`, not the real sidecar name. Owning tests pass 19/19; no code change was needed.
+
 - F238-d-14: Tree expansion now sends `declared-ui.expanded` to the chosen source and redraws only from the next accepted plugin snapshot; the workbench no longer overrides `expanded`. The owning source/section/tree tests pass 93/93. Host-side contract cases remain assigned to F238-d-18.
 
 - F238-d-13: Tree values may place root header buttons before the tree; `branch: true` now identifies a branch before children arrive. The unloaded-branch term is defined, branch limits include unloaded nodes, and its expand state survives until children arrive. Owning workbench tests pass 88/88 and term tests pass 3/3.
