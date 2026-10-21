@@ -664,7 +664,8 @@ func (c *Sidecars) Close(surface string) {
 	c.replaceIdle()
 }
 
-// closeSurface sends closed for surface to the running sidecars and returns true when it recorded a surface that waits for a reply.
+// closeSurface sends closed for surface to the running sidecars that received a request for it, and returns true when it recorded a
+// surface that waits for a reply. A sidecar that never received the surface holds no session of it and gets no closed notice.
 func (c *Sidecars) closeSurface(surface string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -682,7 +683,12 @@ func (c *Sidecars) closeSurface(surface string) bool {
 	}
 	line = append(line, '\n')
 
+	addressed := false
 	for _, process := range c.running {
+		if !process.surfaces[surface] {
+			continue
+		}
+		addressed = true
 		if c.closing[process.name] == nil {
 			c.closing[process.name] = map[string]int{}
 		}
@@ -707,7 +713,7 @@ func (c *Sidecars) closeSurface(surface string) bool {
 			LogInfo("sidecar "+process.name, fmt.Sprintf("close %s: outbox full, buffered", surface))
 		}
 	}
-	return len(c.running) > 0
+	return addressed
 }
 
 // Closing returns the surfaces for which closed was sent and no reply was received, in the order of sidecar and surface (host.sidecars).

@@ -243,6 +243,64 @@ fn closing_a_surface_keeps_other_sessions() {
     );
 }
 
+// contract: sidecars.close.reaches-holding-sidecar
+#[test]
+fn close_reaches_only_the_sidecar_that_holds_the_surface() {
+    const SECOND: &str = "@fixture/sidecar-second";
+    let first = folder::Folder::new();
+    let second = folder::Folder::new();
+    for (dir, record) in [
+        (&first, first.path().join("requests")),
+        (&second, second.path().join("requests")),
+    ] {
+        let program = dir.path().join("echo");
+        std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let declare_in = |name: &str, folder: &Path| SidecarDeclaration {
+        name: name.to_string(),
+        folder: folder.to_path_buf(),
+        data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+        version: "0.0.1".to_string(),
+        dependents: Vec::new(),
+    };
+    let declarations = vec![
+        declare_in(ECHO, first.path()),
+        declare_in(SECOND, second.path()),
+    ];
+    let mut sidecars = Sidecars::new(&declarations, first.path().to_path_buf()).unwrap();
+    sidecars.stop_timeout = STALL;
+    let (window, _events) = owner("a", "/projects/a");
+    sidecars
+        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    sidecars
+        .send(&window, SECOND, "s2", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    // The surface synchronization closes the removed s1 only.
+    sidecars
+        .retain(&window, &|surface| surface != "s1")
+        .unwrap();
+    sidecars.stop();
+    // Only the sidecar that received s1 is told that it closed; the other sidecar gets no closed notice for it.
+    assert_eq!(
+        std::fs::read_to_string(first.path().join("requests")).unwrap(),
+        concat!(
+            r#"{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}"#,
+            "\n",
+            r#"{"surface":"s1","root":"/projects/a","closed":true}"#,
+            "\n",
+        )
+    );
+    assert_eq!(
+        std::fs::read_to_string(second.path().join("requests")).unwrap(),
+        concat!(
+            r#"{"surface":"s2","root":"/projects/a","body":{"operation":"open"}}"#,
+            "\n",
+        )
+    );
+}
+
 // contract: sidecars.send.rejects-undeclared-sidecar, sidecars.send.rejects-after-stop
 #[test]
 fn undeclared_and_stopped_sidecars_are_rejected() {

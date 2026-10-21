@@ -1480,20 +1480,26 @@ impl<O: Owner> Sidecars<O> {
             .map_err(|e| e.to_string())?;
             line.push(b'\n');
 
-            let names: Vec<String> = state.running.keys().cloned().collect();
-            for name in names {
+            // Only the sidecars that received a request for the surface hold it, so only they are told it closed.
+            let names: Vec<String> = state
+                .running
+                .iter()
+                .filter(|(_, process)| process.surfaces.contains(&surface))
+                .map(|(name, _)| name.clone())
+                .collect();
+            for name in &names {
                 *state
                     .closing
-                    .entry(name)
+                    .entry(name.clone())
                     .or_default()
                     .entry(surface.clone())
                     .or_default() += 1;
                 closed_any = true;
             }
             // First collects the processes to which a channel send will be tried (to avoid a borrow conflict).
-            let processes: Vec<(String, Result<(), TrySendError<Outgoing>>)> = state
-                .running
+            let processes: Vec<(String, Result<(), TrySendError<Outgoing>>)> = names
                 .iter()
+                .filter_map(|name| state.running.get(name).map(|process| (name, process)))
                 .map(|(name, process)| {
                     let result = process
                         .outbox

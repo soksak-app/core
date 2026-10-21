@@ -852,6 +852,61 @@ func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 	}
 }
 
+// contract: sidecars.close.reaches-holding-sidecar
+func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
+	directory := t.TempDir()
+	makeEcho := func(name string) (string, string) {
+		folder := filepath.Join(directory, name)
+		if err := os.MkdirAll(folder, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		record := filepath.Join(folder, "requests")
+		if err := os.WriteFile(filepath.Join(folder, "echo"), []byte("#!/bin/sh\ntee "+record+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return folder, record
+	}
+	firstFolder, firstRecord := makeEcho("first")
+	secondFolder, secondRecord := makeEcho("second")
+	const second = "@fixture/sidecar-second"
+	declarations := []host.SidecarDeclaration{
+		{Name: echoSidecar, Folder: firstFolder, Data: []byte(`{"executable":"echo","protocol":1}`)},
+		{Name: second, Folder: secondFolder, Data: []byte(`{"executable":"echo","protocol":1}`)},
+	}
+	sidecars, err := host.NewSidecars(declarations, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sidecars.StopTimeout = stall
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sidecars.Send(owner, second, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s1")
+	sidecars.Stop()
+	// Only the sidecar that received s1 is told that it closed; the other sidecar gets no closed notice for it.
+	first, err := os.ReadFile(firstRecord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"surface":"s1","root":"/projects/a","body":{"operation":"open"}}
+{"surface":"s1","root":"/projects/a","closed":true}
+`; string(first) != want {
+		t.Fatalf("first sidecar requests =\n%s\nwant\n%s", first, want)
+	}
+	secondRequests, err := os.ReadFile(secondRecord)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"surface":"s2","root":"/projects/a","body":{"operation":"open"}}
+`; string(secondRequests) != want {
+		t.Fatalf("second sidecar requests =\n%s\nwant\n%s", secondRequests, want)
+	}
+}
+
 // contract: sidecars.protocol.closed-surface-messages-are-discarded-and-unknown-ones-fail, sidecars.protocol.dropped-message-is-recorded
 func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	written := captureLog(t)
