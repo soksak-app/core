@@ -6,6 +6,7 @@
 
 - F212.8-0-21: control 주소는 사이드바, section, key, path와 역할 때문에 유일하며, DOM 항목은 여러 요소가 이름을 공유하므로 `many`로 선언된다는 사실만 적는다.
 - F212.8-0-22: 거부 이유의 슬롯은 따옴표를 포함해 128 코드 포인트에서 따옴표를 붙여 자른다. `plugins.md`는 세트 안의 중복 섹션 ID를 명시적으로 거부하고, `terms.json`에 `control address`와 `sidebar instance`를 추가했다. address 필드의 타입을 정했고, 다른 `core.sidebar.section.control` 항목의 `address`는 `-32602`로 거부한다.
+- F212.8-1: 선언된 UI의 `list` 요소: `packages/workbench/declared-ui.js`가 값을 거부 표에 따라 검증하고, `empty` 텍스트와 바인딩된 항목을 가진 `list`를 binder를 거쳐 `core.sidebar.section.control`로 그리며, 거부는 `showError`로 표시하고 `hideError`로 거둔다. 단위 테스트는 stub에서 실패(26개 실패)하고 구현에서 통과한다. 명세는 `kind`를 루트 요소에서 받는다고 정하며, 합성 슬롯 `<owner>.<name>`은 JSON 문자열 하나라고 정한다.
 - F212.8-0-23: 선언된 UI 검토 기록은 라운드 20 이후 종료하며, 남는 이의는 계약을 구현하는 항목의 테스트로 정한다.
 - F212.8-0-20: 열아홉 번째 검토 뒤 선언된 UI와 노출 명세를 고쳤다. control 주소는 사이드바를 적고, list 항목과 tree 노드는 path와 role이 필수이며, 어느 control과도 맞지 않는 주소는 새 오류 코드 1009로 보고하고, 메인 페이지는 제어 요청에 응답하기 전에 주소를 검증한다.
 - F212.8-0-19: 열여덟 번째 검토 뒤 선언된 UI 명세를 고쳤다. dom 요청은 선언된 section control을 `address` 객체로 지정할 수 있고, 기준은 거부나 출처 변경 뒤에 정의되며, 값의 어느 부분이라도 어기는 첫 행이 적용되고, 한국어 링크는 한국어 제목에 연결된다.

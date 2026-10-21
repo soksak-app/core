@@ -28,6 +28,7 @@
     "plugin-records.js",
     "system-notifications.js",
     "shown-errors.js",
+    "declared-ui.js",
     "debug-ui.js",
     "debug-order.js",
     "debug-timeline.js",
