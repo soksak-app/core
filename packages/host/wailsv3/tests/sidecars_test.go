@@ -1565,6 +1565,9 @@ func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
 	t.Cleanup(sidecars.Stop)
 	clock := &restartClock{}
 	sidecars.Now = clock.read
+	// The restarted sidecar runs the script that does not answer the shutdown, so the stop waits its stop timeout. The test
+	// sets a short timeout, as the other tests of a sidecar that ignores the shutdown do.
+	sidecars.StopTimeout = 100 * time.Millisecond
 	return sidecars, directory, clock
 }
 
