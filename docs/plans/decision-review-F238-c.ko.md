@@ -28,7 +28,7 @@ SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 
 
 명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
 
-가짜가 SDK에 충실하도록 적합성 검사를 둔다. core가 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`의 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리가 쓰는 모든 가짜의 export 이름과 인자 수를 그 스냅샷과 비교한다. 형태만으로는 부족하므로 core는 계약 벡터도 커밋한다. 각 export 함수에 대해 core 테스트에서 가져온 입력과 기대 출력이다. 각 플러그인의 `check` 대상은 가짜가 맞는 함수의 벡터로 각 가짜를 실행하고, 어긋나면 실패한다. 가짜는 그가 덮는 모든 export에 core 소유 벡터가 하나 이상 있을 때만 플러그인 테스트 트리에 나타날 수 있다. 벡터가 없는 export를 덮는 가짜는 플러그인 `check`가 실패시키고, 플러그인은 그 가짜를 빼거나 자신이 가진 리터럴만 단언한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
+가짜가 SDK에 충실하도록 적합성 검사를 둔다. core가 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`의 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리가 쓰는 모든 가짜의 export 이름과 인자 수를 그 스냅샷과 비교한다. 형태만으로는 부족하므로 core는 계약 벡터도 커밋한다. 각 export 함수에 대해 core 테스트에서 가져온 입력과 기대 출력이다. 각 플러그인의 `check` 대상은 가짜가 맞는 함수의 벡터로 각 가짜를 실행하고, 어긋나면 실패한다. 스냅샷은 가짜가 대리하는 모든 표면을 열거한다. 패키지 export와 `view-start.js`가 주입하는 페이지 API(`sokView`)의 멤버이 그것이며, 이는 이름과 인자 수를 커밋하는 core 스크립트가 나온다. 가짜는 플러그인이 쓰는 호출 모양과 core가 벡터화한 호출 모양만 덮을 수 있다. core는 각 모양에 대해 벡터 또는 예상 관찰 출력을 갖는 짧은 호출 추적을 커밋하고, 이는 core 테스트에서 가져온다. 스냅샷에 없는 표면을 덮는 가짜, 벡터가 없는 호출 모양, 또는 표면이 없는 가짜는 플러그인 `check`가 실패시키고, 플러그인은 그 가짜를 빼거나 자신이 가진 리터럴만 단언한다. `check`는 같은 호출 추적에서 실제 SDK도 함께 실행해, 실행 파일 또는 빌드 스크립트에서 SDK 자체와 대조한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
 
 결정은 각 플러그인 저장소에서 그 저장소의 sub-item이 들어갈 때 효력을 가진다. 그 전까지 현재 형태는 준수가 아니라 소유자가 있는 열린 결함이다.
 
@@ -94,7 +94,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 14. 명세: `docs/spec/plugins.md:40`의 "`make test`가 플러그인 저장소의 테스트를 실행"과 "테스트를 위해 `@soksak/plugin-api`에 의존"을 다음으로 바꾼다. `make test`는 플러그인 테스트를 실행하고, `make check`는 SDK 도구를 실행하며, 플러그인 저장소는 `@soksak/plugin-api`를 빌드 의존성으로 둔다. `docs/spec/plugins.md:171`("플러그인 저장소 테스트가 `checkViewPage`를 호출")은 "플러그인 빌드가 `checkViewPage`를 호출"로 바꾼다. 소유자는 core `main`이며 `.ko.md` 대응 문서도 함께 바꾼다.
 
 
-15. 적합성: core가 생성된 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`에 대해 커밋한다. core는 계약 벡터(export 함수별 입력과 기대 출력, core 테스트에서 가져옴)도 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리의 모든 가짜를 그 스냅샷과 비교하고, 가짜가 맞는 함수의 벡터로 실행해 어긋나면 실패하고, 벡터가 없는 export를 덮는 가짜도 실패한다. 소유자: 스냅샷은 core `main`, 비교는 각 플러그인 저장소.
+15. 적합성: core가 생성된 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`에 대해 커밋한다. core는 계약 벡터(export 함수별 입력과 기대 출력, core 테스트에서 가져옴)도 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리의 모든 가짜를 그 스냅샷과 비교하고, 가짜가 맞는 함수의 벡터로 실행해 어긋나면 실패하고, 벡터가 없는 호출 모양이나 표면을 덮는 가짜도 실패한다. 소유자: 스냅샷은 core `main`, 비교는 각 플러그인 저장소.
 
 ### 범위 확인
 
@@ -200,4 +200,11 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 - D1: 가짜가 core에 계약 벡터가 없는 export를 덮을 수 있고, 그런 가짜는 비교를 통과하므로 동작 표류가 보이지 않는다. 수용: 가짜는 그가 덮는 모든 export에 core 소유 벡터가 하나 이상 있을 때만 플러그인 테스트 트리에 나타날 수 있고, 아니면 플러그인 `check`가 실패한다.
 - D3: 두 감사자 모두 결정 수준 이의가 없다고 보고했다. D3는 닫히다.
 
-상태: D1 열림, 라운드 9 대기(D1만). 라운드 9 감사자는 이 텍스트를 받는다.
+### 라운드 9
+
+새 Haiku 감사자 2명(D1만)이 이의를 보고했다:
+
+- 스냅샷이 세 패키지의 export만 다루지만, 가짜는 `view-start.js`가 주입하는 페이지 API(`sokView`)의 대신도 서므로 스텁이 보이지 않게 바뀌어도 잡히지 않는다. 수용: 스냅샷이 주입된 페이지 API도 열거한다. `view-start.js`를 읽는 core 스크립트가 이를 만든다.
+- export당 벡터 하나는 상태를 갖는 export(`createBinder`, 뷰 브리지, `sokView`)에 대한 충실도의 증거가 아니고, 벡터가 없는 호출 모양에도 맞지 않는다. 수용: 가짜는 플러그인이 쓰는 호출 모양 중 core가 벡터화한 것만 덮으며, 벡터 또는 호출 추적으로 접는다. `check`는 같은 추적에서 실제 SDK를 실행한다.
+
+상태: D1 열림, 라운드 10 대기(D1만). 라운드 10 감사자는 이 텍스트를 받는다.

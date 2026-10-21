@@ -28,7 +28,7 @@ SDK behaviour is tested only in its owning package. A plugin test that asserts a
 
 Command split: `make test` runs the plugin test script only. `make check` runs the SDK-reading tools (`soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`), the SHA-256 comparison of the SDK `view-start.js` with a constant held in the check script, the literal-equality checks of values that a fixture holds (the `VIEW_IMPORTS` entries, the screen-message vector), and `build-vendor --check`. Every plugin repository has a `check` target in its Makefile; `pack` depends on `check`. Build and check scripts (not tests) may call SDK validators.
 
-Fakes stay faithful to the SDK through a conformance check. Core commits an export-surface snapshot (export names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Shape is not enough, so core also commits contract vectors: for each exported function that a fake covers, the input and the expected output, taken from core's own tests. Each plugin's `check` target compares the export names and arity of every fake its test tree uses with the snapshot, runs each fake against the vectors of the functions it covers, and fails on any drift. A fake may appear in a plugin test tree only if every export it covers has at least one core-owned vector; a fake whose export has none fails the plugin `check`, and the plugin then drops that fake or asserts only a literal it holds. A check may read SDK files; a test may not.
+Fakes stay faithful to the SDK through a conformance check. Core commits an export-surface snapshot (export names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Shape is not enough, so core also commits contract vectors: for each exported function that a fake covers, the input and the expected output, taken from core's own tests. Each plugin's `check` target compares the export names and arity of every fake its test tree uses with the snapshot, runs each fake against the vectors of the functions it covers, and fails on any drift. The snapshot enumerates every surface a fake stands in for: the package exports and the members of the page API that `view-start.js` injects (`sokView`), derived by a core script that commits names and arity. A fake may cover only call shapes that the plugin uses and that core has vectored: for each such shape core commits a vector or a short call trace with its expected observable outputs, taken from core's tests. A fake covering a surface absent from the snapshot, a call shape without a vector, or no surface at all fails the plugin `check`, and the plugin then drops that fake or asserts only a literal it holds. The `check` also runs the real SDK on the same traces, in a build or check script, so fidelity is checked against the SDK itself. A check may read SDK files; a test may not.
 
 The decision takes effect for each plugin repository when that repository's sub-items land. Until then the current form is an open defect with an owner, not compliance.
 
@@ -94,7 +94,7 @@ Shipped files: `flowmark/package.json` `files` is `plugin.json`, `events.json`, 
 14. Spec: `docs/spec/plugins.md:40` changes from "`make test` runs the tests of a plugin repository" and "depends on `@soksak/plugin-api` for its tests" to: `make test` runs the plugin tests; `make check` runs the SDK tools; the plugin repository depends on `@soksak/plugin-api` as a build dependency. `docs/spec/plugins.md:171` ("a plugin repository test calls `checkViewPage`") changes to: the plugin build calls `checkViewPage`. Owner: core `main`, with `.ko.md` mirrors.
 
 
-15. Conformance: core commits a generated export-surface snapshot (names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Core also commits contract vectors (input and expected output per exported function, taken from core's tests). Each plugin's `check` target compares every fake of its test tree with that snapshot, runs each fake against the vectors of the functions it covers, and fails on drift; a fake whose export has no vector fails the check. Owner: core `main` for the snapshot; each plugin repository for the comparison.
+15. Conformance: core commits a generated export-surface snapshot (names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Core also commits contract vectors (input and expected output per exported function, taken from core's tests). Each plugin's `check` target compares every fake of its test tree with that snapshot, runs each fake against the vectors and traces of the call shapes it covers, and fails on drift; a fake covering a surface or call shape without a core vector fails the check. Owner: core `main` for the snapshot; each plugin repository for the comparison.
 
 ### Coverage
 
@@ -200,4 +200,11 @@ Two fresh Haiku auditors, asked only whether D1 or D3 itself is wrong:
 - D1: a fake may cover an export that core has no contract vector for, and such a fake passes the comparison, so behaviour drift goes unseen. Accepted: a fake may appear only if every export it covers has at least one core-owned vector; otherwise the plugin `check` fails.
 - D3: both auditors report no decision-level objection. D3 is closed.
 
-Status: D1 open, round 9 pending (D1 only). Round 9 auditors receive this text.
+### Round 9
+
+Two fresh Haiku auditors (D1 only) reported objections:
+
+- The snapshot covers only the exports of the three packages, but fakes also stand in for the page API that `view-start.js` injects (`sokView`), so a stub can drift unseen. Accepted: the snapshot enumerates the injected page API too, from a core script that reads `view-start.js`.
+- One vector per export is not fidelity for stateful exports (`createBinder`, the view bridge, `sokView`) or for call shapes that no vector exercises. Accepted: a fake covers only call shapes the plugin uses that core has vectored, as vectors or call traces, and `check` runs the real SDK on the same traces.
+
+Status: D1 open, round 10 pending (D1 only). Round 10 auditors receive this text.
