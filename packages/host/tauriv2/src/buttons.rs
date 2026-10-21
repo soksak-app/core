@@ -5,11 +5,9 @@
 //! is not 0, so the open press of a rejected release can be ended after this value becomes 0
 //! (docs/spec/exposure.md#host-entries).
 
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
-
-use crate::application_log::log_error;
 
 pub struct Buttons {
     mask: Mutex<u64>,
@@ -29,10 +27,9 @@ impl Buttons {
     /// value. The announcement is made inside the lock so that the order of the announcements equals the order of the
     /// reports. changed must not block.
     pub fn report(&self, mask: u64) {
-        let Ok(mut current) = self.mask.lock() else {
-            log_error("host.buttons", "the button state is poisoned");
-            return;
-        };
+        // default: a lock that a panicking thread poisoned still holds the last reported mask, which is only compared; the panic
+        // hook records the panic.
+        let mut current = self.mask.lock().unwrap_or_else(PoisonError::into_inner);
         if *current == mask {
             return;
         }

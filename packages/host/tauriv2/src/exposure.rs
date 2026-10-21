@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -1097,10 +1097,10 @@ pub(crate) fn watch_buttons(app: &AppHandle) -> Result<(), String> {
     });
     let send = Mutex::new(send);
     app.manage(crate::buttons::Buttons::new(move |value| {
-        let sent = send
-            .lock()
-            .map_err(|_| "the sender is poisoned".to_string())
-            .and_then(|send| send.send(value).map_err(|error| error.to_string()));
+        let sender = send.lock();
+        // default: a lock that a panicking thread poisoned still holds the sender, which has no state a panic can leave inconsistent; the panic hook records the panic.
+        let sender = sender.unwrap_or_else(PoisonError::into_inner);
+        let sent = sender.send(value).map_err(|error| error.to_string());
         if let Err(error) = sent {
             log_error("host.buttons change", error);
         }
@@ -1891,12 +1891,11 @@ impl Host {
     /// The current menu language that host.menu reports. It is the same value as the state that decides whether the
     /// menu is not rebuilt.
     fn menu_language(&self) -> Result<String, Failure> {
-        self.0
-            .state::<crate::menu::MenuLanguage>()
-            .0
-            .lock()
-            .map(|language| language.clone())
-            .map_err(|_| internal("the menu language state is poisoned"))
+        let state = self.0.state::<crate::menu::MenuLanguage>();
+        let language = state.0.lock();
+        // default: a lock that a panicking thread poisoned still holds the menu language, which is only read; the panic hook records the panic.
+        let language = language.unwrap_or_else(PoisonError::into_inner);
+        Ok(language.clone())
     }
 
     /// Runs the request of a name whose owner is host.

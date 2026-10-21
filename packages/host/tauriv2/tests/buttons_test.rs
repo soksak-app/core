@@ -5,7 +5,8 @@
 mod folder;
 
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde_json::{Map, Value, json};
@@ -116,4 +117,25 @@ fn buttons_notify_each_mask_change() {
         json!({"mask": 0})
     );
     endpoint.stop();
+}
+
+// A panic while the state is held poisons the lock; the next report recovers the state and announces its value.
+#[test]
+fn a_poisoned_button_state_is_recovered_and_the_next_report_is_announced() {
+    let announced: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+    let first = Arc::new(AtomicBool::new(true));
+    let sink = Arc::clone(&announced);
+    let panics_once = Arc::clone(&first);
+    let buttons = Arc::new(Buttons::new(move |value| {
+        if panics_once.swap(false, Ordering::SeqCst) {
+            panic!("the first announcement panics while the state lock is held");
+        }
+        sink.lock().unwrap().push(value);
+    }));
+    let source = Arc::clone(&buttons);
+    let poisoning = std::thread::spawn(move || source.report(1));
+    assert!(poisoning.join().is_err(), "the first report must panic");
+    buttons.report(2);
+    assert_eq!(*announced.lock().unwrap(), vec![json!({"mask": 2})]);
+    assert_eq!(buttons.value(), json!({"mask": 2}));
 }

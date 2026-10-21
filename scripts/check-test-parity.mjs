@@ -2165,6 +2165,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F218",
+    implementation: [
+      { file: "packages/host/tauriv2/src/routine/routine.rs", symbol: "pub fn record_panic(" },
+      { file: "packages/host/tauriv2/src/buttons.rs", symbol: "pub fn report(&self, mask: u64)" },
+      { file: "packages/host/wailsv3/src/event_record.go", symbol: "func recordPanic(name, text, stack string)" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens" },
+      { file: "packages/host/tauriv2/tests/panic_hook_test.rs", id: "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full" },
+      { file: "packages/host/tauriv2/tests/buttons_test.rs", id: "a_poisoned_button_state_is_recovered_and_the_next_report_is_announced" },
+      { file: "packages/host/wailsv3/tests/routine_test.go", id: "TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens" },
+      { file: "packages/host/wailsv3/tests/routine_test.go", id: "TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull" },
+    ],
+    expected: "A panic before the writer exists is stored when the writer opens, a panic that no writer stores is written to the standard error in full, and a poisoned button state is recovered by the next report.",
+    levels: ["unit"],
+  },
+  {
     id: "F217",
     implementation: [{ file: "packages/workbench/plane.js", symbol: "function pluginPlaceholder(tab, paramsProblem)" }],
     tests: [

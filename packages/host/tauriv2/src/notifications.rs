@@ -1,6 +1,6 @@
 //! Posts tab notifications to the notification center of the operating system (docs/spec/plugins.md#tab-reports).
 
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Window};
@@ -210,13 +210,9 @@ fn set_error(app: &AppHandle, reason: String) {
 }
 
 fn emit_state(app: &AppHandle) {
-    let Ok(state) = STATE.lock().map(|state| state.clone()) else {
-        log_error(
-            "notification-state",
-            "the notification state lock is poisoned",
-        );
-        return;
-    };
+    // default: a lock that a panicking thread poisoned still holds the permission state, which is only read; the panic hook
+    // records the panic.
+    let state = STATE.lock().unwrap_or_else(PoisonError::into_inner).clone();
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "notification-state", state.clone()) {
             log_error("notification-state", error);
