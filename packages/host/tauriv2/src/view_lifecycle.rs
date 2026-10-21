@@ -8,6 +8,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use serde_json::json;
+
+use crate::event_log::Level;
+use crate::event_record::emit_host;
 use crate::platform::Handle;
 use crate::surfaces::ViewStart;
 
@@ -32,6 +36,8 @@ pub struct ViewSpec {
 #[derive(Default)]
 struct LifecycleState {
     specs: HashMap<String, ViewSpec>,
+    /// The surfaces whose view is alive: tracked and not yet ended, so an end is recorded once.
+    live: HashSet<String>,
     failures: HashMap<String, Vec<Instant>>,
     stopped: HashSet<String>,
 }
@@ -67,7 +73,9 @@ impl ViewLifecycle {
             visible,
             start,
         };
-        self.lock().specs.insert(surface.to_string(), spec.clone());
+        let mut state = self.lock();
+        state.specs.insert(surface.to_string(), spec.clone());
+        state.live.insert(surface.to_string());
         spec
     }
 
@@ -106,10 +114,37 @@ impl ViewLifecycle {
     /// of the same name is a new view.
     pub fn forget(&self, surface: &str) {
         let mut state = self.lock();
+        state.live.remove(surface);
         state.specs.remove(surface);
         state.failures.remove(surface);
         state.stopped.remove(surface);
     }
+
+    /// Stores `host.view.killed` for the view of surface, which the host observes to end: its process ended or its queue
+    /// overflowed, its surface closed, or its window closed (docs/spec/logging.md#principles). An end is stored once: a surface
+    /// without a live view, or a view that already ended, stores nothing.
+    pub fn record_end(&self, surface: &str) {
+        let spec = {
+            let mut state = self.lock();
+            if !state.live.remove(surface) {
+                return;
+            }
+            state.specs.get(surface).cloned()
+        };
+        if let Some(spec) = spec {
+            emit_host(
+                Level::Warn,
+                "host.view.killed",
+                view_killed_event(surface, &spec.plugin),
+            );
+        }
+    }
+}
+
+/// The fields of `host.view.killed`: the plugin and the surface of the view, and `unsent` true, because the records of the view
+/// that the writer did not receive may be lost and the event states that loss (docs/spec/logging.md#principles).
+pub fn view_killed_event(surface: &str, plugin: &str) -> serde_json::Value {
+    json!({"plugin": plugin, "surface": surface, "unsent": true})
 }
 
 /// The reason of a view that stopped its restarts. The log line and the view-stopped event carry it.

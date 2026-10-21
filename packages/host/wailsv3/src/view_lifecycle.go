@@ -39,15 +39,18 @@ type viewLifecycle struct {
 	specs    map[string]*viewSpec
 	failures map[string][]time.Time
 	stopped  map[string]bool
+	// live holds the surfaces whose view is alive: tracked and not yet ended, so an end is recorded once.
+	live map[string]bool
 }
 
 // newViewLifecycle returns the lifecycle of the view surfaces with the clock now.
 func newViewLifecycle(now func() time.Time) *viewLifecycle {
-	return &viewLifecycle{now: now, specs: map[string]*viewSpec{}, failures: map[string][]time.Time{}, stopped: map[string]bool{}}
+	return &viewLifecycle{now: now, specs: map[string]*viewSpec{}, failures: map[string][]time.Time{}, stopped: map[string]bool{}, live: map[string]bool{}}
 }
 
 // track records the view of surface and returns its record. A record of another plugin is replaced, so its folder is resolved again.
 func (l *viewLifecycle) track(surface string, native unsafe.Pointer, plugin, page string, visible bool) *viewSpec {
+	l.live[surface] = true
 	spec := l.specs[surface]
 	if spec == nil || spec.plugin != plugin {
 		spec = &viewSpec{plugin: plugin}
@@ -87,9 +90,29 @@ func (l *viewLifecycle) isStopped(surface string) bool {
 // forget removes the record of surface, which clears its failures and its stop. It runs when the surface is removed, so the next
 // surface of the same name is a new view.
 func (l *viewLifecycle) forget(surface string) {
+	delete(l.live, surface)
 	delete(l.specs, surface)
 	delete(l.failures, surface)
 	delete(l.stopped, surface)
+}
+
+// recordEnd stores host.view.killed for the view of surface, which the host observes to end: its process ended or its queue
+// overflowed, its surface closed, or its window closed (docs/spec/logging.md#principles). An end is stored once: a surface without a
+// live view, or a view that already ended, stores nothing.
+func (l *viewLifecycle) recordEnd(surface string) {
+	if !l.live[surface] {
+		return
+	}
+	delete(l.live, surface)
+	if spec := l.specs[surface]; spec != nil {
+		EmitHost(LevelWarn, "host.view.killed", viewKilledFields(surface, spec.plugin))
+	}
+}
+
+// viewKilledFields are the fields of host.view.killed: the plugin and the surface of the view, and unsent true, because the records of
+// the view that the writer did not receive may be lost and the event states that loss (docs/spec/logging.md#principles).
+func viewKilledFields(surface, plugin string) map[string]any {
+	return map[string]any{"plugin": plugin, "surface": surface, "unsent": true}
 }
 
 // viewOverflow is the failure of a view whose message queue is full. Its text is the reason that the view reports.

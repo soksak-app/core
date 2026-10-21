@@ -594,6 +594,8 @@ func (s *Surfaces) close() {
 		for id, view := range s.views {
 			handles[id] = view.handle
 			views[view.handle] = view
+			// A view of the surface ends with its window (docs/spec/logging.md#principles).
+			s.viewRecords().recordEnd(id)
 		}
 		s.disposePluginHosts()
 		err := CloseWindowSurfaces(handles, s.documents, s.streams, s.images, func(native WindowNative) error {

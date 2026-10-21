@@ -1,10 +1,51 @@
 package host
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 	"unsafe"
 )
+
+// contract: host.view.killed.is-written-on-every-end
+func TestAViewEndStoresHostViewKilledWithItsPluginAndSurface(t *testing.T) {
+	kill, closed, untracked := t.Name()+"-kill", t.Name()+"-close", t.Name()+"-untracked"
+	l := newViewLifecycle(time.Now)
+	// A view that ends by a kill (its process ended) and a view that ends with its surface (a close).
+	l.track(kill, nil, "probe", "ui/page.html", true)
+	l.recordEnd(kill)
+	l.track(closed, nil, "probe", "ui/page.html", true)
+	l.recordEnd(closed)
+	l.forget(closed)
+	// A surface without a view stores nothing, and a view that already ended stores nothing again.
+	l.recordEnd(untracked)
+	l.recordEnd(closed)
+	l.recordEnd(kill)
+	var got []map[string]any
+	records.Lock()
+	for _, record := range records.buffer {
+		if record.event != "host.view.killed" {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(record.fields, &fields); err != nil {
+			records.Unlock()
+			t.Fatal(err)
+		}
+		if fields["surface"] == kill || fields["surface"] == closed || fields["surface"] == untracked {
+			got = append(got, fields)
+		}
+	}
+	records.Unlock()
+	want := []map[string]any{
+		{"plugin": "probe", "surface": kill, "unsent": true},
+		{"plugin": "probe", "surface": closed, "unsent": true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("host.view.killed records %v, want %v", got, want)
+	}
+}
 
 // fakeClock is the clock of the failures of the view tests. The test moves it with set.
 type fakeClock struct {

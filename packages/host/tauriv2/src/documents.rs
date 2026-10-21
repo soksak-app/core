@@ -1327,6 +1327,8 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         Ok(current) if current == document => {}
         _ => return,
     }
+    // The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
+    data.documents.lifecycle().record_end(surface);
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
     end_presentation_wait(window, surface, "process-ended");
@@ -1790,6 +1792,8 @@ pub fn remove_surface_for_reload(
     streams: &Streams,
     surface: &str,
 ) -> Vec<Handle> {
+    // The view of the surface closes with its documents (docs/spec/logging.md#principles).
+    documents.lifecycle().record_end(surface);
     streams.remove_surface(surface);
     documents.remove_surface(surface)
 }
@@ -1819,6 +1823,8 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         Ok(platform) => platform,
         Err(error) => return log_error("document close", error),
     };
+    // A view of the surface ends with it (docs/spec/logging.md#principles).
+    data.documents.lifecycle().record_end(surface);
     data.documents.lifecycle().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();

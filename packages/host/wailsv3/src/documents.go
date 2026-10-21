@@ -771,6 +771,8 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 
 // closeSurfaceDocuments closes all document regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
+	// The view of the surface closes with its documents (docs/spec/logging.md#principles).
+	s.viewRecords().recordEnd(surface)
 	// The regions close with their documents, so their stream effects are not applied.
 	s.streams.RemoveSurface(surface)
 	handles := s.documents.RemoveSurface(surface)
@@ -1411,6 +1413,8 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
 		return
 	}
+	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
+	s.viewRecords().recordEnd(surface)
 	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
 	openCalls := s.documents.endViewCalls(surface)
 	if _, err := s.documents.Remove(key); err != nil {
