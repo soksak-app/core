@@ -49,6 +49,7 @@ fn waiting(relay: &Relay) -> usize {
         .len()
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn abandon_answers_the_waiting_request_of_a_poisoned_lock() {
     let relay = Relay::default();
@@ -75,6 +76,7 @@ fn abandon_answers_the_waiting_request_of_a_poisoned_lock() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn forget_removes_the_request_of_a_poisoned_lock() {
     let relay = Relay::default();

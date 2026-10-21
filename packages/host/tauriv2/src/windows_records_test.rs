@@ -18,6 +18,7 @@ fn poison<T>(lock: &Mutex<T>) {
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_destroyed_window_is_removed_from_the_records_when_their_locks_are_poisoned() {
     let registry = Windows::default();
@@ -61,6 +62,7 @@ fn a_destroyed_window_is_removed_from_the_records_when_their_locks_are_poisoned(
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_last_window_of_a_quitting_application_ends_it_when_the_records_are_poisoned() {
     let registry = Windows::default();

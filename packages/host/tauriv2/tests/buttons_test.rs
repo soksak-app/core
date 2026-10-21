@@ -119,6 +119,7 @@ fn buttons_notify_each_mask_change() {
     endpoint.stop();
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 // A panic while the state is held poisons the lock; the next report recovers the state and announces its value.
 #[test]
 fn a_poisoned_button_state_is_recovered_and_the_next_report_is_announced() {

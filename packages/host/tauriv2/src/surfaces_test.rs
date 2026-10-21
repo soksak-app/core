@@ -115,6 +115,7 @@ fn poison<T>(lock: &Mutex<T>) {
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_press_of_a_surface_view_is_found_when_the_surface_lock_is_poisoned() {
     let named = Mutex::new(HashMap::from([(7usize, "surf".to_string())]));
@@ -127,6 +128,7 @@ fn a_press_of_a_surface_view_is_found_when_the_surface_lock_is_poisoned() {
     );
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn the_first_commit_of_a_page_is_marked_when_the_running_lock_is_poisoned() {
     let running = Running::default();
