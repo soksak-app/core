@@ -534,6 +534,7 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
 	if c.restartRefused(name, surface) {
+		// default: the declaration was read above, so only its transport decides the report of the refusal.
 		if _, persistent, _ := c.declaration(name); persistent {
 			refusalNotice = true
 		} else {
