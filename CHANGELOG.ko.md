@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F229: Rust send check와 plugin session의 검사(`plugin_send_root`, `refuse_surface_send`)는 실패를 관찰했다. 각 검사를 사본에서 끄면 테스트 `a_sidecar_request_of_a_host_is_checked_before_its_send`가 그 assertion으로 실패하고(Red), 변경하지 않은 검사에서 통과한다(Green).
+- F229: Rust sidecar core의 retain hook에 이름 붙은 타입을 두었다. clippy의 `-D warnings`가 요구하기 때문이다. `soksak-host-tauriv2`의 clippy는 0으로 끝나고, `sidecars_transport_test`는 39개 중 39개를 통과한다.
+- F229: environment는 설치된 plugin마다 dependency를 그 plugin host의 sidecar로 선언하고, host call listener는 sidecar 요청을 그 목록으로 검사한다(Red: 수정 전 코드에서 `pluginSidecarsOf is not a function`). 페이지가 sidecar 선언을 받기 전까지 선언은 null이므로, 그 sidecar의 모든 operation은 거부된다(F229-17).
+- F229: view bridge는 sidecar를 이름으로 가리킨다. `runtime.sidecar(name)`은 `on`, `onFailure`와 함께 `send(id, body, cids)`를 제공하고, 각 요청은 이름을 담는다. 메인 페이지는 이름 없는 view send를 거부하고, 표면은 선언하지 않은 이름을 거부한다.
+- F229: 명세는 plugin session id, host 호출 `pluginHostSidecarSend`, plugin session에 대한 표면 send의 거부, plugin session의 닫기를 정한다. 선언된 UI 명세는 plugin host section이 host 페이지가 밀어 넣은 snapshot을 그린다는 것과, state module 등록이 선언된 status를 제공하지 않는 이유를 정한다.
+- F229: 계약 사례 `plugin-host.sidecar.send-checks`, `plugin-host.sidecar.surface-refusal`, `plugin-host.sidecar.close`를 두 host의 test가 선언한다.
 - F239-8: `make benchmark-rust`와 `make benchmark-go`는 benchmark마다 `scripts/benchmarks.mjs`와 test runner를 거쳐 제한 `BENCH_TIMEOUT`(기본 300초)과 함께 돌린다. 각 benchmark는 시작할 때 이름이 표시되고 결과·경과 시간이 보고되며, 출력은 측정값으로 남는다. 제한을 넘은 benchmark는 종료되고 `TIME`으로 보고된다. Red test는 바뀌기 전 대상에서 `RUN` 줄 없이 실패했고, 구현에서 2회 중 2회 통과한다.
 - F239-7: `make push-check`는 네 gate test 파일을 `scripts/gate-tests.mjs`와 test runner로 돌린다. 각 파일은 `node --test <file>`로 제한 `--timeout`(기본 120초)과 함께 실행된다. 각 파일은 시작할 때 이름이 표시되고 결과·경과 시간·제한이 보고되며, 제한을 넘은 파일은 종료되고 `TIME`으로 보고된다. Red test는 제한이 생기기 전 gate runner에서 실패했다. 멈추는 파일이 30초 전체를 돌았고 `RUN` 줄이 없었다. 구현에서 통과한다.
 - F239-6: `make -C native/darwin repeat`와 `repeat-suite`는 native test를 `scripts/native-tests.mjs`로 돌리고 출력을 보인다. 각 test는 시작할 때 이름이 표시되고, 결과·경과 시간·runner의 제한(120초)을 보고한다. `repeat-suite`는 test 실행 파일에 의존하며, 각 실행에서 `test`의 하위 make 대신 스위트에 runner를 돌린다. 하위 make의 출력은 `/dev/null`로 갔었다. Red test는 변경 전 대상에서 첫 assertion으로 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
