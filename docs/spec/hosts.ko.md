@@ -195,7 +195,7 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 
 **수정된 탭을 지키면 종료가 끝난다.** 종료는 준비된 창마다 닫기를 요청하고, 수정된 탭을 지킨 창의 페이지는 host 호출 `windowCloseKept`로 답한다([plugins](plugins.ko.md#탭-알림)). 그러면 host가 종료 상태를 끝낸다. 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고, WebContent process의 종료는 다시 오류 줄이 된다. `host.window`가 이 상태를 `quitting`으로 보고한다.
 
-**영속 사이드카는 애플리케이션보다 오래 살고 다시 붙는다.** 터미널 서비스는 앱 재시작과 연결 단절을 지나 세션을 유지하며, 끊긴 연결은 즉시 다시 맺고 죽은 서비스는 재스폰한다([터미널 런타임](terminal-runtime.ko.md)). 애플리케이션은 종료 시 영속 서비스를 죽이지 않는다. 두 호스트는 platform 연산 `NewSession`(Go) 또는 `new_session`(Rust)으로 영속 서비스를 새 session에서 시작하므로, 서비스는 애플리케이션의 process group이나 terminal의 signal을 받지 않는다.
+**영속 사이드카는 애플리케이션보다 오래 살고 다시 붙는다.** 영속 서비스는 앱 재시작과 연결 단절을 지나 세션을 유지하며, 끊긴 연결은 즉시 다시 맺고 죽은 서비스는 재스폰한다([영속 서비스](persistent-services.ko.md)). 애플리케이션은 종료 시 영속 서비스를 죽이지 않는다. 두 호스트는 platform 연산 `NewSession`(Go) 또는 `new_session`(Rust)으로 영속 서비스를 새 session에서 시작하므로, 서비스는 애플리케이션의 process group이나 terminal의 signal을 받지 않는다.
 
 **비영속 사이드카는 창과 함께 죽는다.** 표면 제거나 창 닫기가 닫힘을 알리고 프로세스는 채널과 함께 끝난다.
 
