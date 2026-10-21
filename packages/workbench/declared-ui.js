@@ -482,6 +482,11 @@ function paintRoot(box, element, ctx) {
     paintButton(box, element, ctx.bind);
     return;
   }
+  if (element.kind === "status-line") {
+    box.className = "declared-status-line";
+    box.textContent = element.text;
+    return;
+  }
   if (element.kind === "list") {
     box.className = "declared-list";
     drawList(box, element.items, {
@@ -509,7 +514,7 @@ function paintRoot(box, element, ctx) {
  */
 export function drawValue(body, elements, { statusId, bind, kept }) {
   for (const element of elements) {
-    if (!["list", "tree", "button"].includes(element.kind)) throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
+    if (!["list", "tree", "button", "status-line"].includes(element.kind)) throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
   }
   drawList(body, elements, {
     key: (element) => `${element.kind} ${element.key}`,

@@ -612,3 +612,41 @@ test("a button without command is rejected at the button", async () => {
   assert.equal(error.pointer, "/elements/0");
   assert.equal(error.reason, 'missing "command"');
 });
+
+// The status-line element (docs/spec/declared-ui.md): one line of plain text, with no command and no control attributes.
+test("a status line draws its text as one line with no control attributes", async () => {
+  const module = await load("status-line-draw");
+  const s = section(module);
+  s.show({ elements: [{ kind: "status-line", key: "st", text: "Ready" }] });
+  assert.equal(s.body.textContent, "Ready", "the text was not drawn");
+  assert.equal(s.body.querySelector("button"), null, "the status line draws a button");
+  assert.equal(s.body.querySelector("[data-expose]"), null, "the status line carries a dom name");
+  assert.equal(s.body.querySelector("[data-key]"), null, "the status line carries data-key");
+  assert.equal(s.calls.length, 0, "the status line is bound to a command");
+});
+
+test("a status line draws its text as text and not as markup", async () => {
+  const module = await load("status-line-text");
+  const s = section(module);
+  s.show({ elements: [{ kind: "status-line", key: "st", text: "<b>x</b>" }] });
+  assert.equal(s.body.querySelector("b"), null, "the text was drawn as markup");
+  assert.equal(s.body.textContent, "<b>x</b>", "the text was not drawn");
+});
+
+test("a redraw keeps the element of a status line", async () => {
+  const module = await load("status-line-keep");
+  const s = section(module);
+  s.show({ elements: [{ kind: "status-line", key: "st", text: "Ready" }] });
+  const line = s.body.firstElementChild;
+  s.show({ elements: [{ kind: "status-line", key: "st", text: "Done" }] });
+  assert.equal(s.body.firstElementChild, line, "the status line was replaced");
+  assert.equal(line.textContent, "Done", "the text was not updated");
+});
+
+test("a status line with a command is rejected at the unknown field", async () => {
+  const module = await load("status-line-command");
+  const error = rejectionOf({ elements: [{ kind: "status-line", key: "st", text: "Ready", command: "demo.open" }] }, OPTIONS, module);
+  assert.ok(error, "no rejection");
+  assert.equal(error.pointer, "/elements/0");
+  assert.equal(error.reason, 'unknown field "command"');
+});
