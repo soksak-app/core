@@ -25,13 +25,13 @@ Common functionality belongs to the workbench or the native host so plugins do n
 
 ## Repositories
 
-Core, each plugin and each sidecar are separate git repositories in sibling folders of the core checkout. Each keeps its own tests, its own `docs/features.md` checklist and its own build; none reads the files of another.
+Core, each plugin and each sidecar are separate git repositories in sibling folders of the core checkout. Each keeps its own tests, its own `docs/features.md` checklist and its own build. `make boundaries` reads the `package.json` name and dependency keys and the `plugin.json` id of each folder that `scripts/workspace-registry.json` declares, and fails when a declared folder is missing. `make registry` and `make install-plugins` read the declared sibling repositories to pack and install them.
 
 | Folder | Repository | GitHub |
 | --- | --- | --- |
 | `core` | The layout library, workbench, plugin-api, client, command line, hosts, applications, specifications and window checks | `soksak-app/core` |
 | `../registry` | The public registry: one file per entry, its checks and its publication ([public registry](registry.md)) | `soksak-app/registry` |
-| `../plugins/<id>` | One plugin: `plugin.json`, its pages, its `package.json` with `engines.soksak`, and its tests. The plugins are `browser`, `terminal`, `files` and `shell` | `soksak-app/plugin-<id>` for `browser`, `terminal` and `files`; `shell` is not published |
+| `../plugins/<id>` | One plugin: `plugin.json`, its pages, its `package.json` with `engines.soksak`, and its tests. The plugins are `browser`, `editor`, `files`, `hwp` and `terminal`; `shell` has a repository but is not declared | `soksak-app/plugin-<id>`; `shell` is not published |
 | `../sidecars/vt` | The terminal engine: the crates `vt-core` and `vt-alacritty`, and the sidecar `@soksak/sidecar-vt-alacritty` in `vt-alacritty` | `soksak-app/sidecar-vt` |
 | `../sidecars/files`, `../sidecars/shell` | The sidecars `@soksak/sidecar-files` and `@soksak/sidecar-shell` | `soksak-app/sidecar-files`; `shell` is not published |
 

@@ -25,13 +25,13 @@ Plugin과 sidecar는 자기 repository에 있다([Repository](#repository)).
 
 ## Repository
 
-Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, 어느 것도 다른 repository의 파일을 읽지 않는다.
+Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make boundaries`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` name과 dependency key, `plugin.json` id를 읽고, 선언한 폴더가 없으면 실패한다. `make registry`와 `make install-plugins`는 선언된 sibling repository를 읽어 pack하고 설치한다.
 
 | 폴더 | Repository | GitHub |
 | --- | --- | --- |
 | `core` | Layout library, workbench, plugin-api, client, command line, host, 애플리케이션, spec, window check | `soksak-app/core` |
 | `../registry` | 공개 registry: 항목마다 파일 하나, 그 검사와 게시([공개 registry](registry.ko.md)) | `soksak-app/registry` |
-| `../plugins/<id>` | Plugin 하나: `plugin.json`, page, `engines.soksak`을 가진 `package.json`, test. Plugin은 `browser`, `terminal`, `files`, `shell`이다 | `browser`, `terminal`, `files`는 `soksak-app/plugin-<id>`. `shell`은 게시하지 않는다 |
+| `../plugins/<id>` | Plugin 하나: `plugin.json`, page, `engines.soksak`을 가진 `package.json`, test. Plugin은 `browser`, `editor`, `files`, `hwp`, `terminal`이다. `shell`은 repository가 있으나 선언하지 않는다 | `soksak-app/plugin-<id>`. `shell`은 게시하지 않는다 |
 | `../sidecars/vt` | Terminal engine: crate `vt-core`, `vt-alacritty`, 그리고 `vt-alacritty`의 sidecar `@soksak/sidecar-vt-alacritty` | `soksak-app/sidecar-vt` |
 | `../sidecars/files`, `../sidecars/shell` | Sidecar `@soksak/sidecar-files`, `@soksak/sidecar-shell` | `soksak-app/sidecar-files`. `shell`은 게시하지 않는다 |
 
