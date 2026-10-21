@@ -250,27 +250,38 @@ func recordWindowEvents(s *Surfaces) *[]windowEvent {
 
 // contract: view.restart.limit-shows-error
 // The fourth failure within the window sends one view-stopped event to the surface, which names the surface, the plugin and the reason.
-// Failures before the fourth send nothing.
+// Failures before the fourth send no view-stopped event; each process end still sends view-process-ended (native-surfaces.md, process end),
+// so this test counts only the stop event.
 func TestViewStopSendsTheStopEventOnceToTheSurface(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
+	stopEvents := func() []windowEvent {
+		var stops []windowEvent
+		for _, event := range *events {
+			if event.name == "view-stopped" {
+				stops = append(stops, event)
+			}
+		}
+		return stops
+	}
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
 		clock.set(offset)
 		endView(t, s, fake)
 	}
-	if len(*events) != 0 {
-		t.Fatalf("events after three failures: %d, want none", len(*events))
+	if len(stopEvents()) != 0 {
+		t.Fatalf("view-stopped events after three failures: %d, want none", len(stopEvents()))
 	}
 	clock.set(30 * time.Second)
 	endView(t, s, fake)
-	if len(*events) != 1 || (*events)[0].name != "view-stopped" {
-		t.Fatalf("events after the fourth failure: %+v, want one view-stopped event", *events)
+	stops := stopEvents()
+	if len(stops) != 1 {
+		t.Fatalf("view-stopped events after the fourth failure: %+v, want one", stops)
 	}
-	payload, ok := (*events)[0].data.(map[string]any)
+	payload, ok := stops[0].data.(map[string]any)
 	if !ok {
-		t.Fatalf("view-stopped payload is %T, want a map", (*events)[0].data)
+		t.Fatalf("view-stopped payload is %T, want a map", stops[0].data)
 	}
 	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["reason"] != viewStopReason() {
 		t.Fatalf("view-stopped payload %v, want surface probe-surface, plugin probe and the stop reason", payload)
