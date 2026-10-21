@@ -2106,9 +2106,12 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
         dependents: vec!["plugin-a".to_string()],
     }];
     let clock = clock.clone();
-    let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
+    let mut sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
         .unwrap()
         .with_clock(move || clock.read());
+    // The restarted sidecar runs the script that does not answer the shutdown, so the stop waits its stop timeout. The
+    // test sets a short timeout, as the other tests of a sidecar that ignores the shutdown do.
+    sidecars.stop_timeout = Duration::from_millis(100);
     (Stopping(sidecars), directory)
 }
 
