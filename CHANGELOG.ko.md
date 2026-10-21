@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F236-10: 지속 service contract가 `docs/spec/terminal-runtime.md`(+ko)에서 `docs/spec/persistent-services.md`(+ko)로 옮겨졌다. 이 명세는 일반 전송, 종료, 복구, 업데이트, 화면 메시지 규칙을 담는다. 터미널 입력, 표시, 세션 오류, 검증 본문은 `docs/plans/decouple-handoff.md`(+ko)로 옮겨 terminal plugin repository가 가진다. 모든 링크와 anchor는 새 파일을 가리키며, image region과 양쪽 host의 주석은 terminal 대신 image region, 지속 service, surface를 말한다. 문서와 주석만 바꿨고 동작 변경은 없다.
 - F236-12: `docs/spec/surface-composition.md`의 인수 기준 목록은 그림 영역의 일반 기준만 담는다. 터미널 기준 둘(터미널 그림이 열 수 변경 때 논리 행을 재배치한다, 배치 중 터미널 셀 메트릭은 고정이다)는 터미널 plugin repository가 담도록 `docs/plans/decouple-handoff.md`로 옮겼다. 문서만 바뀌며 동작 변경은 없다.
 - F236-11: browser 예제가 설치 pack을 `apps/browser/environment.json`의 `install`(registry pack)으로 적는다. `scripts/workspace-registry.json`은 plugin `terminal`과 `browser`를 담은 pack `browser-example`을 나열하고, `make browser-frontend`는 Makefile이 적어 둘 plugin 대신 registry index에서 그 pack의 plugin을 설치한다. `docs/spec/plugins.md`가 field을 적고 환경 검증기가 그 field을 받는다. Red: 바꾸지 않은 검증기에서 `install` 시험이 알 수 없는 field로 실패했다. Green: 환경 시험 4개 중 4개, registry script 시험 5개 중 5개가 통과한다.
 - F236-8: `docs/spec/sidecars.md`는 sidecar 계약만 말한다. `shell`, `files`, 터미널 사이드카(`vt-core`) 절과 그 시험 문장을 sidecar repository가 전달하도록 `docs/plans/decouple-handoff.md`로 옮겼다. F102.2의 files 절 링크는 옮긴 절을 가리킨다. 문서만 바뀌며 동작 변경은 없다.
