@@ -206,22 +206,15 @@ rust-repeat:
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
 	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
-# Runs the tests of a Go package COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
-# A run with no built test file (build tag) or no test of a matching name fails.
-# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
+# Runs the tests of the Go packages of PACKAGE COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
+# Each test of each package is its own process with the limit TEST_TIMEOUT, named when it starts and reported with its result and elapsed time (scripts/go-tests.mjs).
+# A pattern whose packages have no test files fails when none has test files; a run in which no test matches fails.
+# This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
 go-repeat:
 	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@cgo=$$(node scripts/go-repeat-inputs.mjs '$(PACKAGE)' '$(TAGS)') || exit 1; \
-	  output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    CGO_CFLAGS="$(GO_CFLAGS) $$cgo" go test -json -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1; \
-	    status=$$?; \
-	    node scripts/go-repeat-result.mjs "$$output" $$status '$(PACKAGE)' '$(TEST)' '$(TAGS)' \
-	      || { echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
+	  CGO_CFLAGS="$(GO_CFLAGS) $$cgo" node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LINK)'
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.

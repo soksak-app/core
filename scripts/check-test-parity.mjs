@@ -35,7 +35,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/language-repeat.test.mjs", "scripts/test/node-repeat.test.mjs", "scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/node-repeat.test.mjs", "scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
@@ -92,7 +92,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
-  lane("Go repeat result", "js-ts", ["scripts/go-repeat-result.mjs"], ["scripts/test/language-repeat.test.mjs"], { sharedTests: true }),
+  lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/go-repeat.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
@@ -3715,13 +3715,13 @@ const FEATURE_LINKS = [
   {
     id: "F93",
     implementation: [
-      { file: "Makefile", symbol: "node scripts/go-repeat-result.mjs" },
-      { file: "scripts/go-repeat-result.mjs", symbol: "has no test files built with tags" },
+      { file: "Makefile", symbol: "node scripts/go-tests.mjs" },
+      { file: "scripts/go-tests.mjs", symbol: "has no test files built with tags" },
     ],
     tests: [
-      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a package whose test files are not built" },
-      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat passes a run whose tested package passed while a support package has no test files" },
-      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a run in which no test matched" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat fails a package whose test files are not built" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat passes a pattern whose tested package passed while a support package has no test files" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat fails a run in which no test matched" },
       { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat passes its features to every cargo test call" },
     ],
     expected: "The Go and Rust repeat targets run tests behind build tags and features and fail when no test ran.",
