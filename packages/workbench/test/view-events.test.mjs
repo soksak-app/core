@@ -41,6 +41,25 @@ test("a native subscription is registered once and pushes each event of its name
   assert.deepEqual(pushed, [{ event: "probe.changed", data: { surface: "probe-surface", count: 1 } }]);
 });
 
+test("a log levels subscription pushes each change of the stored levels once and nothing while they stay", async () => {
+  const { pushed, push } = fakes();
+  let stored = ["error"];
+  let changed = null;
+  const logLevels = { read: () => stored, on: (fn) => { changed = fn; return Promise.resolve(() => { changed = null; }); } };
+  const subs = createViewSubscriptions({ native: null, sidecar: null, logLevels, push, report: () => {} });
+  assert.equal(typeof subs.logLevels, "function", "the subscriptions have no logLevels");
+  assert.equal(await subs.logLevels(), null);
+  assert.equal(await subs.logLevels(), null);
+  changed();
+  stored = ["error", "warn", "info"];
+  changed();
+  changed();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pushed, [{ event: "log.levels", data: ["error", "warn", "info"] }]);
+  await subs.close();
+  assert.equal(changed, null, "the close ends the subscription");
+});
+
 test("a sidecar subscription pushes its messages and failures with the session id", async () => {
   const { listeners, sidecar, pushed, push } = fakes();
   const subs = createViewSubscriptions({ native: null, sidecar, push, report: () => {} });

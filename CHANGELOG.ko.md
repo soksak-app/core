@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F233: view가 자기 기록의 어떤 level이 저장되는지 안다. view bridge는 `runtime.log`를 가지며, 이것은 처음 쓰일 때 view call `runtime.log.levels`로 저장되는 level을 묻고, 답이 오기 전까지 모든 기록을 보내고, 그 뒤에는 저장되지 않는 level의 field builder를 실행하지 않는다. main page는 `log.enabled(level)`이 true인 level로 답하고, gate의 policy 변경이 그 level을 바꿀 때마다 `log.levels`를 보낸다. `runtime.log`는 `cids`를 page의 writer에 넘긴다. view-calls, view-events, log-gate, view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 5) 변경에서 통과한다(surface-view, view imports와 함께 104/104).
 - F232: view가 DOM surface처럼 깨진 contribution 항목을 invalid로 만든다. view bridge의 `contributions(point)`는 view call `runtime.contributions`로 그 point의 연결된 항목을 각자의 `index`와 core root 위 module과 함께 받고, 항목의 `fail(reason)`은 `runtime.contributions.fail`을 보내며, main page는 그 연결된 항목의 `fail(reason)`으로 답한다. surface context의 항목도 `index`를 가진다. view-calls, contributions, view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 5) 변경에서 통과한다(surface-view와 함께 79/79).
 - F231: view가 자기 page에 보여 주는 오류를 기록한다. view bridge 항목 `runtime.error(where, text)`가 view call `runtime.error`를 보내고, main page는 오류 표시의 기록 경로로 `error page surface <surface> <where>: <text>`를 써서 답한다. 비었거나 control 문자나 `: `를 가진 place와 빈 text는 거부된다. view-calls와 view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 3) 변경에서 통과한다(surface-view와 함께 74/74).
 - F227: view가 다시 surface context의 `tab.state`로 자기 surface의 tab state를 읽고 쓴다. F212.7-11 이후 두 호출은 `tab.read is not a function`으로 실패했다. `view-calls` 시험 다섯이 바뀌지 않은 코드에서 실패하고 수정에서 통과한다(32/32, `surface-modules` 10/10).

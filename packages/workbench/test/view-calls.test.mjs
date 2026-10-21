@@ -47,12 +47,16 @@ function fakes() {
         sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
         textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
         settings: async () => { ran.subscribed.push({ settings: true }); return null; },
+        logLevels: async () => { ran.subscribed.push({ logLevels: true }); return null; },
       },
       command: {
         register: async (name) => { ran.declared.push(name); return null; },
       },
-      log: Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level,
-        (event, fields) => { ran.log.push({ level, event, fields }); }])),
+      log: {
+        ...Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level,
+          (event, fields, options) => { ran.log.push({ level, event, fields, ...(options === undefined ? {} : { options }) }); }])),
+        enabled: (level) => level === "error" || level === "warn",
+      },
       textSize: {
         read: () => { ran.textSize.push("read"); return 1.5; },
         on: (listener) => { ran.textSize.push("on"); return () => {}; },
@@ -184,6 +188,19 @@ test("runtime.log sends the record of the level through the writer of the page a
   const { ran, options } = fakes();
   assert.equal(await answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 } } }, options), null);
   assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 } }]);
+});
+
+test("runtime.log passes the cids of the record to the writer of the page", async () => {
+  const { ran, options } = fakes();
+  await answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } }, options);
+  assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 }, options: { cids: ["b.1"] } }]);
+});
+
+test("runtime.log.levels registers the change subscription of the stored levels and replies with them", async () => {
+  const { ran, options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.log.levels", params: null }, options).catch((error) => error);
+  assert.deepEqual(result, ["error", "warn"]);
+  assert.deepEqual(ran.subscribed, [{ logLevels: true }]);
 });
 
 test("runtime.log refuses a level that the writer does not serve and writes nothing", async () => {

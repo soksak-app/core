@@ -11,13 +11,15 @@
  *                 resolves with the off function
  *     settings    settings(fn): registers fn(values) for the changes of the settings of the plugin, as runtime.settings.on does;
  *                 resolves with the off function
+ *     logLevels   {read(), on(fn)}: read() returns the stored levels of a record of the plugin, and on(fn) registers fn for each
+ *                 change of the policy in force; on resolves with the off function
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
  *     report      report(text): receives the text of a push that the host refused
  *
- * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), close()}. A subscription call resolves with
+ * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), logLevels(), close()}. A subscription call resolves with
  * null, and a second call for the same name or id registers nothing.
  */
-export function createViewSubscriptions({ native, sidecar, textSize, settings, push, report }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, push, report }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
@@ -61,6 +63,18 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, p
     },
     settings() {
       return subscribe("settings", () => settings((values) => forward("settings", values)));
+    },
+    // The stored levels are read again at each change of the policy, and only levels that differ from the last are pushed.
+    logLevels() {
+      return subscribe("log.levels", () => {
+        let last = logLevels.read().join();
+        return logLevels.on(() => {
+          const next = logLevels.read();
+          if (next.join() === last) return;
+          last = next.join();
+          forward("log.levels", next);
+        });
+      });
     },
     async close() {
       closed = true;

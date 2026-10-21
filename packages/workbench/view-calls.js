@@ -23,12 +23,12 @@
  *                 links.open(url): opens a link, as runtime.links.open
  *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
  *                   display of the page
- *                 log: the log levels of the page, as runtime.log of the surface context has; the level gate of the page
- *                   applies at delivery, and a gated record is counted there
+ *                 log: the log levels of the page and enabled(level), as runtime.log of the surface context has; the level
+ *                   gate of the page applies at delivery, and a gated record is counted there
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
  *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
  *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
- *                   subscribe.settings(): register the page subscriptions of the view (view-events.js); each resolves when it is
+ *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
  *                   registered
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
@@ -68,6 +68,8 @@ function untilCancelled(promise, signal) {
     promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
   });
 }
+
+import { LOG_LEVELS } from "@soksak/plugin-api";
 
 // The place of an error line has no control character and no ": ", because the record splits the line at its first ": ".
 const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
@@ -165,9 +167,13 @@ async function run(command, params, { plugin, surface, tab, contributions, runCo
       if (typeof send !== "function") {
         throw new TypeError(`view call ${command} log level must be one of error, warn, info, debug, trace`);
       }
-      send(fields.event, fields.fields);
+      send(fields.event, fields.fields, fields.cids === undefined ? undefined : { cids: fields.cids });
       return null;
     }
+    case "runtime.log.levels":
+      // The view keeps the levels and skips the fields of a level that is not stored; each change arrives as log.levels.
+      await runtime.subscribe.logLevels();
+      return LOG_LEVELS.filter((level) => runtime.log.enabled(level));
     case "runtime.error": {
       // An error that the view shows on its own page is recorded at the moment it appears, as the error display of the page
       // records its errors (docs/spec/native-surfaces.md#view-surfaces).

@@ -1,4 +1,4 @@
-import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
+import { LOG_LEVELS, createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry, registerSurfacePort } from "./exposure.js";
 import { answerViewCall, viewStopState } from "./view-calls.js";
@@ -16,6 +16,7 @@ import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
+import { logGate } from "./log-gate.js";
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
 const mounted = new Map();
@@ -254,6 +255,11 @@ function answerViewCalls(surface, scoped, page, context) {
     },
     textSize: (listener) => context.runtime.textSize.on(listener),
     settings: (listener) => context.runtime.settings.on(listener),
+    // The stored levels of a record of the plugin, read again at each change of the policy of the page gate.
+    logLevels: {
+      read: () => LOG_LEVELS.filter((level) => context.runtime.log.enabled(level)),
+      on: (listener) => Promise.resolve(logGate.onChange(listener)),
+    },
     push: (event, data) => scoped.native.call("viewEvent", { event, data }),
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
   });
@@ -295,6 +301,7 @@ function answerViewCalls(surface, scoped, page, context) {
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
+        logLevels: () => subscriptions.logLevels(),
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.

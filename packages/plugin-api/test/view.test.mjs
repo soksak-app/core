@@ -359,6 +359,31 @@ test("contributions(point) returns the connected items of the point, and fail(re
   assert.equal(await failing, undefined);
 });
 
+test("runtime.log sends every record until the page tells the stored levels, then builds no fields of a level it does not store", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.log?.info, "function", "the view bridge has no runtime.log");
+  let built = 0;
+  const fields = () => { built += 1; return { n: built }; };
+  runtime.log.info("saved", fields, { cids: ["b.1"] });
+  assert.deepEqual(posted.slice(-2), [
+    { sok: 1, id: 1, command: "runtime.log.levels", params: null },
+    { sok: 1, id: 2, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } },
+  ]);
+  host({ sok: 1, id: 1, result: ["error"] });
+  host({ sok: 1, id: 2, result: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(runtime.log.enabled("info"), false);
+  runtime.log.info("saved", fields);
+  assert.equal(built, 1, "the fields of a level that is not stored were built");
+  assert.equal(posted.length, 3);
+  runtime.log.error("failed", { n: 2 });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.log", params: { level: "error", event: "failed", fields: { n: 2 } } });
+  host({ sok: 1, event: "log.levels", data: ["error", "warn", "info"] });
+  assert.equal(runtime.log.enabled("info"), true);
+  assert.equal(posted.filter((message) => message.command === "runtime.log.levels").length, 1);
+});
+
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
   const { host } = setup(t);
   const reports = [];

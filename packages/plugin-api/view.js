@@ -4,9 +4,11 @@
 // of the view (the sok-view webkit message handler in the application).
 //
 // The module imports nothing under runtime/ and no @soksak/workbench/ specifier, so the core root serves it to a view with
-// the view import map (rule 4). Its imports are the call layer and the snapshot channel, which import nothing else.
+// the view import map (rule 4). Its imports are the call layer, the snapshot channel and the recording functions of a plugin
+// runtime, which import nothing else.
 
 import { createCalls } from "./calls.js";
+import { createPluginRuntime } from "./plugin-runtime.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
@@ -98,6 +100,40 @@ export function createViewBridge({ handler, report }) {
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });
+  // The stored levels of a record of the plugin, which the page tells at the first use of runtime.log and at each change
+  // (docs/spec/native-surfaces.md#view-surfaces). Until the first answer every record is sent, and the level gate of the page
+  // counts what it does not store, so no record is lost before the levels are known.
+  let levels = null;
+  let levelsRequested = false;
+  const storedLevel = (level) => {
+    if (!levelsRequested) {
+      levelsRequested = true;
+      if (!listeners.has("log.levels")) listeners.set("log.levels", new Set());
+      listeners.get("log.levels").add((next) => { levels = next; });
+      calls.request("runtime.log.levels", null).then((next) => { levels = next; }, (error) => {
+        // A refused read leaves every record sent, and the refusal is recorded as an error of the view.
+        // default: a refusal that is not an Error carries its value as the text.
+        runtime.error("log levels", String(error?.message ?? error)).catch(() => {
+          // silent: the error line of the refusal is itself refused, and the view has no other path to the application log.
+        });
+      });
+    }
+    return levels === null || levels.includes(level);
+  };
+  // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
+  const prefix = `plugin.${plugin}.`;
+  const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
+    log: (level, event, fields, cids) => {
+      calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
+        .catch((error) => {
+          // default: a refusal that is not an Error carries its value as the text.
+          runtime.error(`log ${event}`, String(error?.message ?? error)).catch(() => {
+            // silent: the error line of the refusal is itself refused, and the view has no other path to the application log.
+          });
+        });
+    },
+    logEnabled: storedLevel,
+  } });
   const runtime = {
     native: {
       on: (name, listener) => {
@@ -119,6 +155,8 @@ export function createViewBridge({ handler, report }) {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
     },
+    // The event log of the page: log.<level>(event, fields, {cids}) and log.enabled(level), as runtime.log of the surface context.
+    log,
     // The error line of an error that the view shows on its own page: the page writes `surface <surface> <where>: <text>` to the
     // application log at the moment the view shows it (docs/spec/native-surfaces.md#view-surfaces).
     error: (where, text) => calls.request("runtime.error", { where, text }).then(() => undefined),
@@ -133,7 +171,9 @@ export function createViewBridge({ handler, report }) {
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (message.event === "theme" || message.event === "textSize" || message.event === "settings") return message.event;
+    if (message.event === "theme" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
+      return message.event;
+    }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
     return `native:${message.event}`;
   };
