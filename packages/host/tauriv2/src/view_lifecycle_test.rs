@@ -1,4 +1,4 @@
-//! Checks the sliding window of the view failures (docs/plans/plugin-processes.md, rule 5, pass value (vi)).
+//! Checks the sliding window of the view failures (docs/spec/plugin-processes.md, rule 5, pass value (vi)).
 
 use std::time::{Duration, Instant};
 

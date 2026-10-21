@@ -244,7 +244,7 @@
         "status": "string",
         "count": "number"
       },
-      "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/plans/plugin-processes.md, rule 2)."
+      "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/spec/plugin-processes.md, rule 2)."
     },
     "page.trace.surface.mount": {
       "layer": "page",

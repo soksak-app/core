@@ -274,10 +274,10 @@ static BOOL isBinaryIdentifier(NSString *text) {
 // The receiver of the sok-view handler of a view configuration (docs/spec/native-surfaces.md#view-surfaces).
 @property sp_view_message viewMessage;
 @property void *viewMessageContext;
-// The receiver of the end of the WebContent process of a view (docs/plans/plugin-processes.md, rule 5). A region has none.
+// The receiver of the end of the WebContent process of a view (docs/spec/plugin-processes.md, rule 5). A region has none.
 @property sp_view_ended viewEnded;
 @property void *viewEndedContext;
-// The receiver of the responsiveness notices of a view (docs/plans/plugin-processes.md, rule 6). A region has none.
+// The receiver of the responsiveness notices of a view (docs/spec/plugin-processes.md, rule 6). A region has none.
 @property sp_view_responsiveness viewResponsiveness;
 @property void *viewResponsivenessContext;
 // The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
@@ -836,7 +836,7 @@ static NSString *const kCoreHost = @"core";
 }
 
 // WebKit reports that the WebContent process of this view stopped answering its responsiveness check. The notice ends neither the
-// view nor its calls; the host records it (docs/plans/plugin-processes.md, rule 6). WebKit calls it through the navigation forwarder.
+// view nor its calls; the host records it (docs/spec/plugin-processes.md, rule 6). WebKit calls it through the navigation forwarder.
 - (void)_webViewWebProcessDidBecomeUnresponsive:(WKWebView *)view {
     if (self.viewResponsiveness && !self.closed) self.viewResponsiveness(self.viewResponsivenessContext, false);
 }

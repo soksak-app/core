@@ -132,7 +132,7 @@ function mountDeclared(entry, record) {
     choose: () => chooseSource({ active: record.context.surface ?? null, registrants: registry.registrants("status", statusId) }),
     channel: transport.channel,
     pull: transport.pull,
-    // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
+    // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
     skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status, count }),
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
   });

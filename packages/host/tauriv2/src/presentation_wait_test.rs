@@ -1,4 +1,4 @@
-//! The presentation wait of views (docs/plans/plugin-processes.md, rule 6). The same cases run in the Go host.
+//! The presentation wait of views (docs/spec/plugin-processes.md, rule 6). The same cases run in the Go host.
 
 use serde_json::json;
 

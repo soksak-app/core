@@ -264,7 +264,7 @@ pub struct Raster {
     pub scale: f64,
 }
 
-/// Resolves a request of the core root of a view of plugin for url_path (docs/plans/plugin-processes.md, rule 4). It returns
+/// Resolves a request of the core root of a view of plugin for url_path (docs/spec/plugin-processes.md, rule 4). It returns
 /// None for a path that is not served.
 pub type CoreRootResolver =
     Box<dyn Fn(&str, &str) -> Option<crate::installed::CoreRootFile> + Send + Sync>;

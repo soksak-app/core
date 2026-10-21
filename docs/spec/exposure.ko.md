@@ -60,11 +60,11 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## 키보드 단축키
 
-워크벤치의 모든 키보드 단축키는 소유자 하나와 명령 하나를 가진다. 기계가 읽는 표는 [shortcuts.json](../../packages/workbench/shortcuts.json)(`packages/workbench/shortcuts.json`)이며, 아래 표는 그 사본이다. `scripts/test/shortcut-table.test.mjs`는 두 표가 일치하는지, [애플리케이션 메뉴](host-contract.ko.md#애플리케이션-메뉴)의 모든 키 동등물이 `native menu` 행인지, 워크벤치 키 처리기의 모든 키 비교에 `workbench` 또는 `view` 행이 있는지 요구한다. 소유자는 [플러그인 프로세스](../plans/plugin-processes.ko.md)의 7번 규칙을 따른다.
+워크벤치의 모든 키보드 단축키는 소유자 하나와 명령 하나를 가진다. 기계가 읽는 표는 [shortcuts.json](../../packages/workbench/shortcuts.json)(`packages/workbench/shortcuts.json`)이며, 아래 표는 그 사본이다. `scripts/test/shortcut-table.test.mjs`는 두 표가 일치하는지, [애플리케이션 메뉴](host-contract.ko.md#애플리케이션-메뉴)의 모든 키 동등물이 `native menu` 행인지, 워크벤치 키 처리기의 모든 키 비교에 `workbench` 또는 `view` 행이 있는지 요구한다. 소유자는 [플러그인 프로세스](plugin-processes.ko.md)의 7번 규칙을 따른다.
 
 - `native menu`: 애플리케이션 메뉴 항목의 키 동등물. 메뉴가 view보다 먼저 키를 받으므로 view의 기본 동작을 막지 않는다. 코어 명령이 있는 행은 메뉴를 거쳐 그 명령에 닿고, `framework role`인 행은 항목의 role을 실행한다.
 - `workbench`: 워크벤치 page 또는 그 네이티브 modal이 처리하고 기본 동작을 막는 키. 행은 그 키가 실행하는 명령을 적는다.
-- `view`: 플러그인 view가 plugin processes 규칙 7에 따라 자기 안에서 처리하는 키: Escape와 텍스트 입력의 키. view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
+- `view`: 플러그인 view가 [plugin 프로세스](plugin-processes.ko.md) 규칙 7에 따라 자기 안에서 처리하는 키: Escape와 텍스트 입력의 키. view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
 
 키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`와 `Escape`는 키 이름이다.
 
@@ -91,7 +91,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
-| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin processes 규칙 7에 따라 view가 정한다 |
+| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin 프로세스 규칙 7에 따라 view가 정한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view의 first responder가 받는다 |
 
 ## 등록
@@ -145,7 +145,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## Plugin processes
 
-메인 페이지는 [plugin process 설계](../plans/plugin-processes.md#messages-and-events)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 call 계층을 연결하기 전까지 각 목록은 `[]`이다. call 계층은 자기 plugin의 열린 call과 손실을 메인 페이지에 보고한다.
+메인 페이지는 [plugin process 설계](plugin-processes.ko.md#메시지와-event)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 call 계층을 연결하기 전까지 각 목록은 `[]`이다. call 계층은 자기 plugin의 열린 call과 손실을 메인 페이지에 보고한다.
 
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.

@@ -8,7 +8,7 @@ Declared UI is a sidebar section whose every element is one of the vocabulary el
 
 - The vocabulary has four elements: `list`, `tree`, `button`, and `status-line`. Core declares no other element. A screen with text input, free DOM, a canvas, a document region, or an image region is a view. A tree that needs inline rename, drag and drop, or a context menu placed at a pointer is a view for the same reason. Core declares no element for those interactions.
 - The workbench draws declared UI only in sidebar sections. Cards and other screens do not draw declared UI.
-- The transport of a snapshot is in [plugin processes](../plans/plugin-processes.md) rule 2. The name, command, and DOM rules are in [exposure](exposure.md). The sidebar layout is in [plugins](plugins.md#sections).
+- The transport of a snapshot is in [plugin processes](plugin-processes.md) rule 2. The name, command, and DOM rules are in [exposure](exposure.md). The sidebar layout is in [plugins](plugins.md#sections).
 - Accessibility: no accessibility claim is made for declared UI until the platform accessibility interface is recorded by a check. This document defines no ARIA role.
 - Core never truncates a value. A plugin that has more elements than a limit cuts its own value and states the cut in a `status-line`. A value above a limit is rejected, never shortened. There is no lazy loading.
 
