@@ -1,5 +1,19 @@
 //! The sidecar requests of a plugin host page (docs/plans/plugin-host-routes.md rules 2 and 3).
 
+// contract: plugin-host.sidecar.page-start-close
+#[test]
+fn the_page_start_closes_plugin_host_sessions_only() {
+    use crate::plugin_host_sidecar::parse_session;
+    // The page start closes the sessions of plugin hosts (rule 7). A surface and a state session are not plugin host sessions.
+    assert_eq!(
+        parse_session("plugin:probe:project-a:fixture-sidecar"),
+        Some(("probe", "project-a", "fixture-sidecar"))
+    );
+    assert_eq!(parse_session("s1"), None);
+    assert_eq!(parse_session("state:files:project-a"), None);
+    assert_eq!(parse_session("plugin:probe:project-a"), None);
+}
+
 // contract: plugin-host.sidecar.send-checks, plugin-host.sidecar.surface-refusal
 #[test]
 fn a_sidecar_request_of_a_host_is_checked_before_its_send() {

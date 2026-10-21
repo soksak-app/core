@@ -172,6 +172,7 @@ func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testin
 }
 
 // The page start closes every plugin session of the window and keeps its surfaces (docs/plans/plugin-host-routes.md rule 7).
+// contract: plugin-host.sidecar.page-start-close
 func TestPageStartClosesThePluginSessionsOfTheWindow(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	c := s.sidecars
