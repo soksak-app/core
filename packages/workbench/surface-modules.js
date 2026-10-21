@@ -188,6 +188,7 @@ function tabStates() {
  */
 export function viewStartValues(surface, project) {
   return {
+    // default: a tab without params gives the view null, the value of no params (docs/spec/plugins.md#view-surfaces).
     params: surface.params ?? null,
     origin: tabOrigin(surface.surfaceId),
     project: project === null ? null : { root: project.root },

@@ -877,6 +877,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let surface = s.id.clone();
                 let plugin = s.plugin.clone();
                 let page = s.composition.page.clone();
+                // default: a view surface whose request carries no start values starts with the empty values.
                 let start = s.start.clone().unwrap_or_default();
                 exposure::on_main(window, move || {
                     documents::sync_view(
