@@ -676,3 +676,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R20-3: `control address`와 `sidebar instance` 용어가 `terms.json`에 없었다. 판정: 수용. 해결: 두 용어를 추가하고, 명세는 `{sidebar, section, key, path?, role?}` 객체를 `control address`로 쓴다. 딥링크 용어 `address`는 바꾸지 않는다.
 - R20-4: address 필드와 `index`의 타입이 명시되지 않았다. 판정: 수용. 해결: `sidebar`, `section`, `key`는 문자열, `path`는 문자열 배열, `index`는 0 이상의 정수이며, 잘못된 타입은 -32602로 거부한다.
 - R20-5: `core.sidebar.section.control`이 아닌 항목에 준 `address`의 결과가 명시되지 않았다. 판정: 수용. 해결: -32602로 거부한다.
+
+**라운드 20 이후 검토 종료**
+
+이 선언된 UI 계약의 검토는 라운드 20 이후 종료한다. 범위는 F212.8-1부터 F212.8-6까지가 구현하는 계약이다. 이 시점 이후 남는 이의는 세 부류에 속한다. 표현, 모든 구현이 같은 방식으로 해결하는 경우, 그리고 해당 항목의 단위 테스트가 정하는 세부 사항이다. 각 이의는 다른 검토 라운드가 아니라 그것을 구현하는 항목의 Red와 Green 테스트로 정한다.

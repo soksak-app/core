@@ -675,3 +675,7 @@ The objections below are the answers of the nineteenth adversarial review of [de
 - R20-3: the terms `control address` and `sidebar instance` had no entry in `terms.json`. Verdict: accepted. Resolution: both terms are added, and the specs use `control address` for the `{sidebar, section, key, path?, role?}` object. The deep-link term `address` is unchanged.
 - R20-4: the types of the address fields and of `index` were not stated. Verdict: accepted. Resolution: `sidebar`, `section`, and `key` are strings, `path` is an array of strings, and `index` is a non-negative integer; a wrong type is refused with -32602.
 - R20-5: an `address` given for an entry other than `core.sidebar.section.control` had no stated result. Verdict: accepted. Resolution: it is refused with -32602.
+
+**Review closure after round 20**
+
+The review of this declared UI contract is closed after round 20. Its scope is the contract that F212.8-1 to F212.8-6 implement. The objections that remain open after this point belong to three classes: wording, cases that every implementation resolves alike, and details that the unit tests of those items settle. Each of these is settled by the Red and Green tests of the item that implements it, not by another review round.
