@@ -119,6 +119,9 @@ export function createViewBridge({ handler, report }) {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
     },
+    // The error line of an error that the view shows on its own page: the page writes `surface <surface> <where>: <text>` to the
+    // application log at the moment the view shows it (docs/spec/native-surfaces.md#view-surfaces).
+    error: (where, text) => calls.request("runtime.error", { where, text }).then(() => undefined),
     theme: (listener) => {
       if (typeof listener !== "function") throw new TypeError("runtime.theme requires a listener");
       if (!listeners.has("theme")) listeners.set("theme", new Set());

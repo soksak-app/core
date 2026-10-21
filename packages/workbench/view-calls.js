@@ -8,6 +8,7 @@
  *
  *     event     {id, command, params} of a call request, or {id, cancel: true} of a cancel
  *     options   plugin: the plugin id of the view
+ *               surface: the surface id of the view, which names the place of the error lines of the view
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
@@ -19,6 +20,8 @@
  *                 sidecar.send(id, body, cids): the send to the declared sidecar, as runtime.sidecar().send
  *                 clipboard: {read(type), writeText(text)}, the clipboard bridge without the PNG bytes
  *                 links.open(url): opens a link, as runtime.links.open
+ *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
+ *                   display of the page
  *                 log: the log levels of the page, as runtime.log of the surface context has; the level gate of the page
  *                   applies at delivery, and a gated record is counted there
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
@@ -65,7 +68,10 @@ function untilCancelled(promise, signal) {
   });
 }
 
-async function run(command, params, { plugin, tab, runCore, runOwned, runtime }) {
+// The place of an error line has no control character and no ": ", because the record splits the line at its first ": ".
+const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
+
+async function run(command, params, { plugin, surface, tab, runCore, runOwned, runtime }) {
   switch (command) {
     case "tab.state.read":
       if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
@@ -156,6 +162,17 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
         throw new TypeError(`view call ${command} log level must be one of error, warn, info, debug, trace`);
       }
       send(fields.event, fields.fields);
+      return null;
+    }
+    case "runtime.error": {
+      // An error that the view shows on its own page is recorded at the moment it appears, as the error display of the page
+      // records its errors (docs/spec/native-surfaces.md#view-surfaces).
+      const fields = objectOf(command, params);
+      if (typeof fields.where !== "string" || !ERROR_PLACE.test(fields.where)) {
+        throw new TypeError(`view call ${command} requires a non-empty where without a control character or ": "`);
+      }
+      if (typeof fields.text !== "string" || fields.text === "") throw new TypeError(`view call ${command} requires a non-empty text`);
+      await runtime.report(`surface ${surface} ${fields.where}: ${fields.text}`);
       return null;
     }
     case "runtime.textSize.read":

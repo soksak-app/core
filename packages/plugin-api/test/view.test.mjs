@@ -332,6 +332,16 @@ test("runtime.settings.read reads the settings of the plugin and runtime.setting
   assert.deepEqual(seen, [{ home: "sok://core/start" }]);
 });
 
+test("runtime.error sends the error line of the view as the call runtime.error and resolves on the reply", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.error, "function", "the view bridge has no runtime.error");
+  const sent = runtime.error("save", "disk full");
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.error", params: { where: "save", text: "disk full" } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, undefined);
+});
+
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
   const { host } = setup(t);
   const reports = [];

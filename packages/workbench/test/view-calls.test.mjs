@@ -6,9 +6,10 @@ import { answerViewCall, viewStopState } from "../view-calls.js";
 
 function fakes() {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [] };
+    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [] };
   const options = {
     plugin: "probe",
+    surface: "probe-surface",
     pending: new Map(),
     tab: {
       state: {
@@ -33,6 +34,7 @@ function fakes() {
         writeText: async (text) => { ran.clipboard.push({ write: text }); },
       },
       links: { open: async (url) => { ran.links.push(url); } },
+      report: (line) => { ran.errors.push(line); },
       subscribe: {
         native: async (name) => { ran.subscribed.push({ native: name }); return null; },
         sidecarMessage: async (id) => { ran.subscribed.push({ sidecarMessage: id }); return null; },
@@ -186,6 +188,27 @@ test("runtime.log refuses a level that the writer does not serve and writes noth
   );
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.log", params: "info" }, options), /requires an object/);
   assert.deepEqual(ran.log, []);
+});
+
+test("runtime.error writes the error line of the view to the application log with its surface and replies null", async () => {
+  const { ran, options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.error", params: { where: "save", text: "disk full" } }, options)
+    .catch((error) => error);
+  assert.equal(result, null);
+  assert.deepEqual(ran.errors, ["surface probe-surface save: disk full"]);
+});
+
+test("runtime.error refuses a place or a text that the error line cannot carry and writes nothing", async () => {
+  const { ran, options } = fakes();
+  const call = (id, params) => answerViewCall({ id, command: "runtime.error", params }, options);
+  await assert.rejects(call(1, "disk full"), /view call runtime\.error requires an object/);
+  for (const [id, where] of [[2, ""], [3, "save: now"], [4, "save\nnow"], [5, 7]]) {
+    await assert.rejects(call(id, { where, text: "disk full" }), /view call runtime\.error requires a non-empty where without a control character or ": "/);
+  }
+  for (const [id, text] of [[6, ""], [7, null]]) {
+    await assert.rejects(call(id, { where: "save", text }), /view call runtime\.error requires a non-empty text/);
+  }
+  assert.deepEqual(ran.errors, []);
 });
 
 test("runtime.textSize.read returns the scale of the surface and runtime.textSize.on subscribes once", async () => {

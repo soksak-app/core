@@ -272,6 +272,7 @@ function answerViewCalls(surface, scoped, page, context) {
   const removeExposurePort = registerSurfacePort(surface.surfaceId, () => {});
   const options = {
     plugin: surface.pluginId,
+    surface: surface.surfaceId,
     pending,
     tab,
     runCore: (name, params) => scoped.call(name, params),
@@ -281,6 +282,8 @@ function answerViewCalls(surface, scoped, page, context) {
       sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
       clipboard: scoped.clipboard,
       links: scoped.links,
+      // The record path of the error display: the host call report of the surface writes the error line to the application log.
+      report: (line) => scoped.native.call("report", line),
       // The log levels of the surface context: the level gate of the page applies at delivery, and a gated record is counted there.
       log: context.runtime.log,
       textSize: context.runtime.textSize,
