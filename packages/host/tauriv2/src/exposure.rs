@@ -912,12 +912,12 @@ pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), Strin
     let window = webview.window();
     let caller = webview.label();
     let caller_is_main_page = caller == window.label();
-    // default: a window whose data is not available holds no view, so the check below refuses the relay of the
-    // main page with its own error.
-    let has_view = caller_is_main_page
-        && window_data(&window)
-            .ok()
-            .is_some_and(|data| data.documents.views().has(&request.surface));
+    let has_view = caller_is_main_page && {
+        // default: a window whose data is not available holds no view, so the check below refuses the relay of
+        // the main page with its own error.
+        let data = window_data(&window).ok();
+        data.is_some_and(|data| data.documents.views().has(&request.surface))
+    };
     check_registration_caller(
         caller,
         &label_for(&window, &request.surface),
