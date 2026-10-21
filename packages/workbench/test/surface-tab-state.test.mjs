@@ -29,8 +29,11 @@ const MODULE = `data:text/javascript,${encodeURIComponent(`export function mount
   globalThis.contexts[context.surfaceId] = context;
   return { dispose() {} };
 }`)}`;
-const surface = (surfaceId, pluginId = "fixture-unload", unload = UNLOAD) =>
-  ({ module: MODULE, surfaceId, pluginId, unload, composition: { kind: "dom" }, declarations: {}, sidecars: [] });
+// The tab creation of the workbench records the origin of each tab (docs/spec/projects.md#tab-origin); a mount reads it, so the fixture records it.
+const surface = (surfaceId, pluginId = "fixture-unload", unload = UNLOAD) => {
+  reports.recordOrigin(surfaceId, null);
+  return { module: MODULE, surfaceId, pluginId, unload, composition: { kind: "dom" }, declarations: {}, sidecars: [] };
+};
 
 test("a declaring surface writes its tab state and reads it back, and refusals name the tab", async () => {
   await mountSurface(slot, surface("tab-state-a"));
@@ -95,7 +98,8 @@ test("the unload mode keeps the tab reports except the error, and the close mode
   assert.equal(reports.tabLabel("tab-unload"), "Doc");
   assert.equal(reports.tabFooter("tab-unload"), "foot");
   assert.equal(reports.tabNotice("tab-unload"), "done");
-  assert.notEqual(reports.tabOrigin("tab-unload"), reports.tabOrigin("tab-never"));
+  assert.deepEqual(reports.tabOrigin("tab-unload"), { directory: null });
+  assert.throws(() => reports.tabOrigin("tab-never"), /has no origin/, "a tab that never recorded an origin throws");
   assert.equal(reports.tabError("tab-unload"), null);
   assert.deepEqual([reports.tabLabel("tab-close"), reports.tabFooter("tab-close"), reports.tabNotice("tab-close"), reports.tabError("tab-close")],
     [null, null, null, null]);

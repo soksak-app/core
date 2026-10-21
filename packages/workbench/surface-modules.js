@@ -11,7 +11,7 @@ import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, tabOrigin,
-  unloadTab } from "./tab-reports.js";
+  unloadTab, viewRefusal } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
@@ -190,6 +190,9 @@ function tabStates() {
  * project that the window shows, or null in a window without one.
  */
 export function viewStartValues(surface, project) {
+  // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
+  const refusal = viewRefusal(surface.surfaceId);
+  if (refusal !== null) throw new TypeError(refusal);
   return {
     // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
     params: surface.params ?? null,

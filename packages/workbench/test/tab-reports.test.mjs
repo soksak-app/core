@@ -37,7 +37,7 @@ test("a new tab's origin is the directory its source tab recorded at that moment
   assert.deepEqual(tabOrigin("tab-e"), { directory: null });
   recordOrigin("tab-f", undefined);
   assert.deepEqual(tabOrigin("tab-f"), { directory: null });
-  assert.deepEqual(tabOrigin("tab-unknown"), { directory: null });
+  assert.throws(() => tabOrigin("tab-unknown"), /tab tab-unknown has no origin/, "a tab with no record throws, it reads no fallback");
   for (const invalid of ["relative", "", 3]) {
     assert.throws(() => reportDirectory("tab-c", invalid), /a tab directory must be an absolute path/);
   }

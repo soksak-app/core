@@ -1,10 +1,14 @@
-import { isLocalAbsolutePath } from "@soksak/plugin-api";
+import { isLocalAbsolutePath, originFault } from "@soksak/plugin-api";
 
 // The tab title, the bottom text, and the working directory that a surface reported (docs/spec/plugins.md#tab-reports). They are not stored in the layout.
 const labels = new Map();
 const footers = new Map();
 const directories = new Map();
 const origins = new Map();
+// The origin that the layout stored for each tab restored from it: {origin} with the stored value, or null when a view tab stored no member.
+const loaded = new Map();
+// The text of the refusal of a restored view tab whose origin fails the validator (docs/spec/native-surfaces.md#view-surfaces).
+const refusals = new Map();
 const notices = new Map();
 const noticePolicies = new Map();
 const modified = new Set();
@@ -133,14 +137,81 @@ export function reportDirectory(tabId, path) {
 // default: a tab that did not report a title is null.
 export const tabLabel = (tabId) => labels.get(tabId) ?? null;
 
-/** The origin of a new tab: the directory that the active tab of the card that added the tab or split recorded at that moment. */
+/**
+ * The origin of a new tab: the directory that the source tab recorded at that moment. The caller passes null when there is no source
+ * tab. A source tab that recorded no directory gives null, which is the value of the origin (docs/spec/projects.md#tab-origin).
+ */
 export function recordOrigin(tabId, fromTabId) {
-  // default: as stated above, when there is no origin tab or it recorded no directory, there is no directory (null).
   origins.set(tabId, Object.freeze({ directory: (fromTabId && directories.get(fromTabId)) ?? null }));
 }
 
-// default: a tab whose origin was not recorded has no directory.
-export const tabOrigin = (tabId) => origins.get(tabId) ?? Object.freeze({ directory: null });
+/** The reading rule of a non-view tab without an origin member: the released format-1 origin {directory: null} (docs/spec/projects.md#tab-origin). */
+export const releasedNonViewOrigin = () => Object.freeze({ directory: null });
+
+/**
+ * Restores the origin of one tab of a stored layout, read by presence: an absent member is missing for a view tab and the released
+ * reading for a non-view tab. The validator (originFault) runs once here, at the layout read. A refusal is kept as data on the tab and
+ * returned as its text; this function never throws (docs/spec/projects.md#tab-origin).
+ */
+export function restoreOrigin(tab, viewTab) {
+  const present = "origin" in tab;
+  if (!viewTab) {
+    loaded.set(tab.id, { origin: present ? tab.origin : releasedNonViewOrigin() });
+    return null;
+  }
+  loaded.set(tab.id, present ? { origin: tab.origin } : null);
+  const fault = originFault(tab.id, present ? tab.origin : undefined);
+  if (fault === null) return null;
+  refusals.set(tab.id, fault);
+  return fault;
+}
+
+/** The refusal text of a restored view tab, or null when it has none. */
+export const viewRefusal = (tabId) => refusals.get(tabId) ?? null;
+
+/**
+ * The origin that a view of tabId starts with: its recorded origin, or the origin loaded from the layout. A tab with neither throws:
+ * no value is filled in (AGENTS.md, reject invalid values at the boundary).
+ */
+export function tabOrigin(tabId) {
+  if (origins.has(tabId)) return origins.get(tabId);
+  const kept = loaded.get(tabId);
+  if (!kept) throw new TypeError(`tab ${tabId} has no origin`);
+  return kept.origin;
+}
+
+/**
+ * The origin member that the layout stores for tabId: {origin} to write, or null when a loaded view tab has no member. Throws for a tab
+ * with neither a recorded origin nor a loaded one.
+ */
+export function storedOriginMember(tabId) {
+  if (origins.has(tabId)) return { origin: origins.get(tabId) };
+  if (!loaded.has(tabId)) throw new TypeError(`tab ${tabId} has no origin to store`);
+  return loaded.get(tabId);
+}
+
+/**
+ * The stored form of a layout state: each content-card tab carries its origin member, and the records of tabs that left the layout are
+ * dropped. A closed tab keeps no origin, and an id is not reused, so dropping its record loses no value.
+ */
+export function storedLayoutState(state) {
+  const ids = new Set();
+  const cards = state.cards.map((card) => {
+    if (!Array.isArray(card.data?.tabs)) return card;
+    const tabs = card.data.tabs.map((tab) => {
+      ids.add(tab.id);
+      // The member of the layout is replaced by the origin that the tab holds, so a stored value is never read twice.
+      const { origin: _stored, ...rest } = tab;
+      const member = storedOriginMember(tab.id);
+      return member === null ? rest : { ...rest, origin: member.origin };
+    });
+    return { ...card, data: { ...card.data, tabs } };
+  });
+  for (const map of [origins, loaded, refusals]) {
+    for (const id of [...map.keys()]) if (!ids.has(id)) map.delete(id);
+  }
+  return { ...state, cards };
+}
 
 /** Records whether the surface of tabId reports work in progress (docs/spec/plugins.md#memory-saver). */
 export function reportKeep(tabId, reason, on) {
@@ -193,7 +264,6 @@ export function forgetTab(tabId) {
   busy.delete(tabId);
   memoryStates.delete(tabId);
   directories.delete(tabId);
-  origins.delete(tabId);
   const noticed = notices.delete(tabId);
   noticePolicies.delete(tabId);
   const footed = footers.delete(tabId);

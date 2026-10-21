@@ -49,7 +49,7 @@ import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js"
 import { authorizeSurface, disposeSurfacesExcept, focusSurface, onSurfaceMounted, placeSurfaces, viewStartValues, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
-import { onTabReports, reportTabState, reportTitle, tabKeeps } from "./tab-reports.js";
+import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from "./tab-reports.js";
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
@@ -249,11 +249,16 @@ onCommit((record) => {
   // The surfaces that the place leaves out are released only after it succeeds; a failed place keeps them mounted.
   // The start values of the views (docs/spec/native-surfaces.md#view-surfaces): the host injects them as window.sokSurface
   // before the page of the view runs. origin is the origin of the tab, and project is the project that the window shows.
-  const placed = all.map((entry) => (entry.surface.composition?.kind === "view"
+  // A view whose origin the layout read refused starts no view. Its tab keeps its place in the layout and shows its text
+  // (docs/spec/projects.md#tab-origin), as a placeholder does.
+  const refusedViews = new Set(all.filter((entry) => entry.surface.composition?.kind === "view"
+    && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
+  for (const id of refusedViews) ids.add(id);
+  const placed = all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)).map((entry) => (entry.surface.composition?.kind === "view"
     ? { ...entry, start: viewStartValues(entry.surface, projects.active()) }
     : entry));
   return placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: placed })).then((answer) => {
-    for (const surface of record.surfaces) authorizeSurface(surface.id);
+    for (const surface of record.surfaces) if (!refusedViews.has(surface.id)) authorizeSurface(surface.id);
     return answer;
   }), { retain: ids, unload });
 });
