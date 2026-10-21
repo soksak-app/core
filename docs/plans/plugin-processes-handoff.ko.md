@@ -47,13 +47,15 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 
 ### 모든 항목
 
-개발이 먼저다. 항목은 자기 단위 시험(Red와 Green)만 돌리고 `[o]`로 표시한 뒤 다음 항목으로 넘어간다. 관문(`make push-check`, 계약 case가 바뀌면 `make host-contract-check`)은 branch를 main에 합칠 때 한 번 돌린다. 전체 모음, 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 개발 항목이 모두 끝난 뒤에 돌린다.
+개발이 먼저다. 항목은 바꾼 것의 소유 검사만 돌린다. 단위 시험(Red와 Green)과 그 항목이 건드리는 구조 검사다. 그다음 `[o]`로 표시하고 다음 항목으로 넘어간다. main에 합칠 때는 충돌 해결의 소유 검사와 pre-push hook이 도는 push 관문(`make push-check`)을 돌린다. 전체 모음(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 활성 체크리스트의 모든 항목이 끝났을 때 한 번 돌린다. 항목마다, 수정마다, 재귀적으로 돌리지 않는다.
+
+오래 걸리는 명령에는 전체 모음에 대한 일괄 제한을 두지 않는다. 시험마다 자기 제한을 둔다. 오래 걸리는 명령은 무엇을 돌리는지, 무엇이 끝나고 통과하거나 실패하는지, 경과 시간을 기록해서 진행과 오류를 관찰할 수 있게 한다. 시작과 끝만 찍는 시험은 허용하지 않는다. 어떤 시험도 수십 분 동안 돌지 않는다.
 
 1. `git fetch` 후 origin의 checklist를 먼저 읽는다.
 2. 요청을 분류하고 항목을 등록한다(EN과 KO). 계약이 바뀌면 명세를 먼저 고친다.
 3. 소유 module에 시험을 쓴다. 바꾸지 않은 코드에서 돌려 실패한 assertion을 기록한다(Red). module이 없거나 compile 오류, link 오류는 Red가 아니다. 코드가 이미 그 동작을 하면, 사본에서 그 동작을 끄고 assertion 실패를 본 뒤 파일을 되돌린다.
 4. 구현하고 같은 시험을 돌린다(Green).
-5. 소유 시험과 변경이 닿는 구조 검사를 돌린 뒤, 커밋된 tree에서 `make push-check`를 돌린다.
+5. 커밋된 tree에서 변경이 닿는 소유 시험과 구조 검사를 돌린다. 전체 모음과 push 관문은 여기서 돌리지 않는다. push 관문은 main에 합칠 때, 전체 모음은 체크리스트 완료 때 한 번 돌린다.
 6. 항목을 Red와 Green과 함께 `[o]`로 표시하고 CHANGELOG에 EN과 KO 항목을 더한다.
 7. author `min-0-max <max@blue.tools>`, `type(scope): Subject (#ID)` 형식으로 커밋한다. 제목은 50자 이하다. 본문은 무엇을 왜 바꿨는지 72열로 감싸 적는다. footer와 trailer는 없다. commit-msg hook이 다른 형식을 거부한다. 경로를 명시해 stage하고 `git add -A`는 쓰지 않는다.
 
@@ -63,12 +65,12 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - branch는 push하지 않는다. 모든 branch는 main에 합치고, push하는 것은 main뿐이다.
 - main에 합치기가 성공한 직후 worktree와 local branch를 지운다. 합치기가 실패했거나 아직 합치지 않은 것은 지우지 않는다. 지우는 조건은 합치기의 성공이다.
 - main에 합칠 수 없는 시험 코드나 탐색 코드는 커밋 전에, 의미가 있으면 cherry-pick하고 아니면 버린다. 바로 지울 수 없으면 지울 조건을 적은 하위 checklist 항목을 등록한다.
-- main에 합치기 전에 main에서 `git fetch`와 `git rev-list --count HEAD..origin/main`을 돌려, 0이 아니면 origin/main을 먼저 합친다. 합친 뒤 main에서 `make push-check`를 돌리고 main을 push한다.
+- main에 합치기 전에 main에서 `git fetch`와 `git rev-list --count HEAD..origin/main`을 돌려, 0이 아니면 origin/main을 먼저 합친다. 합친 뒤 main에서 충돌 해결의 소유 검사를 돌린다. main을 push하면 pre-push hook이 `make push-check`를 돌린다.
 - 새 worktree에서는 시험 전에 `make hooks`, `make native-darwin`, `make frontend-tauriv2`를 돌린다.
 - CHANGELOG 충돌은 양쪽 항목을 모두 남긴다. `docs/operations/examples.md`의 기록된 수가 충돌하면 합친 tree에서 `make parity-check`가 출력하는 수를 쓴다.
 - worktree를 옮기면 Tauri build cache가 옛 경로를 갖고 있어 clippy가 실패한다. 그 worktree에서 `cargo clean -p tauri -p soksak-tauriv2`를 돌린다.
 - 관문 명령은 `&&`로 잇고, pipe로 잇지 않는다(`make x | tail && ...`). pipe는 마지막 명령의 상태를 돌려주므로 실패해도 이어진 명령이 멈추지 않는다. 출력은 log 파일에 쓰고 종료 상태로 판정하거나 `pipefail`을 켠다.
-- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 `make host-contract-check`를 돌린다. 어떤 push 관문도 이 검사를 돌리지 않아서 돌리지 않으면 CI가 실패한다(F220).
+- 계약 case나 `packages/host`, `packages/sok`의 시험을 더하거나 건드리는 변경은 개발 중에 소유 Go 또는 Rust 시험을 돌린다. `make host-contract-check`는 체크리스트 완료 때 다른 전체 모음과 함께 한 번 돌린다. 어떤 push 관문도 이 검사를 돌리지 않으므로, merge 뒤 이 검사가 처음 도는 곳은 CI다(F220).
 
 ### 시험 파일을 더할 때
 
@@ -96,7 +98,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 | push 관문(기록, 구조, 형식, clippy, 관문 시험) | `make push-check` |
 | view 프로세스 benchmark | `make -C native/darwin benchmark-view-processes` |
 
-전체 suite(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, 창 suite)는 항목 완료에 쓰지 않고 체크리스트 전체가 완료된 뒤 배포 전에 한 번 돌린다. 개발 중에는 바꾼 것의 단위 시험만 돌리고, 간헐 실패의 반복 대상도 그 마지막 통과까지 기다린다.
+전체 suite(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, 창 suite)는 항목 완료에 쓰지 않고 활성 체크리스트의 모든 항목이 완료된 뒤 배포 전에 한 번 돌린다. 개발 중에는 바꾼 것의 단위 시험만 돌리고, 간헐 실패의 반복 대상도 그 마지막 통과까지 기다린다.
 
 ### 창 검사와 측정
 
