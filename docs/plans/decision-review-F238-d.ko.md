@@ -80,35 +80,34 @@
 
 ## D9. 플러그인 배치: files와 shell
 
-상태: 라운드 5에서 배치 결정만으로 줄였다. 라운드 1부터 4까지의 D9.1~D9.10 본문은 층 규칙(호스트 페이지가 표현을 만들고, 사이드카는 데이터만 준다)과 호스트 채널을 바꾸었다. 그 둘은 F229(`feat/host-routes-F229`)에 속하며 여기서 정하지 않는다. 라운드 1~4의 구현 발견은 모두 `docs/features.md`의 하위 항목 F238-d-9부터 F238-d-22까지가 필요한 변경이다. 라운드 1~4 본문은 git 이력에 있다.
+상태: 라운드 5에서 배치 결정만으로 줄였고, 라운드 5 반론을 반영해 고쳤다(아래 답변). 라운드 6이 고친 배치를 검토한다. 라운드 1~4의 D9.1~D9.10 본문은 층 규칙과 호스트 채널을 바꾸었다. 그 둘은 F229에 속하며 여기서 정하지 않는다(계획 `../core-host-routes-F229/docs/plans/plugin-host-routes.md`, 어떤 브랜치에도 명세로 없다). 구현 발견은 `docs/features.md`의 하위 항목 F238-d-9~F238-d-22다.
 
 결정(배치만):
 
-- D9.A files 사이드바: view가 없다. 두 섹션은 선언형 UI다. 프로젝트 폴더의 선언형 tree(`files.tree`)와 북마크의 선언형 list(`files.bookmarks`)다. files 플러그인에는 카드 표면이 없다.
-- D9.B shell 카드: view로 남는다. 세 사이드바 섹션(`shell.history`, `shell.cwd`, `shell.jobs`)은 카드의 view가 값을 주는 선언형 status 섹션이다(`docs/spec/declared-ui.md:145`, 첫 원천). shell에는 플러그인 호스트를 만들지 않는다.
-- D9.C F229 의존: files 사이드바는 files 플러그인의 어떤 view도 열려 있지 않을 때도 값을 보여야 하며, `docs/spec/plugin-processes.md:27-28`은 그것을 플러그인 호스트에 맡긴다. 어떤 런타임이 그 값을 주는지, 어떤 층 규칙과 호스트 채널로 주는지는 F229가 정하며 여기서 정하지 않는다. F229가 그 값을 줄 런타임이 없다고 보면 D9.A를 다시 연다.
-- D9.D D9.B의 수용 비용, 전부 적는다: shell 섹션은 카드가 닫혀 있거나 카드의 활성 탭이 아닐 때 비워진다. 기록과 작업 목록은 view 상태라서, 탭 unload가 shell 세션을 끝내고 둘을 비운다. cwd는 탭 상태에서 복원된다.
+- D9.A files 사이드바: 카드 view가 없다. 섹션은 선언형 UI다. 프로젝트 폴더의 선언형 tree(`files.tree`)와 북마크의 선언형 list(`files.bookmarks`)다. 선언형 status는 카드 view나 플러그인 호스트만 제공할 수 있다(`docs/spec/declared-ui.md:145`, `docs/spec/plugin-processes.md:26`). files 사이드바는 files view가 열려 있지 않을 때도 값을 보여야 하므로 원천은 files 플러그인 호스트다. 사이드카는 원천이 될 수 없다. 사이드카는 status를 등록하지 못하고(`declared-ui.md:145`), 목록은 호스트나 view를 거쳐 status에 닿아야 한다. 따라서 files 플러그인 호스트가 배치이며, DOM 없는 로직은 files state 모듈(`plugins/files/ui/state.js`, `./events.js`만 가져옴)이 가진다. 호스트 채널과 층 규칙 문장은 F229에 남는다(F238-d-18, F238-d-20).
+- D9.B shell 카드: view로 남는다. 세 사이드바 섹션(`shell.history`, `shell.cwd`, `shell.jobs`)은 창 고정 사이드바가 아니라 shell 카드의 사이드바에 있다. 원천은 그 카드의 view다(`declared-ui.md:145`, 첫 원천). shell에는 플러그인 호스트를 만들지 않는다.
+- D9.C shell 요구 검사(`plugin-processes.md:26`): shell 섹션이 shell view가 닫혀 있는 동안에도 값을 보여야 하는 경우는 실행 중인 작업뿐이며, 실행 중인 작업은 탭을 적재 상태로 둔다(`plugins/shell/ui/shell.js:56-60`, 실행이 있는 동안 `context.tab.keep("busy", busy)`). 그러므로 실행 중인 작업은 view를 잃지 않는다. 호스트는 필요 없다.
+- D9.D D9.B의 수용 비용, 전부 적는다: 카드가 닫혀 있거나 카드의 활성 탭이 아닐 때 세 섹션은 비워진다(`declared-ui.md:145`). unload는 실행이 없을 때만 `history`, `cwd`(탭 상태에서 복원), `jobs`를 비운다(`shell.js:56-60`). 끝난 실행의 작업 목록은 unload와 함께 비워진다.
+- D9.E files tree 방향: files tree는 F238-d-9가 가로 tree 규칙을 더한 뒤에야 선언형 tree다(`declared-ui.md:56`, `:171`이 지금은 거부한다). 그 전까지 가로 `files.tree`는 module 섹션으로 남는다(`plugin-processes.md:27`의 형식)이며, F212.11이 지운다.
 
 배치의 근거:
 
-- `plugins/files/plugin.json`은 `files.tree`와 `files.bookmarks`를 module 형식으로만 선언하며, 설명은 카드 표면이 없다고 말한다.
-- 배치가 필요로 하는 files UI 상호작용은 tree(펼치기, 선택, 열기)와 list(북마크 추가와 제거)다. `ui/sections/tree.js`, `tree-horizontal.js`, `bookmarks.js`에 있다.
-- `ui/state.js`는 `./events.js`만 가져오고 DOM 참조가 없다(플러그인 저장소 작업 트리에서 확인).
-- `docs/spec/declared-ui.md:145`: state 모듈의 등록은 선언형 status를 제공하지 않는다. 선언형 status는 카드의 view나 플러그인 호스트가 제공한다.
-- `plugins/shell/plugin.json`은 카드 view `ui/index.html`과 `status` 형식의 세 섹션을 선언한다. 텍스트 입력은 view가 필요한 이유다(`docs/spec/plugin-processes.md:24-26`).
-- `plugins/shell/ui/shell.js:56`은 unload가 shell 세션을 끝낸다고 적는다. `shell.js:119`와 `:146-154`는 탭 상태에서 cwd를 복원한다.
+- `plugins/files/plugin.json`은 `files.tree`와 `files.bookmarks`를 module 형식으로 선언하며(`files.tree`에는 가로 module이 있다, `:10`), 설명은 카드 표면이 없다고 말한다. `@soksak/sidecar-files`에 의존한다(`:27-28`).
+- 필요한 files UI 상호작용은 tree(펼치기, 선택, 열기)와 list(북마크 추가와 제거)다: `ui/sections/tree.js`, `tree-horizontal.js`, `bookmarks.js`.
+- `plugins/shell/plugin.json`은 카드 view `ui/index.html`과 `status` 형식의 세 섹션을 선언한다. 텍스트 입력은 view가 필요한 이유다(`plugin-processes.md:24-25`).
+- `shell.js:56-60`은 실행이 있는 동안 탭을 적재 상태로 둔다. `shell.js:119`와 `:146-154`는 탭 상태에서 cwd를 복원한다.
 
-라운드 1~4에서 찾은 구현 공백(여기서 정하지 않음, 필요한 변경은 하위 항목):
+구현 공백(여기서 정하지 않음, 하위 항목): 선언형 어휘에는 가로 tree, 두 번 누르기 open, tree 노드의 keydown, 행 detail, 행 action, 알림 요소, 헤더 버튼 root, `declared-ui.expanded`가 없다(`declared-ui.md:56`, `:117`, `:126`, `:128`, `:130`, `:171`): F238-d-9, F238-d-11~F238-d-14. `terms.json:304`에는 `unloaded branch`가 없다: F238-d-13. `exposure.md`에는 keydown 규칙이 없다: F238-d-11. `plugin-host.md:59`에 "no sidecar send"가 있다: F238-d-18. module 시대의 files 스키마: F238-d-15. files 데이터 프로토콜, DOM 테스트, 호스트 채널, 오류 채널, shell 설명: F238-d-16, -17, -18, -19, -21. 층 규칙, 표현 위치, 자르기 위치: F238-d-20(F229).
 
-- 선언형 어휘에는 가로 tree, 두 번 누르기 open, tree 노드의 keydown, 행 detail, 행 action, 알림 요소, 헤더 버튼 root, `declared-ui.expanded` 메시지가 없다(`declared-ui.md:56`, `:117`, `:126`, `:128`, `:130`, `:171`). 하위 항목 F238-d-9, F238-d-11~F238-d-14.
-- `packages/plugin-api/terms.json:304`은 `branch`를 자식으로 정의하며, 용어 `unloaded branch`는 없다. 하위 항목 F238-d-13.
-- `docs/spec/exposure.md`에는 선언형 요소의 keydown 규칙이 없다("Keyboard shortcuts" 절은 단축키만 다룬다). 하위 항목 F238-d-11.
-- `docs/spec/plugin-host.md:59`에 "no sidecar send"가 있다. 하위 항목 F238-d-18.
-- files의 스키마와 status는 module 시대의 것(`files.git`, `files.selection`, `files.open`, `root`, `error`, `entries`를 가진 `files.tree`)이다. 하위 항목 F238-d-15. module 형식은 F212.11까지 남는다.
-- DOM 없는 테스트, files 사이드카 데이터 프로토콜, 호스트 채널, 오류 채널, shell 설명은 하위 항목 F238-d-16, F238-d-17, F238-d-18, F238-d-19, F238-d-21이다.
-- 층 규칙 문장, 표현 모듈의 위치, 자르기 위치(라운드 3과 4가 다르다)는 F229의 몫이다: F238-d-20.
+라운드 5 반론에 대한 답변(라운드 5 감사자 A와 B, 읽기 전용, claude-haiku-5-5):
 
-라운드 5 감사자에게 묻는 질문: D9.A~D9.D의 배치가 틀렸는가. 구현 발견은 이 질문에 들어가지 않으며 하위 항목이다.
+- A1(가로 files tree): 수락. D9.E.
+- A2와 B1(사이드카 검토 누락, 호스트 배치 근거 부족): 수락. D9.A가 사이드카 배제와 호스트를 원천으로 기록한다. `plugin-processes.md:26`은 사이드카나 view를 먼저 검토하라고 요구하며, 그 검토를 여기 기록한다.
+- A3(인용 어긋남): 수락. 사이드바 섹션의 호스트 규칙은 `plugin-processes.md:26`이고 `:27`은 module 규칙이다. F229 보유 문서는 `../core-host-routes-F229/docs/plans/plugin-host-routes.md`이며, `feat/host-routes-F229`에는 `docs/spec/plugin-processes.md`가 없다.
+- A4(사이드바 종류): 수락. D9.B가 카드 사이드바를 명시한다.
+- A5와 B2(unload가 jobs를 비운다는 말이 shell.js와 어긋남): 수락. D9.C와 D9.D가 `shell.js:56-60`의 busy 유지 규칙을 적는다.
+
+라운드 6 질문: 고친 배치 D9.A~D9.E가 틀렸는가? 구현 발견은 질문에 들어가지 않는다.
 
 ## 검증 실행 (부모, 이 worktree)
 

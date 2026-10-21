@@ -80,35 +80,34 @@ Decision text:
 
 ## D9. Plugin placement of files and shell
 
-Status: reduced to the placement decision in round 5. The round 1 to 4 texts of D9.1 to D9.10 changed the layer rule (the host page builds presentation, the sidecar supplies data) and the host channel. Those belong to F229 (`feat/host-routes-F229`) and are not decided here. Every implementation finding of rounds 1 to 4 is a required change in the sub-items F238-d-9 to F238-d-22 (`docs/features.md`). The round 1 to 4 texts are in git history.
+Status: reduced to the placement decision in round 5 and revised after the round-5 objections (answers below). Round 6 reviews the revised placement. The round 1 to 4 texts of D9.1 to D9.10 changed the layer rule and the host channel; those belong to F229 (plan `../core-host-routes-F229/docs/plans/plugin-host-routes.md`, not on any branch as a spec) and are not decided here. Implementation findings are sub-items F238-d-9 to F238-d-22 (`docs/features.md`).
 
 Decision (placement only):
 
-- D9.A Files sidebar: no view. Its two sections are declared UI: a declared tree of the project folders (`files.tree`) and a declared list of the bookmarks (`files.bookmarks`). The files plugin has no card surface.
-- D9.B Shell card: stays a view. Its three sidebar sections (`shell.history`, `shell.cwd`, `shell.jobs`) are declared status sections whose values come from the view of the card (`docs/spec/declared-ui.md:145`, first source). No plugin host is created for shell.
-- D9.C Dependency on F229: the files sidebar must show values while no view of the files plugin is open, which `docs/spec/plugin-processes.md:27-28` assigns to a plugin host. Which runtime serves those values, and under which layer rule and host channel, is F229's decision and is not made here. If F229 finds that no runtime can serve them, D9.A is reopened.
-- D9.D Accepted costs of D9.B, stated in full: the shell sections are cleared while the card is closed or is not the active tab of its card; the history and the jobs are view state, so an unload of the tab ends the shell session and clears them; the cwd is restored from the tab state.
+- D9.A Files sidebar: no card view. Its sections are declared UI: a declared tree of the project folders (`files.tree`) and a declared list of the bookmarks (`files.bookmarks`). Declared status can be served only by a view of a card or by the plugin host (`docs/spec/declared-ui.md:145`; `docs/spec/plugin-processes.md:26`). The files sidebar must show values with no files view open, so its source is the files plugin host. The sidecar cannot be the source: a sidecar registers no status (`declared-ui.md:145`) and its listing has to reach the status through a host or a view. The files plugin host therefore is the placement, and the files state module (`plugins/files/ui/state.js`, which imports only `./events.js`) holds the DOM-free logic it needs. The host channel and layer rule text stay with F229 (F238-d-18, F238-d-20).
+- D9.B Shell card: stays a view. Its three sidebar sections (`shell.history`, `shell.cwd`, `shell.jobs`) sit in the sidebar of the shell card, not in a fixed window sidebar. Their source is the view of that card (`declared-ui.md:145`, first source). No plugin host for shell.
+- D9.C Shell requirement check against `plugin-processes.md:26`: a shell section needs values while no shell view is open only for a running job, and a running job keeps its tab loaded (`plugins/shell/ui/shell.js:56-60`, `context.tab.keep("busy", busy)` while `runs.size > 0`). So the running jobs never lose their view. No host is needed.
+- D9.D Accepted costs of D9.B, stated in full: while the card is closed or is not the active tab of its card, the three sections are cleared (`declared-ui.md:145`). An unload clears `history`, `cwd` (restored from the tab state) and `jobs` only when no run is active (`shell.js:56-60`); a finished run's job list is cleared with the unload.
+- D9.E Files tree orientation: the files tree is a declared tree only after F238-d-9 adds the horizontal tree rule (`declared-ui.md:56`, `:171` reject it today). Until then the horizontal `files.tree` stays a module section, the form of `plugin-processes.md:27`, and is removed by F212.11 (D9.6 of the round 1 text).
 
 Evidence for the placement:
 
-- `plugins/files/plugin.json` declares `files.tree` and `files.bookmarks` in the module form only, and its description says it has no card surface.
-- The files UI interactions that the placement needs are a tree (expand, select, open) and a list (bookmark add and remove), in `ui/sections/tree.js`, `tree-horizontal.js` and `bookmarks.js`.
-- `ui/state.js` imports only `./events.js` and has no DOM reference (checked in the working tree of the plugin repository).
-- `docs/spec/declared-ui.md:145`: a registration by a state module does not serve a declared status; a declared status is served by a view of the card or by the plugin host.
-- `plugins/shell/plugin.json` declares the card view `ui/index.html` and the three sections with the `status` form. The text input is a view need (`docs/spec/plugin-processes.md:24-26`).
-- `plugins/shell/ui/shell.js:56` states that an unload ends the shell session; `shell.js:119` and `:146-154` restore the cwd from the tab state.
+- `plugins/files/plugin.json` declares `files.tree` and `files.bookmarks` in the module form (`files.tree` has a horizontal module, `:10`) and its description says it has no card surface; it depends on `@soksak/sidecar-files` (`:27-28`).
+- The files UI interactions needed are a tree (expand, select, open) and a list (bookmark add and remove): `ui/sections/tree.js`, `tree-horizontal.js`, `bookmarks.js`.
+- `plugins/shell/plugin.json` declares the card view `ui/index.html` and the three sections in the `status` form; the text input is a view need (`plugin-processes.md:24-25`).
+- `shell.js:56-60` keeps the tab loaded while a run is active; `shell.js:119` and `:146-154` restore the cwd from the tab state.
 
-Implementation gaps found in rounds 1 to 4 (not decided here; required changes, see the sub-items):
+Implementation gaps (not decided here; sub-items): the declared vocabulary lacks horizontal tree, double-press open, keydown on tree nodes, row detail, row actions, notice element, header button root, `declared-ui.expanded` (`declared-ui.md:56`, `:117`, `:126`, `:128`, `:130`, `:171`): F238-d-9, F238-d-11 to F238-d-14. `terms.json:304` lacks `unloaded branch`: F238-d-13. `exposure.md` has no keydown rule: F238-d-11. `plugin-host.md:59` contains "no sidecar send": F238-d-18. Module-era files schemas: F238-d-15. Files data protocol, DOM test, host channel, error channel, shell description: F238-d-16, -17, -18, -19, -21. Layer rule, presentation location, cut site: F238-d-20 (F229).
 
-- The declared vocabulary has no horizontal tree, no double-press open, no keydown on a tree node, no row detail, no row actions, no notice element, no header button root, and no `declared-ui.expanded` message (`declared-ui.md:56`, `:117`, `:126`, `:128`, `:130`, `:171`). Sub-items F238-d-9, F238-d-11 to F238-d-14.
-- `packages/plugin-api/terms.json:304` defines `branch` by its children; the term `unloaded branch` does not exist. Sub-item F238-d-13.
-- `docs/spec/exposure.md` has no keydown rule for declared elements (its "Keyboard shortcuts" section covers shortcuts only). Sub-item F238-d-11.
-- `docs/spec/plugin-host.md:59` contains "no sidecar send". Sub-item F238-d-18.
-- The files schemas and statuses are module-era (`files.git`, `files.selection`, `files.open`, `files.tree` with `root`, `error`, `entries`). Sub-item F238-d-15. The module form stays until F212.11.
-- The DOM-free test, the files sidecar data protocol, the host channel, the error channel, and the shell description are sub-items F238-d-16, F238-d-17, F238-d-18, F238-d-19, F238-d-21.
-- Layer rule text, the presentation module location, and the cut site (round 3 and round 4 disagree) are F229's: F238-d-20.
+Answers to the round-5 objections (round 5 auditors A and B, read-only, claude-haiku-5-5):
 
-Round 5 question to the auditors: is the placement in D9.A to D9.D wrong? Implementation findings are not part of that question; they are sub-items.
+- A1 (horizontal files tree): accepted; D9.E.
+- A2 and B1 (sidecar examination missing; host placement not justified): accepted; D9.A now records the sidecar exclusion and the host as the source. The plugin-processes.md:26 rule requires examining sidecar or view first, and that examination is recorded here.
+- A3 (citation drift): accepted; the sidebar-section host rule is `plugin-processes.md:26`, `:27` is the module rule. The F229 holding document is `../core-host-routes-F229/docs/plans/plugin-host-routes.md`; `docs/spec/plugin-processes.md` does not exist on `feat/host-routes-F229`.
+- A4 (sidebar kind): accepted; D9.B states the card sidebar.
+- A5 and B2 (jobs cleared on unload contradicts shell.js): accepted; D9.C and D9.D give the busy-keep rule with `shell.js:56-60`.
+
+Round 6 question: is the revised placement D9.A to D9.E wrong? Implementation findings are not part of the question.
 
 ## Verification run (parent, in this worktree)
 
