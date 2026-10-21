@@ -1424,6 +1424,8 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
 	}
 	s.endPresentationWait(surface, "process-ended")
+	// The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface})
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {

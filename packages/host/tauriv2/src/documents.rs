@@ -24,7 +24,9 @@ use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
 use crate::surfaces::ViewStart;
 use crate::surfaces::{Placement, require_region, surface_handle};
-use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
+use crate::view_lifecycle::{
+    ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
+};
 use crate::windows::{emit_window, window_data, with_native_owner};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
@@ -1322,6 +1324,10 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
     end_presentation_wait(window, surface, "process-ended");
+    // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+    if let Err(error) = emit_window(window, "view-process-ended", view_process_ended_event(surface)) {
+        log_error("view channel", error);
+    }
     if let Err(error) = data.documents.remove(&key) {
         return log_error("view channel", error);
     }

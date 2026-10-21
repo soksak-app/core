@@ -505,11 +505,15 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
       // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
       const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
+      // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
+      // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
+      const ending = scoped.native.on("view-process-ended", () => documentRegions.released(surface.surfaceId));
       closing.signal.addEventListener("abort", () => {
         answering.then((off) => off());
         stopping.then((off) => off());
         responding.then((off) => off());
         abandoning.then((off) => off());
+        ending.then((off) => off());
         forgetView(surface.surfaceId);
       }, { once: true });
     }

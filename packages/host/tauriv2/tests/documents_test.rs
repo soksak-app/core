@@ -10,7 +10,7 @@ use soksak_host_tauriv2::documents::{
 use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::ViewStart;
 use soksak_host_tauriv2::view_lifecycle::{
-    ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event,
+    ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
 };
 
 fn request(surface: &str, document: &str) -> Request {
@@ -1104,6 +1104,17 @@ fn view_call_invalid_requests_are_errors_not_forwarded() {
 }
 
 // contract: view.regions.close-with-process
+#[test]
+fn a_view_process_end_sends_the_process_ended_event_of_its_surface() {
+    // The page forgets the regions of the surface when this event arrives, so the payload names the surface.
+    let event = view_process_ended_event("probe-surface");
+    assert_eq!(
+        event,
+        serde_json::json!({"surface": "probe-surface"}),
+        "the process-ended event names the surface"
+    );
+}
+
 #[test]
 fn a_view_process_end_removes_the_regions_of_its_surface() {
     // The view itself is removed before the regions, as view_failed removes it, so only the regions remain to be closed.

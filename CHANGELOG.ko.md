@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F228-6: view process가 끝나면 두 호스트는 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내고, page는 그 표면의 영역 기록을 잊으므로 재시작한 view가 영역을 다시 붙이기 전의 memory saver 판단은 닫힌 영역을 query하지 않는다. Go, Rust, page 시험이 바뀌지 않은 코드에서 실패하고 통과한다. Go와 Rust의 process 종료 시험, `surface-view`와 `document-regions`(14/14)가 통과한다.
+- F228: view의 영역은 process 종료 때 닫히고 page가 잊으며, view의 overlay와 view web view는 native plane 아래에 놓인다(F228-5). 하위 항목 F228-1부터 F228-6까지 완료되었다.
 - F228-5: view의 overlay mask는 view의 영역만 자른다. view 웹뷰를 표면 host에서 native plane 아래에 두므로 plane의 mask가 view를 자르지 않고, 보이는 view overlay 아래의 입력은 view 웹뷰로 간다. `view_channel_test`가 바뀌지 않은 코드에서 실패하고(plane 안의 view, 메인 page에 간 overlay 아래 입력) 통과한다. `surface_host_test`는 36/36 통과한다.
 - F228-4: 두 호스트는 view process가 끝나면 view를 다시 만들기 전에 view 표면의 document·image 영역을 닫으므로, 재시작한 view는 `document "<name>" is already attached`로 실패하지 않고 선언된 영역을 다시 붙인다. contract case `view.regions.close-with-process`. Go와 Rust 시험이 바뀌지 않은 코드에서 실패하고 통과한다.
 - F228-3: workbench가 view의 composition·영역 call을 표면의 page 동작으로 제공하므로, view 영역의 attach는 memory saver의 영역 기록을 거치고 배치는 document의 composition revision을 가진다. composition·영역 호스트 호출의 raw `runtime.native.call`은 거부된다. workbench 시험 넷이 바뀌지 않은 코드에서 실패하고 통과한다(`view-calls` 37/37, `surface-view`·`surface-modules` 16/16).

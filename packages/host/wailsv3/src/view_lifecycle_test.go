@@ -328,3 +328,27 @@ func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
 		t.Fatalf("created views after the process end: %d, want the view created again", len(fake.created))
 	}
 }
+
+// A process end sends the view-process-ended event to the surface, so the page forgets the regions that the host closed with
+// the view before the view is created again.
+func TestViewProcessEndSendsTheProcessEndedEvent(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s.views = map[string]*nativeWebview{"probe-surface": {}}
+	events := recordWindowEvents(s)
+	endView(t, s, fake)
+	ended := 0
+	for _, event := range *events {
+		if event.name != "view-process-ended" {
+			continue
+		}
+		ended++
+		payload, ok := event.data.(map[string]any)
+		if !ok || payload["surface"] != "probe-surface" {
+			t.Fatalf("view-process-ended payload %v, want surface probe-surface", event.data)
+		}
+	}
+	if ended != 1 {
+		t.Fatalf("view-process-ended events after the process end: %d, want one", ended)
+	}
+}

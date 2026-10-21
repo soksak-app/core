@@ -298,3 +298,57 @@ test("the region calls of a view run the page operations of its surface", { time
     dom.window.close();
   }
 });
+
+// The host reports the end of a view process with view-process-ended, and the host has closed the regions of the surface with it,
+// so the region record of the page forgets them before the restarted view attaches them again.
+test("a view process end forgets the regions that its surface attached", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        return null;
+      } } };
+    },
+  } });
+  const { documentRegions } = await import("../document-regions.js");
+  documentRegions.useSessions(null);
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-process-end");
+  const pluginId = "fixture-region-end";
+  const surfaceId = "fixture-region-process-end";
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  const replies = () => calls.filter(({ name }) => name === "viewReply").map(({ payload }) => payload);
+  const settle = async (count) => {
+    for (let turn = 0; turn < 100 && replies().length < count; turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+  };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 1, command: "document.attach", params: { name: "doc" } });
+    await settle(1);
+    assert.deepEqual(documentRegions.tabs(), [surfaceId], "the attached region is recorded before the process end");
+    const ended = listeners.get("view-process-ended");
+    assert.ok(ended, "the view subscribes to view-process-ended");
+    ended({ surface: surfaceId });
+    assert.deepEqual(documentRegions.tabs(), [], "the process end forgets the regions of the surface");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
