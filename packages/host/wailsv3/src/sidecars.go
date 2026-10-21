@@ -483,11 +483,25 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 // SendWithCids sends a page request that continues the inputs named by cids; the request line carries them as the field
 // `cids`, and no field when cids is empty.
 func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, "", body, cids)
+}
+
+// SendPluginWithCids sends a request of a plugin host for the session surface, whose project root is root (docs/plans/plugin-host-routes.md
+// rule 3). The root applies to the first send of the session, as the window root does for a surface.
+func (c *Sidecars) SendPluginWithCids(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, root, body, cids)
+}
+
+// send is the send of SendWithCids. project is the root of a plugin session, or empty for the root of the window.
+func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body json.RawMessage, cids []string) error {
 	c.mu.Lock()
 	root, known := c.roots[surface]
 	c.mu.Unlock()
 	if !known {
 		root = owner.ProjectRoot()
+		if project != "" {
+			root = project
+		}
 	}
 	// The JSON serialization is done outside the mutex.
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
@@ -2135,6 +2149,13 @@ func connectionNotice(failure error) (json.RawMessage, error) {
 
 // Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the
 // removal of its plugin.
+// dependsOn reports whether the plugin lists the sidecar name in dependencies.
+func (c *Sidecars) dependsOn(plugin, name string) bool {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	return slices.Contains(c.dependents[name], plugin)
+}
+
 func (c *Sidecars) Declared(name string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

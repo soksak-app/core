@@ -119,6 +119,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	owner := h.owners[req.ID]
 	if owner != nil {
 		local := owner == current
+		owner.projects[req.ID] = folder.Root
 		owner.mu.Lock()
 		owner.root = folder.Root
 		owner.mu.Unlock()
@@ -138,7 +139,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 		owner = h.newWindow("project-"+req.ID, "/?project="+req.ID)
 	}
 	h.mu.Lock()
-	owner.projects[req.ID] = true
+	owner.projects[req.ID] = folder.Root
 	owner.mu.Lock()
 	owner.root = folder.Root
 	owner.mu.Unlock()

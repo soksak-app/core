@@ -245,10 +245,11 @@ type Surfaces struct {
 	prepareNative func()
 	window        *application.WebviewWindow
 	// host is the host that created this window. name is the window identifier of the endpoint and title is the window title.
-	host     *Host
-	name     string
-	title    string
-	projects map[string]bool
+	host  *Host
+	name  string
+	title string
+	// projects holds the projects that this window shows, by project id, with the folder root of each (docs/plans/plugin-host-routes.md rule 3).
+	projects map[string]string
 	root     string
 	ready    bool
 	// readied is the channel that waits for the next WindowReady. Host.mu protects it.
@@ -316,7 +317,7 @@ type Surfaces struct {
 
 func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
-		window: win, projects: map[string]bool{}, sidecars: sidecars,
+		window: win, projects: map[string]string{}, sidecars: sidecars,
 		views:                map[string]*nativeWebview{},
 		compositions:         map[string]SurfaceComposition{},
 		surfacePlugins:       map[string]string{},
@@ -359,6 +360,10 @@ func (s *Surfaces) ProjectRoot() string {
 
 // SidecarSend passes a message that a surface page of this window sent to a sidecar.
 func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids []string) error {
+	// A plugin session is reached only through the plugin host call (docs/plans/plugin-host-routes.md rule 2).
+	if strings.HasPrefix(surface, "plugin:") {
+		return fmt.Errorf("sidecar session %s is reserved for a plugin host", surface)
+	}
 	return s.sidecars.SendWithCids(s, name, surface, body, cids)
 }
 

@@ -84,7 +84,7 @@ const METHOD = {
   documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
   viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
-  pluginHostReply: "PluginHostReply", pluginHostRequest: "PluginHostRequest", pluginHostEvent: "PluginHostEvent",
+  pluginHostReply: "PluginHostReply", pluginHostRequest: "PluginHostRequest", pluginHostEvent: "PluginHostEvent", pluginHostSidecarSend: "PluginHostSidecarSend",
   documentDetach: "DocumentDetach",
   documentSubscribe: "DocumentSubscribe",
   documentUnsubscribe: "DocumentUnsubscribe",
