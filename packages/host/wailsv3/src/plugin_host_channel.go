@@ -138,10 +138,11 @@ type pluginHostOverflow struct {
 func (e pluginHostOverflow) Error() string { return e.reason }
 
 // servedPluginHostCall reports whether the channel of a plugin host serves the call command. The served calls are the
-// registration calls of exposure (docs/spec/plugin-host.md#channel); the host answers the state calls itself.
+// registration calls of exposure and the sidecar calls of the plugin's declared sidecars (docs/spec/plugin-host.md#channel);
+// the host answers the state calls itself.
 func servedPluginHostCall(command string) bool {
 	switch command {
-	case "runtime.command.register", "page.exposure.register":
+	case "runtime.command.register", "page.exposure.register", "runtime.sidecar.send", "runtime.sidecar.on", "runtime.sidecar.onFailure":
 		return true
 	}
 	return false
