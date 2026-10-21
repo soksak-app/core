@@ -54,6 +54,11 @@ These are objections raised in the review that concern behavior outside the rout
 - **F229-6** The restart stop clear rule: a sidecar stop clears by a surface of any plugin that depends on it (`sidecars.md`); a plugin host stop clears by a surface of its own plugin (`plugin-host.md` line 80). The two rules are stated as they are in each specification; the joint rule needs its own decision.
 - **F229-7** The retain of a window keeps every session that the process has sent to, and both hosts build the `keep` list before a service is started (`sidecars.go` 945 to 972; `packages/host/tauriv2/src/sidecars.rs` ~1576 to 1612). A session first sent during the start is missing from the list.
 - **F229-8** The `state:<plugin id>:<project id>` session has the same lifetime defect as F229-1.
+- **F229-9** The state module option is not compared. A state module runs on the workbench page and has `sidecar.send`, `on` and `onFailure` for its one declared sidecar, with session `state:<plugin id>:<project id>` (`docs/spec/plugins.md` 113 to 117). `docs/spec/declared-ui.md` line 145 excludes a state module registration from declared UI without giving a reason. Required: compare the smallest change of letting a state module serve a declared status with option 1, record the reason for the exclusion of line 145 or change it, and then choose.
+- **F229-10** `docs/spec/plugin-host.md` line 59 forbids a sidecar send from a plugin host, and line 5 creates a host only when moving its logic to a sidecar or a view is impossible. Required: show that the plugin logic a host needs cannot move to a sidecar, or keep the prohibition.
+- **F229-11** The lifetime of plugin sessions. Rule 3 keeps a session root until its owner closes the session, but rule 1 serves no close call, and F229-2 (no close at host end) and F229-7 (retain drops sessions first sent during a start) leak or lose exactly these sessions. Required: define the close path (a served close call, or a close at host end) and bring F229-2 and F229-7 into F229, or show that the route is sound without them.
+- **F229-12** `docs/spec/plugins.md` line 58 names as users of a declared sidecar only the page surface and the state module, and requires `surface` or `state`. A plugin with `host` and `sections` and neither cannot declare the sidecar. Required: amend line 58 to name the plugin host and the host-only case, and add it to the specification list.
+- **F229-13** The operation scope. The route is generic over every operation of the declared sidecar, so the files sidecar's `write` and `watch` (`docs/spec/sidecars.md`) would reach a hidden page with no open surface. Required: state which operations the host receives and justify them against the surface-open rule of `sidecars.md`, or restrict them.
 
 ## Review record
 
@@ -114,3 +119,9 @@ Two fresh auditors checked rules 1 to 6 against the code, with rounds 10 and 11 
 7. Rule 4 named no module boundary for the hand-off from `host.js` to `plugin-host.js`: `host.js` imports no `plugin-host.js` (`host.js` 9 to 14). Rule 4 now names the registry export and the import. Accepted.
 
 Objections: 7 distinct, all about how the route is written. The decision review is round 12.
+
+### Round 12 (decision)
+
+Two fresh auditors reviewed the decision only: whether a plugin host sends to and receives from the sidecars that its manifest declares, through a route checked against its own plugin, with no plugin-specific code in core. They raised five distinct objections, each confirmed against the specification and recorded as an open question of the decision: the state module option (F229-9), the boundary of line 59 of `plugin-host.md` (F229-10), the session lifetime (F229-11), the manifest rule of line 58 of `plugins.md` (F229-12) and the operation scope (F229-13).
+
+Decision status: open. The round closes with these sub-items recorded. No specification or implementation of F229 starts until F229-9 to F229-13 are resolved, and a decision on any of them that changes what the route is reopens the review.
