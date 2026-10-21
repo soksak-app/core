@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.7-10: view의 declared UI snapshot 전송: 각 호스트는 view의 snapshot을 창의 event `declared-ui.snapshot {surface, plugin, status, seq, value, skipped}`로 전달하고 그에 대한 자체 event는 쓰지 않는다. view bridge는 pull `declared-ui.snapshot.request`에 status의 최신 값으로 답하고 snapshot을 view event `declared-ui.snapshot.ack`로 확인한다. workbench는 declared section을 view channel에 연결하고 메인 page의 load, source 변경, 방향 변경에서 pull하며, snapshot마다 skipped count를 `page.trace.declared-ui.snapshot.skipped`로 쓴다. view가 없는 source는 channel이 없으므로 그 section은 비어 있다. workbench 패키지의 files 목록이 staging이 빠뜨린 page module들을 naming하고, stage, library-preview, window-sidebar-restoration fixture는 hybrid composition으로 옮긴다. 단위 시험은 stub에서 실패했고(plugin-api 4, 호스트 4, workbench 8) 구현에서 통과한다(plugin-api 326 of 326, Go src 패키지와 Rust documents_test 39 of 39, workbench suite 719 of 719).
 - F224: plugin-api의 기록 검사가 검사 대상 저장소의 census 제외를 적용해, 커밋된 생성 bundle을 기록으로 읽지 않는다. 제외 밖의 위반은 여전히 보고된다.
 - F212.8-7: 한도에서의 declared UI 값 그리기 시간: 워크벤치 시험 `declared-ui-draw-time.test.mjs`는 16 level 안의 5000 node tree와 1000 item list에 대해 jsdom에서 `validateValue`와 `drawValue`를 잴 때 값마다 경과 밀리초를 출력 줄에 기록한다. 5회 실행에서 load average 40.99에서 tree 중앙값은 501.2 ms, list 중앙값은 116.4 ms다. 한도(2000 ms와 500 ms)는 jsdom이 layout이나 paint 없이 DOM node를 만드므로 구성과 연결만을 다룬다. 중앙값이 declared-ui.md의 한도가 정당화하는 범위를 넘지 않으므로 한도는 그대로 둔다.
 - F212.6a-1-3-2-2: page close 멈춤의 원인을 특정했다. `CFRunLoopWakeUp`의 pthread mutex는 main run loop의 `_lock`이며, main thread가 WebKit page close 일을 하는 동안 짧게 반복해 잡는다. 뒤따르는 대기자는 그 뒤에 줄 서고 IPC receive queue와의 원형 대기가 멈춤을 늘린다. 원인이 host code가 아니므로 코드는 바꾸지 않는다.
