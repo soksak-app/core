@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // PluginsRunRequest is the argument of the pluginsRun call (docs/spec/installation.md#plugin-operations-in-the-application).
@@ -149,6 +150,10 @@ func (h *Host) notifyPlugins(change PluginsChanged) {
 	}
 	h.mu.Unlock()
 	for _, s := range windows {
+		if change.Action == "remove" || change.Action == "disable" {
+			// The host web view of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).
+			application.InvokeSync(func() { s.disposePluginHost(change.Plugin) })
+		}
 		s.Emit("plugins-changed", change)
 	}
 }

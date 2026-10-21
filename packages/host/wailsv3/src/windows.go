@@ -210,6 +210,7 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.replayRegistrations()
+	s.loadPluginHosts()
 	routine.Go("windows-changed", h.windowsChanged)
 	routine.Go("deep-link-ready", func() { h.deepLinks.Ready(h.runDeepLink) })
 	for _, ready := range readied {
@@ -588,6 +589,7 @@ func (s *Surfaces) close() {
 			handles[id] = view.handle
 			views[view.handle] = view
 		}
+		s.disposePluginHosts()
 		err := CloseWindowSurfaces(handles, s.documents, s.streams, s.images, func(native WindowNative) error {
 			switch native.Kind {
 			case WindowNativeDocument:

@@ -45,6 +45,18 @@ typedef void (*sp_view_message)(void *context, const char *json);
 void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context);
 
+// Creates the plugin host web view of plugin hidden in the window itself (docs/spec/plugin-host.md). directory is the
+// absolute path where the persistent data store keeps site data, and it is created if missing; documents with the same
+// directory use the same store. folder and plugin name the installed folder and the id of the plugin whose host the web
+// view runs, so sok://<plugin>/<path> serves <path> from that folder and the configuration carries the view
+// configuration: the view channel script channel runs at document start in the page world, the sok-view handler is
+// registered, and the configuration may request sok://core/<path> from the core root resolver
+// (sp_core_root_set_resolver). changed receives the state JSON of the web view. The web view holds a zero frame, is
+// hidden, draws nothing, takes no hit testing, receives no input, and never becomes the first responder. Returns NULL
+// if the webview cannot be created.
+void *sp_plugin_host_create(void *window, const char *directory, const char *folder, const char *plugin,
+    const char *channel, sp_document_changed changed, void *context);
+
 // Called when the WebContent process of a view ends, before the host closes the view (docs/plans/plugin-processes.md, rule 5). It
 // is not called for a closed view. Called on the main thread.
 typedef void (*sp_view_ended)(void *context);
@@ -162,7 +174,7 @@ char *sp_document_interaction_state(void *document);
 // the state is not base64, or the web view refused it.
 const char *sp_document_restore(void *document, const char *state);
 
-// Removes and releases the webview. changed is not called afterward.
+// Removes and releases the webview, of a document region or of a plugin host. changed is not called afterward.
 void sp_document_close(void *document);
 
 // Takes the bytes that the binary store of the region keeps under id (docs/spec/native-surfaces.md#document-regions) and

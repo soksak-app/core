@@ -357,6 +357,16 @@
       },
       "description": "The WebContent process of a view stopped answering its responsiveness check, so the host sent the view-responsiveness notice with responsive false to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
     },
+    "host.trace.plugin-host.process-request": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "window": "string"
+      },
+      "description": "The host created the plugin host web view of the plugin in the window, so its WebContent process is requested (docs/spec/plugin-host.md)."
+    },
     "host.trace.modal.stale-ready": {
       "layer": "host",
       "class": "call",

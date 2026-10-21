@@ -421,6 +421,13 @@ type Platform interface {
 	SetDocumentAppearance(document unsafe.Pointer, dark bool)
 	// CloseDocument removes the document web view. changed is not called afterward.
 	CloseDocument(document unsafe.Pointer)
+	// CreatePluginHost creates the plugin host web view of a plugin hidden in the window itself (docs/spec/plugin-host.md). directory is the absolute path at which
+	// the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward,
+	// error, scroll}) on the UI thread. folder and plugin are the installed folder and the id of the plugin whose host the web view runs;
+	// channel is the text of the view channel script, and the configuration is the view configuration
+	// (docs/spec/native-surfaces.md#view-surfaces). The web view holds a zero frame, is hidden, draws nothing, takes no
+	// hit testing, and receives no input (docs/spec/plugin-host.md).
+	CreatePluginHost(window unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error)
 
 	// CreateImage creates an external picture display region inside the surface web view surface. event receives
 	// keyboard, IME and input events as a JSON string ({key, insert, compose, focus, size, error})

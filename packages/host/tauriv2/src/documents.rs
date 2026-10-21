@@ -29,7 +29,7 @@ use crate::windows::{emit_window, window_data, with_native_owner};
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
 /// from the storage of the app document.
 /// (docs/spec/native-surfaces.md#document-regions).
-const DOCUMENT_DATA: &str = "document-data";
+pub(crate) const DOCUMENT_DATA: &str = "document-data";
 
 /// A document region call of a surface page. Each call uses only the fields that it needs.
 #[derive(Clone, Debug, Deserialize)]
@@ -653,6 +653,14 @@ pub fn set_view_channel(text: &str) -> Result<(), String> {
     VIEW_CHANNEL
         .set(text.to_string())
         .map_err(|_| "the view channel script is already set".to_string())
+}
+
+/// The text of the view channel script. It is an error when the application has not set it.
+pub(crate) fn view_channel() -> Result<&'static str, String> {
+    VIEW_CHANNEL
+        .get()
+        .map(String::as_str)
+        .ok_or_else(|| "the view channel script is not loaded".to_string())
 }
 
 /// The view channel of one view surface: the plugin of its view and its ready document. An empty document means that no ready
