@@ -218,3 +218,12 @@ How-to findings are registered as sub-items, not as decision items:
 - **F229-16** Registry input and manifest checks: the sidecar list parameter from `environment.js` line 95 into the plugin host registry; the refusal of a plugin id with `:` in the manifest reader.
 
 Decision status: closed at round 17. The specification and the implementation of F229 start only from this committed close, and they are not started in this lane. No specification or implementation of F229 starts until the round closes without a decision-level objection.
+
+### F229-1 to F229-8 status (fix/host-route-followups-F229-n)
+
+- **F229-2** closed with evidence, no behaviour change. The page start closes the plugin host sessions of its window in both hosts (`startPage`, `page_started`), and sends no `plugin-host-ended` because the previous page's registrations end with it (rule 7). A host end and a host failure send `plugin-host-ended`. Contract `plugin-host.sidecar.page-start-close` in both hosts' tests.
+- **F229-3** closed. `closed` goes only to the sidecar processes that received a request for the surface, as `sidecars.md` says. Red on the unchanged code in both hosts, Green after the change; contract `sidecars.close.reaches-holding-sidecar`.
+- **F229-4** closed. A dropped sidecar message is written at `warn`, which `logging.md` defines as a loss. The host record path and `events.json` now accept `warn` for `host.record.<level>`. Red in both hosts, Green after the change.
+- **F229-7** closed with evidence. The keep list of a retain is read after the service starts in both hosts, so a session first sent during the start is kept. A mutation that moves the start hook out of the retain path makes the Go test fail; contract `sidecars.retain.keeps-session-first-sent-during-start` declared in both hosts.
+- **F229-5** decided: no core command route. The plugin host calls that the plan needs go through the sidecar route of rules 1 to 8, which no route of the command kind serves.
+- **F229-1, F229-6 and F229-8** open. Next steps: F229-1 needs the decision of the shown project after a release of the shown project (today `ProjectRelease` clears `owner.root` only when no project is left, `packages/host/wailsv3/src/projects.go` 172 to 192), then a Red test in both hosts; F229-6 needs the joint restart-stop rule, then Red and Green in both hosts' `sidecars` tests; F229-8 follows F229-1, because the `state:` session lives on the same project lifetime.

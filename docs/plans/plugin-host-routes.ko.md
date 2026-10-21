@@ -219,3 +219,12 @@ F229는 플러그인 호스트가 매니페스트에 선언된 사이드카에 �
 - **F229-16** 레지스트리 입력과 매니페스트 검사: `environment.js` 95행의 사이드카 목록 매개변수, 매니페스트 읽기에서 `:`를 가진 플러그인 id 거절.
 
 결정 상태: 17차에 닫힘. F229의 명세와 구현은 이 커밋된 닫기에서만 시작하며, 이 레인에서는 시작하지 않는다.
+
+### F229-1부터 F229-8까지의 상태 (fix/host-route-followups-F229-n)
+
+- **F229-2** 동작 변경 없이 근거로 닫음. 페이지 시작은 두 호스트 모두에서 창의 plugin host 세션을 닫고(`startPage`, `page_started`), 이전 페이지의 등록이 그와 함께 끝나므로 `plugin-host-ended`를 보내지 않는다(rule 7). 호스트 종료와 호스트 실패는 `plugin-host-ended`를 보낸다. 두 호스트 테스트의 계약 `plugin-host.sidecar.page-start-close`.
+- **F229-3** 닫음. `closed`는 그 surface에 요청을 받은 사이드카 프로세스에만 보낸다(`sidecars.md`). 두 호스트에서 변경 전 코드 Red, 변경 후 Green. 계약 `sidecars.close.reaches-holding-sidecar`.
+- **F229-4** 닫음. 버려진 사이드카 메시지는 `warn`으로 기록한다(`logging.md`는 이를 손실로 정의). 호스트 기록 경로와 `events.json`은 `host.record.<level>`에 `warn`을 받는다. 두 호스트에서 Red, 변경 후 Green.
+- **F229-7** 근거로 닫음. 두 호스트 모두 retain의 keep 목록을 서비스가 시작한 뒤에 읽으므로 시작 중 처음 보낸 세션이 유지된다. 시작 훅을 retain 경로 밖으로 옮기는 변이에서 Go 테스트가 실패한다. 계약 `sidecars.retain.keeps-session-first-sent-during-start`를 두 호스트에 선언.
+- **F229-5** 결정: 코어 명령 경로를 만들지 않는다. plan이 필요로 하는 plugin host 호출은 규칙 1~8의 사이드카 경로로 가며, 명령 종류의 경로는 이를 제공하지 않는다.
+- **F229-1, F229-6, F229-8** 열림. 다음 단계: F229-1은 표시 중인 project를 해제한 뒤 무엇을 보일지 결정해야 한다(현재 `ProjectRelease`는 더 이상 project가 없을 때만 `owner.root`를 지운다, `packages/host/wailsv3/src/projects.go` 172~192). 그 뒤 두 호스트에서 Red 테스트. F229-6은 사이드카 정지 해제의 공동 규칙을 정한 뒤 두 호스트 `sidecars` 테스트에서 Red와 Green. F229-8은 `state:` 세션이 같은 project 수명에 있으므로 F229-1 뒤에 온다.
