@@ -2197,6 +2197,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F224",
+    implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "declaredFiles" }],
+    tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a file the census declaration excludes is not a record of the repository" }],
+    expected: "The record check applies the census exclude of the checked repository, so a committed generated bundle is not read as a record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F227",
+    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "tab.state.read" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a forwarded tab.state.read returns the tab state of its surface" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
+    ],
+    expected: "A view reads and writes the tab state of its surface through tab.state of the surface context.",
+    levels: ["unit"],
+  },
+  {
     id: "F223",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
