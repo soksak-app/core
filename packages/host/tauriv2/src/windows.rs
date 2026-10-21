@@ -1020,17 +1020,13 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             |handle, address| platform.load_document(handle, address),
             |handle| platform.close_document(handle),
         );
-        match created {
-            Ok(handle) => {
-                data.plugin_hosts.insert(&plugin.id, handle);
-                crate::event_record::emit_host(
-                    crate::event_log::Level::Debug,
-                    "host.trace.plugin-host.process-request",
-                    serde_json::json!({"plugin": plugin.id, "window": window.label()}),
-                );
-            }
-            Err(error) => return Err(error),
-        }
+        let handle = created?;
+        data.plugin_hosts.insert(&plugin.id, handle);
+        crate::event_record::emit_host(
+            crate::event_log::Level::Debug,
+            "host.trace.plugin-host.process-request",
+            serde_json::json!({"plugin": plugin.id, "window": window.label()}),
+        );
     }
     Ok(())
 }

@@ -5,9 +5,7 @@ use std::sync::Mutex;
 use serde_json::{Value, json};
 
 use crate::plugin_host::{self, HostPlugin, HostView, PluginHosts};
-
-#[path = "../tests/support/folder.rs"]
-mod folder;
+use crate::test_folder::Folder;
 
 /// The record of the platform fake: the created host webviews with their configuration, the addresses that they load,
 /// and the handles that are closed.
@@ -16,52 +14,35 @@ struct Fake {
     created: Vec<(String, String, String, String)>,
     loaded: Vec<String>,
     closed: Vec<usize>,
-    next: usize,
-    refuse: bool,
 }
 
 impl Fake {
-    /// The create, load and close closures of one host webview creation, as the platform boundary receives them.
-    fn closures(
-        &mut self,
-    ) -> (
-        impl FnOnce(&str, &HostView<'_>) -> Result<usize, String> + '_,
-        impl FnOnce(usize, &str) -> Result<bool, String> + '_,
-        impl FnOnce(usize) -> Result<(), String> + '_,
-    ) {
-        (
-            |channel: &str, view: &HostView<'_>| {
-                if self.refuse {
-                    return Err("no window".to_string());
-                }
-                self.next += 1;
-                self.created.push((
-                    self.next.to_string(),
-                    view.directory.to_string(),
-                    view.folder.to_string(),
-                    format!("{} {channel}", view.plugin),
-                ));
-                Ok(self.next)
-            },
-            |_handle: usize, address: &str| {
-                if self.refuse {
-                    return Ok(false);
-                }
-                self.loaded.push(address.to_string());
-                Ok(true)
-            },
-            |handle: usize| {
-                self.closed.push(handle);
-                Ok(())
-            },
-        )
+    /// Records one created host webview with its configuration and returns its handle, as the platform boundary does.
+    fn create(&mut self, channel: &str, view: &HostView<'_>) -> usize {
+        self.created.push((
+            (self.created.len() + 1).to_string(),
+            view.directory.to_string(),
+            view.folder.to_string(),
+            format!("{} {channel}", view.plugin),
+        ));
+        self.created.len()
+    }
+
+    /// Records the address that a created host webview loads, as the platform boundary does.
+    fn load(&mut self, address: &str) {
+        self.loaded.push(address.to_string());
+    }
+
+    /// Records one closed host webview handle, as the platform boundary does.
+    fn close(&mut self, handle: usize) {
+        self.closed.push(handle);
     }
 }
 
 /// A configuration folder with one enabled plugin probe, whose manifest declares host, and one enabled plugin plain,
 /// whose manifest declares none.
-fn host_fixture() -> folder::Folder {
-    let config = folder::Folder::new();
+fn host_fixture() -> Folder {
+    let config = Folder::new();
     for (name, content) in [
         (
             "plugins/installed.json",
@@ -105,16 +86,28 @@ fn the_host_creates_the_host_webview_of_a_plugin_that_declares_host_and_loads_it
         }],
         "only probe declares host"
     );
-    let mut fake = Fake::default();
-    let (create, load, close) = fake.closures();
+    let fake = std::cell::RefCell::new(Fake::default());
     let view = HostView {
         directory: "/config/document-data",
         folder: "/config/plugins/probe/0.1.0",
         plugin: &plugins[0].id,
         page: &plugins[0].page,
     };
-    let handle = plugin_host::create_host("channel-script", view, create, load, close)
-        .expect("the host webview of probe is created");
+    let handle = plugin_host::create_host(
+        "channel-script",
+        view,
+        |channel, view| Ok(fake.borrow_mut().create(channel, view)),
+        |_handle, address| {
+            fake.borrow_mut().load(address);
+            Ok(true)
+        },
+        |handle| {
+            fake.borrow_mut().close(handle);
+            Ok(())
+        },
+    )
+    .expect("the host webview of probe is created");
+    let fake = fake.into_inner();
     assert_eq!(
         fake.created,
         vec![(
