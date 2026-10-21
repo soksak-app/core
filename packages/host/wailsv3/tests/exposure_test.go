@@ -341,3 +341,24 @@ func TestRelayLateReplyOfACommandWritesCallLateReply(t *testing.T) {
 		t.Fatalf("delay = %v, want a number of at least 50 ms", late[0]["delay"])
 	}
 }
+
+// contract: view.exposure.register
+// The caller of a registration is either the page view of the surface itself or the main page of the window registering
+// for a surface with a view (docs/spec/exposure.md#relay).
+func TestRegistrationCallerAcceptsTheSurfacePageAndTheMainPageOfAView(t *testing.T) {
+	if err := host.CheckRegistrationCaller("probe-surface", "probe-surface", false, false); err != nil {
+		t.Fatalf("the page view of the surface: %v", err)
+	}
+	if err := host.CheckRegistrationCaller("other-surface", "probe-surface", false, true); err == nil || err.Error() != `this document is not surface "probe-surface"` {
+		t.Fatalf("the page view of another surface: %v, want a surface mismatch error", err)
+	}
+	if err := host.CheckRegistrationCaller("", "probe-surface", true, true); err != nil {
+		t.Fatalf("the main page for a surface with a view: %v", err)
+	}
+	if err := host.CheckRegistrationCaller("", "probe-surface", true, false); err == nil || err.Error() != `this document is not surface "probe-surface"` {
+		t.Fatalf("the main page for a surface without a view: %v, want a surface mismatch error", err)
+	}
+	if err := host.CheckRegistrationCaller("", "probe-surface", false, true); err == nil || err.Error() != `this document is not surface "probe-surface"` {
+		t.Fatalf("an unknown caller: %v, want a surface mismatch error", err)
+	}
+}
