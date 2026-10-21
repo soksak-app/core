@@ -44,7 +44,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 
 A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`.
 
-The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name. An interactive element that a [declared UI](declared-ui.md) value draws carries the attribute `data-key="<key>"` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A request addresses a control by its section id and `data-key`. Controls of list items and tree nodes add `data-path` and `data-role`. The address is unique because keys are unique among siblings, and the role names one of the two controls of a tree node. A non-interactive element carries no `data-key`.
+The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name. An interactive element that a [declared UI](declared-ui.md) value draws carries the attribute `data-key="<key>"` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A request addresses a control by its section id and `data-key`. The address is unique because keys are unique among siblings, and the role names one of the two controls of a tree node. A non-interactive element carries no `data-key`.
 
 ## User interface
 

@@ -6,10 +6,10 @@ Declared UI is a sidebar section whose every element is one of the vocabulary el
 
 ## Scope
 
-- The vocabulary has four elements: `list`, `tree`, `button`, and `status-line`. Core declares no other element. A screen with text input, free DOM, a canvas, a document region, or an image region is a view ([plugin processes](../plans/plugin-processes.md) layer rules). A tree that needs inline rename, drag and drop, or a context menu placed at a pointer is a view for the same reason. Core declares no element for those interactions.
+- The vocabulary has four elements: `list`, `tree`, `button`, and `status-line`. Core declares no other element. A screen with text input, free DOM, a canvas, a document region, or an image region is a view. A tree that needs inline rename, drag and drop, or a context menu placed at a pointer is a view for the same reason. Core declares no element for those interactions.
 - The workbench draws declared UI only in sidebar sections. Cards and other screens do not draw declared UI.
 - The transport of a snapshot is in [plugin processes](../plans/plugin-processes.md) rule 2. The name, command, and DOM rules are in [exposure](exposure.md). The sidebar layout is in [plugins](plugins.md#sections).
-- Accessibility: no accessibility claim is made for declared UI until the platform accessibility interface is recorded by a check ([plugin processes](../plans/plugin-processes.md) rule 8). This document defines no ARIA role.
+- Accessibility: no accessibility claim is made for declared UI until the platform accessibility interface is recorded by a check. This document defines no ARIA role.
 - Core never truncates a value. A plugin that has more elements than a limit cuts its own value and states the cut in a `status-line`. A value above a limit is rejected, never shortened. There is no lazy loading.
 
 ## Declared status
@@ -37,33 +37,33 @@ The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts 
 | Kind | Field | Type | Required | Limit and meaning |
 | --- | --- | --- | --- | --- |
 | `button` | `key` | string | yes | Key rules below. A button that runs `command`. |
-| `button` | `label` | string | yes | Plain text, at most 500 characters. |
+| `button` | `label` | string | yes | Plain text, at most 500 code points. |
 | `button` | `command` | string | yes | A command of the plugin ([binding](#binding)). |
 | `button` | `params` | object | no | Parameters, see [Parameters](#parameters). |
 | `button` | `icon` | string | no | A name of the core icon table (`packages/workbench/icons.js`). |
 | `button` | `enabled` | boolean | no | `false` disables the button. Default `true`. |
 | `list` | `key` | string | yes | Key rules below. |
-| `list` | `empty` | string | yes | Plain text, at most 500 characters. Drawn in place of the rows when `items` is empty. Every list states its empty state, as [plugins](plugins.md#sections) requires for every list. |
+| `list` | `empty` | string | yes | Plain text, at most 500 code points. Drawn in place of the rows when `items` is empty. Every list states its empty state, as [plugins](plugins.md#sections) requires for every list. |
 | `list` | `items` | array | yes | At most 1000 items. Each item has the fields below. |
 | `list` item | `key` | string | yes | Unique within the list. |
-| `list` item | `label` | string | yes | Plain text, at most 500 characters. |
+| `list` item | `label` | string | yes | Plain text, at most 500 code points. |
 | `list` item | `command` | string | no | With `command`, the item is a button; without it, the item is a static row. |
 | `list` item | `params`, `icon`, `enabled` | as `button` | no | Same rules as in `button`. |
 | `list` item | `selected` | boolean | no | Draws the item as selected. Default `false`. No workbench state is kept for it. |
-| `list` item | `detail` | string | no | Plain text, at most 500 characters, drawn after the label. |
+| `list` item | `detail` | string | no | Plain text, at most 500 code points, drawn after the label. |
 | `tree` | `key` | string | yes | Key rules below. |
-| `tree` | `empty` | string | yes | Plain text, at most 500 characters. Drawn in place of the nodes when `nodes` is empty. |
+| `tree` | `empty` | string | yes | Plain text, at most 500 code points. Drawn in place of the nodes when `nodes` is empty. |
 | `tree` | `nodes` | array | yes | Root nodes. At most 5000 nodes in the whole tree, at most 16 levels (root nodes are level 1). A tree is not drawn in a horizontal section ([sidebar section form](#sidebar-section-form)). |
 | `tree` node | `key` | string | yes | Unique among its siblings. |
-| `tree` node | `label` | string | yes | Plain text, at most 500 characters. |
+| `tree` node | `label` | string | yes | Plain text, at most 500 code points. |
 | `tree` node | `command`, `params`, `icon`, `enabled` | as `button` | no | A node with `command` runs it when its label is pressed. |
 | `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Allowed only on a branch, so a leaf that carries it is rejected. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
 | `tree` node | `selected` | boolean | no | Draws the node as selected. Default `false`. The plugin's value applies in every accepted value. |
 | `tree` node | `children` | array | no | Child nodes, with the same rules. A node whose `children` is present and not empty is a branch; any other node is a leaf. |
 | `status-line` | `key` | string | yes | Key rules below. |
-| `status-line` | `text` | string | yes | Plain text, at most 500 characters. Drawn as one line. |
+| `status-line` | `text` | string | yes | Plain text, at most 500 code points. Drawn as one line. |
 
-Key rules: a key is a string of 1 to 128 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, and `-`. Keys are compared as exact strings.
+Key rules: a key is a string of 1 to 128 code points from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, and `-`. Keys are compared as exact strings.
 
 Text rules: a text field is plain text. The workbench draws it as text content, never as markup. A text field that contains a control character (U+0000 to U+001F, U+007F, or U+0080 to U+009F) is rejected.
 
@@ -82,13 +82,13 @@ Each limit is chosen by this document. Its reason is the work that the main page
 | List items | 1000 per list | Bounds the rows that one list draws per declared UI snapshot. |
 | Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per declared UI snapshot. |
 | Tree levels | 16 | Bounds the indent of a tree inside a section. |
-| Text field | 500 characters | Bounds the width of one line of text in a section. |
-| Key | 128 characters | Bounds the identifier that the workbench keeps per element. |
+| Text field | 500 code points | Bounds the width of one line of text in a section. |
+| Key | 128 code points | Bounds the identifier that the workbench keeps per element. |
 | Parameter keys | 16 per object | Bounds the parameter record that each binding keeps. |
-| Parameter key | 64 characters | Bounds the parameter record that each binding keeps. |
-| Parameter string value | 1000 characters | Bounds the parameter record that each binding keeps. |
+| Parameter key | 64 code points | Bounds the parameter record that each binding keeps. |
+| Parameter string value | 1000 code points | Bounds the parameter record that each binding keeps. |
 
-Each limit is checked on receipt. A value that exceeds a limit is rejected, never truncated.
+Each limit is checked on receipt. Every length in this document counts Unicode code points. A value that exceeds a limit is rejected, never truncated.
 
 ## Icons
 
@@ -96,7 +96,7 @@ The `icon` field takes a name of the core icon table. A name that the table does
 
 ## Parameters
 
-`params` of a declared element is a JSON object with at most 16 keys. Each key is a string of at most 64 characters. Each value is a string of at most 1000 characters, a finite number, a boolean, or `null`. An array, an object, or any other value is rejected. The one array in a parameter is the `path` of `core.declared-ui.tree.expand`, which the workbench sets for the expand control. A plugin value cannot carry it.
+`params` of a declared element is a JSON object with at most 16 keys. Each key is a string of at most 64 code points. Each value is a string of at most 1000 code points, a finite number, a boolean, or `null`. An array, an object, or any other value is rejected. The one array in a parameter is the `path` of `core.declared-ui.tree.expand`, which the workbench sets for the expand control. A plugin value cannot carry it.
 
 ## Binding
 
@@ -139,15 +139,15 @@ A declared UI status is drawn through its declared UI snapshots, as follows:
 - A path that is a leaf in an accepted value loses its kept state. A branch with no kept state takes the plugin's `expanded` value.
 - A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
-- A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the declared UI snapshot of the previous process.
+- A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
-- A declared status is served by a plugin process. The source of a status is the first of these that registered it. First, the view of the active tab of the card that holds the sidebar, when that view's page registered the status: for a card sidebar, that card; for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, as `core.sidebars` reports them, and this step is skipped when no override applies. Second, the plugin host of the plugin, when the plugin has one ([plugin processes](../plans/plugin-processes.md)). Otherwise the section is cleared until one of them registers the status. A process registers a status when its page calls `page.exposure.register("status", name)`, and the registration belongs to that process.
+- A declared status is served by a plugin process. The source of a status is the first of these that registered it. First, the view of the active tab of the card that holds the sidebar, when that view's page registered the status: for a card sidebar, that card; for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, as `core.sidebars` reports them, and this step is skipped when no override applies. Second, the plugin host of the plugin, when the plugin has one. Otherwise the section is cleared until one of them registers the status. A process registers a status when its page calls `page.exposure.register("status", name)`, and the registration belongs to that process. A source is the pair of a process and its registration of the status. A change of source means a different pair. A re-registration by the same process for the same status is not a change.
 
 The source changes by these rules:
 
 - (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes.
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
-- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull from the chosen source at the load of the main page, at a change of source and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
+- (c) On a change of source, the workbench pulls the current value from the new source once. The workbench pulls only from the chosen source at the load of the main page, at a change of source and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
@@ -156,7 +156,7 @@ The source changes by these rules:
 ## Sidebar section form
 
 A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
-A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds only a declared item that opens it ([plugin processes](../plans/plugin-processes.md) layer rules).
+A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds a `button` whose command opens the card surface.
 
 - A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element.
 - A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares.
@@ -204,12 +204,12 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | More than 1000 items in a list | `exceeds 1000 items` | `/elements/<i>/items` |
 | More than 5000 nodes in a tree | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
 | A tree node deeper than 16 levels | `exceeds 16 levels` | the node |
-| A text field longer than 500 characters | `exceeds 500 characters` | the text field |
-| A key longer than 128 characters | `exceeds 128 characters` | the key |
-| A key that does not match the key rules | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` | the key |
+| A text field longer than 500 code points | `exceeds 500 code points` | the text field |
+| A key longer than 128 code points | `exceeds 128 code points` | the key |
+| A key that does not match the key rules | `key must be 1 to 128 code points of A-Z, a-z, 0-9, ., _, : or -` | the key |
 | A `params` object with more than 16 keys | `exceeds 16 keys` | the `params` object |
-| A parameter key longer than 64 characters | `exceeds 64 characters` | the parameter key |
-| A parameter string value longer than 1000 characters | `exceeds 1000 characters` | the parameter value |
+| A parameter key longer than 64 code points | `exceeds 64 code points` | the parameter key |
+| A parameter string value longer than 1000 code points | `exceeds 1000 code points` | the parameter value |
 | A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` | the parameter value |
 | A field that the object does not list: a root, an element, a list item, or a tree node | `unknown field <field>` | the object |
 | A required field is missing | `missing <field>` | the object |

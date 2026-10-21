@@ -578,3 +578,14 @@ The objections below are the answers of the tenth adversarial review of [declare
 - R10-2: the word "new" for a branch applied without a baseline, so a branch with kept state could lose it. Verdict: accepted. Resolution: a branch is new only when a baseline exists and the baseline has no branch at its path. With no baseline, a branch with kept state keeps it, and a branch without kept state takes the plugin value.
 - R10-3: the address in the exposure specification named the element attributes for every element. Verdict: accepted. Resolution: a request addresses a control by its section id and `data-key`, and controls of list items and tree nodes add `data-path` and `data-role`, in both languages.
 - R10-4: the term definitions named declared UI snapshots only, and a pull reply is validated like a snapshot. Verdict: accepted. Resolution: the definitions of declared UI and declared UI value name declared UI snapshots and pull replies in the term list.
+
+**Declared UI schema review round 11**
+
+The objections below are the answers of the eleventh adversarial review of [declared UI](../spec/declared-ui.md). Five are accepted, and one is partly accepted.
+
+- R11-1: partly accepted. The declared UI specification relied on the plan for its contracts. Verdict: partly accepted. Resolution: the specification states its own contracts: the pull moments, the source order, the sidebar section layer rule, and the accessibility rule. The plan remains a reference only for the transport of snapshots. The move of the accepted contracts of this plan into a specification, the repointing of links, and the removal of this plan are registered as an item that the branch merge requires, because the move is a change of documents that the merge is not the place for. That item states where the review records go.
+- R11-2: the terms "pull reply" and "kept state" had no entries. Verdict: accepted. Resolution: both terms are added to the term list.
+- R11-3: the sentence that the sidebar holds only a declared item that opens a card surface used a term that the vocabulary does not define. Verdict: accepted. Resolution: the sentence says that the sidebar holds a `button` whose command opens the card surface.
+- R11-4: the source was not defined as a pair. Verdict: accepted. Resolution: a source is the pair of a process and its registration of the status. A change of source means a different pair, and a re-registration by the same process for the same status is not a change.
+- R11-5: the lengths did not say what a character is. Verdict: accepted. Resolution: lengths count Unicode code points, in the limits table and in the rejection rows, in both languages.
+- R11-6: the exposure specification repeated a sentence about controls of list items and tree nodes. Verdict: accepted. Resolution: the repeated sentence is removed in both languages.

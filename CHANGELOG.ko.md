@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-0-12: 선언된 UI 명세가 pull 시점, 출처 순서, 사이드바 계층 규칙, 접근성 규칙을 자기 글로 적는다. 출처는 프로세스와 등록의 짝이고, 길이는 유니코드 코드 포인트를 세며, 용어 pull 응답과 유지된 상태를 더했다.
 - F212.8-0-11: 열 번째 검토 뒤 선언된 UI 명세를 고쳤다. status 대응은 각 status의 load pull을 적고, 가지는 기준이 있을 때만 새 것이며, control의 노출 주소는 section id와 `data-key`이고 list 항목과 tree 노드는 `data-path`와 `data-role`을 더하며, 용어 정의는 pull 응답을 적는다.
 - F212.8-0-10: 아홉 번째 검토 본문의 두 결함을 고쳤다. 전이 규칙은 load 경우를 한 번만 적고, 계획의 load pull은 pull 응답이 snapshot이 아니므로 각 선언된 status의 현재 값을 한 번 요청한다고 적는다.
 - F212.8-0-9: 아홉 번째 검토 뒤 선언된 UI 명세를 고쳤다. load pull은 각 선언된 status를 그 출처에서 요청하고, 모든 control은 루트 요소의 `data-key`를 가지며, list 항목과 tree 노드는 `data-path`와 `data-role`도 가진다. pull 응답은 snapshot이 아니라 응답으로 적는다.

@@ -307,6 +307,18 @@
       "allowed": []
     },
     {
+      "term": "pull reply",
+      "definition": "The response of a pull of a declared UI status: {seq, value}, where value is the source's current value and is null when the source has no value yet (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "kept state",
+      "definition": "The expanded state that the workbench keeps for a tree branch, keyed by its status, tree and path of node keys. The expand command sets it, and a changed expanded value from the plugin replaces it (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "dirty mark",
       "definition": "The mark of a status whose value changed while its snapshot was in transit; the acknowledgement of that snapshot sends the latest value of the status and clears the mark.",
       "rejected": [],
