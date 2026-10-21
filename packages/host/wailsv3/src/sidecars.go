@@ -173,9 +173,9 @@ type Sidecars struct {
 	StopTimeout time.Duration // The deadline of Stop() that a test can inject. Default: 5 seconds.
 	// ReadyTimeout is the upper bound of the time until a newly started persistent service prints its endpoint. Default: 30 seconds. A test injects it.
 	ReadyTimeout time.Duration
-	// Now is the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
+	// Now is the clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
 	Now func() time.Time
-	// restarts holds the restart-limit record of each standard input and output sidecar that has a counted failure. c.mu protects it.
+	// restarts holds the restart-limit record of each sidecar that has a counted failure. c.mu protects it.
 	restarts map[string]*restartRecord
 	// dependents are the plugins that list each sidecar in dependencies. declarations protects it.
 	dependents map[string][]string
@@ -186,19 +186,33 @@ type Sidecars struct {
 	nextRequest   uint64
 }
 
-// restartWindow and restartLimit are the sliding window and the number of counted failures of the restart limit of a standard input and
-// output sidecar (docs/spec/sidecars.md#failure).
+// restartWindow and restartLimit are the sliding window and the number of counted failures of the restart limit of a sidecar of either
+// transport (docs/spec/sidecars.md#failure).
 const (
 	restartWindow = 300 * time.Second
 	restartLimit  = 4
 )
 
-// restartRecord is the restart-limit record of one standard input and output sidecar. failures are the times of the counted failures,
-// oldest first. When the limit stops the restarts, stopped is true.
+// restartRecord is the restart-limit record of one sidecar. failures are the times of the counted failures, oldest first. When the
+// limit stops the restarts, stopped is true.
 type restartRecord struct {
 	failures []time.Time
 	stopped  bool
 }
+
+// errRestartLimit is the reason of the connection notice of a persistent service whose restarts the restart limit stopped
+// (docs/spec/terminal-runtime.md#service-transport).
+var errRestartLimit = errors.New("restart limit")
+
+// revival is the revival of one lost persistent connection. counted is true once a failure of that disconnect is counted, because one
+// disconnect counts at most one failure (docs/spec/terminal-runtime.md#service-transport).
+type revival struct{ counted bool }
+
+// serviceStartFailure is a start failure of the creation path of a persistent service that the restart limit counts: the service printed
+// no endpoint within the ready bound, ended before its endpoint, or did not answer hello within helloTimeout.
+type serviceStartFailure struct{ text string }
+
+func (e serviceStartFailure) Error() string { return e.text }
 
 // now is the time of the restart limit: the injected Now, or time.Now when no test injects one.
 func (c *Sidecars) now() time.Time {
@@ -208,7 +222,7 @@ func (c *Sidecars) now() time.Time {
 	return time.Now()
 }
 
-// countFailure counts a failure of the standard input and output sidecar name at the current time among the failures within restartWindow.
+// countFailure counts a failure of the sidecar name at the current time among the failures within restartWindow.
 // It reports true when this failure is the restartLimit-th counted one, which stops the restarts. It is called holding c.mu.
 func (c *Sidecars) countFailure(name string) bool {
 	record := c.restarts[name]
@@ -231,8 +245,38 @@ func (c *Sidecars) countFailure(name string) bool {
 	return true
 }
 
-// SurfaceOpened is called when the host creates a surface of plugin. It clears the restart limit of each stopped standard input and output
-// sidecar that the plugin lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure). It is called
+// reportRestartLimit writes the stop of the restarts of the sidecar name by the restart limit to the log and as an event.
+func reportRestartLimit(name string) {
+	LogError("sidecar "+name, fmt.Sprintf("restart limit: %d failures within %d s", restartLimit, int(restartWindow/time.Second)))
+	EmitHost(LevelError, "host.sidecar.restart-limit", map[string]any{"sidecar": name})
+}
+
+// countServiceFailure counts a failure of the persistent service name while the host is neither stopping its sidecars nor replacing the
+// sidecar, and reports the stop when it is the restartLimit-th one. lost is the revival of the disconnect that the failure belongs to, nil
+// for a start that a send or a retain runs; a disconnect whose failure is already counted counts nothing more. It returns true when the
+// restarts are stopped by this failure. It is called holding c.mu.
+func (c *Sidecars) countServiceFailure(name string, lost *revival) bool {
+	if _, replacing := c.replacing[name]; c.stopped || replacing || (lost != nil && lost.counted) {
+		return false
+	}
+	if lost != nil {
+		lost.counted = true
+	}
+	if !c.countFailure(name) {
+		return false
+	}
+	reportRestartLimit(name)
+	return true
+}
+
+// restartStopped reports whether the restart limit stops the restarts of the sidecar name. It is called holding c.mu.
+func (c *Sidecars) restartStopped(name string) bool {
+	record := c.restarts[name]
+	return record != nil && record.stopped
+}
+
+// SurfaceOpened is called when the host creates a surface of plugin. It clears the restart limit of each stopped sidecar that the plugin
+// lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure). It is called
 // holding no lock; it takes c.mu.
 func (c *Sidecars) SurfaceOpened(plugin, surface string) {
 	c.mu.Lock()
@@ -252,8 +296,7 @@ func (c *Sidecars) SurfaceOpened(plugin, surface string) {
 // the sidecar is stopped, and then the request is refused, whichever surface sent it; the stop is cleared only by SurfaceOpened. It is called
 // holding c.mu.
 func (c *Sidecars) restartRefused(name, surface string) bool {
-	record := c.restarts[name]
-	if record == nil || !record.stopped {
+	if !c.restartStopped(name) {
 		return false
 	}
 	LogError("sidecar "+name, fmt.Sprintf("restart limit: request for %s refused", surface))
@@ -463,11 +506,20 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 			c.closingChanged()
 		}
 	}()
-	// A refusal by the restart limit is reported to the owner after the unlock, as the failure event of the sidecar (docs/spec/sidecars.md#failure).
+	// A refusal by the restart limit is reported to the owner after the unlock: as the failure event of a standard input and output sidecar,
+	// and as the connection notice of a persistent service (docs/spec/sidecars.md#failure).
 	var refusal *SidecarFailure
+	var refusalNotice bool
 	defer func() {
 		if refusal != nil {
 			owner.Emit("sidecar-failure", *refusal)
+		}
+		if refusalNotice {
+			if body, err := connectionNotice(errRestartLimit); err != nil {
+				LogError("sidecar "+name, fmt.Sprintf("connection notice serialization: %v", err))
+			} else {
+				owner.Emit("sidecar-message", SidecarMessage{Sidecar: name, Surface: surface, Body: body})
+			}
 		}
 	}()
 	c.mu.Lock()
@@ -482,10 +534,14 @@ func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body j
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
 	if c.restartRefused(name, surface) {
-		refusal = &SidecarFailure{Sidecar: name, Surface: surface, Reason: "restart limit"}
+		if _, persistent, _ := c.declaration(name); persistent {
+			refusalNotice = true
+		} else {
+			refusal = &SidecarFailure{Sidecar: name, Surface: surface, Reason: "restart limit"}
+		}
 		return fmt.Errorf("sidecar %s: restart limit", name)
 	}
-	process, started, err := c.process(name)
+	process, started, err := c.process(name, nil)
 	if err != nil {
 		return err
 	}
@@ -995,7 +1051,7 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 				return total, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
 			}
 		}
-		if _, _, err := c.process(name); err != nil {
+		if _, _, err := c.process(name, nil); err != nil {
 			c.mu.Unlock()
 			return total, err
 		}
@@ -1112,8 +1168,10 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 
 // process returns the running sidecar, and when there is none, starts and registers it. It is called holding c.mu and returns holding it. The start
 // waits for the process launch and for the connection and the authentication of a persistent service, so it happens with the lock released. Meanwhile the requests of other sidecars
-// do not wait, and the requests of the same sidecar wait for that start to end. started tells whether this call started it.
-func (c *Sidecars) process(name string) (process *sidecar, started bool, err error) {
+// do not wait, and the requests of the same sidecar wait for that start to end. started tells whether this call started it. lost is the revival
+// of a lost persistent connection that runs this start, nil for a send or a retain. While the restart limit stops the sidecar, it starts nothing;
+// a counted start failure of a persistent service can stop it (docs/spec/terminal-runtime.md#service-transport).
+func (c *Sidecars) process(name string, lost *revival) (process *sidecar, started bool, err error) {
 	for {
 		if process, ok := c.running[name]; ok {
 			return process, false, nil
@@ -1129,13 +1187,19 @@ func (c *Sidecars) process(name string) (process *sidecar, started bool, err err
 		<-wait
 		c.mu.Lock()
 	}
+	if c.restartStopped(name) {
+		return nil, false, fmt.Errorf("sidecar %s: restart limit", name)
+	}
 	done := make(chan struct{})
 	c.starting[name] = done
 	c.mu.Unlock()
-	process, err = c.launch(name)
+	process, err = c.launch(name, lost)
 	c.mu.Lock()
 	delete(c.starting, name)
 	close(done)
+	if failure := (serviceStartFailure{}); errors.As(err, &failure) {
+		c.countServiceFailure(name, lost)
+	}
 	if err != nil {
 		return nil, false, err
 	}
@@ -1148,14 +1212,15 @@ func (c *Sidecars) process(name string) (process *sidecar, started bool, err err
 	return process, true, nil
 }
 
-// launch starts the sidecar name. Call it without the lock; it does not register.
-func (c *Sidecars) launch(name string) (*sidecar, error) {
+// launch starts the sidecar name; lost is the revival that runs the start of a persistent service, or nil. Call it without the lock; it does
+// not register.
+func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 	program, persistent, ok := c.declaration(name)
 	if !ok {
 		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
 	if persistent {
-		return c.processPersistent(name)
+		return c.processPersistent(name, lost)
 	}
 	// A host with a configuration directory has the folder `logs`, where a sidecar writes its event file (docs/spec/sidecars.md#log).
 	arguments := []string{}
@@ -1237,7 +1302,10 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 	return nil, true, nil
 }
 
-func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
+// processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
+// it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
+// there (docs/spec/terminal-runtime.md#service-transport).
+func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, error) {
 	program, _, ok := c.declaration(name)
 	if !ok {
 		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
@@ -1262,6 +1330,14 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
+		if lost != nil {
+			c.mu.Lock()
+			stopped := c.countServiceFailure(name, lost)
+			c.mu.Unlock()
+			if stopped {
+				return nil, errRestartLimit
+			}
+		}
 		cmd = exec.Command(program, "--service-dir", serviceDir, "--log-dir", filepath.Join(c.configDir, "logs"))
 		// A persistent service belongs to the lifetime of the configuration
 		// directory and not of this application process. A new session is started so that the recovery service does not
@@ -1291,13 +1367,13 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		if timedOut {
 			message := fmt.Sprintf("sidecar %s: the service did not print its endpoint within %v", name, c.ReadyTimeout)
 			if err != nil {
-				return nil, fmt.Errorf("%s; %w", message, err)
+				return nil, serviceStartFailure{fmt.Sprintf("%s; %v", message, err)}
 			}
-			return nil, errors.New(message)
+			return nil, serviceStartFailure{message}
 		}
 		// When stdout closes without a line, the service ended before it printed the endpoint.
 		if errors.Is(err, io.EOF) && len(line) == 0 {
-			return nil, fmt.Errorf("sidecar %s: service exited before endpoint", name)
+			return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: service exited before endpoint", name)}
 		}
 		if err != nil {
 			return nil, fmt.Errorf("sidecar %s: service startup: %w", name, err)
@@ -1329,7 +1405,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 		}
 		// This endpoint was left by a service that ended abnormally. Only this record, which was confirmed to be stale, is removed,
 		// and the common single creation path is entered.
-		return c.processPersistent(name)
+		return c.processPersistent(name, lost)
 	}
 	if endpoint.Protocol != 1 {
 		return nil, fmt.Errorf("sidecar %s: service protocol %d is not supported", name, endpoint.Protocol)
@@ -1360,7 +1436,7 @@ func (c *Sidecars) processPersistent(name string) (*sidecar, error) {
 	responseLine, err := reader.ReadBytes('\n')
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		conn.Close()
-		return nil, fmt.Errorf("sidecar %s: the service did not answer hello within %v", name, helloTimeout)
+		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, helloTimeout)}
 	}
 	if err != nil {
 		conn.Close()
@@ -1609,8 +1685,7 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 	close(process.exited)
 	LogError("sidecar "+process.name, "failed: "+reason)
 	if stop {
-		LogError("sidecar "+process.name, fmt.Sprintf("restart limit: %d failures within %d s", restartLimit, int(restartWindow/time.Second)))
-		EmitHost(LevelError, "host.sidecar.restart-limit", map[string]any{"sidecar": process.name})
+		reportRestartLimit(process.name)
 	}
 	c.failRequests(process.name, reason)
 	for _, item := range owned {
@@ -1701,6 +1776,9 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	var owned []ownedSurface
 	c.mu.Lock()
 	stopping := c.stopped
+	// A connection that ends for a protocol violation while the host is not stopping is a failure of the service, which the restart limit
+	// counts here; the service keeps running (docs/spec/terminal-runtime.md#service-transport).
+	stop := violation != "" && !stopping && c.countFailure(process.name)
 	waiters := make([]chan error, 0, len(process.closeWaiters))
 	for request, waiter := range process.closeWaiters {
 		delete(process.closeWaiters, request)
@@ -1741,6 +1819,9 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		// The service violated the protocol. The same message would end the next connection too, so it is not connected again immediately, and the next send
 		// connects again through the creation path (docs/spec/terminal-runtime.md#service-transport).
 		LogError("sidecar "+process.name, "failed: "+violation)
+		if stop {
+			reportRestartLimit(process.name)
+		}
 		c.failRequests(process.name, violation)
 		for _, item := range owned {
 			item.owner.Emit("sidecar-failure", SidecarFailure{Sidecar: process.name, Surface: item.surface, Reason: violation})
@@ -1905,7 +1986,9 @@ func logUnfinishedLine(sidecar string, unfinished int) {
 // a failure is reported by a notification, and the next send passes through the same path again.
 func (c *Sidecars) revivePersistent(name string) {
 	c.awaitReplacedService(name)
-	announced, failure := c.reviveAttempt(name)
+	// One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
+	lost := &revival{}
+	announced, failure := c.reviveAttempt(name, lost)
 	// The first attempt in which the connection is refused is evidence that the endpoint no longer listens; even if a recycled pid
 	// passes kill(pid, 0), the socket is dead. Only in a restart that has a loss record, it discards the endpoint
 	// and tries once more (V5-106). The contract of the send path is unchanged: the
@@ -1917,7 +2000,7 @@ func (c *Sidecars) revivePersistent(name string) {
 				LogError("sidecar "+name, fmt.Sprintf("remove refused endpoint: %v", err))
 			}
 		}
-		announced, failure = c.reviveAttempt(name)
+		announced, failure = c.reviveAttempt(name, lost)
 	}
 	c.mu.Lock()
 	replaced, replacing := c.replacing[name]
@@ -1975,18 +2058,18 @@ func (c *Sidecars) awaitReplacedService(name string) {
 	}
 }
 
-// reviveAttempt is one restart. When another path already restarted it, it returns announced=false,
-// and when the start fails, it returns failure.
-func (c *Sidecars) reviveAttempt(name string) (announced bool, failure error) {
+// reviveAttempt is one restart of the disconnect lost. When another path already restarted it, or the restart limit stops the sidecar, it
+// returns announced=false, and when the start fails, it returns failure.
+func (c *Sidecars) reviveAttempt(name string, lost *revival) (announced bool, failure error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.stopped {
+	if c.stopped || c.restartStopped(name) {
 		return false, nil
 	}
 	if _, running := c.running[name]; running {
 		return false, nil
 	}
-	_, started, err := c.process(name)
+	_, started, err := c.process(name, lost)
 	if err != nil {
 		return false, err
 	}
@@ -2017,11 +2100,7 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 		entries = append(entries, ownerSurface{surface, owner})
 	}
 	c.mu.Unlock()
-	body := map[string]any{"event": "connection", "connected": failure == nil}
-	if failure != nil {
-		body["reason"] = failure.Error()
-	}
-	raw, err := json.Marshal(body)
+	raw, err := connectionNotice(failure)
 	if err != nil {
 		LogError("sidecar "+name, fmt.Sprintf("connection notice serialization: %v", err))
 		return
@@ -2036,6 +2115,15 @@ func (c *Sidecars) notifyConnection(name string, failure error) {
 		}
 		item.owner.Emit("sidecar-message", SidecarMessage{Sidecar: name, Surface: item.surface, Body: raw})
 	}
+}
+
+// connectionNotice is the sidecar-message body of a persistent connection: connected, or not connected with the reason failure.
+func connectionNotice(failure error) (json.RawMessage, error) {
+	body := map[string]any{"event": "connection", "connected": failure == nil}
+	if failure != nil {
+		body["reason"] = failure.Error()
+	}
+	return json.Marshal(body)
 }
 
 // Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the

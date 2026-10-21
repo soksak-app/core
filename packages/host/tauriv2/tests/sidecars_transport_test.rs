@@ -2412,3 +2412,303 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// A clock that a restart-limit check moves. Its time is the base plus the offset that the check set.
+#[derive(Clone)]
+struct RestartClock {
+    base: std::time::Instant,
+    offset: Arc<Mutex<Duration>>,
+}
+
+impl RestartClock {
+    fn new() -> Self {
+        Self {
+            base: std::time::Instant::now(),
+            offset: Arc::new(Mutex::new(Duration::ZERO)),
+        }
+    }
+
+    fn set(&self, offset: Duration) {
+        *self.offset.lock().unwrap() = offset;
+    }
+
+    fn read(&self) -> std::time::Instant {
+        self.base + *self.offset.lock().unwrap()
+    }
+}
+
+/// Waits for the next message of the window and checks that it is the connection notice of surface with connected and,
+/// for a failed connection, reason.
+fn require_connection_notice(
+    messages: &Receiver<Message>,
+    surface: &str,
+    connected: bool,
+    reason: Option<&str>,
+) {
+    let message = messages
+        .recv_timeout(STALL)
+        .expect("no sidecar message; the test stalled");
+    let notice: serde_json::Value = serde_json::from_str(message.body.get()).unwrap();
+    assert!(
+        message.surface == surface
+            && notice["event"] == "connection"
+            && notice["connected"] == connected
+            && notice["reason"].as_str() == reason,
+        "notice of {} = {notice}, want the connection notice of {surface} with connected {connected} and reason {reason:?}",
+        message.surface
+    );
+}
+
+/// Writes the endpoint of the service fixture at socket with the process id pid.
+fn write_restart_endpoint(service_directory: &Path, socket: &Path, pid: u32) {
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "protocol": 1, "pid": pid, "socket": socket, "token": "restart-token"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+/// The number of times the service fixture ran, from the lines it appends to runs.
+fn service_runs(runs: &Path) -> usize {
+    match std::fs::read_to_string(runs) {
+        Ok(text) => text.lines().count(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(error) => panic!("read {}: {error}", runs.display()),
+    }
+}
+
+// The restart limit counts the failures of a persistent service (docs/spec/terminal-runtime.md#service-transport): three
+// failed starts that sends ran and the end of the service process that a revival finds are four failures, and a revival
+// that reattaches the live service counts none. The fourth failure stops the restarts before the revival spawns; a
+// refused send gets the connection notice, and the open of a surface of a dependent plugin clears the stop.
+// contract: sidecars.restart.persistent-service-end-stops-before-the-spawn, sidecars.restart.persistent-refused-send-gets-the-connection-notice
+#[test]
+fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
+    // The writer of the records is shared by the process, so the scenario runs in a child process that nothing else writes in.
+    if let Some(config) = std::env::var_os("SOKSAK_PERSISTENT_RESTART_CHILD") {
+        let writer = records::start_writer(Path::new(&config));
+        let executable_directory = folder::Folder::new();
+        let runs = executable_directory.path().join("runs");
+        let program = executable_directory.path().join("echo");
+        std::fs::write(
+            &program,
+            format!("#!/bin/sh\necho run >> '{}'\nexit 0\n", runs.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let config_directory = folder::Folder::new();
+        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let mut declarations = declare(&fixture, executable_directory.path());
+        declarations[0].dependents = vec!["plugin-a".to_string()];
+        let clock = RestartClock::new();
+        let clock_of_sidecars = clock.clone();
+        let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf())
+            .unwrap()
+            .with_clock(move || clock_of_sidecars.read());
+        let (sent, messages) = channel();
+        let (failed, failures) = channel();
+        let owner = FailureOwner { sent, failed };
+        let send = |surface: &str, seconds: u64| {
+            clock.set(Duration::from_secs(seconds));
+            sidecars.send(&owner, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+        };
+        let exited = format!("sidecar {ECHO}: service exited before endpoint");
+        for seconds in [0, 10, 20] {
+            assert_eq!(
+                send("s1", seconds),
+                Err(exited.clone()),
+                "send at {seconds}s"
+            );
+        }
+
+        // A live service: its first connection echoes one request and ends, and the second ends when cut is sent.
+        let service_directory = config_directory.path().join("services/echo");
+        let socket_path = service_directory.join("restart.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        write_restart_endpoint(&service_directory, &socket_path, std::process::id());
+        let (cut, cut_received) = channel::<()>();
+        let service = thread::spawn(move || {
+            for index in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                stream
+                    .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+                    .unwrap();
+                if index == 1 {
+                    let _ = cut_received.recv();
+                } else {
+                    line.clear();
+                    reader.read_line(&mut line).unwrap();
+                    stream.write_all(line.as_bytes()).unwrap();
+                }
+                stream.shutdown(Shutdown::Both).unwrap();
+            }
+        });
+        send("s1", 30).unwrap();
+        messages.recv_timeout(STALL).unwrap(); // the echo of the open request
+        // The first connection ended and the revival reattached the live service: no failure is counted.
+        require_connection_notice(&messages, "s1", true, None);
+
+        // The service process ends: its endpoint names a process that no longer exists. The revival counts the fourth
+        // failure and stops before it spawns the service.
+        let mut ended = Command::new("/usr/bin/true").spawn().unwrap();
+        let dead = ended.id();
+        ended.wait().unwrap();
+        write_restart_endpoint(&service_directory, &socket_path, dead);
+        clock.set(Duration::from_secs(40));
+        cut.send(()).unwrap();
+        service.join().unwrap();
+        require_connection_notice(&messages, "s1", false, Some("restart limit"));
+        assert_eq!(
+            service_runs(&runs),
+            3,
+            "the stopped revival spawned the service"
+        );
+
+        // While the service is stopped, a send is refused with the connection notice and no sidecar failure.
+        assert_eq!(
+            send("s1", 50),
+            Err(format!("sidecar {ECHO}: restart limit")),
+            "send while stopped"
+        );
+        require_connection_notice(&messages, "s1", false, Some("restart limit"));
+        if let Ok(failure) = failures.try_recv() {
+            panic!("the refused send delivered a sidecar failure: {failure:?}");
+        }
+        assert_eq!(
+            service_runs(&runs),
+            3,
+            "the refused send spawned the service"
+        );
+
+        // The open of a surface of a plugin that lists the sidecar clears the stop: the next send runs the creation path.
+        sidecars.surface_opened("plugin-a", "s2");
+        assert_eq!(send("s2", 60), Err(exited.clone()), "send after the reset");
+        assert_eq!(
+            service_runs(&runs),
+            4,
+            "the send after the reset spawned the service"
+        );
+        sidecars.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_persistent_service_end_stops_the_restarts_before_the_spawn",
+            "--nocapture",
+        ])
+        .env("SOKSAK_PERSISTENT_RESTART_CHILD", config.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the child check failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = records::read_events(&records::event_log_path(config.path()));
+    let text = records::text_of(&events);
+    assert_eq!(
+        text.matches(&format!(
+            "sidecar {ECHO}: restart limit: 4 failures within 300 s\n"
+        ))
+        .count(),
+        1,
+        "restart-limit lines in {text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "sidecar {ECHO}: restart limit: request for s1 refused\n"
+        )),
+        "the log has no refusal line: {text}"
+    );
+    let stops: Vec<_> = events
+        .iter()
+        .filter(|event| event["event"] == "host.sidecar.restart-limit")
+        .collect();
+    assert!(
+        stops.len() == 1 && stops[0]["level"] == "error" && stops[0]["fields"]["sidecar"] == ECHO,
+        "restart-limit events = {stops:?}"
+    );
+    let resets: Vec<_> = events
+        .iter()
+        .filter(|event| event["event"] == "host.trace.sidecar.restart-reset")
+        .collect();
+    assert!(
+        resets.len() == 1
+            && resets[0]["fields"]["sidecar"] == ECHO
+            && resets[0]["fields"]["surface"] == "s2",
+        "restart-reset events = {resets:?}"
+    );
+}
+
+// A connection that the reader ends for a protocol violation is a failure of the persistent service, so the fourth
+// violation within 300 seconds stops the restarts (docs/spec/terminal-runtime.md#service-transport).
+// contract: sidecars.restart.persistent-violation-counts
+#[test]
+fn persistent_protocol_violations_stop_the_restarts() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("violations.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    write_restart_endpoint(&service_directory, &socket_path, std::process::id());
+    // Each of four connections answers hello, receives one request and answers it with a line that is not JSON.
+    let service = thread::spawn(move || {
+        for _ in 0..4 {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            stream
+                .write_all(b"{\"operation\":\"hello\",\"protocol\":1,\"ok\":true}\n")
+                .unwrap();
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            stream.write_all(b"not json\n").unwrap();
+            // When the host closes the connection, the read ends with EOF.
+            std::io::copy(&mut reader, &mut std::io::sink()).unwrap();
+        }
+    });
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let clock = RestartClock::new();
+    let clock_of_sidecars = clock.clone();
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap()
+    .with_clock(move || clock_of_sidecars.read());
+    let (sent, _messages) = channel();
+    let (failed, failures) = channel();
+    let owner = FailureOwner { sent, failed };
+    for seconds in [0, 10, 20, 30] {
+        clock.set(Duration::from_secs(seconds));
+        sidecars
+            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        let failure = failures
+            .recv_timeout(STALL)
+            .expect("no sidecar failure; the test stalled");
+        assert!(
+            failure.reason.starts_with("invalid message: "),
+            "failure at {seconds}s = {failure:?}"
+        );
+    }
+    service.join().unwrap();
+    clock.set(Duration::from_secs(40));
+    assert_eq!(
+        sidecars.send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#)),
+        Err(format!("sidecar {ECHO}: restart limit")),
+        "send at 40s"
+    );
+    sidecars.stop();
+}

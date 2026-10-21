@@ -483,6 +483,9 @@ fn invalid_json_closes_connection() {
 | `sidecars.restart.old-failure-not-counted` | 나중 실패보다 300초 넘게 앞선 실패는 세지 않는다. 0, 10, 20초의 실패 뒤 305초의 실패는 사이드카를 계속 재시작하게 두고, 0초의 실패는 세지 않는다. | both |
 | `sidecars.restart.refuses-already-open-surface` | 재시작 한도가 사이드카를 멈춘 동안 이미 열린 표면의 전송은, 그 표면이 실패한 프로세스에 보냈든 아니든, 이유 "restart limit"으로 거절되고 프로세스를 시작하지 않는다. | both |
 | `sidecars.restart.surface-open-resets-the-record` | 멈춘 사이드카를 `dependencies`에 적은 plugin의 표면이 만들어지면 실패 기록이 지워지고, `sidecar`와 `surface`를 가진 event `host.trace.sidecar.restart-reset`이 기록되며, 다음 전송이 프로세스를 시작한다. 그 사이드카를 적지 않은 plugin의 표면 생성은 멈춤을 그대로 둔다. | both |
+| `sidecars.restart.persistent-service-end-stops-before-the-spawn` | 전송이 실행한 영속 서비스의 실패한 시작 3번, 부활이 살아 있는 서비스에 다시 붙는 끊김, 서비스 프로세스가 끝난 끊김은 다시 붙은 끊김을 빼고 실패 4번으로 센다. 마지막 끊김의 부활은 아무것도 스폰하지 않고, `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰며, event `host.sidecar.restart-limit`을 level `error`로 기록하고, 전송한 표면은 연결 알림 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 받는다. | both |
+| `sidecars.restart.persistent-refused-send-gets-the-connection-notice` | 재시작 한도가 영속 서비스를 멈춘 동안 전송은 서비스를 시작하지 않고, `sidecar <name>: restart limit`로 실패하며, `error: sidecar <name>: restart limit: request for <surface> refused`를 쓰고, 전송한 표면에 이유 `restart limit`인 연결 알림을 전달하며 `sidecar-failure`는 전달하지 않는다. 그 사이드카를 `dependencies`에 적은 plugin의 표면이 만들어진 뒤 다음 전송은 생성 경로를 실행한다. | both |
+| `sidecars.restart.persistent-violation-counts` | 300초 안에 각각 protocol 위반으로 끝난 영속 서비스 연결 4개는 재시작을 멈춘다. 다음 전송은 어느 서비스에도 연결하지 않고 `sidecar <name>: restart limit`로 실패한다. | both |
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | 두 호스트가 토큰으로 한 서비스 엔드포인트에 인증하고 각자의 이벤트를 받는다. | both |
 | `sidecars-transport.hello.declares-protocol-one` | hello 요청은 프로토콜 1을 선언한다. | both |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | 서비스가 연결을 끊으면 다음 보내기가 다시 연결하고 이벤트는 계속 소유자와 표면에 도착한다. | both |

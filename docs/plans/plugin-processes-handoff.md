@@ -29,7 +29,6 @@ State on 2026-10-21. Only main is pushed; no other branch is published.
 | `main` | `core` | pushed; holds the F212 view and declared UI work, F212.7-10 to F212.7-13, and F224 to F227 | — |
 | `fix/lock-unwraps-F218-2-4` | `../core-lock-unwraps-F218-2-4` | F218-2.4 in progress | finish F218-2.4 and F218-2.5, merge into main, then remove the worktree and the branch |
 | `feat/plugin-host-F212.9` | `../core-plugin-host-F212.9` | F212.9-1 and F212.9-2 committed, F212.9-3 in progress | finish F212.9-3 and F212.9-4, merge into main, then remove |
-| `fix/persistent-restart-F212-8a-4` | `../core-persistent-restart-F212-8a-4` | F212.8a-4 in progress | specify and implement, merge into main, then remove |
 | `feat/settings-G1.4-87-1` | `../core-settings-G1.4-87-1` | held item | do not touch |
 | `fix/background-launch-V5-117-1-3-4-7-1-8` | none | held item | do not touch |
 
@@ -47,6 +46,8 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 ## How to work
 
 ### Every item
+
+Development comes first. An item runs only its own unit tests (Red and Green), is marked `[o]`, and the work moves to the next item. The gates (`make push-check`, and `make host-contract-check` when contract cases change) run once when a branch merges into main. Full suites, window checks and measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run after every development item is complete.
 
 1. `git fetch` and read the checklist on origin first.
 2. Classify the request, register the item (EN and KO), and update the specification first when the contract changes.
@@ -123,7 +124,7 @@ The order below follows the dependencies. IDs are checklist IDs.
 
 ### 1. Main items beside F212
 
-Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sidecar test that blocked F218-2.2 run alone), and F212.6a-1-3-2-2 (the stall is the page-close work of WebKit and the system on the main thread, so no host change follows).
+Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sidecar test that blocked F218-2.2 run alone), F212.8a-4 (the restart limit of persistent services, so F212.8a is complete), and F212.6a-1-3-2-2 (the stall is the page-close work of WebKit and the system on the main thread, so no host change follows).
 
 **F218-2.4** — in progress on `fix/lock-unwraps-F218-2-4`. 86 lock results that call `unwrap` or `expect`. Same change and test; Red is the panic of the calling thread.
 
@@ -132,8 +133,6 @@ Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sid
 **F212.1-2-2** — the fixture reply waited 12.4 s for the first answer of the files sidecar. `host.trace.sidecar.ready` (F212.1-2-2-6) measures spawn to first answer. S31 is committed in the files sidecar. Repeat the window check of F212.1-2 with the trace on, and read `host.trace.sidecar.ready` and the sidecar's first record. If the gap is before the sidecar's first record, the cause is the start of the process (the binary launch); record the measured time and its cause. If the gap is inside the sidecar, fix it there.
 
 **F212.1-3** — the recorded DOM mount baseline of pass value (iii). For each installed surface plugin, record the main page from the surface start request to the first content frame (`diagnostics.capture.start/stop`), and take the median of 5 runs with the load average. Make it a tracked window check under `e2e/`, and write the result in the plan table "F212.1-2".
-
-**F212.8a-4** — in progress on `fix/persistent-restart-F212-8a-4`; the decision record is `docs/plans/persistent-restart.md`. The restart limit of persistent services (`docs/spec/terminal-runtime.md`, one attempt per disconnect). This is a decision first: which event counts as a failure of a persistent service. A disconnect that the host re-attaches without a send is not a failure event today. Write the scope, run the review, then specify and implement it in both hosts with a contract case. Reuse the stdio limit of F212.8a (Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
 
 ### 2. Checklist states
 

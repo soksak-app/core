@@ -29,7 +29,6 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 | `main` | `core` | push됨. F212 view와 선언 UI 작업, F212.7-10~F212.7-13, F224~F227을 담는다 | — |
 | `fix/lock-unwraps-F218-2-4` | `../core-lock-unwraps-F218-2-4` | F218-2.4 진행 중 | F218-2.4와 F218-2.5를 끝내고 main에 합친 뒤 worktree와 branch를 지운다 |
 | `feat/plugin-host-F212.9` | `../core-plugin-host-F212.9` | F212.9-1과 F212.9-2 커밋, F212.9-3 진행 중 | F212.9-3과 F212.9-4를 끝내고 main에 합친 뒤 지운다 |
-| `fix/persistent-restart-F212-8a-4` | `../core-persistent-restart-F212-8a-4` | F212.8a-4 진행 중 | 명세하고 구현한 뒤 main에 합치고 지운다 |
 | `feat/settings-G1.4-87-1` | `../core-settings-G1.4-87-1` | 보류 항목 | 건드리지 않는다 |
 | `fix/background-launch-V5-117-1-3-4-7-1-8` | 없음 | 보류 항목 | 건드리지 않는다 |
 
@@ -47,6 +46,8 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 ## 작업 방법
 
 ### 모든 항목
+
+개발이 먼저다. 항목은 자기 단위 시험(Red와 Green)만 돌리고 `[o]`로 표시한 뒤 다음 항목으로 넘어간다. 관문(`make push-check`, 계약 case가 바뀌면 `make host-contract-check`)은 branch를 main에 합칠 때 한 번 돌린다. 전체 모음, 창 검사, 측정(F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12~F212.14)은 개발 항목이 모두 끝난 뒤에 돌린다.
 
 1. `git fetch` 후 origin의 checklist를 먼저 읽는다.
 2. 요청을 분류하고 항목을 등록한다(EN과 KO). 계약이 바뀌면 명세를 먼저 고친다.
@@ -123,7 +124,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 
 ### 1. F212 옆의 main 항목
 
-main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존 sidecar 시험은 F219가 하나씩 돌게 했다), F212.6a-1-3-2-2(멈춤은 main thread에서 WebKit과 시스템이 하는 page close 작업이라 host 변경은 없다).
+main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존 sidecar 시험은 F219가 하나씩 돌게 했다), F212.8a-4(계속 연결하는 service의 재시작 한도, 이로써 F212.8a 완료), F212.6a-1-3-2-2(멈춤은 main thread에서 WebKit과 시스템이 하는 page close 작업이라 host 변경은 없다).
 
 **F218-2.4** — `fix/lock-unwraps-F218-2-4`에서 진행 중. `unwrap`이나 `expect`를 부르는 lock 결과 86곳. 변경과 시험은 같고, Red는 호출 thread의 panic이다.
 
@@ -132,8 +133,6 @@ main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존
 **F212.1-2-2** — fixture 답이 files sidecar의 첫 답을 12.4초 기다렸다. `host.trace.sidecar.ready`(F212.1-2-2-6)가 spawn에서 첫 답까지를 잰다. files sidecar의 S31은 커밋되었다. trace를 켜고 F212.1-2의 창 검사를 되풀이하고, `host.trace.sidecar.ready`와 sidecar의 첫 기록을 읽는다. 공백이 sidecar의 첫 기록 이전이면 원인은 프로세스 시작(binary 실행)이다. 잰 시간과 그 원인을 기록한다. 공백이 sidecar 안이면 거기서 고친다.
 
 **F212.1-3** — 통과값 (iii)의 녹화 기반 DOM mount 기준값. 설치된 surface plugin마다, surface 시작 요청부터 첫 내용 frame까지 main page를 녹화하고(`diagnostics.capture.start/stop`) 5회의 중앙값을 load average와 함께 잡는다. `e2e/` 아래 추적되는 창 검사로 만들고, 결과를 계획의 "F212.1-2" 표에 적는다.
-
-**F212.8a-4** — `fix/persistent-restart-F212-8a-4`에서 진행 중이며, 결정 기록은 `docs/plans/persistent-restart.md`다. 계속 연결하는 service의 재시작 한도(`docs/spec/terminal-runtime.md`, 연결이 끊길 때 한 번 시도). 먼저 결정이 필요하다. 계속 연결하는 service에서 어떤 event를 실패로 셀지다. host가 요청 없이 다시 붙이는 끊김은 지금 실패 event가 아니다. 범위를 적고 검증을 돌린 뒤, 두 host에 계약 case와 함께 명세하고 구현한다. F212.8a의 stdio 한도를 다시 쓴다(Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
 
 ### 2. Checklist 상태
 
