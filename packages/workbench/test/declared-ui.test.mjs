@@ -13,7 +13,7 @@ mock.module("../host.js", { namedExports: { report: (line) => { reports.push(lin
 
 const OPTIONS = {
   owner: "demo",
-  declared: (name) => name === "demo.open",
+  declared: (name) => name === "demo.open" || name === "demo.select",
   hasIcon: (name) => name === "star",
 };
 
@@ -285,11 +285,22 @@ const tree = (nodes, extra = {}) => ({ elements: [{ kind: "tree", key: "t1", emp
 function section(module, orientation = "vertical") {
   const body = document.createElement("div");
   const calls = [];
-  const bind = (el, name, params, options) => { calls.push({ el, name, params: () => (typeof params === "function" ? params() : params), options }); return el; };
+  const runs = [];
+  const bind = (el, name, params, options) => {
+    const entry = { el, name, params: () => (typeof params === "function" ? params() : params), options };
+    calls.push(entry);
+    el.addEventListener(options.event ?? "click", (event) => {
+      if (options.when && !options.when(event)) return;
+      if (options.stop) event.stopPropagation();
+      runs.push({ name, params: entry.params(), type: event.type, detail: event.detail ?? 0 });
+    });
+    return el;
+  };
   const options = { ...OPTIONS, status: "s", orientation, bind };
   return {
     body,
     calls,
+    runs,
     show(value) { assert.doesNotThrow(() => module.receive(body, value, options), "the tree value was not drawn"); },
     expand(path, expanded) { module.setTreeExpanded({ status: "demo.s", tree: "t1", path, expanded }); },
     labels() { return [...body.querySelectorAll(".declared-label")].map((label) => label.textContent); },
@@ -668,6 +679,51 @@ test("a redraw keeps the element of a status line", async () => {
   s.show({ elements: [{ kind: "status-line", key: "st", text: "Done" }] });
   assert.equal(s.body.firstElementChild, line, "the status line was replaced");
   assert.equal(line.textContent, "Done", "the text was not updated");
+});
+
+test("a tree node with open handles Enter and double press separately from command", async () => {
+  const module = await load("tree-open-actions");
+  const s = section(module);
+  s.show(tree([leaf("n", { command: "demo.select", open: "demo.open" })]));
+  const label = s.body.querySelector(".declared-label");
+  assert.ok(label, "the tree node with open was not drawn");
+  const enter = new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+  label.dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented, true, "Enter did not prevent the native click");
+  assert.deepEqual(s.runs.map(({ name }) => name), ["demo.open"], "Enter did not run open exactly once");
+  s.runs.length = 0;
+  label.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 1 }));
+  label.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 2 }));
+  assert.deepEqual(s.runs.map(({ name }) => name), ["demo.select", "demo.open"], "a double press did not run command then open");
+});
+
+test("a tree node with only open is focusable and opens on Enter and double press", async () => {
+  const module = await load("tree-open-only");
+  const s = section(module);
+  s.show(tree([leaf("n", { open: "demo.open" })]));
+  const label = s.body.querySelector(".declared-label");
+  assert.equal(label.tagName, "BUTTON");
+  label.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 1 }));
+  assert.deepEqual(s.runs, [], "a single click ran open without a command");
+  const enter = new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+  label.dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented, true);
+  assert.deepEqual(s.runs.map(({ name }) => name), ["demo.open"]);
+  s.runs.length = 0;
+  label.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 1 }));
+  label.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, detail: 2 }));
+  assert.deepEqual(s.runs.map(({ name }) => name), ["demo.open"]);
+});
+
+test("Enter on a tree node without open has no declared key handler", async () => {
+  const module = await load("tree-no-open-key");
+  const s = section(module);
+  s.show(tree([leaf("n", { command: "demo.select" })]));
+  const label = s.body.querySelector(".declared-label");
+  const enter = new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+  label.dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented, false);
+  assert.deepEqual(s.runs, []);
 });
 
 test("a status line with a command is rejected at the unknown field", async () => {

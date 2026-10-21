@@ -56,7 +56,8 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | `tree` | `nodes` | 배열 | 예 | 루트 노드. 전체 트리에서 5000개 이하의 노드, 16단계 이하(루트 노드는 1단계). |
 | `tree` 노드 | `key` | 문자열 | 예 | 형제 사이에서 유일하다. |
 | `tree` 노드 | `label` | 문자열 | 예 | 평문, 500 코드 포인트 이하. |
-| `tree` 노드 | `command`, `params`, `icon`, `enabled` | `button`과 같음 | 아니오 | `command`가 있는 노드는 label을 누르면 그 명령을 실행한다. |
+| `tree` 노드 | `command`, `params`, `icon`, `enabled` | `button`과 같음 | 아니오 | `command`가 있는 노드는 한 번 누르면 그 명령을 실행한다. `open`이 있으면 두 번 누르기의 두 번째 클릭은 `command` 대신 `open`을 실행한다. |
+| `tree` 노드 | `open` | 문자열 | 아니오 | plugin의 명령. 이 노드에서 Enter keydown은 `open`을 실행하고 native click을 막는다. `event.detail === 2`인 클릭은 `open`을 실행한다. 노드의 `params`는 `command`와 `open` 모두에 적용한다. |
 | `tree` 노드 | `expanded` | 불리언 | 아니오 | 가지에 대한 plugin의 값. 가지에만 허용하므로, 잎에 두면 거부한다. 기본값 `false`. [status 대응](#status-대응)이 우선순위를 정한다. |
 | `tree` 노드 | `selected` | 불리언 | 아니오 | 노드를 선택된 것으로 그린다. 기본값 `false`. plugin의 값은 받아들인 모든 값에 적용된다. |
 | `tree` 노드 | `detail` | 문자열 | 아니오 | 평문, 최대 500 코드 포인트. 라벨 뒤에 `list` 항목의 `detail`과 같이 그린다. |
@@ -110,6 +111,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | `button` | 그 `command` 필드 | 그 `params` 필드 |
 | `command`가 있는 `list` 항목 | 그 `command` 필드 | 그 `params` 필드 |
 | `command`가 있는 `tree` 노드 | 그 `command` 필드 | 그 `params` 필드 |
+| `open`이 있는 `tree` 노드 | 그 `open` 필드 | 그 `params` 필드 |
 | `tree` 가지의 펼침 제어 | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | 사이드바 section 머리 | `core.sidebar.section.fold` | `{sidebar, section}` |
 
@@ -128,7 +130,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 
 선언된 section의 control에 대한 요청은 control address `{sidebar, section, key, path?, role?}`로 지정한다. `sidebar`는 `core.sidebars`가 보고하는 사이드바 인스턴스(`left`, `right`, `cardId:side`)이고, `section`은 section id이며, `key`는 그 control을 가진 루트 요소의 key다. `sidebar`, `section`, `key`는 문자열이다. `path`는 루트 요소 아래의 key들로 이루어진 문자열 배열이고, `role`은 `label` 또는 `expand`다. control이 list 항목이나 tree 노드에 속하면 `path`와 `role`이 필수이고, button이면 둘 다 허용하지 않는다. 이 필드들로 주소는 유일하다. 한 사이드바 인스턴스는 section을 한 번 그리고, 키는 형제 사이에서 유일하며, path와 역할이 control 하나를 정한다. `core.sidebar.section.control` DOM 항목은 여러 요소가 그 이름을 공유하므로 `many`로 선언되어 있다. 다른 타입의 값은 [노출](exposure.ko.md#오류)이 정하는 대로 -32602로 거부하며, `address`의 다섯 필드가 아닌 필드도 -32602로 거부한다. 어느 control과도 맞지 않는 주소는 [노출](exposure.ko.md#오류)의 오류 코드로 실패한다.
 
-키보드 조작은 네이티브 `button` 요소를 쓰므로, Enter와 Space가 같은 묶기를 거쳐 명령에 닿는다. 선언된 UI 요소는 자기 키 처리기를 가지지 않는다.
+네이티브 키보드 조작은 `button` 요소를 쓰므로 Enter와 Space가 같은 묶기를 거쳐 버튼 명령에 닿는다. `open`이 있는 tree 노드는 예외로 Enter keydown을 직접 처리한다. `open`을 실행하고 native click을 막는다. 다른 선언 UI 요소에는 키 처리기가 없다. `command`와 `open`이 모두 있는 노드에서 두 번 누르기의 첫 클릭은 `command`를 실행하고 두 번째 클릭(`event.detail === 2`)은 `command` 대신 `open`을 실행한다.
 
 ## status 대응
 

@@ -56,7 +56,8 @@ The field `kind` names each element's kind. `kind` is accepted on every root ele
 | `tree` | `nodes` | array | yes | Root nodes. At most 5000 nodes in the whole tree, at most 16 levels (root nodes are level 1). |
 | `tree` node | `key` | string | yes | Unique among its siblings. |
 | `tree` node | `label` | string | yes | Plain text, at most 500 code points. |
-| `tree` node | `command`, `params`, `icon`, `enabled` | as `button` | no | A node with `command` runs it when its label is pressed. |
+| `tree` node | `command`, `params`, `icon`, `enabled` | as `button` | no | A single click on a node with `command` runs it. If `open` is present, the second click of a double press runs `open` instead of `command`. |
+| `tree` node | `open` | string | no | A command of the plugin. Enter keydown on this node runs `open` and prevents the native click; a click with `event.detail === 2` runs `open`. The node's `params` apply to both `command` and `open`. |
 | `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Allowed only on a branch, so a leaf that carries it is rejected. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
 | `tree` node | `selected` | boolean | no | Draws the node as selected. Default `false`. The plugin's value applies in every accepted value. |
 | `tree` node | `detail` | string | no | Plain text, at most 500 code points, drawn after the label as a list item's `detail` is drawn. |
@@ -110,6 +111,7 @@ Declared UI elements bind to these commands:
 | `button` | its `command` field | its `params` field |
 | `list` item with `command` | its `command` field | its `params` field |
 | `tree` node with `command` | its `command` field | its `params` field |
+| `tree` node with `open` | its `open` field | its `params` field |
 | `tree` branch expand control | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | sidebar section header | `core.sidebar.section.fold` | `{sidebar, section}` |
 
@@ -128,7 +130,7 @@ Dom names. Every control that a declared UI value draws carries the dom name `co
 
 A request addresses a control of a declared section by a control address, `{sidebar, section, key, path?, role?}`. `sidebar` is the sidebar instance as `core.sidebars` reports it (`left`, `right`, or `cardId:side`), `section` is the section id, and `key` is the key of the root element that holds the control. `sidebar`, `section`, and `key` are strings. `path` is an array of strings, the keys below the root element, and `role` is `label` or `expand`. `path` and `role` are required for a control of a list item or a tree node and forbidden for a button. With these fields the address is unique: one sidebar instance draws a section once, keys are unique among their siblings, and the path plus the role name one control. The `core.sidebar.section.control` dom entry is declared `many` because several elements share that name. A value of another type is refused with -32602, as [exposure](exposure.md#errors) defines, and so is a field of `address` other than these five. An address that matches no control fails with the error code of [exposure](exposure.md#errors).
 
-Native keyboard operation uses the native `button` element, so Enter and Space reach the command through the same binding. A declared UI element has no key handler of its own.
+Native keyboard operation uses the native `button` element, so Enter and Space reach a button's command through the same binding. A tree node with `open` handles Enter keydown itself: it runs `open` and prevents the native click. No other declared UI element has a key handler. For a node with both `command` and `open`, the first click of a double press runs `command`, and the second click (`event.detail === 2`) runs `open` instead of `command`.
 
 ## Status mapping
 

@@ -64,9 +64,10 @@ const NODE_SPEC = {
   key: KEY,
   label: TEXT,
   command: COMMAND,
-  params: { type: "params", needsCommand: true },
+  open: COMMAND,
+  params: { type: "params", needsCommand: true, needsOpen: true },
   icon: ICON,
-  enabled: { type: "boolean", needsCommand: true },
+  enabled: { type: "boolean", needsCommand: true, needsOpen: true },
   expanded: { type: "boolean", branchOnly: true },
   selected: BOOLEAN,
   detail: { type: "text" },
@@ -144,7 +145,7 @@ function checkCommand(violations, name, path, ctx) {
 function checkField(violations, obj, pointer, name, rule, ctx, siblings, level) {
   const path = `${pointer}/${token(name)}`;
   const value = obj[name];
-  if (rule.needsCommand && !Object.hasOwn(obj, "command")) {
+  if (rule.needsCommand && !Object.hasOwn(obj, "command") && !(rule.needsOpen && Object.hasOwn(obj, "open"))) {
     violations.fail("requiresCommand", pointer, `${slot(name)} requires command`);
   }
   if (rule.branchOnly && !isBranch(obj)) {
@@ -306,21 +307,39 @@ export function validateValue(value, options) {
 /** Connects an element to its command. The binder reads the parameters at each run, so a redraw only updates them. */
 const CONNECTIONS = new WeakMap();
 
-function connect(element, name, params, bind) {
+function connect(element, name, params, bind, open) {
   const state = CONNECTIONS.get(element);
   if (state === undefined) {
-    CONNECTIONS.set(element, { name, params });
-    bind(element, name, () => CONNECTIONS.get(element).params, { event: "click" });
+    const connection = { name, open, params };
+    CONNECTIONS.set(element, connection);
+    const currentParams = () => CONNECTIONS.get(element).params;
+    if (open !== undefined) {
+      bind(element, open, currentParams, { event: "click", when: (event) => event.detail === 2 });
+      bind(element, open, currentParams, {
+        event: "keydown",
+        when: (event) => {
+          if (event.key !== "Enter") return false;
+          event.preventDefault();
+          return true;
+        },
+      });
+    }
+    if (name !== undefined) {
+      bind(element, name, currentParams, {
+        event: "click",
+        ...(open === undefined ? {} : { when: (event) => event.detail !== 2 }),
+      });
+    }
     return;
   }
-  if (state.name !== name) throw new Error(`control is connected to ${state.name}, not ${name}`);
+  if (state.name !== name || state.open !== open) throw new Error(`control is connected to ${state.name}/${state.open}, not ${name}/${open}`);
   state.params = params;
 }
 
 const paramsOf = (entry) => (Object.hasOwn(entry, "params") ? entry.params : {});
 
-/** The key of an entry in a keyed drawing: its key and its command. Keys hold no space, so the two parts cannot be confused. */
-const entryKey = (entry) => `${entry.key} ${Object.hasOwn(entry, "command") ? entry.command : ""}`;
+/** The key of an entry in a keyed drawing includes its command and open action, so action changes replace the old control. */
+const entryKey = (entry) => `${entry.key} ${Object.hasOwn(entry, "command") ? entry.command : ""}${Object.hasOwn(entry, "open") ? ` open:${entry.open}` : ""}`;
 
 /** The first child of el that has none of the given classes. */
 function childWithout(el, classes) {
@@ -365,11 +384,11 @@ function paintLabel(label, entry, { key, path, bind }) {
   label.dataset.role = "label";
   label.dataset.expose = CONTROL_NAME;
   label.disabled = entry.enabled === false;
-  connect(label, entry.command, paramsOf(entry), bind);
+  connect(label, entry.command, paramsOf(entry), bind, entry.open);
 }
 
 /** The label element of an entry: a button when the entry has a command, otherwise a static span. */
-const labelElement = (entry) => document.createElement(Object.hasOwn(entry, "command") ? "button" : "span");
+const labelElement = (entry) => document.createElement(Object.hasOwn(entry, "command") || Object.hasOwn(entry, "open") ? "button" : "span");
 
 function paintDetail(row, text) {
   if (text === undefined) {

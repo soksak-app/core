@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-d-11: Declared tree nodes may declare `open`. Enter keydown runs `open` and prevents the native click; a double press runs `command` once, then runs `open` on the detail-2 click. The Red rejected nodes with `open`; the owning workbench tests pass 74/74.
+
 - F238-d-9: Confirmed that F230 already implements and documents the horizontal declared-tree behavior in English and Korean. The owning workbench tests pass 72/72, covering horizontal acceptance, node detail, full-line placement, and scrolling.
 
 - F238-c-27: The screenHash contract runner rejects steps with no operation or multiple operations before execution. Red: the malformed-step assertion failed when the old runner reported an unknown operation as an ordinary error result; the corrected owning test passes 6/6.
