@@ -69,7 +69,7 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
-    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires a module/],
+    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list declares neither module nor status/],
     [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
     [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
@@ -304,7 +304,7 @@ test("the exported sidebars validator applies the environment rules to stored se
   for (const [change, error] of [
     [(s) => { s.sets[0].title = ""; }, /settings: set set-1 title must be 1 to 40 characters/],
     [(s) => { s.sets[0].title = "가".repeat(41); }, /title must be 1 to 40/],
-    [(s) => { s.sets[0].sections.push("side.tree"); }, /without repetition/],
+    [(s) => { s.sets[0].sections.push("side.tree"); }, /set set-1 lists section side.tree twice/],
     [(s) => { s.sets[0].layout = "grid"; }, /layout must be list or tabs/],
     [(s) => { s.links[0].set = "set-9"; }, /known set/],
     [(s) => { s.extra = 1; }, /settings sidebars/],
@@ -536,4 +536,27 @@ test("a dom composition is refused with the plugin and the manifest field", () =
     () => validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "dom" } } }),
     { message: `plugin ${card.id} surface composition: kind dom is removed; the composition takes kind view or hybrid` },
   );
+});
+
+// A section with status is declared UI (docs/spec/declared-ui.md, sidebar section form).
+const statusSide = {
+  id: "side", name: "Side", description: "검사용 섹션.", state: { module: "state/side.js" },
+  exposes: { status: [{ name: "side.count", description: "검사용 상태.", schema: { type: "object" } }] },
+  sections: [{ id: "side.count", name: "Count", status: "side.count" }],
+};
+
+test("a section names exactly one of module and status, and its status is declared by the plugin", () => {
+  let accepted = null;
+  assert.doesNotThrow(() => { accepted = validateManifest(statusSide); }, "a section with a declared status was rejected");
+  assert.equal(accepted.sections[0].status, "side.count");
+  const rejects = [
+    [{ ...statusSide, sections: [{ id: "side.count", name: "Count", module: "ui/count.js", status: "side.count" }] },
+      /section side.count declares both module and status/],
+    [{ ...statusSide, sections: [{ id: "side.count", name: "Count" }] }, /section side.count declares neither module nor status/],
+    [{ ...statusSide, sections: [{ id: "side.count", name: "Count", status: "side.other" }] },
+      /section side.count status side.other is not a status of plugin side/],
+    [{ ...statusSide, sections: [{ id: "side.a", name: "A", status: "side.count" }, { id: "side.b", name: "B", status: "side.count" }] },
+      /status side.count backs section side.a and section side.b/],
+  ];
+  for (const [manifest, message] of rejects) assert.throws(() => validateManifest(manifest), message);
 });

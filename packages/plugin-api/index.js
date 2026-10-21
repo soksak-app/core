@@ -684,24 +684,42 @@ export function validateManifest(manifest) {
   if (manifest.sections !== undefined) {
     if (!Array.isArray(manifest.sections)) throw new Error(`${where}: sections must be an array`);
     const seen = new Set();
+    // A status backs at most one section (docs/spec/declared-ui.md, sidebar section form).
+    const backing = new Map();
     for (const section of manifest.sections) {
       if (!isObject(section)) throw new Error(`${where}: section must be an object`);
-      only(`${where} section`, section, ["id", "name", "module", "fill"]);
+      only(`${where} section`, section, ["id", "name", "module", "fill", "status"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
       if (seen.has(section.id)) throw new Error(`${where}: duplicate section ${section.id}`);
       seen.add(section.id);
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
-      const module = section.module;
-      if (!isObject(module) && !isText(module)) throw new Error(`${where}: section ${section.id} requires a module`);
-      if (isObject(module)) {
-        only(`${where} section ${section.id} module`, module, ["horizontal", "vertical"]);
+      if (section.module !== undefined && section.status !== undefined) {
+        throw new Error(`${where}: section ${section.id} declares both module and status`);
       }
-      const paths = isObject(module) ? [module.horizontal, module.vertical] : [module];
-      for (const path of paths) {
-        if (!isText(path) || path.startsWith("/") || path.split("/").includes("..") || !path.endsWith(".js")) {
-          throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+      if (section.module === undefined && section.status === undefined) {
+        throw new Error(`${where}: section ${section.id} declares neither module nor status`);
+      }
+      if (section.status !== undefined) {
+        const declared = Array.isArray(manifest.exposes?.status) && manifest.exposes.status.some((entry) => entry?.name === section.status);
+        if (!declared) throw new Error(`${where}: section ${section.id} status ${section.status} is not a status of plugin ${id}`);
+        if (backing.has(section.status)) {
+          throw new Error(`${where}: status ${section.status} backs section ${backing.get(section.status)} and section ${section.id}`);
+        }
+        backing.set(section.status, section.id);
+      }
+      const module = section.module;
+      if (module !== undefined) {
+        if (!isObject(module) && !isText(module)) throw new Error(`${where}: section ${section.id} requires a module`);
+        if (isObject(module)) {
+          only(`${where} section ${section.id} module`, module, ["horizontal", "vertical"]);
+        }
+        const paths = isObject(module) ? [module.horizontal, module.vertical] : [module];
+        for (const path of paths) {
+          if (!isText(path) || path.startsWith("/") || path.split("/").includes("..") || !path.endsWith(".js")) {
+            throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
+          }
         }
       }
       // fill is the section that receives the remaining height in the list layout (docs/spec/plugins.md#sections).
@@ -992,8 +1010,11 @@ export function validateSidebars(sidebars, where, loaded = null) {
     if (set.title.length < 1 || set.title.length > SET_TITLE_MAX) {
       throw new Error(`${where}: set ${set.id} title must be 1 to ${SET_TITLE_MAX} characters`);
     }
-    if (set.sections.some((id) => !isText(id)) || new Set(set.sections).size !== set.sections.length) {
-      throw new Error(`${where}: set ${set.id} sections must be section ids without repetition`);
+    if (set.sections.some((id) => !isText(id))) throw new Error(`${where}: set ${set.id} sections must be section ids`);
+    const listed = new Set();
+    for (const id of set.sections) {
+      if (listed.has(id)) throw new Error(`${where}: set ${set.id} lists section ${id} twice`);
+      listed.add(id);
     }
     // A set shows all its sections stacked (list) or one at a time as tabs (tabs).
     if (!["list", "tabs"].includes(set.layout)) throw new Error(`${where}: set ${set.id} layout must be list or tabs`);
