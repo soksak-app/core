@@ -426,7 +426,7 @@ type RetainResult struct {
 }
 
 // SidecarsRetain closes, in the persistent sidecar service, the sessions of surfaces that no layout holds
-// (docs/spec/terminal-runtime.md).
+// (docs/spec/persistent-services.md).
 func (h *Host) SidecarsRetain(ctx context.Context, reqJSON json.RawMessage) (RetainResult, error) {
 	req, err := argument[RetainRequest]("request", reqJSON)
 	if err != nil {
@@ -452,7 +452,7 @@ type ReplaceRequest struct {
 	Sidecar string `json:"sidecar"`
 }
 
-// SidecarsReplace replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates).
+// SidecarsReplace replaces the outdated persistent service of a sidecar (docs/spec/persistent-services.md#updates).
 // It waits for the service, so the call can take as long as the stop timeout.
 func (h *Host) SidecarsReplace(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[ReplaceRequest]("request", reqJSON)

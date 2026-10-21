@@ -100,7 +100,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 5. **재시작.** sidecar, plugin host와 view 프로세스는 통과값 (vi)의 한도 안에서 다시 띄운다. 한도를 넘으면 호스트는 `error:`를 보고하고 멈춘다.
    - 끝난 view 프로세스는 호스트가 다시 만들고, 새 view는 저장된 탭 상태에서 상태를 복원한다. 한도는 view 표면마다 센다. 한도를 넘으면 card가 표시 경로로 오류를 보여 주며, 사용자가 탭을 다시 열 때에만 view를 다시 만든다.
    - 한도를 넘은 뒤의 다음 요청은 프로세스를 띄우지 않고 `sidecar-failure`(reason `restart limit`)로 실패한다. 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 띄우며, 호스트는 `host.trace.sidecar.restart-reset {sidecar, surface}`를 쓴다. plugin host는 `host.trace.plugin-host.restart-reset {plugin}`을 쓴다.
-   - 이 규칙은 두 명세 위치를 바꾼다. [sidecars](../spec/sidecars.ko.md)의 `## Failure` 절은 67행에서 실패 뒤의 다음 요청이 한도 없이 새 프로세스를 띄운다고 적는다. F212.8a가 그 문장을 규칙 5의 한도로 바꾼다. [terminal runtime](../spec/terminal-runtime.ko.md)의 43행이 적는 재시작 규칙(연결 끊김마다 한 번 시도하고, 다음 전송이 같은 경로를 다시 시도)도 F212.8a에서 바꾼다.
+   - 이 규칙은 두 명세 위치를 바꾼다. [sidecars](../spec/sidecars.ko.md)의 `## Failure` 절은 67행에서 실패 뒤의 다음 요청이 한도 없이 새 프로세스를 띄운다고 적는다. F212.8a가 그 문장을 규칙 5의 한도로 바꾼다. [persistent services](../spec/persistent-services.ko.md)의 43행이 적는 재시작 규칙(연결 끊김마다 한 번 시도하고, 다음 전송이 같은 경로를 다시 시도)도 F212.8a에서 바꾼다.
    - 다시 띄우면 state는 마지막으로 저장한 값에서 복원한다. 저장하지 않은 state는 잃으며, plugin마다 어떤 state인지 밝힌다.
    - 고장 주입은 진단 build에서만 둔다.
 6. **표시.** plugin view는 card 배치가 바뀐 뒤(gesture의 첫 변경)의 첫 표시에만 presentation wait에 참여한다.
@@ -272,7 +272,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
    - **F212.7a:** F212.10-editor 뒤, editor view로 (i), (ii), (iii), (iii-b), (v)를 재고; (viii)은 F212.7a 뒤에 실행하는 F212.7c가 잰다. (iii-b)는 성능 trace를 켠 상태로 잰다.
    - **F212.7c:** 끌기 녹화와 기하 오차 (viii). 측정은 첫 view(F212.10-editor의 editor view)로 한다. 모든 plugin view는 각자의 F212.10 항목과 F212.14에서 잰다. F212.10-editor와 F212.7a 뒤에 온다.
 8. **F212.8 선언 UI schema와 workbench 그리기**(sidebar section 포함).
-   - **F212.8a:** 재시작 한도 (vi)를 [sidecars](../spec/sidecars.ko.md)의 `## Failure`와 [terminal runtime](../spec/terminal-runtime.ko.md)의 43행에 넣는다(번역 포함). sidecar 실패를 맡은 호스트 package(Go, Rust, 계약 case)에 Red 시험을 둔다. F212.9보다 먼저 한다. `host.trace.sidecar.restart-reset`을 선언한다.
+   - **F212.8a:** 재시작 한도 (vi)를 [sidecars](../spec/sidecars.ko.md)의 `## Failure`와 [persistent services](../spec/persistent-services.ko.md)의 43행에 넣는다(번역 포함). sidecar 실패를 맡은 호스트 package(Go, Rust, 계약 case)에 Red 시험을 둔다. F212.9보다 먼저 한다. `host.trace.sidecar.restart-reset`을 선언한다.
 9. **F212.9 plugin host 기구**(플랫폼 연산, owner key, 재시작). files 저장소가 state를 sidecar로 옮기는 항목을 먼저 마치고, 그래도 필요한 plugin이 있을 때만 만든다.
    - **F212.9a:** plugin host를 둔다면 그 footprint와 throttle을 F212.10보다 먼저 잰다.
 10. **F212.10 plugin 이전**(각 plugin 저장소의 항목, `engines.soksak`). 이름 붙은 항목 F212.10-shell-layer와 F212.10-browser-sections는 shell과 browser 이전 전에 끝낸다. 각 plugin 항목은 release 전에 그 view의 (iii), (v), (viii)을 잰다.
@@ -314,7 +314,7 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 | [exposure](../spec/exposure.ko.md) 160행 | 공유 app DOM에 mount된 plugin module의 좌표 | F212.11 |
 | [endpoint](../spec/endpoint.ko.md) 99행 | exposure 답의 `diagnostics.surface.hold`. 늦은 답은 버린다(규칙 3) | F212.6 |
 | [installation](../spec/installation.ko.md) 129~130행 | `/modules`와 `/shared` 경로, core root 경로 `sok://core/modules/<package>/<path>`와 `sok://core/shared/<plugin id>.<point>/<specifier>.js`(규칙 4) | F212.5 |
-| [terminal runtime](../spec/terminal-runtime.ko.md) 43행 | sidecar 연결의 재시작 규칙(규칙 5) | F212.8a |
+| [persistent services](../spec/persistent-services.ko.md) 43행 | sidecar 연결의 재시작 규칙(규칙 5) | F212.8a |
 | [sidecars](../spec/sidecars.ko.md) `## Failure` | 재시작 한도(규칙 5) | F212.8a |
 
 ## 위험

@@ -3,7 +3,7 @@
 // it starts the host with the configuration directory that SOKSAK_APP selects.
 // SOKSAK_SHUTDOWN_BY=signal sends SIGTERM to the host instead, which requests the same quit (docs/spec/hosts.md). With
 // SOKSAK_SHUTDOWN_TERMINAL=1 the quit also ends the terminal service, because a normal quit ends the owned sessions and
-// shuts the service down (docs/spec/terminal-runtime.md).
+// shuts the service down (docs/spec/persistent-services.md).
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { connect } from "@soksak/client";

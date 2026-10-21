@@ -193,7 +193,7 @@ void webviewInputSendThen(WKWebView *view, NSString *type, NSTimeInterval timeou
         [handler.waits removeObject:wait];
         wait.done(NO);
     });
-    // After terminal input the native drawing region can be the first responder. When the window is
+    // After input to an image region the native drawing region can be the first responder. When the window is
     // inactive in that state, WebKit can exclude the target page from the mouse handling path, so the
     // drain callback does not arrive until the next synthetic pointer. Before waiting for the pending
     // mouse work of WebKit, restore the target web view as the responder. Only the one pointer sent

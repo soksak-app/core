@@ -438,7 +438,7 @@ int main(void) { @autoreleasepool {
     typeKey(window, @"Backspace", regionAnswered);
     check(keyCount(@"Backspace") == 1 && [valuesOfType(@"insert", 0) count] == 0,
         [NSString stringWithFormat:@"image region: Backspace without a composition is reported as a key (events %@)", events]);
-    // Escape during composition commits the remaining composition once and then reports Escape as a key (docs/spec/terminal-runtime.md).
+    // Escape during composition commits the remaining composition once and then reports Escape as a key (docs/spec/persistent-services.md).
     [events removeAllObjects];
     selectSource(ABC, context);
     selectSource(KOREAN_2SET, context);

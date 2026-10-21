@@ -336,7 +336,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onPluginProcessChange(coreChanged);
   status("core.focus", () => focusState(document));
   status("core.pointer", trackPointer(document, coreChanged));
-  // Observation of document focus transitions (V5-114). The terminal region is click-transparent, so a press makes the document take focus back, and the address bar that remained as activeElement can receive focus and become visible at that moment. Every transition leaves one line in the performance trace and the diagnostic log and announces core.focus. The elements of a surface are inside a shadow root, so the name is read from the actual target of the event.
+  // Observation of document focus transitions (V5-114). The image region is click-transparent, so a press makes the document take focus back, and the address bar that remained as activeElement can receive focus and become visible at that moment. Every transition leaves one line in the performance trace and the diagnostic log and announces core.focus. The elements of a surface are inside a shadow root, so the name is read from the actual target of the event.
   document.addEventListener("focusin", (event) => {
     trace("focus", { phase: "in", element: focusName(event) });
     log(`focus in ${focusName(event)}`);

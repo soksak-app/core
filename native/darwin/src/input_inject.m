@@ -143,7 +143,7 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // -[NSWindow sendEvent:] makes the pressed view the first responder if it accepts, and then delivers the press.
             // This path delivers directly to the view, so it follows the same order. The surface web view of the host does not
-            // become the first responder on a press alone (e2e/shell.test.mjs). The window and the application are not activated.
+            // become the first responder on a press alone. The window and the application are not activated.
             if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
             if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, 1, 1)];
             else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, 1, 1)];

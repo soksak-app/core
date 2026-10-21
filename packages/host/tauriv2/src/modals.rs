@@ -492,7 +492,7 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
     // waits for its own lock and stops the handling of every endpoint request.
     state.discard()?;
     exposure::window_changed(window);
-    // The terminal image region reports `resignFirstResponder` synchronously. Calling `set_focus` here re-enters the
+    // An image region reports `resignFirstResponder` synchronously. Calling `set_focus` here re-enters the
     // main WebView while the current Tauri invoke still owns the WebKit dispatch lock, so the focus callback can
     // deadlock the event loop. The focus is restored in the next AppKit turn after the hide command returns. A
     // replacement modal may have opened before that turn. In that case the earlier restoration must not take the focus
