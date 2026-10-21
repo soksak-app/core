@@ -182,3 +182,75 @@
 각 mouse 연산과 결과는 동일한 비어 있지 않은 `inputId`를 싣는다. 잘못된 좌표처럼 실패한 mouse 연산도 자기 mouse 결과로 답하며, 그 `x`와 `y`는 `null`이고 `error`는 `invalidParams: <reason>`이므로 결과의 짝이 유지된다. 페이지는 그 오류를 터미널 입력 오류로 보인다. 페이지는 연산마다 새 ID를 지정하며 이전 입력의 결과로 다음 제스처를 완료할 수 없다. `written`은 PTY 쓰기 성공이며 자식의 바이트 수신이나 선택 표시를 뜻하지 않는다. 진단 빌드는 `start`와 `stop` 동작을 가진 `terminal.pointer.trace`로 DOM 포인터·캡처 이벤트, 네이티브 포커스 통지, 대기열의 mouse 연산과 결과를 순서대로 제한된 크기로 기록한다. 한도 초과를 명시적으로 표시하고 측정을 실패시킨다. 쓰기 성공과 자식 수신을 구분하기 위해 사이드카는 열린 세션의 `pty.pending` 연산에 `{event: "pty.pending", pending, written}`으로 답한다. `pending`은 마스터가 쓰고 자식이 아직 읽지 않은 입력 바이트 수로 플랫폼 PTY 입력 큐(마스터 fd의 FIONREAD, macOS에서는 마스터와 슬레이브가 공유하는 tty를 읽는다)에서 재고, `written`은 세션 reader가 지금까지 읽은 자식 출력의 누적 바이트 수다. 한 번의 측정 왕복이 같은 시점의 두 값을 함께 돌려주며 세션이 없는 경우를 포함한 오류 응답도 같은 `pty.pending` 이벤트 표식을 실어 답이 자기 요청을 밝힌다. 진단 빌드는 이 측정을 `terminal.pty.pending` 명령으로 노출하며 0 이상 정수 `{pending, written}`으로 해소되고 사이드카의 명시적 오류는 거절한다. 큐는 전송 관측이다. 아직 조립되지 않은 canonical 모드의 줄은 세지 않으므로 raw 모드 자식이 측정 계약이고, 큐가 비었다는 사실은 자식에 대한 전달은 증명해도 프로그램이 바이트를 해석했음은 증명하지 않는다. 두 표본 사이 `written`의 증가는 자식이 출력을 했다는 관측으로 프로그램 파싱과 선택 렌더링을 나눈다.
 
 반복 수락은 `?1003` motion과 `?1006` SGR 보고를 켜고 자기 선택을 직접 그리는 전체 화면 fixture TUI(`e2e/fixture-tui.mjs`)와 OS 포인터 입력으로 드래그, 같은 TUI의 제3지점 클릭, 포커스 보정이나 상태 초기화 없는 즉시 재드래그 순서로 검사한다. 실패 뒤에만 다른 카드를 클릭하고 돌아와 회복을 관측하며 회복으로 실패를 통과로 바꾸지 않는다. 호스트마다 제3지점 세 영역(입력·출력·빈 영역)을 한 번씩 거치고 가운데 주기는 느린 속도로 하는, 초기화 없는 3주기를 통과해야 한다. 간헐 실패는 repeat target으로 재현하고 수락한다. 각 제스처의 입력 결과를 연결하고 보이는 반응을 전체 녹화에서 수치로 측정한다. Shift 선택은 별도 대조군이다.
+
+## 화면 hash 이동 목록(F236-9-2)
+
+이 절은 [화면 hash 결정](screen-hash-decision.ko.md)의 결정 9-1이 정한 이동 목록과 출시 gate다. byte 정의의 소유자는 선언된 contract repository(화면 contract)다. core는 그것을 import하지 않고 registry 항목도 두지 않는다. 아래 행은 gate가 성립할 때만 core를 떠난다. 그전까지 core는 그 행, 포인터, 검사를 유지한다. 화면 contract repository는 아직 없다.
+
+### contract repository가 가질 것
+
+1. 두 언어의 byte 정의: `screenBytes`와 `screenHash`, 그 JavaScript(npm package)와 Rust(crate) 참조 구현, 그리고 magic `SKSCR1`.
+2. golden vector와 거부 메시지, 그리고 두 구현에 이를 돌리는 contract repository 안의 시험.
+3. 화면 message 형식과 그 검증기 `screenFromMessage`, 두 언어로. message가 sidecar와 page 사이의 wire이기 때문이다.
+4. 이 부분을 정의하는 글: `docs/spec/replay.md`의 "Screen hash"와 "Golden vectors" 절, `docs/spec/persistent-services.md`의 "Screen message" 절, gate가 성립할 때의 내용 그대로.
+
+byte가 바뀌면 magic이 바뀌므로 새 contract tag다. plugin과 sidecar는 같은 변경에서 pin을 옮긴다. contract repository는 plugin이나 sidecar 코드를 갖지 않고, 시험은 자기 fixture만 읽는다.
+
+### core를 떠나는 것
+
+각 행은 core 항목, 목적지, gate를 적는다. S1부터 S10까지는 아래 G1 뒤 core의 한 변경에서 함께 떠난다. 그래서 어떤 core 출시도 반쯤 옮긴 hash를 갖지 않는다.
+
+| 행 | core 항목(경로, HEAD의 줄) | 목적지 | gate |
+| --- | --- | --- | --- |
+| S1 | `packages/plugin-api/screen-hash.js`: `screenBytes`(42줄), `screenHash`(90줄), `screenFromMessage`(110~134줄)과 그 helper `shown`, `isObject`, `messageRefuse`, `resolvedColor`; 1줄 | contract repository(두 언어). terminal plugin은 그 사본을 import한다 | G1 |
+| S2 | `packages/plugin-api/package.json` 15줄과 23줄(export `./screen-hash`); `packages/plugin-api/index.js` 55줄(`PAGE_IMPORTS`); `packages/workbench/index.html` 12줄과 `overlay.html` 25줄(import map); `docs/spec/plugins.md` 309줄과 `docs/spec/plugins.ko.md` 310줄(page import 문장) | 제거. 항목을 import하는 설치된 terminal 버전은 동작을 멈추고 폐기된다(감독자 결정) | G1 |
+| S3 | `packages/plugin-api/test/validate.test.mjs` 270줄(항목의 assertion); `packages/plugin-api/test/screen-hash.test.mjs` | contract repository 시험 | G1 |
+| S4 | `packages/log-contract/fixtures/replay/screen-hash.json`, `screen-message.json`; 시험 `packages/log-contract/test/screen-hash.test.mjs`, `screen-message.test.mjs`; `replay-vectors-named.test.mjs`에서는 screen-hash vector의 assertion만(`inputs.json`의 assertion은 남는다) | contract repository(vector와 거부) | G1 |
+| S5 | `docs/spec/replay.md`의 "Screen hash"(33~55줄)와 "Golden vectors"(56~70줄), `docs/spec/replay.ko.md` 39, 54, 58, 83줄: contract를 가리키는 포인터로 바꾼다. `scripts/check-docs.mjs`에서 `#screen-hash`와 `#golden-vectors`가 여전히 풀리도록 제목은 남는다 | contract repository(글) | G1 |
+| S6 | `docs/spec/persistent-services.md` 51~68줄("Screen message")과 `docs/spec/persistent-services.ko.md` 68줄: 포인터로 바꾸고 제목은 남긴다 | contract repository(글) | G1 |
+| S7 | `packages/plugin-api/terms.json`의 용어 "screen hash"(169줄) | contract 용어집 | G1 |
+| S8 | `scripts/check-test-parity.mjs`의 항목 F160.35(2649~2663줄: 구현, 단위 시험, e2e 시험, expected 문구) | 파서와 함께 contract repository 또는 terminal plugin으로 옮긴다. 시험을 가진 쪽으로 | G1 |
+| S9 | sidecar `../sidecars/vt/vt-core/src/screen_hash.rs`: hash 소유자를 뺀다. `message_cells`는 sidecar 모듈로 옮기고, message의 cell과 cursor 형식은 crate에서 온다. 호출자: `vt-core/src/protocol.rs` 1276줄과 1333줄; `vt-alacritty/src/replay.rs` 18줄과 309줄; `vt-core/tests/screen_hash_test.rs` 8줄; `vt-core/tests/screen_message_test.rs` 6줄과 `screen-message.json` 읽기 | sidecar repository, crate를 통해 | G1(crate에 의존하는 sidecar 출시) |
+| S10 | sidecar 사본 `vt-core/tests/fixtures/log-contract/screen-hash.json`, `screen-message.json`과 README 8~11줄("Core owns all three") | sidecar repository가 제거 | G1(S9와 같은 sidecar 출시) |
+| S11 | `scripts/check-test-parity.mjs`의 항목 F160.25(2617~2630줄): 구현 `screenHash`(`screen-hash.js`)가 contract repository로 옮기고, `sok` 시험 `replay_test.go`와 `replay_test.rs`, e2e 시험은 core에 남아 남은 소유자로 항목을 재배정한다. `packages/sok/tauriv2/tests/replay_test.rs`(590줄)와 `packages/sok/wailsv3/tests/replay_test.go`(340줄)의 screen message를 인용한 주석도 재배정한다 | contract repository(구현), core(시험, 재배정) | G1 |
+| S12 | `docs/spec/events.json` 190줄(처음 분기의 설명): page frame의 layer를 `page`로 적고 있다. `replay.md` 22줄에 따라 `plugin`으로 바꾼다(감독자 결정). `page.*` 이벤트의 layer `page`는 남는다 | core | F236-9-3, gate 없음: 이름 정정만 하며 저장된 기록은 이미 `plugin`을 쓴다 |
+| S13 | `packages/plugin-api/terms.json`: 용어 "replay"(150줄과 151줄)이 terminal 세션을 말한다 | core | F236-9-3, gate 없음: "세션"으로 |
+| S14 | terminal page `../plugins/terminal/ui/terminal.js`: `screenFromMessage`와 `screenHash`를 import하는 2줄과 호출 1209줄과 1218줄은 (b)의 복사본을 쓴다. plugin의 `Makefile`에 `make pack` 전 복사 단계를 넣는다 | terminal plugin repository | G1 (b) |
+| S15 | 복원 입력 검증기(gate V2): `docs/spec/replay.md` 72, 87, 109줄; `docs/spec/host-contract.md` 696줄과 `docs/spec/host-contract.ko.md` 697줄(명령 `cli.debug.replay-input-cases`); `packages/log-contract/test/replay-inputs.test.mjs`(7, 17, 23, 29줄); `packages/sok/tauriv2/tests/replay_inputs_test.rs`와 `packages/sok/wailsv3/tests/replay_inputs_test.go`; `scripts/check-test-parity.mjs`의 항목 F160.34(2633~2648줄) | V2가 성립할 때까지 core. 그 뒤 sidecar repository가 검증기 시험을 가지고 항목도 함께 온다. `replay.md`와 `host-contract.md`는 명령 문구를 남긴다 | V2 |
+| S16 | `CHANGELOG.md`와 `CHANGELOG.ko.md`의 F160.25, F160.34, F160.35 항목, 그리고 `docs/features.md`와 `docs/features.ko.md`의 F236-9 항목은 기록으로 남고 바뀌지 않는다. G1 (e)는 사용자에게 미치는 결과를 담은 changelog 항목을 새로 추가한다 | core(새 changelog 항목만) | G1 (e) |
+
+유지되는 일반 문구는 `docs/spec/replay.md` 5줄("각 화면의 hash"와 입력 종류 표)이며, terminal을 이름 부르지 않는다.
+
+변경 뒤 core는 행 F160.25(`screenHash`)를 `screenHash`를 가지는 동안만 두고, S1과 같은 변경에서 contract repository로 재배정한다. `sok` 형식 검사는 core에 남는다. 문자열 형식만 검사하고 아무것도 계산하지 않기 때문이다: `packages/sok/tauriv2/src/replay.rs` 100줄의 `is_screen_hash`와 `packages/sok/wailsv3/src/replay.go` 26줄의 `screenHashText`. 설치 기반 창 검사 `e2e/terminal-replay.test.mjs`는 `AGENTS.md` 33줄의 예외로 core에 남고, G1 (d)의 관찰 동작 검사다.
+
+### View state의 producer 규칙(gate V1)
+
+`docs/spec/replay.md` 74~98줄("View state"와 그 "Decision")은 terminal 엔진이 그려진 화면을 계산하는 방식을 말한다: cell의 selection 강조, 테마에 따른 빈 cell 자르기, viewport 이동, viewport 밖의 cursor. 그 저장소가 가질 때 terminal sidecar(`../sidecars/vt`, 그 `docs/spec/`)의 명세로 옮긴다. core는 `replay.md`의 "### Hashed members" 제목 아래에 일반 문장 하나를 둔다. hash된 cell과 cursor는 sidecar가 그려진 화면에 대해 보고하는 것이며, 각 sidecar는 자기 명세에서 그것을 계산하는 방식을 말한다. 97줄(그려진 화면의 golden vector)은 vector가 contract에 남으므로 "Golden vectors"에 남는다. gate V1: sidecar 명세가 글을 가지고 그 저장소의 문서 검사가 통과한다. V1이 성립하면 `scripts/check-test-parity.mjs`의 행 F160.34는 view-state 문구가 아니라 `replay.md`의 입력 종류를 기대한다.
+
+### replay 입력 검증기(gate V2)
+
+검증기는 byte 정의가 아니라 terminal 경계(grid에 대한 selection, 테마 색)를 가진다. 이동 목록은 다음과 같다.
+
+- core: `packages/log-contract/index.js`의 `replayInputProblem`과 `replaySessionProblem`, fixture `packages/log-contract/fixtures/replay/inputs.json`, 그리고 명령이 `replaySessionProblem`을 부르는 곳(`replay.md` 85줄)은 V2가 성립할 때까지 남는다.
+- sidecar 사본: sidecar fixture(`vt-core/tests/fixtures/log-contract/`)의 `replay-inputs.json`.
+- `sok` 사본: `packages/sok/tauriv2/src/replay_inputs.rs`와 `packages/sok/wailsv3/src/replay_inputs.go`.
+- 계약 변경이 먼저다: `replay.md`의 "Replay executable"에 요구가 들어간다. 실행 파일은 검증기가 거부하는 `inputs.json`의 모든 입력을 같은 오류 문구로 거부한다. 요구는 그것을 담은 sidecar 출시에 적용된다.
+- gate V2: 설치된 sidecar 출시가 `inputs.json`의 잘못된 경우를 자기 실행 파일로 end-to-end 창 검사에서 통과시킨다. 그다음 core는 검증기, `sok` 사본, sidecar 사본을 한 변경에서 제거하고, 명령은 더 이상 `replaySessionProblem`을 부르지 않는다.
+
+### gate G1(행 S1~S10)
+
+행 S1~S10은 다음이 모두 성립할 때만 core를 한 변경에서 떠난다.
+
+- (a) contract repository에 byte, vector, message 형식을 담은 npm package와 crate를 공개하는 tag가 있고, 두 구현이 그 저장소의 vector를 통과한다.
+- (b) terminal plugin 출시가 그 tag의 모듈을 `make pack` 전에 `ui/`로 복사하고 `files`에 적으며, npm package를 `devDependencies`가 아니라 `dependencies`에 선언한다(모듈이 실행 파일과 함께 배포되므로). page는 복사본을 상대 경로로 import한다. terminal sidecar 출시는 crate를 `Cargo.toml`의 `[dependencies]`에 선언하고 hash에 그것을 부른다.
+- (c) `../registry/plugins/terminal.json`에서 core 항목을 import하는 terminal 출시가 모두 `../registry/revoked.json`에서 폐기된다. `engines.soksak`으로는 구분할 수 없으므로 `0.0.3`부터 최신까지 각 출시를 검사한다: `0.0.4`~`0.0.10`은 `*`, `0.0.11`~`0.0.14`는 `>=0.0.11`이다. import를 아직 확인하지 못한 출시는 확인될 때까지 gate를 막는다.
+- (d) registry로 설치한 그 plugin과 sidecar로 `e2e/terminal-replay.test.mjs`가 통과한다.
+- (e) 제품 결정을 사용자에게 보이는 결과와 함께 changelog에 적는다: 폐기된 terminal 버전의 설치된 page는 사용자가 registry에서 새 terminal 출시를 설치할 때까지 멈춘다(감독자 결정). 폐기만으로는 설치된 사본이 제거되지 않는다.
+
+순서: (a) contract tag, (b) plugin과 sidecar 출시, (c) 폐기, (d) 창 검사, (e) changelog 항목, 그다음 S1~S10을 제거하고 parity 행을 재배정하는 core 변경.
+
+### 기록한 공백(이 목록이 풀지 않는 것)
+
+- core 변경 전까지 core의 사본, contract의 사본과 sidecar의 fixture 사본이 나란히 있고, core가 돌릴 수 있는 검사는 이를 비교하지 않는다. 어긋남은 설치된 쌍을 통한 `e2e/terminal-replay.test.mjs`에서만 드러난다. 이 공백은 G1과 함께 닫힌다.
+- terminal plugin의 `sok plugin pack`이 `files` 목록을 어떻게 다루는지는 확인하지 않았다. (b)의 복사 단계는 출시를 만들 때만 검증된다.
+- 폐기된 출시는 사용자 기기에 설치된 채 남는다. registry 조치로는 제거되지 않는다.

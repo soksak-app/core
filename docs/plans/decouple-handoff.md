@@ -182,3 +182,75 @@ The `sidecar` and `native image` sources also report the surface error that the 
 Each mouse operation and its result carry the same non-empty `inputId`. A mouse operation that fails, such as for an invalid coordinate, still answers with its mouse result, whose `x` and `y` are `null` and whose `error` is `invalidParams: <reason>`, so the results stay paired; the page shows that error as a terminal input error. The page assigns a fresh ID to every operation; a result for an earlier input cannot complete a later gesture. `written` means that the PTY write succeeded, not that the child consumed the bytes or rendered a selection. Diagnostic builds expose `terminal.pointer.trace` with `start` and `stop` actions and bounded ordered entries for DOM pointer/capture events, native focus notifications, queued mouse operations, and results. Overflow is explicit and invalidates the measurement. To separate a successful write from child receipt, the sidecar answers a `pty.pending` operation for the open session with `{event: "pty.pending", pending, written}`: `pending` is the count of master-written input bytes the child has not yet read, taken from the platform PTY input queue (FIONREAD on the master fd, which on macOS reads the tty shared by master and slave), and `written` is the cumulative count of child output bytes the session reader has read; one round trip returns both values from the same instant, and an error reply, including a missing session, carries the same `pty.pending` event marker so the reply identifies its request. Diagnostic builds expose the measurement as the `terminal.pty.pending` command, which resolves to `{pending, written}`, nonnegative integers, and rejects an explicit sidecar error. The queue is a transport observation: a canonical-mode line that has not been assembled yet is not counted, so a raw-mode child is the measured contract, and a drained queue proves delivery to the child, not that the program interpreted the bytes. Growth of `written` between two samples is the observable of the child having produced output, which separates program parsing from selection rendering.
 
 Repeat acceptance uses the full-screen fixture TUI (`e2e/fixture-tui.mjs`), which enables `?1003` motion and `?1006` SGR reporting and draws its own selection, and OS pointer input: drag, click a third point inside the same TUI, then immediately drag again without refocusing or resetting state. Only after a failure may the check click another card and return to observe recovery; recovery never changes that failed attempt into a pass. Each host must pass three uninterrupted cycles, one per third-point region (input, output, blank), with the middle cycle at the slow speed; an intermittent failure is reproduced and accepted through the repeat target. Every gesture has correlated input results and complete capture measurements of its visible effect. Shift selection is a separate control.
+
+## Screen hash move list (F236-9-2)
+
+This section is the move list and release gate of decision 9-1 in [screen hash decision](screen-hash-decision.md). The owner of the byte definition is a declared contract repository (the screen contract). Core holds no import of it and no registry entry for it. A row below leaves core only when its gate holds. Until then core keeps the row, its pointer and its check. The screen contract repository does not exist yet.
+
+### What the contract repository holds
+
+1. The byte definition in both languages: `screenBytes` and `screenHash`, their JavaScript (npm package) and Rust (crate) reference implementations, and the magic `SKSCR1`.
+2. The golden vectors and the refusal messages, and the tests in the contract repository that run them against both implementations.
+3. The screen message form and its validator `screenFromMessage`, in both languages, because the message is the wire between the sidecar and the page.
+4. The text that defines these parts: the sections "Screen hash" and "Golden vectors" of `docs/spec/replay.md` and the section "Screen message" of `docs/spec/persistent-services.md`, as they stand when the gate holds.
+
+A change of the bytes changes the magic, so it is a new contract tag. A plugin and a sidecar move their pins in the same change. The contract repository holds no plugin or sidecar code, and its tests read only its own fixtures.
+
+### What leaves core
+
+Each row names the core item, its destination, and the gate. Rows S1 to S10 leave together in one core change after gate G1 (below), so no core release has a half-moved hash.
+
+| Row | Core item (path, lines at HEAD) | Destination | Gate |
+| --- | --- | --- | --- |
+| S1 | `packages/plugin-api/screen-hash.js`: `screenBytes` (line 42), `screenHash` (line 90), `screenFromMessage` (lines 110 to 134) with its helpers `shown`, `isObject`, `messageRefuse` and `resolvedColor`; line 1 | Contract repository (both languages). The terminal plugin imports its copy | G1 |
+| S2 | `packages/plugin-api/package.json` lines 15 and 23 (export `./screen-hash`); `packages/plugin-api/index.js` line 55 (`PAGE_IMPORTS`); `packages/workbench/index.html` line 12 and `overlay.html` line 25 (import maps); `docs/spec/plugins.md` line 309 and `docs/spec/plugins.ko.md` line 310 (page-import sentence) | Removed. Installed terminal versions that import the entry stop working, and are revoked (supervisor decision) | G1 |
+| S3 | `packages/plugin-api/test/validate.test.mjs` line 270 (assertion of the entry); `packages/plugin-api/test/screen-hash.test.mjs` | Contract repository tests | G1 |
+| S4 | `packages/log-contract/fixtures/replay/screen-hash.json`, `screen-message.json`; tests `packages/log-contract/test/screen-hash.test.mjs`, `screen-message.test.mjs`; in `replay-vectors-named.test.mjs` only the assertions about screen-hash vectors (its assertions on `inputs.json` stay) | Contract repository (vectors and refusals) | G1 |
+| S5 | `docs/spec/replay.md` "Screen hash" (lines 33 to 55) and "Golden vectors" (lines 56 to 70), and `docs/spec/replay.ko.md` lines 39, 54, 58 and 83: replaced by a pointer to the contract. The headings stay so that `#screen-hash` and `#golden-vectors` still resolve under `scripts/check-docs.mjs` | Contract repository (text) | G1 |
+| S6 | `docs/spec/persistent-services.md` lines 51 to 68 ("Screen message") and `docs/spec/persistent-services.ko.md` line 68: replaced by a pointer, the heading stays | Contract repository (text) | G1 |
+| S7 | `packages/plugin-api/terms.json`: the term "screen hash" (line 169) | Contract glossary | G1 |
+| S8 | `scripts/check-test-parity.mjs`: entry F160.35 (lines 2649 to 2663: its implementation, its unit tests, its e2e tests and its expected text) | Moves with the parser to the contract repository or the terminal plugin, whichever holds the test | G1 |
+| S9 | Sidecar `../sidecars/vt/vt-core/src/screen_hash.rs`: the hash owner is removed. `message_cells` moves out of it into a sidecar module, and the cell and cursor types of the message come from the crate. Callers: `vt-core/src/protocol.rs` lines 1276 and 1333; `vt-alacritty/src/replay.rs` lines 18 and 309; `vt-core/tests/screen_hash_test.rs` line 8; `vt-core/tests/screen_message_test.rs` lines 6 and the read of `screen-message.json` | Sidecar repository, through the crate | G1 (sidecar release that depends on the crate) |
+| S10 | Sidecar copies `vt-core/tests/fixtures/log-contract/screen-hash.json` and `screen-message.json`, and the README lines 8 to 11 ("Core owns all three") | Removed by the sidecar repository | G1 (same sidecar release as S9) |
+| S11 | `scripts/check-test-parity.mjs` entry F160.25 (lines 2617 to 2630): its implementation `screenHash` in `screen-hash.js` moves to the contract repository. The `sok` tests `replay_test.go` and `replay_test.rs` and the e2e tests stay in core, and the entry is re-pointed to the kept owners. The comments that cite the screen message in `packages/sok/tauriv2/tests/replay_test.rs` (line 590) and `packages/sok/wailsv3/tests/replay_test.go` (line 340) are re-pointed too | Contract repository (implementation); core (tests, re-pointed) | G1 |
+| S12 | `docs/spec/events.json` line 190 (the description of the first divergence): the layer of a page frame is named `page`; it becomes `plugin`, as `replay.md` line 22 states (supervisor decision). The layers `page` of the `page.*` events stay | Core | F236-9-3, no gate: a name correction, the stored records already use `plugin` |
+| S13 | `packages/plugin-api/terms.json`: the term "replay" (lines 150 and 151) names a terminal session | Core | F236-9-3, no gate: "a session" |
+| S14 | Terminal page `../plugins/terminal/ui/terminal.js`: the import of `screenFromMessage` and `screenHash` (line 2) and the calls at lines 1209 and 1218 use the copy of gate (b). The plugin's `Makefile` gets the copy step before `make pack` | Terminal plugin repository | G1 (b) |
+| S15 | Replay input validator (gate V2): `docs/spec/replay.md` lines 72, 87 and 109; `docs/spec/host-contract.md` line 696 and `docs/spec/host-contract.ko.md` line 697 (command `cli.debug.replay-input-cases`); `packages/log-contract/test/replay-inputs.test.mjs` (lines 7, 17, 23 and 29); `packages/sok/tauriv2/tests/replay_inputs_test.rs` and `packages/sok/wailsv3/tests/replay_inputs_test.go`; entry F160.34 of `scripts/check-test-parity.mjs` (lines 2633 to 2648) | Core until V2 holds; then the sidecar repository holds the validator tests and the entry moves with them. `replay.md` and `host-contract.md` keep the command text | V2 |
+| S16 | `CHANGELOG.md` and `CHANGELOG.ko.md` entries of F160.25, F160.34 and F160.35, and the F236-9 entries of `docs/features.md` and `docs/features.ko.md`, stay as history, unchanged. G1 (e) adds a new changelog entry with the user-facing consequence | Core (new changelog entry only) | G1 (e) |
+
+The kept generic text is `docs/spec/replay.md` line 5 ("a hash of each screen it produces") and the input-kind table, which name no terminal.
+
+After the change, core keeps `scripts/check-test-parity.mjs` row F160.25 (`screenHash`) only while core keeps `screenHash`; it is re-pointed to the contract repository in the same change as S1. The `sok` format checks stay in core, because they check a string and compute nothing: `is_screen_hash` (`packages/sok/tauriv2/src/replay.rs` line 100) and `screenHashText` (`packages/sok/wailsv3/src/replay.go` line 26). The application window check `e2e/terminal-replay.test.mjs` stays in core, under the exception of `AGENTS.md` line 33, and is the observed-behaviour check of gate G1 (d).
+
+### Producer rules of View state (gate V1)
+
+`docs/spec/replay.md` lines 74 to 98 ("View state" and its "Decision") say how the terminal engine computes the drawn screen: the selection highlight in the cells, the trimming of blank cells by theme, the viewport moves, and the cursor outside the viewport. They move to the specification of the terminal sidecar (`../sidecars/vt`, its `docs/spec/`) when that repository holds them. Core keeps one generic sentence under the heading "### Hashed members" in `replay.md`: the hashed cells and the cursor are the ones the sidecar reports for the drawn screen, and each sidecar states in its own specification how it computes them. Line 97 (the golden vectors of a drawn screen) stays with "Golden vectors", because the vectors stay in the contract. Gate V1: the sidecar specification holds the text and its docs check passes in that repository. The `scripts/check-test-parity.mjs` row F160.34 expects the input kinds of `replay.md`, not the view-state wording, once V1 holds.
+
+### Replay input validator (gate V2)
+
+The validator holds terminal bounds (a selection against the grid, theme colours), not the byte definition. Its move list:
+
+- Core: `replayInputProblem` and `replaySessionProblem` in `packages/log-contract/index.js`, the fixture `packages/log-contract/fixtures/replay/inputs.json`, and the command's call of `replaySessionProblem` (`replay.md` line 85) stay until V2 holds.
+- Sidecar copy: `replay-inputs.json` in the sidecar fixtures (`vt-core/tests/fixtures/log-contract/`).
+- `sok` copies: `packages/sok/tauriv2/src/replay_inputs.rs` and `packages/sok/wailsv3/src/replay_inputs.go`.
+- Contract change first: "Replay executable" in `replay.md` gets the requirement that the executable refuses every input of `inputs.json` that the validator refuses, with the same error text. The requirement applies to sidecar releases that carry it.
+- Gate V2: an installed sidecar release passes the invalid cases of `inputs.json` through its executable in an end-to-end window check. Then core removes the validator, the `sok` copies and the sidecar copy in one change, and the command no longer calls `replaySessionProblem`.
+
+### Gate G1 (for rows S1 to S10)
+
+Rows S1 to S10 leave core in one core change only when all of the following hold.
+
+- (a) The contract repository has a tag that publishes the npm package and the crate with the bytes, the vectors and the message form, and both implementations pass the vectors in that repository.
+- (b) A terminal plugin release copies that tag's module into `ui/` before `make pack`, lists it in its `files`, and declares the npm package under `dependencies` (not `devDependencies`), because the module ships in its runtime files. The page imports the copy by a relative path. A terminal sidecar release declares the crate under `[dependencies]` in `Cargo.toml` and calls it for the hash.
+- (c) Every terminal release in `../registry/plugins/terminal.json` that imports core's entry is revoked in `../registry/revoked.json`. Each release is checked, from `0.0.3` to the latest, because `engines.soksak` cannot separate them: `0.0.4` to `0.0.10` are `*`, and `0.0.11` to `0.0.14` are `>=0.0.11`. A release whose import is not yet verified blocks the gate until it is checked.
+- (d) `e2e/terminal-replay.test.mjs` passes with that released plugin and sidecar installed through the registry.
+- (e) The product decision is recorded in the changelog with its user-facing consequence: installed pages of the revoked terminal versions stop until the user installs the new terminal release from the registry (supervisor decision). Revocation alone does not remove an installed copy.
+
+Order: (a) the contract tag; (b) the plugin and sidecar releases; (c) the revocations; (d) the window check; (e) the changelog entry; then the core change that removes rows S1 to S10 and re-points the parity rows.
+
+### Gaps recorded, not solved by this list
+
+- Until the core change, core's copies, the contract's copies and the sidecar's fixture copies exist side by side, and no check that core can run compares them. Drift is detected only by `e2e/terminal-replay.test.mjs` through the installed pair. The gap closes with G1.
+- The terminal plugin's `sok plugin pack` treatment of the `files` list was not inspected; the copy step of (b) is verified only when the release is built.
+- A revoked release stays installed on a user's machine; no registry action removes it.
