@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-c-27: 표준 bytes, SHA-256 결과, screen-message 변환, 이름 있는 거부 오류에 대한 순서 있는 `screenHash` 사례를 공개한다. core 테스트는 각 단계를 `screen-hash.js`에 실행하며 공개 사례 회귀 검사가 5/5 통과한다. `drawList`와 manifest/diagnostics validator는 계속 미완료다.
+
 - F238-c-27: 직접·위임 command 호출, 실패한 run, command 거부, audit 결과, disposal에 대한 순서 있는 `createBinder` 계약 사례 6개를 공개한다. core 테스트는 각 단계를 `binder.js`에 실행하며, Red 공개 사례 검사는 계약 추가 후 7/7 통과한다. 남은 표면은 `screenHash`, `drawList`, manifest/diagnostics 검증기다.
 
 - F238-c-2: parity 소유권이 패키지 이름 접두사나 하드코딩한 소유자 이름 대신 workspace registry의 정확한 선언 component 이름과 `kind`를 사용한다. plugin과 sidecar 코드의 미선언 이름은 발견 사항이다. 회귀 테스트는 수정 전 구현에서 실패하고 선언 소유자 조회에서 통과한다. 소유자 범위 테스트는 125/125 통과한다. F238-c-3은 중복으로 종료했다. F238-c-12의 기존 범위 표를 확인했으며 plugin 단언은 삭제하지 않았다.

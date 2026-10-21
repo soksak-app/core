@@ -1,0 +1,229 @@
+{
+  "surface": "packages/plugin-api/screen-hash.js#screenHash",
+  "description": "Ordered screenHash cases fix canonical screen bytes, the SHA-256 output, the projection from a screen message, and named refusals. Inputs and results are literals owned by this contract.",
+  "cases": [
+    {
+      "id": "screen.bytes.canonical-order",
+      "steps": [
+        {
+          "bytes": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "bytes": "534b534352310000000100000001010000000000000000000000014101000000000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "6eedce8be3fb57666d3dba35f49a4e29f48b61959a8013ca625631c30f821c28"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.projects-hashed-fields",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 7,
+              "segment": "seg-1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true,
+                "shape": "block",
+                "focused": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/"
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "6eedce8be3fb57666d3dba35f49a4e29f48b61959a8013ca625631c30f821c28"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.refusal.names-invalid-member",
+      "steps": [
+        {
+          "bytes": {
+            "screen": {
+              "rows": 0,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "error": "screen hash: rows must be a positive integer, found 0"
+          }
+        },
+        {
+          "bytes": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 3,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "error": "screen hash: cells[0].width must be 0, 1 or 2, found 3"
+          }
+        },
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "segment": "seg-1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true,
+                "shape": "block",
+                "focused": true
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/"
+                }
+              ]
+            }
+          },
+          "output": {
+            "error": "screen message: sequence must be an integer from 1, found undefined"
+          }
+        }
+      ]
+    }
+  ]
+}

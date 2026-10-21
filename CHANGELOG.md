@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-27: Publish ordered `screenHash` cases for canonical bytes, SHA-256 output, screen-message projection, and named refusal errors. Core tests execute every step against `screen-hash.js`; the published-case regression passes 5/5. `drawList` and the manifest/diagnostics validators remain open.
+
 - F238-c-27: Publish six ordered `createBinder` contract cases for direct and delegated command calls, failed runs, command refusal, audit output, and disposal. Core tests execute each step against `binder.js`; the Red published-case assertion passes with the contract (7/7). Remaining surfaces are `screenHash`, `drawList`, and manifest/diagnostics validation.
 
 - F238-c-2: Parity ownership now uses exact declared component names and `kind` values from the workspace registry instead of package-name prefixes or hard-coded owner names. Undeclared names in plugin and sidecar code are findings. The regression test failed against the pre-fix implementation and passes with the declared-owner lookup; the ownership coverage tests pass 125/125. F238-c-3 is closed as duplicate. F238-c-12's existing coverage table was confirmed; no plugin assertions were removed.

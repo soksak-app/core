@@ -43,7 +43,8 @@
     "commits-check.js",
     "terms.json",
     "contract/view-wire.json",
-    "contract/create-binder.json"
+    "contract/create-binder.json",
+    "contract/screen-hash.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",
