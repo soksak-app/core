@@ -147,7 +147,7 @@ Done: F212.8 and all its children, including F212.8-6-3 (the source and transiti
 F212.9-1 (the specification `docs/spec/plugin-host.md`) and F212.9-2 (the native operation) are committed on `feat/plugin-host-F212.9`; F212.9-3 and F212.9-4 are in progress there.
 
 F212.9 is required, because a plugin whose sidebar section shows values while none of its views is open needs a plugin host (declared-ui.md, source order). The files state is the first case.
-- Spec first: `docs/spec/plugin-processes.md` section "Plugin host" (a platform operation that creates a plugin host web view attached to the window, not to a surface host; owner key `plugin:<id>`) and rule 5 (restart within limit (vi), state restored from the last saved value). The specification of `feat/plugin-host-F212.9` links `../plans/plugin-processes.md`; repoint those links to `plugin-processes.md` when it merges main.
+- Spec first: `docs/spec/plugin-processes.md` section "Plugin host" (a platform operation that creates a plugin host web view attached to the window, not to a surface host; owner key `plugin:<id>`) and rule 5 (restart within limit (vi), state restored from the last saved value).
 - F212.9a: measure the footprint and the throttle of a hidden host web view before F212.10.
 - Implement in native/darwin and both hosts, with contract cases, Go and Rust tests, and a native test. The view channel code of F212.7-2 is the pattern for the host channel.
 

@@ -35,6 +35,8 @@ const EXACT = new Map([
   ["host.test.start", "lifecycle"],
   ["host.trace.call.late-reply", "call"],
   ["host.trace.modal.stale-ready", "call"],
+  ["host.trace.plugin-host.process-ready", "call"],
+  ["host.trace.plugin-host.process-request", "call"],
   ["host.trace.sidecar.ready", "call"],
   ["host.trace.sidecar.restart-reset", "call"],
   ["host.trace.status.notify", "call"],

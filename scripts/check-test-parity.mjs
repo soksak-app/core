@@ -113,10 +113,10 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs", "packages/host/tauriv2/src/plugin_host_test.rs", "packages/host/tauriv2/src/plugin_host_channel_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go"]),
   lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
@@ -2237,6 +2237,43 @@ const FEATURE_LINKS = [
     expected: "The window-check source audit accepts a timer that records an observation through report and does not apply its timer rule to the harness tests, which run on mocked time.",
     levels: ["unit"],
   },
+  {
+    id: "F212.9-3-1",
+    implementation: [
+      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "pluginHostMessage" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "receive" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsOnlyTheRegistrationCalls" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_only_the_registration_calls_and_refuses_every_other_call" },
+    ],
+    expected: "Both hosts relay the replies, the registration calls and the snapshots of a plugin host page to the main page without a surface, refuse every other call, post the theme and the messages of the main page to the ready document, and send plugin-host-ended when the host ends.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.9-3-2",
+    implementation: [
+      { file: "packages/workbench/plugin-host.js", symbol: "listenPluginHostCalls" },
+      { file: "packages/workbench/exposure.js", symbol: "forwardHost" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a plugin host answers only a request without surface for a name that no surface registered" },
+      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "plugin-host-ended removes the registrations of the host and ends its open requests" },
+    ],
+    expected: "The main page answers the registration calls of a plugin host under plugin:<plugin id>, answers a request without surface through the host only when no surface page registered the name, and removes the registrations when the host ends.",
+    levels: ["unit"],
+  },
+  {
+    id: "F212.9-3-3",
+    implementation: [{ file: "packages/workbench/declared-source.js", symbol: "createDeclaredSource" }],
+    tests: [
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "the channel of a plugin host source acknowledges through pluginHostEvent and delivers the snapshots of its plugin" },
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "the pull of a plugin host source runs the snapshot request through the layer of its host" },
+    ],
+    expected: "The source of a plugin host receives the snapshots of its plugin without a surface, acknowledges through pluginHostEvent and pulls through the request layer of the host.",
+    levels: ["unit"],
+  },
+
   {
     id: "F219",
     implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],

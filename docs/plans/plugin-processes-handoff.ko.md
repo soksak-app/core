@@ -147,7 +147,7 @@ main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존
 F212.9-1(명세 `docs/spec/plugin-host.md`)과 F212.9-2(native 연산)는 `feat/plugin-host-F212.9`에 커밋되었고, F212.9-3과 F212.9-4가 그곳에서 진행 중이다.
 
 F212.9는 필요하다. view가 하나도 열려 있지 않을 때 sidebar section에 값을 보여 주는 plugin은 plugin host가 있어야 하기 때문이다(declared-ui.md, 출처 순서). 첫 사례는 files state다.
-- 명세 먼저: `docs/spec/plugin-processes.md`의 "plugin host" 절(surface host가 아니라 창에 붙는 plugin host web view를 만드는 platform 연산, owner key `plugin:<id>`)과 규칙 5(한도 (vi) 안의 재시작, 마지막 저장값에서 state 복원). `feat/plugin-host-F212.9`의 명세는 `../plans/plugin-processes.md`를 link하므로, main을 합칠 때 그 link를 `plugin-processes.md`로 바꾼다.
+- 명세 먼저: `docs/spec/plugin-processes.md`의 "plugin host" 절(surface host가 아니라 창에 붙는 plugin host web view를 만드는 platform 연산, owner key `plugin:<id>`)과 규칙 5(한도 (vi) 안의 재시작, 마지막 저장값에서 state 복원).
 - F212.9a: F212.10 전에 숨은 host web view의 footprint와 throttle을 잰다.
 - native/darwin과 두 host에 구현하고, 계약 case, Go와 Rust 시험, native 시험을 둔다. F212.7-2의 view 통로 코드가 host 통로의 본보기다.
 

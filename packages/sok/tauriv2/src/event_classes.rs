@@ -90,6 +90,8 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.test.start" => Some(Class::Lifecycle),
         "host.trace.call.late-reply" => Some(Class::Call),
         "host.trace.modal.stale-ready" => Some(Class::Call),
+        "host.trace.plugin-host.process-ready" => Some(Class::Call),
+        "host.trace.plugin-host.process-request" => Some(Class::Call),
         "host.trace.sidecar.ready" => Some(Class::Call),
         "host.trace.sidecar.restart-reset" => Some(Class::Call),
         "host.trace.status.notify" => Some(Class::Call),

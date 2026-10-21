@@ -512,6 +512,38 @@ fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -> Resu
     documents::view_reply(&webview, request)
 }
 
+/// Receives the reply of the main page to a call request of a plugin host (docs/spec/plugin-host.md#channel).
+#[tauri::command(async)]
+fn plugin_host_reply(
+    webview: Webview,
+    request: Argument<crate::plugin_host_channel::PluginHostReply>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_channel::plugin_host_reply(&webview, request)
+}
+
+/// Posts a request of the main page to a plugin host, such as the pull of a declared status
+/// (docs/spec/plugin-host.md#declared-ui-snapshots).
+#[tauri::command(async)]
+fn plugin_host_request(
+    webview: Webview,
+    request: Argument<crate::plugin_host_channel::PluginHostRequest>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_channel::plugin_host_request(&webview, request)
+}
+
+/// Posts an event of the main page to a plugin host, such as the acknowledgement of a declared UI snapshot
+/// (docs/spec/plugin-host.md#declared-ui-snapshots).
+#[tauri::command(async)]
+fn plugin_host_event(
+    webview: Webview,
+    request: Argument<crate::plugin_host_channel::PluginHostEvent>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_channel::plugin_host_event(&webview, request)
+}
+
 /// Sets the page zoom of a document region as the text scale.
 #[tauri::command(async)]
 fn document_zoom(webview: Webview, request: Argument<documents::Request>) -> Result<(), String> {

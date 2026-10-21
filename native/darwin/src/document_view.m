@@ -993,19 +993,15 @@ void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context) {
     coreRootContext = context;
 }
 
-void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *channel,
-    sp_document_changed changed, void *context) {
-    bool isView = channel != NULL;
-    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
-    NSView *surface = (NSView *)surfaceHandle;
-    if (!surface || !directory || !changed || !surface.window) return NULL;
-    if (isView && !(folder && plugin)) return NULL;
-    NSString *channelSource = isView ? [NSString stringWithUTF8String:channel] : nil;
-    if (isView && !channelSource) return NULL;
+// Builds the web view with the configuration of a document region, or with the view configuration (isView) that a view
+// surface and a plugin host use (docs/spec/native-surfaces.md#view-surfaces). The view is hidden with a zero frame and
+// is attached to no parent; the caller places it and owns the reference until sp_document_close.
+static SPDocumentView *pluginView(const char *directory, const char *folder, const char *plugin, NSString *channelSource,
+    bool isView, sp_document_changed changed, void *context) {
     WKWebsiteDataStore *store = storeForDirectory(directory);
-    if (!store) return NULL;
+    if (!store) return nil;
     NSString *applicationName = safariApplicationName();
-    if (!applicationName) return NULL;
+    if (!applicationName) return nil;
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.applicationNameForUserAgent = applicationName;
     configuration.websiteDataStore = store;
@@ -1052,9 +1048,24 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.binaries = binaries;
     view.navigationDelegate = view;
     view.UIDelegate = view;
+    view.hidden = YES;
+    for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0, &kStateContext);
+    return view;
+}
+
+void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *channel,
+    sp_document_changed changed, void *context) {
+    bool isView = channel != NULL;
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSView *surface = (NSView *)surfaceHandle;
+    if (!surface || !directory || !changed || !surface.window) return NULL;
+    if (isView && !(folder && plugin)) return NULL;
+    NSString *channelSource = isView ? [NSString stringWithUTF8String:channel] : nil;
+    if (isView && !channelSource) return NULL;
+    SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, isView, changed, context);
+    if (!view) return NULL;
     view.webSurface = surface;
     view.appearance = surface.effectiveAppearance;
-    view.hidden = YES;
     if (!webviewInputRegister(view) || !webviewIgnorePageFocus(view)) {
         [view release];
         return NULL;
@@ -1071,7 +1082,33 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     view.zoom = 1;
     view.pageZoom = view.zoom;
     [view _setOverrideDeviceScaleFactor:sp_surface_scale(surface)];
-    for (NSString *key in observedKeys()) sp_observe_key_path("document_view.state", SP_OBSERVE_COUNT, view, view, key, 0, &kStateContext);
+    [openDocuments() addObject:view];
+    return view; // The caller owns this reference until sp_document_close.
+}
+
+void *sp_plugin_host_create(void *windowHandle, const char *directory, const char *folder, const char *plugin,
+    const char *channel, sp_document_changed changed, void *context) {
+    NSCAssert(NSThread.isMainThread, @"the plugin host belongs to the main thread");
+    NSWindow *window = (NSWindow *)windowHandle;
+    // The host web view is the view configuration of a view: it has the channel script and the plugin (docs/spec/plugin-host.md).
+    if (!window || !window.contentView || !directory || !changed || !channel || !folder || !plugin) return NULL;
+    NSString *channelSource = [NSString stringWithUTF8String:channel];
+    if (!channelSource) return NULL;
+    SPDocumentView *view = pluginView(directory, folder, plugin, channelSource, YES, changed, context);
+    if (!view) return NULL;
+    view.appearance = window.effectiveAppearance;
+    // The host page receives no input and never becomes the first responder (docs/spec/plugin-host.md): no input
+    // registration, no click monitor, and the page-focus suppression that a webview configuration sets.
+    if (!webviewIgnorePageFocus(view)) {
+        [view release];
+        return NULL;
+    }
+    // The placement of the host web view: attached to the window itself, hidden, at a zero frame. A hidden view takes
+    // no hit testing and draws nothing.
+    [window.contentView addSubview:view];
+    view.zoom = 1;
+    view.pageZoom = view.zoom;
+    [view _setOverrideDeviceScaleFactor:window.backingScaleFactor];
     [openDocuments() addObject:view];
     return view; // The caller owns this reference until sp_document_close.
 }

@@ -139,6 +139,10 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
 - **응답성.** WebKit이 view의 WebContent process가 응답성 검사에 답하지 않는다고 알리면, 호스트는 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, responsive: false}` event를 창의 메인 page에 보낸다. process가 다시 답하면 호스트는 `host.trace.view.responsive {plugin, surface}`를 쓰고 `responsive: true`를 보낸다. 이 알림은 view의 어떤 call도 끝내지 않는다. 메인 page는 view surface마다 상태를 `core.plugin.views {plugin, surface, responsive}`에 보관하고, surface가 dispose되면 이를 지운다. 문서 영역은 알림을 받지 않는다.
 - **process 종료.** view process가 끝나면 호스트는 view가 열어 둔 각 call을 `process-ended` 이유로 끝내고, `host.call.peer-lost`를 쓰며, view의 presentation wait를 끝낸다. 그 뒤 호스트는 view를 다시 만들고, 새 view는 저장된 탭 상태에서 상태를 복원한다. 재시작 한도는 [plugins](plugins.ko.md#view-표면)의 한도다. 같은 표면의 실패가 300초 안에 4번 일어나면 재시작을 멈춘다. 네 번째 실패에서 호스트는 `error: view channel: <surface>: the view failed 4 times within 300 seconds and is created again when its tab is reopened`을 application log에 쓰고, 창의 메인 page에 `view-stopped {surface, plugin, reason}` event를 보낸다. reason은 `the view failed 4 times within 300 seconds and is created again when its tab is reopened`이다. 메인 page는 reason을 표시 경로로 card에 보여 주며, 사용자가 탭을 다시 열 때까지 card가 이를 유지한다.
 
+## plugin host
+
+plugin host는 manifest가 선언하는 plugin의 숨은 web view로, 창에 붙고 surface host에는 붙지 않는다. 아무것도 보여 주지 않는다. surface frame을, region을, presentation wait을 가지지 않고, 입력을 받지 않으며, 어떤 hit test도 그것에 닿지 않는다. channel, exposure 등록, snapshot, restart limit, state의 계약은 [plugin host](plugin-host.ko.md)에 있다.
+
 ## 영역
 
 영역은 표면에서 네이티브 콘텐츠를 표시하는 장소다. 소유권, 계층, 완전한 스냅샷 위치, 쌓임, 입력, 세대, 래스터 규칙은 [표면 합성](surface-composition.ko.md)이 정의한다. 이 문서는 문서·그림 공급자에만 해당하는 동작을 정의한다.

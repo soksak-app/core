@@ -13,6 +13,7 @@ use tauri::{
 };
 
 use crate::application_log::{log_error, log_failure};
+use crate::documents::DOCUMENT_DATA;
 use crate::modals::Overlay;
 use crate::platform::{self, Handle};
 use crate::projects::project_folder;
@@ -48,6 +49,10 @@ pub(crate) struct WindowData {
     pub streams: crate::documents::Streams,
     /// The image regions of surface pages.
     pub images: crate::images::Images,
+    /// The plugin host webviews of the window, by plugin id (docs/spec/plugin-host.md).
+    pub plugin_hosts: crate::plugin_host::PluginHosts,
+    /// The channels of the plugin host pages of the window, by plugin id (docs/spec/plugin-host.md#channel).
+    pub plugin_host_channels: crate::plugin_host_channel::PluginHostChannels,
     /// The surface composition that the main page declared and that the host uses to check the authority of region
     /// calls.
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
@@ -369,6 +374,20 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
 /// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     for window in app.windows().values() {
+        if change.action == "remove" || change.action == "disable" {
+            // The host webview of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).
+            log_failure(
+                "plugin host",
+                crate::exposure::on_main(window, {
+                    let window = window.clone();
+                    let plugin = change.plugin.clone();
+                    move || {
+                        dispose_plugin_host(&window, &plugin);
+                        Ok(())
+                    }
+                }),
+            );
+        }
         if let Err(error) = emit_window(window, "plugins-changed", change.clone()) {
             log_error("plugins-changed", error);
         }
@@ -643,10 +662,12 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
             let natives = context.clone();
+            let closing = host.clone();
             log_failure(
                 "window close",
                 platform.enqueue_ui(Box::new(move || {
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
+                    dispose_plugin_hosts(&closing);
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
                     // content process remain.
                     let surfaces = std::mem::take(
@@ -965,7 +986,132 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     data.ready.store(false, Ordering::Relaxed);
     crate::exposure::page_reloaded(window);
     reload_surface_documents(window)?;
+    dispose_plugin_hosts(window);
     data.overlay.discard()
+}
+
+/// Creates the plugin host webview of every loaded plugin whose manifest declares host and that the window has none of.
+/// A failure of one creation is written to the application log. It runs on the main thread
+/// (docs/spec/plugin-host.md#lifetime).
+fn load_plugin_hosts(window: &Window) {
+    let result = load_plugin_hosts_on_main(window);
+    log_failure("plugin host", result);
+}
+
+fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
+    let data = window_data(window)?;
+    let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
+    let plugins = crate::plugin_host::host_plugins(&config)?;
+    let wanted = data.plugin_hosts.missing(&plugins);
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let platform = platform::current()?;
+    let owner = native_owner(window)?;
+    let directory = config.join(DOCUMENT_DATA);
+    let directory = directory
+        .to_str()
+        .ok_or("document data directory is not UTF-8")?
+        .to_string();
+    let theme = crate::theme::get(window)?;
+    let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
+    let theme = crate::documents::theme_script(&theme);
+    let channel = crate::documents::view_channel()?;
+    for plugin in wanted {
+        let folder = crate::installed::plugin_folder(&config, &plugin.id)?;
+        let folder = folder
+            .to_str()
+            .ok_or("plugin folder is not UTF-8")?
+            .to_string();
+        let host_plugin = plugin.id.clone();
+        let theme = theme.clone();
+        let host_window = window.clone();
+        data.plugin_host_channels.register(&plugin.id);
+        let view = crate::plugin_host::HostView {
+            directory: &directory,
+            folder: &folder,
+            plugin: &plugin.id,
+            page: &plugin.page,
+        };
+        let created = crate::plugin_host::create_host(
+            channel,
+            view,
+            |channel, view| {
+                let (state_window, state_plugin) = (host_window.clone(), host_plugin.clone());
+                let handle = platform.create_plugin_host(
+                    owner,
+                    view.directory,
+                    view.folder,
+                    view.plugin,
+                    channel,
+                    Box::new(move |state: String| {
+                        // A navigation of the page clears its ready document (docs/spec/plugin-host.md#channel).
+                        crate::plugin_host_channel::state(&state_window, &state_plugin, &state);
+                    }),
+                )?;
+                let (message_window, message_plugin) = (host_window.clone(), host_plugin.clone());
+                platform.set_view_message(
+                    handle,
+                    Box::new(move |value: String| {
+                        crate::plugin_host_channel::message(
+                            &message_window,
+                            &message_plugin,
+                            handle,
+                            &value,
+                        );
+                    }),
+                )?;
+                let (ended_window, ended_plugin) = (host_window.clone(), host_plugin.clone());
+                platform.set_view_ended(
+                    handle,
+                    Box::new(move || {
+                        crate::plugin_host_channel::ended(&ended_window, &ended_plugin, handle);
+                    }),
+                )?;
+                platform.add_document_script(handle, &theme)?;
+                Ok(handle)
+            },
+            |handle, address| platform.load_document(handle, address),
+            |handle| platform.close_document(handle),
+        );
+        let handle = created.inspect_err(|_| data.plugin_host_channels.unregister(&plugin.id))?;
+        data.plugin_hosts.insert(&plugin.id, handle);
+        crate::event_record::emit_host(
+            crate::event_log::Level::Debug,
+            "host.trace.plugin-host.process-request",
+            serde_json::json!({"plugin": plugin.id, "window": window.label()}),
+        );
+    }
+    Ok(())
+}
+
+/// Closes the plugin host webview of plugin and sends plugin-host-ended to the main page, which removes the
+/// registrations of the host (docs/spec/plugin-host.md#channel). A failure is written to the application log. It runs
+/// on the main thread.
+pub(crate) fn dispose_plugin_host(window: &Window, plugin: &str) {
+    crate::plugin_host_channel::end(window, plugin, None);
+}
+
+/// Closes every plugin host webview of the window. A failure is written to the application log. It runs on the main
+/// thread.
+pub(crate) fn dispose_plugin_hosts(window: &Window) {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => return log_error("plugin host", error),
+    };
+    let handles = data.plugin_hosts.take_all();
+    // The main page is replaced or ends with the window, so its registrations of the hosts end with it.
+    data.plugin_host_channels.unregister_all();
+    if handles.is_empty() {
+        return;
+    }
+    let platform = match platform::current() {
+        Ok(platform) => platform,
+        Err(error) => return log_error("plugin host", error),
+    };
+    for handle in handles {
+        log_failure("plugin host", platform.close_document(handle));
+    }
 }
 
 pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
@@ -989,6 +1135,7 @@ pub(crate) fn window_ready(window: &Window) -> Result<(), String> {
         }
     }
     crate::exposure::rewatch(window);
+    load_plugin_hosts(window);
     crate::deep_link::ready(window.app_handle());
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }

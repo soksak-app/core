@@ -13,6 +13,7 @@ globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
 const { createRegistry, installExposure, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { keepHostCommands } = await import("../plugin-host.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
   const received = [];
@@ -249,6 +250,50 @@ test("surface registrations are checked against the declarations and the surface
   assert.equal(changes, 5, "a closed surface is reported");
   assert.deepEqual(made.namesOf("tab-a"), []);
   assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, false);
+});
+
+test("a plugin host answers only a request without surface for a name that no surface registered", async () => {
+  const forwarded = [];
+  const made = coreRegistry(fakeHost(({ surface, method }) => {
+    forwarded.push({ surface, method });
+    return { result: "from surface" };
+  }));
+  const plugins = { "tab-a": "probe" };
+  let changes = 0;
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, registrationChanged: () => changes++ });
+  const sent = [];
+  const forget = keepHostCommands("probe", {
+    run: async (command, params) => {
+      sent.push({ command, params });
+      return command === "declared-ui.snapshot.request" ? { seq: 3, value: ["a"] } : { ran: params };
+    },
+    receive: () => {},
+    close: () => {},
+  });
+  try {
+    assert.throws(() => made.hostRegistered({ plugin: "other", kind: "command", name: "probe.send" }), /cannot register/);
+    assert.throws(() => made.hostRegistered({ plugin: "probe", kind: "command", name: "probe.missing" }), /undeclared/);
+    made.hostRegistered({ plugin: "probe", kind: "command", name: "probe.send" });
+    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines" });
+    assert.equal(changes, 2);
+    assert.equal(made.hostRegistrant("status", "probe.lines"), "plugin:probe");
+    assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, true);
+    assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send", params: { n: 1 } } }), { result: { ran: { n: 1 } } });
+    assert.deepEqual(await made.handle({ method: "status.get", params: { name: "probe.lines" } }), { result: { value: ["a"], version: 3 } });
+    assert.equal((await made.handle({ method: "status.watch", params: { name: "probe.lines" } })).error.message, "plugin host probe does not serve status.watch");
+    // A request that names a surface is never answered by the host.
+    assert.equal((await made.handle({ method: "command.run", params: { name: "probe.send", surface: "plugin:probe" } })).error.code, EXPOSURE_ERRORS.unregistered);
+    // A surface page that registers the name answers in place of the host.
+    made.registered({ surface: "tab-a", kind: "command", name: "probe.send" });
+    assert.deepEqual(await made.handle({ method: "command.run", params: { name: "probe.send" } }), { result: "from surface" });
+    assert.deepEqual(forwarded.map(({ surface }) => surface), ["tab-a"]);
+    assert.equal(sent.length, 2, "the host received a request that a surface answers");
+    made.hostUnregistered("probe");
+    assert.equal(made.hostRegistrant("status", "probe.lines"), null);
+    assert.equal((await made.handle({ method: "status.get", params: { name: "probe.lines" } })).error.code, EXPOSURE_ERRORS.unregistered);
+  } finally {
+    forget();
+  }
 });
 
 test("mounted surface rectangles retain application coordinates after layout changes", { timeout: 10000 }, async () => {

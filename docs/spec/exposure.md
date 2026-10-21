@@ -106,6 +106,8 @@ The workbench registers core entries in the registry of the main page. A plugin 
 
 The native host relays registrations and requests between a surface page and the registry of the main page in the same way that it relays [sidecar](sidecars.md) messages. When a surface page closes, the registry removes its registrations.
 
+A page registers under a key that identifies it, the owner key of the registration. A surface page registers under its surface id with the owner from its plugin. A plugin host page registers through its channel under the owner key `plugin:<plugin id>` ([plugin host](plugin-host.md#exposure)); the registration of a plugin host ends with its process, and a process that is created again within the restart limit registers again under the same key.
+
 ### Surface documents
 
 `@soksak/plugin-api/page` registers these core entries in every plugin surface page, so plugins do not implement them. Core declares them in `exposure.json`. They are the only core names that surface pages register.
@@ -130,7 +132,7 @@ A reply of a modal document reaches the main page only while that modal is the o
 
 ### Choosing a surface
 
-Several surface pages can register the same name. A request for such a name can include `surface`, an identifier from `core.surfaces`, in `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, and `dom.act`. Without `surface`, the main page chooses the active tab of the focused card, then the visible surfaces in the latest layout, then the latest registration. A `surface` that has not registered the name returns 1002. A request without `surface` for a name that a [plugin state module](plugins.md#plugin-state) registered is answered by that module in the application document.
+Several surface pages can register the same name. A request for such a name can include `surface`, an identifier from `core.surfaces`, in `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, and `dom.act`. Without `surface`, the main page chooses the active tab of the focused card, then the visible surfaces in the latest layout, then the latest registration. A `surface` that has not registered the name returns 1002. A request without `surface` for a name that a [plugin state module](plugins.md#plugin-state) registered is answered by that module in the application document. A request without `surface` for a name that a [plugin host](plugin-host.md) registered and that no surface page and no state module registered is answered by the registration of the plugin host; a request that names a `surface` is never answered by a plugin host, because a plugin host is not a surface.
 
 ## Tab memory
 
