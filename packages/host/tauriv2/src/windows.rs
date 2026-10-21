@@ -929,19 +929,15 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
             // A release of the shown project clears the shown root at once, even when another project is still held: the window
             // shows no project until the page shows one explicitly (docs/plans/plugin-host-routes.md F229-1).
             let data = window_data(&owner)?;
-            let shown_released = {
-                let mut shown = data
+            let shown_released = clear_released_shown(
+                &mut data
                     .shown
                     .lock()
                     // default: a lock that a panicking thread poisoned still holds the shown project, which this call may clear;
                     // the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner);
-                let released = *shown == id;
-                if released {
-                    shown.clear();
-                }
-                released
-            };
+                    .unwrap_or_else(PoisonError::into_inner),
+                &id,
+            );
             window
                 .state::<crate::sidecars::WindowSidecars>()
                 .close_owned(&owner, &|surface| {
@@ -962,6 +958,16 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
     }
     notify_workspace(window.app_handle());
     Ok(())
+}
+
+/// Clears the shown project of a window when it is the released project id, and reports whether it cleared it
+/// (docs/plans/plugin-host-routes.md F229-1). A shown project that is still held is kept.
+pub(crate) fn clear_released_shown(shown: &mut String, id: &str) -> bool {
+    let released = *shown == id;
+    if released {
+        shown.clear();
+    }
+    released
 }
 
 /// Removes the link of the project id from the owner record, and returns the released window label and whether no other

@@ -100,6 +100,28 @@ fn a_plugin_send_is_refused_while_no_project_is_shown() {
     );
 }
 
+// A release clears the shown project of a window only when it is the released project, and a shown project that is still held
+// stays (docs/plans/plugin-host-routes.md F229-1).
+// contract: plugin-host.sidecar.release-shown-project
+#[test]
+fn a_release_clears_the_shown_project_only_when_it_is_the_released_one() {
+    use crate::windows::clear_released_shown;
+    let mut shown = "project-b".to_string();
+    assert!(
+        !clear_released_shown(&mut shown, "project-a"),
+        "a release of a project that is not shown reported a cleared shown project"
+    );
+    assert_eq!(
+        shown, "project-b",
+        "a release of another project cleared the shown project"
+    );
+    assert!(
+        clear_released_shown(&mut shown, "project-b"),
+        "the release of the shown project did not report the clear"
+    );
+    assert_eq!(shown, "", "the released shown project is still shown");
+}
+
 // The sessions that end with the release of a project are the plugin sessions and the state sessions of that project
 // (docs/plans/plugin-host-routes.md rule 7, F229-8).
 // contract: plugin-host.sidecar.release-state-session
