@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use super::surface_start_script;
-use crate::surfaces::{SurfaceProject, ViewStart};
+use crate::surfaces::{SurfaceProject, ViewStart, view_origin_directory};
 
 // contract: view.start-values.first-script
 #[test]
@@ -47,5 +47,24 @@ fn the_start_values_script_refuses_a_missing_origin() {
         surface_start_script("probe-surface", &ViewStart::default()),
         Err(r#"surface "probe-surface": view start origin is missing"#.to_string()),
         "the script names the missing origin"
+    );
+}
+
+// The origin directory is an absolute path in the one local form: a relative path, the // and /<letter>: prefixes and a NUL
+// byte are refused with the same text, and an absolute local path is accepted.
+#[test]
+fn the_origin_directory_refuses_a_path_that_is_not_local_absolute() {
+    let text = r#"surface "probe-surface": view start origin directory is not an absolute path"#;
+    for path in ["relative", "C:\\x", "/C:/x", "//server/share", "a\u{0}b"] {
+        assert_eq!(
+            view_origin_directory("probe-surface", Some(&json!({"directory": path}))),
+            Err(text.to_string()),
+            "the directory {path:?} is refused as not absolute"
+        );
+    }
+    assert_eq!(
+        view_origin_directory("probe-surface", Some(&json!({"directory": "/a"}))),
+        Ok(Some("/a".to_string())),
+        "an absolute local directory is accepted"
     );
 }

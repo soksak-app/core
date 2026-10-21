@@ -133,3 +133,22 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 		t.Fatalf("start values script without an origin: no error, want a refusal")
 	}
 }
+
+// The origin directory is an absolute path in the one local form: a relative path, the // and /<letter>: prefixes and a NUL
+// byte are refused with the same text, and an absolute local path is accepted.
+func TestViewOriginDirectoryRefusesAPathThatIsNotLocalAbsolute(t *testing.T) {
+	const notAbsolute = `surface "probe-surface": view start origin directory is not an absolute path`
+	for _, path := range []string{"relative", `C:\x`, "/C:/x", "//server/share", "a\x00b"} {
+		raw, err := json.Marshal(map[string]string{"directory": path})
+		if err != nil {
+			t.Fatalf("%q: origin fixture: %v", path, err)
+		}
+		if _, err := viewOriginDirectory("probe-surface", raw); err == nil || err.Error() != notAbsolute {
+			t.Fatalf("directory %q: %v, want %q", path, err, notAbsolute)
+		}
+	}
+	dir, err := viewOriginDirectory("probe-surface", json.RawMessage(`{"directory":"/a"}`))
+	if err != nil || dir == nil || *dir != "/a" {
+		t.Fatalf("absolute local directory: %v %v, want /a", dir, err)
+	}
+}

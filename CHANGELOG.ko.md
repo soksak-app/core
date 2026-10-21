@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-a-7: 로컬 절대 경로가 아닌 view 시작 값의 origin directory를 두 호스트가 거부한다. 상대 경로, `//` 또는 `/<letter>:` 접두사, NUL 바이트는 `surface <id>: view start origin directory is not an absolute path`로 거부되며, contract case `view.start-values.refuses-a-missing-origin`이 두 호스트의 시험에서 그 거부를 선언한다.
 - F237: `origin`이 없거나 `null`이거나 경로 또는 `null`을 담은 `{directory}`가 아니면 두 호스트가 `{directory: null}`을 주입하지 않고 origin을 이름으로 드러내는 오류로 거부한다. contract case `view.start-values.refuses-a-missing-origin`이 이 거부를 두 호스트의 시험에 선언한다.
 - F235: view의 시작 값 `origin`은 한 형식, 곧 경로나 `null`을 담은 `{directory}`를 가지며, 이는 surface context의 형식이고 두 호스트가 주입하는 형식이다. native-surfaces.md와 contract case `view.start-values.first-script`는 더 이상 맨 `null`을 적지 않는다. 코드는 바뀌지 않았고, 시작 값 script의 호스트 시험이 이미 그 형식을 확인한다.
 - F234: view가 shortcut table을 등록한다. view bridge의 `shortcuts.register()`가 view call `runtime.shortcuts.read`로 view가 keyboard focus를 가진 동안 성립하는 행을 읽는다. bridge는 workbench 키를 막고 `runtime.shortcuts.run`으로 넘기며, 다른 모든 키의 기본 동작을 유지하고, table 전 첫 키에서 `runtime.shortcuts.missing`을 보내며, main page는 이것을 `page.view.shortcut-table-missing {plugin}`으로 기록한다. 실패한 넘긴 명령은 `page.input.shortcut.failed {plugin, key, command}`로 기록된다. 두 event를 선언하고 class table을 다시 만들었다. view-calls와 view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 6) 변경에서 통과한다(surface-view, view imports와 함께 95/95).

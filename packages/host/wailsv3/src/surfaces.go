@@ -111,7 +111,19 @@ func viewOriginDirectory(surface string, origin json.RawMessage) (*string, error
 	if path == "" {
 		return nil, fmt.Errorf("surface %q: view start origin directory is empty", surface)
 	}
+	if !localAbsolutePath(path) {
+		return nil, fmt.Errorf("surface %q: view start origin directory is not an absolute path", surface)
+	}
 	return &path, nil
+}
+
+// localAbsolutePath reports whether a view origin directory is an absolute path in the one local form: it starts with `/`,
+// not with `//` (UNC) or `/<letter>:` (drive), and holds no NUL byte. The rule is a string rule, so every host applies the same
+// test on every platform: the // and drive forms are refused for portability, not because the platform API accepts them.
+// The Rust host runs the same test (is_local_absolute_path).
+func localAbsolutePath(path string) bool {
+	drive := len(path) >= 3 && path[0] == '/' && ((path[1] >= 'A' && path[1] <= 'Z') || (path[1] >= 'a' && path[1] <= 'z')) && path[2] == ':'
+	return strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "//") && !drive && !strings.Contains(path, "\x00")
 }
 
 type SurfaceRegion struct {

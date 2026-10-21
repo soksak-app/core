@@ -93,9 +93,23 @@ pub(crate) fn view_origin_directory(
         Some(Value::String(path)) if path.is_empty() => Err(format!(
             "surface {surface:?}: view start origin directory is empty"
         )),
+        Some(Value::String(path)) if !is_local_absolute_path(path) => Err(format!(
+            "surface {surface:?}: view start origin directory is not an absolute path"
+        )),
         Some(Value::String(path)) => Ok(Some(path.clone())),
         _ => Err(malformed()),
     }
+}
+
+/// Whether a view origin directory is an absolute path in the one local form: it starts with `/`, not with `//` (UNC) or
+/// `/<letter>:` (drive), and holds no NUL byte. The rule is a string rule, so every host applies the same test on every
+/// platform: the // and drive forms are refused for portability, not because the platform API accepts them. The Go host
+/// runs the same test (localAbsolutePath).
+fn is_local_absolute_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    let drive =
+        bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':';
+    path.starts_with('/') && !path.starts_with("//") && !drive && !path.contains('\0')
 }
 
 /// Checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
