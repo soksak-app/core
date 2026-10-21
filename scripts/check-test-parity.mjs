@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { components } from "./check-boundaries.mjs";
+import { components, corePackageNames } from "./check-boundaries.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -4544,6 +4544,10 @@ export function packageIndex(root = ROOT) {
     const dir = dirname(file);
     index.set(manifest.name, { dir: dir === "." ? "" : dir, owner: ownerFor(file) ?? "core", exports: manifest.exports });
   }
+  // The core-served prefix (@soksak/shared) has no package.json; core serves every subpath of it.
+  for (const name of corePackageNames(root)) {
+    if (!index.has(name)) index.set(name, { dir: "", owner: "core", exports: { "./*": "./*" } });
+  }
   for (const item of components(root)) {
     if (item.kind === "core") continue;
     index.set(item.name, { dir: item.dir, owner: item.kind, exports: JSON.parse(readFileSync(join(item.dir, "package.json"), "utf8")).exports });
@@ -4614,8 +4618,9 @@ export function auditOwnership(files, readSource = (file) => readFileSync(`${ROO
       if (value.startsWith("@soksak/")) {
         const { base, subpath } = packageReference(value);
         const entry = index.get(base);
+        // An undeclared name is a finding in every owner: core names only declared packages (decision D3, rule 2).
         if (!entry) {
-          if (owner === "plugin" || owner === "sidecar") errors.push(`${file}: ${kind} names undeclared package ${base}`);
+          errors.push(`${file}: ${kind} names undeclared package ${base}`);
           continue;
         }
         // A subpath is public only when the package lists it in its exports map; a package without one exposes none.

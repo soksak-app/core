@@ -199,7 +199,7 @@ const declared = new Map([
   [scoped("plugin-api"), { dir: "packages/plugin-api", owner: "core", exports: { ".": "./index.js", "./view": "./view.js" } }],
   [scoped("plugin-probe"), { dir: "/elsewhere/plugins/probe", owner: "plugin" }],
   [scoped("sidecar-probe"), { dir: "/elsewhere/sidecars/probe", owner: "sidecar" }],
-  [scoped("sidecar-example"), { dir: "/elsewhere/sidecars/example", owner: "sidecar" }],
+  [scoped("sidecar-y"), { dir: "/elsewhere/sidecars/y", owner: "sidecar" }],
 ]);
 
 test("ownership audit rejects cross-owner implementation names and private paths", { timeout: 1000 }, () => {
@@ -210,8 +210,8 @@ test("ownership audit rejects cross-owner implementation names and private paths
     "packages/example/src/index.js",
     "plugins/example/test/module.test.mjs",
   ], (file) => ({
-    "plugins/example/ui/module.js": `import "${scoped("sidecar-example")}";\nimport "sidecars/example/src/main.go";\n`,
-    "plugins/example/plugin.json": `{"sidecars":["${scoped("sidecar-example")}"]}`,
+    "plugins/example/ui/module.js": `import "${scoped("sidecar-y")}";\nimport "sidecars/example/src/main.go";\n`,
+    "plugins/example/plugin.json": `{"sidecars":["${scoped("sidecar-y")}"]}`,
     "sidecars/example/src/main.go": "package main\n",
     "packages/example/src/index.js": 'import "plugins/example/ui/module.js";\n',
     "plugins/example/test/module.test.mjs": 'import "sidecars/example/src/main.go";\n',
@@ -232,6 +232,7 @@ test("ownership audit classifies only declared names, by exact name", { timeout:
   assert.deepEqual(errors, [
     `packages/example/index.js: core implementation names plugin implementation ${scoped("plugin-probe")}`,
     `packages/example/index.js: core implementation names sidecar implementation ${scoped("sidecar-probe")}`,
+    `packages/example/index.js: core implementation names undeclared package ${scoped("plugin-undeclared")}`,
   ]);
 });
 
@@ -244,6 +245,32 @@ test("ownership audit refuses an undeclared package in plugin and sidecar code",
     `plugins/example/ui/a.js: plugin implementation names undeclared package ${scoped("plugin-undeclared")}`,
     `sidecars/example/src/b.js: sidecar implementation names undeclared package ${scoped("plugin-undeclared")}`,
   ]);
+});
+
+test("ownership audit fails a plugin that names a declared sidecar or a private path", { timeout: 1000 }, () => {
+  const index = new Map([
+    ...declared,
+    [scoped("sidecar-y"), { dir: "/elsewhere/sidecars/y", owner: "sidecar" }],
+  ]);
+  const errors = auditOwnership([
+    "apps/x/a.js",
+    "e2e/a.test.mjs",
+    "plugins/x/ui/a.js",
+  ], (file) => file === "plugins/x/ui/a.js"
+    ? `import "${scoped("sidecar-y")}";\nimport "${scoped("plugin-api")}";\nimport "${scoped("plugin-api")}/src/private.js";\n`
+    : `import "${scoped("plugin-api")}/src/private.js";\n`,
+  index);
+  assert.deepEqual(errors, [
+    `apps/x/a.js: application implementation reads private path ${scoped("plugin-api")}/src/private.js`,
+    `e2e/a.test.mjs: contract test reads private path ${scoped("plugin-api")}/src/private.js`,
+    `plugins/x/ui/a.js: plugin implementation names sidecar implementation ${scoped("sidecar-y")}`,
+    `plugins/x/ui/a.js: plugin implementation reads private path ${scoped("plugin-api")}/src/private.js`,
+  ]);
+});
+
+test("ownership audit refuses a core source that names an undeclared package", { timeout: 1000 }, () => {
+  const errors = auditOwnership(["packages/x/a.js"], () => `import "${scoped("hwp")}";\n`, declared);
+  assert.deepEqual(errors, [`packages/x/a.js: core implementation names undeclared package ${scoped("hwp")}`]);
 });
 
 test("ownership audit allows a subpath only when the exports map lists it or the package is its own", { timeout: 1000 }, () => {
@@ -288,7 +315,7 @@ test("ownership audit does not authorize private access through a declared depen
     "plugins/example/ui/module.js",
     "sidecars/example/src/main.go",
   ], (file) => file.endsWith("module.js")
-    ? `import "${scoped("sidecar-example/src/private.js")}";\n`
+    ? `import "${scoped("sidecar-y/src/private.js")}";\n`
     : "package main\n", declared);
   assert.ok(errors.some((error) => error.includes("private")));
 });
