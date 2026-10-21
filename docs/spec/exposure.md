@@ -229,14 +229,14 @@ The host and the pages exchange these messages. They are internal to core and no
 | host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the command's timeout, whether it forwards the command or answers it itself; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one. The host refuses a name that starts with `host.` with `the page cannot change host status <name>`; only the host changes a host status |
-| surface page → host | call `exposureRegister` | `{surface, kind, name}` |
+| surface page → host | call `exposureRegister` | `{surface, kind, name}`. The page of a view has no surface bridge: it calls `runtime.native.call` with `{name: "registered", payload: {kind, name}}` through the view channel ([view surfaces](native-surfaces.md#view-surfaces)), and the main page relays it with this call. A relay from the main page is accepted only for a surface that has a view |
 | host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed. Surfaces outlive a reload of the main page, so after the main page reports ready the host sends every live registration again |
 | main page → host | call `exposureForward` | `{id, surface, method, params, timeout?}` for a name that a surface page registered. `timeout` is an integer from 1 to 600000 milliseconds, taken from the command declaration; without it the host waits 10 seconds. `status.next` takes no `timeout`. An invalid `timeout` returns -32602 |
-| host → surface page | event `exposure-request` | `{id, method, params}` |
+| host → surface page | event `exposure-request` | `{id, method, params}`. For a view, the event carries `surface` and the main page relays it to the view through the view's `exposure-request` subscription (`runtime.native.on`), with `data` `{id, surface, method, params}` |
 | main page → surface page (through `exposureForward`) | `status.watch`, `status.unwatch` | `{name}`. The surface page starts or stops following the value |
 | main page → surface page (through `exposureForward`) | `status.next` | `{name, version}`. The surface page replies `{version, value}` when its value is newer than `version`, or `{closed: true}` after `status.unwatch`. The host applies no timeout to this request; it fails with 1003 when the surface closes |
 | host → main page | event `diagnostics-tick` | No payload. Diagnostic builds only: one per step of `diagnostics.drag` |
-| surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward` |
+| surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward`. The page of a view answers through `runtime.native.call` with `{name: "exposureReply", payload: {id, result|error}}`, which the main page sends as this call with the surface of the view |
 
 The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview. For a `core.sidebar.section.control` request, the main page validates `index` or `address` before it answers, and the hosts relay the request unread.
 
@@ -249,7 +249,7 @@ The runtime modules map these calls to framework bindings:
 | `exposureReply` | `ExposureReply` | `exposure_reply` |
 | `exposureChanged` | `ExposureChanged` | `exposure_changed` |
 | `exposureForward` | `ExposureForward` | `exposure_forward` |
-| `exposureRegister` | `ExposureRegister` (surface bridge) | `exposure_register` |
+| `exposureRegister` | `ExposureRegister` (surface bridge and main page) | `exposure_register` |
 
 The page interface for surface pages is `page.exposure`: `register(kind, name)`, `onRequest(fn)` where `fn({id, method, params})` is called for each forwarded request, and `reply(id, payload)`. The main page uses `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, and `host.call(...)` with the calls above. A reply without `surface` answers a request of the window's main document; a reply with `surface` answers a request of that surface document and names it with a nonempty string. A `surface` that is `null`, empty, or not a string is rejected as an error, not treated as a main-document reply.
 
