@@ -744,6 +744,7 @@ fn invalid_json_closes_connection() {
 | `installed.document.names-from-package-json` | `/installed-plugins.json` 항목의 `package`와 설치된 plugin의 `/modules/<package>`는 기록된 `path`의 `package.json`의 `name`이며, `package.json`이 없으면 `{"error":"<file>: no such file or directory"}`다. | both |
 | `installed.document.refuses-package` | Plugin이 `package`를 담은 `installed.json`은 `{"error":"<file>: plugins/installed.json <id>: unknown field package"}`다. | both |
 | `installed.document.reports-errors` | 켜진 plugin의 `plugin.json`이 없거나 잘못되었거나, `diagnostics.json`이나 `installed.json`이 잘못되었으면 `/installed-plugins.json`은 파일과 이유를 담은 `{"error":...}`다. | both |
+| `installed.document.sidecar-facts` | `/installed-plugins.json`의 plugin `sidecars` 항목은 사이드카 의존마다 그 사이드카의 `sidecar.json`에 있는 `message`와 `hostReadOperations`를 사이드카 이름 아래 담으며, 사이드카 의존이 없는 plugin에는 `sidecars` 필드가 없다. | both |
 | `installed.plugin-json.invalid-text` | 켜진 plugin의 `plugin.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.json.invalid-text` | `installed.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |
 | `installed.package-json.invalid-text` | 켜진 plugin의 `package.json`이 JSON이 아니면 두 host 모두 `/installed-plugins.json`은 `{"error":"<file> is not valid JSON"}`다. host마다 다른 parser 세부는 담지 않는다. | both |

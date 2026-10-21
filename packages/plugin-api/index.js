@@ -238,13 +238,49 @@ function checkHostOperationsDeclaration(where, hostOperations, dependencies) {
  * host names only read operations. sidecars maps each sidecar name to its validated sidecar.json.
  */
 export function checkHostOperations(manifest, sidecars) {
+  // default: hostOperations is an optional field of plugin.json; without it the plugin host calls no operation of a sidecar.
   for (const [name, operations] of Object.entries(manifest.hostOperations ?? {})) {
     const sidecar = sidecars[name];
     if (sidecar === undefined) throw new Error(`hostOperations ${name}: sidecar.json is missing`);
+    // default: hostReadOperations is an optional field of sidecar.json; without it the sidecar allows no operation to a plugin host.
     const readOperations = sidecar.hostReadOperations ?? [];
     for (const operation of operations) {
       if (!readOperations.includes(operation)) throw new Error(`hostOperations ${name}: operation ${operation} is not in hostReadOperations`);
     }
+  }
+}
+
+/**
+ * Checks the message form of a sidecar, which the body of a plugin host request takes (docs/spec/sidecars.md#messages). where names
+ * the declaration that holds it.
+ */
+function checkSidecarMessage(where, message) {
+  if (!isObject(message)) throw new Error(`${where}: message must be an object`);
+  only(`${where} message`, message, ["form", "operationField"]);
+  if (message.form !== "json-object") throw new Error(`${where}: message form must be json-object`);
+  if (!isText(message.operationField) || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(message.operationField)) {
+    throw new Error(`${where}: message operationField must be a field name`);
+  }
+}
+
+/** Checks the list of operations that a sidecar allows a plugin host, hostReadOperations. where names the declaration that holds it. */
+function checkHostReadOperations(where, operations) {
+  if (!isOperationList(operations)) throw new Error(`${where}: hostReadOperations must be a list of distinct operation names`);
+}
+
+/**
+ * Checks the sidecar facts of an installed plugin: each sidecar dependency maps to the message form and the host read operations of its
+ * sidecar.json, which the installed document carries (docs/spec/installation.md). A name that is not a dependency is refused.
+ */
+function checkSidecarFacts(where, sidecars, dependencies) {
+  if (!isObject(sidecars)) throw new Error(`${where}: sidecars must map sidecars to facts`);
+  for (const [name, facts] of Object.entries(sidecars)) {
+    if (!Object.hasOwn(dependencies, name)) throw new Error(`${where}: sidecars ${name} is not a dependency`);
+    const sidecarWhere = `${where} sidecar ${name}`;
+    if (!isObject(facts)) throw new Error(`${sidecarWhere}: facts must be an object`);
+    only(sidecarWhere, facts, ["message", "hostReadOperations"]);
+    if (facts.message !== undefined) checkSidecarMessage(sidecarWhere, facts.message);
+    if (facts.hostReadOperations !== undefined) checkHostReadOperations(sidecarWhere, facts.hostReadOperations);
   }
 }
 
@@ -640,6 +676,7 @@ export function validateManifest(manifest) {
   if (manifest.hostOperations !== undefined) {
     // A plugin host calls the operations that its manifest declares for each sidecar dependency (docs/spec/plugin-host.md).
     if (manifest.host === undefined) throw new Error(`${where}: hostOperations requires host`);
+    // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecar that hostOperations may name.
     checkHostOperationsDeclaration(where, manifest.hostOperations, manifest.dependencies ?? {});
   }
   if (manifest.extends !== undefined) {
@@ -839,18 +876,9 @@ function validateEventsPath(where, events) {
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
   only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events", "replay", "message", "hostReadOperations"]);
-  if (sidecar.message !== undefined) {
-    // The message form that a plugin host's body takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
-    if (!isObject(sidecar.message)) throw new Error("sidecar.json: message must be an object");
-    only("sidecar.json message", sidecar.message, ["form", "operationField"]);
-    if (sidecar.message.form !== "json-object") throw new Error("sidecar.json: message form must be json-object");
-    if (!isText(sidecar.message.operationField) || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(sidecar.message.operationField)) {
-      throw new Error("sidecar.json: message operationField must be a field name");
-    }
-  }
-  if (sidecar.hostReadOperations !== undefined && !isOperationList(sidecar.hostReadOperations)) {
-    throw new Error("sidecar.json: hostReadOperations must be a list of distinct operation names");
-  }
+  // The message form that a plugin host's body takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
+  if (sidecar.message !== undefined) checkSidecarMessage("sidecar.json", sidecar.message);
+  if (sidecar.hostReadOperations !== undefined) checkHostReadOperations("sidecar.json", sidecar.hostReadOperations);
   validateEventsPath("sidecar.json", sidecar.events);
   const { executable } = sidecar;
   if (!isText(executable) || executable.startsWith("/") || executable.split("/").includes("..")) {
@@ -1305,7 +1333,7 @@ export function validateInstalledPlugins(document) {
   const packages = new Set();
   for (const plugin of document.plugins) {
     if (!isObject(plugin)) throw new Error(`${INSTALLED_PLUGINS}: every plugin must be an object`);
-    only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "diagnostics"]);
+    only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "sidecars", "diagnostics"]);
     if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
     if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
       throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package.json name`);
@@ -1320,6 +1348,11 @@ export function validateInstalledPlugins(document) {
     } catch (error) {
       // States which installed plugin the rejected manifest belongs to. That file is plugins/<id>/<version>/plugin.json.
       throw new Error(`installed plugin ${plugin.id} ${plugin.version} (${plugin.package}): ${error.message}`);
+    }
+    // default: sidecars is an optional field of the installed plugin; without it the plugin has no sidecar facts.
+    if (plugin.sidecars !== undefined) {
+      // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecar whose facts are checked.
+      checkSidecarFacts(`${INSTALLED_PLUGINS}: plugin ${plugin.id}`, plugin.sidecars, plugin.manifest.dependencies ?? {});
     }
     if (plugin.diagnostics !== undefined && !isObject(plugin.diagnostics)) {
       throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} diagnostics must be an object`);

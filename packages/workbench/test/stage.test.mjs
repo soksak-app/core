@@ -110,6 +110,30 @@ test("an application without a host stages the enabled installed plugins as a ho
     /installed\.json does not exist; install plugins with sok first/);
 });
 
+test("an application without a host stages the sidecar facts of each sidecar dependency of an installed plugin", (t) => {
+  const app = fixtureApp(t);
+  const configuration = mkdtempSync(join(tmpdir(), "soksak-sidecar-facts-"));
+  t.after(() => rmSync(configuration, { recursive: true, force: true }));
+  const write = (path, text) => {
+    mkdirSync(join(configuration, path, ".."), { recursive: true });
+    writeFileSync(join(configuration, path), text);
+  };
+  write("plugins/installed.json", JSON.stringify({ format: 2, plugins: {
+    probe: { version: "0.1.0", path: "plugins/probe/0.1.0", enabled: true, sidecars: { "@fixture/sidecar-probe": "^0.1.0" } },
+  }, sidecars: { "@fixture/sidecar-probe": { version: "0.1.0", path: "sidecars/fixture-sidecar-probe/0.1.0/darwin-arm64" } } }));
+  write("plugins/probe/0.1.0/package.json", JSON.stringify({ name: "@fixture/probe" }));
+  write("plugins/probe/0.1.0/plugin.json", JSON.stringify({ id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
+    dependencies: { "@fixture/sidecar-probe": "^0.1.0" }, hostOperations: { "@fixture/sidecar-probe": ["list"] } }));
+  write("plugins/probe/0.1.0/ui/host.html", "<main></main>\n");
+  write("sidecars/fixture-sidecar-probe/0.1.0/darwin-arm64/sidecar.json", JSON.stringify({ executable: "build/worker", protocol: 1,
+    message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] }));
+  stage(app, "--installed", configuration);
+  const [plugin] = JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins;
+  assert.deepEqual(plugin.sidecars, { "@fixture/sidecar-probe": {
+    message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"],
+  } });
+});
+
 test("staging refuses an installed.json entry that holds package", (t) => {
   const app = fixtureApp(t);
   const configuration = installedConfiguration(t);

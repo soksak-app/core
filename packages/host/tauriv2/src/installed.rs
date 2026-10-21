@@ -64,9 +64,38 @@ pub fn plugin_folder(config_dir: &Path, plugin: &str) -> Result<PathBuf, String>
         .ok_or_else(|| format!("plugin {plugin} is not installed and enabled"))
 }
 
+/// The sidecar facts of each installed plugin, by plugin id and then by sidecar name: the message form and the host read
+/// operations of the sidecar.json of each sidecar dependency (docs/spec/sidecars.md#messages). Only those two fields are
+/// kept; the page validates them. A plugin without sidecar dependencies has no entry.
+fn sidecar_facts(
+    config_dir: &Path,
+) -> Result<BTreeMap<String, BTreeMap<String, serde_json::Map<String, serde_json::Value>>>, String> {
+    let mut facts: BTreeMap<String, BTreeMap<String, serde_json::Map<String, serde_json::Value>>> =
+        BTreeMap::new();
+    for declaration in installed_sidecars(config_dir)? {
+        let file = declaration.folder.join("sidecar.json");
+        let value: serde_json::Value = serde_json::from_slice(&declaration.data)
+            .map_err(|error| format!("{}: {error}", file.display()))?;
+        let serde_json::Value::Object(object) = value else {
+            return Err(format!("{}: expected an object", file.display()));
+        };
+        let kept: serde_json::Map<String, serde_json::Value> = object
+            .into_iter()
+            .filter(|(key, _)| key == "message" || key == "hostReadOperations")
+            .collect();
+        for plugin in &declaration.dependents {
+            facts
+                .entry(plugin.clone())
+                .or_default()
+                .insert(declaration.name.clone(), kept.clone());
+        }
+    }
+    Ok(facts)
+}
+
 /// The content of /installed-plugins.json. For each plugin it holds the installed plugin.json as the manifest, so that
-/// the page registers the plugins before the first screen. When the installation state cannot be read, it is an {
-/// "error" } document.
+/// the page registers the plugins before the first screen, and the facts of its sidecar dependencies. When the installation
+/// state cannot be read, it is an { "error" } document.
 pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u8> {
     #[derive(Serialize)]
     struct Entry {
@@ -74,6 +103,8 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
         package: String,
         version: String,
         manifest: Box<RawValue>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sidecars: Option<BTreeMap<String, serde_json::Map<String, serde_json::Value>>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         diagnostics: Option<Box<RawValue>>,
     }
@@ -87,9 +118,14 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
         Ok((plugins, _)) => plugins,
         Err(error) => return failure(error),
     };
+    let mut facts = match sidecar_facts(config_dir) {
+        Ok(facts) => facts,
+        Err(error) => return failure(error),
+    };
     let mut entries = vec![];
     for plugin in plugins {
         let mut entry = Entry {
+            sidecars: facts.remove(&plugin.id),
             id: plugin.id,
             package: plugin.package,
             version: plugin.version,

@@ -47,6 +47,7 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
   if (typeof object !== "object" || object === null || Array.isArray(object)) throw refuse("body is not a JSON object");
   const operation = object[form.operationField];
   if (typeof operation !== "string") throw refuse("operation is missing or not a string");
+  // default: hostReadOperations is an optional field of sidecar.json; without it the sidecar allows no operation to a plugin host.
   const readable = sidecarDeclaration.hostReadOperations ?? [];
   if (!declared.includes(operation) || !readable.includes(operation)) throw refuse(`operation ${operation} is not served`);
   return JSON.stringify(object);
@@ -59,8 +60,8 @@ export const servedPluginHostCall = (command) => command === "runtime.command.re
 /*
  * The sidecars that each installed plugin declares as dependencies: plugin id -> [{name, declared, declaration}]. declared is the
  * operations that the plugin manifest names for the sidecar (hostOperations), and declaration is the validated sidecar.json, or null
- * when the page holds none. The installed document carries no sidecar declarations, so the sidecar check refuses every operation of
- * such a sidecar (docs/plans/plugin-host-routes.md rule 8).
+ * when the page holds none. The installed document carries the facts of each sidecar dependency, so the sidecar check refuses every
+ * operation of a sidecar that the document holds no facts for (docs/plans/plugin-host-routes.md rule 8).
  */
 const declaredSidecars = new Map();
 
@@ -104,6 +105,7 @@ function routeSessionEvent(kind, event, sidecar, session, payload) {
   const fields = kind === "message" ? { body: payload } : { reason: payload };
   // default: a post that the host refuses is written at error with its reason.
   bridge.call("pluginHostEvent", { plugin, event: kind, sidecar, id: session, ...fields }).catch((error) => {
+    // default: a rejection that is not an Error is reported by its text, so the record names the failure either way.
     reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: ${error?.message ?? error}`);
   });
 }
@@ -111,6 +113,7 @@ function routeSessionEvent(kind, event, sidecar, session, payload) {
 // The sidecar listeners of the page, installed once when a host first subscribes to a session.
 let sessionListeners = null;
 function listenSessionEvents() {
+  // default: the listeners are installed on the first subscription and kept after it, so the assignment runs once.
   sessionListeners ??= Promise.all([
     bridge.on("sidecar-message", (event) => {
       if (pluginSessionOf(event?.surface) !== null) routeSessionEvent("message", event, event.sidecar, event.surface, event.body);
