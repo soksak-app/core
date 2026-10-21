@@ -119,8 +119,9 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	owner := h.owners[req.ID]
 	if owner != nil {
 		local := owner == current
+		owner.projects[req.ID] = folder.Root
 		owner.mu.Lock()
-		owner.root = folder.Root
+		owner.shown, owner.root = req.ID, folder.Root
 		owner.mu.Unlock()
 		h.mu.Unlock()
 		owner.setTitle(req.Title + titleSuffix)
@@ -138,9 +139,9 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 		owner = h.newWindow("project-"+req.ID, "/?project="+req.ID)
 	}
 	h.mu.Lock()
-	owner.projects[req.ID] = true
+	owner.projects[req.ID] = folder.Root
 	owner.mu.Lock()
-	owner.root = folder.Root
+	owner.shown, owner.root = req.ID, folder.Root
 	owner.mu.Unlock()
 	h.owners[req.ID] = owner
 	h.mu.Unlock()
@@ -182,12 +183,23 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	delete(h.owners, id)
 	empty := owner != nil && len(owner.projects) == 0
 	h.mu.Unlock()
-	// A window that has no project left shows the library, so the project root and the title are cleared.
-	if empty {
+	// The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md rule 7).
+	if owner != nil {
+		owner.sidecars.closeProjectSessions(owner, id)
+	}
+	// A release of the shown project clears the shown root at once, even when another project is still held: the window shows no
+	// project until the page shows one explicitly (docs/plans/plugin-host-routes.md F229-1). A window with no project left shows
+	// the library, so the title is cleared with it.
+	if owner != nil {
 		owner.mu.Lock()
-		owner.root = ""
+		shownReleased := owner.shown == id
+		if shownReleased {
+			owner.shown, owner.root = "", ""
+		}
 		owner.mu.Unlock()
-		owner.setTitle(windowTitle)
+		if empty || shownReleased {
+			owner.setTitle(windowTitle)
+		}
 	}
 	h.notifyWorkspace()
 	return nil

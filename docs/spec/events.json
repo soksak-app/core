@@ -110,6 +110,7 @@
       "class": "lifecycle",
       "level": [
         "error",
+        "warn",
         "info"
       ],
       "fields": {
@@ -937,9 +938,10 @@
       "level": "debug",
       "fields": {
         "sidecar": "string",
-        "surface": "string"
+        "surface": "string",
+        "plugin": "string"
       },
-      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record, and the next request starts the sidecar (docs/spec/sidecars.md#failure)."
+      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened, or the person enabled a plugin that lists it: the host cleared the failure record, and the next request starts the sidecar. The surface field names the opened surface and the plugin field names the enabled plugin (docs/spec/sidecars.md#failure)."
     },
     "host.project.removal_allowed": {
       "layer": "host",

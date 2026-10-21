@@ -43,6 +43,7 @@ const installed = { plugins: [
 const { environment, installEnvironment, pluginDiagnostics } = await import("../environment.js");
 const registry = await import("../registry.js");
 const settings = await import("../settings.js");
+const { pluginSidecarsOf } = await import("../plugin-host.js");
 
 test("the environment registers card plugins, sections, and sidebar defaults from the installed manifests", async () => {
   assert.throws(() => environment(), /not loaded/);
@@ -66,4 +67,11 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   assert.equal(settings.settingDefinitions()["card.cursor.shape"].default, "block");
   assert.equal(environment().workspace.focus, "main");
   assert.throws(() => installEnvironment(files["/environment.json"], installed), /already loaded/);
+});
+
+test("the environment declares each installed plugin's dependencies to its plugin host as sidecars", () => {
+  // A dependency is a sidecar of the plugin host. The page has no sidecar.json, so the declaration is null, and the host refuses
+  // every operation of the sidecar (docs/plans/plugin-host-routes.md rule 8).
+  assert.deepEqual(pluginSidecarsOf("card"), [{ name: "@fixture/sidecar-card", declared: [], declaration: null }]);
+  assert.deepEqual(pluginSidecarsOf("side"), []);
 });

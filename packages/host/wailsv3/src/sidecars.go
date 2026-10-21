@@ -287,6 +287,19 @@ func (c *Sidecars) restartStopped(name string) bool {
 // lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure). It is called
 // holding no lock; it takes c.mu.
 func (c *Sidecars) SurfaceOpened(plugin, surface string) {
+	c.clearDependencyStops(plugin, "surface", surface)
+}
+
+// PluginEnabled is called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin
+// lists in dependencies, in the same step as the plugin host stop of the plugin (docs/spec/sidecars.md#failure). It is called
+// holding no lock; it takes c.mu.
+func (c *Sidecars) PluginEnabled(plugin string) {
+	c.clearDependencyStops(plugin, "plugin", plugin)
+}
+
+// clearDependencyStops clears the restart limit of each stopped sidecar that plugin lists in dependencies and writes the trace
+// with origin, the field that names the surface or the plugin of the clear. It is called holding no lock; it takes c.mu.
+func (c *Sidecars) clearDependencyStops(plugin, origin, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.declarations.RLock()
@@ -296,7 +309,7 @@ func (c *Sidecars) SurfaceOpened(plugin, surface string) {
 			continue
 		}
 		delete(c.restarts, name)
-		EmitHost(LevelDebug, "host.trace.sidecar.restart-reset", map[string]any{"sidecar": name, "surface": surface})
+		EmitHost(LevelDebug, "host.trace.sidecar.restart-reset", map[string]any{"sidecar": name, origin: value})
 	}
 }
 
@@ -486,11 +499,25 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 // SendWithCids sends a page request that continues the inputs named by cids; the request line carries them as the field
 // `cids`, and no field when cids is empty.
 func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, "", body, cids)
+}
+
+// SendPluginWithCids sends a request of a plugin host for the session surface, whose project root is root (docs/plans/plugin-host-routes.md
+// rule 3). The root applies to the first send of the session, as the window root does for a surface.
+func (c *Sidecars) SendPluginWithCids(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, root, body, cids)
+}
+
+// send is the send of SendWithCids. project is the root of a plugin session, or empty for the root of the window.
+func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body json.RawMessage, cids []string) error {
 	c.mu.Lock()
 	root, known := c.roots[surface]
 	c.mu.Unlock()
 	if !known {
 		root = owner.ProjectRoot()
+		if project != "" {
+			root = project
+		}
 	}
 	// The JSON serialization is done outside the mutex.
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
@@ -653,7 +680,8 @@ func (c *Sidecars) Close(surface string) {
 	c.replaceIdle()
 }
 
-// closeSurface sends closed for surface to the running sidecars and returns true when it recorded a surface that waits for a reply.
+// closeSurface sends closed for surface to the running sidecars that received a request for it, and returns true when it recorded a
+// surface that waits for a reply. A sidecar that never received the surface holds no session of it and gets no closed notice.
 func (c *Sidecars) closeSurface(surface string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -671,7 +699,12 @@ func (c *Sidecars) closeSurface(surface string) bool {
 	}
 	line = append(line, '\n')
 
+	addressed := false
 	for _, process := range c.running {
+		if !process.surfaces[surface] {
+			continue
+		}
+		addressed = true
 		if c.closing[process.name] == nil {
 			c.closing[process.name] = map[string]int{}
 		}
@@ -696,7 +729,7 @@ func (c *Sidecars) closeSurface(surface string) bool {
 			LogInfo("sidecar "+process.name, fmt.Sprintf("close %s: outbox full, buffered", surface))
 		}
 	}
-	return len(c.running) > 0
+	return addressed
 }
 
 // Closing returns the surfaces for which closed was sent and no reply was received, in the order of sidecar and surface (host.sidecars).
@@ -1012,13 +1045,11 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	if surfaces == nil {
 		return 0, errors.New("retain requires a surfaces list")
 	}
-	c.mu.Lock()
-	// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
-	keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
-	for surface, root := range c.roots {
-		keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+	for _, item := range surfaces {
+		if item.Surface == "" || item.Root == "" {
+			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
+		}
 	}
-	c.mu.Unlock()
 	c.declarations.RLock()
 	names := make([]string, 0, len(c.persistent))
 	for name, persistent := range c.persistent {
@@ -1027,19 +1058,9 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 	}
 	c.declarations.RUnlock()
-	for _, item := range keep {
-		if item.Surface == "" || item.Root == "" {
-			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
-		}
-	}
 	total := 0
 	for _, name := range names {
 		request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
-		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
-		if err != nil {
-			return total, err
-		}
-		line = append(line, '\n')
 		waiter := make(chan error, 1)
 		c.mu.Lock()
 		if c.stopped {
@@ -1081,6 +1102,24 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 			c.mu.Unlock()
 			return total, fmt.Errorf("sidecar %s is not running", name)
 		}
+		// The keep list is built here, after the service started, so a plugin session first sent during the start is kept (F229-7).
+		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
+		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
+		for surface, root := range c.roots {
+			keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+		}
+		for _, item := range keep {
+			if item.Surface == "" || item.Root == "" {
+				c.mu.Unlock()
+				return total, fmt.Errorf("retain surface entry is invalid: %+v", item)
+			}
+		}
+		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
+		if err != nil {
+			c.mu.Unlock()
+			return total, err
+		}
+		line = append(line, '\n')
 		process.closeWaiters[request] = waiter
 		select {
 		case process.outbox <- queue(line):
@@ -2135,6 +2174,13 @@ func connectionNotice(failure error) (json.RawMessage, error) {
 
 // Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the
 // removal of its plugin.
+// dependsOn reports whether the plugin lists the sidecar name in dependencies.
+func (c *Sidecars) dependsOn(plugin, name string) bool {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	return slices.Contains(c.dependents[name], plugin)
+}
+
 func (c *Sidecars) Declared(name string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -2157,7 +2203,7 @@ func (e sidecarEnded) Is(target error) bool { return target == ErrSidecarEnded }
 // transfer image among them with the error closed, because the supplier keeps a transfer image until the host answers it
 // (docs/spec/native-surfaces.md#image-regions).
 func (c *Sidecars) dropMessage(sidecar string, event sidecarEvent) {
-	LogInfo("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
+	LogWarn("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
 	name, answer, ok := ClosedImageAnswer(event.Body)
 	if !ok {
 		return

@@ -11,7 +11,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tauri::{Manager, Webview, Window};
+use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
 use crate::documents::{ViewReplyError, theme_message};
@@ -81,7 +81,11 @@ struct NavigationState {
 pub fn forwarded_call(command: &str) -> bool {
     matches!(
         command,
-        "runtime.command.register" | "page.exposure.register"
+        "runtime.command.register"
+            | "page.exposure.register"
+            | "runtime.sidecar.send"
+            | "runtime.sidecar.on"
+            | "runtime.sidecar.onFailure"
     )
 }
 
@@ -583,6 +587,56 @@ pub(crate) fn surface_opened(window: &Window, plugin: &str) {
             }),
         );
     }
+}
+
+/// Handles the enable of plugin by the person: when the limit stopped the restarts of its plugin host, it clears the record,
+/// writes host.trace.plugin-host.restart-reset, and creates the host again in every window, as the open of a surface does
+/// (docs/spec/plugin-host.md#restarts).
+pub(crate) fn plugin_enabled(app: &AppHandle, plugin: &str) {
+    let windows = app.windows();
+    let labels: Vec<String> = windows.keys().cloned().collect();
+    let cleared = clear_enabled_stop(
+        &app.state::<PluginHostRestarts>(),
+        plugin,
+        &labels,
+        |label| {
+            let Some(other) = windows.get(label) else {
+                return;
+            };
+            let target = other.clone();
+            log_failure(
+                "plugin host",
+                crate::exposure::on_main(other, move || {
+                    crate::windows::load_plugin_hosts(&target);
+                    Ok(())
+                }),
+            );
+        },
+    );
+    if cleared {
+        emit_host(
+            Level::Debug,
+            "host.trace.plugin-host.restart-reset",
+            json!({"plugin": plugin}),
+        );
+    }
+}
+
+/// Clears the restart-limit stop of plugin when the person enables it, and calls reload once for each window label.
+/// It calls reload for no label and returns false when the reset cleared no stop; it returns true when it cleared one.
+pub(crate) fn clear_enabled_stop(
+    restarts: &PluginHostRestarts,
+    plugin: &str,
+    labels: &[String],
+    mut reload: impl FnMut(&str),
+) -> bool {
+    if !restarts.reset(plugin) {
+        return false;
+    }
+    for label in labels {
+        reload(label);
+    }
+    true
 }
 
 /// Records the navigation state of the host of plugin. A failure is written to the application log.

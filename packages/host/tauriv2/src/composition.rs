@@ -174,6 +174,23 @@ pub(crate) struct CompositionPlaceRequest {
     overlays: Vec<CompositionPlacement>,
 }
 
+/// The DOM overlays of a surface in the order of its declaration. Each keeps the insets and the visibility of its placement.
+fn dom_overlays(
+    names: &[String],
+    overlays: &HashMap<String, CompositionPlacement>,
+) -> Vec<DOMOverlay> {
+    names
+        .iter()
+        .map(|name| {
+            let placement = overlays.get(name).expect("validated above");
+            DOMOverlay {
+                insets: placement.insets(),
+                visible: placement.visible,
+            }
+        })
+        .collect()
+}
+
 fn exact_placements(
     values: Vec<CompositionPlacement>,
     names: &[String],
@@ -312,16 +329,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
                     }
                 }
             }
-            let native_overlays: Vec<_> = overlay_names
-                .iter()
-                .map(|name| {
-                    let placement = overlays.get(name).expect("validated above");
-                    DOMOverlay {
-                        insets: placement.insets(),
-                        visible: placement.visible,
-                    }
-                })
-                .collect();
+            let native_overlays = dom_overlays(&overlay_names, &overlays);
             platform.set_surface_overlays(surface_handle, &native_overlays)?;
             revisions.insert(surface, revision);
             Ok(())
@@ -335,3 +343,7 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
     })?;
     send_image_configurations(&window, configurations)
 }
+
+#[cfg(test)]
+#[path = "composition_overlay_test.rs"]
+mod overlay_test;

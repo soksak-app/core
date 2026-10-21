@@ -1,7 +1,7 @@
 import { LOG_LEVELS, createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry, registerSurfacePort } from "./exposure.js";
-import { answerViewCall, viewStopState } from "./view-calls.js";
+import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
@@ -110,7 +110,6 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
     },
     image: {
       attach: (name, sidecar) => invoke("imageAttach", { name, sidecar }),
-      place: (name, insets, visible) => composed("imagePlace", { name, insets, visible }),
       focus: (name) => invoke("imageFocus", { name }),
       caret: (name, x, y, width, height) => invoke("imageCaret", { name, x, y, width, height }),
       text: (name, text) => invoke("imageText", { name, text }),
@@ -248,11 +247,13 @@ function tabState(surface, isDisposed) {
 function answerViewCalls(surface, scoped, page, context) {
   // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
   const { tab } = context;
+  // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
+  const gate = pluginNativeGate(scoped.native);
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   const pending = new Map();
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
-    native: (name, listener) => scoped.native.on(name, listener),
+    native: (name, listener) => gate.on(name, listener),
     // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
       on: (id, listener) => page.sidecar().on(id, listener),
@@ -292,8 +293,14 @@ function answerViewCalls(surface, scoped, page, context) {
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
     runtime: {
-      native: { call: (name, payload) => scoped.native.call(name, payload) },
-      sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
+      native: gate,
+      sidecar: {
+        // A view names the sidecar of its send; the name must be the one the surface declares, so no other sidecar is reached.
+        send: (id, body, cids, name) => {
+          if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
+          return page.sidecar().send(id, body, cids);
+        },
+      },
       clipboard: scoped.clipboard,
       links: scoped.links,
       // The record path of the error display: the host call report of the surface writes the error line to the application log.
@@ -323,6 +330,16 @@ function answerViewCalls(surface, scoped, page, context) {
           return null;
         },
       },
+    },
+    // The composition of the view runs the page operations of the surface that a hybrid composition uses: the revision of the
+    // document, the region lifetime of a place and the region record (docs/spec/native-surfaces.md#view-surfaces, regions).
+    composition: {
+      // default: a view without regions or overlays declares none of them.
+      declaration: () => ({ kind: surface.composition.kind, regions: surface.composition.regions ?? [], overlays: surface.composition.overlays ?? [] }),
+      place: (regions, overlays) => page.composition.place(0, regions, overlays),
+      report: (text) => page.surfaces.report(text),
+      document: page.document,
+      image: page.image,
     },
   };
   const answering = scoped.native.on("view-call", (event) => {
@@ -467,7 +484,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,
-      runtime: { sidecar: page.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
+      runtime: { sidecar: page.sidecar, native: pluginNativeGate(scoped.native), exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         links: scoped.links,
         theme: scoped.theme,
@@ -513,11 +530,15 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
       // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
       const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
+      // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
+      // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
+      const ending = scoped.native.on("view-process-ended", () => documentRegions.released(surface.surfaceId));
       closing.signal.addEventListener("abort", () => {
         answering.then((off) => off());
         stopping.then((off) => off());
         responding.then((off) => off());
         abandoning.then((off) => off());
+        ending.then((off) => off());
         forgetView(surface.surfaceId);
       }, { once: true });
     }

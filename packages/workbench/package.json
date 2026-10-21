@@ -103,6 +103,7 @@
     "focus-state.js",
     "pointer-state.js",
     "plugin-processes.js",
+    "plugin-host.js",
     "stage.mjs",
     "staged.js",
     "replace-file.mjs"

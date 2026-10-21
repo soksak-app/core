@@ -71,6 +71,11 @@ pub fn log_info(place: &str, text: impl std::fmt::Display) {
     log_record("info", "host", place, text);
 }
 
+/// Writes one warning record of the host. A warning records a loss or a degradation that the host recovers from.
+pub fn log_warn(place: &str, text: impl std::fmt::Display) {
+    log_record("warn", "host", place, text);
+}
+
 /// Writes the error of result as the error line of place when result failed. It is used by an operation whose result
 /// cannot be returned to the caller.
 pub fn log_failure(place: &str, result: Result<(), String>) {

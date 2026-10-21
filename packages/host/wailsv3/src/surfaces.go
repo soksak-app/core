@@ -280,13 +280,19 @@ type Surfaces struct {
 	// prepareNative registers the main web view and prepares the window. It is decided when the window is created.
 	prepareNative func()
 	window        *application.WebviewWindow
+	// titles sets the title of the native window (windows.go setTitle). NewSurfaces sets the window, and a test sets a recorder.
+	titles titleSetter
 	// host is the host that created this window. name is the window identifier of the endpoint and title is the window title.
-	host     *Host
-	name     string
-	title    string
-	projects map[string]bool
-	root     string
-	ready    bool
+	host  *Host
+	name  string
+	title string
+	// projects holds the projects that this window shows, by project id, with the folder root of each (docs/plans/plugin-host-routes.md rule 3).
+	projects map[string]string
+	// shown is the project that the window shows, empty when it shows none, and root is its folder root. owner.mu protects both.
+	// A release of the shown project clears both at once (docs/plans/plugin-host-routes.md F229-1).
+	shown string
+	root  string
+	ready bool
 	// readied is the channel that waits for the next WindowReady. Host.mu protects it.
 	readied []chan struct{}
 	monitor uintptr
@@ -352,7 +358,7 @@ type Surfaces struct {
 
 func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 	s := &Surfaces{
-		window: win, projects: map[string]bool{}, sidecars: sidecars,
+		window: win, titles: win, projects: map[string]string{}, sidecars: sidecars,
 		views:                map[string]*nativeWebview{},
 		compositions:         map[string]SurfaceComposition{},
 		surfacePlugins:       map[string]string{},
@@ -393,8 +399,19 @@ func (s *Surfaces) ProjectRoot() string {
 	return s.root
 }
 
+// shownProject returns the project that this window shows, or empty when it shows none.
+func (s *Surfaces) shownProject() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.shown
+}
+
 // SidecarSend passes a message that a surface page of this window sent to a sidecar.
 func (s *Surfaces) SidecarSend(name, surface string, body json.RawMessage, cids []string) error {
+	// A plugin session is reached only through the plugin host call (docs/plans/plugin-host-routes.md rule 2).
+	if strings.HasPrefix(surface, "plugin:") {
+		return fmt.Errorf("sidecar session %s is reserved for a plugin host", surface)
+	}
 	return s.sidecars.SendWithCids(s, name, surface, body, cids)
 }
 

@@ -161,6 +161,12 @@ pub fn view_stopped_event(surface: &str, plugin: &str) -> serde_json::Value {
     serde_json::json!({"surface": surface, "plugin": plugin, "reason": view_stop_reason()})
 }
 
+/// The payload of the view-process-ended event of the view of surface, which the page answers by forgetting the regions of the surface
+/// that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+pub fn view_process_ended_event(surface: &str) -> serde_json::Value {
+    serde_json::json!({"surface": surface})
+}
+
 /// The prefix of the reason of a view.error message whose message queue is full (docs/spec/native-surfaces.md#view-surfaces).
 const QUEUE_FULL_PREFIX: &str = "queue full for ";
 

@@ -20,6 +20,11 @@ void webviewAttachSurface(void *webview, void *mainWebview);
 void webviewDetachSurface(void *webview);
 // Native plane of the surface. Regions can be placed only below this view.
 void *webviewSurfaceNativePlane(void *surface);
+// Places the web view of a view in the surface below the native plane, so the overlay mask of the plane does not cut it
+// and the regions of the view are drawn above it. Returns false when the surface has no host.
+bool sp_surface_place_view(void *surface, void *view);
+// Forgets the web view of a view placed in its surface, before the view is closed.
+void sp_surface_unplace_view(void *view);
 #ifdef __OBJC__
 @class NSEvent, NSView;
 // A view in the surface coordinate system uses one device pixel per coordinate unit. WebKit uses the wheel delta

@@ -150,6 +150,10 @@ func (h *Host) notifyPlugins(change PluginsChanged) {
 	}
 	h.mu.Unlock()
 	h.pluginHostStates.pluginChanged(change.Action, change.Plugin)
+	// The enable of a plugin clears its plugin host stop and the sidecar stops of its manifest in one step, as a surface open does.
+	if change.Action == "enable" {
+		h.pluginEnabled(change.Plugin)
+	}
 	for _, s := range windows {
 		if change.Action == "remove" || change.Action == "disable" {
 			// The host web view of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).

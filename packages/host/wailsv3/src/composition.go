@@ -139,6 +139,18 @@ func validPlacement(value CompositionPlacement) bool {
 	return true
 }
 
+// nativeSurfaceOverlays returns the DOM overlays of a surface in the order of its declaration. Each keeps the insets and the visibility of its placement.
+func nativeSurfaceOverlays(names []string, overlays map[string]CompositionPlacement) []platform.DOMOverlay {
+	native := make([]platform.DOMOverlay, 0, len(names))
+	for _, name := range names {
+		p := overlays[name]
+		native = append(native, platform.DOMOverlay{
+			Left: p.Left, Top: p.Top, Right: p.Right, Bottom: p.Bottom, Visible: p.Visible,
+		})
+	}
+	return native
+}
+
 func exactPlacements(values []CompositionPlacement, names []string, what string) (map[string]CompositionPlacement, error) {
 	if len(values) != len(names) {
 		return nil, fmt.Errorf("composition %s must exactly match its declaration", what)
@@ -281,14 +293,7 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 				}
 			}
 		}
-		nativeOverlays := make([]platform.DOMOverlay, 0, len(declaration.Overlays))
-		for _, name := range declaration.Overlays {
-			p := overlays[name]
-			nativeOverlays = append(nativeOverlays, platform.DOMOverlay{
-				Left: p.Left, Top: p.Top, Right: p.Right, Bottom: p.Bottom, Visible: p.Visible,
-			})
-		}
-		system.SetSurfaceOverlays(view.handle, nativeOverlays)
+		system.SetSurfaceOverlays(view.handle, nativeSurfaceOverlays(declaration.Overlays, overlays))
 		s.compositionRevisions[request.Surface] = request.Revision
 	})
 	if err != nil {

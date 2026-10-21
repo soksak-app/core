@@ -136,6 +136,7 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 
 // The origin directory is an absolute path in the one local form: a relative path, the // and /<letter>: prefixes and a NUL
 // byte are refused with the same text, and an absolute local path is accepted.
+// contract: view.start-values.refuses-a-missing-origin
 func TestViewOriginDirectoryRefusesAPathThatIsNotLocalAbsolute(t *testing.T) {
 	const notAbsolute = `surface "probe-surface": view start origin directory is not an absolute path`
 	for _, path := range []string{"relative", `C:\x`, "/C:/x", "//server/share", "a\x00b"} {

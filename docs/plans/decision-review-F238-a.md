@@ -20,6 +20,12 @@ Branches: `feat/view-region-F228`, `fix/view-region-close-F228-5`, `fix/view-ori
 6. Reapply: an image region reapplies its insets inside a local `CATransaction`. A document region reapplies at placement and in its `NSViewFrameDidChangeNotification` observer; neither runs in a `CATransaction`. The spec does not claim a window transaction for document regions.
 7. Hit-test owner. The hit-test fix has one owner: `fix/view-region-close-F228-5`, which already rewrites `hitTest` (`webview_geometry.m:283-300`), and `SPWindowComposition.hitTest` (`webview_geometry.m:183-194`), the hybrid counterpart, which returns `self.mainWebview`'s hit at `:189` without a DOM test. Both are under this one owner. `feat/view-region-F228` does not change `hitTest`; its version is superseded when the fix branch merges, and the feat branch must not merge a `hitTest` change of its own.
 
+### Supervisor decision F238-a-14-5 (final)
+
+F238-a-2 limited the events a view may subscribe to through `runtime.native.on` to the four region events. That also removed `exposure-request`, which is the declared route of view exposure (`docs/spec/exposure.md`, F212.7-12) and is not a region event. Restoring it is not widening the allowlist: it is a declared core route that the narrowing removed by mistake. The subscribable set is the four region events plus `exposure-request`, named once in the explicit list `PLUGIN_NATIVE_EVENTS` of `packages/workbench/view-calls.js` (spec: `docs/spec/native-surfaces.md#plugin-host-calls`). Every other event name stays refused with `native event <name> is not served`. `REGION_EVENTS` keeps the four region events. Red: a view test that subscribes to `exposure-request` and receives the request was refused on the unchanged gate (`native event exposure-request is not served`). Green after the list adds it; the refusal test for an unlisted event stays.
+
+Resolved by this decision: F238-a-14-3 and F238-a-14-4 (the shell and editor `exposure-request` subscriptions) need no plugin change. F238-a-14-1 and F238-a-14-2 (the `report` call) stay open under their repositories.
+
 ### Why
 
 Routing through the stamped view call makes the revision, the region lifetime and the region record the only path to a region. A raw host call would skip them (`view-calls.js:74-76`, feat). This is a workbench choice with that basis, not a consequence of rule 9 of the plugin process rules. Rule 9 supplies only the envelope check.

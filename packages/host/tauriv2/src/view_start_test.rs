@@ -53,6 +53,7 @@ fn the_start_values_script_refuses_a_missing_origin() {
 // The origin directory is an absolute path in the one local form: a relative path, the // and /<letter>: prefixes and a NUL
 // byte are refused with the same text, and an absolute local path is accepted.
 #[test]
+// contract: view.start-values.refuses-a-missing-origin
 fn the_origin_directory_refuses_a_path_that_is_not_local_absolute() {
     let text = r#"surface "probe-surface": view start origin directory is not an absolute path"#;
     for path in ["relative", "C:\\x", "/C:/x", "//server/share", "a\u{0}b"] {

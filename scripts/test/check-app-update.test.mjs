@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseOptions, releaseKey, withCore } from "../check-app-update.mjs";
+import { emptyInstalledState, parseOptions, releaseKey, withCore } from "../check-app-update.mjs";
 
 test("the options name the host, the bundle and the registry index", () => {
   assert.deepEqual(parseOptions(["--host", "tauriv2", "--bundle", "b.app", "--registry", "i.json"]), { host: "tauriv2", bundle: "b.app", registry: "i.json" });
@@ -13,6 +13,10 @@ test("the options name the host, the bundle and the registry index", () => {
 test("the release key joins the platform, the architecture and the host", () => {
   assert.equal(releaseKey("wailsv3", "arm64"), "darwin-arm64-wailsv3");
   assert.equal(releaseKey("tauriv2", "x64"), "darwin-x64-tauriv2");
+});
+
+test("an empty installation is written in format 3, the format the application and sok write", () => {
+  assert.deepEqual(emptyInstalledState(), { format: 3, plugins: {}, sidecars: {} });
 });
 
 test("the index lists one newer core release for the key and keeps the rest", () => {

@@ -124,7 +124,11 @@ fn an_event_the_catalog_does_not_declare_is_marked_undeclared_and_has_no_class()
     assert_eq!(marked.len(), 2);
     for event in marked {
         assert_eq!(event["undeclared"], true, "{event}");
-        assert!(event.get("class").is_none(), "{event}");
+        if event["event"] == "plugin.editor.opened" {
+            assert_eq!(event["class"], "lifecycle", "{event}");
+        } else {
+            assert!(event.get("class").is_none(), "{event}");
+        }
     }
 }
 

@@ -265,10 +265,10 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
   const bodies = [];
   const reasons = [];
-  const onMessage = runtime.sidecar().on("probe-surface", (body) => bodies.push(body));
-  const onFailure = runtime.sidecar().onFailure("probe-surface", (reason) => reasons.push(reason));
-  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface" } });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface" } });
+  const onMessage = runtime.sidecar("fixture-sidecar").on("probe-surface", (body) => bodies.push(body));
+  const onFailure = runtime.sidecar("fixture-sidecar").onFailure("probe-surface", (reason) => reasons.push(reason));
+  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
   host({ sok: 1, id: 1, result: null });
   host({ sok: 1, id: 2, result: null });
   await onMessage;
@@ -278,6 +278,25 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   host({ sok: 1, event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } });
   assert.deepEqual(bodies, [{ n: 1 }]);
   assert.deepEqual(reasons, ["exited"]);
+});
+
+test("runtime.sidecar(name) sends to the named sidecar and its requests carry the name and the id", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.throws(() => runtime.sidecar(), TypeError);
+  assert.throws(() => runtime.sidecar(""), TypeError);
+  const port = runtime.sidecar("fixture-sidecar");
+  const sent = port.send("probe-surface", '{"operation":"list"}', ["c1"]);
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.sidecar.send", params: { id: "probe-surface", sidecar: "fixture-sidecar", body: '{"operation":"list"}', cids: ["c1"] } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, null);
+  const bodies = [];
+  const onMessage = port.on("probe-surface", (body) => bodies.push(body));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  host({ sok: 1, id: 2, result: null });
+  await onMessage;
+  host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", body: { n: 1 } } });
+  assert.deepEqual(bodies, [{ n: 1 }]);
 });
 
 test("runtime.theme gives the listener the last theme that the host sent, then each later theme", (t) => {
@@ -492,4 +511,99 @@ test("runtime.command sends a command name through the view call route and resol
   host({ sok: 1, id: 1, result: "closed" });
   assert.equal(await sent, "closed");
   assert.throws(() => runtime.command(""), /runtime\.command requires a non-empty name/);
+
+});
+
+/**
+ * Prepares a view page with one region element and a handler that answers each call of the view at once with the reply of its
+ * command in replies, or null. The window gets the observers and the viewport that the composition controller reads.
+ */
+function compositionSetup(t, replies) {
+  const { posted, host } = setup(t);
+  const view = globalThis.window;
+  view.document.body.innerHTML = '<div id="doc"></div><div id="picture"></div>';
+  view.ResizeObserver = class { observe() {} disconnect() {} };
+  view.requestAnimationFrame = () => 1;
+  view.cancelAnimationFrame = () => {};
+  view.visualViewport = { width: 800, height: 600 };
+  const rect = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
+  view.document.getElementById("doc").getBoundingClientRect = () => rect(10, 20, 300, 200);
+  view.document.getElementById("picture").getBoundingClientRect = () => rect(320, 20, 400, 400);
+  const handler = {
+    postMessage: (message) => {
+      posted.push(message);
+      if (typeof message.command !== "string") return;
+      const reply = replies[message.command];
+      queueMicrotask(() => host({ sok: 1, id: message.id, result: typeof reply === "function" ? reply(message.params) : reply ?? null }));
+    },
+  };
+  return { posted, host, view, handler };
+}
+
+const VIEW_DECLARATION = {
+  kind: "view",
+  regions: [
+    { name: "doc", kind: "document", input: "native" },
+    { name: "picture", kind: "image", sidecar: "@probe/sidecar", input: "dom" },
+  ],
+  overlays: [],
+};
+
+test("composition.create of a view attaches its declared regions and places one snapshot through view calls", async (t) => {
+  const { posted, host, view, handler } = compositionSetup(t, {
+    "composition.declaration": VIEW_DECLARATION,
+    "document.attach": { history: false },
+  });
+  const bridge = createViewBridge({ handler, report: () => {} });
+  assert.equal(typeof bridge.composition?.create, "function", "the view bridge has a composition");
+  const composition = await bridge.composition.create({
+    regions: { doc: view.document.getElementById("doc"), picture: view.document.getElementById("picture") },
+    overlays: {},
+  });
+  const calls = posted.filter((message) => typeof message.command === "string").map(({ command, params }) => ({ command, params }));
+  assert.deepEqual(calls, [
+    { command: "composition.declaration", params: null },
+    { command: "document.attach", params: { name: "doc" } },
+    { command: "runtime.native.on", params: { name: "document-state" } },
+    { command: "runtime.native.on", params: { name: "document-message" } },
+    { command: "runtime.native.on", params: { name: "document-stream" } },
+    { command: "image.attach", params: { name: "picture", sidecar: "@probe/sidecar" } },
+    { command: "runtime.native.on", params: { name: "image-event" } },
+    { command: "composition.place", params: {
+      regions: [
+        { name: "doc", left: 10, top: 20, right: 490, bottom: 380, visible: true },
+        { name: "picture", left: 320, top: 20, right: 80, bottom: 180, visible: true },
+      ],
+      overlays: [],
+    } },
+  ]);
+  // The region handles send their operations as view calls, and the region events arrive through runtime.native.on.
+  const doc = composition.region("doc");
+  const states = [];
+  doc.onState((state) => states.push(state));
+  host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "doc", state: { url: "https://example.test/" } } });
+  host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "other", state: { url: "https://other.test/" } } });
+  assert.deepEqual(plain(states), [{ url: "https://example.test/" }]);
+  await doc.load("https://example.test/");
+  await composition.region("picture").setCaret({ x: 1, y: 2, width: 3, height: 4 });
+  assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })), [
+    { command: "document.load", params: { name: "doc", url: "https://example.test/" } },
+    { command: "image.caret", params: { name: "picture", x: 1, y: 2, width: 3, height: 4 } },
+  ]);
+  await composition.dispose();
+  assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })).sort((a, b) => a.command.localeCompare(b.command)), [
+    { command: "document.detach", params: { name: "doc" } },
+    { command: "image.detach", params: { name: "picture" } },
+  ]);
+});
+
+test("composition.create of a view refuses elements that do not match its declaration and attaches nothing", async (t) => {
+  const { posted, view, handler } = compositionSetup(t, { "composition.declaration": VIEW_DECLARATION });
+  const bridge = createViewBridge({ handler, report: () => {} });
+  assert.equal(typeof bridge.composition?.create, "function", "the view bridge has a composition");
+  await assert.rejects(
+    bridge.composition.create({ regions: { doc: view.document.getElementById("doc") }, overlays: {} }),
+    { message: "composition regions must exactly match the surface declaration (expected doc, picture)" },
+  );
+  assert.deepEqual(posted.filter((message) => typeof message.command === "string").map((message) => message.command), ["composition.declaration"]);
 });

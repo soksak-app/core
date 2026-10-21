@@ -89,7 +89,11 @@ func TestAnEventTheCatalogDoesNotDeclareIsMarkedUndeclaredAndHasNoClass(t *testi
 		if event["undeclared"] != true {
 			t.Fatalf("%s is not marked undeclared: %v", name, event)
 		}
-		if _, has := event["class"]; has {
+		if name == "plugin.editor.opened" {
+			if event["class"] != "lifecycle" {
+				t.Fatalf("%s has class %v, want lifecycle for an undeclared plugin event: %v", name, event["class"], event)
+			}
+		} else if _, has := event["class"]; has {
 			t.Fatalf("%s has a class although the catalog does not declare it: %v", name, event)
 		}
 	}

@@ -353,6 +353,95 @@ static void droppedFiles(void *context, const char *json) {
 - (void)dealloc { [_draggingPasteboard release]; [super dealloc]; }
 @end
 
+// The native view of a surface's native plane. The plane is the only subview of the surface that is not a web view.
+static NSView *nativePlaneOf(NSView *surface) {
+    for (NSView *child in surface.subviews) if ([NSStringFromClass(child.class) isEqualToString:@"SPSurfaceNativePlane"]) return child;
+    return nil;
+}
+
+// Adds a native view that covers the native plane, as a native document region does.
+static NSView *addNativeView(NSView *surface) {
+    NSView *plane = nativePlaneOf(surface);
+    NSView *native = [[[NSView alloc] initWithFrame:plane.bounds] autorelease];
+    native.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [plane addSubview:native];
+    return native;
+}
+
+// A point given in the local coordinates of the surface, in the superview coordinates that AppKit passes to hitTest:.
+static NSPoint superviewPoint(NSView *surface, NSPoint local) {
+    return [surface convertPoint:local toView:surface.superview];
+}
+
+static BOOL isWithin(NSView *view, NSView *ancestor) {
+    for (NSView *parent = view; parent; parent = parent.superview) if (parent == ancestor) return YES;
+    return NO;
+}
+
+// Hit testing of the surface under its declared DOM overlay (20 points on each side). The surfaces are placed away from
+// the origin of the window where a conversion error shows, and the overlay point is inside the overlay.
+static void checkHitTesting(WKWebView *main) {
+    currentStep = __func__;
+    double overlay[5] = {20, 20, 20, 20, 1};
+    // A surface with no web view and no app DOM: the point under its visible overlay is not a native hit.
+    NSView *plain = (NSView *)sp_surface_create(main);
+    [plain setValue:nil forKey:@"mainWebview"];
+    plain.hidden = NO;
+    webviewSetFrame(plain, 0, 0, 200, 150);
+    addNativeView(plain);
+    webviewSetSurfaceOverlays(plain, overlay, 1);
+    check([plain hitTest:superviewPoint(plain, NSMakePoint(100, 80))] == nil,
+        @"a point under the visible overlay of a surface without a web view is not a native hit");
+    // The same kind of surface at a non-zero origin: a point outside its overlay is the native view of its plane.
+    NSView *moved = (NSView *)sp_surface_create(main);
+    [moved setValue:nil forKey:@"mainWebview"];
+    moved.hidden = NO;
+    webviewSetFrame(moved, 300, 20, 200, 150);
+    NSView *movedNative = addNativeView(moved);
+    webviewSetSurfaceOverlays(moved, overlay, 1);
+    check([moved hitTest:superviewPoint(moved, NSMakePoint(5, 5))] == movedNative,
+        [NSString stringWithFormat:@"a point outside the overlay of a surface at a non-zero origin is its native view (frame %@)",
+            NSStringFromRect(moved.frame)]);
+    // A view surface whose web view does not cover the point: the point under the overlay is not a native hit.
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 200, 150)] autorelease];
+    [main.window.contentView addSubview:view positioned:NSWindowAbove relativeTo:main];
+    webviewAttachSurface(view, main);
+    NSView *viewSurface = view.superview;
+    webviewSetFrame(view, 0, 0, 200, 150);
+    view.frame = NSMakeRect(0, 0, 100, 100);
+    addNativeView(viewSurface);
+    webviewSetSurfaceOverlays(view, overlay, 1);
+    check([viewSurface hitTest:superviewPoint(viewSurface, NSMakePoint(150, 100))] == nil,
+        @"a point under the visible overlay of a view that its web view does not cover is not a native hit");
+    // A hidden view web view under a visible overlay: the point is not a native hit.
+    WKWebView *hiddenView = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 200, 150)] autorelease];
+    [main.window.contentView addSubview:hiddenView positioned:NSWindowAbove relativeTo:main];
+    webviewAttachSurface(hiddenView, main);
+    NSView *hiddenSurface = hiddenView.superview;
+    webviewSetFrame(hiddenView, 0, 0, 200, 150);
+    addNativeView(hiddenSurface);
+    hiddenView.hidden = YES;
+    webviewSetSurfaceOverlays(hiddenView, overlay, 1);
+    check([hiddenSurface hitTest:superviewPoint(hiddenSurface, NSMakePoint(100, 80))] == nil,
+        @"a point under the visible overlay of a hidden view web view is not a native hit");
+    // The app DOM of the window (main) under a visible overlay: the DOM hit is returned, and nothing when main is hidden.
+    NSView *app = (NSView *)sp_surface_create(main);
+    app.hidden = NO;
+    webviewSetFrame(app, 300, 20, 200, 150);
+    addNativeView(app);
+    webviewSetSurfaceOverlays(app, overlay, 1);
+    NSView *appHit = [app hitTest:superviewPoint(app, NSMakePoint(100, 80))];
+    check(appHit != nil && isWithin(appHit, main), @"a point under the overlay of the app DOM is the DOM hit of the main web view");
+    main.hidden = YES;
+    check([app hitTest:superviewPoint(app, NSMakePoint(100, 80))] == nil, @"a point under the overlay of a hidden app DOM is not a hit");
+    main.hidden = NO;
+    [plain removeFromSuperview];
+    [moved removeFromSuperview];
+    [viewSurface removeFromSuperview];
+    [hiddenSurface removeFromSuperview];
+    [app removeFromSuperview];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -446,6 +535,7 @@ int main(void) { @autoreleasepool {
     [composition addSubview:later];
     check(composition.subviews.lastObject == drop, @"file drop: the drop view stays above a view added later");
     [later removeFromSuperview];
+    checkHitTesting(main);
     check(sp_window_file_drop(main, droppedFiles, NULL, NULL) &&
         [composition.subviews filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(id view, NSDictionary *bindings) {
             return [view registeredDraggedTypes].count > 0 && view != main;

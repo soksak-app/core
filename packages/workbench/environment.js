@@ -4,6 +4,7 @@
 // (docs/spec/installation.md), and the layout of a new space and the sidebar defaults come from environment.json.
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
+import { declarePluginSidecars } from "./plugin-host.js";
 import { registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
@@ -54,7 +55,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
   // default: if environment.json has no registry, there is no default registry for the first run to set.
   registry = environment.registry ?? null;
   const installed = validateInstalledPlugins(installedDocument);
-  const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
+  const manifests = installed.map(({ package: name, version, manifest, sidecars }) => ({ name, manifest, version, sidecars }));
   // A dependency that names the package of an installed plugin is a plugin dependency, not a sidecar (docs/spec/plugins.md#pluginjson).
   const pluginNames = new Set(installed.map((plugin) => plugin.package));
   installContributions(installed);
@@ -66,9 +67,14 @@ export function installEnvironment(environmentDocument, installedDocument) {
   diagnosticModules = Promise.all(installed.filter((plugin) => diagnosticPlugins[plugin.package]).map(async (plugin) =>
     [plugin.id, await import(`/${modulePath(plugin.package, diagnosticPlugins[plugin.package].module)}`)]))
     .then((entries) => new Map(entries));
-  for (const { name, manifest } of manifests) {
+  for (const { name, manifest, sidecars } of manifests) {
     // default: the diagnostic module exists only in some plugins of a diagnostic build; without it the value is null.
     const diagnostics = diagnosticPlugins[name] ?? null;
+    // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecars. hostOperations is optional
+    // too; without it the plugin host calls no operation of a sidecar (docs/plans/plugin-host-routes.md rule 8).
+    declarePluginSidecars(manifest.id, manifestSidecars(manifest, pluginNames)
+      // default: a sidecar that the installed document holds no facts for has no declaration (null), so the plugin host refuses its operations.
+      .map((sidecar) => ({ name: sidecar, declared: manifest.hostOperations?.[sidecar] ?? [], declaration: sidecars?.[sidecar] ?? null })));
     // default: exposes is an optional field of plugin.json; without it there is no declaration (docs/spec/plugins.md).
     const exposes = diagnostics ? mergeExposes(manifest.exposes ?? {}, diagnostics.exposes) : manifest.exposes;
     if (manifest.surface) {

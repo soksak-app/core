@@ -20,6 +20,11 @@ import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 const NEWER = "99.0.0";
 const WAIT_MS = 120_000;
 
+/** The installed plugin state of an empty installation, in the format the application and sok write. */
+export function emptyInstalledState() {
+  return { format: 3, plugins: {}, sidecars: {} };
+}
+
 /** The command line options. */
 export function parseOptions(args) {
   const { values } = parseArgs({ args, options: { host: { type: "string" }, bundle: { type: "string" }, registry: { type: "string" } }, strict: true });
@@ -104,7 +109,7 @@ async function main() {
     const indexPath = join(work, "index.json");
     writeFileSync(indexPath, JSON.stringify(index));
     // An empty installation is not a first run, so the application installs no starter pack.
-    writeFileSync(join(config, "plugins", "installed.json"), JSON.stringify({ format: 2, plugins: {}, sidecars: {} }));
+    writeFileSync(join(config, "plugins", "installed.json"), JSON.stringify(emptyInstalledState()));
     const sok = (...args) => run(join(running, "Contents", "MacOS", "sok"), [...args, "--config-dir", config]);
     sok("registry", "use", indexPath);
 

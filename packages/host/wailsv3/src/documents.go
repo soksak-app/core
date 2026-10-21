@@ -1422,11 +1422,18 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		return
 	}
 	system.CloseDocument(handle)
+	// The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
+	// again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
+	s.closeSurfaceDocuments(surface)
+	s.closeSurfaceImages(surface)
+	s.images.BeginGeneration(surface)
 	// Each call that the view had open ends with the reason process-ended, and the host writes its peer-lost event.
 	for _, call := range openCalls {
 		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
 	}
 	s.endPresentationWait(surface, "process-ended")
+	// The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface})
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {

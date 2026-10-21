@@ -81,7 +81,7 @@ func TestPluginHostChannelRelaysAReplyToTheMainPage(t *testing.T) {
 func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 	fake := &channelPlatform{}
 	s, events := channelSurfaces(t, fake, true)
-	for _, command := range []string{"runtime.native.call", "runtime.sidecar.send", "tab.state.read", "runtime.clipboard.read", "runtime.links.open"} {
+	for _, command := range []string{"runtime.native.call", "runtime.sidecar.close", "tab.state.read", "runtime.clipboard.read", "runtime.links.open"} {
 		if err := s.pluginHostMessage("probe", hostMessage(`{"id": 4, "command": "`+command+`", "params": {"name": "x"}}`)); err != nil {
 			t.Fatalf("unserved call %s: %v", command, err)
 		}
@@ -130,6 +130,33 @@ func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 		if err := s.pluginHostMessage("probe", hostMessage(message)); err == nil {
 			t.Fatalf("call %s is accepted", message)
 		}
+	}
+}
+
+// contract: plugin-host.channel.call-served-set
+func TestPluginHostChannelForwardsTheSidecarCalls(t *testing.T) {
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	params := `{"id": "plugin:probe:project-a:fixture-sidecar", "sidecar": "fixture-sidecar"}`
+	for id, command := range []string{"runtime.sidecar.send", "runtime.sidecar.on", "runtime.sidecar.onFailure"} {
+		message := `{"id": ` + fmt.Sprint(id+10) + `, "command": "` + command + `", "params": ` + params + `}`
+		if err := s.pluginHostMessage("probe", hostMessage(message)); err != nil {
+			t.Fatalf("served call %s: %v", command, err)
+		}
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("a served sidecar call was refused or answered by the host: %v", fake.posted)
+	}
+	want := []hostEvent{
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(10), "command": "runtime.sidecar.send", "params": json.RawMessage(params)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(11), "command": "runtime.sidecar.on", "params": json.RawMessage(params)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(12), "command": "runtime.sidecar.onFailure", "params": json.RawMessage(params)}},
+	}
+	if !reflect.DeepEqual(*events, want) {
+		t.Fatalf("events %v, want %v", *events, want)
+	}
+	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"runtime.sidecar.send", "runtime.sidecar.on", "runtime.sidecar.onFailure"}) {
+		t.Fatalf("open calls %v, want the forwarded sidecar calls", calls)
 	}
 }
 
@@ -428,5 +455,47 @@ func TestPluginHostStateEndsWithTheRemovalOrDisableOfThePlugin(t *testing.T) {
 		if got := stateCall(t, s, fake, 20+id, "state.read", "null"); got != empty(20+id) {
 			t.Fatalf("the %s of the plugin kept the value: %s", action, got)
 		}
+	}
+}
+
+// contract: plugin-host.call.refuses-unlisted-commands
+func TestPluginHostChannelRefusesEveryCommandOutsideTheAllowlist(t *testing.T) {
+	// The plugin allowlist is the exposure reply and the region calls of a view. The names are fixtures of this check.
+	// Every other method of the Wails command table (the exported methods of Host) is refused by the channel of a plugin
+	// host page.
+	allowed := map[string]bool{}
+	for _, name := range []string{
+		"exposureReply",
+		"compositionDeclare", "compositionPlace",
+		"documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
+		"documentPost", "documentQuery", "documentInteractionState",
+		"imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
+	} {
+		allowed[name] = true
+	}
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	table := reflect.TypeOf(&Host{})
+	checked := 0
+	for i := 0; i < table.NumMethod(); i++ {
+		name := table.Method(i).Name
+		command := strings.ToLower(name[:1]) + name[1:]
+		if allowed[command] {
+			continue
+		}
+		checked++
+		if err := s.pluginHostMessage("probe", hostMessage(`{"id": 9, "command": "`+command+`"}`)); err != nil {
+			t.Fatalf("command %s: %v", command, err)
+		}
+		want := `{"error":{"code":-32000,"message":"plugin host call ` + command + ` is not served"},"id":9,"sok":1}`
+		if len(fake.posted) == 0 || fake.posted[len(fake.posted)-1] != want {
+			t.Fatalf("command %s posted %v, want the refusal %s", command, fake.posted, want)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("the command table has no command outside the allowlist")
+	}
+	if len(*events) != 0 {
+		t.Fatalf("a refused command was forwarded: %v", *events)
 	}
 }

@@ -61,7 +61,7 @@ function installedConfiguration(t) {
     writeFileSync(join(configuration, path), text);
   };
   const folder = (id, version) => `plugins/${id}/${version}`;
-  write("plugins/installed.json", JSON.stringify({ format: 2, plugins: {
+  write("plugins/installed.json", JSON.stringify({ format: 3, plugins: {
     probe: { version: "0.1.0", path: folder("probe", "0.1.0"), enabled: true, sidecars: {} },
     alpha: { version: "1.0.0", path: folder("alpha", "1.0.0"), enabled: true, sidecars: {} },
     off: { version: "1.0.0", path: folder("off", "1.0.0"), enabled: false, sidecars: {} },
@@ -108,6 +108,45 @@ test("an application without a host stages the enabled installed plugins as a ho
   assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins[1].diagnostics, DIAGNOSTICS);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", join(configuration, "missing")], { cwd: app, stdio: "pipe" }),
     /installed\.json does not exist; install plugins with sok first/);
+});
+
+test("an application without a host stages the sidecar facts of each sidecar dependency of an installed plugin", (t) => {
+  const app = fixtureApp(t);
+  const configuration = mkdtempSync(join(tmpdir(), "soksak-sidecar-facts-"));
+  t.after(() => rmSync(configuration, { recursive: true, force: true }));
+  const write = (path, text) => {
+    mkdirSync(join(configuration, path, ".."), { recursive: true });
+    writeFileSync(join(configuration, path), text);
+  };
+  write("plugins/installed.json", JSON.stringify({ format: 3, plugins: {
+    probe: { version: "0.1.0", path: "plugins/probe/0.1.0", enabled: true, sidecars: { "@fixture/sidecar-probe": "^0.1.0" } },
+  }, sidecars: { "@fixture/sidecar-probe": { version: "0.1.0", path: "sidecars/fixture-sidecar-probe/0.1.0/darwin-arm64" } } }));
+  write("plugins/probe/0.1.0/package.json", JSON.stringify({ name: "@fixture/probe" }));
+  write("plugins/probe/0.1.0/plugin.json", JSON.stringify({ id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
+    dependencies: { "@fixture/sidecar-probe": "^0.1.0" }, hostOperations: { "@fixture/sidecar-probe": ["list"] } }));
+  write("plugins/probe/0.1.0/ui/host.html", "<main></main>\n");
+  write("sidecars/fixture-sidecar-probe/0.1.0/darwin-arm64/sidecar.json", JSON.stringify({ executable: "build/worker", protocol: 1,
+    message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] }));
+  stage(app, "--installed", configuration);
+  const [plugin] = JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins;
+  assert.deepEqual(plugin.sidecars, { "@fixture/sidecar-probe": {
+    message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"],
+  } });
+});
+
+test("staging reads the installed state format that sok writes and refuses every other format by name", (t) => {
+  const app = fixtureApp(t);
+  const configuration = installedConfiguration(t);
+  const file = join(configuration, "plugins/installed.json");
+  const installed = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(installed.format, 3);
+  stage(app, "--installed", configuration);
+  assert.equal(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")).plugins.length, 2);
+  for (const format of [1, 2, 4]) {
+    writeFileSync(file, JSON.stringify({ ...installed, format }));
+    assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--installed", configuration], { cwd: app, stdio: "pipe" }),
+      new RegExp(`installed\\.json: format ${format} is not 3, the format that sok writes`));
+  }
 });
 
 test("staging refuses an installed.json entry that holds package", (t) => {

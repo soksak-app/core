@@ -1076,7 +1076,16 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
         [view release];
         return NULL;
     }
-    [nativePlane addSubview:view];
+    if (isView) {
+        // A view draws its declared overlays in its own DOM, so it is placed below the plane that the overlay mask cuts.
+        if (!sp_surface_place_view(surface, view)) {
+            webviewInputUnregister(view);
+            [view release];
+            return NULL;
+        }
+    } else {
+        [nativePlane addSubview:view];
+    }
     [view installEventMonitor];
     sp_observe_key_path("document_view.appearance", SP_OBSERVE_RECORD, surface, view, @"effectiveAppearance", 0, &kAppearanceContext);
     view.zoom = 1;
@@ -1355,6 +1364,7 @@ void sp_document_close(void *handle) {
     [view.binaries releaseAll];
     view.binaries = nil;
     [openDocuments() removeObject:view];
+    sp_surface_unplace_view(view);
     [view stopHiddenTimer];
     if (view.eventMonitor) {
         [NSEvent removeMonitor:view.eventMonitor];

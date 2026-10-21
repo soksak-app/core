@@ -73,12 +73,12 @@ fn text(data: Vec<u8>) -> String {
 #[test]
 fn installed_plugins_document_lists_enabled_plugins_by_id() {
     let config = installed_fixture();
-    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}}}]}"#;
+    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         release
     );
-    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
+    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
@@ -87,6 +87,23 @@ fn installed_plugins_document_lists_enabled_plugins_by_id() {
     assert_eq!(
         text(installed::installed_plugins_document(empty.path(), true)),
         r#"{"plugins":[]}"#
+    );
+}
+
+// contract: installed.document.sidecar-facts
+#[test]
+fn installed_plugins_document_declares_the_message_form_and_host_operations_of_each_sidecar() {
+    let config = installed_fixture();
+    write_installed(
+        config.path(),
+        &[(
+            "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json",
+            r#"{"executable": "build/worker", "protocol": 1, "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}"#,
+        )],
+    );
+    assert_eq!(
+        text(installed::installed_plugins_document(config.path(), false)),
+        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"hostReadOperations":["list"],"message":{"form":"json-object","operationField":"operation"}}}}]}"#
     );
 }
 
