@@ -35,7 +35,7 @@ Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별�
 | `../sidecars/vt` | Terminal engine: crate `vt-core`, `vt-alacritty`, 그리고 `vt-alacritty`의 sidecar `@soksak/sidecar-vt-alacritty` | `soksak-app/sidecar-vt` |
 | `../sidecars/files`, `../sidecars/shell` | Sidecar `@soksak/sidecar-files`, `@soksak/sidecar-shell` | `soksak-app/sidecar-files`. `shell`은 게시하지 않는다 |
 
-이름이 `@soksak/plugin-`으로 시작하는 `@soksak` scope의 package는 plugin이고(core의 `@soksak/plugin-api`는 제외), `@soksak/sidecar-`로 시작하는 package는 sidecar다. core source와 test는 이 중 어느 것도 부르지 않고, fixture는 `@scope/plugin-probe`, `@scope/sidecar-probe` 같은 다른 scope를 쓴다.
+이름이 `@soksak/plugin-`으로 시작하는 `@soksak` scope의 package는 plugin이고(core의 `@soksak/plugin-api`는 제외), `@soksak/sidecar-`로 시작하는 package는 sidecar다. core source와 test는 이 중 어느 것도 부르지 않고, fixture는 `@scope/plugin-probe`, `@scope/sidecar-probe` 같은 다른 scope를 쓴다. core 이름은 core checkout에서 추적되는 모든 `package.json`의 이름이며, 애플리케이션, `e2e`, workbench test runtime을 포함한다. `@soksak/shared`도 core 이름이다. core가 import-map 접두사 `sok://core/shared/`로 제공하며 `package.json`은 없다.
 
 Checkout은 repository를 이 sibling 폴더에 두고, repository 둘 이상이 필요한 workflow도 같은 방식으로 checkout한다. 그래서 `scripts/workspace-registry.json`의 상대 폴더가 어디서나 성립한다.
 

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { checkNames, components } from "../check-boundaries.mjs";
+import { checkNames, components, corePackageNames } from "../check-boundaries.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
@@ -28,6 +28,15 @@ test("components lists the core packages and the declared folders", () => {
   const found = components();
   assert.ok(found.some((item) => item.kind === "core" && item.name === scoped("plugin-api")));
   assert.ok(found.every((item) => typeof item.name === "string"));
+});
+
+test("corePackageNames reads every tracked package.json and the core-served prefix", () => {
+  // Applications, the e2e package and the workbench test runtime are core packages (decision of F238-c-4).
+  const names = corePackageNames();
+  for (const name of [scoped("plugin-api"), scoped("browser"), scoped("e2e"), scoped("runtime"), scoped("shared")]) {
+    assert.ok(names.includes(name), `${name} is a core name`);
+  }
+  assert.ok(!names.includes(scoped("plugin-api-x")));
 });
 
 test("checkNames allows the exact core names and refuses the others", () => {

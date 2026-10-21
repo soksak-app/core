@@ -35,7 +35,7 @@ Core, each plugin and each sidecar are separate git repositories in sibling fold
 | `../sidecars/vt` | The terminal engine: the crates `vt-core` and `vt-alacritty`, and the sidecar `@soksak/sidecar-vt-alacritty` in `vt-alacritty` | `soksak-app/sidecar-vt` |
 | `../sidecars/files`, `../sidecars/shell` | The sidecars `@soksak/sidecar-files` and `@soksak/sidecar-shell` | `soksak-app/sidecar-files`; `shell` is not published |
 
-A package of the scope `@soksak` whose name starts with `@soksak/plugin-` is a plugin, except `@soksak/plugin-api` of core, and one whose name starts with `@soksak/sidecar-` is a sidecar; core sources and tests name none of them, and their fixtures use another scope, such as `@scope/plugin-probe` and `@scope/sidecar-probe`.
+A package of the scope `@soksak` whose name starts with `@soksak/plugin-` is a plugin, except `@soksak/plugin-api` of core, and one whose name starts with `@soksak/sidecar-` is a sidecar; core sources and tests name none of them, and their fixtures use another scope, such as `@scope/plugin-probe` and `@scope/sidecar-probe`. The core names are the names of every `package.json` tracked in the core checkout, applications, `e2e` and the workbench test runtime included, and `@soksak/shared` is a core name as well: core serves it as the import-map prefix `sok://core/shared/` and it has no `package.json`.
 
 A checkout places the repositories in these sibling folders, and a workflow that needs more than one repository checks them out the same way, so the relative folders of `scripts/workspace-registry.json` hold everywhere.
 
