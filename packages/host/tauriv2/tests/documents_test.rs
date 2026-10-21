@@ -5,11 +5,12 @@ use std::time::{Duration, Instant};
 
 use soksak_host_tauriv2::documents::{
     Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
-    parse_report, remove_surface_for_reload, stream_ack_refusal,
+    parse_report, remove_surface_for_reload, remove_view_regions, stream_ack_refusal,
 };
+use soksak_host_tauriv2::images::Images;
 use soksak_host_tauriv2::surfaces::ViewStart;
 use soksak_host_tauriv2::view_lifecycle::{
-    ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event,
+    ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
 };
 
 fn request(surface: &str, document: &str) -> Request {
@@ -714,6 +715,43 @@ fn view_restart_keeps_the_surface_and_plugin_of_its_record() {
 }
 
 // contract: view.restart.limit-shows-error
+// Each process end sends view-process-ended (native-surfaces.md, process end), so the failures before the fourth send no
+// view-stopped event, and only the fourth failure sends one, once.
+#[test]
+fn view_stop_event_is_sent_once_at_the_fourth_failure() {
+    let lifecycle = ViewLifecycle::default();
+    let start = Instant::now();
+    lifecycle.track(
+        "probe-surface",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
+    for offset in [0, 10, 20] {
+        assert!(
+            lifecycle.fail("probe-surface", seconds_after(start, offset)),
+            "the failure at {offset} seconds restarts the view and sends no view-stopped event"
+        );
+    }
+    assert!(
+        !lifecycle.fail("probe-surface", seconds_after(start, 30)),
+        "the fourth failure stops the restarts, which sends the view-stopped event"
+    );
+    let event = view_stopped_event("probe-surface", "probe");
+    assert_eq!(
+        event["surface"], "probe-surface",
+        "the stop event names the surface"
+    );
+    assert_eq!(
+        event["reason"],
+        view_stop_reason(),
+        "the stop event carries the stop reason"
+    );
+}
+
+// contract: view.restart.limit-shows-error
 #[test]
 fn view_stop_event_names_the_surface_plugin_and_reason() {
     assert_eq!(
@@ -1100,4 +1138,64 @@ fn view_call_invalid_requests_are_errors_not_forwarded() {
             "message {message} is accepted, want an error"
         );
     }
+}
+
+// contract: view.regions.close-with-process
+// contract: view.process-ended.forgets-regions
+#[test]
+fn a_view_process_end_sends_the_process_ended_event_of_its_surface() {
+    // The page forgets the regions of the surface when this event arrives, so the payload names the surface.
+    let event = view_process_ended_event("probe-surface");
+    assert_eq!(
+        event,
+        serde_json::json!({"surface": "probe-surface"}),
+        "the process-ended event names the surface"
+    );
+}
+
+// contract: view.regions.close-with-process
+#[test]
+fn a_view_process_end_removes_the_regions_of_its_surface() {
+    // The view itself is removed before the regions, as view_failed removes it, so only the regions remain to be closed.
+    let documents = Documents::default();
+    let streams = Streams::default();
+    let images = Images::default();
+    let document: Key = ("probe-surface".to_string(), "doc".to_string());
+    documents.reserve(&document).unwrap();
+    assert!(documents.set(&document, 11));
+    let other: Key = ("other-surface".to_string(), "doc".to_string());
+    documents.reserve(&other).unwrap();
+    assert!(documents.set(&other, 13));
+    let image = ("probe-surface".to_string(), "picture".to_string());
+    images
+        .reserve(&image, "probe-surface", "@probe/sidecar")
+        .unwrap();
+    assert!(images.set(&image, 12));
+    let (closed_documents, closed_images) =
+        remove_view_regions(&documents, &streams, &images, "probe-surface");
+    assert_eq!(
+        closed_documents,
+        vec![11],
+        "the document region of the surface is closed"
+    );
+    assert_eq!(
+        closed_images,
+        vec![12],
+        "the image region of the surface is closed"
+    );
+    assert!(
+        documents.reserve(&document).is_ok(),
+        "the view created again attaches the document region again"
+    );
+    assert!(
+        images
+            .reserve(&image, "probe-surface", "@probe/sidecar")
+            .is_ok(),
+        "the view created again attaches the image region again"
+    );
+    assert_eq!(
+        documents.get(&other),
+        Ok(13),
+        "the regions of another surface stay"
+    );
 }

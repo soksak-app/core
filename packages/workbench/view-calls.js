@@ -30,6 +30,13 @@
  *                   another plugin or an undeclared name is refused (view-commands.js)
  *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
  *                   and relays it to the host (surface-modules.js)
+ *               composition: the page operations of the surface that a hybrid composition uses (surface-modules.js)
+ *                 declaration(): the declared {kind, regions, overlays} of the surface
+ *                 place(regions, overlays): places one complete snapshot with the composition revision of the document
+ *                 report(text): reports a failure of the composition through the report host call of the surface
+ *                 document: {attach, load, zoom, go, post, subscribe, unsubscribe, detach} of the surface; attach goes through the
+ *                   region record of the memory saver (document-regions.js)
+ *                 image: {attach, focus, caret, text, detach} of the surface
  */
 export async function answerViewCall(event, options) {
   if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
@@ -65,7 +72,64 @@ function untilCancelled(promise, signal) {
   });
 }
 
-async function run(command, params, { plugin, tab, runCore, runOwned, runtime }) {
+// The host calls of the composition and the regions. A view operates its regions only through the composition calls, because a
+// host call from the view would skip the revision of the document, the region lifetime and the region record
+// (docs/spec/native-surfaces.md#view-surfaces, regions).
+export const REGION_HOST_CALLS = new Set([
+  "compositionDeclare", "compositionPlace",
+  "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
+  "documentPost", "documentQuery", "documentInteractionState",
+  "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
+]);
+
+// The host calls of the view bridge (docs/spec/native-surfaces.md#view-surfaces, view channel). The page sends them itself, so a
+// plugin never reaches them.
+export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply"]);
+
+// The host commands that plugin code may send through its native handle (docs/spec/native-surfaces.md#view-surfaces). A plugin
+// reaches a host command only through this allowlist: a command that is not listed is refused, so a command added to the host
+// stays closed to plugins until it is listed here.
+export const PLUGIN_HOST_CALLS = new Set(["exposureReply"]);
+
+// The native events of the region record that a view subscribes to (docs/spec/native-surfaces.md#view-surfaces, regions). The other
+// events are internal to the view bridge.
+export const REGION_EVENTS = new Set(["document-stream", "document-state", "document-message", "image-event"]);
+
+// The native events that plugin code may subscribe to through its native handle (docs/spec/native-surfaces.md#plugin-host-calls, docs/spec/exposure.md#relay).
+// The four region events, and exposure-request, the declared route of view exposure: the forwarded exposure request reaches the view
+// through this subscription. Every other event name is refused.
+export const PLUGIN_NATIVE_EVENTS = new Set([...REGION_EVENTS, "exposure-request"]);
+
+/**
+ * The plugin-facing native handle of a surface: the host calls and the native events that plugin code reaches through runtime.native.
+ * call refuses the region calls and the view bridge calls, so a plugin reaches a region only through its composition. The refusal
+ * is in this handle, not in each caller, so every plugin-facing path passes it.
+ */
+export function pluginNativeGate(native) {
+  return {
+    call(name, payload) {
+      if (REGION_HOST_CALLS.has(name)) {
+        return Promise.reject(new Error(`host call ${name} is not served: a view operates its regions through its composition`));
+      }
+      if (VIEW_BRIDGE_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served: the view bridge is internal`));
+      if (!PLUGIN_HOST_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served to plugins`));
+      return native.call(name, payload);
+    },
+    on(name, listener) {
+      if (!PLUGIN_NATIVE_EVENTS.has(name)) return Promise.reject(new Error(`native event ${name} is not served: the view bridge is internal`));
+      return native.on(name, listener);
+    },
+  };
+}
+
+/** The named fields of a region call, whose name is the region name. Any other value is refused. */
+function regionOf(command, params) {
+  const fields = objectOf(command, params);
+  if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty region name`);
+  return fields;
+}
+
+async function run(command, params, { plugin, tab, runCore, runOwned, runtime, composition }) {
   switch (command) {
     case "tab.state.read":
       if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
@@ -83,6 +147,9 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
         if (typeof payload.kind !== "string" || payload.kind === "") throw new TypeError(`view call ${fields.name} requires a non-empty kind`);
         if (typeof payload.name !== "string" || payload.name === "") throw new TypeError(`view call ${fields.name} requires a non-empty name`);
         return runtime.exposure.registered(payload);
+      }
+      if (REGION_HOST_CALLS.has(fields.name)) {
+        throw new Error(`view call ${command} ${fields.name} is not served: a view operates its regions through its composition`);
       }
       return runtime.native.call(fields.name, fields.payload);
     }
@@ -169,6 +236,64 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
     case "runtime.settings.on":
       await runtime.subscribe.settings();
       return null;
+    // The composition and the regions of the view run the page operations of its surface with the named fields only, so a field such
+    // as surface in the params reaches no host call (docs/spec/native-surfaces.md#view-surfaces, regions).
+    case "composition.declaration":
+      return composition.declaration();
+    case "composition.place": {
+      const fields = objectOf(command, params);
+      if (!Array.isArray(fields.regions) || !Array.isArray(fields.overlays)) {
+        throw new TypeError(`view call ${command} requires the arrays regions and overlays`);
+      }
+      return composition.place(fields.regions, fields.overlays);
+    }
+    case "composition.report":
+      if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty text`);
+      return composition.report(params);
+    case "document.attach":
+      return composition.document.attach(regionOf(command, params).name);
+    case "document.load": {
+      const fields = regionOf(command, params);
+      return composition.document.load(fields.name, fields.url);
+    }
+    case "document.zoom": {
+      const fields = regionOf(command, params);
+      return composition.document.zoom(fields.name, fields.zoom);
+    }
+    case "document.go": {
+      const fields = regionOf(command, params);
+      return composition.document.go(fields.name, fields.action, fields.offset);
+    }
+    case "document.post": {
+      const fields = regionOf(command, params);
+      return composition.document.post(fields.name, fields.message);
+    }
+    case "document.subscribe": {
+      const fields = regionOf(command, params);
+      return composition.document.subscribe(fields.name, fields.stream);
+    }
+    case "document.unsubscribe": {
+      const fields = regionOf(command, params);
+      return composition.document.unsubscribe(fields.name, fields.handle);
+    }
+    case "document.detach":
+      return composition.document.detach(regionOf(command, params).name);
+    case "image.attach": {
+      const fields = regionOf(command, params);
+      return composition.image.attach(fields.name, fields.sidecar);
+    }
+    case "image.focus":
+      return composition.image.focus(regionOf(command, params).name);
+    case "image.caret": {
+      const fields = regionOf(command, params);
+      return composition.image.caret(fields.name, fields.x, fields.y, fields.width, fields.height);
+    }
+    case "image.text": {
+      const fields = regionOf(command, params);
+      return composition.image.text(fields.name, fields.text);
+    }
+    case "image.detach":
+      return composition.image.detach(regionOf(command, params).name);
     default:
       break;
   }
