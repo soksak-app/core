@@ -11,9 +11,9 @@ F212.8a-4의 제안과 검증 기록이다. 규칙이 [터미널 런타임](../s
 ## 제안
 
 1. 재시작 한도가 세는 계속 연결 service의 실패는 다음 중 하나다.
-   - 호스트가 sidecar를 멈추고 있지 않을 때 service 프로세스가 끝나는 것. reader의 부활이 그 끝을 위해 돌 때 그 끝을 세고, 오래된 endpoint를 지운 뒤 또는 남은 것이 없을 때 단일 생성 경로로 service를 다시 낳는다. 아래의 멈춤이 그 spawn을 막아도 같다.
+   - 호스트가 sidecar를 멈추고 있지도 않고 그 sidecar의 교체도 진행 중이 아닐 때 service 프로세스가 끝나는 것. reader의 부활이 그 끝을 위해 돌 때 그 끝을 세고, 오래된 endpoint를 지운 뒤 또는 남은 것이 없을 때 단일 생성 경로로 service를 다시 낳는다. 아래의 멈춤이 그 spawn을 막아도 같다.
    - 생성 경로의 시작 실패: `the service did not print its endpoint within 30s`, `service exited before endpoint`, `the service did not answer hello within 5s`;
-   - protocol 위반으로 연결이 끝나는 것. [터미널 런타임](../spec/terminal-runtime.ko.md) `### Service transport`가 적는 이유 중 하나다. reader가 연결을 끝낼 때 그것을 세고, service는 계속 돈다.
+   - 호스트가 sidecar를 멈추고 있지 않을 때 protocol 위반으로 연결이 끝나는 것. [터미널 런타임](../spec/terminal-runtime.ko.md) `### Service transport`가 적는 이유 중 하나다. reader가 연결을 끝낼 때 그것을 세고, service는 계속 돈다.
    부활이 살아 있는 service에 다시 붙는 끊김은 실패가 아니다. 끊김 하나는 부활이 무엇을 시도했든 실패를 하나만 센다. 연결이 거부되어 다시 시도하는 부활은 그 재시도와 함께 한 번으로 세고, service를 다시 낳은 부활의 시작이 실패하면 그 시작 실패로 한 번만 센다. 전송이 시작한 생성은 자신의 실패를 따로 센다.
 2. 세는 방식은 [사이드카](../spec/sidecars.ko.md) `## Failure`의 표준 입출력 규칙을 따른다. 각 실패가 도착한 시각으로 세고 timer는 없다. 새 실패보다 300초 앞선 실패는 세지 않는다. 300초 안의 네 번째 실패가 재시작을 멈추고 `error: sidecar <name>: restart limit: 4 failures within 300 s`를 log에 쓰고 수준 error로 `host.sidecar.restart-limit` `{sidecar}` event를 쓴다.
 3. 멈춤은 네 번째 실패에서, 부활이나 전송이 생성 경로를 돌기 전에 시작한다. 네 번째 실패가 실패한 시작이면, 그 sidecar에 전송한 surface들은 어떤 실패한 시작과 같이 그 시작 오류를 담은 연결 알림을 받는다. service 프로세스의 끝이면 호스트는 그것을 세고 부활이 spawn하기 전에 멈추며, 전송한 surface들은 연결 알림 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 받는다. service가 멈춘 동안 호스트는 부활도 생성도 하지 않는다. 전송은 `sidecar <name>: restart limit`으로 실패하고, 호스트는 `error: sidecar <name>: restart limit: request for <surface> refused`를 log에 쓰고, 전송한 surface는 연결 알림 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 받는다. 멈춤을 풀 때까지 다른 연결 알림은 쓰지 않는다. 계속 연결 transport의 restart-limit 보고는 연결 알림으로만 간다. 멈춤은 `sidecar-failure` 전달을 더하지 않는다.
