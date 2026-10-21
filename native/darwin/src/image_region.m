@@ -284,7 +284,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 
 // The Paste of the Edit menu notifies the page so that it runs the declared paste command. The paste of NSTextView
 // puts the text into the input document,
-// which is the workspace of the input method, so it is not used (docs/spec/terminal-runtime.md).
+// which is the workspace of the input method, so it is not used (docs/spec/persistent-services.md).
 - (void)paste:(id)sender {
     [self report:"{\"type\":\"action\",\"name\":\"paste\"}"];
 }
