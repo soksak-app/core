@@ -85,15 +85,17 @@
 결정(배치만):
 
 - D9.A files 사이드바: 카드 view가 없다. files 섹션은 선언형 UI이며 왼쪽 또는 오른쪽 사이드바에 세로로 놓인다(방향은 사이드바 면을 따른다, `docs/spec/plugins.md:97`). 원천은 files 플러그인 호스트다. 호스트가 원천인 이유는 `docs/spec/plugin-processes.md:26`이다. view가 없는 동안 값을 보여야 하는 섹션은 그 플러그인의 호스트가 필요하다. 사이드카는 현재 명세에서 원천이 아니다. status는 page가 `page.exposure.register`로 등록하며(`docs/spec/declared-ui.md:145`), 사이드카에는 page가 없다. 이 배제는 현재 명세의 규칙이며 개정으로 바뀔 수 있다. 사이드카의 사실이 아니다.
-  - `docs/spec/plugin-host.md:5`와 `plugin-processes.md:28`의 호스트 생성 검사(view도 사이드카도 가질 수 없는 DOM 없는 로직)는 로직으로는 충족되지 않는다. 목록, git 상태, 선택은 사이드카에 둘 수 있고 호스트는 아무 로직도 갖지 않는다. 그래서 호스트는 `:26`에 따라서만 생성되며, 이를 위해 `:5`와 `:28`의 소유자 면제가 필요하다(D9.F.1). 면제를 거부하면 대안은 files 카드 표면이며, 이는 files의 새 작업이다.
+  - `docs/spec/plugin-host.md:5`와 `plugin-processes.md:28`의 호스트 생성 검사(view도 사이드카도 가질 수 없는 DOM 없는 로직)는 로직으로는 충족되지 않는다. 목록, git 상태, 선택은 사이드카에 둘 수 있고 호스트는 아무 로직도 갖지 않는다. 그래서 호스트는 `:26`에 따라서만 생성되며, 이를 위해 `:5`와 `:28`의 소유자 면제가 필요하다(D9.F.1). 면제를 거부하면 대안은 D9.A′이며, 이것은 D9.A의 변형이 아니라 다른 배치다.
   - 사이드카는 호스트에 보낼 수 없다. `docs/spec/plugin-host.md:59`가 "no sidecar send"를 금한다(D9.F.2, F238-d-23).
   - 북마크는 프로젝트 데이터에 있다(`docs/spec/plugins.md:126`). 호스트가 프로젝트 데이터에 닿으려면 `plugin-host.md:59`의 개정이 필요하다(D9.F.2). 상태 모듈은 선언형 status를 제공하지 못한다(`declared-ui.md:145`).
   - 펼친 상태는 워크벤치에 남는다(`declared-ui.md:3-11`). 사이드카는 목록, git 상태, 플러그인 자신의 값을 준다.
   - 조건(F238-d-24): files 섹션 view(`ui/sections/tree.js`, `bookmarks.js`)에 이름 바꾸기, 끌어 놓기, 포인터 컨텍스트 메뉴, 텍스트 입력이 없어야 한다. 있으면 카드 표면이 필요하다(`plugin-processes.md:25`).
   - `plugins/files/ui/state.js`(`./events.js`만 가져옴)는 사이드카로 옮긴다. F229의 결정(F238-d-20)은 호스트 표현에만 해당한다.
+- D9.A′ 대안, 다른 배치: files 목록, 북마크, 선택을 files 카드 view로 옮긴다. 이 view는 자기 탭, 수명, unload를 가진다. 사이드바에는 그 카드를 여는 선언형 open 항목만 남는다(`docs/spec/plugin-processes.md:26`: view가 필요한 섹션은 카드 표면이 된다. 카드 표면 규칙은 `:9`). open 항목의 status 원천은 `declared-ui.md:145`가 카드 사이드바에 대해 말하는 대로 정한다. 대가: files의 새 카드 view와 탭 수명, files 탭의 unload, 사이드바의 선언형 open 항목. D9.A의 사이드바 섹션과 D9.E의 세로 방향은 files 목록에 더 이상 적용되지 않는다.
 - D9.B shell 카드: view로 남는다. 세 섹션(`shell.history`, `shell.cwd`, `shell.jobs`)은 플러그인이 선언한 섹션이며, Settings 배정(`docs/spec/example-model.md:20`) 또는 집합이 명시되지 않을 때 `data.sidebars`가 파생하는 플러그인 기본(`:24`)으로 카드 왼쪽 사이드바에 놓인다. shell의 선언된 기본 집합은 매니페스트에 있으며, 이 worktree에는 없고 shell 저장소에서 확인한다(F238-d-21). 원천은 그 카드에서 shell 탭의 view다(`declared-ui.md:145`, 첫 원천). 기본 배치에서는 shell 플러그인 호스트가 없다.
 - D9.C 실행 중인 작업: `context.tab.keep("busy", on)`(`plugins/shell/ui/shell.js:56-60`)은 실행 중에 탭을 적재 상태로 둔다(`docs/spec/plugins.md:203`). 이는 보호이지 원천이 아니다. 카드의 활성 탭이 shell 탭이 아니면 `declared-ui.md:145`가 활성 탭의 view에서 섹션을 가져오므로, 활성이 아닌 shell 탭의 실행 중 작업은 보이지 않는다.
 - D9.D 기본 경로의 비용, 전부 적는다: 카드의 활성 탭이 더 이상 shell 탭이 아니거나 카드가 닫히면 섹션은 비워진다(`declared-ui.md:145`, `:149-150`). 플러그인 기본 경로에서는 집합이 활성 탭을 따르므로(`example-model.md:24`), 카드를 다른 플러그인의 탭으로 바꾸면 섹션이 사라진다. Settings에서 명시 배정하면 집합은 탭 변경 뒤에도 남지만(`example-model.md:22`), 활성 탭이 shell 탭이 아니면 원천이 비므로 그때도 비어 있다. 두 경로 모두 비활성 탭의 실행 중 작업을 비운다(D9.C). unload는 `history`, `jobs`, cwd의 view 상태를 지운다(`shell.js:56`). 다만 실행이 있으면 탭은 적재 상태를 유지한다(D9.C). cwd는 다음 적재 때 탭 상태에서 복원된다(`shell.js:119`, `:146-154`).
+  - 창 사이드바 배정: `docs/spec/example-model.md:20`은 Settings가 섹션 집합을 창의 왼쪽 또는 오른쪽 사이드바에 배정하게 한다. 고정 창 사이드바는 플러그인 override가 적용될 때만 포커스된 카드의 활성 탭을 첫 원천으로 쓰고, 적용되지 않으면 그 단계를 건너뛴다(`declared-ui.md:145`). 그래서 override 없이 창 사이드바에 배정된 shell 집합은 원천이 없고 항상 비워진다. 이 배정을 막는 것은 shell이 아니라 명세다. shell 기본은 카드 왼쪽뿐이다.
   - 대안(소유자 결정): shell 탭이 활성이 아닐 때도 history와 cwd가 보여야 한다면, `plugin-processes.md:26`에 따라 shell에 플러그인 호스트가 필요하고 D9.B는 대체된다. 명세의 어떤 요구도 그렇게 하지 않는다. 기본값을 기록하며, shell 소유자가 확인하기 전까지 확정으로 보지 않는다(F238-d-21).
 - D9.E 방향: files 섹션은 왼쪽 또는 오른쪽 사이드바에 있으므로 세로 module과 세로 선언형 tree가 적용된다. 지금의 가로 `files.tree` module(`plugins/files/plugin.json:10`)은 다른 module 형식과 함께 F212.11이 지운다. 소유자가 files를 위나 아래 사이드바에 요구하면 가로 tree 규칙(F238-d-9)이 필요하며, 그 요구가 이유다.
 - D9.F 확정 전에 소유자가 정할 전제:
@@ -119,7 +121,14 @@
 - A4(`state.js` 배치): 일부 수락. `state.js`는 사이드카로 옮기며, F229는 호스트 표현만 정한다.
 - D9.B부터 D9.E까지의 일관성 검사: 두 감사자 모두 반론이 없었다.
 
-라운드 10 질문: 전제 D9.F가 붙은 고친 배치가 틀렸는가? 구현 발견은 질문에 들어가지 않는다.
+라운드 10 답변(감사자 A와 B, claude-haiku-5-5, 읽기 전용):
+
+- A: 배치 반론 없음. 층 규칙, 원천 순서, 호스트 규칙, Settings 규칙의 인용이 파일과 맞다.
+- B1(대안이 `:7`로 인용되고 비용이 없음): 수락. 대안은 D9.A′, 다른 배치이며 `:26`과 `:9`를 인용하고 비용을 적는다.
+- B2(D9.D에 창 사이드바 배정이 없음): 수락. D9.D가 그 경로와 명세가 막는다는 점을 적는다.
+- B 참고(사이드카 배제는 현재 명세의 규칙이며 사이드카 등록 경로가 명세에 없다): D9.A와 일관된다.
+
+라운드 11 질문: 전제 D9.F와 대안 D9.A′가 붙은 고친 배치가 틀렸는가? 구현 발견은 질문에 들어가지 않는다.
 
 ## 검증 실행 (부모, 이 worktree)
 
