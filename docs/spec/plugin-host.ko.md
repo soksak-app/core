@@ -77,7 +77,7 @@ plugin host의 restart limit은 표준 입력과 출력 sidecar의 한도다([si
 
 plugin host가 멈춘 동안 host는 어떤 요청으로도 그것을 다시 만들지 않는다. 그 등록은 제거되었고, 그 이름 중 하나에 대한 요청은 선언되었으나 등록되지 않은 이름의 오류를 돌려주며, 그것이 제공하던 declared section은 비어 있다. 멈춤은 그 자체로 실패 기록을 지우지 않는다.
 
-plugin의 surface를 열어 보는 사람의 행동만이 멈춤을 지운다. plugin host가 멈춘 동안 plugin의 surface가 열릴 때, host는 [sidecars](sidecars.ko.md#실패)의 멈춘 사이드카를 지우듯 그 plugin host의 실패 기록을 지우고, event `host.trace.plugin-host.restart-reset {plugin}`을 `debug` level로 쓰고, 모든 창에서 plugin host를 다시 만든다. plugin host가 멈추지 않은 동안의 surface 열기는 아무것도 지우지 않고, 다른 plugin의 surface 생성도 아무것도 지우지 않는다.
+plugin의 surface를 열어 보는 사람의 행동만이 멈춤을 지운다. plugin host가 멈춘 동안 plugin의 surface가 열릴 때, host는 [sidecars](sidecars.ko.md#실패)의 멈춘 사이드카를 지우듯 그 plugin host의 실패 기록을 지우고, event `host.trace.plugin-host.restart-reset {plugin}`을 `debug` level로 쓰고, 모든 창에서 plugin host를 다시 만든다. plugin host가 멈추지 않은 동안의 surface 열기는 아무것도 지우지 않고, 다른 plugin의 surface 생성도 아무것도 지우지 않는다. plugin의 surface를 여는 것은 같은 단계에서 그 `dependencies`에 적힌 사이드카의 멈춤도 지운다([sidecars](sidecars.ko.md#실패)). 두 기록은 이 한 트리거를 공유한다.
 
 재시작은 마지막으로 저장된 값에서 상태를 복구한다([state](#state)). 저장되지 않은 상태는 잃어지며, 각 plugin은 자기 문서에 그것이 어느 상태인지 밝힌다.
 

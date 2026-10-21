@@ -2281,7 +2281,7 @@ fn counts_only_failures_within_the_window() {
     );
 }
 
-// contract: sidecars.restart.surface-open-resets-the-record
+// contract: sidecars.restart.surface-open-resets-the-record, plugin-host.restart.stop-clear-joint
 #[test]
 fn surface_open_clears_the_restart_limit() {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());

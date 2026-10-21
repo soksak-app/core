@@ -1735,7 +1735,7 @@ func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 	}
 }
 
-// contract: sidecars.restart.surface-open-resets-the-record
+// contract: sidecars.restart.surface-open-resets-the-record, plugin-host.restart.stop-clear-joint
 func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
 	log := useEventLog(t)

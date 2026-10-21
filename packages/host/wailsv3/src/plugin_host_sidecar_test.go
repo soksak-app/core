@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // sidecarSessionSurfaces returns a window that holds the project project-a with the root /fixture/root, and a Sidecars
@@ -218,6 +219,47 @@ func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testin
 		if _, ok := c.owners[kept]; !ok {
 			t.Fatalf("the session %s was closed, want it kept", kept)
 		}
+	}
+}
+
+// One open of a surface of a plugin clears the stop of its plugin host and the stop of each sidecar that the plugin lists, and
+// an automatic restart of the plugin host clears neither (docs/plans/plugin-host-routes.md F229-6; docs/spec/sidecars.md#failure).
+// contract: plugin-host.restart.stop-clear-joint
+func TestOneSurfaceOpenClearsTheHostStopAndTheSidecarStopOfItsPlugin(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	hosts := newPluginHostRestarts()
+	c.mu.Lock()
+	c.restarts["fixture-sidecar"] = &restartRecord{}
+	for i := 0; i < restartLimit; i++ {
+		c.restarts["fixture-sidecar"].count(time.Now())
+	}
+	c.mu.Unlock()
+	for i := 0; i < restartLimit-1; i++ {
+		hosts.failed("probe")
+	}
+	// The restart of the plugin host within its limit is not an open: it clears no stop.
+	if _, stop := hosts.failed("probe"); !stop {
+		t.Fatal("the fourth failure of the plugin host did not stop it")
+	}
+	c.mu.Lock()
+	stillStopped := c.restartStopped("fixture-sidecar")
+	c.mu.Unlock()
+	if !stillStopped {
+		t.Fatal("the sidecar stop was not in place before the open")
+	}
+	// The open of a surface of probe clears both records in one step (surfaces.go, the layout's opened surfaces).
+	c.SurfaceOpened("probe", "fixture-surface")
+	hosts.reset("probe")
+	c.mu.Lock()
+	stillStopped = c.restartStopped("fixture-sidecar")
+	c.mu.Unlock()
+	if stillStopped {
+		t.Fatal("the open of a surface of probe left the sidecar stop of its dependency in place")
+	}
+	if hosts.stopped("probe") {
+		t.Fatal("the open of a surface of probe left the plugin host stopped")
 	}
 }
 
