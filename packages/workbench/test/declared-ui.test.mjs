@@ -212,7 +212,7 @@ test("an item with a command draws a bound button with the control attributes", 
   const module = await load("draw-button");
   const body = document.createElement("div");
   const calls = [];
-  const bind = (el, name, params, options) => { calls.push({ el, name, params, options }); return el; };
+  const bind = (el, name, params, options) => { calls.push({ el, name, params: () => (typeof params === "function" ? params() : params), options }); return el; };
   module.drawValue(body, list([item("a", { command: "demo.open", params: { id: 1 } })]).elements, { owner: "demo", bind });
   const button = body.querySelector("button");
   assert.ok(button, "no button was drawn");
@@ -224,7 +224,7 @@ test("an item with a command draws a bound button with the control attributes", 
   assert.equal(calls.length, 1, "the button was not bound once");
   assert.equal(calls[0].el, button);
   assert.equal(calls[0].name, "demo.open");
-  assert.deepEqual(calls[0].params, { id: 1 });
+  assert.deepEqual(calls[0].params(), { id: 1 });
   assert.deepEqual(calls[0].options, { event: "click" });
 });
 
@@ -285,7 +285,7 @@ const tree = (nodes, extra = {}) => ({ elements: [{ kind: "tree", key: "t1", emp
 function section(module, orientation = "vertical") {
   const body = document.createElement("div");
   const calls = [];
-  const bind = (el, name, params, options) => { calls.push({ el, name, params, options }); return el; };
+  const bind = (el, name, params, options) => { calls.push({ el, name, params: () => (typeof params === "function" ? params() : params), options }); return el; };
   const options = { ...OPTIONS, status: "s", orientation, bind };
   return {
     body,
@@ -320,7 +320,7 @@ test("a collapsed branch hides its children, and its expand control requests the
   assert.equal(control.dataset.expose, "core.sidebar.section.control");
   const call = s.requested(["b"]);
   assert.equal(call.name, EXPAND);
-  assert.deepEqual(call.params, { status: "demo.s", tree: "t1", path: ["b"], expanded: true });
+  assert.deepEqual(call.params(), { status: "demo.s", tree: "t1", path: ["b"], expanded: true });
   assert.deepEqual(call.options, { event: "click" });
   assert.equal(s.body.querySelector(".declared-label").hasAttribute("data-role"), false, "a static branch label carries a role");
 });
@@ -337,14 +337,14 @@ test("a node with command draws a bound label, and a static leaf carries no cont
   assert.equal(b.dataset.expose, "core.sidebar.section.control");
   const bound = s.calls.find((call) => call.el === b);
   assert.equal(bound.name, "demo.open");
-  assert.deepEqual(bound.params, { id: 1 });
+  assert.deepEqual(bound.params(), { id: 1 });
   assert.deepEqual(bound.options, { event: "click" });
   for (const label of [c, x]) {
     assert.equal(label.tagName, "SPAN", "a static label is not a span");
     assert.equal(label.hasAttribute("data-expose"), false, "a static label carries a dom name");
     assert.equal(label.hasAttribute("data-key"), false, "a static label carries data-key");
   }
-  assert.equal(s.requested(["b"]).params.expanded, false, "an expanded branch does not request collapse");
+  assert.equal(s.requested(["b"]).params().expanded, false, "an expanded branch does not request collapse");
 });
 
 test("a node with enabled false draws its button disabled", async () => {
@@ -377,7 +377,7 @@ test("a branch that is drawn collapsed keeps its state until the plugin changes 
   assert.deepEqual(s.labels(), ["b"]);
   s.expand(["b"], true);
   assert.deepEqual(s.labels(), ["b", "c"], "the expand command did not draw the children");
-  assert.equal(s.requested(["b"]).params.expanded, false, "the redrawn control does not request collapse");
+  assert.equal(s.requested(["b"]).params().expanded, false, "the redrawn control does not request collapse");
   s.show(tree([branch("b", [leaf("c")])]));
   assert.deepEqual(s.labels(), ["b", "c"], "an unchanged plugin value replaced the kept state");
   s.expand(["b"], false);
@@ -393,7 +393,7 @@ test("the kept state is kept by the full path of keys", async () => {
   assert.deepEqual(s.labels(), ["b", "c"]);
   s.expand(["b", "c"], true);
   assert.deepEqual(s.labels(), ["b", "c", "d"], "the branch at the path did not expand");
-  assert.equal(s.requested(["b", "c"]).params.path.join("/"), "b/c");
+  assert.equal(s.requested(["b", "c"]).params().path.join("/"), "b/c");
 });
 
 test("a new branch takes its plugin value, and a path that becomes a leaf loses its kept state", async () => {
@@ -511,4 +511,55 @@ test("a tree in a horizontal section is rejected at the tree, and a tree in a ve
   assert.ok(error, "no rejection");
   assert.equal(error.pointer, "/elements/0");
   assert.equal(error.reason, "tree cannot be drawn in a horizontal section");
+});
+
+// Keyed redraw (docs/spec/exposure.md, redraw rule): a control whose address stays keeps its element, and its command is bound once.
+test("a redraw keeps the element of each list row whose key stays", async () => {
+  const module = await load("keep-row");
+  const s = section(module);
+  s.show(list([item("a", { command: "demo.open" }), item("b")]));
+  const rows = [...s.body.querySelectorAll(".declared-row")];
+  s.show(list([item("a", { command: "demo.open" }), item("b", { detail: "two" })]));
+  const kept = [...s.body.querySelectorAll(".declared-row")];
+  assert.equal(kept.length, 2, "the rows were not drawn");
+  assert.equal(kept[0], rows[0], "the row of an unchanged key was replaced");
+  assert.equal(kept[1], rows[1], "the row of an unchanged key was replaced");
+});
+
+test("a redraw keeps the expand control of a branch and binds it once", async () => {
+  const module = await load("keep-expand");
+  const s = section(module);
+  s.show(tree([branch("b", [leaf("c")])]));
+  const control = s.body.querySelector('[data-role="expand"]');
+  s.show(tree([branch("b", [leaf("c")])]));
+  assert.equal(s.body.querySelector('[data-role="expand"]'), control, "the expand control was replaced");
+  assert.equal(s.calls.length, 1, "the control was bound again by the redraw");
+});
+
+test("the expand control keeps keyboard focus after its command draws the tree again", async () => {
+  const module = await load("keep-focus");
+  const s = section(module);
+  document.body.append(s.body);
+  try {
+    s.show(tree([branch("b", [leaf("c")])]));
+    const control = s.body.querySelector('[data-role="expand"]');
+    control.focus();
+    assert.equal(document.activeElement, control, "the control did not take focus");
+    s.expand(["b"], true);
+    assert.equal(document.activeElement, control, "focus left the expand control after the command");
+    assert.equal(control.isConnected, true, "the expand control left the document");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a changed parameter updates the kept button without binding it again", async () => {
+  const module = await load("keep-params");
+  const s = section(module);
+  s.show(list([item("a", { command: "demo.open", params: { id: 1 } })]));
+  const button = s.body.querySelector("button");
+  s.show(list([item("a", { command: "demo.open", params: { id: 2 } })]));
+  assert.equal(s.body.querySelector("button"), button, "the button was replaced");
+  assert.equal(s.calls.length, 1, "the button was bound again");
+  assert.deepEqual(s.calls[0].params(), { id: 2 }, "the bound parameters were not updated");
 });

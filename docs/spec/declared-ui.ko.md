@@ -119,6 +119,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 요청은 제어가 요청하는 `expanded` 값을 담으며, 이는 workbench가 그릴 때의 유지 상태와 반대다. 같은 요청을 되풀이하면 같은 상태를 설정한다.
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
+다시 그릴 때 남는 address의 각 루트 요소, list 행, tree 노드, 펼침 제어는 같은 요소를 유지한다. [exposure](exposure.ko.md#사용자-인터페이스)가 모든 다시 그리기에 요구하는 규칙이며, 명령 실행 뒤에도 키보드 초점이 제어에 남게 한다. 그런 각 제어는 명령에 한 번만 묶이며, 다시 그릴 때는 매개변수만 갱신한다. `command`가 바뀐 list 행이나 tree 노드는 새 요소다. key에 명령이 포함되기 때문이다.
 네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다. 가지의 펼침 제어는 가지가 접혀 있으면 core의 chevron-right 아이콘을, 펼쳐 있으면 chevron-down 아이콘을 보인다.
 
 

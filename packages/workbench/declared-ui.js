@@ -1,6 +1,7 @@
 // Declared UI values of a sidebar section (docs/spec/declared-ui.md): the validator of a value, the drawing of its elements,
 // and the display of a rejected value through showError and hideError. The validator collects every violation of a value and
 // reports the one of the first row in the rejection table; within that row, the first occurrence in document order.
+import { drawList } from "@soksak/plugin-api";
 import { icon } from "./icons.js";
 import { hideError, showError } from "./shown-errors.js";
 
@@ -304,71 +305,99 @@ export function validateValue(value, options) {
   return { elements: value.elements };
 }
 
-/** The label of a list item or a tree node: its icon, its text, and the detail of a list item. */
-function labelOf(item, label) {
-  label.className = "declared-label";
-  if (Object.hasOwn(item, "icon")) {
-    const mark = document.createElement("span");
-    mark.className = "declared-icon";
-    mark.innerHTML = icon(item.icon);
-    label.append(mark);
+/** Connects an element to its command. The binder reads the parameters at each run, so a redraw only updates them. */
+const CONNECTIONS = new WeakMap();
+
+function connect(element, name, params, bind) {
+  const state = CONNECTIONS.get(element);
+  if (state === undefined) {
+    CONNECTIONS.set(element, { name, params });
+    bind(element, name, () => CONNECTIONS.get(element).params, { event: "click" });
+    return;
   }
-  label.append(document.createTextNode(item.label));
-  return label;
+  if (state.name !== name) throw new Error(`control is connected to ${state.name}, not ${name}`);
+  state.params = params;
 }
 
-/** The label element of an item or a node: a button bound to its command when it has one, otherwise a static span. */
-function labelElement(entry, { key, path, bind }) {
-  if (!Object.hasOwn(entry, "command")) return labelOf(entry, document.createElement("span"));
-  const label = document.createElement("button");
+const paramsOf = (entry) => (Object.hasOwn(entry, "params") ? entry.params : {});
+
+/** The key of an entry in a keyed drawing: its key and its command. Keys hold no space, so the two parts cannot be confused. */
+const entryKey = (entry) => `${entry.key} ${Object.hasOwn(entry, "command") ? entry.command : ""}`;
+
+/** The first child of el that has none of the given classes. */
+function childWithout(el, classes) {
+  return Array.from(el.children).find((child) => !classes.some((name) => child.classList.contains(name)));
+}
+
+function childOf(el, name) {
+  return Array.from(el.children).find((child) => child.classList.contains(name));
+}
+
+/** Writes the content of a label: its icon and its text. A button also takes its command and its disabled state. */
+function paintLabel(label, entry, { key, path, bind }) {
+  label.className = "declared-label";
+  label.replaceChildren();
+  if (Object.hasOwn(entry, "icon")) {
+    const mark = document.createElement("span");
+    mark.className = "declared-icon";
+    mark.innerHTML = icon(entry.icon);
+    label.append(mark);
+  }
+  label.append(document.createTextNode(entry.label));
+  if (label.tagName !== "BUTTON") return;
   label.type = "button";
   label.dataset.key = key;
   label.dataset.path = JSON.stringify(path);
   label.dataset.role = "label";
   label.dataset.expose = CONTROL_NAME;
-  if (entry.enabled === false) label.disabled = true;
-  bind(label, entry.command, entry.params, { event: "click" });
-  return labelOf(entry, label);
+  label.disabled = entry.enabled === false;
+  connect(label, entry.command, paramsOf(entry), bind);
 }
 
-function drawItem(listKey, item, bind) {
-  const row = document.createElement("div");
-  row.className = "declared-row";
-  if (item.selected === true) row.dataset.selected = "true";
-  row.append(labelElement(item, { key: listKey, path: [item.key], bind }));
-  if (Object.hasOwn(item, "detail")) {
-    const detail = document.createElement("span");
+/** The label element of an entry: a button when the entry has a command, otherwise a static span. */
+const labelElement = (entry) => document.createElement(Object.hasOwn(entry, "command") ? "button" : "span");
+
+function paintDetail(row, text) {
+  if (text === undefined) {
+    const old = childOf(row, "declared-detail");
+    if (old) old.remove();
+    return;
+  }
+  let detail = childOf(row, "declared-detail");
+  if (!detail) {
+    detail = document.createElement("span");
     detail.className = "declared-detail";
-    detail.append(document.createTextNode(item.detail));
     row.append(detail);
   }
+  detail.textContent = text;
+}
+
+function createItemRow(item) {
+  const row = document.createElement("div");
+  row.className = "declared-row";
+  row.append(labelElement(item));
   return row;
 }
 
-function drawList(element, bind) {
-  const box = document.createElement("div");
-  box.className = "declared-list";
-  if (element.items.length === 0) {
-    const empty = document.createElement("span");
-    empty.className = "declared-empty";
-    empty.append(document.createTextNode(element.empty));
-    box.append(empty);
-    return box;
-  }
-  for (const item of element.items) box.append(drawItem(element.key, item, bind));
-  return box;
+function paintItem(row, item, listKey, bind) {
+  if (item.selected === true) row.dataset.selected = "true";
+  else delete row.dataset.selected;
+  paintLabel(childWithout(row, ["declared-detail"]), item, { key: listKey, path: [item.key], bind });
+  paintDetail(row, Object.hasOwn(item, "detail") ? item.detail : undefined);
 }
 
-/** The kept expanded state of the branch at path, which every branch of a drawn tree has. */
-function keptOf(kept, tree, path) {
-  const expanded = kept.get(tree)?.get(JSON.stringify(path));
-  if (expanded === undefined) throw new Error(`tree ${tree} path ${JSON.stringify(path)} has no kept state`);
-  return expanded;
+function createNode(node) {
+  const wrap = document.createElement("div");
+  wrap.className = "declared-node";
+  const row = document.createElement("div");
+  row.className = "declared-row";
+  row.append(labelElement(node));
+  wrap.append(row);
+  return wrap;
 }
 
 /** The expand control of a branch. It requests the state opposite to the one the branch shows. */
-function expandControl(tree, path, expanded, { statusId, bind }) {
-  const control = document.createElement("button");
+function paintExpand(control, { statusId, tree, path, expanded, bind }) {
   control.type = "button";
   control.className = "declared-expand";
   control.dataset.key = tree;
@@ -378,62 +407,97 @@ function expandControl(tree, path, expanded, { statusId, bind }) {
   const mark = document.createElement("span");
   mark.className = "declared-icon";
   mark.innerHTML = icon(expanded ? "chevron-down" : "chevron-right");
-  control.append(mark);
-  bind(control, EXPAND, { status: statusId, tree, path, expanded: !expanded }, { event: "click" });
-  return control;
+  control.replaceChildren(mark);
+  connect(control, EXPAND, { status: statusId, tree, path, expanded: !expanded }, bind);
 }
 
-/** The nodes of one level below parent. A branch draws its children only while it is expanded. */
-function drawNodes(tree, nodes, parent, ctx) {
-  return nodes.map((node) => {
-    const path = [...parent, node.key];
-    const wrap = document.createElement("div");
-    wrap.className = "declared-node";
-    const row = document.createElement("div");
-    row.className = "declared-row";
-    if (node.selected === true) row.dataset.selected = "true";
-    const branch = isBranch(node);
-    const expanded = branch ? keptOf(ctx.kept, tree.key, path) : false;
-    if (branch) row.append(expandControl(tree.key, path, expanded, ctx));
-    row.append(labelElement(node, { key: tree.key, path, bind: ctx.bind }));
-    wrap.append(row);
-    if (branch && expanded) {
-      const children = document.createElement("div");
+/** The kept expanded state of the branch at path, which every branch of a drawn tree has. */
+function keptOf(kept, tree, path) {
+  const expanded = kept.get(tree)?.get(JSON.stringify(path));
+  if (expanded === undefined) throw new Error(`tree ${tree} path ${JSON.stringify(path)} has no kept state`);
+  return expanded;
+}
+
+/** Writes one tree node: its row with the expand control of a branch and its label, and the children of an expanded branch. */
+function paintNode(wrap, node, path, ctx) {
+  const row = wrap.firstElementChild;
+  if (node.selected === true) row.dataset.selected = "true";
+  else delete row.dataset.selected;
+  const branch = isBranch(node);
+  const expanded = branch ? keptOf(ctx.kept, ctx.tree, path) : false;
+  let control = childOf(row, "declared-expand");
+  if (branch) {
+    if (!control) {
+      control = document.createElement("button");
+      row.prepend(control);
+    }
+    paintExpand(control, { statusId: ctx.statusId, tree: ctx.tree, path, expanded, bind: ctx.bind });
+  } else if (control) {
+    control.remove();
+  }
+  paintLabel(childWithout(row, ["declared-expand"]), node, { key: ctx.tree, path, bind: ctx.bind });
+  let children = childOf(wrap, "declared-children");
+  if (branch && expanded) {
+    if (!children) {
+      children = document.createElement("div");
       children.className = "declared-children";
-      children.append(...drawNodes(tree, node.children, path, ctx));
       wrap.append(children);
     }
-    return wrap;
-  });
+    drawList(children, node.children, {
+      key: entryKey,
+      create: createNode,
+      update: (child, entry) => paintNode(child, entry, [...path, entry.key], ctx),
+    });
+  } else if (children) {
+    children.remove();
+  }
 }
 
-function drawTree(element, ctx) {
-  const box = document.createElement("div");
-  box.className = "declared-tree";
-  if (element.nodes.length === 0) {
-    const empty = document.createElement("span");
-    empty.className = "declared-empty";
-    empty.append(document.createTextNode(element.empty));
-    box.append(empty);
-    return box;
+function appendEmpty(box, text) {
+  const empty = document.createElement("span");
+  empty.className = "declared-empty";
+  empty.append(document.createTextNode(text));
+  box.append(empty);
+}
+
+/** Writes one root element into its box. Rows and nodes keep their elements while their keys stay (drawList of plugin-api). */
+function paintRoot(box, element, ctx) {
+  if (element.kind === "list") {
+    box.className = "declared-list";
+    drawList(box, element.items, {
+      key: entryKey,
+      create: createItemRow,
+      update: (row, item) => paintItem(row, item, element.key, ctx.bind),
+    });
+    if (element.items.length === 0) appendEmpty(box, element.empty);
+    return;
   }
-  box.append(...drawNodes(element, element.nodes, [], ctx));
-  return box;
+  box.className = "declared-tree";
+  drawList(box, element.nodes, {
+    key: entryKey,
+    create: createNode,
+    update: (wrap, node) => paintNode(wrap, node, [node.key], { ...ctx, tree: element.key }),
+  });
+  if (element.nodes.length === 0) appendEmpty(box, element.empty);
 }
 
 /**
- * Draws the root elements of an accepted value into body, replacing its previous content. Every control is connected through
- * bind(element, name, params, options) of the binder, and carries the dom name and the control attributes. kept holds the expanded
- * state of each tree by its key and the path of each branch (settle).
+ * Draws the root elements of an accepted value into body. A root element keeps its box while its kind and key stay, so a redraw
+ * keeps every control whose address stays. Every control is connected through bind(element, name, params, options) of the binder,
+ * and carries the dom name and the control attributes. kept holds the expanded state of each tree by its key and the path of each
+ * branch (settle).
  */
 export function drawValue(body, elements, { statusId, bind, kept }) {
-  const nodes = elements.map((element) => {
-    if (element.kind === "list") return drawList(element, bind);
-    if (element.kind === "tree") return drawTree(element, { statusId, bind, kept });
-    throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
+  for (const element of elements) {
+    if (element.kind !== "list" && element.kind !== "tree") throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
+  }
+  drawList(body, elements, {
+    key: (element) => `${element.kind} ${element.key}`,
+    create: () => document.createElement("div"),
+    update: (box, element) => paintRoot(box, element, { statusId, bind, kept }),
   });
-  body.replaceChildren(...nodes);
 }
+
 
 /**
  * The state of each declared UI status, keyed by its status name `<plugin>.<name>`. kept maps each tree key to the expanded state

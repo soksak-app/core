@@ -119,6 +119,7 @@ A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is 
 The request carries the `expanded` value that the control requests, which is the opposite of the kept state when the workbench draws it. Repeating the request sets the same state.
 
 A disabled element (`enabled: false`) is rendered with the `disabled` attribute, so no click reaches its binding.
+A redraw keeps the element of each root element, list row, tree node, and expand control whose address stays, as [exposure](exposure.md#user-interface) requires of every redraw, so keyboard focus stays on a control after its command runs. Each such control is connected to its command once, and a redraw only updates its parameters. A list row or tree node whose `command` changes is a new element, because its key includes the command.
 The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button. The expand control of a branch shows the chevron-right icon of the core while the branch is collapsed, and the chevron-down icon while it is expanded.
 
 
