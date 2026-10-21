@@ -165,6 +165,28 @@ test('the message of a finding names the file, the line and the rule', () => {
   assert.equal(outside.message, 'a.go:4: go.go-statement is outside its entrance files');
 });
 
+test('a lock result that is matched, mapped, unwrapped or dropped is a finding of the recovery rule, and a recovered lock is not', () => {
+  const source = [
+    'fn f() {',
+    '    if let Ok(mut a) = state.lock() {',
+    '        a.push(1);',
+    '    }',
+    '    let x = state.lock().map_err(|e| e.to_string())?;',
+    '    let y = state.lock().unwrap();',
+    '    match state.lock() {',
+    '        _ => {}',
+    '    }',
+    '    // default: the state is only read, and the panic hook records the panic that poisoned the lock.',
+    '    let z = state.lock().unwrap_or_else(PoisonError::into_inner);',
+    '}',
+    '',
+  ].join('\n');
+  const findings = checker.censusFindings(new Map([['a.rs', source]]), noConfig()).filter(({ rule }) => rule === 'rs.lock-result');
+  assert.deepEqual(findings.map(({ file, line, rule }) => `${file}:${line} ${rule}`), [
+    'a.rs:2 rs.lock-result', 'a.rs:5 rs.lock-result', 'a.rs:6 rs.lock-result', 'a.rs:7 rs.lock-result',
+  ]);
+});
+
 test('a reason marker on the line, in the comment above it or inside an empty catch accepts a source', () => {
   assert.deepEqual(census({
     'a.js': [
@@ -222,7 +244,7 @@ test('a census declaration with an unknown key, an unknown rule or a pending val
   assert.throws(parse({ pending: { 'go.recover': 'later' } }), /gives the rule go\.recover the pending item "later", which is no checklist id/);
   assert.throws(parse({ entrances: { 'go.recover': 'a.go' } }), /entrances that are not a list of patterns/);
   assert.throws(() => checker.parseCensusConfig('scripts/census.json', '{'), /^Error: scripts\/census\.json: /);
-  assert.equal(EVENT_RULES.every((rule) => rule.language && rule.pattern && ['entrance', 'event-or-reason'].includes(rule.requires) && rule.description), true);
+  assert.equal(EVENT_RULES.every((rule) => rule.language && rule.pattern && ['entrance', 'event-or-reason', 'recovery'].includes(rule.requires) && rule.description), true);
 });
 
 test('a reason marker is the one form `(default|silent): <reason>`', () => {
