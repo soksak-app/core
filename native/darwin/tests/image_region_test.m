@@ -1405,7 +1405,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([reportsWithoutCids(reported) isEqualToArray:@[@{@"type": @"action", @"name": @"paste"}, @{@"type": @"action", @"name": @"paste"}]]
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"edit actions: paste reports one paste action and leaves the input document empty (got %@)", reported]);
-        // Copy goes to the page command that copies the terminal selection and does not write the input method document to the pasteboard.
+        // Copy goes to the page command that copies the selection and does not write the input method document to the pasteboard.
         NSInteger changes = NSPasteboard.generalPasteboard.changeCount;
         NSUInteger beforeCopy = collectedEvents.count;
         [NSApp sendAction:@selector(copy:) to:regionView from:nil];
@@ -1447,7 +1447,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // A pointer press inside the region frame is not reported as terminal focus loss. The pointer passes through this view
+    // A pointer press inside the region frame is not reported as image region focus loss. The pointer passes through this view
     // to the page (hitTest is nil), so WebKit makes the pressed web view the first responder, and the page focus
     // command returns it to the region. If the resign of that round trip were reported to the ?1004 child, the child would cancel a drag
     // in progress, so a resign while the press point is inside the region is not a focus change.

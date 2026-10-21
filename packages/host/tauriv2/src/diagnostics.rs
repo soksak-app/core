@@ -185,7 +185,9 @@ fn relaunch(host: &Host) -> Result<Value, Failure> {
         .state::<crate::windows::Windows>()
         .update
         .lock()
-        .expect("pending update") = Some(crate::app_update::PendingStart {
+        // default: a lock that a panicking thread poisoned still holds the pending update, which the call replaces; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = Some(crate::app_update::PendingStart {
         command,
         relaunch: true,
     });
@@ -791,7 +793,9 @@ static MODAL_HOLDS: Mutex<Option<HashMap<String, Arc<ModalHold>>>> = Mutex::new(
 fn modal_hold_of(window: &str) -> Option<Arc<ModalHold>> {
     MODAL_HOLDS
         .lock()
-        .expect("modal holds")
+        // default: a lock that a panicking thread poisoned still holds the held modal replies, which are only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .as_ref()?
         .get(window)
         .cloned()
@@ -802,23 +806,34 @@ pub(crate) fn hold_modal_content(window: &str) {
     let Some(hold) = modal_hold_of(window) else {
         return;
     };
-    let mut state = hold.state.lock().expect("modal hold");
+    // default: a lock that a panicking thread poisoned still holds the held reply count, which the hold amends; the
+    // panic hook records the panic.
+    let mut state = hold.state.lock().unwrap_or_else(PoisonError::into_inner);
     state.1 += 1;
     hold.changed.notify_all();
     while !state.0 {
-        state = hold.changed.wait(state).expect("modal hold");
+        state = hold
+            .changed
+            .wait(state)
+            // default: a wait that a poisoned lock ends still returns the guard of the held reply count, which the hold
+            // reads; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
     }
 }
 
 /// When on is set, starts to hold the modal content replies of the window; otherwise sends the held replies and stops
 /// holding.
 fn modal_hold(window: &str, on: bool) {
-    let mut holds = MODAL_HOLDS.lock().expect("modal holds");
+    // default: a lock that a panicking thread poisoned still holds the held modal replies, which the call amends; the
+    // panic hook records the panic.
+    let mut holds = MODAL_HOLDS.lock().unwrap_or_else(PoisonError::into_inner);
     let holds = holds.get_or_insert_with(HashMap::new);
     if on {
         holds.entry(window.to_string()).or_default();
     } else if let Some(hold) = holds.remove(window) {
-        hold.state.lock().expect("modal hold").0 = true;
+        // default: a lock that a panicking thread poisoned still holds the held reply count, which the release amends;
+        // the panic hook records the panic.
+        hold.state.lock().unwrap_or_else(PoisonError::into_inner).0 = true;
         hold.changed.notify_all();
     }
 }
@@ -865,3 +880,7 @@ fn modal_held(window: &str) -> Result<Value, Failure> {
     }
     Ok(Value::Null)
 }
+
+#[cfg(test)]
+#[path = "diagnostics_lock_test.rs"]
+mod lock_test;

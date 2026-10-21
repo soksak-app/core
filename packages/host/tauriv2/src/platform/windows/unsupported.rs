@@ -295,6 +295,17 @@ pub fn close_document(_document: Handle) -> Result<(), String> {
     missing("document removal")
 }
 
+pub fn create_plugin_host(
+    _window: Handle,
+    _store: &str,
+    _folder: &str,
+    _plugin: &str,
+    _channel: &str,
+    _changed: Box<dyn Fn(String)>,
+) -> Result<Handle, String> {
+    missing("plugin host web view")
+}
+
 pub fn view_id(_view: &PlatformWebview) -> Result<Handle, String> {
     missing("webview identity")
 }

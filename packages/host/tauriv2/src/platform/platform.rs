@@ -264,7 +264,7 @@ pub struct Raster {
     pub scale: f64,
 }
 
-/// Resolves a request of the core root of a view of plugin for url_path (docs/plans/plugin-processes.md, rule 4). It returns
+/// Resolves a request of the core root of a view of plugin for url_path (docs/spec/plugin-processes.md, rule 4). It returns
 /// None for a path that is not served.
 pub type CoreRootResolver =
     Box<dyn Fn(&str, &str) -> Option<crate::installed::CoreRootFile> + Send + Sync>;
@@ -481,6 +481,22 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn set_document_appearance(&self, document: Handle, dark: bool) -> Result<(), String>;
     /// Removes the document webview. changed is not called afterwards. Call it on the main thread.
     fn close_document(&self, document: Handle) -> Result<(), String>;
+    /// Creates the plugin host webview of a plugin hidden in the window itself (docs/spec/plugin-host.md). store is the
+    /// absolute path in which the persistent data store keeps the site data. changed receives the state JSON ({url,
+    /// title, loading, progress, canGoBack, canGoForward, error, scroll}) on the main thread. folder and plugin are the
+    /// installed folder and the id of the plugin whose host the webview runs; channel is the text of the view channel
+    /// script, and the configuration is the view configuration (docs/spec/native-surfaces.md#view-surfaces). The webview
+    /// holds a zero frame, is hidden, draws nothing, takes no hit testing, and receives no input
+    /// (docs/spec/plugin-host.md). Call it on the main thread.
+    fn create_plugin_host(
+        &self,
+        window: Handle,
+        store: &str,
+        folder: &str,
+        plugin: &str,
+        channel: &str,
+        changed: Box<dyn Fn(String)>,
+    ) -> Result<Handle, String>;
     /// Returns the view address that identifies the webview in the input chain.
     fn view_id(&self, view: &PlatformWebview) -> Result<Handle, String>;
 
@@ -882,7 +898,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
     /// Waits until the service process `pid` ends, for at most `timeout`, and answers whether it ended. A process that
     /// does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
-    /// process that stays as a zombie, so it does not poll (docs/spec/terminal-runtime.md#updates).
+    /// process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
     fn wait_service_process_end(
         &self,
         pid: u32,

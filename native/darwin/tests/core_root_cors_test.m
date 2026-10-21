@@ -183,7 +183,7 @@ int main(void) { @autoreleasepool {
     BOOL none = runCase(@"case (b)", nil, @"index.html");
     check(!none, @"case (b): the module import fails when the response has no Access-Control-Allow-Origin");
 
-    // Case (c) has no assertion in the contract yet; the value is recorded so the plan can state it.
+    // Case (c) has no assertion; the value is recorded because the specification states that WebKit accepts it.
     runCase(@"case (c)", @"*", @"index.html");
 
     BOOL other = runCase(@"case (d)", @"sok://other", @"index.html");

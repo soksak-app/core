@@ -32,7 +32,7 @@ test("the plugin page of the library lists each plugin with its description, ver
       { id: "db", name: "DB", description: "데이터베이스 표면.", state: "available", installed: null, latest: "2.0.0",
         sidecars: [{ name: "@x/db", range: "^1.0.0", version: null }] },
       { id: "term", name: "터미널", description: "명령을 실행하는 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true },
-        latest: "0.2.0", sidecars: [{ name: "@soksak/sidecar-vt", range: "^0.1.0", version: "0.1.2" }] },
+        latest: "0.2.0", sidecars: [{ name: "@scope/sidecar-probe", range: "^0.1.0", version: "0.1.2" }] },
       // The window kept its page when the plugin changed, so the card offers to apply the change.
       { id: "kept", name: "kept", description: "", state: "reload", installed: { version: "2.0.0", enabled: true },
         latest: null, sidecars: [] },
@@ -95,7 +95,7 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("db", "operation"), "db install 진행 중");
     assert.equal(text("term", "state"), "사용 중");
     assert.equal(text("term", "versions"), "설치된 버전 0.1.0 · 최신 버전 0.2.0");
-    assert.equal(text("term", "sidecars"), "사이드카 @soksak/sidecar-vt 0.1.2");
+    assert.equal(text("term", "sidecars"), "사이드카 @scope/sidecar-probe 0.1.2");
     assert.equal(text("term", "operation"), null, "the operation line shows on a card of another plugin");
     assert.equal(text("plain", "about"), null, "a plugin without a description shows an empty description");
     assert.equal(text("plain", "sidecars"), "사이드카 없음");

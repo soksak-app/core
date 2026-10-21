@@ -1,7 +1,7 @@
 // The page side of the commands of a view (docs/spec/native-surfaces.md#view-surfaces). The page runs a command of a view for each
 // exposure request of the command: it sends {id, command, params} to the view as viewRequest, and the view answers with the reply
 // that the host delivers as view-reply. The call layer of plugin-api holds the open calls, their declared time limit and the late
-// replies, so the requests use the same rules as the calls of a plugin process (docs/plans/plugin-processes.md, rule 3).
+// replies, so the requests use the same rules as the calls of a plugin process (docs/spec/plugin-processes.md, rule 3).
 
 import { createCalls, DEFAULT_CALL_TIMEOUT } from "@soksak/plugin-api";
 

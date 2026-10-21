@@ -163,8 +163,8 @@ function sources(directory, extension) {
 }
 
 const HOST_SOURCES = {
-  wailsv3: { language: 'go', files: () => [...sources('packages/host/wailsv3/tests', '_test.go'), ...sources('packages/host/wailsv3/src', '_test.go'), ...sources('packages/sok/wailsv3/tests', '_test.go')] },
-  tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'), ...sources('packages/sok/tauriv2/tests', '.rs')] },
+  wailsv3: { language: 'go', files: () => [...sources('packages/host/wailsv3/tests', '_test.go'), ...sources('packages/host/wailsv3/src', '_test.go'), ...sources('packages/sok/wailsv3/tests', '_test.go'), ...sources('packages/sok/wailsv3/src', '_test.go')] },
+  tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'), ...sources('packages/sok/tauriv2/tests', '.rs'), ...sources('packages/sok/tauriv2/src', '.rs')] },
 };
 
 /** The limit of one contract test. A test that needs more is reported by the run and gets its own limit with its reason. */

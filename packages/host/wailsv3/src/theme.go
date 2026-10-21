@@ -47,6 +47,7 @@ func (s *Surfaces) SetTheme(theme Theme) error {
 	s.Emit("theme", theme)
 	// A view receives the theme after its ready message, so only the views with a ready document are posted to.
 	s.postThemeToViews()
+	s.postThemeToPluginHosts()
 	return nil
 }
 

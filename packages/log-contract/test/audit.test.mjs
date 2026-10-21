@@ -12,11 +12,11 @@ const catalog = {
     "native.input.key_down": { layer: "native", class: "input", level: "info", fields: { keyCode: "number" } },
     "native.input.text": { layer: "native", class: "input", level: "info", cids: "required", fields: { keyCode: "number" } },
     "page.terminal.send": { layer: "page", class: "input", level: "info", fields: {} },
-    "sidecar.vt.pty_write": { layer: "sidecar", class: "io", level: "info", fields: { hex: "string" } },
+    "sidecar.probe.pty_write": { layer: "sidecar", class: "io", level: "info", fields: { hex: "string" } },
     "native.record.error": { layer: "native", class: "lifecycle", level: "error", fields: { where: "string", text: "string" } },
     "log.policy": { layer: "host", class: "lifecycle", level: "info", fields: { source: "string", classes: "object" } },
   },
-  chains: { key: ["native.input.key_down", "page.terminal.send", "sidecar.vt.pty_write"] },
+  chains: { key: ["native.input.key_down", "page.terminal.send", "sidecar.probe.pty_write"] },
 };
 
 // The class of a line is the class that the catalog declares for its event; a test passes `class: undefined` to omit it.
@@ -35,7 +35,7 @@ test("a log with declared events, consecutive seq and a complete chain passes", 
     open,
     line(2, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
     line(3, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }),
-    line(4, "sidecar.vt.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }),
+    line(4, "sidecar.probe.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }),
   ].join("\n");
   assert.deepEqual(auditLog("host-b1.jsonl", text, catalog), []);
 });
@@ -131,7 +131,7 @@ test("a declared chain with a missing hop is a finding for its correlation ident
   ].join("\n");
   const findings = auditLog("host-b1.jsonl", text, catalog);
   assert.equal(findings.length, 1);
-  assert.match(findings[0].message, /chain key of b1.1 lacks sidecar.vt.pty_write/);
+  assert.match(findings[0].message, /chain key of b1.1 lacks sidecar.probe.pty_write/);
 });
 
 test("a chain ends at an error event that carries its correlation identifier", () => {
@@ -355,7 +355,7 @@ test("seq continues across the main file and the debug file of one process", () 
 
 test("the files of different processes have separate seq, and a file name outside the pattern is an error", () => {
   const host = { file: "host-1-2.jsonl", text: generation(1, 3) };
-  const sidecar = { file: "vt-3-4.jsonl", text: generation(1, 2, "b2") };
+  const sidecar = { file: "probe-3-4.jsonl", text: generation(1, 2, "b2") };
   assert.deepEqual(auditLogs([host, sidecar], catalog), []);
   assert.throws(() => auditLogs([{ file: "other.log", text: generation(1, 2) }], catalog), /other\.log: not an event file name/);
 });
@@ -376,11 +376,11 @@ test("the chains of the files of one configuration folder join, so a hop in a si
     debugOn(2),
     line(3, "native.input.key_down", { keyCode: 36 }, { cids: ["b1.1"] }),
     line(4, "page.terminal.send", {}, { cids: ["b1.1"], layer: "page" }));
-  const sidecar = lines(line(1, "log.open", { schema: 2, pid: 8, role: "vt", boot: "b2" }),
-    line(2, "sidecar.vt.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }));
-  assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }, { file: "vt-3-4.jsonl", text: sidecar }], catalog), []);
+  const sidecar = lines(line(1, "log.open", { schema: 2, pid: 8, role: "probe", boot: "b2" }),
+    line(2, "sidecar.probe.pty_write", { hex: "0d" }, { cids: ["b1.1"], layer: "sidecar" }));
+  assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }, { file: "probe-3-4.jsonl", text: sidecar }], catalog), []);
   assert.deepEqual(auditLogs([{ file: "host-1-2.jsonl", text: host }], catalog), [
-    { file: "host-1-2.jsonl", line: 3, message: "chain key of b1.1 lacks sidecar.vt.pty_write" },
+    { file: "host-1-2.jsonl", line: 3, message: "chain key of b1.1 lacks sidecar.probe.pty_write" },
   ]);
 });
 

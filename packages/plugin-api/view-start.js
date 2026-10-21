@@ -1,4 +1,4 @@
-// The injected document-start script of a view page (docs/plans/plugin-processes.md, rule 4). The application injects this file's
+// The injected document-start script of a view page (docs/spec/plugin-processes.md, rule 4). The application injects this file's
 // text into each view configuration before any page script runs. It has no import, so it runs as a plain script.
 //
 // The script posts the ready message with the document identifier of the page through the sok-view handler. It adds the

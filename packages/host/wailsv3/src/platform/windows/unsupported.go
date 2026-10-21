@@ -229,6 +229,10 @@ func (implementation) CreateDocument(unsafe.Pointer, string, string, string, str
 	return nil, unsupported("document view")
 }
 
+func (implementation) CreatePluginHost(unsafe.Pointer, string, string, string, string, func(string)) (unsafe.Pointer, error) {
+	return nil, unsupported("plugin host web view")
+}
+
 func (implementation) SetViewMessage(unsafe.Pointer, func(string)) error {
 	return unsupported("view channel")
 }

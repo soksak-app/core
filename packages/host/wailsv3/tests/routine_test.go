@@ -104,14 +104,20 @@ const routineNoWriterChild = "SOKSAK_ROUTINE_NO_WRITER_CHILD"
 // contract: log.panic.without-writer-is-written-to-the-standard-error
 func TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull(t *testing.T) {
 	if os.Getenv(routineNoWriterChild) != "" {
-		// No writer opens, so the entrance ends the process by the bounded wait; reaching the end of the wait is the failure.
+		// No writer opens in this process; the entrance ends the process after the short writer deadline.
+		host.PanicWriterDeadline = 100 * time.Millisecond
+		// Reaching the end of the wait is the failure.
 		routine.Go("probe", func() { panic("the lock directory cannot be read") })
 		time.Sleep(10 * time.Second)
 		os.Exit(4)
 	}
 	command := exec.Command(os.Args[0], "-test.run=^TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull$")
 	command.Env = append(os.Environ(), routineNoWriterChild+"=1")
+	started := time.Now()
 	output, err := command.CombinedOutput()
+	if elapsed := time.Since(started); elapsed >= 2*time.Second {
+		t.Fatalf("the child ended after %v; the writer deadline of the test must not be waited in real time", elapsed)
+	}
 	var ended *exec.ExitError
 	if !errors.As(err, &ended) || ended.ExitCode() != 2 {
 		t.Fatalf("child ended with %v, output %q", err, output)

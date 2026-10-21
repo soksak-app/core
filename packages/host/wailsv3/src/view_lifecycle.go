@@ -7,7 +7,7 @@ import (
 )
 
 // viewRestartLimit is the number of failures of one view surface within viewRestartWindow that stops its restarts
-// (docs/plans/plugin-processes.md, rule 5, pass value (vi)).
+// (docs/spec/plugin-processes.md, rule 5, pass value (vi)).
 const viewRestartLimit = 4
 
 // viewRestartWindow is the sliding window of the failures of one view surface. A failure older than the window is not counted.

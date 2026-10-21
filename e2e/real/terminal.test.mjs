@@ -730,7 +730,7 @@ for (const app of Object.values(APPS)) {
     await read("SHIFT", "\\033[?1002h\\033[?1006h", 1, "\\033[?1002l\\033[?1006l");
     const before = (await s.get("terminal.session", surface)).selectionReleases;
     // A selection covers a cell only when the pointer passes the middle of that cell, so the press happens near the left edge of the first cell and the release passes the middle of the last cell
-    // (docs/spec/terminal-runtime.md).
+    // (docs/spec/persistent-services.md).
     const from = { ...cellPoint(origin, session, 0, row), x: cellPoint(origin, session, 0, row).x - 0.3 * session.cellWidth };
     const to = { ...cellPoint(origin, session, 4, row), x: cellPoint(origin, session, 4, row).x + 0.3 * session.cellWidth };
     const steps = [{ type: "move", ...from, modifiers: ["shift"] }, { type: "down", ...from, modifiers: ["shift"] }];

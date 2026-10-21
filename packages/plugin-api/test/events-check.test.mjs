@@ -165,7 +165,7 @@ test('the message of a finding names the file, the line and the rule', () => {
   assert.equal(outside.message, 'a.go:4: go.go-statement is outside its entrance files');
 });
 
-test('a lock result that is matched, mapped, unwrapped or dropped is a finding of the recovery rule, and a recovered lock is not', () => {
+test('a lock result or a condition wait that is matched, mapped, unwrapped or dropped is a finding of the recovery rule, and a recovered lock, a method of the type and a process wait are not', () => {
   const source = [
     'fn f() {',
     '    if let Ok(mut a) = state.lock() {',
@@ -178,12 +178,24 @@ test('a lock result that is matched, mapped, unwrapped or dropped is a finding o
     '    }',
     '    // default: the state is only read, and the panic hook records the panic that poisoned the lock.',
     '    let z = state.lock().unwrap_or_else(PoisonError::into_inner);',
+    '    let m = self.read()?;',
+    '    let n = match self.read() {',
+    '        Ok(n) => n,',
+    '    };',
+    '    guard = wake.wait(guard).expect("the guard");',
+    '    let (guard, _) = wake',
+    '        .wait_timeout(guard, left)',
+    '        .unwrap();',
+    '    let status = child.wait()?;',
+    '    // default: the guard is only read, and the panic hook records the panic that poisoned the lock.',
+    '    guard = wake.wait(guard).unwrap_or_else(PoisonError::into_inner);',
     '}',
     '',
   ].join('\n');
   const findings = checker.censusFindings(new Map([['a.rs', source]]), noConfig()).filter(({ rule }) => rule === 'rs.lock-result');
   assert.deepEqual(findings.map(({ file, line, rule }) => `${file}:${line} ${rule}`), [
     'a.rs:2 rs.lock-result', 'a.rs:5 rs.lock-result', 'a.rs:6 rs.lock-result', 'a.rs:7 rs.lock-result',
+    'a.rs:16 rs.lock-result', 'a.rs:18 rs.lock-result',
   ]);
 });
 

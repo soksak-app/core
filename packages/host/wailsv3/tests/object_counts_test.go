@@ -112,7 +112,7 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 }
 
 // A surface is a sidecar session only of the sidecars to which it sent: a surface of the same owner that sent nothing,
-// such as a browser surface beside a terminal surface, is no session. The Wails host sends nothing to a sidecar for a
+// such as a browser surface beside another surface, is no session. The Wails host sends nothing to a sidecar for a
 // surface on a page reload.
 // contract: diagnostics.objects.sidecar-sessions-agree
 func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {

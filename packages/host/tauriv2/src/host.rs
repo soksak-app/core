@@ -13,6 +13,8 @@
 // macro.
 #![recursion_limit = "256"]
 
+use std::sync::PoisonError;
+
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -65,6 +67,14 @@ pub mod page_process;
 pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
+pub mod plugin_host;
+pub mod plugin_host_channel;
+#[cfg(test)]
+#[path = "plugin_host_channel_test.rs"]
+mod plugin_host_channel_test;
+#[cfg(test)]
+#[path = "plugin_host_test.rs"]
+mod plugin_host_test;
 pub mod plugins;
 pub mod presentation_wait;
 #[cfg(feature = "diagnostics")]
@@ -300,6 +310,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .plugin(tauri_plugin_deep_link::init())
         .manage(windows::Windows::default())
         .manage(exposure::Exposure::default())
+        .manage(plugin_host::PluginHostStates::default())
+        .manage(plugin_host::PluginHostRestarts::default())
         .plugin(endpoint)
         .manage(surfaces::Background)
         // The main page is fetched with a scheme that knows the webview that requested the start document
@@ -382,7 +394,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     |_| "the configuration directory of installed plugins is already set",
                 )?;
                 // The core root of a view serves the core files from the bundled frontend, which the page reads too
-                // (docs/plans/plugin-processes.md, rule 4).
+                // (docs/spec/plugin-processes.md, rule 4).
                 let core_root_frontend = std::sync::Arc::clone(&core_frontend);
                 // Each view configuration runs the view channel script of the bundled frontend before its page
                 // (docs/spec/native-surfaces.md#view-surfaces).
@@ -501,7 +513,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     .state::<windows::Windows>()
                     .update
                     .lock()
-                    .expect("pending update")
+                    // default: a lock that a panicking thread poisoned still holds the pending update, which the exit
+                    // takes; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
                     .take();
                 if let Some(pending) = update {
                     // The command waits for the end of this process, so it starts here, before the flush that stores its event
@@ -516,7 +530,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     .state::<LogIndexStop>()
                     .0
                     .lock()
-                    .expect("the stop of the log index")
+                    // default: a lock that a panicking thread poisoned still holds the stop of the log index, which the
+                    // exit takes; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
                     .take()
                 {
                     stop();
@@ -528,7 +544,9 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     app.state::<LogPolicyStop>()
                         .0
                         .lock()
-                        .expect("the stop of the policy watch")
+                        // default: a lock that a panicking thread poisoned still holds the stop of the policy watch,
+                        // which the exit takes; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner)
                         .take(),
                 );
                 if let Err(error) = event_log::flush_event_log(

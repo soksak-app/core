@@ -3,6 +3,8 @@
 //! Each command calls a function of the module of its role. The command names and the argument names must match the
 //! calls of the page runtime (`apps/tauriv2/runtime/index.js`).
 
+use std::sync::PoisonError;
+
 use serde_json::value::RawValue;
 
 use crate::arguments::Argument;
@@ -363,7 +365,7 @@ struct ReplaceRequest {
     sidecar: String,
 }
 
-/// Replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates). The call waits
+/// Replaces the outdated persistent service of a sidecar (docs/spec/persistent-services.md#updates). The call waits
 /// for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result<(), String> {
@@ -372,7 +374,7 @@ fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result
 }
 
 /// Closes the sessions of the surfaces that no layout holds in the persistent sidecar service and returns the number
-/// closed (docs/spec/terminal-runtime.md). It waits for the service, so it is an async command.
+/// closed (docs/spec/persistent-services.md). It waits for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_retain(
     window: Window,
@@ -508,6 +510,38 @@ fn view_event(webview: Webview, request: Argument<documents::ViewEventRequest>) 
 fn view_reply(webview: Webview, request: Argument<documents::ViewReply>) -> Result<(), String> {
     let Argument(request) = request;
     documents::view_reply(&webview, request)
+}
+
+/// Receives the reply of the main page to a call request of a plugin host (docs/spec/plugin-host.md#channel).
+#[tauri::command(async)]
+fn plugin_host_reply(
+    webview: Webview,
+    request: Argument<crate::plugin_host_channel::PluginHostReply>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_channel::plugin_host_reply(&webview, request)
+}
+
+/// Posts a request of the main page to a plugin host, such as the pull of a declared status
+/// (docs/spec/plugin-host.md#declared-ui-snapshots).
+#[tauri::command(async)]
+fn plugin_host_request(
+    webview: Webview,
+    request: Argument<crate::plugin_host_channel::PluginHostRequest>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_channel::plugin_host_request(&webview, request)
+}
+
+/// Posts an event of the main page to a plugin host, such as the acknowledgement of a declared UI snapshot
+/// (docs/spec/plugin-host.md#declared-ui-snapshots).
+#[tauri::command(async)]
+fn plugin_host_event(
+    webview: Webview,
+    request: Argument<crate::plugin_host_channel::PluginHostEvent>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_channel::plugin_host_event(&webview, request)
 }
 
 /// Sets the page zoom of a document region as the text scale.
@@ -669,7 +703,9 @@ fn app_update_apply(
         .state::<crate::windows::Windows>()
         .update
         .lock()
-        .expect("pending update") = Some(crate::app_update::PendingStart {
+        // default: a lock that a panicking thread poisoned still holds the pending update, which the call replaces; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = Some(crate::app_update::PendingStart {
         command,
         relaunch: false,
     });

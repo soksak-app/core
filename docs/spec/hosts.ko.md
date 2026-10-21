@@ -102,6 +102,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 입력 | 입력 감시와 해제. Tauri는 포인터 라우팅에 웹뷰를 등록하는 연산도 가진다 |
 | 캡처 | 창 캡처: 대상 지정, 시작, 첫 프레임 대기, 종료 |
 | 문서 영역 | 표면 웹뷰 안의 생성, 이동, 기록 동작, 여백에 따른 배치, 대화 상자 흐림, 닫기 |
+| Plugin host | 창 자체에 붙는 [plugin host](plugin-host.ko.md) web view의 생성, 숨은 배치, 없앰 |
 | 종료 | 종료 신호(SIGTERM, SIGINT, SIGHUP). 첫 신호는 호스트의 종료 요청을 부르고, 그 뒤의 신호는 기본 동작으로 프로세스를 끝낸다. quit 는 창이 저장한 뒤 모든 창의 웹 프로세스를 끝낸다 — [프로세스 생명주기](#프로세스-생명주기) |
 | 종료 요청 | 운영체제의 종료 요청(Dock, 로그아웃, 재시작, 다른 프로그램이 보내는 `kAEQuitApplication` Apple event)은 준비된 창의 저장을 포함해 `host.quit`과 같은 종료를 실행하고, 호스트는 저장과 종료 단계를 마친 뒤 프로세스가 끝나기 직전에 그 요청에 오류 없이 답한다. 창이 수정된 탭을 지키면 애플리케이션은 종료하지 않는다. 페이지가 `windowCloseKept`를 알리고([수정된 탭을 지키면 종료가 끝난다](#프로세스-생명주기)) 호스트는 대기 중인 각 요청에 `userCanceledErr`로 답하므로, Dock, 로그아웃, 다른 프로그램이 애플리케이션이 남는다는 것을 안다. 애플리케이션 프레임워크의 자체 종료 경로는 쓰지 않는다. Wails 프레임워크는 미룬 종료에 취소로 답해 로그아웃도 멈추고, Tauri 프레임워크는 페이지 저장을 기다리지 않고 끝나기 때문이다 |
 | 창 동작 | 창을 만들기 전에 창 크기 변경 애니메이션 길이 줄이기 |
@@ -125,6 +126,8 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 비동기 시작·대리자 종료 실패는 현재 스트림을 식별할 때만 녹화 오류를 바꾼다. 이전 스트림의 지연 실패는 스트림 동일성과 함께 보고하며 이후 녹화 오류·첫 프레임 준비를 바꾸지 않는다. 시작 완료는 전달될 때까지 원래 스트림 동일성을 유지하며 교체된 스트림의 동일성을 자신의 것으로 읽지 않는다.
 
 웹뷰 연산은 DOM 평면을 창의 공통 표면 컨테이너에 직접 붙이지 않고 `SurfaceHost`에 붙인다. 문서·그림 연산은 그 호스트 네이티브 평면의 하위 뷰를 만든다. 플랫폼 인터페이스는 영역을 `SurfaceHost`의 형제로 배치하는 연산을 노출하지 않는다. 두 언어 호스트는 플랫폼 코드를 호출하기 전에 [표면 합성](surface-composition.ko.md)을 검증한다.
+
+plugin host web view는 플랫폼이 `SurfaceHost`가 아니라 창 자체에 붙이는 유일한 web view다. surface를, frame을, region을 가지지 않으며 아무것도 그리지 않는다([plugin host](plugin-host.ko.md)). darwin이 이 연산을 구현하며, 제공할 수 없는 플랫폼은 플랫폼 인터페이스의 모든 연산이 그러하듯 `platform/<os>/unsupported.*`의 오류로 요청을 실패시킨다.
 
 두 호스트에서 place는 답하기 전에 더 이상 나열하지 않는 각 표면의 문서 영역과 그림 영역을 모두 닫는다(Wails에서 `closeSurfaceDocuments`와 `images.CloseSurface`, Tauri에서 `documents::close_surface`와 `images::close_surface`). 그 뒤 page는 영역을 detach하지 않고 그 표면을 release한다([region lifetime](native-surfaces.ko.md#region-lifetime)).
 
@@ -159,7 +162,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H10 | 없음 | `src/platform/darwin/file_watch.rs` | Wails host는 library `fsnotify`로 정책 파일을 감시한다. 정책 파일 감시를 충족하는 Rust library가 없으므로(`notify` 8.2의 FSEvents watcher는 writer가 하위 폴더에 덧붙이는 동안 폴더의 event를 전달하지 않았고, kqueue watcher는 rename을 다음 kernel event까지 전달하지 않았으며, `kqueue` crate 1.2에는 막힌 대기를 끝낼 user event가 없다) Tauri host는 macOS에서 kqueue로 감시한다 |
 | H11 | `src/platform/darwin/input_source_await.go` | 없음 | C에 함수를 내보내는 Go 파일은 preamble에 C 함수를 정의할 수 없으므로, `sp_input_source_await`의 block에서 내보낸 callback으로 가는 다리는 별도 파일이다. Rust는 `input_source.rs`에서 closure를 block(`block2`)으로 native 계층에 넘긴다 |
 | H12 | none | `tests/support/folder.rs` | Rust 시험은 실패한 assertion이 unwind하는 동안에도 폴더를 지우고 지우기 실패를 보고하는 guard가 필요하다. `tempfile::TempDir`는 실패를 보고하지 않고 drop한다. Go 시험은 시험 뒤 폴더를 지우고 지우기가 실패하면 시험을 실패시키는 `testing.T.TempDir`를 쓰므로 Wails 호스트에는 별도 파일이 없다 |
-| H13 | none | `src/notifications_test.rs`, `src/project_removal_test.rs`, `src/exposure_status_test.rs`, `src/endpoint_lock_test.rs`, `src/surfaces_test.rs`, `src/windows_records_test.rs`, `src/sidecars_lock_test.rs`, `src/performance_lock_test.rs`, `src/workspace_lock_test.rs` | Rust host는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 권한 상태, 제거 요청, 문서 요청 relay, endpoint 연결과 구독, surface 등록부, window 기록, sidecar 전송 상태, trace switch, workspace 쓰기의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go host에는 시험할 lock 상태가 없다 |
+| H13 | none | `src/notifications_test.rs`, `src/project_removal_test.rs`, `src/exposure_status_test.rs`, `src/endpoint_lock_test.rs`, `src/surfaces_test.rs`, `src/windows_records_test.rs`, `src/sidecars_lock_test.rs`, `src/performance_lock_test.rs`, `src/workspace_lock_test.rs`, `src/debug_follow_lock_test.rs`, `src/log_query_lock_test.rs`, `src/deep_link_lock_test.rs`, `src/assets_lock_test.rs`, `src/process_lock_hook_lock_test.rs`, `src/log_policy_watch_hook_lock_test.rs`, `src/diagnostics_lock_test.rs` | Rust host는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 권한 상태, 제거 요청, 문서 요청 relay, endpoint 연결과 구독, surface 등록부, window 기록, sidecar 전송 상태, trace switch, sampler와 그 등록부, workspace 쓰기, log notice, log index의 대기 경로, deep link queue, 보고된 asset 경로, process lock hook, policy watch hook, 보류된 modal 응답의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go host에는 시험할 lock 상태가 없다 |
 | E1 | `diagnostics.heap.profile` | 없음 | 이 endpoint method는 Go runtime의 heap profile(`runtime/pprof`)을 쓴다. Rust host에는 profile할 garbage-collected heap이 없다. ID가 E로 시작하는 행은 endpoint method를 나열하고 `make host-parity-check`가 그 행을 읽는다 |
 | A1 | 내용만 다름 | 내용만 다름 | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다 |
 | A2 | 없음 | `build.rs` | Tauri는 `tauri_build::build()`를 요구한다 |
@@ -170,6 +173,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics && !dev` 단위 test에서 `capture` 요청과 release 식별자를, `dev` build는 `dev` 단위 test에서 `.dev` 식별자를, 다른 build는 `!diagnostics` test에서 사용법 오류와 release 식별자를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`와 `cfg(feature = "dev")`로 build를 검사한다 |
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
 | C4 | none | `tests/support/folder.rs` | `sok` 시험을 위한 H12와 같은 guard다. `sok`의 Go 시험은 `testing.T.TempDir`를 쓴다. 시험은 다른 패키지의 경로를 읽지 않으므로 호스트와 `sok` 시험 crate가 각자 파일을 둔다 |
+| C5 | none | `src/event_log_lock_test.rs` | `sok`의 Rust writer는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 write observer의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go writer에는 시험할 lock 상태가 없다 |
 
 ## Memory pressure
 
@@ -195,7 +199,7 @@ host의 goroutine과 스레드는 진입점으로만 시작한다. Go는 `routin
 
 **수정된 탭을 지키면 종료가 끝난다.** 종료는 준비된 창마다 닫기를 요청하고, 수정된 탭을 지킨 창의 페이지는 host 호출 `windowCloseKept`로 답한다([plugins](plugins.ko.md#탭-알림)). 그러면 host가 종료 상태를 끝낸다. 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고, WebContent process의 종료는 다시 오류 줄이 된다. `host.window`가 이 상태를 `quitting`으로 보고한다.
 
-**영속 사이드카는 애플리케이션보다 오래 살고 다시 붙는다.** 터미널 서비스는 앱 재시작과 연결 단절을 지나 세션을 유지하며, 끊긴 연결은 즉시 다시 맺고 죽은 서비스는 재스폰한다([터미널 런타임](terminal-runtime.ko.md)). 애플리케이션은 종료 시 영속 서비스를 죽이지 않는다. 두 호스트는 platform 연산 `NewSession`(Go) 또는 `new_session`(Rust)으로 영속 서비스를 새 session에서 시작하므로, 서비스는 애플리케이션의 process group이나 terminal의 signal을 받지 않는다.
+**영속 사이드카는 애플리케이션보다 오래 살고 다시 붙는다.** 영속 서비스는 앱 재시작과 연결 단절을 지나 세션을 유지하며, 끊긴 연결은 즉시 다시 맺고 죽은 서비스는 재스폰한다([영속 서비스](persistent-services.ko.md)). 애플리케이션은 종료 시 영속 서비스를 죽이지 않는다. 두 호스트는 platform 연산 `NewSession`(Go) 또는 `new_session`(Rust)으로 영속 서비스를 새 session에서 시작하므로, 서비스는 애플리케이션의 process group이나 terminal의 signal을 받지 않는다.
 
 **비영속 사이드카는 창과 함께 죽는다.** 표면 제거나 창 닫기가 닫힘을 알리고 프로세스는 채널과 함께 끝난다.
 

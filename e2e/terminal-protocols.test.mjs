@@ -244,7 +244,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(await color("19"), highlightText, "OSC 119 reset");
     await effect(s, surface, "\\033[1;1HHIGHLIGHT");
     await selectFirstCells();
-    // Without a highlight color, a selected cell is drawn on the selection background of the theme (--rail) (docs/spec/terminal-runtime.md).
+    // Without a highlight color, a selected cell is drawn on the selection background of the theme (--rail) (docs/spec/persistent-services.md).
     const selection = await selectionBackground(s);
     const [plain] = await cellBackgrounds(s, surface, [{ col: 1, row: 0 }]);
     assert.ok(isColor(plain, selection),

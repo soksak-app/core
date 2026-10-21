@@ -1,7 +1,7 @@
 package host_test
 
 // Checks the core root of a view: the core files of the view import map and the files that the granted item rule grants
-// (docs/plans/plugin-processes.md, rule 4).
+// (docs/spec/plugin-processes.md, rule 4).
 
 import (
 	"os"

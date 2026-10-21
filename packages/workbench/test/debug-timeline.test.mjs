@@ -41,16 +41,16 @@ test("the text line of each golden page is the line that the implementations of 
 });
 
 test("rows are ordered by the key of the query: time, then role, then boot, then seq, and each row once", () => {
-  const a = [row("host", "b1", 2, 20), row("host", "b1", 1, 20), row("vt", "v1", 1, 20)];
+  const a = [row("host", "b1", 2, 20), row("host", "b1", 1, 20), row("probe", "v1", 1, 20)];
   const b = [row("host", "b1", 2, 20), row("host", "b0", 9, 20), row("host", "b1", 3, 10)];
-  assert.deepEqual(mergeRows(a, b).map(rowId), ["host-b1:3", "host-b0:9", "host-b1:1", "host-b1:2", "vt-v1:1"]);
+  assert.deepEqual(mergeRows(a, b).map(rowId), ["host-b1:3", "host-b0:9", "host-b1:1", "host-b1:2", "probe-v1:1"]);
   assert.deepEqual(keyOf(a[0]), { ts_us: 20, role: "host", boot: "b1", seq: 2 });
   assert.ok(compareRows(a[1], a[0]) < 0 && compareRows(a[0], a[2]) < 0 && compareRows(a[0], a[0]) === 0);
-  assert.deepEqual(a.map(rowId), ["host-b1:2", "host-b1:1", "vt-v1:1"], "the arguments are not changed");
+  assert.deepEqual(a.map(rowId), ["host-b1:2", "host-b1:1", "probe-v1:1"], "the arguments are not changed");
 });
 
 test("the event files are the files of the logs folder that the query reads", () => {
-  for (const path of ["logs/host-1-2.jsonl", "logs/host-1-2.jsonl.3", "logs/host-1-2.debug.jsonl", "logs/host-1-2.debug.jsonl.5", "logs/host-1-2.jsonl.6", "logs/host-1-2.debug.jsonl.12", "logs/vt-v1.jsonl", "logs/sok-s1.jsonl"]) assert.ok(isEventFile(path), path);
+  for (const path of ["logs/host-1-2.jsonl", "logs/host-1-2.jsonl.3", "logs/host-1-2.debug.jsonl", "logs/host-1-2.debug.jsonl.5", "logs/host-1-2.jsonl.6", "logs/host-1-2.debug.jsonl.12", "logs/probe-v1.jsonl", "logs/sok-s1.jsonl"]) assert.ok(isEventFile(path), path);
   for (const path of ["logs/host-1-2.jsonl.0", "logs/host-1-2.jsonl.01", "logs/host-1-2.jsonl.idx", "logs/host-1-2.stderr", "logs/state-20261009T010203Z.json", "logs/captures/host-x.jsonl", "plugins/host-a.jsonl", "logs/application.log"]) assert.equal(isEventFile(path), false, path);
 });
 

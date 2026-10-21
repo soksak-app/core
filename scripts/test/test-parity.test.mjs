@@ -212,6 +212,19 @@ test("ownership audit rejects cross-owner implementation names and private paths
   assert.ok(!result.some((error) => error.includes("plugin.json")), "declaration files must connect owners");
 });
 
+test("ownership audit classifies plugins and sidecars by their name prefix, without a list of real names", { timeout: 1000 }, () => {
+  const errors = auditOwnership([
+    "packages/example/index.js",
+    "packages/example/api.js",
+  ], (file) => file.endsWith("index.js")
+    ? 'import "@soksak/plugin-probe";\nimport "@soksak/sidecar-probe";\n'
+    : 'import "@soksak/plugin-api";\n');
+  assert.deepEqual(errors, [
+    "packages/example/index.js: core implementation names plugin implementation @soksak/plugin-probe",
+    "packages/example/index.js: core implementation names sidecar implementation @soksak/sidecar-probe",
+  ]);
+});
+
 test("ownership audit does not authorize private access through a declared dependency", { timeout: 1000 }, () => {
   const errors = auditOwnership([
     "plugins/example/ui/module.js",

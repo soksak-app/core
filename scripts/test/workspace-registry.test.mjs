@@ -69,6 +69,6 @@ test("the registry releases every declared sidecar, also one that no workspace p
 
 test("a declared repository folder resolves from the main checkout, also when the script runs in a worktree", { timeout: 1000 }, () => {
   // The git common directory of a worktree under <main>/.claude/worktrees/ is <main>/.git, so the main checkout is its parent.
-  assert.equal(repositoryFolder("../plugins/browser", "/work/core/.git"), "/work/plugins/browser");
-  assert.equal(repositoryFolder("../sidecars/vt", "/work/core/.git"), "/work/sidecars/vt");
+  assert.equal(repositoryFolder("../plugins/probe", "/work/core/.git"), "/work/plugins/probe");
+  assert.equal(repositoryFolder("../sidecars/probe", "/work/core/.git"), "/work/sidecars/probe");
 });

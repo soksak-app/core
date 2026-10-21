@@ -265,6 +265,47 @@ func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) error {
 	}
 	return s.pushViewEvent(req)
 }
+
+// PluginHostReply receives the reply of the main page to a call request of a plugin host (docs/spec/plugin-host.md#channel).
+func (h *Host) PluginHostReply(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PluginHostReplyRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.answerPluginHostCall(req)
+}
+
+// PluginHostRequest receives a request of the main page to a plugin host, such as the pull of a declared status
+// (docs/spec/plugin-host.md#declared-ui-snapshots).
+func (h *Host) PluginHostRequest(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PluginHostRequestRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.pushPluginHostRequest(req)
+}
+
+// PluginHostEvent receives an event that the main page pushes to a plugin host, such as the acknowledgement of a declared
+// UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
+func (h *Host) PluginHostEvent(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PluginHostEventRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.pushPluginHostEvent(req)
+}
 func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {
@@ -426,7 +467,7 @@ type RetainResult struct {
 }
 
 // SidecarsRetain closes, in the persistent sidecar service, the sessions of surfaces that no layout holds
-// (docs/spec/terminal-runtime.md).
+// (docs/spec/persistent-services.md).
 func (h *Host) SidecarsRetain(ctx context.Context, reqJSON json.RawMessage) (RetainResult, error) {
 	req, err := argument[RetainRequest]("request", reqJSON)
 	if err != nil {
@@ -452,7 +493,7 @@ type ReplaceRequest struct {
 	Sidecar string `json:"sidecar"`
 }
 
-// SidecarsReplace replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates).
+// SidecarsReplace replaces the outdated persistent service of a sidecar (docs/spec/persistent-services.md#updates).
 // It waits for the service, so the call can take as long as the stop timeout.
 func (h *Host) SidecarsReplace(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[ReplaceRequest]("request", reqJSON)

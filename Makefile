@@ -29,7 +29,7 @@ push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check migrations-check
 	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
-	@node --test scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs
+	@node scripts/gate-tests.mjs scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
@@ -53,13 +53,14 @@ page-memory:
 	@case "$(BUILD)" in ''|release|debug) ;; *) echo "page-memory requires BUILD=release|debug" >&2; exit 2;; esac
 	@node scripts/measure-page-memory.mjs --sok $(if $(filter debug,$(BUILD)),target/debug/soksak-$(APP).app,target/release/$(APP)/soksak.app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --idle-minutes $(or $(MINUTES),60) --reloads $(or $(RELOADS),20)
 
-# Repeats the fixed operations of scripts/measure-object-counts.mjs REPETITIONS times against a running diagnostic build and prints the object counts
-# and footprints per repetition (docs/plans/document-streams-and-memory.md). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
+# Repeats the operations of scripts/measure-object-counts.mjs for the surface plugins PLUGINS REPETITIONS times against a running diagnostic build and prints
+# the object counts and footprints per repetition (docs/plans/document-streams-and-memory.md). The diagnostic methods exist only in diagnostic builds, so BUILD defaults to debug.
 object-counts:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "object-counts requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...' [BUILD=release|debug] [REPETITIONS=20]" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "object-counts requires CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(strip $(PLUGINS))" in '') echo "object-counts requires PLUGINS='ID...', the surface plugins whose tabs it opens" >&2; exit 2;; esac
 	@case "$(BUILD)" in ''|debug|release) ;; *) echo "object-counts requires BUILD=release|debug" >&2; exit 2;; esac
-	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" --repetitions $(or $(REPETITIONS),20)
+	@node scripts/measure-object-counts.mjs --sok $(if $(filter release,$(BUILD)),target/release/$(APP)/soksak.app,target/debug/soksak-$(APP).app)/Contents/MacOS/sok --config-dir "$(CONFIG)" $(foreach plugin,$(PLUGINS),--plugin $(plugin)) --repetitions $(or $(REPETITIONS),20)
 
 # Has the main page of a running diagnostic build send CALLS host calls ROUNDS times and prints the footprint of its page process before the calls, after
 # them and after a collection (scripts/measure-host-calls.mjs); MINUTES=M waits M minutes without input instead of the calls;
@@ -83,7 +84,7 @@ hidden-tab-memory:
 # Measures the share of the diagnostics in the memory of a running host: with the debug switch on and then off, it runs five repetitions of
 # object-counts and prints the footprint of the host process (docs/operations/examples.md).
 trace-share:
-	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR" >&2; exit 2;; esac
+	@case "$(APP)" in wailsv3|tauriv2) ;; *) echo "trace-share requires APP=wailsv3|tauriv2 CONFIG=DIR PLUGINS='ID...'" >&2; exit 2;; esac
 	@case "$(CONFIG)" in '') echo "trace-share requires CONFIG=DIR" >&2; exit 2;; esac
 	@sok=target/debug/soksak-$(APP).app/Contents/MacOS/sok; \
 	  pid=$$(pgrep -f "soksak-$(APP).app/Contents/MacOS/soksak-$(APP) --config-dir $(CONFIG)" | head -1); \
@@ -91,7 +92,7 @@ trace-share:
 	  for on in true false; do \
 	    echo "start debug=$$on"; \
 	    $$sok core.settings.debug --config-dir "$(CONFIG)" --params "{\"on\":$$on}" > /dev/null || exit 1; \
-	    $(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" BUILD=debug REPETITIONS=5 > /dev/null 2>&1 || exit 1; \
+	    $(MAKE) --no-print-directory object-counts APP=$(APP) CONFIG="$(CONFIG)" PLUGINS="$(PLUGINS)" BUILD=debug REPETITIONS=5 > /dev/null 2>&1 || exit 1; \
 	    echo "end debug=$$on host $$pid $$(footprint -p $$pid | grep -o 'Footprint: [0-9.]* [KMG]*B' | head -1)"; \
 	  done
 
@@ -147,15 +148,14 @@ e2e-registry-tls:
 browser-example-check: browser-frontend
 	@pnpm -F @soksak/browser check
 
-# The browser example has no host, so BROWSER_PLUGINS are installed into BROWSER_CONFIG and the staging provides that installation as a host does
-# (the staging layout of docs/spec/plugins.md).
+# The browser example has no host, so the plugins of the pack that apps/browser/environment.json names in `install` are installed into
+# BROWSER_CONFIG and the staging provides that installation as a host does (the staging layout of docs/spec/plugins.md).
 BROWSER_CONFIG = target/browser-config
-BROWSER_PLUGINS = terminal browser
 
 browser-frontend: registry
 	@rm -rf $(BROWSER_CONFIG)
 	@target/debug/sok registry use $(REGISTRY)/index.json --config-dir $(BROWSER_CONFIG)
-	@for id in $(BROWSER_PLUGINS); do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
+	@ids=$$(node -e "const env = require('$(CURDIR)/apps/browser/environment.json'); const pack = require('$(CURDIR)/$(REGISTRY)/index.json').packs.find((p) => p.name === env.install); if (!pack) throw new Error('apps/browser/environment.json install names no pack: ' + env.install); console.log(pack.plugins.join(' '))") || exit 1; for id in $$ids; do target/debug/sok plugin install $$id --config-dir $(BROWSER_CONFIG) || exit 1; done
 	@pnpm -F @soksak/browser exec soksak-stage build --installed $(CURDIR)/$(BROWSER_CONFIG)
 
 browser-example: browser-frontend
@@ -184,76 +184,50 @@ language-test: native-darwin
 # Runs each test of a Rust package alone in a new process. Finds tests that depend on state another test created or on test order.
 # Reports the test name at the first failure. MANIFEST is the Cargo.toml of the workspace that holds the package and FEATURES is the --features value of cargo.
 MANIFEST ?= Cargo.toml
+# The limit in seconds of one Rust test in rust-tests-alone and rust-repeat; the runner kills a test at it (scripts/rust-tests.mjs).
+TEST_TIMEOUT ?= 120
+# The limit in seconds of one benchmark in benchmark-rust and benchmark-go; the runner kills a benchmark at it (scripts/benchmarks.mjs).
+BENCH_TIMEOUT ?= 300
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
-	@names=$$(cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --list 2>/dev/null | sed -n 's/: test$$//p'); \
-	  count=0; for name in $$names; do \
-	    count=$$((count + 1)); \
-	    cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --exact "$$name" > /dev/null 2>&1 \
-	      || { echo "FAIL: $(PACKAGE) $$name fails when it runs alone (test $$count)" >&2; exit 1; }; \
-	  done; \
-	  [ $$count -gt 0 ] || { echo "rust-tests-alone found no tests in $(PACKAGE)" >&2; exit 1; }; \
-	  echo "$(PACKAGE): $$count tests pass alone"
+	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --count 1 --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
 # Measures the cost of the recorder. It is not a test: it prints numbers and asserts nothing. The Rust writer is measured with cargo bench and the native ring with the benchmark of native/darwin.
 benchmark-rust:
-	@$(CARGO_ENV) cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark --bench event_native_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_log_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_native_benchmark
 
 benchmark-go:
-	@$(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" -run '^$$' -bench 'EventLogEmit|NativePull' -benchtime 1x -v ./packages/host/wailsv3/tests
+	@$(GO_ENV) node scripts/benchmarks.mjs go ./packages/host/wailsv3/tests 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
 
 rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "rust-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
-	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    if [ -n "$(TEST)" ]; then cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --exact "$(TEST)" > "$$output" 2>&1; \
-	    else cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) > "$$output" 2>&1; fi \
-	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    if [ -n "$(TEST)" ] && ! grep -q "1 passed" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test named $(TEST)" >&2; exit 1; fi; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
+	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
-# Runs the tests of a Go package COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
-# A run with no built test file (build tag) or no test of a matching name fails.
-# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
+# Runs the tests of the Go packages of PACKAGE COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
+# Each test of each package is its own process with the limit TEST_TIMEOUT, named when it starts and reported with its result and elapsed time (scripts/go-tests.mjs).
+# A pattern whose packages have no test files fails when none has test files; a run in which no test matches fails.
+# This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
 go-repeat:
 	@case "$(PACKAGE)" in '') echo "go-repeat requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "go-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@cgo=$$(node scripts/go-repeat-inputs.mjs '$(PACKAGE)' '$(TAGS)') || exit 1; \
-	  output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    CGO_CFLAGS="$(GO_CFLAGS) $$cgo" go test -json -count=1 $(if $(TAGS),-tags '$(TAGS)') -ldflags "$(GO_LINK)" $(if $(TEST),-run '$(TEST)') $(PACKAGE) > "$$output" 2>&1; \
-	    status=$$?; \
-	    node scripts/go-repeat-result.mjs "$$output" $$status '$(PACKAGE)' '$(TEST)' '$(TAGS)' \
-	      || { echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
+	  CGO_CFLAGS="$(GO_CFLAGS) $$cgo" node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LINK)'
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
-# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
-# The executed tests are counted in the TAP result, which is machine-readable. The human-readable output carries color codes depending on the environment, and when no test matches the name
-# the file itself is reported as one passing result, so only results whose title matches the name pattern and that are not skipped are counted.
-node-repeat: SHELL := /bin/bash -o pipefail
+# Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts
+# (scripts/node-repeat.mjs). Each test of a repeat gets the same limit through --test-timeout.
+# This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
+# A repeat fails when no passed test matches the pattern.
 node-repeat:
 	@case "$(FILE)" in '') echo "node-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "node-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    echo "START: $(FILE) $(NAME) run $$run of $(COUNT)"; \
-	    node --test --experimental-test-module-mocks --test-reporter=tap --test-name-pattern='$(NAME)' $(FILE) 2>&1 | tee "$$output" \
-	      || { echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    sed -nE 's/^[[:space:]]*ok [0-9]+ - //p' "$$output" | grep -v '# SKIP' | grep -qE -- '$(NAME)' \
-	      || { echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(FILE) $(NAME): $(COUNT) of $(COUNT) runs pass"
+	@node scripts/node-repeat.mjs --file '$(FILE)' --name='$(NAME)' --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs COMMAND with a temporary folder of its own and fails when it leaves a soksak- entry there, except the window-check
 # configuration folders soksak-check-* (docs/operations/examples.md#temporary-folders): make temp-audit COMMAND="pnpm test"

@@ -19,7 +19,7 @@ test("each test reports its start, its end and its elapsed time, and a failure c
   ], { concurrency: 1, defaultTimeoutMs: 5000 });
   assert.equal(results.get("a::passes").status, "pass");
   assert.equal(results.get("a::fails").status, "fail");
-  assert.match(lines.find((line) => line.startsWith("RUN  a::passes")), /^RUN  a::passes \(1 running\)$/);
+  assert.match(lines.find((line) => line.startsWith("RUN  a::passes")), /^RUN  a::passes \(1 running, limit 5\.000s\)$/);
   assert.match(lines.find((line) => line.startsWith("PASS a::passes")), /^PASS a::passes \d+\.\d{3}s$/);
   assert.match(lines.find((line) => line.startsWith("FAIL a::fails")), /^FAIL a::fails \d+\.\d{3}s exit 3$/);
   assert.ok(lines.includes("  the detail"), `the output of the failed test is missing: ${JSON.stringify(lines)}`);
@@ -33,14 +33,14 @@ test("a test over its own limit is killed and reported as a timeout without hold
   assert.equal(results.get("slow").status, "timeout");
   assert.equal(results.get("quick").status, "pass");
   // The quick test starts while the hanging test is in flight; the running count of its RUN line shows it.
-  assert.match(lines.find((line) => line.startsWith("RUN  quick")), /^RUN  quick \(2 running\)$/);
+  assert.match(lines.find((line) => line.startsWith("RUN  quick")), /^RUN  quick \(2 running, limit 5\.000s\)$/);
   assert.match(lines.find((line) => line.startsWith("TIME slow")), /^TIME slow \d+\.\d{3}s exceeded 0\.300s and was killed$/);
 });
 
 test("the pool runs at most `concurrency` tests at once and runs them in parallel", async () => {
   const tests = ["a", "b", "c", "d"].map((name) => node(name, sleeping(300)));
   const { lines } = await run(tests, { concurrency: 2, defaultTimeoutMs: 5000 });
-  const running = lines.filter((line) => line.startsWith("RUN  ")).map((line) => Number(/\((\d+) running\)/.exec(line)[1]));
+  const running = lines.filter((line) => line.startsWith("RUN  ")).map((line) => Number(/\((\d+) running/.exec(line)[1]));
   // The running counts of the RUN lines show the overlap; elapsed time depends on the machine load.
   assert.equal(Math.max(...running), 2);
 });

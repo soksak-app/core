@@ -59,7 +59,7 @@ export const PAGE_IMPORTS = Object.freeze({
 });
 
 /**
- * The imports of the import map of a view page. A view is served from the core root (docs/plans/plugin-processes.md, rule 4),
+ * The imports of the import map of a view page. A view is served from the core root (docs/spec/plugin-processes.md, rule 4),
  * so its import map names the core targets at sok://core, and it has no entry for runtime/ or the workbench.
  */
 export const VIEW_IMPORTS = Object.freeze({
@@ -69,7 +69,7 @@ export const VIEW_IMPORTS = Object.freeze({
   "@soksak/shared/": "sok://core/shared/",
 });
 
-/** The entry files of the view import closure, by package name (docs/plans/plugin-processes.md, rule 4). */
+/** The entry files of the view import closure, by package name (docs/spec/plugin-processes.md, rule 4). */
 const VIEW_CLOSURE_ENTRIES = Object.freeze({
   "@soksak/plugin-api": Object.freeze(["index.js", "view.js"]),
   "soksak": Object.freeze(["dist/index.js"]),
@@ -545,7 +545,7 @@ export function validateManifest(manifest) {
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
-  // The core root is the reserved host `core` (docs/plans/plugin-processes.md rule 4), so no plugin may take that id.
+  // The core root is the reserved host `core` (docs/spec/plugin-processes.md rule 4), so no plugin may take that id.
   if (id === "core") throw new Error("plugin.json: plugin id core is reserved for the core root");
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
@@ -847,12 +847,15 @@ export function validateSidecar(sidecar) {
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars", "starter", "registry"]);
+  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars", "starter", "install", "registry"]);
   if (environment.sidecars !== undefined && typeof environment.sidecars !== "boolean") {
     throw new Error("environment.json: sidecars must be true or false");
   }
   if (environment.starter !== undefined && !isText(environment.starter)) {
     throw new Error("environment.json: starter must be a pack name");
+  }
+  if (environment.install !== undefined && !isText(environment.install)) {
+    throw new Error("environment.json: install must be a pack name");
   }
   // The default registry is the index location that the first run determines (docs/spec/installation.md#fetching).
   if (environment.registry !== undefined
