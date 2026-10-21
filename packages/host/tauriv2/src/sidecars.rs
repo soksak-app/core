@@ -2511,7 +2511,7 @@ impl<O: Owner> Core<O> {
                 }
             })();
             let mut was_current = false;
-            let mut stopping = false;
+            let stopping;
             let mut owned = Vec::new();
             let mut changed = None;
             {
