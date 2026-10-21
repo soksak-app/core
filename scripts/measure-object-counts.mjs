@@ -1,11 +1,11 @@
 // Measures the object counts of a window of a running application before and after repeated operations (docs/plans/document-streams-and-memory.md,
-// Main application). It reads diagnostics.objects of the window after the counts settle, runs the fixed list of operations N times, settles after
+// Main application). It reads diagnostics.objects of the window after the counts settle, runs the list of operations N times, settles after
 // each operation, and reads the counts and the footprint of each process again. The measure function asserts nothing: it logs one entry per
 // repetition, {repetition, counts, footprint}, and then one summary per count, {count, baseline, values, grows}, where grows is true when the count
 // rises in every repetition after the second. A count that grows is a defect for the owning check to judge.
 // `make object-counts` runs it.
 //
-//   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR [--repetitions N]
+//   node scripts/measure-object-counts.mjs --sok PATH --config-dir DIR --plugin ID [--plugin ID]... [--repetitions N]
 import { spawn, execFile, execFileSync } from "node:child_process";
 import { connect } from "@soksak/client";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -17,8 +17,14 @@ import { parseArgs } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-/** The operations of one repetition, in order. Each is a step of the CLI part, which runs its declared commands (see operate). */
-export const OPERATIONS = ["tab.terminal", "tab.browser", "card.split", "plugins.apply", "project.window"];
+/**
+ * The operations of one repetition, in order, for the installed surface plugins that the measurement names: one tab of each
+ * plugin, then a split with the first plugin, a plugin apply and a project window. Each is a step of the CLI part, which runs
+ * its declared commands (see operate).
+ */
+export function operationsFor(plugins) {
+  return [...plugins.map((plugin) => `tab.${plugin}`), "card.split", "plugins.apply", "project.window"];
+}
 
 /** The baseline reads at most this many times before it fails, so a count that keeps changing ends the measurement. */
 const BASELINE_MAX_READINGS = 10;
@@ -86,7 +92,8 @@ async function footprintOf(status, footprint) {
  * the bytes of a process, operate(name) runs one operation, settle() waits for the status notification that ends the last operation, and log(entry)
  * receives each entry. Returns the summary of each count, keyed by its name.
  */
-export async function measure({ objects, status, footprint, operate, settle, repetitions, log, operations = OPERATIONS }) {
+export async function measure({ objects, status, footprint, operate, settle, repetitions, log, operations }) {
+  if (!Array.isArray(operations) || operations.length === 0) throw new Error("measure needs the operations of a repetition");
   const baseline = await settledCounts(objects, settle);
   log({ repetition: 0, counts: baseline, footprint: await footprintOf(status, footprint) });
   const rows = [baseline];
@@ -114,12 +121,19 @@ export async function measure({ objects, status, footprint, operate, settle, rep
 export function parseOptions(args) {
   const { values } = parseArgs({
     args, strict: true,
-    options: { sok: { type: "string" }, "config-dir": { type: "string" }, repetitions: { type: "string", default: "20" } },
+    options: {
+      sok: { type: "string" }, "config-dir": { type: "string" }, repetitions: { type: "string", default: "20" },
+      plugin: { type: "string", multiple: true, default: [] },
+    },
   });
   const repetitions = Number(values.repetitions);
   if (!Number.isInteger(repetitions) || repetitions < 1) throw new Error("--repetitions must be a positive integer");
   if (!values.sok || !values["config-dir"]) throw new Error("required options: --sok PATH --config-dir DIR");
-  return { repetitions, sok: values.sok, configDir: values["config-dir"] };
+  // The plugins are those of the measured application, which core does not know, so the measurement names them.
+  if (values.plugin.length === 0) throw new Error("required option: --plugin ID, once for each surface plugin whose tab the measurement opens");
+  const empty = values.plugin.find((plugin) => plugin.trim() === "");
+  if (empty !== undefined) throw new Error(`--plugin must name a plugin id (${JSON.stringify(empty)})`);
+  return { repetitions, sok: values.sok, configDir: values["config-dir"], plugins: values.plugin };
 }
 
 const STEP_LIMIT_MS = 60_000;
@@ -196,20 +210,16 @@ if (import.meta.main) {
   };
 
   const projectRoot = mkdtempSync(join(tmpdir(), "object-counts-project-"));
+  const tabSteps = Object.fromEntries(options.plugins.map((plugin) => [`tab.${plugin}`, async () => {
+    const card = await firstCard();
+    const { tab } = await run(["core.card.add-tab", "--window", window, "--card", card, "--plugin", plugin]);
+    await run(["core.tab.close", "--window", window, "--tab", tab]);
+  }]));
   const operateSteps = {
-    "tab.terminal": async () => {
-      const card = await firstCard();
-      const { tab } = await run(["core.card.add-tab", "--window", window, "--card", card, "--plugin", "terminal"]);
-      await run(["core.tab.close", "--window", window, "--tab", tab]);
-    },
-    "tab.browser": async () => {
-      const card = await firstCard();
-      const { tab } = await run(["core.card.add-tab", "--window", window, "--card", card, "--plugin", "browser"]);
-      await run(["core.tab.close", "--window", window, "--tab", tab]);
-    },
+    ...tabSteps,
     "card.split": async () => {
       const card = await firstCard();
-      const split = await run(["core.card.split", "--window", window, "--card", card, "--side", "right", "--plugin", "terminal"]);
+      const split = await run(["core.card.split", "--window", window, "--card", card, "--side", "right", "--plugin", options.plugins[0]]);
       await run(["core.card.close", "--window", window, "--card", split.card]);
     },
     "plugins.apply": async () => {
@@ -258,6 +268,7 @@ if (import.meta.main) {
         mark = null;
       },
       repetitions: options.repetitions,
+      operations: operationsFor(options.plugins),
       log: (entry) => console.log(JSON.stringify(entry)),
     });
   } finally {

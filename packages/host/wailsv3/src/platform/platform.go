@@ -518,7 +518,7 @@ type Platform interface {
 	ServiceProcessExists(pid int) (bool, error)
 	// WaitServiceProcessEnd waits until the service process pid ends, for at most timeout, and answers whether it ended.
 	// A process that does not exist has ended. The wait uses the kernel notification of the end of a process, which
-	// also reports a process that stays as a zombie, so it does not poll (docs/spec/terminal-runtime.md#updates).
+	// also reports a process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
 	WaitServiceProcessEnd(pid int, timeout time.Duration) (bool, error)
 	// NewSession makes command start in a new session. A persistent service belongs to the configuration directory and not to the application process,
 	// so it does not receive the signals of the process group and the terminal of the application. Call it before starting

@@ -22,7 +22,7 @@ test('the page table gives every declared event and family member its catalog cl
   assert.equal(classOf('page.console.warn'), 'lifecycle');
   assert.equal(classOf('page.console.'), undefined);
   assert.equal(classOf('page.console.WARN'), undefined);
-  assert.equal(classOf('plugin.editor.opened'), undefined);
+  assert.equal(classOf('plugin.probe.opened'), undefined);
 });
 
 test('a family whose placeholder is not at the end and a class outside the contract are refused', () => {

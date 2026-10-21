@@ -82,7 +82,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 5. **재시작.** sidecar, plugin host와 view 프로세스는 통과값 (vi)의 한도 안에서 다시 띄운다. 한도를 넘으면 호스트는 `error:`를 보고하고 멈춘다.
    - 끝난 view 프로세스는 호스트가 다시 만들고, 새 view는 저장된 탭 상태에서 상태를 복원한다. 한도는 view 표면마다 센다. 한도를 넘으면 card가 표시 경로로 오류를 보여 주며, 사용자가 탭을 다시 열 때에만 view를 다시 만든다.
    - 한도를 넘은 뒤의 다음 요청은 프로세스를 띄우지 않고 `sidecar-failure`(reason `restart limit`)로 실패한다. 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 띄우며, 호스트는 `host.trace.sidecar.restart-reset {sidecar, surface}`를 쓴다. plugin host는 `host.trace.plugin-host.restart-reset {plugin}`을 쓴다.
-   - 표준 입출력 sidecar의 재시작 한도는 [sidecars](sidecars.ko.md#실패)에, persistent service의 재시작 규칙은 [terminal runtime](terminal-runtime.ko.md)에 적는다.
+   - 표준 입출력 sidecar의 재시작 한도는 [sidecars](sidecars.ko.md#실패)에, persistent service의 재시작 규칙은 [persistent services](persistent-services.ko.md)에 적는다.
    - 다시 띄우면 state는 마지막으로 저장한 값에서 복원한다. 저장하지 않은 state는 잃으며, plugin마다 어떤 state인지 밝힌다.
    - 고장 주입은 진단 build에서만 둔다.
 6. **표시.** plugin view는 card 배치가 바뀐 뒤(gesture의 첫 변경)의 첫 표시에만 presentation wait에 참여한다.

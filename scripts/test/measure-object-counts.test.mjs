@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { OPERATIONS, measure } from "../measure-object-counts.mjs";
+import * as counts from "../measure-object-counts.mjs";
+import { measure } from "../measure-object-counts.mjs";
+
+const OPERATIONS = counts.operationsFor(["probe"]);
 
 /** The diagnostics.objects reply with every host, page and document count set to n. */
 function snapshot(n) {
   return {
     host: { surfaces: n, regions: n, documents: n, sidecarSessions: n, pendingReplies: n, eventSubscribers: n },
     page: { elements: n, documents: n },
-    documents: [{ surface: "terminal", document: "doc", elements: n, documents: n }],
+    documents: [{ surface: "probe", document: "doc", elements: n, documents: n }],
   };
 }
 
@@ -16,13 +19,23 @@ function snapshot(n) {
 function effects(calls, objectsOf) {
   let operations = 0;
   return {
+    operations: OPERATIONS,
     objects: async () => { calls.push("objects"); return objectsOf(operations); },
     operate: async (name) => { operations += 1; calls.push(`operate ${name}`); },
     settle: async () => { calls.push("settle"); },
-    status: async () => { calls.push("status"); return { pageProcess: 42, documents: [{ surface: "terminal", document: "doc", process: 43 }] }; },
+    status: async () => { calls.push("status"); return { pageProcess: 42, documents: [{ surface: "probe", document: "doc", process: 43 }] }; },
     footprint: (pid) => { calls.push(`footprint ${pid}`); return pid * 1000; },
   };
 }
+
+test("the operations name no plugin: each plugin of --plugin has a tab operation and the split uses the first", () => {
+  assert.deepEqual(counts.operationsFor?.(["probe-a", "probe-b"]), ["tab.probe-a", "tab.probe-b", "card.split", "plugins.apply", "project.window"]);
+  assert.deepEqual(counts.parseOptions(["--sok", "s", "--config-dir", "d", "--plugin", "probe-a", "--plugin", "probe-b"]).plugins, ["probe-a", "probe-b"]);
+});
+
+test("the measurement requires at least one --plugin", () => {
+  assert.throws(() => counts.parseOptions(["--sok", "s", "--config-dir", "d"]), /--plugin/);
+});
 
 test("constant counts are not reported as growing", async () => {
   const entries = [];
@@ -37,7 +50,7 @@ test("constant counts are not reported as growing", async () => {
   assert.deepEqual(entries.map((entry) => entry.repetition), [0, 1, 2, 3, 4]);
   assert.equal(summary.length, Object.keys(result).length);
   assert.ok(summary.every((entry) => entry.grows === false));
-  assert.deepEqual(entries[1].footprint, { page: { pid: 42, bytes: 42_000 }, documents: [{ surface: "terminal", document: "doc", pid: 43, bytes: 43_000 }] });
+  assert.deepEqual(entries[1].footprint, { page: { pid: 42, bytes: 42_000 }, documents: [{ surface: "probe", document: "doc", pid: 43, bytes: 43_000 }] });
 });
 
 test("a count that rises in every repetition after the second is reported as growing", async () => {

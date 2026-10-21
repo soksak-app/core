@@ -205,6 +205,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
     let close_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
     let shutdown_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
     let owner_closed = Mutex::new(false);
+    let connected = std::sync::atomic::AtomicBool::new(true);
     poison(&close_waiters);
     poison(&shutdown_waiters);
     poison(&owner_closed);
@@ -227,6 +228,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &outbox,
         &close_waiters,
         &shutdown_waiters,
+        &connected,
         &owner_closed,
         "test",
         Instant::now() + Duration::from_secs(10),
@@ -240,6 +242,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &outbox,
         &close_waiters,
         &shutdown_waiters,
+        &connected,
         &owner_closed,
         "test",
         Instant::now() + Duration::from_secs(10),

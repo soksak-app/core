@@ -2234,6 +2234,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239",
+    implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
+    tests: [{ file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],
+    expected: "Each test runner names every test when it starts, reports its result and elapsed time, and ends a test at its own limit.",
+    levels: ["unit"],
+  },
+  {
     id: "F223",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
@@ -2683,6 +2690,13 @@ const FEATURE_LINKS = [
       { file: "packages/sok/tauriv2/tests/log_policy_test.rs", id: "the_policy_reader_refuses_every_invalid_golden_case_with_its_text" },
     ],
     expected: "The catalog check finds the emit sites of a Rust sidecar through its declared emitters, the readers of the policy file reproduce its golden cases, and the replay checks the view-state inputs of a session with the rules of a session before it applies them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F236",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "function packageOwner(name)" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "ownership audit classifies plugins and sidecars by their name prefix, without a list of real names" }],
+    expected: "The ownership audit names no real plugin or sidecar: it classifies a package by its name prefix. The decoupling items F236-1 to F236-12 keep their evidence in docs/features.md, and the moves they name are in docs/plans/decouple-handoff.md.",
     levels: ["unit"],
   },
   {
@@ -4514,15 +4528,17 @@ function isDeclaration(file) {
   return DECLARATION_FILE.test(file);
 }
 
+/**
+ * The owner of a package by its name (docs/spec/plugins.md#repositories): every `@soksak/plugin-*` package except
+ * `@soksak/plugin-api` is a plugin and every `@soksak/sidecar-*` package is a sidecar, so core holds no list of the
+ * packages of other repositories.
+ */
 function packageOwner(name) {
   const base = name.split("/").slice(0, 2).join("/");
   if (base === "@soksak/plugin-api" || base === "@soksak/runtime" || base === "@soksak/workbench") return "core";
-  if (base.startsWith("@soksak/plugin-") && (base.endsWith("-example") || [
-    "@soksak/plugin-browser", "@soksak/plugin-files", "@soksak/plugin-shell", "@soksak/plugin-terminal",
-  ].includes(base))) return "plugin";
-  if (base.startsWith("@soksak/sidecar-") && (base.endsWith("-example") || [
-    "@soksak/sidecar-files", "@soksak/sidecar-shell", "@soksak/sidecar-vt-alacritty", "@soksak/sidecar-vt-core",
-  ].includes(base))) return "sidecar";
+  if (base.startsWith("@soksak/plugin-")) return "plugin";
+  if (base.startsWith("@soksak/sidecar-")) return "sidecar";
+  // default: another name of the scope @soksak or a name of another scope has no owner that this audit compares.
   return null;
 }
 

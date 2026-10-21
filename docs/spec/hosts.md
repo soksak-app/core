@@ -198,7 +198,7 @@ A host that ends without its exit path leaves no WebKit process: launchd runs th
 
 **A quit ends when a window keeps a modified tab.** A quit asks each ready window to close, and the page of a window that keeps a modified tab answers with the host call `windowCloseKept` ([plugins](plugins.md#tab-reports)). The host then ends the quit state: closing the last window afterwards does not quit the application, and the end of a WebContent process is an error line again. `host.window` reports the state as `quitting`.
 
-**Persistent sidecars outlive the application and reconnect.** The terminal service keeps its sessions across application restarts and connection losses; a lost connection is revived at once and a dead service respawned ([terminal runtime](terminal-runtime.md)). The application never kills a persistent service on exit. Both hosts start a persistent service in a new session through the platform operation `NewSession` (Go) or `new_session` (Rust), so the service receives no signal of the application's process group or terminal.
+**Persistent sidecars outlive the application and reconnect.** The persistent service keeps its sessions across application restarts and connection losses; a lost connection is revived at once and a dead service respawned ([persistent services](persistent-services.md)). The application never kills a persistent service on exit. Both hosts start a persistent service in a new session through the platform operation `NewSession` (Go) or `new_session` (Rust), so the service receives no signal of the application's process group or terminal.
 
 **Non-persistent sidecars die with their window.** Removing a surface or closing its window sends the close notice; the process ends with the channel.
 

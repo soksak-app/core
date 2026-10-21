@@ -366,7 +366,7 @@ struct ReplaceRequest {
     sidecar: String,
 }
 
-/// Replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates). The call waits
+/// Replaces the outdated persistent service of a sidecar (docs/spec/persistent-services.md#updates). The call waits
 /// for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result<(), String> {
@@ -375,7 +375,7 @@ fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result
 }
 
 /// Closes the sessions of the surfaces that no layout holds in the persistent sidecar service and returns the number
-/// closed (docs/spec/terminal-runtime.md). It waits for the service, so it is an async command.
+/// closed (docs/spec/persistent-services.md). It waits for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_retain(
     window: Window,

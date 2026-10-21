@@ -1,4 +1,4 @@
-// The golden messages of the screen (docs/spec/terminal-runtime.md#screen-message): the page reproduces the hash of the screen
+// The golden messages of the screen (docs/spec/persistent-services.md#screen-message): the page reproduces the hash of the screen
 // vector of each message from the message alone, and refuses each message the fixture lists as rejected with its error text.
 
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ for (const vector of messages.rejected) {
   });
 }
 
-for (const document of ["../../../docs/spec/terminal-runtime.md", "../../../docs/spec/terminal-runtime.ko.md"]) {
+for (const document of ["../../../docs/spec/persistent-services.md", "../../../docs/spec/persistent-services.ko.md"]) {
   test(`${document.split("/").pop()} names the fixture of the screen messages, its rejected messages and the members of the message`, () => {
     const text = readFileSync(new URL(document, import.meta.url), "utf8");
     assert.ok(text.includes("`packages/log-contract/fixtures/replay/screen-message.json`"), "the fixture of the messages is not named");

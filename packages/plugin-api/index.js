@@ -943,12 +943,15 @@ export function validateSidecar(sidecar) {
  */
 export function validateEnvironment(environment) {
   if (!isObject(environment)) throw new Error("environment.json: expected an object");
-  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars", "starter", "registry"]);
+  only("environment.json", environment, ["runtime", "workspace", "sidebars", "settings", "sidecars", "starter", "install", "registry"]);
   if (environment.sidecars !== undefined && typeof environment.sidecars !== "boolean") {
     throw new Error("environment.json: sidecars must be true or false");
   }
   if (environment.starter !== undefined && !isText(environment.starter)) {
     throw new Error("environment.json: starter must be a pack name");
+  }
+  if (environment.install !== undefined && !isText(environment.install)) {
+    throw new Error("environment.json: install must be a pack name");
   }
   // The default registry is the index location that the first run determines (docs/spec/installation.md#fetching).
   if (environment.registry !== undefined

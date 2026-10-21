@@ -71,7 +71,7 @@ test("finds the host by the config-dir argument and skips tools, sidecars and We
     `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
     `  11 node scripts/measure-app-usage.mjs --sok /x/sok --config-dir ${DIR}`,
     `  12 /x/target/debug/sok windows --config-dir ${DIR}`,
-    `  13 ${DIR}/sidecars/vt-alacritty/build/vt --config-dir ${DIR}`,
+    `  13 ${DIR}/sidecars/probe-service/build/probe --config-dir ${DIR}`,
     `  14 /System/Library/WebKit.framework/com.apple.WebKit.Networking --config-dir ${DIR}`,
     "  15 /usr/bin/other --config-dir /elsewhere",
   ].join("\n"));
@@ -82,10 +82,10 @@ test("matches a data folder whose launch path has a doubled slash", () => {
   const launched = DIR.replace("/Library/", "//Library/");
   const table = parseProcessTable([
     `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
-    `  11 ${launched}/sidecars/vt/bin/vt --config-dir ${launched}`,
+    `  11 ${launched}/sidecars/probe/bin/probe --config-dir ${launched}`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, DIR), { pid: 10 });
-  assert.deepEqual(sidecarProcesses(table, DIR), [{ role: "sidecar vt", pid: 11, attribution: "executable path" }]);
+  assert.deepEqual(sidecarProcesses(table, DIR), [{ role: "sidecar probe", pid: 11, attribution: "executable path" }]);
 });
 
 test("finds the host and the sidecars of a data folder that the processes launch by its real path", () => {
@@ -93,10 +93,10 @@ test("finds the host and the sidecars of a data folder that the processes launch
   const real = "/private/var/tester/soksak-check";
   const table = parseProcessTable([
     `  10 /Applications/soksak-check.app/Contents/MacOS/soksak --config-dir ${real}`,
-    `  11 ${real}/sidecars/vt/bin/vt --x`,
+    `  11 ${real}/sidecars/probe/bin/probe --x`,
   ].join("\n"));
   assert.deepEqual(hostProcess(table, given, real), { pid: 10 });
-  assert.deepEqual(sidecarProcesses(table, given, real), [{ role: "sidecar vt", pid: 11, attribution: "executable path" }]);
+  assert.deepEqual(sidecarProcesses(table, given, real), [{ role: "sidecar probe", pid: 11, attribution: "executable path" }]);
 });
 
 test("reports a missing or duplicate host", () => {
@@ -108,13 +108,13 @@ test("reports a missing or duplicate host", () => {
 
 test("lists the sidecars whose executable is under the config dir", () => {
   const table = parseProcessTable([
-    `  21 ${DIR}/sidecars/vt-alacritty/build/vt-alacritty --flag`,
-    `  22 ${DIR}/sidecars/terminal/bin/terminal`,
-    `  23 /other/sidecars/terminal/bin/terminal`,
+    `  21 ${DIR}/sidecars/probe-service/build/probe-service --flag`,
+    `  22 ${DIR}/sidecars/worker/bin/worker`,
+    `  23 /other/sidecars/worker/bin/worker`,
   ].join("\n"));
   assert.deepEqual(sidecarProcesses(table, DIR), [
-    { role: "sidecar vt-alacritty", pid: 21, attribution: "executable path" },
-    { role: "sidecar terminal", pid: 22, attribution: "executable path" },
+    { role: "sidecar probe-service", pid: 21, attribution: "executable path" },
+    { role: "sidecar worker", pid: 22, attribution: "executable path" },
   ]);
 });
 
