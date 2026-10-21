@@ -39,10 +39,9 @@ impl Buttons {
 
     /// The current value {mask} of host.buttons.
     pub fn value(&self) -> Value {
-        match self.mask.lock() {
-            Ok(mask) => value(*mask),
-            Err(poisoned) => value(*poisoned.into_inner()),
-        }
+        // default: a lock that a panicking thread poisoned still holds the last reported mask, which is only read; the panic
+        // hook records the panic.
+        value(*self.mask.lock().unwrap_or_else(PoisonError::into_inner))
     }
 }
 
