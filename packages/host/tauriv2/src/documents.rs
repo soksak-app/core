@@ -1333,7 +1333,11 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
     let open_calls = data.documents.views().end_calls(surface);
     end_presentation_wait(window, surface, "process-ended");
     // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
-    if let Err(error) = emit_window(window, "view-process-ended", view_process_ended_event(surface)) {
+    if let Err(error) = emit_window(
+        window,
+        "view-process-ended",
+        view_process_ended_event(surface),
+    ) {
         log_error("view channel", error);
     }
     if let Err(error) = data.documents.remove(&key) {

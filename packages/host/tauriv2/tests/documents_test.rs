@@ -740,8 +740,15 @@ fn view_stop_event_is_sent_once_at_the_fourth_failure() {
         "the fourth failure stops the restarts, which sends the view-stopped event"
     );
     let event = view_stopped_event("probe-surface", "probe");
-    assert_eq!(event["surface"], "probe-surface", "the stop event names the surface");
-    assert_eq!(event["reason"], view_stop_reason(), "the stop event carries the stop reason");
+    assert_eq!(
+        event["surface"], "probe-surface",
+        "the stop event names the surface"
+    );
+    assert_eq!(
+        event["reason"],
+        view_stop_reason(),
+        "the stop event carries the stop reason"
+    );
 }
 
 // contract: view.restart.limit-shows-error
@@ -1160,19 +1167,35 @@ fn a_view_process_end_removes_the_regions_of_its_surface() {
     documents.reserve(&other).unwrap();
     assert!(documents.set(&other, 13));
     let image = ("probe-surface".to_string(), "picture".to_string());
-    images.reserve(&image, "probe-surface", "@probe/sidecar").unwrap();
+    images
+        .reserve(&image, "probe-surface", "@probe/sidecar")
+        .unwrap();
     assert!(images.set(&image, 12));
     let (closed_documents, closed_images) =
         remove_view_regions(&documents, &streams, &images, "probe-surface");
-    assert_eq!(closed_documents, vec![11], "the document region of the surface is closed");
-    assert_eq!(closed_images, vec![12], "the image region of the surface is closed");
+    assert_eq!(
+        closed_documents,
+        vec![11],
+        "the document region of the surface is closed"
+    );
+    assert_eq!(
+        closed_images,
+        vec![12],
+        "the image region of the surface is closed"
+    );
     assert!(
         documents.reserve(&document).is_ok(),
         "the view created again attaches the document region again"
     );
     assert!(
-        images.reserve(&image, "probe-surface", "@probe/sidecar").is_ok(),
+        images
+            .reserve(&image, "probe-surface", "@probe/sidecar")
+            .is_ok(),
         "the view created again attaches the image region again"
     );
-    assert_eq!(documents.get(&other), Ok(13), "the regions of another surface stay");
+    assert_eq!(
+        documents.get(&other),
+        Ok(13),
+        "the regions of another surface stay"
+    );
 }
