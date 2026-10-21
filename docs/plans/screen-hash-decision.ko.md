@@ -194,8 +194,8 @@ C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들�
 
 감독자가 round 5에서 열린 채 남은 두 질문에 답했다. 두 답은 F236-9-2와 F236-9-3을 구속하며, round 6의 auditor는 이를 결정된 것으로 확인한다.
 
-- **설치된 terminal 버전.** 질문: core가 사본을 제거한 뒤에도 core를 import하는 설치된 terminal 버전이 계속 동작하는가? 답: 아니다. 구속하는 규칙은 하위 호환 없음, 호환 계층 없음, 옛 경로 제거이며, core와 plugin은 0.0.x이다. 이유: 설치된 복사본을 위해 항목을 남기면 그 규칙이 금지하는 호환 계층이 된다. 따라서 core에서 import하는 설치된 terminal 버전은 제거 뒤 동작을 멈추고 폐기되며, 새 terminal release가 계약 패키지를 복사한다(G1 (b)). 질문 5는 더 이상 열린 질문이 아니다. G1 (e)는 이 답과, 사용자에게 보이는 결과를 적은 changelog 항목으로 충족된다.
-- **page frame의 layer.** page frame의 layer는 `docs/spec/events.json`이 선언한 이름 `page`이다. 명세 `replay.md` 22줄과 `sok`의 layer 검사에 있는 `plugin`은 틀린 이름이며, F236-9-2에서 바꾼다. F236-9-3은 먼저 Red 테스트를 쓴다.
+- **설치된 terminal 버전.** 질문: core가 사본을 제거한 뒤에도 core를 import하는 설치된 terminal 버전이 계속 동작하는가? 답: 아니다. 구속하는 규칙(AGENTS.md 9줄)은 하위 호환 없음, 호환 계층 없음, 옛 경로 제거이며, 버전 조건이 없다. 이유: 설치된 복사본을 위해 항목을 남기면 그 규칙이 금지하는 호환 계층이 된다. 따라서 core에서 import하는 설치된 terminal 버전은 제거 뒤 동작을 멈추고 폐기되며, 새 terminal release가 계약 패키지를 복사한다(G1 (b)). 설치된 terminal 버전에 관한 질문은 G1 (e)에서 더 이상 열려 있지 않다. 감독자는 사용자에게 보이는 단절을 받아들인다. 폐기된 버전의 설치된 page는 사용자가 registry에서 새 terminal release를 설치할 때까지 멈춘다. G1 (e)는 이 답과, 사용자에게 보이는 결과를 적은 changelog 항목으로 충족된다.
+- **page frame의 layer.** page frame의 layer는 `docs/spec/events.json`이 선언한 이름 `page`이다. 명세 `replay.md` 22줄과 `sok`의 layer 검사에 있는 `plugin`은 F236-9-2에서 바꾼다. F236-9-3은 먼저 Red 테스트를 쓴다. 라운드 6은 이 답에 반하는 근거를 찾았다(라운드 6의 A1과 B1). 감독자가 F236-9-1을 닫기 전에 이를 확인하거나 바꾼다.
 
 ### 검토 기록
 
@@ -217,4 +217,13 @@ C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들�
 - sidecar manifest는 `vt-alacritty/sidecar.json`이며 dependency를 선언하지 않는다(H7). registry는 plugin과 sidecar 외에 pack도 선언한다(H10). H2의 인과 주장은 뺐다. H6에서는 `sok plugin pack`의 동작을 확인하지 않았다고 적었다.
 - 한국어 twin의 H2, H8, C2 문단의 표현은 auditor가 세밀하게 비교하지 않았다. 이 twin은 같은 문장에서 다시 썼다.
 
-6차 검토는 이 판에 대해 대기 중이다.
+6차 검토(두 명의 새 읽기 전용 auditor, 감독자 결정을 담은 판에 대해 결정 수준만). 두 auditor 모두 소유자 선택(C2)과 G1 조건 (a)~(d)에서 결함을 찾지 못했다. 두 명 모두 page frame의 layer에 이의를 제기했으므로 F236-9-1은 닫히지 않는다. 이 판에 반영했다.
+
+- A1과 B1(layer): 명세는 page frame에 `plugin`을 쓴다. `replay.md` 22줄은 page가 `runtime.log`로 frame을 쓴다고 하고, `plugins.md` 242줄과 `host-contract.md` 829줄은 plugin의 `runtime.log` 이벤트를 layer `plugin`에, `page.` 이벤트를 layer `page`에 저장한다고 하며, `logging.md` 34줄과 37줄은 `plugin`을 layer로 나열한다. `events.json`은 layer `page`를 31개 항목에 선언하는데 모두 `page.*` 이름이며 frame 기록에 관해 아무것도 말하지 않는다. 감독자 답의 근거인 「events.json이 선언한 이름」은 frame 기록을 덮지 않는다. 답은 감독자의 것으로 남으며, 반하는 근거는 감독자가 확인하거나 바꾸도록 여기 기록한다. F236-9-2는 `logging.md` 34줄과 37줄도 `events.json`과 대조하여 확인한다.
+- A2(카탈로그 밖의 layer 근거 없음): 근거는 감독자 결정에 기록되어 있다. 위의 근거는 같은 질문의 다른 쪽이다(A1).
+- A3(사용자에게 보이는 단절을 누가 받아들이는가): 반영했다. 감독자 결정이 감독자의 수용과 사용자의 새 terminal release 설치를 적는다.
+- A4(여기서 정의되지 않은 질문 5): 반영했다. 본문이 질문을 적는다.
+- B2(호환 계층 없음의 근거): 반영했다. 근거는 버전 조건이 없는 AGENTS.md 9줄을 인용한다.
+- B3과 B4(소유자 선택, G1 일관성): 이의 없음.
+
+F236-9-1은 열려 있다. F236-9-2와 F236-9-3은 시작하지 않는다. 감독자가 layer 답을 확인하거나 바꾸고, 그다음 두 명의 새 auditor로 7차 검토를 한다.

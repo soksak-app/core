@@ -194,8 +194,8 @@ Every removal and pointer replacement in the first four core bullets above happe
 
 The supervisor answered two questions that round 5 left open. Both bind F236-9-2 and F236-9-3, and the round 6 auditors check them as decided.
 
-- **Installed terminal versions.** Question: do installed terminal versions that import from core keep working after core removes its copies? Answer: no. The binding rule is no backward compatibility, no compatibility layers, and removal of old paths, and core and plugins are 0.0.x. Reason: an entry kept for installed copies would be the compatibility layer that the rule forbids. So an installed terminal version that imports from core stops working after the removal and is revoked, and the new terminal release copies the contract package (G1 (b)). Question 5 is therefore no longer an open question. G1 (e) is met by this answer and by the changelog entry of its user-facing consequence.
-- **Layer of a page frame.** The layer of a page frame is `page`, the name that `docs/spec/events.json` declares. The name `plugin` in `replay.md` line 22 and in the `sok` layer checks is the wrong name and is changed in F236-9-2. F236-9-3 writes the Red test first.
+- **Installed terminal versions.** Question: do installed terminal versions that import from core keep working after core removes its copies? Answer: no. The binding rule (AGENTS.md line 9) is no backward compatibility, no compatibility layers, and removal of old paths, with no version condition. Reason: an entry kept for installed copies would be the compatibility layer that the rule forbids. So an installed terminal version that imports from core stops working after the removal and is revoked, and the new terminal release copies the contract package (G1 (b)). The question about installed terminal versions is therefore no longer open in G1 (e). The supervisor accepts the user-facing break: installed pages of the revoked versions stop until the user installs the new terminal release from the registry. G1 (e) is met by this answer and by the changelog entry of its user-facing consequence.
+- **Layer of a page frame.** The layer of a page frame is `page`, the name that `docs/spec/events.json` declares. The name `plugin` in `replay.md` line 22 and in the `sok` layer checks is changed in F236-9-2. F236-9-3 writes the Red test first. Round 6 found evidence against this answer (A1 and B1 in Round 6); the supervisor confirms or changes it before F236-9-1 closes.
 
 ### Review record
 
@@ -217,4 +217,13 @@ Round 5 (two fresh read-only auditors, on the fifth version). Accepted in this v
 - The sidecar manifest is `vt-alacritty/sidecar.json`, which declares no dependency (H7); the registry declares packs as well as plugins and sidecars (H10). The causal claim about F236-10 was removed (H2). The plugin's `sok plugin pack` behaviour is stated as not inspected (H6).
 - The Korean twin's wording of H2, H8 and the C2 paragraphs was not compared closely by the auditor; the Korean twin is rewritten from the same text.
 
-Round 6 is pending on this version.
+Round 6 (two fresh read-only auditors, decision level only, on the version with the supervisor decision). Neither found a fault in the owner choice (C2) or in G1 conditions (a) to (d). Both objected to the page-frame layer, so F236-9-1 is not closed. Accepted in this version:
+
+- A1 and B1 (layer): the spec uses `plugin` for page frames. `replay.md` line 22 has the page write the frame through `runtime.log`; `plugins.md` line 242 and `host-contract.md` line 829 store a plugin's `runtime.log` events in layer `plugin` and `page.` events in layer `page`; `logging.md` lines 34 and 37 list `plugin` as a layer. `events.json` declares layer `page` on 31 entries, all named `page.*`, and says nothing about frame records. The basis of the supervisor's answer, the name that `events.json` declares, does not cover frame records. The answer stays the supervisor's; the contrary evidence is recorded here for the supervisor to confirm or change. F236-9-2 also checks `logging.md` lines 34 and 37 against `events.json`.
+- A2 (no reason for the layer answer beyond the catalog): the basis is recorded in the Supervisor decision; the evidence above is the other side of the same question (A1).
+- A3 (who accepts the user-facing break): accepted; the Supervisor decision names the supervisor's acceptance and the user's install of the new terminal release.
+- A4 (question 5 not defined here): accepted; the text names the question.
+- B2 (basis of no compatibility layers): accepted; the reason cites AGENTS.md line 9, which has no version condition.
+- B3 and B4 (owner choice, G1 consistency): no objection.
+
+F236-9-1 stays open. F236-9-2 and F236-9-3 do not start. The supervisor confirms or changes the layer answer, and then round 7 runs with two fresh auditors.
