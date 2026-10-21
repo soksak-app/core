@@ -48,3 +48,22 @@ test("checkNames reports a file it cannot read", () => {
   });
   assert.deepEqual(errors, ["packages/x/missing.js: cannot be read: gone"]);
 });
+
+// The rule of decision D3, rule 1: a core source names only exact core package names, declared or not.
+const cases = [
+  ["packages/x/x.js", `import "${scoped("plugin-foo")}";\n`, false],
+  ["packages/x/x.ts", `import "${scoped("plugin-foo")}";\n`, false],
+  ["packages/x/x.js", `import "${scoped("sidecar-vt-alacritty")}";\n`, false],
+  ["packages/x/x.js", `import "${scoped("sidecar-example")}";\n`, false],
+  ["packages/x/x.js", `import "${scoped("plugin-api-x")}";\n`, false],
+  ["packages/x/x.js", `import "${scoped("plugin-browser")}";\n`, false],
+  ["apps/x/x.js", `import "${scoped("hwp")}";\n`, false],
+  ["packages/x/x.js", 'import "@scope/sidecar-vt";\n', true],
+  ["packages/x/x.js", `import "${scoped("plugin-api")}";\n`, true],
+];
+for (const [file, text, allowed] of cases) {
+  test(`core name rule: ${file} ${allowed ? "allows" : "refuses"} ${text.trim()}`, () => {
+    const errors = checkNames(core, [file], () => text);
+    assert.equal(errors.length === 0, allowed, errors.join("\n"));
+  });
+}
