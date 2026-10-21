@@ -22,6 +22,8 @@ type viewSpec struct {
 	directory string
 	folder    string
 	visible   bool
+	// The start values of the view, which the host injects again when it creates the view again.
+	start ViewStart
 }
 
 // viewStopReason is the reason of a view that stopped its restarts: the log line and the view-stopped event carry it. The window is

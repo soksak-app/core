@@ -182,6 +182,20 @@ function tabStates() {
 }
 
 /**
+ * The start values of the view of surface (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
+ * the page receives at start, which the host injects as window.sokSurface before the page of the view runs. project is the
+ * project that the window shows, or null in a window without one.
+ */
+export function viewStartValues(surface, project) {
+  return {
+    params: surface.params ?? null,
+    origin: tabOrigin(surface.surfaceId),
+    project: project === null ? null : { root: project.root },
+    declarations: surface.declarations,
+  };
+}
+
+/**
  * context.tab.state of a surface whose plugin declares surface.unload as {format, maxBytes} (docs/spec/plugins.md#memory-saver).
  * isDisposed tells whether the surface of this context was disposed; a write after it is refused and reported once.
  */

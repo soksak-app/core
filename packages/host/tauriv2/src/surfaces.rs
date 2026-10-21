@@ -6,6 +6,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::{Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
@@ -36,6 +37,68 @@ pub(crate) struct Surface {
     /// The id of the plugin that owns the surface. A document region opens the plugin document of that plugin.
     plugin: String,
     composition: SurfaceComposition,
+    /// The start values of the view of a view surface, which the host injects as window.sokSurface before the page runs
+    /// (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
+    #[serde(default)]
+    start: Option<ViewStart>,
+}
+
+/// The working directory that the tab that opened the surface recorded at that moment (docs/spec/plugins.md#tab-reports).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct SurfaceOrigin {
+    pub(crate) directory: Option<String>,
+}
+
+/// The root of the project that the window shows (docs/spec/plugins.md#tab-reports).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct SurfaceProject {
+    pub(crate) root: String,
+}
+
+/// The start values of a view (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that the page
+/// receives at start, which the host injects as window.sokSurface before the page of the view runs.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+pub struct ViewStart {
+    #[serde(default)]
+    pub(crate) params: Option<Value>,
+    #[serde(default)]
+    pub(crate) origin: Option<SurfaceOrigin>,
+    #[serde(default)]
+    pub(crate) project: Option<SurfaceProject>,
+    #[serde(default)]
+    pub(crate) declarations: Option<Value>,
+}
+
+/// Checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
+fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
+    if start
+        .origin
+        .as_ref()
+        .is_some_and(|origin| origin.directory.as_deref() == Some(""))
+    {
+        return Err(format!(
+            "surface {surface:?}: view start origin directory is empty"
+        ));
+    }
+    if start
+        .project
+        .as_ref()
+        .is_some_and(|project| project.root.is_empty())
+    {
+        return Err(format!(
+            "surface {surface:?}: view start project root is empty"
+        ));
+    }
+    if start
+        .declarations
+        .as_ref()
+        .is_some_and(|declarations| !declarations.is_object())
+    {
+        return Err(format!(
+            "surface {surface:?}: view start declarations are not an object"
+        ));
+    }
+    Ok(())
 }
 
 pub fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
@@ -556,6 +619,15 @@ pub fn check_sync_request(
                 surface.id
             ));
         }
+        if let Some(start) = &surface.start {
+            if surface.composition.kind != "view" {
+                return Err(format!(
+                    "surface {:?}: only a view surface carries start values",
+                    surface.id
+                ));
+            }
+            validate_view_start(&surface.id, start)?;
+        }
     }
     request
         .overlays
@@ -754,6 +826,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let surface = s.id.clone();
                 let plugin = s.plugin.clone();
                 let page = s.composition.page.clone();
+                let start = s.start.clone().unwrap_or_default();
                 exposure::on_main(window, move || {
                     documents::sync_view(
                         &view_window,
@@ -763,6 +836,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                         &plugin,
                         &page,
                         visible,
+                        start,
                     )
                 })?;
             }

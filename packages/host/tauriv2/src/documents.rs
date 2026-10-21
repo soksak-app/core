@@ -22,6 +22,7 @@ use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
+use crate::surfaces::ViewStart;
 use crate::surfaces::{Placement, require_region, surface_handle};
 use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
 use crate::windows::{emit_window, window_data, with_native_owner};
@@ -1037,6 +1038,7 @@ pub fn create_view(
 
 /// Creates the view of a view surface when the surface has none, and places the view over the whole surface. Call it on the
 /// main thread.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn sync_view(
     window: &Window,
     platform: &'static dyn platform::Platform,
@@ -1045,15 +1047,21 @@ pub(crate) fn sync_view(
     plugin: &str,
     page: &str,
     visible: bool,
+    start: ViewStart,
 ) -> Result<(), String> {
     let data = window_data(window)?;
     if !visible {
         // A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.rs).
         end_presentation_wait(window, surface, "hidden");
     }
-    data.documents
-        .lifecycle()
-        .track(surface, surface_handle, plugin, page, visible);
+    data.documents.lifecycle().track(
+        surface,
+        surface_handle,
+        plugin,
+        page,
+        visible,
+        start.clone(),
+    );
     // A view that failed beyond the restart limit is not created again until its surface is removed (docs/plans/plugin-processes.md,
     // rule 5).
     if data.documents.lifecycle().is_stopped(surface) {
@@ -1064,7 +1072,15 @@ pub(crate) fn sync_view(
         Ok(handle) => handle,
         Err(_) => {
             data.documents.reserve(&key)?;
-            match attach_view(window, platform, surface, surface_handle, plugin, page) {
+            match attach_view(
+                window,
+                platform,
+                surface,
+                surface_handle,
+                plugin,
+                page,
+                start,
+            ) {
                 Ok(handle) => {
                     if !data.documents.set(&key, handle) {
                         platform.close_document(handle)?;
@@ -1102,6 +1118,7 @@ fn attach_view(
     surface_handle: Handle,
     plugin: &str,
     page: &str,
+    start: ViewStart,
 ) -> Result<Handle, String> {
     let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
     let directory = config.join(DOCUMENT_DATA);
@@ -1179,6 +1196,7 @@ fn attach_view(
             let theme = crate::theme::get(window)?;
             let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
             platform.add_document_script(document, &theme_script(&theme))?;
+            platform.add_document_script(document, &surface_start_script(surface, &start))?;
             record_view_process_request(surface, plugin);
             Ok(document)
         },
@@ -1340,6 +1358,7 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         &spec.plugin,
         &spec.page,
         spec.visible,
+        spec.start,
     ) {
         log_error("view channel", error);
     }
@@ -2092,9 +2111,46 @@ pub fn theme_script(theme: &Value) -> String {
     format!("window.sokTheme = Object.freeze({theme});")
 }
 
+/// The document-start script that sets window.sokSurface to the frozen start values of the view of surface, which the first page
+/// script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface has none of is carried as JSON
+/// null.
+pub fn surface_start_script(surface: &str, start: &ViewStart) -> String {
+    let params = start
+        .params
+        .as_ref()
+        .map_or_else(|| "null".to_string(), |value| value.to_string());
+    let directory = start
+        .origin
+        .as_ref()
+        .and_then(|origin| origin.directory.as_deref())
+        .map_or_else(
+            || "null".to_string(),
+            |directory| Value::String(directory.to_string()).to_string(),
+        );
+    let project = start.project.as_ref().map_or_else(
+        || "null".to_string(),
+        |project| {
+            let root = Value::String(project.root.clone());
+            format!("Object.freeze({{\"root\":{root}}})")
+        },
+    );
+    let declarations = start
+        .declarations
+        .as_ref()
+        .map_or_else(|| "{}".to_string(), |value| value.to_string());
+    let id = Value::String(surface.to_string());
+    format!(
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations})}});"
+    )
+}
+
 #[cfg(test)]
 #[path = "view_theme_test.rs"]
 mod theme_tests;
+
+#[cfg(test)]
+#[path = "view_start_test.rs"]
+mod start_tests;
 
 /// Writes host.call.peer-lost {plugin, command, reason: process-ended} for a view call that was open when its view process ended
 /// (docs/spec/native-surfaces.md#view-surfaces).

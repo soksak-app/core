@@ -23,7 +23,7 @@ func TestViewCreationAddsTheThemeScriptBeforeTheLoad(t *testing.T) {
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true); err != nil {
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, ViewStart{}); err != nil {
 		t.Fatalf("first sync of the view: %v", err)
 	}
 	if len(fake.created) != 1 {
@@ -31,11 +31,19 @@ func TestViewCreationAddsTheThemeScriptBeforeTheLoad(t *testing.T) {
 	}
 	want := `window.sokTheme = Object.freeze({"scheme":"dark","tokens":{"surface":"#101010"}});`
 	scripts := fake.scripts[fake.created[0]]
-	if len(scripts) != 1 || scripts[0] != want {
-		t.Fatalf("user scripts of the view: %q, want the theme script %q", scripts, want)
+	found := false
+	for _, script := range scripts {
+		if script == want {
+			found = true
+		}
 	}
-	if len(fake.loadsBeforeScript) != 1 || fake.loadsBeforeScript[0] != 0 {
-		t.Fatalf("loads before the theme script: %v, want none", fake.loadsBeforeScript)
+	if !found {
+		t.Fatalf("user scripts of the view hold no theme script %q: %q", want, scripts)
+	}
+	for _, loads := range fake.loadsBeforeScript {
+		if loads != 0 {
+			t.Fatalf("loads before a script: %v, want none", fake.loadsBeforeScript)
+		}
 	}
 }
 

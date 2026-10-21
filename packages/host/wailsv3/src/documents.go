@@ -351,7 +351,7 @@ const viewRegionName = ""
 
 // attachView creates the view web view of a view surface with the view configuration (isView) and loads sok://<plugin>/<page> into it.
 // The view state is not reported by this step. It runs on the UI thread.
-func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string) error {
+func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string, start ViewStart) error {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
 	if err := s.documents.Reserve(key); err != nil {
 		return err
@@ -380,6 +380,9 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	if err == nil {
 		err = s.addThemeScript(handle)
 	}
+	if err == nil {
+		err = s.addStartScript(handle, surfaceID, start)
+	}
 	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
 		system.CloseDocument(handle)
 		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
@@ -407,6 +410,55 @@ func (s *Surfaces) addThemeScript(document unsafe.Pointer) error {
 	return system.AddDocumentScript(document, script)
 }
 
+// addStartScript adds the start values script of the view document, with the values that the page declared for the surface,
+// before the view loads its page (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) addStartScript(document unsafe.Pointer, surfaceID string, start ViewStart) error {
+	script, err := surfaceStartScript(surfaceID, start)
+	if err != nil {
+		return err
+	}
+	return system.AddDocumentScript(document, script)
+}
+
+// surfaceStartScript returns the document-start script that sets window.sokSurface to the frozen start values of the view of
+// surface, which the first page script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface
+// has none of is carried as JSON null.
+func surfaceStartScript(surface string, start ViewStart) (string, error) {
+	id, err := json.Marshal(surface)
+	if err != nil {
+		return "", fmt.Errorf("view start surface cannot be serialized: %w", err)
+	}
+	params := "null"
+	if start.Params != nil {
+		params = string(start.Params)
+	}
+	directory := "null"
+	if start.Origin != nil && start.Origin.Directory != nil {
+		text, err := json.Marshal(*start.Origin.Directory)
+		if err != nil {
+			return "", fmt.Errorf("view start origin cannot be serialized: %w", err)
+		}
+		directory = string(text)
+	}
+	project := "null"
+	if start.Project != nil {
+		root, err := json.Marshal(start.Project.Root)
+		if err != nil {
+			return "", fmt.Errorf("view start project cannot be serialized: %w", err)
+		}
+		project = `Object.freeze({"root":` + string(root) + "})"
+	}
+	declarations := "{}"
+	if start.Declarations != nil {
+		declarations = string(start.Declarations)
+	}
+	return "window.sokSurface = Object.freeze({\"surface\":" + string(id) +
+		",\"params\":" + params +
+		",\"origin\":Object.freeze({\"directory\":" + directory + "})" +
+		",\"project\":" + project +
+		",\"declarations\":Object.freeze(" + declarations + ")});", nil
+}
+
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
 // view-responsiveness event to the owning surface. It ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
@@ -422,13 +474,14 @@ func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
 }
 
 // syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
-func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool) error {
+func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool, start ViewStart) error {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
 	if !visible {
 		// A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.go).
 		s.endPresentationWait(surfaceID, "hidden")
 	}
 	spec := s.viewRecords().track(surfaceID, surface, plugin, page, visible)
+	spec.start = start
 	// A view that failed beyond the restart limit is not created again until its surface is removed (view_lifecycle.go).
 	if s.viewRecords().isStopped(surfaceID) {
 		return nil
@@ -443,7 +496,7 @@ func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, pa
 			spec.folder = folder
 			spec.directory = filepath.Join(s.host.configDir, documentData)
 		}
-		if err := s.attachView(surfaceID, surface, spec.directory, spec.folder, plugin, page, viewChannelScript); err != nil {
+		if err := s.attachView(surfaceID, surface, spec.directory, spec.folder, plugin, page, viewChannelScript, spec.start); err != nil {
 			return err
 		}
 		if handle, err = s.documents.Get(key); err != nil {
@@ -1382,7 +1435,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view is not created again", surface))
 		return
 	}
-	if err := s.syncView(surface, spec.native, spec.plugin, spec.page, spec.visible); err != nil {
+	if err := s.syncView(surface, spec.native, spec.plugin, spec.page, spec.visible, spec.start); err != nil {
 		LogError("view channel", err)
 	}
 }
