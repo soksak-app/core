@@ -29,10 +29,14 @@ fn a_new_watch_receives_the_next_window_value_after_a_stale_record() {
 
 /// Poisons the lock by panicking while its guard is held.
 fn poison<T>(lock: &Mutex<T>) {
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _guard = lock.lock().unwrap();
-        panic!("the test poisons the lock");
-    }));
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = lock.lock().unwrap();
+            panic!("the test poisons the lock");
+        }))
+        .is_err(),
+        "the closure must panic"
+    );
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 

@@ -61,10 +61,14 @@ fn a_status_read_during_surface_close_finds_the_registered_surface() {
 
 /// Poisons the lock by panicking while its guard is held.
 fn poison<T>(lock: &Mutex<T>) {
-    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let _guard = lock.lock().unwrap();
-        panic!("the test poisons the lock");
-    }));
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = lock.lock().unwrap();
+            panic!("the test poisons the lock");
+        }))
+        .is_err(),
+        "the closure must panic"
+    );
     assert!(lock.is_poisoned(), "the lock was not poisoned");
 }
 
