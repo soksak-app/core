@@ -497,7 +497,7 @@ fn the_state_ends_with_the_removal_or_disable_of_the_plugin() {
     }
 }
 
-// contract: plugin-host.sidecar.send-checks
+// contract: plugin-host.sidecar.send-checks, plugin-host.sidecar.surface-refusal
 #[test]
 fn a_sidecar_request_of_a_host_is_checked_before_its_send() {
     use crate::plugin_host_channel::{parse_session, plugin_send_root, refuse_surface_send};

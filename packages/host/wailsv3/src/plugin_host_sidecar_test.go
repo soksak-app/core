@@ -32,6 +32,7 @@ func sidecarSessionSurfaces(t *testing.T) *Surfaces {
 	}
 }
 
+// contract: plugin-host.sidecar.send-checks
 func TestPluginHostSidecarSendPassesTheChecksOfAHeldProject(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	err := s.pluginHostSidecarSend(PluginHostSidecarSendRequest{Plugin: "probe", Sidecar: "fixture-sidecar", ID: "plugin:probe:project-a:fixture-sidecar", Body: json.RawMessage(`{"operation":"list"}`)})
@@ -40,6 +41,7 @@ func TestPluginHostSidecarSendPassesTheChecksOfAHeldProject(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.sidecar.send-checks
 func TestPluginHostSidecarSendRefusesAnUnheldOrRootlessProjectAndAnUndeclaredSidecar(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	cases := []struct {
@@ -66,6 +68,7 @@ func TestPluginHostSidecarSendRefusesAnUnheldOrRootlessProjectAndAnUndeclaredSid
 	}
 }
 
+// contract: plugin-host.sidecar.surface-refusal
 func TestSurfaceSidecarSendRefusesThePluginSessions(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	err := s.SidecarSend("fixture-sidecar", "plugin:probe:project-a:fixture-sidecar", json.RawMessage(`{"operation":"list"}`), nil)
@@ -145,6 +148,7 @@ func TestProjectReleaseClosesThePluginSessionsOfThatProject(t *testing.T) {
 
 // The close of a plugin host closes the plugin sessions of its plugin that the calling window owns, and no other session
 // (docs/plans/plugin-host-routes.md rule 7, pluginHostSidecarClose).
+// contract: plugin-host.sidecar.close
 func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testing.T) {
 	s := sidecarSessionSurfaces(t)
 	c := s.sidecars

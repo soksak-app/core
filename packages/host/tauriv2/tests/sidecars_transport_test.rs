@@ -2855,6 +2855,53 @@ fn persistent_retain_keeps_a_session_first_sent_during_the_start() {
     service.thread.join().unwrap();
 }
 
+// contract: plugin-host.sidecar.close
+#[test]
+fn plugin_host_close_closes_only_the_callers_sessions_of_the_plugin() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = fixture_service(config_directory.path(), "plugin-close.sock");
+    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (caller, _caller_events) = owner("plugin-close-caller", "/live");
+    let (other_window, _other_events) = owner("plugin-close-other", "/other");
+    let probe_session = "plugin:probe:project-a:fixture-sidecar";
+    let other_plugin = "plugin:other:project-a:fixture-sidecar";
+    let other_window_session = "plugin:probe:project-b:fixture-sidecar";
+    for (window, surface) in [
+        (&caller, probe_session),
+        (&caller, other_plugin),
+        (&other_window, other_window_session),
+    ] {
+        sidecars
+            .send(window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+    }
+    // The close of the probe plugin by the caller: the predicate is the plugin prefix that plugin_host_sidecar_close uses.
+    sidecars
+        .close_owned(&caller, &|surface| surface.starts_with("plugin:probe:"))
+        .unwrap();
+    let closed = service.closes.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        closed["surface"], probe_session,
+        "the caller's session of the closed plugin is closed, and no session of another window is"
+    );
+    sidecars
+        .close_owned(&caller, &|surface| surface == other_plugin)
+        .unwrap();
+    let closed = service.closes.recv_timeout(STALL).unwrap();
+    assert_eq!(
+        closed["surface"], other_plugin,
+        "the next close is the other plugin's session of the caller, so the probe close closed nothing else"
+    );
+    sidecars.stop();
+    service.thread.join().unwrap();
+}
+
 // contract: sidecars.close-owned.selects-the-closed-surfaces
 #[test]
 fn persistent_close_owned_closes_only_the_selected_surfaces() {
