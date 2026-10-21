@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-21: The terminal removes its SDK census subprocess tests; core owns scanner/reason and CLI coverage, while terminal `make check` scans its repository. Terminal tests pass 162/162, core census tests 27/27.
+
 - F238-c-9: Reconciled the fixture scope with the D3 rule; the workbench tests already use `@scope/sidecar-probe`, not the real sidecar name. Owning tests pass 19/19; no code change was needed.
 
 - F238-d-14: Tree expansion now sends `declared-ui.expanded` to the chosen source and redraws only from the next accepted plugin snapshot; the workbench no longer overrides `expanded`. The owning source/section/tree tests pass 93/93. Host-side contract cases remain assigned to F238-d-18.

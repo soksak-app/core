@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-c-21: terminal의 SDK census subprocess 테스트를 제거했다. Scanner/reason 및 CLI coverage는 core가 소유하고 terminal `make check`는 저장소 census를 실행한다. Terminal test 162/162, core census test 27/27 통과.
+
 - F238-c-9: D3 규칙에 맞춰 fixture scope를 대조했다. Workbench 테스트는 이미 실제 sidecar 이름 대신 `@scope/sidecar-probe`를 사용한다. 소유 테스트 19/19 통과, 코드 변경은 필요하지 않았다.
 
 - F238-d-14: tree 펼침은 선택된 원천에 `declared-ui.expanded`를 보내며, workbench는 다음에 받아들인 plugin snapshot으로만 다시 그린다. workbench가 `expanded`를 덮어쓰지 않는다. 소유 source/section/tree 테스트 93/93 통과. host 계약 사례는 F238-d-18의 소유 범위로 남는다.
