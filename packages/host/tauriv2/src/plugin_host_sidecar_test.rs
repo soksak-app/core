@@ -9,7 +9,9 @@ use std::thread::JoinHandle;
 
 use serde_json::value::RawValue;
 
-use crate::plugin_host_sidecar::{is_plugin_session, is_plugin_session_of, is_project_session};
+use crate::plugin_host_sidecar::{
+    close_plugin_host_sessions, is_plugin_session, is_plugin_session_of, is_project_session,
+};
 use crate::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 use crate::test_folder::Folder;
 
@@ -313,6 +315,69 @@ fn a_plugin_host_close_closes_only_the_callers_sessions_of_the_plugin() {
         closing_surfaces(&sidecars),
         ["plugin:probe:project-a:fixture-sidecar"],
         "the close of the plugin host closes the caller's sessions of its plugin only"
+    );
+    sidecars.stop();
+    thread.join().unwrap();
+}
+
+// The plugin host close from the main webview of the window closes the owned plugin sessions of that plugin only
+// (docs/plans/plugin-host-routes.md rule 7, pluginHostSidecarClose).
+// contract: plugin-host.sidecar.close
+#[test]
+fn a_plugin_host_close_from_the_main_webview_closes_the_owned_sessions_of_the_plugin() {
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (_received, thread) = service(config.path());
+    let sidecars = declared(executable.path(), config.path());
+    let window = owner("window-a");
+    open_session(
+        &sidecars,
+        &window,
+        "plugin:probe:project-a:fixture-sidecar",
+        ROOT,
+    );
+    open_session(
+        &sidecars,
+        &window,
+        "plugin:other:project-a:fixture-sidecar",
+        ROOT,
+    );
+    close_plugin_host_sessions(&sidecars, &window, "window-a", "window-a", "probe").unwrap();
+    assert_eq!(
+        closing_surfaces(&sidecars),
+        ["plugin:probe:project-a:fixture-sidecar"],
+        "the close from the main webview closes the sessions of its plugin only"
+    );
+    sidecars.stop();
+    thread.join().unwrap();
+}
+
+// A plugin host close from another webview of the window is rejected and closes no session.
+// contract: plugin-host.sidecar.close
+#[test]
+fn a_plugin_host_close_from_another_webview_is_rejected_and_closes_nothing() {
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (_received, thread) = service(config.path());
+    let sidecars = declared(executable.path(), config.path());
+    let window = owner("window-a");
+    open_session(
+        &sidecars,
+        &window,
+        "plugin:probe:project-a:fixture-sidecar",
+        ROOT,
+    );
+    let error =
+        close_plugin_host_sessions(&sidecars, &window, "other-webview", "window-a", "probe")
+            .unwrap_err();
+    assert!(
+        error.contains("must come from the main webview of window-a"),
+        "the rejection names the main webview: {error}"
+    );
+    assert_eq!(
+        closing_surfaces(&sidecars),
+        Vec::<String>::new(),
+        "a call from another webview closes no session"
     );
     sidecars.stop();
     thread.join().unwrap();

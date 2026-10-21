@@ -7,7 +7,7 @@ use std::sync::PoisonError;
 use serde::Deserialize;
 use tauri::{Manager, Webview};
 
-use crate::sidecars::WindowSidecars;
+use crate::sidecars::{Owner, Sidecars, WindowSidecars};
 use crate::windows::window_data;
 
 /// Returns the plugin, the project and the sidecar of a plugin session id plugin:<plugin>:<project>:<sidecar>, or None for an id
@@ -137,12 +137,24 @@ pub(crate) fn plugin_host_sidecar_send(
 /// plugin-host-routes.md rule 7).
 pub(crate) fn plugin_host_sidecar_close(webview: &Webview, plugin: &str) -> Result<(), String> {
     let window = webview.window();
-    crate::exposure::authorize_main_caller(
+    close_plugin_host_sessions(
+        &window.state::<WindowSidecars>(),
+        &window,
         webview.label(),
         window.label(),
-        "plugin host sidecar close",
-    )?;
-    window
-        .state::<WindowSidecars>()
-        .close_owned(&window, &|surface| is_plugin_session_of(surface, plugin))
+        plugin,
+    )
+}
+
+/// Closes the plugin sessions of plugin that the owner holds, after the caller is checked to be the main webview of the
+/// window of the owner. Tauri window values are only read by the caller of this function.
+pub(crate) fn close_plugin_host_sessions<O: Owner>(
+    sidecars: &Sidecars<O>,
+    owner: &O,
+    caller: &str,
+    window: &str,
+    plugin: &str,
+) -> Result<(), String> {
+    crate::exposure::authorize_main_caller(caller, window, "plugin host sidecar close")?;
+    sidecars.close_owned(owner, &|surface| is_plugin_session_of(surface, plugin))
 }
