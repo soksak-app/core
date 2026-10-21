@@ -1,0 +1,253 @@
+{
+  "surface": "packages/plugin-api/list.js#drawList",
+  "description": "Ordered calls fix keyed element identity, updates, ordering, duplicate-key refusal, and removal of unmanaged list children.",
+  "cases": [
+    {
+      "id": "draw-list.keeps-unchanged-identity",
+      "steps": [
+        {
+          "draw": {
+            "entries": [
+              {
+                "id": "a",
+                "title": "A"
+              },
+              {
+                "id": "b",
+                "title": "B"
+              }
+            ]
+          },
+          "output": {
+            "order": [
+              "a",
+              "b"
+            ],
+            "nodeIds": [
+              "n1",
+              "n2"
+            ],
+            "text": [
+              "A",
+              "B"
+            ],
+            "created": [
+              "a",
+              "b"
+            ],
+            "updated": [
+              "a:A",
+              "b:B"
+            ],
+            "error": null
+          }
+        },
+        {
+          "draw": {
+            "entries": [
+              {
+                "id": "a",
+                "title": "A2"
+              },
+              {
+                "id": "b",
+                "title": "B"
+              }
+            ]
+          },
+          "output": {
+            "order": [
+              "a",
+              "b"
+            ],
+            "nodeIds": [
+              "n1",
+              "n2"
+            ],
+            "text": [
+              "A2",
+              "B"
+            ],
+            "created": [
+              "a",
+              "b"
+            ],
+            "updated": [
+              "a:A",
+              "b:B",
+              "a:A2",
+              "b:B"
+            ],
+            "error": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "draw-list.reorders-and-reconciles-keys",
+      "steps": [
+        {
+          "draw": {
+            "entries": [
+              {
+                "id": "a",
+                "title": "A"
+              },
+              {
+                "id": "b",
+                "title": "B"
+              },
+              {
+                "id": "c",
+                "title": "C"
+              }
+            ]
+          },
+          "output": {
+            "order": [
+              "a",
+              "b",
+              "c"
+            ],
+            "nodeIds": [
+              "n1",
+              "n2",
+              "n3"
+            ],
+            "text": [
+              "A",
+              "B",
+              "C"
+            ],
+            "created": [
+              "a",
+              "b",
+              "c"
+            ],
+            "updated": [
+              "a:A",
+              "b:B",
+              "c:C"
+            ],
+            "error": null
+          }
+        },
+        {
+          "draw": {
+            "entries": [
+              {
+                "id": "a",
+                "title": "A"
+              },
+              {
+                "id": "c",
+                "title": "C"
+              },
+              {
+                "id": "d",
+                "title": "D"
+              }
+            ]
+          },
+          "output": {
+            "order": [
+              "a",
+              "c",
+              "d"
+            ],
+            "nodeIds": [
+              "n1",
+              "n3",
+              "n4"
+            ],
+            "text": [
+              "A",
+              "C",
+              "D"
+            ],
+            "created": [
+              "a",
+              "b",
+              "c",
+              "d"
+            ],
+            "updated": [
+              "a:A",
+              "b:B",
+              "c:C",
+              "a:A",
+              "c:C",
+              "d:D"
+            ],
+            "error": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "draw-list.refuses-duplicate-keys",
+      "steps": [
+        {
+          "draw": {
+            "entries": [
+              {
+                "id": "a",
+                "title": "A"
+              },
+              {
+                "id": "a",
+                "title": "duplicate"
+              }
+            ]
+          },
+          "output": {
+            "order": [],
+            "nodeIds": [],
+            "text": [],
+            "created": [
+              "a"
+            ],
+            "updated": [
+              "a:A"
+            ],
+            "error": "drawList: key \"a\" appears twice"
+          }
+        }
+      ]
+    },
+    {
+      "id": "draw-list.removes-unmanaged-text",
+      "initialText": "unmanaged",
+      "steps": [
+        {
+          "draw": {
+            "entries": [
+              {
+                "id": "a",
+                "title": "A"
+              }
+            ]
+          },
+          "output": {
+            "order": [
+              "a"
+            ],
+            "nodeIds": [
+              "n1"
+            ],
+            "text": [
+              "A"
+            ],
+            "created": [
+              "a"
+            ],
+            "updated": [
+              "a:A"
+            ],
+            "error": null
+          }
+        }
+      ]
+    }
+  ]
+}

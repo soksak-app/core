@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-27: Publish ordered `drawList` cases for keyed element identity and updates, ordering/reconciliation, duplicate-key refusal, and unmanaged-child removal. Core tests execute each call against `list.js`; the published-case regression passes 5/5. The manifest and diagnostics validators remain open.
+
 - F238-c-27: Publish ordered `screenHash` cases for canonical bytes, SHA-256 output, screen-message projection, and named refusal errors. Core tests execute every step against `screen-hash.js`; the published-case regression passes 5/5. `drawList` and the manifest/diagnostics validators remain open.
 
 - F238-c-27: Publish six ordered `createBinder` contract cases for direct and delegated command calls, failed runs, command refusal, audit output, and disposal. Core tests execute each step against `binder.js`; the Red published-case assertion passes with the contract (7/7). Remaining surfaces are `screenHash`, `drawList`, and manifest/diagnostics validation.
