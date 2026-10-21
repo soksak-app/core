@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-6-4: 선언 section의 그리기와 보고: 워크벤치는 `status`가 있는 section을 선언 section 상태로 mount하고, body는 받아들인 declared UI 값을 그리며, 거부는 하나의 표시 경로로 보이고 다음 받아들인 값이 거둔다. root 요소는 세로 방향에서 쌓이고 가로 방향에서 한 줄로 줄을 바꿔 놓이며, 방향이 바뀌면 받아들인 값을 다시 검사한다. `core.sidebars`는 선언 section의 `mounted`와 `error`를 보고한다. snapshot 전송과 pull은 아직 실제 연결이 없어서 응용에서 선언 section은 비어 있다. 단위 시험은 stub에서 실패(assertion 오류 4개)하고 구현에서 통과한다(81 of 81).
 - F212.8-0-21: control 주소는 사이드바, section, key, path와 역할 때문에 유일하며, DOM 항목은 여러 요소가 이름을 공유하므로 `many`로 선언된다는 사실만 적는다.
 - F212.8-0-22: 거부 이유의 슬롯은 따옴표를 포함해 128 코드 포인트에서 따옴표를 붙여 자른다. `plugins.md`는 세트 안의 중복 섹션 ID를 명시적으로 거부하고, `terms.json`에 `control address`와 `sidebar instance`를 추가했다. address 필드의 타입을 정했고, 다른 `core.sidebar.section.control` 항목의 `address`는 `-32602`로 거부한다.
 - F212.8-1-1: 선언 UI의 키 기반 다시 그리기: 루트 요소, list 행, tree 노드, 펼침 제어는 address가 남는 동안 같은 요소를 유지하며, `@soksak/plugin-api`의 `drawList`로 조정하고, 각 제어는 명령에 한 번만 묶인다. 명령 실행 뒤에도 펼침 제어에 초점이 남는다. 단위 테스트는 바뀌기 전 모듈에서 실패(assertion 4개)하고 구현에서 통과한다(48개 중 48개).
