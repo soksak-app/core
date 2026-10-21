@@ -106,6 +106,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
 
+페이지는 자신을 식별하는 key, 즉 그 등록의 owner key 아래에서 등록한다. 표면 페이지는 자기 surface id 아래에서 자기 plugin을 owner로 하여 등록한다. plugin host 페이지는 자기 channel을 통해 owner key `plugin:<plugin id>` 아래에서 등록하며([plugin host](plugin-host.ko.md#exposure)), plugin host의 등록은 자기 프로세스와 함께 끝나고 restart limit 안에서 다시 만들어진 프로세스는 같은 key로 다시 등록한다.
+
 ### 표면 문서
 
 `@soksak/plugin-api/page`는 모든 플러그인 표면 페이지에 다음 코어 항목을 등록하므로 플러그인이 구현하지 않는다. 코어는 이 항목을 `exposure.json`에 선언한다. 표면 페이지가 등록하는 코어 이름은 이 항목뿐이다.
@@ -130,7 +132,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ### 표면 선택
 
-여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다.
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다. [plugin host](plugin-host.ko.md)가 등록하고 어떤 표면 페이지와 상태 모듈도 등록하지 않은 이름에 대한 `surface` 없는 요청은 plugin host의 등록이 답한다. `surface`를 naming하는 요청은 plugin host가 답하지 않는다. plugin host는 surface가 아니기 때문이다.
 
 ## Tab memory
 

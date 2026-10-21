@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.9-1: `docs/spec/plugin-host.md`가 plugin host를 명세한다. `plugin.json`의 `host` 선언(페이지와 선택적 선언 상태), plugin당 창당 하나의 숨은 web view와 view의 구성과 channel, plugin을 불러올 때의 lifetime, owner key `plugin:<plugin id>` 아래의 exposure 등록, surface 필드 없는 declared UI snapshot과 pull, sidecar failure 계약의 restart limit과 event `host.plugin-host.restart`, `host.plugin-host.restart-limit`, `host.trace.plugin-host.restart-reset`, 그리고 host 페이지의 다음 시작을 위해 상태를 저장하는 `state.write`와 `state.read` call. exposure.md는 owner key와 host 등록을, hosts.md와 native-surfaces.md는 web view를 창에 붙이는 platform 연산을, plugins.md는 manifest 필드를 밝히며, 용어 `plugin host state`가 등재된다.
 - F212.6a-1-3-2-2: page close 멈춤의 원인을 특정했다. `CFRunLoopWakeUp`의 pthread mutex는 main run loop의 `_lock`이며, main thread가 WebKit page close 일을 하는 동안 짧게 반복해 잡는다. 뒤따르는 대기자는 그 뒤에 줄 서고 IPC receive queue와의 원형 대기가 멈춤을 늘린다. 원인이 host code가 아니므로 코드는 바꾸지 않는다.
 - F212.8-6-4: 선언 section의 그리기와 보고: 워크벤치는 `status`가 있는 section을 선언 section 상태로 mount하고, body는 받아들인 declared UI 값을 그리며, 거부는 하나의 표시 경로로 보이고 다음 받아들인 값이 거둔다. root 요소는 세로 방향에서 쌓이고 가로 방향에서 한 줄로 줄을 바꿔 놓이며, 방향이 바뀌면 받아들인 값을 다시 검사한다. `core.sidebars`는 선언 section의 `mounted`와 `error`를 보고한다. snapshot 전송과 pull은 아직 실제 연결이 없어서 응용에서 선언 section은 비어 있다. 단위 시험은 stub에서 실패(assertion 오류 4개)하고 구현에서 통과한다(81 of 81).
 - F212.8-0-21: control 주소는 사이드바, section, key, path와 역할 때문에 유일하며, DOM 항목은 여러 요소가 이름을 공유하므로 `many`로 선언된다는 사실만 적는다.

@@ -63,6 +63,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈이 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
+| `host` | 아니오 | `{ "page": "<경로>", "state"?: { "format": <양의 정수>, "maxBytes": <양의 정수> } }`: [plugin host](plugin-host.ko.md). plugin의 DOM 없는 로직을 실행하는 숨은 web view다. `page`는 `view` composition의 페이지 규칙을 따르고, `state`는 host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태를 선언한다 |
 
 플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. `hybrid` 표면에서 워크벤치는 `modules/<name>/<module>`(`<name>`은 플러그인 `package.json`의 `name`)을 import하고 `mount(root, context)`를 호출한다. `view` 표면은 module이 없으며 워크벤치는 그것을 위해 아무것도 import하지 않는다([view 표면](#view-표면)). 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
 

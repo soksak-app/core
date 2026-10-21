@@ -102,6 +102,7 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 | 입력 | 입력 감시와 해제. Tauri는 포인터 라우팅에 웹뷰를 등록하는 연산도 가진다 |
 | 캡처 | 창 캡처: 대상 지정, 시작, 첫 프레임 대기, 종료 |
 | 문서 영역 | 표면 웹뷰 안의 생성, 이동, 기록 동작, 여백에 따른 배치, 대화 상자 흐림, 닫기 |
+| Plugin host | 창 자체에 붙는 [plugin host](plugin-host.ko.md) web view의 생성, 숨은 배치, 없앰 |
 | 종료 | 종료 신호(SIGTERM, SIGINT, SIGHUP). 첫 신호는 호스트의 종료 요청을 부르고, 그 뒤의 신호는 기본 동작으로 프로세스를 끝낸다. quit 는 창이 저장한 뒤 모든 창의 웹 프로세스를 끝낸다 — [프로세스 생명주기](#프로세스-생명주기) |
 | 종료 요청 | 운영체제의 종료 요청(Dock, 로그아웃, 재시작, 다른 프로그램이 보내는 `kAEQuitApplication` Apple event)은 준비된 창의 저장을 포함해 `host.quit`과 같은 종료를 실행하고, 호스트는 저장과 종료 단계를 마친 뒤 프로세스가 끝나기 직전에 그 요청에 오류 없이 답한다. 창이 수정된 탭을 지키면 애플리케이션은 종료하지 않는다. 페이지가 `windowCloseKept`를 알리고([수정된 탭을 지키면 종료가 끝난다](#프로세스-생명주기)) 호스트는 대기 중인 각 요청에 `userCanceledErr`로 답하므로, Dock, 로그아웃, 다른 프로그램이 애플리케이션이 남는다는 것을 안다. 애플리케이션 프레임워크의 자체 종료 경로는 쓰지 않는다. Wails 프레임워크는 미룬 종료에 취소로 답해 로그아웃도 멈추고, Tauri 프레임워크는 페이지 저장을 기다리지 않고 끝나기 때문이다 |
 | 창 동작 | 창을 만들기 전에 창 크기 변경 애니메이션 길이 줄이기 |
@@ -125,6 +126,8 @@ Rust: `src/platform/platform.rs`는 각 운영체제 모듈을 `#[cfg(target_os 
 비동기 시작·대리자 종료 실패는 현재 스트림을 식별할 때만 녹화 오류를 바꾼다. 이전 스트림의 지연 실패는 스트림 동일성과 함께 보고하며 이후 녹화 오류·첫 프레임 준비를 바꾸지 않는다. 시작 완료는 전달될 때까지 원래 스트림 동일성을 유지하며 교체된 스트림의 동일성을 자신의 것으로 읽지 않는다.
 
 웹뷰 연산은 DOM 평면을 창의 공통 표면 컨테이너에 직접 붙이지 않고 `SurfaceHost`에 붙인다. 문서·그림 연산은 그 호스트 네이티브 평면의 하위 뷰를 만든다. 플랫폼 인터페이스는 영역을 `SurfaceHost`의 형제로 배치하는 연산을 노출하지 않는다. 두 언어 호스트는 플랫폼 코드를 호출하기 전에 [표면 합성](surface-composition.ko.md)을 검증한다.
+
+plugin host web view는 플랫폼이 `SurfaceHost`가 아니라 창 자체에 붙이는 유일한 web view다. surface를, frame을, region을 가지지 않으며 아무것도 그리지 않는다([plugin host](plugin-host.ko.md)). darwin이 이 연산을 구현하며, 제공할 수 없는 플랫폼은 플랫폼 인터페이스의 모든 연산이 그러하듯 `platform/<os>/unsupported.*`의 오류로 요청을 실패시킨다.
 
 두 호스트에서 place는 답하기 전에 더 이상 나열하지 않는 각 표면의 문서 영역과 그림 영역을 모두 닫는다(Wails에서 `closeSurfaceDocuments`와 `images.CloseSurface`, Tauri에서 `documents::close_surface`와 `images::close_surface`). 그 뒤 page는 영역을 detach하지 않고 그 표면을 release한다([region lifetime](native-surfaces.ko.md#region-lifetime)).
 
