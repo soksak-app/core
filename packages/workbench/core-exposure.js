@@ -14,6 +14,7 @@ import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
 import { setTreeExpanded } from "./declared-ui.js";
+import { resolveSectionControl } from "./section-address.js";
 import { losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
 import { tabMenuItems } from "./tab-menu.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
@@ -594,7 +595,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
 
   for (const { name } of registry.list().dom) {
-    if (name.startsWith("core.")) registry.dom(name);
+    if (name.startsWith("core.")) registry.dom(name, undefined, name === "core.sidebar.section.control" ? resolveSectionControl : undefined);
   }
 
   onPicker(coreChanged);

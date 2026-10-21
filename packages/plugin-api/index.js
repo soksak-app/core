@@ -1090,6 +1090,7 @@ export const EXPOSURE_ERRORS = Object.freeze({
   unavailable: 1004,
   timeout: 1005,
   inactive: 1006,
+  noControl: 1009,
 });
 
 const OWNER = /^(core|host|[a-z][a-z0-9-]*)$/;
@@ -1405,6 +1406,8 @@ export function exposureEntries(declared) {
   const statuses = new Map();
   const commands = new Map();
   const doms = new Map();
+  // The resolver of each dom entry that accepts an address (docs/spec/exposure.md, requests): resolve(address, elements) returns the element.
+  const resolvers = new Map();
   const tables = { status: statuses, command: commands, dom: doms };
 
   const declaration = (kind, name) => {
@@ -1492,9 +1495,14 @@ export function exposureEntries(declared) {
     },
 
     /** provide is a function that returns an array of elements. Unless many is set, it registers only once. */
-    dom(name, provide) {
+    dom(name, provide, resolve) {
       const { many } = declaration("dom", name);
       if (!many && doms.has(name)) throw new Error(`dom ${name} is already registered`);
+      if (resolve !== undefined) {
+        if (typeof resolve !== "function") throw new Error(`dom ${name} resolver must be a function`);
+        if (resolvers.has(name)) throw new Error(`dom ${name} resolver is already registered`);
+        resolvers.set(name, resolve);
+      }
       // default: for the first registration of this name, there is no earlier provider.
       doms.set(name, [...(doms.get(name) ?? []), provide]);
     },
@@ -1558,6 +1566,15 @@ export function exposureEntries(declared) {
         }
         // default: an undefined result of a command without a result is not in JSON, so it is answered as null.
         return (await run(input)) ?? null;
+      }
+      if (params.address !== undefined) {
+        if (params.index !== undefined) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "a request gives index or address, not both");
+        const resolve = resolvers.get(name);
+        if (!resolve) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `dom ${name} takes no address`);
+        const element = resolve(params.address, elements(name));
+        if (!element) throw new ExposureError(EXPOSURE_ERRORS.noControl, `dom ${name} has no element at the address`);
+        if (method === "dom.rect") return elementRect(element);
+        return actOn(element, params);
       }
       const list = elements(name);
       if (list.length === 0) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has no element`);

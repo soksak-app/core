@@ -354,8 +354,8 @@ export function createRegistry({ call = null, report = null } = {}) {
       }
       return result;
     }),
-    /** Registers a core dom entry. The elements are found by the data-expose attribute when requested. */
-    dom: (name, provide = byAttribute(name)) => core.dom(name, provide),
+    /** Registers a core dom entry. The elements are found by the data-expose attribute when requested. resolve answers an address (plugin-api dom). */
+    dom: (name, provide = byAttribute(name), resolve = undefined) => core.dom(name, provide, resolve),
 
     /**
      * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command.

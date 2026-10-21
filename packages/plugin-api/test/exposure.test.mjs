@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  EXPOSURE_ERRORS, actOn, createExpose, declarationMap, exposureEntries, matchesSchema, pagePackage,
+  EXPOSURE_ERRORS, ExposureError, actOn, createExpose, declarationMap, exposureEntries, matchesSchema, pagePackage,
   mergeExposes, replyPayload, validateInstalledPlugins, validateDiagnostics, validateExposes, validateExposureFile,
   validateManifest,
 } from "../index.js";
@@ -324,4 +324,26 @@ test("a rejected installed manifest names the plugin, its version and package", 
     manifest: { id: "alpha", name: "Alpha", description: "검사용.", sidecars: ["@fixture/sidecar"] } };
   assert.throws(() => validateInstalledPlugins({ plugins: [plugin] }),
     /^Error: installed plugin alpha 0\.0\.3 \(plugin-alpha\): plugin\.json: unknown field sidecars$/);
+});
+
+// The address form of a dom request (docs/spec/exposure.md, requests): an entry that resolves addresses answers the address through its resolver.
+test("a dom request gives an index or an address, never both, and an address resolves through the entry's resolver", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const input = element();
+  const found = element({ left: 9, top: 9, width: 1, height: 1 });
+  const seen = [];
+  entries.dom("probe.input", () => [input]);
+  const code = async (work) => (await replyPayload(work)).error?.code;
+  // index and address together are refused.
+  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: 0, address: {} })), EXPOSURE_ERRORS.invalidParams);
+  // An entry without a resolver takes no address.
+  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", address: {} })), EXPOSURE_ERRORS.invalidParams);
+  entries.dom("probe.row", () => [element()], (address, elements) => {
+    seen.push({ address, count: elements.length });
+    if (address.key === "none") throw new ExposureError(1009, "no control matches");
+    return found;
+  });
+  assert.deepEqual(await entries.answer("dom.rect", { name: "probe.row", address: { key: "go" } }), { x: 9, y: 9, width: 1, height: 1 });
+  assert.deepEqual(seen, [{ address: { key: "go" }, count: 1 }], "the resolver did not receive the address and the elements");
+  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });
