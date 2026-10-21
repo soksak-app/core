@@ -55,7 +55,7 @@ the opened surface recorded no host.trace.sidecar.restart-reset
 
 1. main과 branch에서 `make rust-tests-alone PACKAGE=soksak-host-tauriv2`와 `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=3`을 돌린다. 실패가 시험 순서 때문인지 F218-2.2 때문인지 가린다.
 2. 이 시험은 공유 event log에서 trace 기록을 읽는다. 같은 binary의 다른 시험이 같은 log에 쓰거나 log를 비우는지 확인한다. Go 시험의 `useEventLog`가 격리된 형태다.
-3. 원인을 고친다. Red는 반복 실행이나 순서 실행으로, Green은 전체 실행 세 번으로 기록한다. 그다음 F218-2.2를 합친다.
+3. 원인을 고친다. Red는 실패 assertion을 보이는 가장 가벼운 실행으로, Green은 바꾼 것의 소유 시험으로 기록한다. 전체 모음 판정 실행은 지금이 아니라 체크리스트 전체가 완료된 뒤 한 번 돌린다. 그다음 F218-2.2를 합친다.
 
 ### Sidecar 저장소
 
@@ -114,7 +114,7 @@ the opened surface recorded no host.trace.sidecar.restart-reset
 | push 관문(기록, 구조, 형식, clippy, 관문 시험) | `make push-check` |
 | view 프로세스 benchmark | `make -C native/darwin benchmark-view-processes` |
 
-전체 suite(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, 창 suite)는 항목 완료에 쓰지 않는다.
+전체 suite(`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, 창 suite)는 항목 완료에 쓰지 않고 체크리스트 전체가 완료된 뒤 배포 전에 한 번 돌린다. 개발 중에는 바꾼 것의 단위 시험만 돌리고, 간헐 실패의 반복 대상도 그 마지막 통과까지 기다린다.
 
 ### 창 검사와 측정
 

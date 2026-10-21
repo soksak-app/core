@@ -55,7 +55,7 @@ The same test passes alone three of three times (`make rust-repeat PACKAGE=soksa
 
 1. Run `make rust-tests-alone PACKAGE=soksak-host-tauriv2` and `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=3` on main and on the branch. This shows whether the failure depends on test order or on F218-2.2.
 2. The test reads trace records through a shared event log. Check whether another test in the same binary writes or drains the same log; `useEventLog` in the Go tests is the isolated pattern.
-3. Fix the cause, with a Red from a repeat or order run and a Green from three full runs. Then merge F218-2.2.
+3. Fix the cause, with a Red from the cheapest run that shows the failing assertion and a Green from the owning tests. The full-suite acceptance runs once after the checklist completes, not now. Then merge F218-2.2.
 
 ### Sidecar repositories
 
@@ -114,7 +114,7 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 | Push gate (records, structure, format, clippy, gate tests) | `make push-check` |
 | View process benchmark | `make -C native/darwin benchmark-view-processes` |
 
-Full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, the window suites) are not run to complete an item.
+Full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, the window suites) are not run to complete an item; they run once after the checklist completes, before the release. During development run only the unit tests of what changed; repeat targets of an intermittent failure also wait for that final pass.
 
 ### Window checks and measurements
 
