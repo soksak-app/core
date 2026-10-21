@@ -23,7 +23,7 @@ func TestViewCreationAddsTheThemeScriptBeforeTheLoad(t *testing.T) {
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, ViewStart{}); err != nil {
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
 		t.Fatalf("first sync of the view: %v", err)
 	}
 	if len(fake.created) != 1 {

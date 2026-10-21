@@ -109,7 +109,7 @@ func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecycle
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, ViewStart{}); err != nil {
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
 		t.Fatalf("first sync of the view: %v", err)
 	}
 	return s, fake, native
@@ -201,7 +201,7 @@ func TestViewStoppedSurfaceIsNotCreatedUntilItsRecordIsCleared(t *testing.T) {
 		t.Fatalf("four failures within the window do not stop the restarts")
 	}
 	created := len(fake.created)
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, ViewStart{}); err != nil {
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
 		t.Fatalf("sync of a stopped surface: %v", err)
 	}
 	if len(fake.created) != created {

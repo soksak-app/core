@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tauri::{Manager, Webview, Window};
 
@@ -43,12 +43,6 @@ pub(crate) struct Surface {
     start: Option<ViewStart>,
 }
 
-/// The working directory that the tab that opened the surface recorded at that moment (docs/spec/plugins.md#tab-reports).
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct SurfaceOrigin {
-    pub(crate) directory: Option<String>,
-}
-
 /// The root of the project that the window shows (docs/spec/plugins.md#tab-reports).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct SurfaceProject {
@@ -61,25 +55,51 @@ pub struct SurfaceProject {
 pub struct ViewStart {
     #[serde(default)]
     pub(crate) params: Option<Value>,
-    #[serde(default)]
-    pub(crate) origin: Option<SurfaceOrigin>,
+    /// The origin as the page sent it, kept raw so that a missing origin and a null origin are refused alike
+    /// (view_origin_directory); the Go host runs the same check.
+    #[serde(default, deserialize_with = "present_value")]
+    pub(crate) origin: Option<Value>,
     #[serde(default)]
     pub(crate) project: Option<SurfaceProject>,
     #[serde(default)]
     pub(crate) declarations: Option<Value>,
 }
 
+/// Keeps a present value, null included, so that an absent field and a null field are told apart.
+fn present_value<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
+}
+
+/// The directory that the origin of the view of surface records, or None when it records none. The origin is required and has
+/// the one form {"directory": path} or {"directory": null}; any other value is refused with its reason
+/// (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) fn view_origin_directory(
+    surface: &str,
+    origin: Option<&Value>,
+) -> Result<Option<String>, String> {
+    let Some(origin) = origin else {
+        return Err(format!("surface {surface:?}: view start origin is missing"));
+    };
+    let malformed = || {
+        format!("surface {surface:?}: view start origin is not {{directory}} with a path or null")
+    };
+    // default: a value that is not an object of one member, or whose directory is not a string or null, has the form error.
+    let fields = origin
+        .as_object()
+        .filter(|fields| fields.len() == 1)
+        .ok_or_else(malformed)?;
+    match fields.get("directory") {
+        Some(Value::Null) => Ok(None),
+        Some(Value::String(path)) if path.is_empty() => Err(format!(
+            "surface {surface:?}: view start origin directory is empty"
+        )),
+        Some(Value::String(path)) => Ok(Some(path.clone())),
+        _ => Err(malformed()),
+    }
+}
+
 /// Checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
 fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
-    if start
-        .origin
-        .as_ref()
-        .is_some_and(|origin| origin.directory.as_deref() == Some(""))
-    {
-        return Err(format!(
-            "surface {surface:?}: view start origin directory is empty"
-        ));
-    }
     if start
         .project
         .as_ref()
@@ -98,6 +118,7 @@ fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
             "surface {surface:?}: view start declarations are not an object"
         ));
     }
+    view_origin_directory(surface, start.origin.as_ref())?;
     Ok(())
 }
 
@@ -654,14 +675,16 @@ pub fn check_sync_request(
                 surface.id
             ));
         }
-        if let Some(start) = &surface.start {
-            if surface.composition.kind != "view" {
-                return Err(format!(
-                    "surface {:?}: only a view surface carries start values",
-                    surface.id
-                ));
-            }
-            validate_view_start(&surface.id, start)?;
+        if surface.start.is_some() && surface.composition.kind != "view" {
+            return Err(format!(
+                "surface {:?}: only a view surface carries start values",
+                surface.id
+            ));
+        }
+        if surface.composition.kind == "view" {
+            // default: a view without start values has no origin, which validate_view_start refuses.
+            let start = surface.start.clone().unwrap_or_default();
+            validate_view_start(&surface.id, &start)?;
         }
     }
     request
@@ -877,8 +900,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let surface = s.id.clone();
                 let plugin = s.plugin.clone();
                 let page = s.composition.page.clone();
-                // default: a view surface synced without start values injects empty ones, as wailsv3 does; values
-                // that are present were checked by validate_view_start.
+                // default: a view surface without start values has no origin; documents::sync_view refuses it when it
+                // builds the start values script, and CheckSyncRequest refuses it first.
                 let start = s.start.clone().unwrap_or_default();
                 exposure::on_main(window, move || {
                     documents::sync_view(

@@ -22,8 +22,8 @@ use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
-use crate::surfaces::ViewStart;
 use crate::surfaces::{Placement, require_region, surface_handle};
+use crate::surfaces::{ViewStart, view_origin_directory};
 use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
 use crate::windows::{emit_window, window_data, with_native_owner};
 
@@ -1201,7 +1201,7 @@ fn attach_view(
             let theme = crate::theme::get(window)?;
             let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
             platform.add_document_script(document, &theme_script(&theme))?;
-            platform.add_document_script(document, &surface_start_script(surface, &start))?;
+            platform.add_document_script(document, &surface_start_script(surface, &start)?)?;
             record_view_process_request(surface, plugin);
             Ok(document)
         },
@@ -2120,20 +2120,16 @@ pub fn theme_script(theme: &Value) -> String {
 
 /// The document-start script that sets window.sokSurface to the frozen start values of the view of surface, which the first page
 /// script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface has none of is carried as JSON
-/// null.
-pub fn surface_start_script(surface: &str, start: &ViewStart) -> String {
+/// null, except the origin, which must be present and of its form; a missing or malformed origin is refused.
+pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, String> {
     let params = start
         .params
         .as_ref()
         .map_or_else(|| "null".to_string(), |value| value.to_string());
-    let directory = start
-        .origin
-        .as_ref()
-        .and_then(|origin| origin.directory.as_deref())
-        .map_or_else(
-            || "null".to_string(),
-            |directory| Value::String(directory.to_string()).to_string(),
-        );
+    let directory = view_origin_directory(surface, start.origin.as_ref())?.map_or_else(
+        || "null".to_string(),
+        |directory| Value::String(directory).to_string(),
+    );
     let project = start.project.as_ref().map_or_else(
         || "null".to_string(),
         |project| {
@@ -2146,9 +2142,9 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> String {
         .as_ref()
         .map_or_else(|| "{}".to_string(), |value| value.to_string());
     let id = Value::String(surface.to_string());
-    format!(
+    Ok(format!(
         "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations})}});"
-    )
+    ))
 }
 
 #[cfg(test)]

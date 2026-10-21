@@ -433,8 +433,12 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 		params = string(start.Params)
 	}
 	directory := "null"
-	if start.Origin != nil && start.Origin.Directory != nil {
-		text, err := json.Marshal(*start.Origin.Directory)
+	origin, err := viewOriginDirectory(surface, start.Origin)
+	if err != nil {
+		return "", err
+	}
+	if origin != nil {
+		text, err := json.Marshal(*origin)
 		if err != nil {
 			return "", fmt.Errorf("view start origin cannot be serialized: %w", err)
 		}
