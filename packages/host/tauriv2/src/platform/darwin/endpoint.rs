@@ -52,10 +52,14 @@ pub fn service_process_exists(pid: u32) -> Result<bool, String> {
         .output()
         .map_err(|e| format!("cannot inspect service process {pid} state: {e}"))?;
     let state = String::from_utf8_lossy(&output.stdout);
-    if !state.trim_start().starts_with('Z') {
-        return Ok(true);
-    }
-    Ok(false)
+    Ok(listed_as_alive(&state))
+}
+
+/// Whether the state that ps printed for a process names a process that runs. Empty output means that ps lists no such
+/// process: the process was reaped after kill(pid, 0) passed, so it has ended. A zombie (state Z) has ended too.
+fn listed_as_alive(state: &str) -> bool {
+    let state = state.trim_start();
+    !state.is_empty() && !state.starts_with('Z')
 }
 
 /// Waits for the end of the service process `pid` with the kqueue notification NOTE_EXIT, for at most `timeout`. A
@@ -299,4 +303,23 @@ pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>
 pub fn connect(address: &str) -> Result<Box<dyn Connection>, String> {
     let stream = UnixStream::connect(address).map_err(|e| format!("{address}: {e}"))?;
     Ok(Box::new(Stream(stream)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::listed_as_alive;
+
+    #[test]
+    fn a_process_that_ps_does_not_list_has_ended() {
+        // A process reaped between kill(pid, 0) and ps leaves no row, so the state is empty.
+        assert!(!listed_as_alive(""));
+        assert!(!listed_as_alive("  \n"));
+    }
+
+    #[test]
+    fn a_zombie_has_ended_and_a_running_process_has_not() {
+        assert!(!listed_as_alive("Z+\n"));
+        assert!(listed_as_alive("S   \n"));
+        assert!(listed_as_alive("  Ss\n"));
+    }
 }
