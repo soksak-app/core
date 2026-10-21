@@ -62,6 +62,7 @@ var eventClasses = map[string]Class{
 	"host.trace.view.responsive":              ClassCall,
 	"host.trace.view.unresponsive":            ClassCall,
 	"host.update.start":                       ClassLifecycle,
+	"host.view.killed":                        ClassLifecycle,
 	"host.window.event":                       ClassLifecycle,
 	"host.workspace.settings":                 ClassLifecycle,
 	"log.closed":                              ClassLifecycle,

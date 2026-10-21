@@ -49,6 +49,7 @@ const EXACT = new Map([
   ["host.trace.view.responsive", "call"],
   ["host.trace.view.unresponsive", "call"],
   ["host.update.start", "lifecycle"],
+  ["host.view.killed", "lifecycle"],
   ["host.window.event", "lifecycle"],
   ["host.workspace.settings", "lifecycle"],
   ["log.closed", "lifecycle"],

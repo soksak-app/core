@@ -104,6 +104,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.trace.view.responsive" => Some(Class::Call),
         "host.trace.view.unresponsive" => Some(Class::Call),
         "host.update.start" => Some(Class::Lifecycle),
+        "host.view.killed" => Some(Class::Lifecycle),
         "host.window.event" => Some(Class::Lifecycle),
         "host.workspace.settings" => Some(Class::Lifecycle),
         "log.closed" => Some(Class::Lifecycle),

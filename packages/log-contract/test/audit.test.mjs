@@ -83,6 +83,19 @@ test("the main file holds error, warn and info, and the debug file holds debug a
   ]);
 });
 
+test("an undeclared event of the layer plugin has the class lifecycle and is accepted only with it", () => {
+  const findings = auditLog("host-b1.jsonl", [
+    open,
+    line(2, "plugin.probe.other", {}, { undeclared: true, layer: "plugin", class: "lifecycle" }),
+    line(3, "plugin.probe.other", {}, { undeclared: true, layer: "plugin", class: "call" }),
+    line(4, "plugin.probe.other", {}, { undeclared: true, layer: "plugin" }),
+  ].join("\n"), catalog);
+  assert.deepEqual(findings, [
+    { line: 3, message: "event plugin.probe.other is undeclared in the layer plugin, so it has the class lifecycle, found call" },
+    { line: 4, message: "event plugin.probe.other is undeclared in the layer plugin, so it has the class lifecycle, found none" },
+  ]);
+});
+
 test("an undeclared event, a missing field and a field of the wrong type are reported with the line", () => {
   const text = [
     open,

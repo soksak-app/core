@@ -360,6 +360,8 @@ fn invalid_json_closes_connection() {
 | `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. 5초 안에 붙은 writer가 없으면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. | both |
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | both |
 | `host.stall.passes-every-gate` | stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 lifecycle 기록을 끄는 policy에서도 저장된다. 로깅 명세의 이름 붙은 gate 예외로 모든 gate를 `warn`에서 지나가기 때문이다. | both |
+| `host.view.killed.passes-every-gate` | 종료 기록 `host.view.killed`는 lifecycle 기록을 끄는 policy에서도 저장된다. 명세의 이름 붙은 gate 예외로 `warn`에서 모든 gate를 지나기 때문이다. | both |
+| `host.view.killed.is-written-on-every-end` | host가 종료를 관찰하는 view(process가 끝난 뒤 kill, surface 또는 window와 함께 close)는 자기 plugin, 자기 surface와 `unsent` true를 담은 `host.view.killed`를 종료마다 한 번 저장한다. 살아 있는 view가 없는 surface는 아무것도 저장하지 않는다. | both |
 | `host.locks.poisoned-state-is-recovered` | poisoned lock은 가지고 있던 상태와 함께 복구되고 연산이 끝난다. host의 panic hook이 panic을 기록한다. 로깅 명세의 하나뿐인 방식이다. | tauriv2 only: Go mutex는 poison되지 않는다 |
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | 두 host |
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
@@ -817,6 +819,8 @@ fn invalid_json_closes_connection() {
 | `log.record.start-buffer-holds-records-until-the-writer-exists` | host의 writer가 생기기 전에 쓴 기록은 시작 buffer에서 기다리고, writer는 그 기록을 쓴 시각 그대로 순서대로 받는다. | both |
 | `log.record.start-buffer-counts-its-loss` | 시작 buffer는 1024개를 담고 그 너머의 기록은 거부하며, writer는 거부한 기록을 그 수와 함께 `log.dropped`로 기록한다. | both |
 | `log.plugin-catalog.classifies-plugin-events` | writer는 plugin event를 plugin class가 주는 class로, 어느 catalog도 선언하지 않은 event를 `undeclared`로 저장한다. | both |
+| `log.plugin-gate.undeclared-takes-lifecycle` | 선언되지 않은 layer plugin의 event는 class lifecycle과 `undeclared`로 저장되며, lifecycle을 끈 policy는 이를 거부하고 `log.gated`에 class lifecycle로 센다. | both |
+| `log.plugin-gate.refuses-below-the-class-level` | class의 level 아래의 plugin event는 writer가 거부하고 `log.gated`에 그 class로 센다. | both |
 | `log.plugin-catalog.reads-the-enabled-plugins` | plugin class는 활성화된 설치 plugin의 catalog가 선언한 class이며, 비활성 plugin은 아무것도 더하지 않는다. | both |
 | `log.plugin-catalog.refuses-a-catalog` | 없거나 JSON이 아니거나 `plugin.<plugin>.` 밖의 이름이나 모르는 class를 선언한 catalog는 plugin id 순서로 그 파일을 밝히는 오류이고, 다른 plugin은 class를 유지한다. | both |
 | `log.plugin-catalog.host-applies-the-installed-catalogs` | host는 설치된 catalog의 class를 writer에 주고, 쓸 수 없는 catalog를 장소 `plugin catalog`의 오류 기록으로 남긴다. | both |
