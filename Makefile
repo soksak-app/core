@@ -217,23 +217,14 @@ go-repeat:
 	  CGO_CFLAGS="$(GO_CFLAGS) $$cgo" node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LINK)'
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
-# This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
-# The executed tests are counted in the TAP result, which is machine-readable. The human-readable output carries color codes depending on the environment, and when no test matches the name
-# the file itself is reported as one passing result, so only results whose title matches the name pattern and that are not skipped are counted.
-node-repeat: SHELL := /bin/bash -o pipefail
+# Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts
+# (scripts/node-repeat.mjs). Each test of a repeat gets the same limit through --test-timeout.
+# This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
+# A repeat fails when no passed test matches the pattern.
 node-repeat:
 	@case "$(FILE)" in '') echo "node-repeat requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "node-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    echo "START: $(FILE) $(NAME) run $$run of $(COUNT)"; \
-	    node --test --experimental-test-module-mocks --test-reporter=tap --test-name-pattern='$(NAME)' $(FILE) 2>&1 | tee "$$output" \
-	      || { echo "FAIL: $(FILE) $(NAME) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    sed -nE 's/^[[:space:]]*ok [0-9]+ - //p' "$$output" | grep -v '# SKIP' | grep -qE -- '$(NAME)' \
-	      || { echo "FAIL: no test in $(FILE) matched $(NAME)" >&2; exit 1; }; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(FILE) $(NAME): $(COUNT) of $(COUNT) runs pass"
+	@node scripts/node-repeat.mjs --file '$(FILE)' --name='$(NAME)' --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs COMMAND with a temporary folder of its own and fails when it leaves a soksak- entry there, except the window-check
 # configuration folders soksak-check-* (docs/operations/examples.md#temporary-folders): make temp-audit COMMAND="pnpm test"
