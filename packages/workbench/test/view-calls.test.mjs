@@ -11,8 +11,10 @@ function fakes() {
     plugin: "probe",
     pending: new Map(),
     tab: {
-      read: () => ({ count: 2 }),
-      write: (value) => { ran.writes.push(value); },
+      state: {
+        read: () => ({ count: 2 }),
+        write: (value) => { ran.writes.push(value); },
+      },
       title: (text) => { ran.reports.push({ title: text }); },
       footer: (text) => { ran.reports.push({ footer: text }); },
       directory: (path) => { ran.reports.push({ directory: path }); },
@@ -64,6 +66,7 @@ test("a forwarded tab.state.read returns the tab state of its surface", async ()
 test("tab.state.read is refused when the surface declares no tab state", async () => {
   const { options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...options, tab: null }), /tab state is not declared/);
+  await assert.rejects(answerViewCall({ id: 2, command: "tab.state.read", params: null }, { ...options, tab: { ...options.tab, state: undefined } }), /tab state is not declared/);
 });
 
 test("a command of another plugin is refused and runs nothing", async () => {
@@ -96,6 +99,7 @@ test("tab.state.write stores the params as the tab state of its surface", async 
 test("tab.state.write is refused when the surface declares no tab state", async () => {
   const { ran, options } = fakes();
   await assert.rejects(answerViewCall({ id: 1, command: "tab.state.write", params: {} }, { ...options, tab: null }), /tab state is not declared/);
+  await assert.rejects(answerViewCall({ id: 2, command: "tab.state.write", params: {} }, { ...options, tab: { ...options.tab, state: undefined } }), /tab state is not declared/);
   assert.deepEqual(ran.writes, []);
 });
 
@@ -290,11 +294,11 @@ test("a restarted view reads the tab state of its surface as it was saved before
     write: (value) => { store.set("probe-surface", value); },
   };
   const { options: before } = fakes();
-  await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, { ...before, tab: surfaceTab });
+  await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, { ...before, tab: { ...before.tab, state: surfaceTab } });
   assert.deepEqual(store.get("probe-surface"), { page: 3 });
   const { options: restarted } = fakes();
   assert.deepEqual(
-    await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: surfaceTab }),
+    await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: { ...restarted.tab, state: surfaceTab } }),
     { page: 3 },
   );
 });

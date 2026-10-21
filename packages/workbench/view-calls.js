@@ -9,12 +9,11 @@
  *     event     {id, command, params} of a call request, or {id, cancel: true} of a cancel
  *     options   plugin: the plugin id of the view
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
- *               tab: {read(), write(value)} of the tab state of the surface, or null when the plugin declares no surface.unload
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
- *               tab: the tab handlers of the surface context, as context.tab has: state when the plugin declares
- *                 surface.unload, and the reports title(text), footer(text), directory(path), notify(text, policy),
- *                 modified(value), error(text), keep(reason, on)
+ *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
+ *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), and state with
+ *                 {read, write} only when the plugin declares surface.unload
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
  *                 sidecar.send(id, body, cids): the send to the declared sidecar, as runtime.sidecar().send
@@ -67,11 +66,11 @@ function untilCancelled(promise, signal) {
 async function run(command, params, { plugin, tab, runCore, runOwned, runtime }) {
   switch (command) {
     case "tab.state.read":
-      if (!tab) throw new Error(`view call ${command}: the tab state is not declared`);
-      return tab.read();
+      if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
+      return tab.state.read();
     case "tab.state.write":
-      if (!tab) throw new Error(`view call ${command}: the tab state is not declared`);
-      tab.write(params);
+      if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
+      tab.state.write(params);
       return null;
     case "runtime.native.call": {
       const fields = objectOf(command, params);
