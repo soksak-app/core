@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.6a-1-3-2-2: page close 멈춤의 원인을 특정했다. `CFRunLoopWakeUp`의 pthread mutex는 main run loop의 `_lock`이며, main thread가 WebKit page close 일을 하는 동안 짧게 반복해 잡는다. 뒤따르는 대기자는 그 뒤에 줄 서고 IPC receive queue와의 원형 대기가 멈춤을 늘린다. 원인이 host code가 아니므로 코드는 바꾸지 않는다.
 - F212: `docs/plans/plugin-processes-handoff.md`가 F212와 그 옆 항목의 남은 작업, 각 branch와 worktree의 상태, 작업 규칙, 항목마다의 시험 명령을 적는다.
 - F218-1: Rust host는 프로세스의 첫 동작으로 panic hook을 설치하므로, writer가 생기기 전의 `host.panic`은 시작 buffer에 남고 writer가 열릴 때 저장된다. panic 뒤 프로세스를 끝내는 스레드는 writer를 최대 5초 기다리며, 그 시간 안에 writer가 붙지 않으면 프로세스는 상태 101로 끝나고 record와 stack을 표준 오류에 쓴다. Go goroutine 진입점도 같은 방식으로 writer를 기다린다(docs/spec/hosts.ko.md#프로세스-수명, 계약 `log.panic.before-writer-is-stored-when-the-writer-opens`).
 - F218-2.1: 프로젝트 제거 요청, 알림 권한 상태, 버튼 mask는 모든 지점에서 poisoned lock을 `PoisonError::into_inner`로 복구하며, 각 지점에 `default:` 사유를 적는다. poisoned lock 뒤에도 요청은 등록, 응답, 종료되고, `state()`는 오류 대신 권한 상태를 읽는다. test: `project_removal_test.rs`(둘)와 `notifications_test.rs`(하나)는 변경 전에 실패하고 변경 후 통과한다. census 규칙 `rs.lock-result`(`packages/plugin-api/census-rules.json`)는 match, 오류 변환, unwrap되는 `lock()`, `read()`, `write()` 결과를 나열하며, F218-2.5에 pending이고 발견 221개가 남아 있어 F218-2의 나머지 group이 전환한다.
