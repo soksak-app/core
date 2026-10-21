@@ -1766,7 +1766,11 @@ impl ReplaceService {
     fn installed_process_id(&self) -> Option<u32> {
         std::fs::read_to_string(&self.installed_pid_path)
             .ok()
-            .map(|text| text.trim().parse().expect("the installed service writes its process identifier"))
+            .map(|text| {
+                text.trim()
+                    .parse()
+                    .expect("the installed service writes its process identifier")
+            })
     }
 }
 
@@ -2278,7 +2282,9 @@ fn process_is_running(process_id: u32) -> bool {
         .args(["-o", "stat=", "-p", &process_id.to_string()])
         .output()
         .expect("ps lists the process state");
-    !String::from_utf8_lossy(&state.stdout).trim_start().starts_with('Z')
+    !String::from_utf8_lossy(&state.stdout)
+        .trim_start()
+        .starts_with('Z')
 }
 
 // contract: sidecars-transport.persistent.connection-events
