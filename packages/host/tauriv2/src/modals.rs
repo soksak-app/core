@@ -530,11 +530,11 @@ pub(crate) fn pick(
     let context = window_data(window)?;
     let state = &context.overlay;
 
-    // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
-    // hook records the panic.
     let open = state
         .open
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the
+        // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
         .map(|m| OpenModal {
