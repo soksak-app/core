@@ -873,6 +873,8 @@ struct Core<O> {
     started: Condvar,
     /// The upper limit of the time until a newly started persistent service prints its endpoint.
     ready_timeout: Duration,
+    /// The upper limit of the time until a persistent service answers hello. A check gives a short limit.
+    hello_timeout: Duration,
 }
 
 /// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
@@ -1037,6 +1039,7 @@ impl<O: Owner> Sidecars<O> {
                 })),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
+                hello_timeout: HELLO_TIMEOUT,
             }),
             stop_timeout: Duration::from_secs(5),
         };
@@ -1170,6 +1173,15 @@ impl<O: Owner> Sidecars<O> {
         Arc::get_mut(&mut self.core)
             .expect("the ready timeout is set before the sidecars are shared")
             .ready_timeout = limit;
+        self
+    }
+
+    /// Changes the upper limit of the time until a persistent service answers hello. A check gives a short limit
+    /// instead of the default 5 seconds. Call it only right after creation, before another reference exists.
+    pub fn with_hello_timeout(mut self, limit: Duration) -> Self {
+        Arc::get_mut(&mut self.core)
+            .expect("the hello timeout is set before the sidecars are shared")
+            .hello_timeout = limit;
         self
     }
 
@@ -2495,7 +2507,7 @@ impl<O: Owner> Core<O> {
         // deadline of one day. The read thread that follows wakes up once a day with WouldBlock and waits again.
         const NO_READ_DEADLINE: Duration = Duration::from_secs(24 * 60 * 60);
         stream
-            .set_read_deadline(Some(HELLO_TIMEOUT))
+            .set_read_deadline(Some(core.hello_timeout))
             .map_err(|e| format!("sidecar {name}: hello deadline: {e}"))?;
         let hello = serde_json::json!({
             "operation": "hello",
@@ -2523,8 +2535,8 @@ impl<O: Owner> Core<O> {
                         name,
                         lost,
                         format!(
-                            "sidecar {name}: the service did not answer hello within {}s",
-                            HELLO_TIMEOUT.as_secs()
+                            "sidecar {name}: the service did not answer hello within {:?}",
+                            core.hello_timeout
                         ),
                     )
                 }

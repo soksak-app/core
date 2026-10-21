@@ -1238,7 +1238,33 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		close(helloSeen)
 		time.Sleep(500 * time.Millisecond)
 		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
-		_, _ = io.Copy(io.Discard, reader)
+		// The service answers close-owner and shutdown, so that Stop ends without its deadline.
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply map[string]any
+			switch request["operation"] {
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+			if request["operation"] == "shutdown" {
+				return
+			}
+		}
 	}()
 	folder := t.TempDir()
 	if err := os.WriteFile(filepath.Join(folder, "fast"), []byte("#!/bin/sh\ntee /dev/null\n"), 0o755); err != nil {
@@ -1271,6 +1297,11 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	if waited > 50*time.Millisecond {
 		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
 	}
+	stopping := time.Now()
+	sidecars.Stop()
+	if elapsed := time.Since(stopping); elapsed >= time.Second {
+		t.Fatalf("stop took %v; the service answers close-owner and shutdown, so the stop must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
+	}
 }
 
 // A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.
@@ -1300,10 +1331,14 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sidecars.HelloTimeout = 100 * time.Millisecond
 	owner := &harnessOwner{root: "/hello", seen: make(chan SidecarMessage, 1)}
 	begin := time.Now()
 	err = sendWithin(t, sidecars, owner, 30*time.Second)
-	if want := "sidecar fixture-service: the service did not answer hello within 5s"; err == nil || err.Error() != want {
+	if elapsed := time.Since(begin); elapsed >= time.Second {
+		t.Fatalf("the start failed after %v; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply", elapsed)
+	}
+	if want := "sidecar fixture-service: the service did not answer hello within 100ms"; err == nil || err.Error() != want {
 		t.Fatalf("unanswered hello = %v after %v, want %q", err, time.Since(begin), want)
 	}
 }

@@ -1406,12 +1406,19 @@ fn persistent_start_fails_when_hello_is_not_answered() {
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
-    .unwrap();
+    .unwrap()
+    .with_hello_timeout(Duration::from_millis(100));
     let (window, _events) = owner("hello", "/projects/hello");
+    let begun = std::time::Instant::now();
     let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    let elapsed = begun.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "the start failed after {elapsed:?}; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply"
+    );
     assert_eq!(
         error,
-        "sidecar @fixture/sidecar-echo: the service did not answer hello within 5s"
+        "sidecar @fixture/sidecar-echo: the service did not answer hello within 100ms"
     );
     release.send(()).unwrap();
     server.join().unwrap();

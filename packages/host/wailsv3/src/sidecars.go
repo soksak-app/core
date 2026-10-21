@@ -173,6 +173,8 @@ type Sidecars struct {
 	StopTimeout time.Duration // The deadline of Stop() that a test can inject. Default: 5 seconds.
 	// ReadyTimeout is the upper bound of the time until a newly started persistent service prints its endpoint. Default: 30 seconds. A test injects it.
 	ReadyTimeout time.Duration
+	// HelloTimeout is the upper bound of the time until a persistent service answers hello (docs/spec/terminal-runtime.md). Default: 5 seconds. A test injects it.
+	HelloTimeout time.Duration
 	// Now is the clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A test injects it; nil uses time.Now.
 	Now func() time.Time
 	// restarts holds the restart-limit record of each sidecar that has a counted failure. c.mu protects it.
@@ -209,7 +211,7 @@ var errRestartLimit = errors.New("restart limit")
 type revival struct{ counted bool }
 
 // serviceStartFailure is a start failure of the creation path of a persistent service that the restart limit counts: the service printed
-// no endpoint within the ready bound, ended before its endpoint, or did not answer hello within helloTimeout.
+// no endpoint within the ready bound, ended before its endpoint, or did not answer hello within HelloTimeout.
 type serviceStartFailure struct{ text string }
 
 func (e serviceStartFailure) Error() string { return e.text }
@@ -348,6 +350,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		basenames:       map[string]string{},
 		StopTimeout:     5 * time.Second,
 		ReadyTimeout:    30 * time.Second,
+		HelloTimeout:    5 * time.Second,
 	}
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
 	if configDirectoryProvided {
@@ -1275,9 +1278,6 @@ type persistentEndpoint struct {
 	Token    string `json:"token"`
 }
 
-// helloTimeout is the upper bound of the time until the service answers hello (docs/spec/terminal-runtime.md).
-const helloTimeout = 5 * time.Second
-
 // serviceEndpointLine reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends that service,
 // reaps it, returns true as timedOut, and returns the failure of that cleanup as err.
 func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (line []byte, timedOut bool, err error) {
@@ -1436,14 +1436,14 @@ func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, erro
 		return nil, fmt.Errorf("sidecar %s: hello: %w", name, err)
 	}
 	// The hello reply has a deadline so that a service that does not answer does not make the requests and Stop of this sidecar wait forever.
-	if err := conn.SetReadDeadline(time.Now().Add(helloTimeout)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(c.HelloTimeout)); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("sidecar %s: hello deadline: %w", name, err)
 	}
 	responseLine, err := reader.ReadBytes('\n')
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		conn.Close()
-		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, helloTimeout)}
+		return nil, serviceStartFailure{fmt.Sprintf("sidecar %s: the service did not answer hello within %v", name, c.HelloTimeout)}
 	}
 	if err != nil {
 		conn.Close()
