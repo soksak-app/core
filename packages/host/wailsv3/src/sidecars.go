@@ -285,6 +285,19 @@ func (c *Sidecars) restartStopped(name string) bool {
 // lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure). It is called
 // holding no lock; it takes c.mu.
 func (c *Sidecars) SurfaceOpened(plugin, surface string) {
+	c.clearDependencyStops(plugin, "surface", surface)
+}
+
+// PluginEnabled is called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin
+// lists in dependencies, in the same step as the plugin host stop of the plugin (docs/spec/sidecars.md#failure). It is called
+// holding no lock; it takes c.mu.
+func (c *Sidecars) PluginEnabled(plugin string) {
+	c.clearDependencyStops(plugin, "plugin", plugin)
+}
+
+// clearDependencyStops clears the restart limit of each stopped sidecar that plugin lists in dependencies and writes the trace
+// with origin, the field that names the surface or the plugin of the clear. It is called holding no lock; it takes c.mu.
+func (c *Sidecars) clearDependencyStops(plugin, origin, value string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.declarations.RLock()
@@ -294,7 +307,7 @@ func (c *Sidecars) SurfaceOpened(plugin, surface string) {
 			continue
 		}
 		delete(c.restarts, name)
-		EmitHost(LevelDebug, "host.trace.sidecar.restart-reset", map[string]any{"sidecar": name, "surface": surface})
+		EmitHost(LevelDebug, "host.trace.sidecar.restart-reset", map[string]any{"sidecar": name, origin: value})
 	}
 }
 

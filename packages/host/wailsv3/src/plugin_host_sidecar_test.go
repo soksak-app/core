@@ -274,6 +274,45 @@ func TestOneSurfaceOpenClearsTheHostStopAndTheSidecarStopOfItsPlugin(t *testing.
 	}
 }
 
+// One enable of a plugin clears the stop of its plugin host and the stop of each sidecar that the plugin lists, through the plugin
+// change of the host, as one open of its surface does (docs/plans/plugin-host-routes.md F229-6; docs/spec/sidecars.md#failure).
+// contract: plugin-host.restart.enable-clears-stops
+func TestEnableOfAPluginClearsItsHostStopAndItsSidecarStops(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	hosts := newPluginHostRestarts()
+	c.mu.Lock()
+	c.restarts["fixture-sidecar"] = &restartRecord{}
+	for i := 0; i < restartLimit; i++ {
+		c.restarts["fixture-sidecar"].count(time.Now())
+	}
+	c.mu.Unlock()
+	for i := 0; i < restartLimit; i++ {
+		hosts.failed("probe")
+	}
+	if !hosts.stopped("probe") {
+		t.Fatal("the fourth failure of the plugin host did not stop it")
+	}
+	c.mu.Lock()
+	stillStopped := c.restartStopped("fixture-sidecar")
+	c.mu.Unlock()
+	if !stillStopped {
+		t.Fatal("the sidecar stop was not in place before the enable")
+	}
+	h := &Host{windows: map[uint]*Surfaces{}, sidecars: c, pluginHostRestarts: hosts, pluginHostStates: newPluginHostStates()}
+	h.notifyPlugins(PluginsChanged{Action: "enable", Plugin: "probe"})
+	c.mu.Lock()
+	stillStopped = c.restartStopped("fixture-sidecar")
+	c.mu.Unlock()
+	if stillStopped {
+		t.Fatal("the enable of probe left the sidecar stop of its dependency in place")
+	}
+	if hosts.stopped("probe") {
+		t.Fatal("the enable of probe left the plugin host stopped")
+	}
+}
+
 // The page start closes every plugin session of the window and keeps its surfaces (docs/plans/plugin-host-routes.md rule 7).
 // contract: plugin-host.sidecar.page-start-close
 func TestPageStartClosesThePluginSessionsOfTheWindow(t *testing.T) {

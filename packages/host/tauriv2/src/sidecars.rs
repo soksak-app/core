@@ -1151,6 +1151,18 @@ impl<O: Owner> Sidecars<O> {
     /// Called when the host creates a surface of plugin. It clears the restart limit of each stopped sidecar that the
     /// plugin lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure).
     pub fn surface_opened(&self, plugin: &str, surface: &str) {
+        self.clear_dependency_stops(plugin, "surface", surface);
+    }
+
+    /// Called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin lists in
+    /// dependencies, in the same step as the plugin host stop of the plugin (docs/spec/sidecars.md#failure).
+    pub fn plugin_enabled(&self, plugin: &str) {
+        self.clear_dependency_stops(plugin, "plugin", plugin);
+    }
+
+    /// Clears the restart limit of each stopped sidecar that plugin lists in dependencies, and writes the trace with the field
+    /// origin, which names the surface or the plugin of the clear.
+    fn clear_dependency_stops(&self, plugin: &str, origin: &str, value: &str) {
         let mut state = self
             .core
             .state
@@ -1181,10 +1193,13 @@ impl<O: Owner> Sidecars<O> {
         };
         for name in cleared {
             state.restarts.remove(&name);
+            let mut fields = serde_json::Map::new();
+            fields.insert("sidecar".to_string(), name.into());
+            fields.insert(origin.to_string(), value.into());
             emit_host(
                 Level::Debug,
                 "host.trace.sidecar.restart-reset",
-                serde_json::json!({"sidecar": name, "surface": surface}),
+                serde_json::Value::Object(fields),
             );
         }
     }

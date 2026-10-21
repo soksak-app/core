@@ -380,6 +380,12 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     app.state::<crate::plugin_host::PluginHostStates>()
         .plugin_changed(&change.action, &change.plugin);
+    // The enable of a plugin clears its plugin host stop and the sidecar stops of its manifest in one step, as a surface open does.
+    if change.action == "enable" {
+        app.state::<crate::sidecars::WindowSidecars>()
+            .plugin_enabled(&change.plugin);
+        crate::plugin_host_channel::plugin_enabled(app, &change.plugin);
+    }
     for window in app.windows().values() {
         if change.action == "remove" || change.action == "disable" {
             // The host webview of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).

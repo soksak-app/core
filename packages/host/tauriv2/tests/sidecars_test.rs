@@ -2323,6 +2323,49 @@ fn surface_open_clears_the_restart_limit() {
     assert_eq!(reset["fields"]["surface"], "s2", "restart-reset {reset}");
 }
 
+// contract: plugin-host.restart.enable-clears-stops
+#[test]
+fn enable_clears_the_restart_limit_of_its_sidecars() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let clock = RestartClock::new();
+    let (sidecars, directory) = restart_sidecars(&clock);
+    let writer_folder = folder::Folder::new();
+    let writer = records::start_writer(writer_folder.path());
+    let (window, _events, failures) = failing_owner("a", "/projects/a");
+    for seconds in [0, 10, 20, 30] {
+        let offset = Duration::from_secs(seconds);
+        send_at(&clock, &sidecars, &window, "s1", offset).unwrap();
+        require_invalid_failure(&failures, offset);
+    }
+    require_restart_limit(
+        send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(40)),
+        Duration::from_secs(40),
+    );
+    failures.recv_timeout(STALL).expect("no refusal failure");
+    // The enable of a plugin that does not list the sidecar leaves the stop in place.
+    sidecars.plugin_enabled("plugin-b");
+    require_restart_limit(
+        send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(41)),
+        Duration::from_secs(41),
+    );
+    failures.recv_timeout(STALL).expect("no refusal failure");
+    // The enable of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
+    std::fs::write(directory.path().join("ok"), b"").unwrap();
+    sidecars.plugin_enabled("plugin-a");
+    send_at(&clock, &sidecars, &window, "s2", Duration::from_secs(42)).unwrap();
+    sidecars.stop();
+    writer.flush(Duration::from_secs(5)).unwrap();
+    let events = records::read_events(&records::event_log_path(writer_folder.path()));
+    let reset = events
+        .iter()
+        .find(|event| {
+            event["event"] == "host.trace.sidecar.restart-reset"
+                && event["fields"]["plugin"] == "plugin-a"
+        })
+        .expect("the enable of plugin-a recorded no host.trace.sidecar.restart-reset");
+    assert_eq!(reset["fields"]["sidecar"], ECHO, "restart-reset {reset}");
+}
+
 /// Waits for the next failure of the window and checks that it is an invalid message of surface.
 fn require_invalid_failure_of(failures: &Receiver<Failure>, surface: &str, offset: Duration) {
     let failure = failures

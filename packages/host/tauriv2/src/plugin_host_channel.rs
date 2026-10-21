@@ -11,7 +11,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tauri::{Manager, Webview, Window};
+use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
 use crate::documents::{ViewReplyError, theme_message};
@@ -578,6 +578,30 @@ pub(crate) fn surface_opened(window: &Window, plugin: &str) {
         json!({"plugin": plugin}),
     );
     for other in window.app_handle().windows().into_values() {
+        let target = other.clone();
+        log_failure(
+            "plugin host",
+            crate::exposure::on_main(&other, move || {
+                crate::windows::load_plugin_hosts(&target);
+                Ok(())
+            }),
+        );
+    }
+}
+
+/// Handles the enable of plugin by the person: when the limit stopped the restarts of its plugin host, it clears the record,
+/// writes host.trace.plugin-host.restart-reset, and creates the host again in every window, as the open of a surface does
+/// (docs/spec/plugin-host.md#restarts).
+pub(crate) fn plugin_enabled(app: &AppHandle, plugin: &str) {
+    if !app.state::<PluginHostRestarts>().reset(plugin) {
+        return;
+    }
+    emit_host(
+        Level::Debug,
+        "host.trace.plugin-host.restart-reset",
+        json!({"plugin": plugin}),
+    );
+    for other in app.windows().into_values() {
         let target = other.clone();
         log_failure(
             "plugin host",
