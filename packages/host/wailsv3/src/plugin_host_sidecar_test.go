@@ -28,6 +28,8 @@ func sidecarSessionSurfaces(t *testing.T) *Surfaces {
 	}
 	return &Surfaces{
 		projects: map[string]string{"project-a": "/fixture/root", "project-empty": ""},
+		shown:    "project-a",
+		root:     "/fixture/root",
 		sidecars: c,
 	}
 }
@@ -65,6 +67,53 @@ func TestPluginHostSidecarSendRefusesAnUnheldOrRootlessProjectAndAnUndeclaredSid
 		if err == nil || err.Error() != tc.want {
 			t.Fatalf("%s: %v, want %q", tc.name, err, tc.want)
 		}
+	}
+}
+
+// Releasing the shown project clears the shown root of the window at once, while another project is still held, and a
+// plugin send while no project is shown is refused (docs/plans/plugin-host-routes.md rules 3 and 7, F229-1).
+// contract: plugin-host.sidecar.release-shown-project
+func TestReleasingTheShownProjectClearsTheWindowAtOnce(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	s.projects["project-b"] = "/fixture/other"
+	s.shown, s.root = "project-b", "/fixture/other"
+	h := &Host{owners: map[string]*Surfaces{"project-a": s, "project-b": s}, windows: map[uint]*Surfaces{}, sidecars: c}
+	if err := h.ProjectRelease(json.RawMessage(`"project-b"`)); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if root := s.ProjectRoot(); root != "" {
+		t.Fatalf("the shown root after the release of the shown project is %q, want none", root)
+	}
+	err := s.pluginHostSidecarSend(PluginHostSidecarSendRequest{Plugin: "probe", Sidecar: "fixture-sidecar", ID: "plugin:probe:project-a:fixture-sidecar", Body: json.RawMessage(`{"operation":"list"}`)})
+	if err == nil || err.Error() != "plugin host probe: no project is shown" {
+		t.Fatalf("a plugin send while no project is shown: %v, want the named refusal", err)
+	}
+}
+
+// A state session of a released project ends with it, as a plugin session does (docs/plans/plugin-host-routes.md F229-8).
+// contract: plugin-host.sidecar.release-state-session
+func TestProjectReleaseClosesTheStateSessionOfThatProject(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	s.projects["project-b"] = "/fixture/other"
+	h := &Host{owners: map[string]*Surfaces{"project-a": s, "project-b": s}, windows: map[uint]*Surfaces{}, sidecars: c}
+	released := "state:probe:project-a"
+	held := "state:probe:project-b"
+	c.owners[released] = s
+	c.owners[held] = s
+	c.roots[released] = "/fixture/root"
+	c.roots[held] = "/fixture/other"
+	if err := h.ProjectRelease(json.RawMessage(`"project-a"`)); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if _, ok := c.owners[released]; ok {
+		t.Fatalf("the state session %s of the released project is still owned", released)
+	}
+	if _, ok := c.owners[held]; !ok {
+		t.Fatalf("the state session %s of a project that is still held was closed", held)
 	}
 }
 

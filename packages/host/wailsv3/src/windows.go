@@ -28,7 +28,10 @@ func (s *Surfaces) setTitle(title string) {
 	s.mu.Lock()
 	s.title = title
 	s.mu.Unlock()
-	s.window.SetTitle(title)
+	// A surface of a test has no window, and the title is recorded only.
+	if s.window != nil {
+		s.window.SetTitle(title)
+	}
 	if s.host != nil {
 		routine.Go("windows-changed", s.host.windowsChanged)
 	}

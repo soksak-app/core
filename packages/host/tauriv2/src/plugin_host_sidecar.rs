@@ -24,6 +24,24 @@ pub(crate) fn parse_session(id: &str) -> Option<(&str, &str, &str)> {
     }
 }
 
+/// Returns the plugin and the project of a state session id state:<plugin>:<project>, or None for an id that is not one
+/// (docs/plans/plugin-host-routes.md F229-8).
+pub(crate) fn parse_state_session(id: &str) -> Option<(&str, &str)> {
+    let parts: Vec<&str> = id.strip_prefix("state:")?.split(':').collect();
+    match parts.as_slice() {
+        [plugin, project] if !plugin.is_empty() && !project.is_empty() => Some((plugin, project)),
+        _ => None,
+    }
+}
+
+/// Reports whether surface is a plugin session or a state session of project. Both end with the release of the project
+/// (docs/plans/plugin-host-routes.md rule 7, F229-8).
+pub(crate) fn is_project_session(surface: &str, project: &str) -> bool {
+    parse_session(surface).is_some_and(|(_, session_project, _)| session_project == project)
+        || parse_state_session(surface)
+            .is_some_and(|(_, session_project)| session_project == project)
+}
+
 /// A sidecar request of the host of plugin: the sidecar, the session id, the body and the correlation identifiers.
 #[derive(Deserialize)]
 pub struct PluginHostSidecarSend {
@@ -47,12 +65,14 @@ pub(crate) fn refuse_surface_send(surface: &str) -> Result<(), String> {
 }
 
 /// The checks of a sidecar request of the host of plugin before its send, and the folder root that it sends with (rules 2 and 3).
-/// held is the root that the window records for the project of the session, or None when the window does not hold the project.
+/// shown is whether the window shows a project, and held is the root that the window records for the project of the session, or
+/// None when the window does not hold the project. A window that shows no project refuses every request (F229-1).
 pub(crate) fn plugin_send_root(
     plugin: &str,
     sidecar: &str,
     id: &str,
     depends: bool,
+    shown: bool,
     held: Option<&str>,
 ) -> Result<String, String> {
     let Some((_, project, _)) = parse_session(id).filter(|(session_plugin, _, session_sidecar)| {
@@ -64,6 +84,9 @@ pub(crate) fn plugin_send_root(
     };
     if !depends {
         return Err(format!("plugin host {plugin} cannot use sidecar {sidecar}"));
+    }
+    if !shown {
+        return Err(format!("plugin host {plugin}: no project is shown"));
     }
     let root = held.ok_or_else(|| {
         format!("plugin host {plugin}: project {project} is not held by this window")
@@ -92,7 +115,15 @@ pub(crate) fn plugin_host_sidecar_send(
     let depends = sidecars.depends_on(&request.plugin, &request.sidecar);
     // default: a session id that names no project holds no root, so the checks of plugin_send_root refuse it.
     let project = parse_session(&request.id).map_or("", |(_, project, _)| project);
-    let held = window_data(&window)?
+    let data = window_data(&window)?;
+    let shown = !data
+        .shown
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the shown project, which is only read; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_empty();
+    let held = data
         .projects
         .lock()
         // default: a lock that a panicking thread poisoned still holds the project roots, which are only read; the panic hook
@@ -105,6 +136,7 @@ pub(crate) fn plugin_host_sidecar_send(
         &request.sidecar,
         &request.id,
         depends,
+        shown,
         held.as_deref(),
     )?;
     sidecars.send_plugin_with_cids(
