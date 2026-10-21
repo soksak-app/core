@@ -34,7 +34,7 @@ Every `plugin.json` surface declares one composition.
 ```json
 {
   "surface": {
-    "composition": { "kind": "view", "page": "ui/shell.html" }
+    "composition": { "kind": "view", "page": "ui/view.html" }
   }
 }
 ```
@@ -44,14 +44,14 @@ A `view` composition declares its page, and it declares its native regions and o
 ```json
 {
   "surface": {
-    "page": "ui/terminal.html",
+    "page": "ui/hybrid.html",
     "composition": {
       "kind": "hybrid",
       "regions": [
         {
           "name": "view",
           "kind": "image",
-          "sidecar": "@soksak/sidecar-vt-alacritty",
+          "sidecar": "@scope/sidecar-probe",
           "input": "dom"
         }
       ],
@@ -100,7 +100,7 @@ Native transaction commit and cancellation can synchronously invoke window redra
 
 Each surface attachment has a generation. Navigation, replacement, or close ends that generation. Region operations and image frames carry the generation; the host rejects data from an older generation even when the surface and region names were reused.
 
-Reloading the app DOM replaces every mounted plugin document in that window. The host cancels the pending layout, hides the logical surfaces, closes their document/image attachments, clears their exposure registrations and composition revisions, and advances attachment generations before remount. This operation does not close terminal sessions; the new modules reconnect to the same session owners. Per-tab WebView navigation callbacks cannot implement this lifecycle in the single-DOM model. The reload command hides the surfaces before it ends the page process, so the window shows no native surface without the page. A screen change within the page, such as opening the library and returning to the workspace, shows no frame without the page.
+Reloading the app DOM replaces every mounted plugin document in that window. The host cancels the pending layout, hides the logical surfaces, closes their document/image attachments, clears their exposure registrations and composition revisions, and advances attachment generations before remount. This operation does not close sidecar sessions; the new modules reconnect to the same session owners. Per-tab WebView navigation callbacks cannot implement this lifecycle in the single-DOM model. The reload command hides the surfaces before it ends the page process, so the window shows no native surface without the page. A screen change within the page, such as opening the library and returning to the workspace, shows no frame without the page.
 
 Continuous layout commits only a complete native frame. The host keeps the previous complete frame visible while a newer composition or raster is pending; it never commits a new region geometry with an older raster, clips the old raster into the new geometry, or exposes a platform-default background. A visible image region's composition revision, raster revision, exact dimensions, and presented snapshot must all belong to the prepared layout before the host commits it. Before the first valid snapshot, the image layer stays transparent so the application's surface background remains visible. After input settles, `host.window.presented` also verifies that each image region whose own placement and `SurfaceHost` are visible has presented the exact current raster and that the resulting native transaction has reached the display. Hiding or showing the outer surface updates that requirement without changing the region raster revision. The command fails on timeout instead of accepting a missing or failed presentation. Empty native pixels, stale raster content, exposing a platform-default background, and allowing native content outside `SurfaceHost` are failures.
 
@@ -137,6 +137,4 @@ A failed preparation or presentation rejects its requesting operation and appear
 - Tests delay and reorder composition snapshots, configure events, and image frames. Stale generations, revisions, and sequences never become visible.
 - A hybrid surface preserves native/DOM stacking and hit ownership at fractional coordinates and after backing-scale changes.
 - Every committed frame uses an exact current raster; a pending raster holds the previous complete frame until the new raster is consumed.
-- A terminal image preserves its logical text while resizing: narrowing reduces terminal columns and reflows long logical rows onto multiple screen rows; widening increases columns and reflows those rows back without truncation or permanent narrow wrapping.
-- Terminal cell width and height are stable presentation metrics during layout; divider movement changes the surface and raster geometry, not the font or cell metrics, and native geometry changes do not animate.
 - Both native hosts enforce the same declaration and revision rules. A platform that cannot implement them fails at startup.

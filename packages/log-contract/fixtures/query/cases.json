@@ -9,12 +9,12 @@
       "host-b1:3",
       "host-b1:4",
       "host-b1:5",
-      "vt-v1:1",
+      "probe-v1:1",
       "host-b1:6",
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3",
-      "vt-v1:4",
+      "probe-v1:2",
+      "probe-v1:3",
+      "probe-v1:4",
       "host-b1:7",
       "host-b1:9",
       "sok-s1:1",
@@ -23,7 +23,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "scanned": {
@@ -38,12 +38,12 @@
       "2026-10-08T22:53:20.200000Z debug page page.call window=w1 surface=tab-x session=s1 cids=b1.1,b1.2 name=\"Café\" ok=true",
       "2026-10-08T22:53:21.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1",
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
       "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
       "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
@@ -96,13 +96,13 @@
       "host-b1:4",
       "host-b1:5",
       "host-b1:20",
-      "vt-v1:1",
+      "probe-v1:1",
       "host-b1:6",
       "host-b1:21",
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3",
-      "vt-v1:4",
+      "probe-v1:2",
+      "probe-v1:3",
+      "probe-v1:4",
       "host-b1:7",
       "host-b1:22",
       "host-b1:9",
@@ -112,7 +112,7 @@
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "scanned": {
@@ -128,13 +128,13 @@
       "2026-10-08T22:53:21.000000Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
       "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1",
       "2026-10-08T22:53:21.000002Z info host log.open schema=2 pid=4242 role=\"host\" boot=\"b1\"",
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
       "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
       "2026-10-08T22:53:21.210000Z debug native native.input.query call=\"markedRange\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
@@ -172,7 +172,7 @@
     },
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -193,17 +193,17 @@
       "warn"
     ],
     "rows": [
-      "vt-v1:4",
+      "probe-v1:4",
       "host-b1:7"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
       "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
     ]
   },
@@ -227,7 +227,7 @@
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -255,7 +255,7 @@
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "scanned": {
@@ -272,27 +272,27 @@
   {
     "name": "event prefix",
     "params": {
-      "event_prefix": "sidecar.vt"
+      "event_prefix": "sidecar.probe"
     },
     "args": [
       "--event-prefix",
-      "sidecar.vt"
+      "sidecar.probe"
     ],
     "rows": [
-      "vt-v1:2",
-      "vt-v1:3",
-      "vt-v1:4"
+      "probe-v1:2",
+      "probe-v1:3",
+      "probe-v1:4"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\""
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\""
     ]
   },
   {
@@ -314,7 +314,7 @@
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -338,7 +338,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -361,20 +361,20 @@
     "rows": [
       "host-b1:21",
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3"
+      "probe-v1:2",
+      "probe-v1:3"
     ],
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
     ]
   },
   {
@@ -387,18 +387,18 @@
       "s2"
     ],
     "rows": [
-      "vt-v1:2",
-      "vt-v1:3"
+      "probe-v1:2",
+      "probe-v1:3"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
     ]
   },
   {
@@ -416,12 +416,12 @@
     "rows": [
       "host-b1:21",
       "host-b1:8",
-      "vt-v1:2"
+      "probe-v1:2"
     ],
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "scanned": {
@@ -433,7 +433,7 @@
     "lines": [
       "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\""
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\""
     ]
   },
   {
@@ -452,7 +452,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -475,7 +475,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -493,19 +493,19 @@
     ],
     "rows": [
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3"
+      "probe-v1:2",
+      "probe-v1:3"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
     ]
   },
   {
@@ -524,7 +524,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -551,7 +551,7 @@
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -572,7 +572,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": []
@@ -596,21 +596,21 @@
       "host-b1:6",
       "host-b1:21",
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3"
+      "probe-v1:2",
+      "probe-v1:3"
     ],
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.110000Z debug page page.call cids=b1.3 name=\"sidecarSend\" surface=\"tab-y\" ok=true",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
     ]
   },
   {
@@ -625,24 +625,24 @@
     "rows": [
       "host-b1:6",
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3",
-      "vt-v1:4",
+      "probe-v1:2",
+      "probe-v1:3",
+      "probe-v1:4",
       "host-b1:7",
       "host-b1:9"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
       "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\""
     ]
@@ -662,7 +662,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -684,7 +684,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -702,19 +702,19 @@
     ],
     "rows": [
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3"
+      "probe-v1:2",
+      "probe-v1:3"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+      "2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
     ]
   },
   {
@@ -735,7 +735,7 @@
       "1791500001000001/host/b1/5"
     ],
     "rows": [
-      "vt-v1:1",
+      "probe-v1:1",
       "host-b1:6",
       "host-b1:8"
     ],
@@ -747,11 +747,11 @@
     },
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.100000Z info host host.test.start name=\"first\" run=\"r1\"",
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3"
     ]
@@ -777,7 +777,7 @@
       "1791500001100000/host/b1/6"
     ],
     "rows": [
-      "vt-v1:1",
+      "probe-v1:1",
       "host-b1:5"
     ],
     "next": {
@@ -788,11 +788,11 @@
     },
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"vt\" boot=\"v1\"",
+      "2026-10-08T22:53:21.005000Z info sidecar log.open schema=2 pid=4343 role=\"probe\" boot=\"v1\"",
       "2026-10-08T22:53:21.000001Z info host log.rotated bytes=1024 generation=1"
     ]
   },
@@ -809,16 +809,16 @@
       "error"
     ],
     "rows": [
-      "vt-v1:4"
+      "probe-v1:4"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\""
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\""
     ]
   },
   {
@@ -826,14 +826,14 @@
     "params": {
       "since": {
         "host-b1": 6,
-        "vt-v1": 2
+        "probe-v1": 2
       }
     },
     "args": null,
     "rows": [
       "host-b1:8",
-      "vt-v1:3",
-      "vt-v1:4",
+      "probe-v1:3",
+      "probe-v1:4",
       "host-b1:7",
       "host-b1:9",
       "sok-s1:1",
@@ -842,13 +842,13 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
-      "2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
+      "2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
       "2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\"",
       "2026-10-08T22:53:21.300000Z info host host.test.end name=\"first\" run=\"r1\" result=\"pass\"",
       "2026-10-08T22:53:22.000000Z info sok log.open schema=2 pid=4444 role=\"sok\" boot=\"s1\"",
@@ -860,7 +860,7 @@
     "params": {
       "around": {
         "ts_us": 1791500001170000,
-        "role": "vt",
+        "role": "probe",
         "boot": "v1",
         "seq": 3
       },
@@ -869,7 +869,7 @@
     },
     "args": [
       "--around",
-      "1791500001170000/vt/v1/3",
+      "1791500001170000/probe/v1/3",
       "--earlier",
       "2",
       "--later",
@@ -877,28 +877,28 @@
     ],
     "rows": [
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:3",
-      "vt-v1:4",
+      "probe-v1:2",
+      "probe-v1:3",
+      "probe-v1:4",
       "host-b1:7"
     ],
     "context": [
       "host-b1:8",
-      "vt-v1:2",
-      "vt-v1:4",
+      "probe-v1:2",
+      "probe-v1:4",
       "host-b1:7"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "  2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2",
-      "  2026-10-08T22:53:21.180000Z error sidecar sidecar.vt.failed surface=tab-z session=s3 reason=\"closed\"",
+      "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\"",
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2",
+      "  2026-10-08T22:53:21.180000Z error sidecar sidecar.probe.failed surface=tab-z session=s3 reason=\"closed\"",
       "  2026-10-08T22:53:21.200000Z warn page page.console.error text=\"boom\""
     ]
   },
@@ -937,7 +937,7 @@
     "next": null,
     "tail": {
       "host-b1": 22,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -976,7 +976,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -1014,7 +1014,7 @@
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
@@ -1044,21 +1044,21 @@
     ],
     "rows": [
       "host-b1:8",
-      "vt-v1:2"
+      "probe-v1:2"
     ],
     "context": [
       "host-b1:8",
-      "vt-v1:2"
+      "probe-v1:2"
     ],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
       "  2026-10-08T22:53:21.150000Z info host host.sidecar.request cids=b1.3 name=\"terminal\" surface=\"tab-y\" bytes=3",
-      "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.vt.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\""
+      "  2026-10-08T22:53:21.160000Z debug sidecar sidecar.probe.pty_write surface=tab-y session=s2 cids=b1.3 hex=\"0d\" text=\"\\r\""
     ]
   },
   {
@@ -1066,7 +1066,7 @@
     "params": {
       "around": {
         "ts_us": 1791500001170000,
-        "role": "vt",
+        "role": "probe",
         "boot": "v1",
         "seq": 3
       },
@@ -1075,24 +1075,24 @@
     },
     "args": [
       "--around",
-      "1791500001170000/vt/v1/3",
+      "1791500001170000/probe/v1/3",
       "--earlier",
       "0",
       "--later",
       "0"
     ],
     "rows": [
-      "vt-v1:3"
+      "probe-v1:3"
     ],
     "context": [],
     "next": null,
     "tail": {
       "host-b1": 9,
-      "vt-v1": 4,
+      "probe-v1": 4,
       "sok-s1": 2
     },
     "lines": [
-      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.vt.pty_read surface=tab-y session=s2 bytes=2"
+      "2026-10-08T22:53:21.170000Z debug sidecar sidecar.probe.pty_read surface=tab-y session=s2 bytes=2"
     ]
   }
 ]

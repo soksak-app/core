@@ -62,6 +62,9 @@ static void documentQuery(void *document, uintptr_t context) {
 static void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *channel, uintptr_t context) {
     return sp_document_create(surface, store, package, plugin, channel, documentChangedBridge, (void *)context);
 }
+static void *pluginHostCreate(void *window, const char *store, const char *package, const char *plugin, const char *channel, uintptr_t context) {
+    return sp_plugin_host_create(window, store, package, plugin, channel, documentChangedBridge, (void *)context);
+}
 static void documentSetMessage(void *document, uintptr_t context) {
     sp_document_set_message(document, documentMessageBridge, (void *)context);
 }
@@ -211,6 +214,27 @@ func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, 
 	if document == nil {
 		receiver.Delete()
 		return nil, errors.New("cannot create a document view in this surface")
+	}
+	documents[document] = receiver
+	return document, nil
+}
+
+// CreatePluginHost creates the plugin host web view of a plugin hidden in the window itself with the view configuration
+// (docs/spec/plugin-host.md). The state receiver is kept until CloseDocument, as the receiver of a document region is.
+func (implementation) CreatePluginHost(window unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
+	name := C.CString(directory)
+	defer C.free(unsafe.Pointer(name))
+	folderText := C.CString(folder)
+	defer C.free(unsafe.Pointer(folderText))
+	id := C.CString(plugin)
+	defer C.free(unsafe.Pointer(id))
+	channelText := C.CString(channel)
+	defer C.free(unsafe.Pointer(channelText))
+	receiver := cgo.NewHandle(changed)
+	document := C.pluginHostCreate(window, name, folderText, id, channelText, C.uintptr_t(receiver))
+	if document == nil {
+		receiver.Delete()
+		return nil, errors.New("cannot create a plugin host web view in this window")
 	}
 	documents[document] = receiver
 	return document, nil

@@ -400,7 +400,9 @@ impl Relay {
     pub fn pending_count(&self, target: &str) -> usize {
         self.pending
             .lock()
-            .expect("relay pending requests")
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, which are only read;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .values()
             .filter(|(waiting, _)| waiting == target)
             .count()

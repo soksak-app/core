@@ -9,6 +9,11 @@
       "name": "starter",
       "description": "Plugins that the first run installs: browser, terminal and files.",
       "plugins": ["browser", "terminal", "files"]
+    },
+    {
+      "name": "browser-example",
+      "description": "Plugins that the browser example installs before it stages: terminal and browser.",
+      "plugins": ["terminal", "browser"]
     }
   ]
 }

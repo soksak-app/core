@@ -44,12 +44,12 @@ test('the audit of a configuration folder reads the files of every layer, genera
   write('host-1-2.jsonl.1', [open(1, 'host'), line(2, 'host.window.event', { window: 'main', kind: 'focus' })]);
   write('host-1-2.jsonl', [open(3, 'host'), line(5, 'page.record.error', { where: 'w', text: 't' }, { layer: 'page', page: '1791948729050', level: 'error' })]);
   write('host-1-2.debug.jsonl.10', [open(4, 'host'), line(6, 'host.window.event', { window: 'main', kind: 'focus' }, { level: 'debug' })]);
-  write('vt-3-4.jsonl', [open(1, 'vt'), line(2, 'host.surprise', {}, { layer: 'sidecar' })]);
+  write('probe-3-4.jsonl', [open(1, 'probe'), line(2, 'host.surprise', {}, { layer: 'sidecar' })]);
   write('notes.txt', ['not an event file']);
   const logs = join(root, 'logs');
   assert.deepEqual(auditLogDirectories({ ...catalog, layers: [...catalog.layers, 'sidecar'] }, [root]), [
     `${join(logs, 'host-1-2.jsonl')}:2: undeclared error w: t`,
-    `${join(logs, 'vt-3-4.jsonl')}:2: event host.surprise is not declared`,
+    `${join(logs, 'probe-3-4.jsonl')}:2: event host.surprise is not declared`,
   ]);
 });
 

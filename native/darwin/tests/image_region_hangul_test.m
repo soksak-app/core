@@ -1,6 +1,6 @@
 // The Korean input method revises the syllable before its newest insert: a final consonant that a vowel follows moves to the
 // next syllable, and the input method can append the new syllable before it replaces the previous one. The image region must
-// keep that syllable revisable, so every committed syllable reaches the page once and in order (docs/spec/terminal-runtime.md).
+// keep that syllable revisable, so every committed syllable reaches the page once and in order (docs/spec/persistent-services.md).
 // The selected input source is the machine's, so the check answers the two questions of the region about it (whether the
 // source composes and whether it composes only Hangul) through the runtime, without changing the input source of the person.
 #import <Cocoa/Cocoa.h>

@@ -60,11 +60,11 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## 키보드 단축키
 
-워크벤치의 모든 키보드 단축키는 소유자 하나와 명령 하나를 가진다. 기계가 읽는 표는 [shortcuts.json](../../packages/workbench/shortcuts.json)(`packages/workbench/shortcuts.json`)이며, 아래 표는 그 사본이다. `scripts/test/shortcut-table.test.mjs`는 두 표가 일치하는지, [애플리케이션 메뉴](host-contract.ko.md#애플리케이션-메뉴)의 모든 키 동등물이 `native menu` 행인지, 워크벤치 키 처리기의 모든 키 비교에 `workbench` 또는 `view` 행이 있는지 요구한다. 소유자는 [플러그인 프로세스](../plans/plugin-processes.ko.md)의 7번 규칙을 따른다.
+워크벤치의 모든 키보드 단축키는 소유자 하나와 명령 하나를 가진다. 기계가 읽는 표는 [shortcuts.json](../../packages/workbench/shortcuts.json)(`packages/workbench/shortcuts.json`)이며, 아래 표는 그 사본이다. `scripts/test/shortcut-table.test.mjs`는 두 표가 일치하는지, [애플리케이션 메뉴](host-contract.ko.md#애플리케이션-메뉴)의 모든 키 동등물이 `native menu` 행인지, 워크벤치 키 처리기의 모든 키 비교에 `workbench` 또는 `view` 행이 있는지 요구한다. 소유자는 [플러그인 프로세스](plugin-processes.ko.md)의 7번 규칙을 따른다.
 
 - `native menu`: 애플리케이션 메뉴 항목의 키 동등물. 메뉴가 view보다 먼저 키를 받으므로 view의 기본 동작을 막지 않는다. 코어 명령이 있는 행은 메뉴를 거쳐 그 명령에 닿고, `framework role`인 행은 항목의 role을 실행한다.
 - `workbench`: 워크벤치 page 또는 그 네이티브 modal이 처리하고 기본 동작을 막는 키. 행은 그 키가 실행하는 명령을 적는다.
-- `view`: 플러그인 view가 plugin processes 규칙 7에 따라 자기 안에서 처리하는 키: Escape와 텍스트 입력의 키. view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
+- `view`: 플러그인 view가 [plugin 프로세스](plugin-processes.ko.md) 규칙 7에 따라 자기 안에서 처리하는 키: Escape와 텍스트 입력의 키. view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
 
 키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`와 `Escape`는 키 이름이다.
 
@@ -91,7 +91,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
-| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin processes 규칙 7에 따라 view가 정한다 |
+| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin 프로세스 규칙 7에 따라 view가 정한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view의 first responder가 받는다 |
 
 ## 등록
@@ -105,6 +105,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `expose.dom(name, element)` | dom 항목의 요소 |
 
 네이티브 호스트는 [사이드카](sidecars.ko.md) 메시지를 전달하는 방식과 같은 방식으로 표면 페이지와 메인 페이지 등록소 사이에서 등록과 요청을 전달한다. 표면 페이지가 닫히면 등록소는 그 페이지의 등록을 제거한다.
+
+페이지는 자신을 식별하는 key, 즉 그 등록의 owner key 아래에서 등록한다. 표면 페이지는 자기 surface id 아래에서 자기 plugin을 owner로 하여 등록한다. plugin host 페이지는 자기 channel을 통해 owner key `plugin:<plugin id>` 아래에서 등록하며([plugin host](plugin-host.ko.md#exposure)), plugin host의 등록은 자기 프로세스와 함께 끝나고 restart limit 안에서 다시 만들어진 프로세스는 같은 key로 다시 등록한다.
 
 ### 표면 문서
 
@@ -130,7 +132,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ### 표면 선택
 
-여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다.
+여러 표면 페이지가 같은 이름을 등록할 수 있다. 이런 이름에 대한 `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, `dom.act` 요청은 `core.surfaces`의 식별자인 `surface`를 포함할 수 있다. `surface`가 없으면 메인 페이지가 포커스된 카드의 활성 탭, 최근 배치의 보이는 표면, 마지막 등록 순서로 고른다. 그 이름을 등록하지 않은 `surface`는 1002를 반환한다. [플러그인 상태 모듈](plugins.ko.md#플러그인-상태)이 등록한 이름에 대한 `surface` 없는 요청은 애플리케이션 문서의 그 모듈이 답한다. [plugin host](plugin-host.ko.md)가 등록하고 어떤 표면 페이지와 상태 모듈도 등록하지 않은 이름에 대한 `surface` 없는 요청은 plugin host의 등록이 답한다. `surface`를 naming하는 요청은 plugin host가 답하지 않는다. plugin host는 surface가 아니기 때문이다.
 
 ## Tab memory
 
@@ -145,7 +147,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 ## Plugin processes
 
-메인 페이지는 [plugin process 설계](../plans/plugin-processes.md#messages-and-events)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 call 계층을 연결하기 전까지 각 목록은 `[]`이다. call 계층은 자기 plugin의 열린 call과 손실을 메인 페이지에 보고한다.
+메인 페이지는 [plugin process 설계](plugin-processes.ko.md#메시지와-event)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 call 계층을 연결하기 전까지 각 목록은 `[]`이다. call 계층은 자기 plugin의 열린 call과 손실을 메인 페이지에 보고한다.
 
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
@@ -170,7 +172,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | status | `host.dock` | 애플리케이션 Dock 메뉴 항목 제목의 순서 목록 |
 | status | `host.log` | `{path, size, notices, coalesced}`: event log의 변경에 대한 가장 최근 알림([따라가기](debug.ko.md#파일)). `path`는 설정 폴더 아래의 event 파일(`logs/<name>`), `size`는 바이트 크기이고, `notices`는 시작 이후 발행한 알림 수로 250 ms에 하나까지이며, `coalesced`는 뒤의 알림에 합쳐진 알림 수다. 첫 알림 전의 값은 `{path: "", size: 0, notices: 0, coalesced: 0}`다. host는 알림마다 `host.log` 감시자에게 알린다. log만 읽는 호출의 기록을 뺀 모든 줄이 변경을 알리므로 알림 뒤 `log.query`를 요청하는 client가 다음 알림을 일으키지 않는다 |
 | status | `host.buttons` | `{mask}`: AppKit이 눌렸다고 보고하는 mouse 버튼(`+[NSEvent pressedMouseButtons]`: bit 0 왼쪽, bit 1 오른쪽, 그 위 bit는 다른 버튼). 호스트는 AppKit이 mouse 버튼의 누름이나 뗌을 애플리케이션에 전달할 때(local event monitor)와 다른 애플리케이션에 전달할 때(global event monitor) 마스크를 읽고, 마스크가 바뀌면 `host.buttons` 감시자에게 알린다. 그래서 다른 애플리케이션이 최전면인 동안의 사람의 버튼도 값을 바꾼다. 합성 `input.pointer` 누름과 뗌은 AppKit의 event 전달을 거치지 않고 뷰로 가므로 값을 바꾸지 않는다 |
-| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지))과, 서비스가 설치된 것과 다른 version으로 도는 persistent 사이드카([terminal runtime](terminal-runtime.ko.md#updates)) |
+| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지))과, 서비스가 설치된 것과 다른 version으로 도는 persistent 사이드카([persistent services](persistent-services.ko.md#updates)) |
 | command | `host.menu.select` | 애플리케이션 메뉴 항목 `{menu, title}`을 실행한다. 제목이 `menu`인 하위 메뉴에서 제목이 `title`인 항목이다 |
 | status | `host.menu` | 애플리케이션 메뉴. 구분선을 뺀 하위 메뉴마다 `[{title, items: [{title, key}]}]`이며, `key`는 수정 키 `ctrl`, `opt`, `shift`, `cmd`를 이 순서로 `+`로 이은 뒤 키를 붙인 단축키이거나 빈 문자열이다 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |

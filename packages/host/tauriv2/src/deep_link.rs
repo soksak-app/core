@@ -1,7 +1,7 @@
 //! Parses deep links and runs them as declared commands (docs/spec/native-host.md#deep-links).
 
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Map, Value, json};
 use tauri::AppHandle;
@@ -150,7 +150,9 @@ impl DeepLinkQueue {
         let mut state = self
             .state
             .lock()
-            .expect("deep link queue state is not poisoned");
+            // default: a lock that a panicking thread poisoned still holds the deep link queue, which the call amends;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
         if state.ready {
             drop(state);
             run(&value);
@@ -166,7 +168,9 @@ impl DeepLinkQueue {
             let mut state = self
                 .state
                 .lock()
-                .expect("deep link queue state is not poisoned");
+                // default: a lock that a panicking thread poisoned still holds the deep link queue, which the call
+                // amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
             if state.ready || state.draining {
                 return;
             }
@@ -177,7 +181,9 @@ impl DeepLinkQueue {
                 let mut state = self
                     .state
                     .lock()
-                    .expect("deep link queue state is not poisoned");
+                    // default: a lock that a panicking thread poisoned still holds the deep link queue, which the call
+                    // amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
                 match state.pending.pop_front() {
                     Some(value) => value,
                     None => {
@@ -248,3 +254,7 @@ fn run(app: &AppHandle, value: &str) -> Result<(), String> {
         .map_err(|failure| failure.message)?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "deep_link_lock_test.rs"]
+mod lock_test;

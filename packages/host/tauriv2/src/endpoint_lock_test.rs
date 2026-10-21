@@ -349,3 +349,21 @@ fn a_state_notification_is_written_when_the_peer_list_lock_is_poisoned() {
         "a state notification was not written while the peer list lock was poisoned"
     );
 }
+// contract: host.locks.poisoned-state-is-recovered
+#[cfg(feature = "diagnostics")]
+#[test]
+fn the_subscribers_are_counted_when_the_peer_list_lock_is_poisoned() {
+    let shared = shared(Pages::default());
+    let sink = Sink::default();
+    shared
+        .peers
+        .lock()
+        .unwrap()
+        .insert(1, peer(writer_of(&sink), &[watch("state"), watch("title")]));
+    poison(&shared.peers);
+    assert_eq!(
+        Notifier(shared.clone()).subscribers("main"),
+        2,
+        "the subscribers of a poisoned peer list were not counted"
+    );
+}

@@ -1,4 +1,4 @@
-// Checks that the modules of a view page import only what the view import map serves (docs/plans/plugin-processes.md, rule 4).
+// Checks that the modules of a view page import only what the view import map serves (docs/spec/plugin-processes.md, rule 4).
 // The walk reads the files of this package and of fixture packages in a temporary folder.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";

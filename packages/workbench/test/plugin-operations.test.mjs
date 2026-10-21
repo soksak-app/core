@@ -60,7 +60,7 @@ test("a loaded plugin that was disabled after the window loaded waits for a page
 });
 
 test("a row names its sidecars from the installed entry, else the newest registry version, else the manifest", () => {
-  const vt = "@soksak/sidecar-vt";
+  const probe = "@scope/sidecar-probe";
   const withSidecars = {
     registry: "file:///registry/index.json",
     index: { plugins: [{ id: "db", package: "plugin-db", name: "DB", description: "DB 설명.", versions: [
@@ -69,17 +69,17 @@ test("a row names its sidecars from the installed entry, else the newest registr
     ] }], revoked: { plugins: [], sidecars: [], core: [] } },
     installed: {
       format: 2,
-      plugins: { term: { version: "0.1.0", enabled: true, sidecars: { [vt]: "^0.1.0" } } },
-      sidecars: { [vt]: { version: "0.1.2", path: "/config/sidecars/soksak-sidecar-vt/0.1.2/darwin-arm64" } },
+      plugins: { term: { version: "0.1.0", enabled: true, sidecars: { [probe]: "^0.1.0" } } },
+      sidecars: { [probe]: { version: "0.1.2", path: "/config/sidecars/scope-sidecar-probe/0.1.2/darwin-arm64" } },
     },
   };
-  const term = { ...loaded[0], dependencies: { [vt]: "^0.1.0" } };
+  const term = { ...loaded[0], dependencies: { [probe]: "^0.1.0" } };
   const rows = pluginRows([term], withSidecars);
-  assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: vt, range: "^0.1.0", version: "0.1.2" }]);
+  assert.deepEqual(rows.find((row) => row.id === "term").sidecars, [{ name: probe, range: "^0.1.0", version: "0.1.2" }]);
   assert.deepEqual(rows.find((row) => row.id === "db").sidecars,
     [{ name: "@a/b", range: "1.0.0", version: null }, { name: "@x/db", range: "^1.0.0", version: null }]);
   // Without a host, it uses the dependencies of the loaded manifest.
-  assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: vt, range: "^0.1.0", version: null }]);
+  assert.deepEqual(pluginRows([term], null)[0].sidecars, [{ name: probe, range: "^0.1.0", version: null }]);
 });
 
 test("without a host only the loaded plugins are listed, all loaded, and operations fail", async () => {
@@ -255,14 +255,14 @@ test("status reports the outdated sidecars that the host lists", async () => {
 
 test("replacing a sidecar runs the host call and reads the outdated sidecars again, also after a failure", async () => {
   const host = fakeHost({
-    sidecarsReplace: [{}, new Error("sidecar vt: replace: close owner: boom")],
-    sidecarsOutdated: [[], [{ sidecar: "vt", running: "0.0.3", installed: "0.0.7", sessions: 0 }]],
+    sidecarsReplace: [{}, new Error("sidecar probe: replace: close owner: boom")],
+    sidecarsOutdated: [[], [{ sidecar: "probe", running: "0.0.3", installed: "0.0.7", sessions: 0 }]],
   });
   const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
-  await operations.replace("vt");
-  await assert.rejects(operations.replace("vt"), /close owner: boom/);
+  await operations.replace("probe");
+  await assert.rejects(operations.replace("probe"), /close owner: boom/);
   assert.deepEqual(host.calls, [
-    ["sidecarsReplace", { sidecar: "vt" }], ["sidecarsOutdated"], ["sidecarsReplace", { sidecar: "vt" }], ["sidecarsOutdated"],
+    ["sidecarsReplace", { sidecar: "probe" }], ["sidecarsOutdated"], ["sidecarsReplace", { sidecar: "probe" }], ["sidecarsOutdated"],
   ]);
   assert.equal(operations.status().outdated.length, 1);
 });
@@ -271,7 +271,7 @@ test("without a host the outdated sidecars are empty and replacing fails", async
   const operations = createPluginOperations({ host: null, loaded: () => loaded, changed: () => {} });
   await operations.refreshOutdated();
   assert.deepEqual(operations.status().outdated, []);
-  await assert.rejects(operations.replace("vt"), /plugin operations need a native host/);
+  await assert.rejects(operations.replace("probe"), /plugin operations need a native host/);
 });
 
 test("update-all updates the plugins of updates one after the other and stops at the first failure", async () => {

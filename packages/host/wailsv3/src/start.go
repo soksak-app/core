@@ -79,7 +79,10 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	}
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
 	routine.Go("windows-changed", h.windowsChanged)
-	application.InvokeSync(s.reloadSurfaceDocuments)
+	application.InvokeSync(func() {
+		s.reloadSurfaceDocuments()
+		s.disposePluginHosts()
+	})
 	s.discardOverlay()
 	snapshot, err := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	if err != nil {

@@ -1,4 +1,4 @@
-//! The failures and the records of the view surfaces of a window (docs/plans/plugin-processes.md, rule 5).
+//! The failures and the records of the view surfaces of a window (docs/spec/plugin-processes.md, rule 5).
 //!
 //! The host closes a view whose process ends or whose message queue overflows, and creates it again from its record. A surface whose
 //! failures reach the restart limit creates no view until its surface is removed. The failures carry the instant at which they occur,
@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use crate::platform::Handle;
 use crate::surfaces::ViewStart;
 
-/// The restart limit of a view surface: the fourth failure within VIEW_RESTART_WINDOW stops its restarts (docs/plans/plugin-processes.md,
+/// The restart limit of a view surface: the fourth failure within VIEW_RESTART_WINDOW stops its restarts (docs/spec/plugin-processes.md,
 /// rule 5, pass value (vi)).
 pub const VIEW_RESTART_LIMIT: usize = 4;
 

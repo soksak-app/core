@@ -295,7 +295,7 @@ fn query_follows_the_tail_with_since() {
     );
     assert_eq!(seqs_of(&followed), vec![23, 24], "the rows after the tail");
     assert!(
-        followed.tail["host-b1"] == 24 && followed.tail["vt-v1"] == 4,
+        followed.tail["host-b1"] == 24 && followed.tail["probe-v1"] == 4,
         "the new tail is {:?}: host-b1 covers the file and the debug file",
         followed.tail
     );
@@ -467,14 +467,14 @@ fn query_refuses_invalid_parameters() {
     let config = fixture_config("query-broken");
     let mut file = std::fs::OpenOptions::new()
         .append(true)
-        .open(config.join("logs").join("vt-v1.jsonl"))
+        .open(config.join("logs").join("probe-v1.jsonl"))
         .expect("append");
     file.write_all(b"not json\n").expect("write");
     drop(file);
     let query = parse_log_query("{}").expect("query");
     let error = query_logs(&config, &query, None).expect_err("broken line");
     assert!(
-        error.contains("logs/vt-v1.jsonl:5: not JSON: not json"),
+        error.contains("logs/probe-v1.jsonl:5: not JSON: not json"),
         "{error}"
     );
     let error = query_logs(

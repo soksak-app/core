@@ -1,4 +1,4 @@
-//! The presentation wait of views (docs/plans/plugin-processes.md, rule 6). A view joins the wait once per card layout change, and the
+//! The presentation wait of views (docs/spec/plugin-processes.md, rule 6). A view joins the wait once per card layout change, and the
 //! wait ends at the first of the presentation of the view, the end of its process, a change of which the view is not shown, and an
 //! unresponsive notice. The host runs on the main thread only, so the wait holds no timer.
 

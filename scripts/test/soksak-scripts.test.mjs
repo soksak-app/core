@@ -235,7 +235,7 @@ test("window-source audit rejects a source path of another repository component"
   for (const line of [
     'import { THEMES } from "../packages/workbench/settings.js";',
     'const { THEMES } = await import("../packages/workbench/settings.js");',
-    'readFileSync(join(root, "plugins/files/plugin.json"));',
+    'readFileSync(join(root, "plugins/probe/plugin.json"));',
   ]) {
     const errors = auditE2ESource(line, "e2e/fixture.test.mjs");
     assert.equal(errors.length, 1, `${line}: ${JSON.stringify(errors)}`);
@@ -269,17 +269,17 @@ test("window-source audit rejects native input that activates the application", 
 test("window-source audit allows activation only in the activation tier", { timeout: 1000 }, () => {
   const line = 'await session.pointer(x, y, "move", { activate: true });';
   assert.deepEqual(auditE2ESource(line, "e2e/activation/ime.test.mjs"), []);
-  assert.equal(auditE2ESource(line, "e2e/terminal.test.mjs").length, 1);
+  assert.equal(auditE2ESource(line, "e2e/probe.test.mjs").length, 1);
   assert.equal(auditE2ESource(line, "e2e/activation-like.test.mjs").length, 1);
 });
 
 test("window-source audit allows activation in the real-input tier and input pacing only in its tool", { timeout: 1000 }, () => {
   const line = 'await session.pointer(x, y, "move", { activate: true });';
-  assert.deepEqual(auditE2ESource(line, "e2e/real/terminal.test.mjs"), []);
+  assert.deepEqual(auditE2ESource(line, "e2e/real/probe.test.mjs"), []);
   const pacing = "  if (step.wait) delay(step.wait / 1000);";
   assert.deepEqual(auditE2ESource(pacing, "e2e/real/hid.mjs"), []);
-  assert.deepEqual(auditE2ESource(pacing, "e2e/real/terminal.test.mjs"), ["e2e/real/terminal.test.mjs:1: uses a fixed sleep"]);
-  assert.deepEqual(auditE2ESource(pacing, "e2e/terminal.test.mjs"), ["e2e/terminal.test.mjs:1: uses a fixed sleep"]);
+  assert.deepEqual(auditE2ESource(pacing, "e2e/real/probe.test.mjs"), ["e2e/real/probe.test.mjs:1: uses a fixed sleep"]);
+  assert.deepEqual(auditE2ESource(pacing, "e2e/probe.test.mjs"), ["e2e/probe.test.mjs:1: uses a fixed sleep"]);
 });
 
 test("exposure audit verifies every declared core entry", { timeout: 5000 }, async () => {

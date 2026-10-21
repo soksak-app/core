@@ -8,6 +8,8 @@
 // In a browser runtime without a host, the registry also works inside this document. Then there is no path that
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
+import { hostKeyOf, hostCommandsOf, listenPluginHostCalls } from "./plugin-host.js";
+import { SNAPSHOT_REQUEST_COMMAND } from "@soksak/plugin-api";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
 import {
@@ -55,6 +57,10 @@ export function createRegistry({ call = null, report = null } = {}) {
   const methods = new Map();
   /* For each declaration key, the surfaces that registered the entry. Registration order is kept. */
   const surfaces = new Map();
+  // The plugin of the plugin host that registered each entry, by declaration key; its owner key is plugin:<plugin id>
+  // (docs/spec/plugin-host.md#exposure). A host registration is kept apart from the surfaces, so a request that names a
+  // surface and a watch of a surface never reach a plugin host.
+  const hosts = new Map();
   const surfaceNames = (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key);
   const registrationTrace = (phase, surface, fields = {}) => trace("surface.registration", {
     phase, surface, timeOrigin: performance.timeOrigin, hasPort: surfacePorts.has(surface), ...fields,
@@ -88,6 +94,29 @@ export function createRegistry({ call = null, report = null } = {}) {
       // default: a refusal value may not be an Error, so the value itself is written.
       report(new Error(`status ${name} change was refused: ${error?.message ?? error}`, { cause: error })));
   };
+
+  /**
+   * Sends a request to the plugin host of plugin through its channel (docs/spec/plugin-host.md#exposure). A command runs
+   * within its declared time limit, a status get pulls the current value of the status once, and every other request is
+   * refused, because the host page pushes its statuses as declared UI snapshots.
+   */
+  async function forwardHost(plugin, method, params) {
+    const commands = hostCommandsOf(plugin);
+    if (commands === null) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `plugin host ${plugin} has no channel`);
+    try {
+      // default: a command request without params runs the command with null, the value of no params.
+      if (method === "command.run") return await commands.run(params.name, params.params ?? null);
+      if (method === "status.get") {
+        const reply = await commands.run(SNAPSHOT_REQUEST_COMMAND, { status: params.name });
+        return { value: reply?.value, version: reply?.seq };
+      }
+    } catch (error) {
+      if (error instanceof ExposureError) throw error;
+      // default: a rejection that is not an Error carries its value as the reason.
+      throw new ExposureError(EXPOSURE_ERRORS.failed, String(error?.message ?? error));
+    }
+    throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `plugin host ${plugin} does not serve ${method}`);
+  }
 
   /**
    * Forwards a request to a surface. When the command declaration has a timeout, the host waits for that time.
@@ -202,6 +231,11 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
     if (!found || !surfaceName(name)) return core.answer(method, params, changed);
     const requested = params.surface;
+    // A request without surface for a name that no surface page registered is answered by the plugin host that registered
+    // it (docs/spec/plugin-host.md#exposure).
+    const hostPlugin = requested === undefined && !surfaces.get(declarationKey(kind, name))?.size
+      ? hosts.get(declarationKey(kind, name)) : undefined;
+    if (hostPlugin !== undefined) return forwardHost(hostPlugin, method, params);
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
       const watch = following.get(key);
@@ -237,7 +271,8 @@ export function createRegistry({ call = null, report = null } = {}) {
         ...declaration,
         registered: surfaceName(declaration.name)
           // default: when no surface registered the name, the number of registered surfaces is 0.
-          ? (surfaces.get(key)?.size ?? 0) > 0 || Boolean(pageOf(kind, declaration.name)) : core.registered(kind, declaration.name),
+          ? (surfaces.get(key)?.size ?? 0) > 0 || hosts.has(key) || Boolean(pageOf(kind, declaration.name))
+          : core.registered(kind, declaration.name),
       });
     }
     return out;
@@ -468,6 +503,39 @@ export function createRegistry({ call = null, report = null } = {}) {
     },
 
     /**
+     * Registers an entry of the plugin host of plugin under the owner key plugin:<plugin id>
+     * (docs/spec/plugin-host.md#exposure). The name must be declared by the plugin.
+     */
+    hostRegistered({ plugin, kind, name }) {
+      const key = declarationKey(kind, name);
+      if (!declared.has(key)) throw new Error(`plugin ${plugin} registered undeclared ${kind} ${name}`);
+      if (ownerOf(name) !== plugin) throw new Error(`plugin ${plugin} cannot register ${name}`);
+      hosts.set(key, plugin);
+      registrationTrace("registered", hostKeyOf(plugin), { kind, name });
+      registrationChanged();
+    },
+
+    /** Removes every registration of the plugin host of plugin, whose channel ended (docs/spec/plugin-host.md#exposure). */
+    hostUnregistered(plugin) {
+      for (const [key, owner] of [...hosts]) {
+        if (owner === plugin) hosts.delete(key);
+      }
+      registrationTrace("disposed", hostKeyOf(plugin));
+      registrationChanged();
+    },
+
+    /** The owner key plugin:<plugin id> of the plugin host that registered the entry, or null when none did. */
+    hostRegistrant(kind, name) {
+      const plugin = hosts.get(declarationKey(kind, name));
+      return plugin === undefined ? null : hostKeyOf(plugin);
+    },
+
+    /** The declared time limit of the command name, or undefined when its declaration states none. */
+    commandTimeout(name) {
+      return declared.get(declarationKey("command", name))?.declaration.timeout;
+    },
+
+    /**
      * Applies the pending registrations of surfaces whose owner plugin became known. Registrations that do not match the declaration or the plugin are not applied; they are collected and thrown as one exception.
      */
     revisit() {
@@ -613,5 +681,12 @@ export async function connectExposure({ report, ...values }) {
     } catch (error) {
       report(`exposure: ${error.message}`);
     }
+  });
+  listenPluginHostCalls({
+    register: (plugin, kind, name) => registry.hostRegistered({ plugin, kind, name }),
+    unregister: (plugin) => registry.hostUnregistered(plugin),
+    timeoutOf: (name) => registry.commandTimeout(name),
+    // default: a rejection that is not an Error is reported with its text.
+    report: (error) => report(`plugin host: ${String(error?.message ?? error)}`),
   });
 }

@@ -110,7 +110,9 @@ struct Sampler {
 static SAMPLER: Mutex<Option<Sampler>> = Mutex::new(None);
 
 fn start_sampler() {
-    let mut sampler = SAMPLER.lock().expect("the sampler");
+    // default: a lock that a panicking thread poisoned still holds the sampler, which the start amends; the panic hook
+    // records the panic.
+    let mut sampler = SAMPLER.lock().unwrap_or_else(PoisonError::into_inner);
     if sampler.is_some() {
         return;
     }
@@ -134,7 +136,13 @@ fn start_sampler() {
 }
 
 fn end_sampler() {
-    let Some(sampler) = SAMPLER.lock().expect("the sampler").take() else {
+    let Some(sampler) = SAMPLER
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the sampler, which the end takes; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
+    else {
         return;
     };
     // Dropping the sender ends the channel, which stops the thread at its next wait.
@@ -153,7 +161,9 @@ static PROCESSES: Mutex<BTreeMap<u32, (String, String)>> = Mutex::new(BTreeMap::
 pub fn process_add(role: &str, name: &str, pid: u32) {
     PROCESSES
         .lock()
-        .expect("the process registry")
+        // default: a lock that a panicking thread poisoned still holds the process registry, which the call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(pid, (role.to_string(), name.to_string()));
     observe(
         "host",
@@ -164,7 +174,12 @@ pub fn process_add(role: &str, name: &str, pid: u32) {
 /// Removes a process from the registry; a pid that is not named is ignored because both the end of a process and the end of
 /// its connection remove it.
 pub fn process_remove(pid: u32) {
-    PROCESSES.lock().expect("the process registry").remove(&pid);
+    PROCESSES
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the process registry, which the call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&pid);
 }
 
 /// The processes of one window that the sampler reads: the WebContent process of its page, and the WebContent process of each
@@ -184,13 +199,20 @@ static WINDOWS: Mutex<BTreeMap<String, WindowReader>> = Mutex::new(BTreeMap::new
 pub fn window_add(window: &str, read: WindowReader) {
     WINDOWS
         .lock()
-        .expect("the window registry")
+        // default: a lock that a panicking thread poisoned still holds the window registry, which the call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(window.to_string(), read);
 }
 
 /// Removes a window from the registry when it closes; a label that is not registered is ignored.
 pub fn window_remove(window: &str) {
-    WINDOWS.lock().expect("the window registry").remove(window);
+    WINDOWS
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window registry, which the call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(window);
 }
 
 /// Stores the resident size of the host and of every registered process, each as one event `host.sampler.memory`. A process
@@ -199,7 +221,9 @@ pub fn sample() {
     observe("sampler", || memory_record(std::process::id()));
     let named: Vec<(u32, (String, String))> = PROCESSES
         .lock()
-        .expect("the process registry")
+        // default: a lock that a panicking thread poisoned still holds the process registry, which the sample reads;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .iter()
         .map(|(pid, process)| (*pid, process.clone()))
         .collect();
@@ -210,7 +234,9 @@ pub fn sample() {
     }
     let windows: Vec<(String, WindowReader)> = WINDOWS
         .lock()
-        .expect("the window registry")
+        // default: a lock that a panicking thread poisoned still holds the window registry, which the sample reads; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .iter()
         .map(|(window, read)| (window.clone(), read.clone()))
         .collect();
@@ -279,7 +305,12 @@ pub fn surface(phase: &str, surface: &str, placement: Option<([f64; 4], bool)>) 
 
 /// Whether the sampler of the trace runs.
 pub fn sampler_running() -> bool {
-    SAMPLER.lock().expect("the sampler").is_some()
+    SAMPLER
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the sampler, which is only read; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_some()
 }
 
 /// The memory event of pid that the sampler records. When the read fails, it records the error instead of the size.

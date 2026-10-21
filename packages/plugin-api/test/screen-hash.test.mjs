@@ -29,7 +29,7 @@ test("a size that is not a positive integer is refused", () => {
   assert.throws(() => screenBytes({ ...screen([cell()]), rows: 0 }), { message: "screen hash: rows must be a positive integer, found 0" });
 });
 
-// The screen message of a sidecar (docs/spec/terminal-runtime.md#screen-message).
+// The screen message of a sidecar (docs/spec/persistent-services.md#screen-message).
 const message = () => ({
   event: "screen",
   sequence: 4,

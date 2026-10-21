@@ -60,11 +60,11 @@ Coverage is judged in the running document. The binder's `audit(root)` lists int
 
 ## Keyboard shortcuts
 
-Every keyboard shortcut of the workbench has one owner and one command. The machine-readable table is [shortcuts.json](../../packages/workbench/shortcuts.json) (`packages/workbench/shortcuts.json`); the table below is its copy. `scripts/test/shortcut-table.test.mjs` requires that both match, that every key equivalent of the [application menu](host-contract.md#application-menu) is a `native menu` row, and that every key comparison of the workbench key handlers has a `workbench` or `view` row. The owners follow [plugin processes](../plans/plugin-processes.md) rule 7:
+Every keyboard shortcut of the workbench has one owner and one command. The machine-readable table is [shortcuts.json](../../packages/workbench/shortcuts.json) (`packages/workbench/shortcuts.json`); the table below is its copy. `scripts/test/shortcut-table.test.mjs` requires that both match, that every key equivalent of the [application menu](host-contract.md#application-menu) is a `native menu` row, and that every key comparison of the workbench key handlers has a `workbench` or `view` row. The owners follow [plugin processes](plugin-processes.md) rule 7:
 
 - `native menu`: a key equivalent of an application menu item. The menu receives the key before the view, so the view's default action is not prevented. A row with a core command reaches it through the menu; a row with `framework role` runs the role of the item.
 - `workbench`: a key that the workbench page or its native modals handle and prevent by default. The row names the command that the key runs.
-- `view`: a key that a plugin view handles inside itself under plan rule 7: Escape and the keys of a text input. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
+- `view`: a key that a plugin view handles inside itself under [plugin processes](plugin-processes.md) rule 7: Escape and the keys of a text input. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
 
 In a key, `cmd` is the Command key on macOS and the Control key on the other hosts (`CmdOrCtrl`). `Enter` and `Escape` are key names.
 
@@ -91,7 +91,7 @@ In a key, `cmd` is the Command key on macOS and the Control key on the other hos
 | `Enter` | workbench | core.library.form.submit | — | A library form field has focus |
 | `Escape` | workbench | core.picker.close | — | A picker layer is open |
 | `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
-| `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plan rule 7 |
+| `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plugin processes rule 7 |
 | `text input keys` | view | none | — | A plugin view has a text input focused; the first responder of the view receives them |
 
 ## Registration
@@ -105,6 +105,8 @@ The workbench registers core entries in the registry of the main page. A plugin 
 | `expose.dom(name, element)` | The element for a dom entry |
 
 The native host relays registrations and requests between a surface page and the registry of the main page in the same way that it relays [sidecar](sidecars.md) messages. When a surface page closes, the registry removes its registrations.
+
+A page registers under a key that identifies it, the owner key of the registration. A surface page registers under its surface id with the owner from its plugin. A plugin host page registers through its channel under the owner key `plugin:<plugin id>` ([plugin host](plugin-host.md#exposure)); the registration of a plugin host ends with its process, and a process that is created again within the restart limit registers again under the same key.
 
 ### Surface documents
 
@@ -130,7 +132,7 @@ A reply of a modal document reaches the main page only while that modal is the o
 
 ### Choosing a surface
 
-Several surface pages can register the same name. A request for such a name can include `surface`, an identifier from `core.surfaces`, in `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, and `dom.act`. Without `surface`, the main page chooses the active tab of the focused card, then the visible surfaces in the latest layout, then the latest registration. A `surface` that has not registered the name returns 1002. A request without `surface` for a name that a [plugin state module](plugins.md#plugin-state) registered is answered by that module in the application document.
+Several surface pages can register the same name. A request for such a name can include `surface`, an identifier from `core.surfaces`, in `status.get`, `status.watch`, `status.unwatch`, `command.run`, `dom.rect`, and `dom.act`. Without `surface`, the main page chooses the active tab of the focused card, then the visible surfaces in the latest layout, then the latest registration. A `surface` that has not registered the name returns 1002. A request without `surface` for a name that a [plugin state module](plugins.md#plugin-state) registered is answered by that module in the application document. A request without `surface` for a name that a [plugin host](plugin-host.md) registered and that no surface page and no state module registered is answered by the registration of the plugin host; a request that names a `surface` is never answered by a plugin host, because a plugin host is not a surface.
 
 ## Tab memory
 
@@ -145,7 +147,7 @@ The [memory saver](plugins.md#memory-saver) of the main page has these entries.
 
 ## Plugin processes
 
-The main page publishes three statuses of the [plugin process design](../plans/plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process connects its call layer, which reports the open calls and the losses of its plugin to the main page.
+The main page publishes three statuses of the [plugin process design](plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process connects its call layer, which reports the open calls and the losses of its plugin to the main page.
 
 - Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin that has one, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
 - Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
@@ -170,7 +172,7 @@ Screen coordinates are points with the origin at the top-left corner of the prim
 | status | `host.dock` | The titles of the application's Dock menu items in order |
 | status | `host.log` | `{path, size, notices, coalesced}`: the latest notice of a change of the event log ([following](debug.md#files)). `path` is the event file under the configuration folder (`logs/<name>`) and `size` its size in bytes; `notices` counts the notices published since the start, at most one per 250 ms, and `coalesced` counts the announcements that were folded into a later notice. Before the first notice the value is `{path: "", size: 0, notices: 0, coalesced: 0}`. The host notifies `host.log` watchers with each notice; a line announces a change except the record of a call that only reads the log, so a client that queries `log.query` after a notice does not cause the next notice |
 | status | `host.buttons` | `{mask}`: the mouse buttons that AppKit reports as pressed (`+[NSEvent pressedMouseButtons]`: bit 0 left, bit 1 right, higher bits other buttons). The host reads the mask when AppKit delivers a mouse button press or release to the application (a local event monitor) or to another application (a global event monitor), and notifies `host.buttons` watchers when the mask changes. A person's button therefore changes it while another application is frontmost. A synthetic `input.pointer` press or release goes to a view, not through AppKit's event dispatch, and does not change it |
-| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: the surfaces whose `closed` the host has sent and the sidecar has not answered ([sidecars](sidecars.md#messages)), and the persistent sidecars whose service runs another version than the installed one ([terminal runtime](terminal-runtime.md#updates)) |
+| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: the surfaces whose `closed` the host has sent and the sidecar has not answered ([sidecars](sidecars.md#messages)), and the persistent sidecars whose service runs another version than the installed one ([persistent services](persistent-services.md#updates)) |
 | command | `host.menu.select` | Performs the application menu item `{menu, title}`: the item with `title` in the submenu with the title `menu` |
 | status | `host.menu` | The application menu: `[{title, items: [{title, key}]}]` for each submenu without separators, where `key` is the key equivalent written as the modifiers `ctrl`, `opt`, `shift`, `cmd` in that order joined by `+` before the key, or empty |
 | command | `host.window.close` | Closes the window through its normal close action |

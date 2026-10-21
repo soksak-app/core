@@ -30,7 +30,7 @@ for (const app of Object.values(APPS)) {
       y: view.document.y + view.y + (row + 0.5) * session.cellHeight });
     const before = session.selectionReleases;
     // A selection covers a cell only when the pointer passes the middle of the cell, so the press is near the left edge of the first cell and the release is after the middle of the last cell
-    // (docs/spec/terminal-runtime.md).
+    // (docs/spec/persistent-services.md).
     const shift = 0.3 * session.cellWidth;
     await s.pointer(cell(0).x - shift, cell(0).y, "down");
     await s.pointer(cell(3).x, cell(3).y, "drag");

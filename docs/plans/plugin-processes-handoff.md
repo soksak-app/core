@@ -10,7 +10,7 @@ This document lists the remaining work of F212 (plugin code outside the main pag
 |---|---|
 | Process rules, the checklist rules, Red/Green, commit form, branches and worktrees | `AGENTS.md` (+ `.ko.md`) |
 | Checklist | `docs/features.md` (+ `.ko.md`) |
-| Decided design of F212: the layers, the rules 1 to 10, the pass values (i) to (viii), the review records | `docs/plans/plugin-processes.md` (+ `.ko.md`) |
+| Contract of F212: the layers, the pass values (i) to (viii), the rules 1 to 10, the messages and events, the plugin host | `docs/spec/plugin-processes.md` (+ `.ko.md`) |
 | Declared UI contract (list, tree, button, status-line, sections, addresses, rejections) | `docs/spec/declared-ui.md` (+ `.ko.md`) |
 | Exposure contract (commands, statuses, dom, `address`, errors) | `docs/spec/exposure.md` |
 | Build, test parity, window checks, diagnostics | `docs/operations/examples.md` |
@@ -29,7 +29,6 @@ State on 2026-10-21. Only main is pushed; no other branch is published.
 | `main` | `core` | pushed; holds the F212 view and declared UI work, F212.7-10 to F212.7-13, and F224 to F227 | — |
 | `fix/lock-unwraps-F218-2-4` | `../core-lock-unwraps-F218-2-4` | F218-2.4 in progress | finish F218-2.4 and F218-2.5, merge into main, then remove the worktree and the branch |
 | `feat/plugin-host-F212.9` | `../core-plugin-host-F212.9` | F212.9-1 and F212.9-2 committed, F212.9-3 in progress | finish F212.9-3 and F212.9-4, merge into main, then remove |
-| `fix/persistent-restart-F212-8a-4` | `../core-persistent-restart-F212-8a-4` | F212.8a-4 in progress | specify and implement, merge into main, then remove |
 | `feat/settings-G1.4-87-1` | `../core-settings-G1.4-87-1` | held item | do not touch |
 | `fix/background-launch-V5-117-1-3-4-7-1-8` | none | held item | do not touch |
 
@@ -48,13 +47,25 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 
 ### Every item
 
+Development comes first. An item runs only the owning checks of what it changed: its unit tests (Red and Green) and the structural checks it touches. Then it is marked `[o]` and the work moves to the next item. A merge into main runs the owning checks of the conflict resolution and the push gate that the pre-push hook runs (`make push-check`). The full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`), the window checks and the measurements (F212.1-2-2, F212.1-3, F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.12 to F212.14) run once, when every item of the active checklist is complete. They never run per fix, per item, or recursively.
+
+Long-running commands get no blanket limit over a whole suite. Each test has its own limit. A long command logs what runs, what finishes, what passes or fails, and the elapsed time, so its progress and its errors are observed. A test that prints only a start and an end is not acceptable. No test may run for tens of minutes.
+
 1. `git fetch` and read the checklist on origin first.
 2. Classify the request, register the item (EN and KO), and update the specification first when the contract changes.
 3. Write the test at the owning module. Run it on the unchanged code and record the failing assertion (Red). A missing module, a compile error or a link error is not Red. When the code already has the behavior, disable it on a copy to see the assertion fail, then restore the file.
 4. Implement, then run the same test (Green).
-5. Run the owning tests and the structural checks the change touches, then `make push-check` on the committed tree.
+5. Run the owning tests and the structural checks the change touches on the committed tree. Do not run the full suites or the push gate here; the push gate runs at the merge into main, and the full suites run once at checklist completion.
 6. Mark the item `[o]` with its Red and Green, and add CHANGELOG entries in EN and KO.
 7. Commit with author `min-0-max <max@blue.tools>` and `type(scope): Subject (#ID)`. The subject has at most 50 characters. The body states what changed and why, wrapped at 72 columns. There is no footer and no trailer. The commit-msg hook rejects other forms. Stage explicit paths only; never use `git add -A`.
+
+### No coupling
+
+- Core, plugins, sidecars, kits, specifications and contracts are separate repositories (folders of the workspace), and none of them knows the implementation of another.
+- Registries (`environment.json`, the settings, `plugin.json`) state what is installed at which version. A relation between packages is declared only as `dependencies` of a manifest.
+- Packages exchange only the wire of a contract and the exposed commands, DOM and statuses. Common functions belong to core and features belong to plugins; a plugin feature never moves into core.
+- A test of package A never verifies the implementation of package B. A tests only its own boundary, with fakes and fixtures; B tests itself in its own repository; the common cases are defined by the contract and run by B. A test of A that reads the paths, SDK, build or real names of B is forbidden; fixtures use probe names (`probe`, `@scope/plugin-probe`, `@scope/sidecar-probe`).
+- Exception: the installation-based window checks of core (`e2e/`) may install real plugins and sidecars and check their relations and behaviour together; that is the integration level. They install through the registries and manifests, never through repository paths or builds. The rule above applies to every other part of core: unit tests, scripts, product code and specifications.
 
 ### Branches and worktrees
 
@@ -62,12 +73,12 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 - Never push a branch. Every branch merges into main, and only main is pushed.
 - Remove the worktree and the local branch right after the merge into main succeeds. Never remove one whose merge failed or has not happened: the condition of a removal is a successful merge.
 - Test or probe code that cannot merge into main is cherry-picked while it still has meaning, otherwise discarded, before the commit. When it cannot be removed at once, register a checklist sub-item that states the removal condition.
-- Before a merge into main, run `git fetch` and `git rev-list --count HEAD..origin/main` on main, and merge origin/main first when the count is not zero. After the merge run `make push-check` on main, then push main.
+- Before a merge into main, run `git fetch` and `git rev-list --count HEAD..origin/main` on main, and merge origin/main first when the count is not zero. After the merge run the owning checks of the conflict resolution on main. The pre-push hook runs `make push-check` when main is pushed.
 - Run `make hooks`, `make native-darwin` and `make frontend-tauriv2` in a new worktree before tests.
 - On a CHANGELOG conflict keep both entries. On a conflict of the recorded counts in `docs/operations/examples.md`, use the count that `make parity-check` prints for the merged tree.
 - After a worktree moves, the Tauri build cache keeps old paths and clippy fails. Run `cargo clean -p tauri -p soksak-tauriv2` in the worktree.
 - Gate commands with `&&`, and never pipe a gate command (`make x | tail && ...`): the pipe returns the status of its last command, so a failure does not stop the chain. Write the output to a log file and judge by the exit status, or set `pipefail`.
-- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs `make host-contract-check`; no push gate runs it, and CI fails without it (F220).
+- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs the owning Go or Rust test during development. `make host-contract-check` runs once at checklist completion with the other full suites. No push gate runs it, so CI is the first place it runs after a merge (F220).
 
 ### Adding a test file
 
@@ -95,7 +106,7 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 | Push gate (records, structure, format, clippy, gate tests) | `make push-check` |
 | View process benchmark | `make -C native/darwin benchmark-view-processes` |
 
-Full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, the window suites) are not run to complete an item; they run once after the checklist completes, before the release. During development run only the unit tests of what changed; repeat targets of an intermittent failure also wait for that final pass.
+Full suites (`pnpm test`, `make native-test`, `make host-contract-check`, `make verify`, the window suites) are not run to complete an item; they run once when every item of the active checklist is complete, before the release. During development run only the unit tests of what changed; repeat targets of an intermittent failure also wait for that final pass.
 
 ### Window checks and measurements
 
@@ -123,7 +134,7 @@ The order below follows the dependencies. IDs are checklist IDs.
 
 ### 1. Main items beside F212
 
-Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sidecar test that blocked F218-2.2 run alone), and F212.6a-1-3-2-2 (the stall is the page-close work of WebKit and the system on the main thread, so no host change follows).
+Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sidecar test that blocked F218-2.2 run alone), F212.8a-4 (the restart limit of persistent services, so F212.8a is complete), and F212.6a-1-3-2-2 (the stall is the page-close work of WebKit and the system on the main thread, so no host change follows).
 
 **F218-2.4** — in progress on `fix/lock-unwraps-F218-2-4`. 86 lock results that call `unwrap` or `expect`. Same change and test; Red is the panic of the calling thread.
 
@@ -131,13 +142,11 @@ Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sid
 
 **F212.1-2-2** — the fixture reply waited 12.4 s for the first answer of the files sidecar. `host.trace.sidecar.ready` (F212.1-2-2-6) measures spawn to first answer. S31 is committed in the files sidecar. Repeat the window check of F212.1-2 with the trace on, and read `host.trace.sidecar.ready` and the sidecar's first record. If the gap is before the sidecar's first record, the cause is the start of the process (the binary launch); record the measured time and its cause. If the gap is inside the sidecar, fix it there.
 
-**F212.1-3** — the recorded DOM mount baseline of pass value (iii). For each installed surface plugin, record the main page from the surface start request to the first content frame (`diagnostics.capture.start/stop`), and take the median of 5 runs with the load average. Make it a tracked window check under `e2e/`, and write the result in the plan table "F212.1-2".
-
-**F212.8a-4** — in progress on `fix/persistent-restart-F212-8a-4`; the decision record is `docs/plans/persistent-restart.md`. The restart limit of persistent services (`docs/spec/terminal-runtime.md`, one attempt per disconnect). This is a decision first: which event counts as a failure of a persistent service. A disconnect that the host re-attaches without a send is not a failure event today. Write the scope, run the review, then specify and implement it in both hosts with a contract case. Reuse the stdio limit of F212.8a (Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
+**F212.1-3** — the recorded DOM mount baseline of pass value (iii). For each installed surface plugin, record the main page from the surface start request to the first content frame (`diagnostics.capture.start/stop`), and take the median of 5 runs with the load average. Make it a tracked window check under `e2e/`, and write the median of each plugin, with the plugin version and the load average, in the result of F212.1-3 in `docs/features.md` (+ `.ko.md`), as F212.1-2 records its trace medians. Pass value (iii) in `docs/spec/plugin-processes.md` defines the baseline.
 
 ### 2. Checklist states
 
-Done: F212.3, F212.4 and F212.6 are `[o]`. F212.7 stays `[ ]` while F212.7a, F212.7b-1, F212.7c, F212.7d-1 and F212.7-9 are open.
+Done: F212.3, F212.4 and F212.6 are `[o]`. F212.7 stays `[ ]` while F212.7a, F212.7b-1, F212.7c and F212.7d-1 are open.
 
 ### 3. Declared UI (F212.8)
 
@@ -147,28 +156,33 @@ Done: F212.8 and all its children, including F212.8-6-3 (the source and transiti
 
 F212.9-1 (the specification `docs/spec/plugin-host.md`) and F212.9-2 (the native operation) are committed on `feat/plugin-host-F212.9`; F212.9-3 and F212.9-4 are in progress there.
 
-F212.9 is required, because a plugin whose sidebar section shows values while none of its views is open needs a plugin host (declared-ui.md, source order). The plan names the files state as the first case.
-- Spec first: plan native gap 3 (a platform operation that creates a plugin host web view attached to the window, not to a surface host), gap 7 (owner key `plugin:<id>`), and rule 5 (restart within limit (vi), state restored from the last saved value).
+F212.9 is required, because a plugin whose sidebar section shows values while none of its views is open needs a plugin host (declared-ui.md, source order). The files state is the first case.
+- Spec first: `docs/spec/plugin-processes.md` section "Plugin host" (a platform operation that creates a plugin host web view attached to the window, not to a surface host; owner key `plugin:<id>`) and rule 5 (restart within limit (vi), state restored from the last saved value).
 - F212.9a: measure the footprint and the throttle of a hidden host web view before F212.10.
 - Implement in native/darwin and both hosts, with contract cases, Go and Rust tests, and a native test. The view channel code of F212.7-2 is the pattern for the host channel.
 
 ### 5. Plan into specifications (F212.7-9)
 
-Before F212.15: move the accepted contract of `docs/plans/plugin-processes.md` into a new `docs/spec/plugin-processes.md` (+ko). Repoint every link, including `packages/plugin-api/terms.json` and `docs/spec/declared-ui.md` line 11, and remove the plan. Decide where the review records go: the specification has no history, so they go to the changelog entries or are dropped.
+Done: the accepted contract of the plan is `docs/spec/plugin-processes.md` (+ko), and the plan is removed. The review records of the plan are not carried over: each accepted resolution is a rule or a reason of `docs/spec/plugin-processes.md` or `docs/spec/declared-ui.md`, and the changelog entries of F212.2, F212.5-1 and F212.8-0 to F212.8-0-23 record each review and what it changed. The parts of the plan that are work, not contract, are in this document: the placement of section 6, the pass value rules of section 7, and the specification changes, rollback order and risks of section 8. A link to `docs/plans/plugin-processes.md` on another branch is repointed to `docs/spec/plugin-processes.md` when that branch merges main.
 
 ### 6. Plugin moves (F212.10)
 
-Each move is an item of its own plugin repository, made against main. The plan table "Layers and placement" gives the target of each plugin:
+Each move is an item of its own plugin repository, made against main. The table gives the target of each plugin under the layer rules of `docs/spec/plugin-processes.md`:
 
-| Plugin | Surface | Section | State | Sidecar |
-|---|---|---|---|---|
-| editor | view (text input, IME) | — | — | files |
-| flowmark | view | — | — | its own |
-| shell | declared UI if the vocabulary expresses it, otherwise view | — | — | shell |
-| files | — | declared tree, or a view when it needs rename, drag or a context menu | files sidecar, otherwise plugin host | files |
-| hwp | view with a document region | — | — | files |
-| browser | view with a document region | four sections as declared UI or card surfaces | — | — |
-| terminal | view with an image region | — | — | vt |
+| Plugin | Surface | Section | State and logic | Extension point | Sidecar |
+|---|---|---|---|---|---|
+| editor | view (CodeMirror, text input, IME) | — | — | imports the modules that contributing plugins declare, from the core root | files |
+| flowmark | view (free DOM) | — | — | — | its own |
+| shell | declared UI if the vocabulary expresses it, otherwise view; item F212.10-shell-layer sets it before the shell move | — | — | — | shell |
+| files | — | declared tree, or a view when it needs rename, drag or a context menu | moves to the files sidecar; a plugin host only when that is impossible | — | files |
+| hwp | view with a document region | — | — | — | files |
+| browser | view with a document region | the four sections each become declared UI or a card surface; item F212.10-browser-sections sets them before the browser move | — | — | — |
+| terminal | view with an image region and overlay screens | — | — | — | vt |
+
+- The items F212.10-shell-layer and F212.10-browser-sections are recorded in the checklists of the shell and browser plugin repositories, and no cell of the table stays open without such an item.
+- The modal page is out of scope, because no plugin uses it.
+- Moving the files state to a sidecar is an item of the files plugin and files sidecar repositories; whether the editor buffer moves is set by pass value (iv), in the editor repository.
+- Plugin releases with an `engines.soksak` range are published after the core release of F212.15; each is an item of its plugin repository, recorded as unreleased until F212.15 publishes the core version it requires.
 
 - Core names no plugin in code or tests (`make boundaries`). Each plugin repository checks its own sources.
 - Each plugin item measures its view before its release: (iii) first display, (v) display after a layout change, (viii) drag. Each plugin release follows the core release.
@@ -183,11 +197,13 @@ Each move is an item of its own plugin repository, made against main. The plan t
 - F212.13: the input method activation check of views, run with approval.
 - F212.14: the final measurement of every plugin view against (i), (ii), (iii), (iii-b), (v) and (viii).
 
-The pass values are in the plan, section "Pass values". A failed mechanism value ((v), (vi) or (viii)) stops the mechanism items. A failed plugin value stops only that plugin, and the person decides between accepting the cost and changing its layer.
+The pass values are in `docs/spec/plugin-processes.md`, section "Pass values". When a value is not met, record the measured values in the checklist. A failed mechanism value ((v), (vi) or (viii)) stops the mechanism items (F212.7b, F212.7c, F212.8a) and the items that depend on them. A failed plugin value ((i), (ii), (iii), (iii-b)) stops only that plugin, and the person decides between accepting the cost and changing its layer in a revision of the specification that goes to adversarial review. When the editor view footprint of (iv) exceeds 50 MB, add the item that moves the editor buffer and its analysis to a sidecar after F212.9. Completion of F212 requires (i), (ii), (iii), (iii-b), (v), (vi) and (viii) to pass and (iv) to be measured.
 
 ### 8. Removal and release
 
-- F212.11: remove the page mount of plugin surfaces, parking, the `dom` composition, and the page mount of module sections and state modules. Manifests then accept only the new form.
+- F212.11: remove the page mount of plugin surfaces, parking, the `dom` composition, and the page mount of module sections and state modules. Manifests then accept only the new form. The same item changes the specification statements of the page mount: the one app DOM WebView that owns the DOM that plugins mount (`docs/spec/plugins.md`, section "Surface module ownership" and the "DOM tabs" paragraph), the single application DOM and the reload that replaces mounted plugin documents (`docs/spec/surface-composition.md`), and the coordinates of plugin modules in the shared application DOM (`docs/spec/exposure.md`), with their translations.
+- Rollback: a core stage is rolled back only after the plugin releases that require it are rolled back to their previous `engines` range and released. F212.10 is rolled back by releasing each plugin with its previous `engines` range. F212.11 removes the old paths, so its commit is reverted only after F212.10 is rolled back. The rollback order of each stage is recorded in its checklist item.
+- Risks: IME, dragging and layout, the process count and the first display time, and the Wails call path.
 - F212.15: release core only when no development item is open; list the open items first. Then release each plugin and the files and shell sidecars.
 
 ## Held items

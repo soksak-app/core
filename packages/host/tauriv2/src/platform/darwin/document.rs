@@ -53,6 +53,15 @@ unsafe extern "C" {
     fn sp_document_stream_ack(document: *mut c_void, seq: u64) -> bool;
     fn sp_document_post(document: *mut c_void, json: *const c_char) -> bool;
     fn sp_document_load(document: *mut c_void, url: *const c_char) -> bool;
+    fn sp_plugin_host_create(
+        window: *mut c_void,
+        store: *const c_char,
+        folder: *const c_char,
+        plugin: *const c_char,
+        channel: *const c_char,
+        changed: Changed,
+        context: *mut c_void,
+    ) -> *mut c_void;
     fn sp_document_zoom(document: *mut c_void, zoom: f64) -> bool;
     fn sp_document_go(document: *mut c_void, action: i32, offset: i32) -> bool;
     fn sp_document_place(
@@ -157,6 +166,41 @@ pub fn create(
         return Err("cannot create a document view in this surface".into());
     }
     let handle = document as Handle;
+    RECEIVERS.with(|all| all.borrow_mut().insert(handle, receiver));
+    Ok(handle)
+}
+
+/// Creates the plugin host webview of a plugin hidden in the window itself with the view configuration
+/// (docs/spec/plugin-host.md). The state receiver is kept until close, as the receiver of a document region is.
+pub fn create_plugin_host(
+    window: Handle,
+    store: &str,
+    folder: &str,
+    plugin: &str,
+    channel: &str,
+    receive: Box<dyn Fn(String)>,
+) -> Result<Handle, String> {
+    let store = CString::new(store).map_err(|e| e.to_string())?;
+    let folder = CString::new(folder).map_err(|e| e.to_string())?;
+    let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
+    let channel = CString::new(channel).map_err(|e| e.to_string())?;
+    let receiver = Box::into_raw(Box::new(Receiver(receive)));
+    let host = unsafe {
+        sp_plugin_host_create(
+            window as *mut c_void,
+            store.as_ptr(),
+            folder.as_ptr(),
+            plugin.as_ptr(),
+            channel.as_ptr(),
+            changed,
+            receiver as *mut c_void,
+        )
+    };
+    if host.is_null() {
+        drop(unsafe { Box::from_raw(receiver) });
+        return Err("cannot create a plugin host webview in this window".into());
+    }
+    let handle = host as Handle;
     RECEIVERS.with(|all| all.borrow_mut().insert(handle, receiver));
     Ok(handle)
 }

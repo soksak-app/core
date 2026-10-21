@@ -461,15 +461,13 @@ test("the expand command set the same state when it runs again with the same arg
   assert.deepEqual(s.labels(), ["b", "c"]);
 });
 
-test("a rejected tree in a horizontal section shows its rejection and removes the previous tree", async () => {
+test("a tree in a horizontal section is drawn with its outline, as in a vertical section", async () => {
   const module = await load("tree-horizontal");
-  reports.length = 0;
   const s = section(module, "horizontal");
-  s.show(tree([leaf("l")]));
-  assert.deepEqual(s.labels(), [], "the tree was drawn in a horizontal section");
-  assert.equal(s.body.dataset.error, "declared UI demo.s");
-  assert.equal(s.body.textContent, "/elements/0: tree cannot be drawn in a horizontal section");
-  assert.deepEqual(reports, ["declared UI demo.s: /elements/0: tree cannot be drawn in a horizontal section"]);
+  s.show(tree([branch("b", [leaf("c")], { expanded: true }), leaf("l")]));
+  assert.deepEqual(s.labels(), ["b", "c", "l"], "the tree was not drawn in a horizontal section");
+  assert.equal(s.body.dataset.error, undefined, "the tree in a horizontal section shows an error");
+  assert.equal(s.body.querySelector(".declared-tree").children.length, 2, "the root nodes are not drawn in order");
 });
 
 test("expanded on a leaf is rejected at the expanded field, also for a branch with no children", async () => {
@@ -503,14 +501,43 @@ test("more than 5000 tree nodes are rejected at the nodes array, and 5000 are ac
   assert.equal(error.reason, "exceeds 5000 nodes");
 });
 
-test("a tree in a horizontal section is rejected at the tree, and a tree in a vertical section is accepted", async () => {
+test("a tree is accepted with the same value in a horizontal and in a vertical section", async () => {
   const module = await load("tree-orientation");
   const value = tree([leaf("l")]);
   assert.equal(rejectionOf(value, { ...OPTIONS, orientation: "vertical" }, module), null, "a vertical tree was rejected");
-  const error = rejectionOf(value, { ...OPTIONS, orientation: "horizontal" }, module);
-  assert.ok(error, "no rejection");
-  assert.equal(error.pointer, "/elements/0");
-  assert.equal(error.reason, "tree cannot be drawn in a horizontal section");
+  assert.equal(rejectionOf(value, { ...OPTIONS, orientation: "horizontal" }, module), null, "a horizontal tree was rejected");
+});
+
+// Tree node detail (docs/spec/declared-ui.md, element table): plain text drawn after the label, as the detail of a list item.
+test("a tree node draws its detail after its label, and a branch draws its detail too", async () => {
+  const module = await load("tree-detail");
+  const s = section(module);
+  s.show(tree([branch("b", [leaf("c", { detail: "A" })], { expanded: true, detail: "2 changed" }), leaf("l", { detail: "M" })]));
+  assert.equal(s.body.querySelectorAll(".declared-detail").length, 3, "a detail is missing");
+  const leafRow = [...s.body.querySelectorAll(".declared-row")].find((r) => r.textContent.startsWith("l"));
+  assert.equal(leafRow.querySelector(".declared-detail").textContent, "M", "the leaf detail is not drawn");
+  assert.equal(leafRow.lastElementChild.className, "declared-detail", "the detail is not drawn after the label");
+  const branchRow = [...s.body.querySelectorAll(".declared-row")].find((r) => r.textContent.startsWith("b"));
+  assert.equal(branchRow.querySelector(".declared-detail").textContent, "2 changed", "the branch detail is not drawn");
+  s.show(tree([leaf("l", { detail: "A" })]));
+  assert.equal(s.body.querySelector(".declared-detail").textContent, "A", "a redraw did not update the detail");
+  s.show(tree([leaf("l")]));
+  assert.equal(s.body.querySelector(".declared-detail"), null, "a detail that the value no longer carries is still drawn");
+});
+
+test("a tree node detail is plain text of at most 500 code points, and is rejected at the field", async () => {
+  const module = await load("tree-detail-rules");
+  assert.equal(rejectionOf(tree([leaf("l", { detail: "x".repeat(500) })]), OPTIONS, module), null, "a detail of 500 code points was rejected");
+  const long = rejectionOf(tree([leaf("l", { detail: "x".repeat(501) })]), OPTIONS, module);
+  assert.ok(long, "no rejection for a long detail");
+  assert.equal(long.pointer, "/elements/0/nodes/0/detail");
+  assert.equal(long.reason, "exceeds 500 code points");
+  const control = rejectionOf(tree([leaf("l", { detail: "a\u0007b" })]), OPTIONS, module);
+  assert.equal(control.pointer, "/elements/0/nodes/0/detail");
+  assert.equal(control.reason, '"detail" contains a control character');
+  const type = rejectionOf(tree([leaf("l", { detail: 1 })]), OPTIONS, module);
+  assert.equal(type.pointer, "/elements/0/nodes/0/detail");
+  assert.equal(type.reason, '"detail" must be string');
 });
 
 // Keyed redraw (docs/spec/exposure.md, redraw rule): a control whose address stays keeps its element, and its command is bound once.

@@ -1393,7 +1393,7 @@ func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, value str
 	LogError("view channel", err)
 	var overflow viewOverflow
 	if errors.As(err, &overflow) {
-		// The view has lost messages, so it is closed and created again (docs/plans/plugin-processes.md, rule 4).
+		// The view has lost messages, so it is closed and created again (docs/spec/plugin-processes.md, rule 4).
 		s.viewFailed(surface, handle)
 	}
 }
@@ -1632,13 +1632,13 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 	return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}, true, nil
 }
 
-// The event name of a declared UI snapshot of a view (docs/plans/plugin-processes.md, messages and events).
+// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
 const declaredSnapshotEvent = "declared-ui.snapshot"
 
 // DeclaredSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the view of surface, which has the
 // plugin id. A snapshot is {"event": "declared-ui.snapshot", "plugin", "status", "seq", "value", "skipped"}, whose seq is an integer
 // from 1 and whose skipped is a count of 0 or more. It returns false when message is not a snapshot, and an error for a snapshot
-// whose fields are invalid. The host relays the snapshot and writes no event for it (docs/plans/plugin-processes.md, rule 2).
+// whose fields are invalid. The host relays the snapshot and writes no event for it (docs/spec/plugin-processes.md, rule 2).
 func DeclaredSnapshotEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(message, &fields); err != nil {

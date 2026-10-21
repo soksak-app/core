@@ -1238,7 +1238,33 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		close(helloSeen)
 		time.Sleep(500 * time.Millisecond)
 		_, _ = io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n")
-		_, _ = io.Copy(io.Discard, reader)
+		// The service answers close-owner and shutdown, so that Stop ends without its deadline.
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				return
+			}
+			var request map[string]any
+			if json.Unmarshal(line, &request) != nil {
+				return
+			}
+			var reply map[string]any
+			switch request["operation"] {
+			case "close-owner":
+				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
+			case "shutdown":
+				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
+			}
+			if reply != nil {
+				encoded, _ := json.Marshal(reply)
+				if _, err := connection.Write(append(encoded, '\n')); err != nil {
+					return
+				}
+			}
+			if request["operation"] == "shutdown" {
+				return
+			}
+		}
 	}()
 	folder := t.TempDir()
 	if err := os.WriteFile(filepath.Join(folder, "fast"), []byte("#!/bin/sh\ntee /dev/null\n"), 0o755); err != nil {
@@ -1271,6 +1297,11 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	if waited > 50*time.Millisecond {
 		t.Fatalf("a send to another sidecar waited %v for the service start, want < 50ms", waited)
 	}
+	stopping := time.Now()
+	sidecars.Stop()
+	if elapsed := time.Since(stopping); elapsed >= time.Second {
+		t.Fatalf("stop took %v; the service answers close-owner and shutdown, so the stop must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
+	}
 }
 
 // A start to a service that received hello and does not reply fails after 5 seconds with a fixed sentence.
@@ -1300,10 +1331,14 @@ func TestPersistentStartFailsWhenHelloIsNotAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sidecars.HelloTimeout = 100 * time.Millisecond
 	owner := &harnessOwner{root: "/hello", seen: make(chan SidecarMessage, 1)}
 	begin := time.Now()
 	err = sendWithin(t, sidecars, owner, 30*time.Second)
-	if want := "sidecar fixture-service: the service did not answer hello within 5s"; err == nil || err.Error() != want {
+	if elapsed := time.Since(begin); elapsed >= time.Second {
+		t.Fatalf("the start failed after %v; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply", elapsed)
+	}
+	if want := "sidecar fixture-service: the service did not answer hello within 100ms"; err == nil || err.Error() != want {
 		t.Fatalf("unanswered hello = %v after %v, want %q", err, time.Since(begin), want)
 	}
 }
@@ -1707,6 +1742,16 @@ type replaceService struct {
 	secondAt   time.Time
 }
 
+// installedProcessRunning reports whether pid is a process that runs. A process that ended, or a zombie that is already ended (state Z), is not running.
+func installedProcessRunning(pid int) bool {
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return false
+	}
+	state := strings.TrimSpace(string(out))
+	return state != "" && !strings.HasPrefix(state, "Z")
+}
+
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
 	t.Helper()
 	socketDirectory := socketParent(t)
@@ -1739,10 +1784,34 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		t.Fatal(err)
 	}
 	folder := t.TempDir()
-	script := "#!/bin/sh\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
+	installedPID := filepath.Join(folder, "installed.pid")
+	script := "#!/bin/sh\necho $$ > " + installedPID + "\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// The installed service process that the host starts for the fixture ends with the test.
+	t.Cleanup(func() {
+		data, err := os.ReadFile(installedPID)
+		if err != nil {
+			return // default: the host started no installed service in this test, so no process remains.
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			t.Errorf("installed service pid file: %v", err)
+			return
+		}
+		// default: a process that already ended gives ESRCH, and the check below reports only a process that remains.
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
+		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z.
+		deadline := time.Now().Add(time.Second)
+		for installedProcessRunning(pid) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if installedProcessRunning(pid) {
+			t.Errorf("installed service process %d outlived the test", pid)
+		}
+	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
 	go func() {
 		for index := 0; ; index++ {
@@ -2263,5 +2332,261 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	}
 	if ms, ok := fields["ms"].(float64); !ok || ms < 0 {
 		t.Fatalf("ms = %v, want a number of milliseconds from the spawn", fields["ms"])
+	}
+}
+
+// requireConnectionNotice waits for the next sidecar message of owner and checks that it is the connection notice of surface
+// with connected and, for a failed connection, reason.
+func requireConnectionNotice(t *testing.T, owner *failureOwner, surface string, connected bool, reason string) {
+	t.Helper()
+	message := receiveSidecarMessage(t, owner.seen)
+	var notice map[string]any
+	if err := json.Unmarshal(message.Body, &notice); err != nil {
+		t.Fatalf("the notice of %s is not JSON: %v", message.Surface, err)
+	}
+	got, _ := notice["reason"].(string)
+	if message.Surface != surface || notice["event"] != "connection" || notice["connected"] != connected || got != reason {
+		t.Fatalf("notice of %s = %v, want the connection notice of %s with connected %v and reason %q", message.Surface, notice, surface, connected, reason)
+	}
+}
+
+// deadProcessID is the process id of a process that has ended and has been reaped.
+func deadProcessID(t *testing.T) int {
+	t.Helper()
+	command := exec.Command("/usr/bin/true")
+	if err := command.Run(); err != nil {
+		t.Fatal(err)
+	}
+	return command.Process.Pid
+}
+
+// The restart limit counts the failures of a persistent service (docs/spec/persistent-services.md#service-transport): three
+// failed starts that sends ran and the end of the service process that a revival finds are four failures, and a revival
+// that reattaches the live service counts none. The fourth failure stops the restarts before the revival spawns; a
+// refused send gets the connection notice, and the open of a surface of a dependent plugin clears the stop.
+// contract: sidecars.restart.persistent-service-end-stops-before-the-spawn, sidecars.restart.persistent-refused-send-gets-the-connection-notice
+func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
+	log := useEventLog(t)
+	root := t.TempDir()
+	folder := t.TempDir()
+	runs := filepath.Join(folder, "runs")
+	if err := os.WriteFile(filepath.Join(folder, "service"), []byte("#!/bin/sh\necho run >> '"+runs+"'\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := harnessDeclarations(folder)
+	declarations[0].Dependents = []string{"plugin-a"}
+	sidecars, err := NewSidecars(declarations, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	clock := &restartClock{}
+	sidecars.Now = clock.read
+	owner := &failureOwner{root: "/only", seen: make(chan SidecarMessage, 16), failures: make(chan host.SidecarFailure, 16)}
+	send := func(surface string, offset time.Duration) error {
+		clock.set(offset)
+		return sidecars.Send(owner, "fixture-service", surface, json.RawMessage(`{"operation":"open"}`))
+	}
+	countRuns := func() int {
+		data, err := os.ReadFile(runs)
+		if err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		return strings.Count(string(data), "run\n")
+	}
+	exited := "sidecar fixture-service: service exited before endpoint"
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
+		if err := send("surface-1", offset); err == nil || err.Error() != exited {
+			t.Fatalf("send at %v = %v, want %q", offset, err, exited)
+		}
+	}
+
+	// A live service: its first connection echoes one request and ends, and the second ends when cut is closed.
+	socket := filepath.Join(socketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	writeHarnessEndpoint(t, root, socket)
+	cut := make(chan struct{})
+	go func() {
+		for index := 0; index < 2; index++ {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer connection.Close()
+				reader := bufio.NewReader(connection)
+				if _, err := reader.ReadBytes('\n'); err != nil {
+					return
+				}
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+					return
+				}
+				if index == 1 {
+					<-cut
+					return
+				}
+				line, err := reader.ReadBytes('\n')
+				if err != nil {
+					return
+				}
+				_, _ = connection.Write(line)
+			}()
+		}
+	}()
+	if err := send("surface-1", 30*time.Second); err != nil {
+		t.Fatalf("send to the live service: %v", err)
+	}
+	receiveSidecarMessage(t, owner.seen) // the echo of the open request
+	// The first connection ended and the revival reattached the live service: no failure is counted.
+	requireConnectionNotice(t, owner, "surface-1", true, "")
+
+	// The service process ends: its endpoint names a process that no longer exists. The revival counts the fourth failure
+	// and stops before it spawns the service.
+	service := filepath.Join(root, "services", "service")
+	endpoint, err := json.Marshal(map[string]any{"protocol": 1, "pid": deadProcessID(t), "socket": socket, "token": "harness-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service, "endpoint.json"), endpoint, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	clock.set(40 * time.Second)
+	close(cut)
+	requireConnectionNotice(t, owner, "surface-1", false, "restart limit")
+	if got := countRuns(); got != 3 {
+		t.Fatalf("the service was spawned %d times, want 3: the stopped revival spawned it", got)
+	}
+
+	// While the service is stopped, a send is refused with the connection notice and no sidecar-failure.
+	if err := send("surface-1", 50*time.Second); err == nil || err.Error() != "sidecar fixture-service: restart limit" {
+		t.Fatalf("send while stopped = %v, want the restart limit refusal", err)
+	}
+	requireConnectionNotice(t, owner, "surface-1", false, "restart limit")
+	select {
+	case failure := <-owner.failures:
+		t.Fatalf("the refused send delivered a sidecar failure: %+v", failure)
+	default:
+	}
+	if got := countRuns(); got != 3 {
+		t.Fatalf("the refused send spawned the service: %d runs", got)
+	}
+
+	// The open of a surface of a plugin that lists the sidecar clears the stop: the next send runs the creation path.
+	sidecars.SurfaceOpened("plugin-a", "surface-2")
+	if err := send("surface-2", 60*time.Second); err == nil || err.Error() != exited {
+		t.Fatalf("send after the reset = %v, want %q", err, exited)
+	}
+	if got := countRuns(); got != 4 {
+		t.Fatalf("the send after the reset spawned the service %d times in all, want 4", got)
+	}
+
+	sidecars.Stop()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	events := readEventLog(t, log.Path())
+	text := support.TextOf(events)
+	if count := strings.Count(text, "error host sidecar fixture-service: restart limit: 4 failures within 300 s\n"); count != 1 {
+		t.Fatalf("the log has %d restart-limit lines: %q", count, text)
+	}
+	if !strings.Contains(text, "error host sidecar fixture-service: restart limit: request for surface-1 refused\n") {
+		t.Fatalf("the log has no refusal line: %q", text)
+	}
+	stops, resets := 0, 0
+	for _, event := range events {
+		switch event["event"] {
+		case "host.sidecar.restart-limit":
+			stops++
+			if event["level"] != "error" || event["fields"].(map[string]any)["sidecar"] != "fixture-service" {
+				t.Fatalf("restart-limit event = %v", event)
+			}
+		case "host.trace.sidecar.restart-reset":
+			resets++
+			if fields := event["fields"].(map[string]any); fields["sidecar"] != "fixture-service" || fields["surface"] != "surface-2" {
+				t.Fatalf("restart-reset event = %v", event)
+			}
+		}
+	}
+	if stops != 1 || resets != 1 {
+		t.Fatalf("restart-limit events = %d, restart-reset events = %d; want 1 and 1", stops, resets)
+	}
+}
+
+// A connection that the reader ends for a protocol violation is a failure of the persistent service, so the fourth
+// violation within 300 seconds stops the restarts (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars.restart.persistent-violation-counts
+func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
+	root := t.TempDir()
+	socket := filepath.Join(socketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	writeHarnessEndpoint(t, root, socket)
+	var connections sync.WaitGroup
+	t.Cleanup(connections.Wait)
+	accepted := make(chan struct{}, 8)
+	go func() {
+		for {
+			connection, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			accepted <- struct{}{}
+			connections.Add(1)
+			go func() {
+				defer connections.Done()
+				defer connection.Close()
+				reader := bufio.NewReader(connection)
+				if _, err := reader.ReadBytes('\n'); err != nil {
+					return
+				}
+				if _, err := io.WriteString(connection, `{"operation":"hello","protocol":1,"ok":true}`+"\n"); err != nil {
+					return
+				}
+				if _, err := reader.ReadBytes('\n'); err != nil {
+					return
+				}
+				if _, err := io.WriteString(connection, "not json\n"); err != nil {
+					return
+				}
+				_, _ = io.Copy(io.Discard, reader)
+			}()
+		}
+	}()
+	sidecars, err := NewSidecars(harnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	clock := &restartClock{}
+	sidecars.Now = clock.read
+	owner := &failureOwner{root: "/only", seen: make(chan SidecarMessage, 16), failures: make(chan host.SidecarFailure, 16)}
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
+		clock.set(offset)
+		if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		select {
+		case failure := <-owner.failures:
+			if !strings.HasPrefix(failure.Reason, "invalid message: ") {
+				t.Fatalf("failure at %v = %+v", offset, failure)
+			}
+		case <-time.After(stall):
+			t.Fatalf("no sidecar failure at %v; the test stalled", offset)
+		}
+	}
+	clock.set(40 * time.Second)
+	err = sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
+	if err == nil || err.Error() != "sidecar fixture-service: restart limit" {
+		t.Fatalf("send at 40s = %v, want the restart limit refusal", err)
+	}
+	if got := len(accepted); got != 4 {
+		t.Fatalf("the host connected %d times, want 4", got)
 	}
 }

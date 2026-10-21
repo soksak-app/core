@@ -25,7 +25,7 @@ const FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 /// How long the thread that ends the process waits for the writer when the panic happened before the writer opened. The wait
 /// ends at the attach of the writer, which wakes it. The bound applies only to a writer that never opens, which is a start that
 /// fails before the writer exists; then the record goes to the standard error instead of the event log.
-const WRITER_DEADLINE: Duration = Duration::from_secs(5);
+pub(crate) const WRITER_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Whether the writer of the host is attached, and the wake of the thread that waits for it.
 static WRITER: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
@@ -49,16 +49,22 @@ where
 /// Starts the thread that ends the process after a panic. Call it before the panic hook is installed; calling it again does
 /// nothing.
 pub fn start_panic_ender() {
+    start_panic_ender_with(WRITER_DEADLINE);
+}
+
+/// Starts the thread that ends the process after a panic, and gives that thread the writer deadline `writer_deadline`.
+/// The first call sets the deadline; later calls do nothing.
+pub fn start_panic_ender_with(writer_deadline: Duration) {
     ENDER.get_or_init(|| {
         let (wake, woken) = channel::<String>();
         spawn_named("panic-ender", move || {
             let Ok(record) = woken.recv() else {
                 return;
             };
-            if !wait_for_writer(WRITER_DEADLINE) {
+            if !wait_for_writer(writer_deadline) {
                 // No writer exists to store the record, so the record is written to the standard error in full.
                 eprintln!(
-                    "event writer: the record of the panic is not stored: no writer opened within {WRITER_DEADLINE:?}\n{record}"
+                    "event writer: the record of the panic is not stored: no writer opened within {writer_deadline:?}\n{record}"
                 );
                 std::process::exit(PANIC_STATUS);
             }
