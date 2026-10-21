@@ -1148,7 +1148,13 @@ impl<O: Owner> Sidecars<O> {
     ) -> Result<(), String> {
         let current = owner.root()?;
         let root = {
-            let state = self.core.state.lock().map_err(|e| e.to_string())?;
+            let state = self
+                .core
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the surface roots, which are only read; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
             // default: a surface with no recorded directory starts from the current project root of the window.
             state.roots.get(surface).cloned().unwrap_or(current)
         };
@@ -1165,7 +1171,13 @@ impl<O: Owner> Sidecars<O> {
         line.push(b'\n');
         trace_message("sidecar.send", name, surface, body);
 
-        let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
+        let mut state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which the send reads and
+            // amends; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
         if state.stopped {
             return Err("sidecars are stopped".into());
         }
@@ -1264,7 +1276,13 @@ impl<O: Owner> Sidecars<O> {
     /// Even when the page removed the image registration from the host first, the recovery after a reload must
     /// initialize the persistent surface work.
     pub fn running_persistent(&self) -> Result<Vec<(String, Vec<String>)>, String> {
-        let state = self.core.state.lock().map_err(|e| e.to_string())?;
+        let state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
         let mut running: Vec<_> = state
             .running
             .iter()
@@ -1286,7 +1304,13 @@ impl<O: Owner> Sidecars<O> {
 
     /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
-        let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
+        let mut state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
         let key = owner.key();
         let gone: Vec<String> = state
             .owners
@@ -1570,7 +1594,13 @@ impl<O: Owner> Sidecars<O> {
             );
             let (waiter, answer) = sync_channel(1);
             {
-                let mut state = self.core.state.lock().map_err(|e| e.to_string())?;
+                let mut state = self
+                    .core
+                    .state
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the start reads
+                    // and amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
                 if state.stopped {
                     return Err("sidecars are stopped".into());
                 }
@@ -1981,7 +2011,9 @@ impl<O: Owner> Core<O> {
         state.starting.insert(name.to_string());
         drop(state);
         let started = Self::start(core, name);
-        let mut state = core.state.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the sidecar state, which the start amends; the
+        // panic hook records the panic.
+        let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
         state.starting.remove(name);
         core.started.notify_all();
         let Started { process, threads } = started?;
@@ -2477,8 +2509,12 @@ impl<O: Owner> Core<O> {
                     record_reply(&state, &sidecar, &event);
                     let owner = state
                         .lock()
-                        .ok()
-                        .and_then(|state| state.owners.get(&event.surface).cloned());
+                        // default: a lock that a panicking thread poisoned still holds the owner record, which is only
+                        // read; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .owners
+                        .get(&event.surface)
+                        .cloned();
                     if let Some(owner) = owner {
                         let response_sender = ReadThreadResponseSender {
                             sidecar_name: sidecar.clone(),
@@ -3250,7 +3286,13 @@ impl Owner for Window {
     }
     fn root(&self) -> Result<String, String> {
         let context = window_data(self)?;
-        let root = context.root.lock().map_err(|e| e.to_string())?.clone();
+        let root = context
+            .root
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the root of the window, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
         Ok(root)
     }
     fn sidecar_reconnected(&self, sidecar: &str) {
@@ -3347,3 +3389,7 @@ fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "sidecars_lock_test.rs"]
+mod lock_test;
