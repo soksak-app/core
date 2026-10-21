@@ -607,3 +607,36 @@ test("composition.create of a view refuses elements that do not match its declar
   );
   assert.deepEqual(posted.filter((message) => typeof message.command === "string").map((message) => message.command), ["composition.declaration"]);
 });
+
+// Published producer-side bridge vectors run against createViewBridge, not the consumer fixture.
+const BRIDGE_CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-bridge.json", import.meta.url), "utf8"));
+test("published view bridge cases match calls, replies, events, and refusals", async (t) => {
+  assert.equal(BRIDGE_CONTRACT.cases.length, 3);
+  for (const item of BRIDGE_CONTRACT.cases) {
+    await t.test(item.id, async (subtest) => {
+      if (item.id === "view.bridge.refuses-unsupported-page") {
+        setup(subtest, { url: item.steps[0].input.url });
+        let actual;
+        try { createViewBridge({ handler: { postMessage() {} }, report() {} }); } catch (error) { actual = error; }
+        assert.ok(actual, "unsupported page must be refused");
+        assert.ok(actual.message.startsWith(item.steps[0].output.throws), actual.message);
+        return;
+      }
+      const { posted, host } = setup(subtest);
+      const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report() {} });
+      if (item.id === "view.bridge.ready-and-request-reply") {
+        assert.equal(posted[0]?.event === "view.ready", item.steps[0].output.ready);
+        const reply = bridge.calls.request(item.steps[1].input.command, item.steps[1].input.params);
+        assert.deepEqual(posted.at(-1), item.steps[1].output);
+        host(item.steps[2].input);
+        assert.equal(await reply, item.steps[2].output);
+      } else {
+        const received = [];
+        const subscription = bridge.runtime.theme((value) => received.push(value));
+        host({ sok: 1, event: item.steps[1].input.event, data: item.steps[1].input.data });
+        assert.deepEqual(received, [item.steps[1].output]);
+        await subscription.dispose;
+      }
+    });
+  }
+});

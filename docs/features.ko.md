@@ -2369,3 +2369,7 @@ macOS의 터미널 키보드 전달을 수정했다(2026-09-20). Tauri의 빈 �
 2026-09-08 라이브러리 단순화 검증은 두 macOS 호스트를 다시 빌드하고 재시작했다. 전체 예제 검사에서 37개 통과, 녹화 프레임 수 부족으로 2개 실패(Wails 56개·Tauri 55개, 기준 60개 초과), 2× 화면 하나만 연결되어 화면 전환 검사 2개를 생략했다. 실패한 2개는 같은 코드와 기준으로 재검사하여 통과했다. 프레임 수 부족은 간헐적으로 발생하며 이번 변경에서 수정하지 않았다. Go 3/3·Rust 3/3 저장소 검사와 `make docs-check`를 통과했다. Windows·Linux 네이티브 실행은 미검증이다. 변경하지 않은 배치 라이브러리는 테스트 310개 통과·변이 142개 검출 결과를 유지한다.
 
 녹화 완전성(2026-09-17): 녹화는 프레임을 별도 큐에서 쓰고 `diagnostics.capture.stop`이 가장 긴 표시 간격을 알린다. 끌기 녹화는 100ms를 넘으면 실패한다. 이전에는 2×에서 최대 480ms 걸린 디스크 쓰기가 프레임을 버렸고, 위에 적은 간헐적 프레임 수 실패의 원인이었다. 창 크기 변경과 최대화는 `resize.test.mjs`가 측정한다. AppKit 또는 Wails 애니메이션 동안 배치는 창 프레임보다 250~400ms 늦게 따라오며(WebKit/WebKit#72971, tauri-apps/tao#1207), 변경이 끝난 프레임은 창 크기와 맞는다.
+
+### F238-c-27 producer bridge 후속
+
+- [o] F238-c-27-1 — P1: 소유자 core `main`; 완료된 F238-c-27의 연결 후속 항목이며 부모는 완료 상태로 둔다. `packages/plugin-api/contract/view-bridge.json`에 ready, 요청/응답, 이벤트 전달, 지원하지 않는 페이지 거부의 producer 순서 사례를 공개하고 `packages/plugin-api/test/view.test.mjs`에서 실제 view bridge로 실행한다. Host route는 입력이며 page bridge export는 호출이다. Red: 공개 reply 기대값을 `ok`에서 `wrong`으로 바꾸자 소유 테스트가 `ok !== wrong`으로 실패했다. Green: 계약을 복원한 뒤 `node --test packages/plugin-api/test/view.test.mjs`가 45/45 통과한다. `make docs-check`가 문서 110개와 record 검사 1608개를 통과한다.
