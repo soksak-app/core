@@ -4518,8 +4518,9 @@ const OWNER_ROOTS = [
 ];
 const DECLARATION_FILE = /(^|\/)(package|plugin|sidecar|environment|exposure)\.json$/;
 const PRIVATE_SEGMENT = /(^|\/)(src|tests?|internal|private)(\/|$)/;
-const IMPORT_SPECIFIER = /(?:from\s*|import\s*\(|require\s*\(|import\s+)["'`]([^"'`]+)["'`]/g;
-const PACKAGE_REFERENCE = /@soksak\/(?:plugin|sidecar)-[a-z0-9-]+(?:\/(?:src|tests?|internal|private)(?:\/[a-z0-9_./-]+)?)?/g;
+const IMPORT_SPECIFIER = /(?:from\s*|import\s*\(|require(?:\.resolve)?\s*\(|import\s+)["'`]([^"'`]+)["'`]/g;
+// The bare form of a reference is the argument of require.resolve; other bare names are not module references.
+const PACKAGE_REFERENCE = /require\.resolve\(\s*["'`](@soksak\/[a-z0-9][a-z0-9-]*(?:\/[^"'`\s]+)?)["'`]/g;
 
 function ownerFor(file) {
   return OWNER_ROOTS.find(([root]) => file.startsWith(root))?.[1] ?? null;
@@ -4584,7 +4585,7 @@ function ownerReferences(source) {
   const references = [];
   for (const match of source.matchAll(IMPORT_SPECIFIER)) references.push({ value: match[1], private: PRIVATE_SEGMENT.test(match[1]) });
   for (const match of source.matchAll(PACKAGE_REFERENCE)) {
-    if (!references.some(({ value }) => value === match[0])) references.push({ value: match[0], private: PRIVATE_SEGMENT.test(match[0]) });
+    if (!references.some(({ value }) => value === match[1])) references.push({ value: match[1], private: false });
   }
   return references;
 }

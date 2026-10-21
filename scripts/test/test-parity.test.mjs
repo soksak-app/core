@@ -265,6 +265,24 @@ test("ownership audit allows a subpath only when the exports map lists it or the
   ]);
 });
 
+test("ownership audit finds a bare require.resolve reference with a private subpath", { timeout: 1000 }, () => {
+  // The runtime is a core package outside the plugin prefixes, so only the bare require.resolve form finds it.
+  const index = new Map([
+    ...declared,
+    [scoped("runtime"), { dir: "packages/runtime", owner: "core", exports: { ".": "./index.js" } }],
+  ]);
+  const errors = auditOwnership([
+    "plugins/example/ui/module.js",
+    "plugins/example/ui/view.js",
+  ], (file) => file.endsWith("module.js")
+    ? `const p = require.resolve("${scoped("runtime")}/src/x.js");\n`
+    : `const v = require.resolve("${scoped("plugin-api")}/view");\n`,
+  index);
+  assert.deepEqual(errors, [
+    `plugins/example/ui/module.js: plugin implementation reads private path ${scoped("runtime")}/src/x.js`,
+  ]);
+});
+
 test("ownership audit does not authorize private access through a declared dependency", { timeout: 1000 }, () => {
   const errors = auditOwnership([
     "plugins/example/ui/module.js",
