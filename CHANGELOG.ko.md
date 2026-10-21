@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-7: `make push-check`는 네 gate test 파일을 `scripts/gate-tests.mjs`와 test runner로 돌린다. 각 파일은 `node --test <file>`로 제한 `--timeout`(기본 120초)과 함께 실행된다. 각 파일은 시작할 때 이름이 표시되고 결과·경과 시간·제한이 보고되며, 제한을 넘은 파일은 종료되고 `TIME`으로 보고된다. Red test는 제한이 생기기 전 gate runner에서 실패했다. 멈추는 파일이 30초 전체를 돌았고 `RUN` 줄이 없었다. 구현에서 통과한다.
 - F239-6: `make -C native/darwin repeat`와 `repeat-suite`는 native test를 `scripts/native-tests.mjs`로 돌리고 출력을 보인다. 각 test는 시작할 때 이름이 표시되고, 결과·경과 시간·runner의 제한(120초)을 보고한다. `repeat-suite`는 test 실행 파일에 의존하며, 각 실행에서 `test`의 하위 make 대신 스위트에 runner를 돌린다. 하위 make의 출력은 `/dev/null`로 갔었다. Red test는 변경 전 대상에서 첫 assertion으로 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
 - F239-5: `make node-repeat`는 Node test 파일의 각 반복을 `scripts/node-repeat.mjs`를 거쳐 `node --test`의 한 process로 돌린다. 제한은 `TEST_TIMEOUT`(기본 120초)이다. runner는 각 반복을 시작할 때 이름을 표시하고, 제한에서 process group을 종료하며 `TIME`으로 보고한다. `--test-timeout`은 반복의 각 test에 같은 제한을 준다. 반복은 `NODE_TEST_CONTEXT` 없이 돌아서, test에서 시작된 대상도 파일을 실행한다. Red test는 변경 전 대상에서 첫 assertion으로 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
 - F239-4: `make go-repeat`는 Go package의 각 test를 test binary의 자기 process(`-test.run ^<name>$`)로 `scripts/go-tests.mjs`를 거쳐 돌린다. 각 test는 시작할 때 표시되고, 결과·경과 시간·자기 제한 `TEST_TIMEOUT`(기본 120초)을 보고한다. 제한을 넘은 test는 종료되고 `TIME`으로 보고된다. 이전 판정기 `scripts/go-repeat-result.mjs`와 그 시험은 `scripts/test/go-repeat.test.mjs`로 대체되었다. Red test는 변경 전 대상에서 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
