@@ -272,6 +272,7 @@ fn close_persistent_owner(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
     shutdown_waiters: &ReplyWaiters,
+    connected: &AtomicBool,
     owner_closed: &Mutex<bool>,
     prefix: &str,
     deadline: std::time::Instant,
@@ -282,9 +283,38 @@ fn close_persistent_owner(
     if *closed {
         return Ok(false);
     }
-    send_close_owner_and_shutdown(outbox, close_waiters, shutdown_waiters, prefix, deadline)?;
+    send_close_owner_and_shutdown(
+        outbox,
+        close_waiters,
+        shutdown_waiters,
+        connected,
+        prefix,
+        deadline,
+    )?;
     *closed = true;
     Ok(true)
+}
+
+/// Registers the waiter of a request of a persistent connection, unless the connection is already lost. The read thread
+/// clears `connected` under the lock of the waiters before it fails them, so a waiter registered after the loss is failed
+/// here with `lost` and does not wait for its deadline.
+fn register_waiter(
+    waiters: &ReplyWaiters,
+    connected: &AtomicBool,
+    request: String,
+    tx: SyncSender<Result<(), String>>,
+    lost: &str,
+) -> Result<(), String> {
+    let mut waiters = waiters
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the waiters of the requests, which the call
+        // amends; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    if !connected.load(Ordering::Acquire) {
+        return Err(lost.to_string());
+    }
+    waiters.insert(request, tx);
+    Ok(())
 }
 
 /// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer until the
@@ -293,6 +323,7 @@ fn send_close_owner_and_shutdown(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
     shutdown_waiters: &ReplyWaiters,
+    connected: &AtomicBool,
     prefix: &str,
     deadline: std::time::Instant,
 ) -> Result<(), CloseFailure> {
@@ -304,12 +335,17 @@ fn send_close_owner_and_shutdown(
     })?;
     bytes.push(b'\n');
     let (tx, rx) = sync_channel(1);
-    close_waiters
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the waiters of the close-owner replies, which
-        // the call amends; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(request, tx);
+    register_waiter(
+        close_waiters,
+        connected,
+        request,
+        tx,
+        "persistent service disconnected before close-owner ack",
+    )
+    .map_err(|text| CloseFailure {
+        text: format!("close owner: {text}"),
+        send_close: true,
+    })?;
     outbox
         .send(Outgoing::Line(QueuedLine::new(bytes)))
         .map_err(|error| CloseFailure {
@@ -338,12 +374,17 @@ fn send_close_owner_and_shutdown(
         serde_json::to_vec(&shutdown_line).expect("shutdown request serialization cannot fail");
     shutdown_bytes.push(b'\n');
     let (shutdown_tx, shutdown_rx) = sync_channel(1);
-    shutdown_waiters
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies, which the
-        // call amends; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(shutdown_request, shutdown_tx);
+    register_waiter(
+        shutdown_waiters,
+        connected,
+        shutdown_request,
+        shutdown_tx,
+        "persistent service disconnected before shutdown ack",
+    )
+    .map_err(|text| CloseFailure {
+        text: format!("shutdown: {text}"),
+        send_close: true,
+    })?;
     outbox
         .send(Outgoing::Line(QueuedLine::new(shutdown_bytes)))
         .map_err(|error| CloseFailure {
@@ -1526,7 +1567,7 @@ impl<O: Owner> Sidecars<O> {
     /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
     /// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
     pub fn replace(&self, name: &str) -> Result<(), String> {
-        let (outbox, close_waiters, shutdown_waiters, owner_closed) = {
+        let (outbox, close_waiters, shutdown_waiters, connected, owner_closed) = {
             let mut state = self
                 .core
                 .state
@@ -1553,6 +1594,7 @@ impl<O: Owner> Sidecars<O> {
                 process.outbox.clone(),
                 Arc::clone(&connection.close_waiters),
                 Arc::clone(&connection.shutdown_waiters),
+                Arc::clone(&connection.connected),
                 Arc::clone(&connection.owner_closed),
             );
             let running = connection.version.clone();
@@ -1582,6 +1624,7 @@ impl<O: Owner> Sidecars<O> {
             &outbox,
             &close_waiters,
             &shutdown_waiters,
+            &connected,
             &owner_closed,
             &prefix,
             deadline,
@@ -1951,6 +1994,7 @@ impl<O: Owner> Sidecars<O> {
                             &process.outbox,
                             &persistent.close_waiters,
                             &persistent.shutdown_waiters,
+                            &persistent.connected,
                             &persistent.owner_closed,
                             &prefix,
                             deadline,
@@ -2824,13 +2868,21 @@ impl<O: Owner> Core<O> {
             crate::performance::process_remove(reader_service_pid);
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
-            for (_, sender) in waiters
+            let error = Err("persistent service disconnected before shutdown ack".to_string());
+            // The flag is cleared under both waiter locks: a request registers its waiter under one of these locks only
+            // while the flag is set, so every registered waiter is failed here.
+            let mut close_waiters = waiters
                 .lock()
                 // default: a lock that a panicking thread poisoned still holds the waiters of the close-owner replies,
                 // which the reader amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .drain()
-            {
+                .unwrap_or_else(PoisonError::into_inner);
+            let mut shutdown_waiters = shutdown_waiters_for_reader
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies,
+                // which the reader amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            reader_connected.store(false, Ordering::Release);
+            for (_, sender) in close_waiters.drain() {
                 if sender.send(close_error.clone()).is_err() {
                     crate::application_log::log_info(
                         &format!("sidecar {sidecar}"),
@@ -2838,14 +2890,7 @@ impl<O: Owner> Core<O> {
                     );
                 }
             }
-            let error = Err("persistent service disconnected before shutdown ack".to_string());
-            for (_, sender) in shutdown_waiters_for_reader
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies,
-                // which the reader amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .drain()
-            {
+            for (_, sender) in shutdown_waiters.drain() {
                 if sender.send(error.clone()).is_err() {
                     crate::application_log::log_info(
                         &format!("sidecar {sidecar}"),

@@ -179,8 +179,14 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
     assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
     // The hosts stop before the service ends, so no host connects again or starts the service.
+    let stopping = std::time::Instant::now();
     first.stop();
     second.stop();
+    let elapsed = stopping.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "stop of both hosts took {elapsed:?}; the service answers close-owner and shutdown, so the stop must not wait its deadline"
+    );
     service.join().unwrap();
     assert!(
         !config_directory.path().join("logs").exists(),

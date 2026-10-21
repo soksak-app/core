@@ -1476,7 +1476,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         .unwrap();
         let writer = records::start_writer(std::path::Path::new(&config));
         let (sidecars, _directory) = script_sidecars(
-            "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec sleep 600\n",
+            "#!/bin/sh\nread open1\nread open2\nread closed2\nprintf '%s\\n' '{\"surface\":\"s2\",\"body\":\"late\"}' '{\"surface\":\"s1\",\"body\":\"after\"}'\nexec cat >/dev/null\n",
         );
         let (window, events, _failures) = failing_owner("a", "/projects/a");
         for surface in ["s1", "s2"] {
@@ -1493,6 +1493,15 @@ fn a_dropped_sidecar_message_is_recorded() {
             .expect("no sidecar event; the test stalled");
         assert_eq!(event.surface, "s1");
         writer.flush(STALL).unwrap();
+        // The sidecar ends when its input closes, so the stop does not wait for its deadline.
+        let stopping = std::time::Instant::now();
+        sidecars.stop();
+        let elapsed = stopping.elapsed();
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "stop took {elapsed:?}; the sidecar ends with its input and must not wait the stop deadline of {:?}",
+            sidecars.stop_timeout
+        );
         return;
     }
     let config = folder::Folder::new();
