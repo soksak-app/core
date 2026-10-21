@@ -621,6 +621,24 @@ const BRIDGE_ACTIONS = {
   "view.bridge.sidecar-subscriptions": ["create", "sidecar-subscribe", "host-reply", "sidecar-subscribe", "host-reply", "host-event", "host-event", "host-event"],
   "view.bridge.runtime-log-level-gate": ["create", "log", "host-reply", "host-reply", "host-event", "log-disabled", "log", "host-reply"],
 };
+const OPEN_CALL_COUNTS = {
+  "view.bridge.ready-and-request-reply": [1, 0],
+  "view.bridge.events-delivered-in-order": [],
+  "view.bridge.refuses-malformed-host-message": [],
+  "view.bridge.tab-state-read-write": [1, 0, 1, 0],
+  "view.bridge.sidecar-send": [1, 0],
+  "view.bridge.sidecar-subscriptions": [1, 0, 1, 0],
+  "view.bridge.runtime-log-level-gate": [1, 2, 1, 0, 1, 0],
+};
+function assertOpenCallSequence(reports, plugin, expected) {
+  const updates = reports.filter(({ kind }) => kind === "open-calls");
+  assert.deepEqual(updates.map(({ count }) => count), expected);
+  for (const update of updates) {
+    assert.equal(update.plugin, plugin);
+    if (update.count === 0) assert.equal(update.oldestStartedAt, null);
+    else assert.ok(Number.isFinite(update.oldestStartedAt));
+  }
+}
 function validateBridgeCases(cases) {
   assert.ok(Array.isArray(cases) && cases.length > 0, "view bridge contract must publish cases");
   const ids = cases.map(({ id }) => id);
@@ -670,6 +688,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.deepEqual(posted.at(-1), item.steps[1].output);
         host(item.steps[2].input);
         assert.equal(await reply, item.steps[2].output);
+        assert.equal(bridge.calls.openCalls().count, 0);
       } else if (item.id === "view.bridge.refuses-malformed-host-message") {
         assert.equal(posted[0]?.event === "view.ready", item.steps[0].output.ready);
         const before = posted.length;
@@ -684,6 +703,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
           } else if (step.action === "host-reply") {
             host(step.input);
             assert.deepEqual(await pending.shift(), step.output);
+            assert.equal(bridge.calls.openCalls().count, pending.length);
           }
         }
         assert.equal(pending.length, 0);
@@ -699,6 +719,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
           try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
           host(replyStep.input);
           try { assert.deepEqual(await pending, replyStep.output); } catch (error) { mismatch ??= error; }
+          assert.equal(bridge.calls.openCalls().count, 0);
           index += 1;
           if (mismatch) throw mismatch;
         }
@@ -718,6 +739,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
             host(replyStep.input);
             try { assert.equal(typeof await subscription, "function"); } catch (error) { mismatch ??= error; }
+            assert.equal(bridge.calls.openCalls().count, 0);
             index += 1;
             if (mismatch) throw mismatch;
           } else if (step.action === "host-event") {
@@ -738,6 +760,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             host(step.input);
             await new Promise((resolve) => setImmediate(resolve));
             if (step.input.id === 1) assert.equal(runtime.log.enabled("debug"), step.output.includes("debug"));
+            assert.equal(bridge.calls.openCalls().count, step.input.id === 1 ? 1 : 0);
             assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), []);
           } else if (step.action === "host-event") {
             host({ sok: 1, ...step.input });
@@ -760,6 +783,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.deepEqual(received, item.steps.slice(1).map((step) => step.output));
         await subscription.dispose;
       }
+      assertOpenCallSequence(reports, globalThis.window.location.host, OPEN_CALL_COUNTS[item.id]);
     });
   }
 });

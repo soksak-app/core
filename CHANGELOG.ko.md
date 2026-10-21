@@ -2139,3 +2139,4 @@
 - F238-c-27-3: plugin-api package 파일 목록에 `contract/view-bridge.json`을 포함한다. 소유 회귀 검사는 1/1 통과하고 `npm pack --dry-run --json`이 계약의 포함을 확인했다. 게시하지 않았다.
 - F238-c-27-4: 소유 view 테스트가 빈 계약 사례 집합, 필수 사례 누락, 예상하지 않은 action 순서와 축약된 지원하지 않는 페이지 거부 문구를 거부하고 실행 메시지를 정확히 비교한다. 집중 view 테스트가 47/47 통과한다.
 - F238-c-27-5: Flowmark tab state, 이름이 지정된 sidecar send/subscription 및 이벤트, view log-level gate/log call의 ordered producer 사례를 추가한다. 집중 producer test가 실제 `createViewBridge`로 10/10 통과하며 dependency pin은 변경하지 않는다.
+- F238-c-27-6: sidecar-send producer command literal을 구현과 일치하게 수정하고 ordered case 전반에서 정확한 open-call count 전이 및 미결 호출 0개를 검사한다. 집중 producer gate가 10/10 통과한다.
