@@ -12,7 +12,8 @@ const root = resolve(import.meta.dirname, '../..');
 
 // The fake cargo builds nothing and reports one test executable of the package `fixture` in the JSON form of `--no-run`, and its
 // manifest in `cargo metadata`. The executable lists two tests (`--list`) and runs the test named by `--exact`. The test named
-// beta hangs for 8 seconds, so only a kill at its limit ends it sooner.
+// beta hangs for 8 seconds, so only a kill at its limit ends it sooner. The library of the package has one documentation test,
+// listed by `cargo test --doc -- --list` and run by name with `cargo test --doc -- <name>`.
 function fakeCargo(t) {
   const directory = mkdtempSync(join(tmpdir(), 'soksak-rust-repeat-'));
   t.after(() => rmSync(directory, { recursive: true }));
@@ -29,8 +30,10 @@ printf 'running 1 test\\ntest %s ... ok\\n\\ntest result: ok. 1 passed; 0 failed
   writeFileSync(cargo, `#!/bin/sh
 printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
 case "$*" in
+  *--doc*--list*) printf 'src/lib.rs - doc_example (line 3): test\\n'; exit 0 ;;
+  *--doc*) printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed\\n'; exit 0 ;;
   *message-format=json*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture"},"executable":"${executable}"}\\n'; exit 0 ;;
-  metadata*) printf '{"packages":[{"name":"fixture","manifest_path":"${join(directory, 'Cargo.toml')}"}]}\\n'; exit 0 ;;
+  metadata*) printf '{"packages":[{"name":"fixture","manifest_path":"${join(directory, 'Cargo.toml')}","targets":[{"kind":["lib"],"doctest":true}]}]}\\n'; exit 0 ;;
   *--no-run*) exit 0 ;;
 esac
 exit 1
@@ -64,4 +67,17 @@ test('make rust-repeat passes its features to every cargo test call', (t) => {
   const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((call) => call.startsWith('test '));
   assert.equal(calls.length, 2, JSON.stringify(calls));
   for (const call of calls) assert.match(call, /--features diagnostics/, call);
+});
+
+test('make rust-repeat runs each documentation test of the library with its own name, result and elapsed time', (t) => {
+  const directory = fakeCargo(t);
+  // The make target passes the name quoted: a doc-test name holds spaces and parentheses, which the recipe shell would split.
+  const result = spawnSync('make', ['rust-repeat', 'PACKAGE=fixture', 'COUNT=1', 'TEST=src/lib.rs - doc_example (line 3)', 'TEST_TIMEOUT=2'], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` }, encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  src\/lib\.rs - doc_example \(line 3\) \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^PASS src\/lib\.rs - doc_example \(line 3\) \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n');
+  assert.ok(calls.some((call) => /--doc -- src\/lib\.rs - doc_example \(line 3\)$/.test(call)), JSON.stringify(calls));
 });

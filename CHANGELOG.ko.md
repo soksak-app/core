@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-24: `make rust-repeat`와 `make rust-tests-alone`이 Rust 라이브러리의 문서 테스트를 다시 돈다. 각 테스트는 이름으로 실행되고 자기 제한 `TEST_TIMEOUT`을 받으며, 다른 테스트와 같이 결과와 경과 시간이 보고된다(`scripts/rust-tests.mjs`). runner는 문서 테스트가 있는 라이브러리에 한해 `cargo test --doc -- --list`로 목록을 얻는다. 대상은 레시피에서 `TEST`를 인용하므로 공백이 있는 문서 테스트 이름도 실행된다. Red test(`scripts/test/rust-repeat.test.mjs`)는 변경 전 runner에서 `fixture has no test named src/lib.rs - doc_example (line 3)`으로 실패했고, 구현에서 통과한다.
 - F239-3: `make rust-repeat`와 `make rust-tests-alone`은 Rust 패키지의 각 test를 test 실행 파일의 자기 프로세스(`<executable> --exact <name>`)로 `scripts/rust-tests.mjs`를 거쳐 돌린다. 각 test는 시작할 때 표시되고, 결과·경과 시간·자기 제한 `TEST_TIMEOUT`(기본 120초)을 보고한다. 제한을 넘은 test는 종료되고 `TIME`으로 보고된다. test runner는 `RUN` 줄에 제한을 표시한다. Red test(`scripts/test/rust-repeat.test.mjs`)는 변경 전 대상의 첫 `RUN` 줄에서 실패했고, 구현에서 통과한다.
 - F239-2: Tauri host의 detach test는 60초가 아니라 0.01초에 끝난다. fixture는 시작한 endpoint 프로세스를 test와 함께 종료하고, 테스트 출력을 그 프로세스에 넘겨주지 않아 runner가 프로세스의 종료를 기다리지 않는다.
 - F239-1: 플러그인 프로세스 handoff에 test 실행 규칙을 적는다. 각 항목은 소유 검사만 돌리고, 전체 모음·host contract 검사·창 검사는 활성 체크리스트가 완료될 때 한 번 돌린다. 각 test는 자기 제한을 갖고 전체 suite에는 일괄 제한이 없다(docs/plans/plugin-processes-handoff.ko.md, 항목마다).

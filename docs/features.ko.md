@@ -2029,6 +2029,7 @@
   - [ ] F239-21 — P2: `a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full`(Rust, 5.2초)는 `Duration::from_secs(10)`을, `TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull`(Go, 5.0초)는 `10 * time.Second`을 기다린다. 기대: panic 출력을 경계가 아니라 event로 기다린다.
   - [ ] F239-22 — P2: `a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request`(Rust, 5.1초)는 sidecar 교환에서 시간을 쓴다. 원인은 변경 전에 측정한다.
   - [ ] F239-23 — P2: `order_is_correct_when_stop_flushes_buffered_messages`(Rust, 5.0초)는 stop 경로에서 시간을 쓴다. 원인은 변경 전에 측정한다.
+  - [o] F239-24 — P1: `make rust-repeat`와 `make rust-tests-alone`은 Rust package의 라이브러리 문서 테스트를 어떤 대상으로도 돌리지 않는다. F239-3은 cargo가 빌드한 test 실행 파일만 돌리므로, F239-3 이전 `cargo test -q`가 돌리던 문서 테스트가 더는 돌지 않는다. 기대: 각 문서 테스트가 목록에 올라 자기 제한 `TEST_TIMEOUT`과 함께 이름으로 실행되고, 다른 테스트처럼 결과와 경과 시간이 보고된다. Red: `scripts/test/rust-repeat.test.mjs`가 변경 전 runner에서 `fixture has no test named src/lib.rs - doc_example (line 3)`으로 실패했다. Green: 같은 test가 통과한다. runner는 문서 테스트가 있는 라이브러리에 대해 `cargo test --doc -- --list`로 목록을 얻고 각 테스트를 제한과 함께 `cargo test --doc -- <name>`으로 실행하며, 대상은 `TEST`를 인용해 공백과 괄호가 있는 이름이 runner에 도달하게 한다. 소유 단위 시험만: `scripts/test/rust-repeat.test.mjs`. 실제 package `soksak-host-tauriv2`에는 문서 테스트가 없어 목록에 올릴 것이 없다.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
