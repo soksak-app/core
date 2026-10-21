@@ -584,11 +584,51 @@ func (s *Surfaces) authorizeSurface(viewID uint64, requested string) error {
 	return AuthorizeSurfaceCaller(s.surfaceOf(viewID), requested, viewID, uint64(s.window.ID()))
 }
 
-// exposureRegister forwards the registration of a surface page to the main page.
+// exposureRegister forwards the registration of a surface page to the main page. The page of a view has no surface
+// bridge of its own, so the main page relays its registration with the identity of the window (docs/spec/exposure.md#relay).
 func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) error {
-	if surface := s.surfaceOf(viewID); surface == "" || surface != req.Surface {
-		return fmt.Errorf("this document is not surface %q", req.Surface)
+	caller := s.surfaceOf(viewID)
+	s.mu.Lock()
+	_, hasView := s.views[req.Surface]
+	s.mu.Unlock()
+	isMainPage := caller == "" && viewID == uint64(s.window.ID())
+	if err := CheckRegistrationCaller(caller, req.Surface, isMainPage, hasView); err != nil {
+		return err
 	}
+	return s.recordRegistration(req)
+}
+
+// CheckRegistrationCaller verifies a registration caller: either the page view of the requested surface itself, or the
+// main page of the window registering for a surface with a view (docs/spec/exposure.md#relay).
+func CheckRegistrationCaller(callerSurface, requested string, callerIsMainPage bool, hasView bool) error {
+	if callerSurface != "" {
+		if callerSurface != requested {
+			return fmt.Errorf("this document is not surface %q", requested)
+		}
+		return nil
+	}
+	if callerIsMainPage && hasView {
+		return nil
+	}
+	return fmt.Errorf("this document is not surface %q", requested)
+}
+
+// ExposureRegister records the registration that the main page of the window relayed from the page of a view. It is the
+// entrance of the page call exposureRegister (docs/spec/exposure.md#relay).
+func (h *Host) ExposureRegister(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[SurfaceRegistration]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.exposureRegister(uint64(s.window.ID()), req)
+}
+
+// recordRegistration validates the entry, records it with the window and announces it to the main page.
+func (s *Surfaces) recordRegistration(req SurfaceRegistration) error {
 	if req.Kind != "status" && req.Kind != "command" && req.Kind != "dom" {
 		return fmt.Errorf("unknown exposure kind %q", req.Kind)
 	}
@@ -609,7 +649,7 @@ func (s *Surfaces) exposureRegister(viewID uint64, req SurfaceRegistration) erro
 		s.registrations[req.Surface] = append(s.registrations[req.Surface], req)
 	}
 	s.mu.Unlock()
-	s.window.EmitEvent("exposure-registered", req)
+	s.windowEvent("exposure-registered", req)
 	return nil
 }
 
