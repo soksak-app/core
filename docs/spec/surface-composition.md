@@ -137,6 +137,4 @@ A failed preparation or presentation rejects its requesting operation and appear
 - Tests delay and reorder composition snapshots, configure events, and image frames. Stale generations, revisions, and sequences never become visible.
 - A hybrid surface preserves native/DOM stacking and hit ownership at fractional coordinates and after backing-scale changes.
 - Every committed frame uses an exact current raster; a pending raster holds the previous complete frame until the new raster is consumed.
-- A terminal image preserves its logical text while resizing: narrowing reduces terminal columns and reflows long logical rows onto multiple screen rows; widening increases columns and reflows those rows back without truncation or permanent narrow wrapping.
-- Terminal cell width and height are stable presentation metrics during layout; divider movement changes the surface and raster geometry, not the font or cell metrics, and native geometry changes do not animate.
 - Both native hosts enforce the same declaration and revision rules. A platform that cannot implement them fails at startup.

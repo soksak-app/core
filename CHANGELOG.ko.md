@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F236-12: `docs/spec/surface-composition.md`의 인수 기준 목록은 그림 영역의 일반 기준만 담는다. 터미널 기준 둘(터미널 그림이 열 수 변경 때 논리 행을 재배치한다, 배치 중 터미널 셀 메트릭은 고정이다)는 터미널 plugin repository가 담도록 `docs/plans/decouple-handoff.md`로 옮겼다. 문서만 바뀌며 동작 변경은 없다.
 - F236-11: browser 예제가 설치 pack을 `apps/browser/environment.json`의 `install`(registry pack)으로 적는다. `scripts/workspace-registry.json`은 plugin `terminal`과 `browser`를 담은 pack `browser-example`을 나열하고, `make browser-frontend`는 Makefile이 적어 둘 plugin 대신 registry index에서 그 pack의 plugin을 설치한다. `docs/spec/plugins.md`가 field을 적고 환경 검증기가 그 field을 받는다. Red: 바꾸지 않은 검증기에서 `install` 시험이 알 수 없는 field로 실패했다. Green: 환경 시험 4개 중 4개, registry script 시험 5개 중 5개가 통과한다.
 - F236-8: `docs/spec/sidecars.md`는 sidecar 계약만 말한다. `shell`, `files`, 터미널 사이드카(`vt-core`) 절과 그 시험 문장을 sidecar repository가 전달하도록 `docs/plans/decouple-handoff.md`로 옮겼다. F102.2의 files 절 링크는 옮긴 절을 가리킨다. 문서만 바뀌며 동작 변경은 없다.
 - F236-6: log query fixture가 terminal sidecar role `vt` 대신 role `probe`와 event `sidecar.probe.*`를 쓴다(파일 `logs/probe-v1.jsonl`, `digests.json`의 그 색인 digest, 그리고 감사, event-log, debug-timeline, Go와 Rust 시험). event 읽기는 어떤 role의 sidecar 로그 파일도 받아들이고 `sidecar.<name>.*` event를 layer `<name>-core`로 옮기므로 읽기 코드가 sidecar 이름을 갖지 않는다. terminal sidecar의 layer `vt-core`는 그대로다. Red: 바꾸지 않은 읽기 코드에서 sidecar 파일의 event-log 시험이 행을 돌려주지 않았다. Green: 변경한 Node 시험 64개 중 64개와 Go, Rust sok fixture 시험이 통과한다.

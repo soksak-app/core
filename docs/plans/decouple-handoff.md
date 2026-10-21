@@ -74,3 +74,10 @@ The terminal sidecar (`@soksak/sidecar-vt-core`) is the client module for the pe
 | `close` | `{}` | Close the terminal session and shut down the PTY. A host `{closed: true}` envelope uses the same close operation, so removing a surface cannot leave its PTY session alive. The service kills the session's process group; a group whose processes have all ended or are exiting, which macOS answers with `EPERM` (a shell that leaves unread output exits only after the terminal output drains), is already closed, and any other failure is an error that names the group and its remaining processes. |
 
 The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes; its `frame` is `{generation, raster, sequence}` of the frame that shows that screen (the next frame while changes wait for the answer of a sent one), or null while the surface has no image, and sends image envelopes through the host's image relay when a new frame is drawn. Host `configure` replaces the page-driven `resize` request and is coalesced to its latest raster revision. While a transfer image awaits `consumed` or an error, the sidecar does not modify it. Screen and configuration changes remain pending, and the next frame uses the latest configuration after the response.
+
+## Terminal plugin acceptance criteria (F236-12)
+
+The terminal plugin repository holds these two criteria of image regions in its own specification and checks them in its window checks. Core keeps the generic criteria of [surface composition](../spec/surface-composition.md#acceptance).
+
+- A terminal image preserves its logical text while resizing: narrowing reduces terminal columns and reflows long logical rows onto multiple screen rows; widening increases columns and reflows those rows back without truncation or permanent narrow wrapping.
+- Terminal cell width and height are stable presentation metrics during layout; divider movement changes the surface and raster geometry, not the font or cell metrics, and native geometry changes do not animate.
