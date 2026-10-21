@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-a-8: surface context는 origin을 요구한다. `createSurfaceContext`는 origin이 없는 값과 null 또는 로컬 절대 경로를 담은 `{directory}`가 아닌 모든 값을 실패한 검사의 문장과 함께 거부하며, `{directory: null}`을 채워 넣지 않는다.
 - F238-a-7: 로컬 절대 경로가 아닌 view 시작 값의 origin directory를 두 호스트가 거부한다. 상대 경로, `//` 또는 `/<letter>:` 접두사, NUL 바이트는 `surface <id>: view start origin directory is not an absolute path`로 거부되며, contract case `view.start-values.refuses-a-missing-origin`이 두 호스트의 시험에서 그 거부를 선언한다.
 - F237: `origin`이 없거나 `null`이거나 경로 또는 `null`을 담은 `{directory}`가 아니면 두 호스트가 `{directory: null}`을 주입하지 않고 origin을 이름으로 드러내는 오류로 거부한다. contract case `view.start-values.refuses-a-missing-origin`이 이 거부를 두 호스트의 시험에 선언한다.
 - F235: view의 시작 값 `origin`은 한 형식, 곧 경로나 `null`을 담은 `{directory}`를 가지며, 이는 surface context의 형식이고 두 호스트가 주입하는 형식이다. native-surfaces.md와 contract case `view.start-values.first-script`는 더 이상 맨 `null`을 적지 않는다. 코드는 바뀌지 않았고, 시작 값 script의 호스트 시험이 이미 그 형식을 확인한다.

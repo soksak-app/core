@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-a-8: A surface context requires its origin: `createSurfaceContext` refuses a missing origin and every value that is not `{directory}` with null or a local absolute path, with the text of the failed check, and it no longer fills in `{directory: null}`.
 - F238-a-7: A view start whose origin directory is not a local absolute path is refused by both hosts: a relative path, a `//` or `/<letter>:` prefix, and a NUL byte are refused with `surface <id>: view start origin directory is not an absolute path`; the contract case `view.start-values.refuses-a-missing-origin` declares the refusal in both hosts' tests.
 - F237: A view start whose `origin` is missing, `null`, or not `{directory}` with a path or `null` is refused by both hosts with an error that names the origin, instead of injecting `{directory: null}`; the contract case `view.start-values.refuses-a-missing-origin` declares the refusal in both hosts' tests.
 - F235: The start value `origin` of a view has one form, `{directory}` with a path or `null`, the form of the surface context and of what both hosts inject; native-surfaces.md and the contract case `view.start-values.first-script` no longer name a bare `null`. No code changed; the host tests of the start values script already assert the form.
