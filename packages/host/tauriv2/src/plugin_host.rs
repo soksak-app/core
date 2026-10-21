@@ -68,6 +68,7 @@ pub struct PluginHosts(Mutex<HashMap<String, Handle>>);
 impl PluginHosts {
     /// Returns the plugins of plugins that the window has no host webview of, in the order of plugins.
     pub fn missing(&self, plugins: &[HostPlugin]) -> Vec<HostPlugin> {
+        // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
         let hosts = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         plugins
             .iter()
@@ -80,6 +81,7 @@ impl PluginHosts {
     pub fn insert(&self, plugin: &str, handle: Handle) {
         self.0
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .insert(plugin.to_string(), handle);
     }
@@ -88,6 +90,7 @@ impl PluginHosts {
     pub fn take(&self, plugin: &str) -> Option<Handle> {
         self.0
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .remove(plugin)
     }
@@ -96,6 +99,7 @@ impl PluginHosts {
     pub fn take_all(&self) -> Vec<Handle> {
         self.0
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .drain()
             .map(|(_, handle)| handle)
@@ -106,6 +110,7 @@ impl PluginHosts {
     pub fn contains(&self, plugin: &str) -> bool {
         self.0
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .contains_key(plugin)
     }
