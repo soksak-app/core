@@ -187,6 +187,18 @@ test('a declared tree in a horizontal body takes a full line of the row',()=>{
  } finally {styled.window.close();}
 });
 
+test('a declared tree scrolls horizontally inside its box with a visible thin scrollbar in every orientation',()=>{
+ const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
+ const styled=new JSDOM(`<style>${css}</style><div class="set" data-orientation="horizontal"><div class="set__body" data-declared><div class="declared-tree"></div></div></div><div class="set" data-orientation="vertical"><div class="set__body" data-declared><div class="declared-tree"></div></div></div>`);
+ try {
+  for (const tree of styled.window.document.querySelectorAll('.declared-tree')) {
+   const style=styled.window.getComputedStyle(tree);
+   assert.equal(style.overflowX,'auto','a tree wider than its box must scroll inside the box');
+   assert.equal(style.scrollbarWidth,'thin','the scroll of a tree must show a scrollbar');
+  }
+ } finally {styled.window.close();}
+});
+
 test('horizontal list sections use a row while vertical lists use a column',()=>{
  const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
  const styled=new JSDOM(`<style>${css}</style><div class="set" data-layout="list" data-orientation="horizontal"></div><div class="set" data-layout="list" data-orientation="vertical"></div>`);
