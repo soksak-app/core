@@ -160,8 +160,6 @@ The order below follows the dependencies. IDs are checklist IDs.
 
 **F212.6a-1-3-2-2** — the cause of the 2.4 s main-thread stall of the Tauri host. The findings are in the item. Stall dumps of 2 s or more are now stored by default (F212.6a-1-3-2-1). When the next one appears, symbolicate the WebKit frames with `atos -o /System/Library/Frameworks/WebKit.framework/Versions/A/WebKit -l <load address> <addresses>`; it resolves through the dyld shared cache when the OS build matches the dump. Then name the thread that holds `IPC::Connection` `m_incomingMessagesLock` and the run loop lock. Mark the parent F212.6a-1-3 when its children are complete.
 
-**F212.8a-4** — the restart limit of persistent services (`docs/spec/terminal-runtime.md`, one attempt per disconnect). This is a decision first: which event counts as a failure of a persistent service. A disconnect that the host re-attaches without a send is not a failure event today. Write the scope, run the review, then specify and implement it in both hosts with a contract case. Reuse the stdio limit of F212.8a (Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
-
 ### 2. Branch `feat/view-kind-F212.7`: checklist states
 
 Several parent items stay `[ ]` although all their children are `[o]`: F212.3, F212.4, F212.6 and F212.7 (whose open children are F212.7a, F212.7b-1, F212.7c, F212.7d-1 and F212.7-9). Read each parent's children and set the parent by the rule: `[o]` only when every child is complete and verified, `[~]` only while a child is `[~]`.

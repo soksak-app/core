@@ -785,9 +785,9 @@ struct State<O> {
     stopping: HashMap<String, Stopping>,
     /// The requests with correlation identifiers that wait for a reply (sidecar_reply.rs).
     requests: RequestLedger,
-    /// The clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check injects it.
+    /// The clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A check injects it.
     clock: Arc<dyn Fn() -> Instant + Send + Sync>,
-    /// The restart-limit record of each standard input and output sidecar that has a counted failure.
+    /// The restart-limit record of each sidecar that has a counted failure.
     restarts: HashMap<String, RestartRecord>,
 }
 
@@ -1085,9 +1085,8 @@ impl<O: Owner> Sidecars<O> {
         self
     }
 
-    /// Called when the host creates a surface of plugin. It clears the restart limit of each stopped standard input and
-    /// output sidecar that the plugin lists in dependencies, so the next request starts the sidecar
-    /// (docs/spec/sidecars.md#failure).
+    /// Called when the host creates a surface of plugin. It clears the restart limit of each stopped sidecar that the
+    /// plugin lists in dependencies, so the next request starts the sidecar (docs/spec/sidecars.md#failure).
     pub fn surface_opened(&self, plugin: &str, surface: &str) {
         let mut state = self.core.state.lock().expect("sidecar state");
         let cleared: Vec<String> = {
@@ -1115,7 +1114,7 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
-    /// Changes the clock of the restart limit of standard input and output sidecars (docs/spec/sidecars.md#failure). A check
+    /// Changes the clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure). A check
     /// injects a clock that it moves; the default is the monotonic clock. Call it only right after creation, before another
     /// reference exists.
     pub fn with_clock(self, clock: impl Fn() -> Instant + Send + Sync + 'static) -> Self {
@@ -1201,20 +1200,39 @@ impl<O: Owner> Sidecars<O> {
                 "discarding disconnected persistent connection",
             );
         }
-        // A refusal by the restart limit is reported to the owner after the unlock, as the failure event of the sidecar.
+        // A refusal by the restart limit is reported to the owner after the unlock: as the failure event of a standard
+        // input and output sidecar, and as the connection notice of a persistent service (docs/spec/sidecars.md#failure).
         if restart_refused(&mut state, name, surface) {
             drop(state);
-            owner.deliver_failure(Failure {
-                sidecar: name.to_string(),
-                surface: surface.to_string(),
-                reason: "restart limit".to_string(),
-            });
+            let persistent = self
+                .core
+                .declaration(name)
+                .is_some_and(|(_, persistent)| persistent);
+            if !persistent {
+                owner.deliver_failure(Failure {
+                    sidecar: name.to_string(),
+                    surface: surface.to_string(),
+                    reason: "restart limit".to_string(),
+                });
+            } else {
+                match connection_notice(&Err(RESTART_LIMIT_REASON.to_string())) {
+                    Ok(body) => owner.deliver(Message {
+                        sidecar: name.to_string(),
+                        surface: surface.to_string(),
+                        body,
+                    }),
+                    Err(error) => log_error(
+                        &format!("sidecar {name}"),
+                        format!("connection notice serialization: {error}"),
+                    ),
+                }
+            }
             return Err(format!("sidecar {name}: restart limit"));
         }
         // The first start, for which no loss was announced, has no notification. When the start consumes the record of
         // an earlier connection loss, this call sends the connection notification (V5-106). If the start fails, the
         // error of this send conveys that failure to the caller.
-        let (mut state, started) = Core::ensure(&self.core, state, name)?;
+        let (mut state, started) = Core::ensure(&self.core, state, name, None)?;
         let restarted = started && state.unannounced_loss.remove(name);
         // The lock was released during the start, so the owner of the surface is checked again.
         if let Some(other) = state.owners.get(surface)
@@ -1637,7 +1655,7 @@ impl<O: Owner> Sidecars<O> {
                             return Err(format!("sidecar {name}: read endpoint: {error}"));
                         }
                     }
-                    state = Core::ensure(&self.core, state, &name)?.0;
+                    state = Core::ensure(&self.core, state, &name, None)?.0;
                 }
                 let process = state.running.get(&name).expect("started above");
                 let connection = process
@@ -1947,13 +1965,14 @@ const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends and
-/// reaps that service and fails, and appends the failure of that cleanup after the error.
+/// reaps that service and fails, and appends the failure of that cleanup after the error. The second value of the error
+/// is true when no line arrived within limit, the start failure that the restart limit counts.
 fn service_endpoint_line(
     name: &str,
     child: &mut Child,
     stdout: std::process::ChildStdout,
     limit: Duration,
-) -> Result<String, String> {
+) -> Result<String, (String, bool)> {
     let (sender, receiver) = sync_channel(1);
     let reader_name = name.to_string();
     crate::routine::spawn_named("sidecar-read-line", move || {
@@ -1968,7 +1987,7 @@ fn service_endpoint_line(
         }
     });
     match receiver.recv_timeout(limit) {
-        Ok(read) => read.map_err(|e| format!("sidecar {name}: service startup: {e}")),
+        Ok(read) => read.map_err(|e| (format!("sidecar {name}: service startup: {e}"), false)),
         Err(_) => {
             let message = format!(
                 "sidecar {name}: the service did not print its endpoint within {}s",
@@ -1976,12 +1995,18 @@ fn service_endpoint_line(
             );
             // When the service ends, stdout is closed and the read thread ends too.
             if let Err(error) = child.kill() {
-                return Err(format!("{message}; ending the service failed: {error}"));
+                return Err((
+                    format!("{message}; ending the service failed: {error}"),
+                    true,
+                ));
             }
             if let Err(error) = child.wait() {
-                return Err(format!("{message}; reaping the service failed: {error}"));
+                return Err((
+                    format!("{message}; reaping the service failed: {error}"),
+                    true,
+                ));
             }
-            Err(message)
+            Err((message, true))
         }
     }
 }
@@ -1991,10 +2016,13 @@ impl<O: Owner> Core<O> {
     /// returns while holding it. The start waits for the process to start and for the connection and authentication of
     /// a persistent service, so it is done with the lock released. Meanwhile requests of other sidecars do not wait,
     /// and requests of the same sidecar wait for that start to end. The second value is whether this call started it.
+    /// lost is the revival of a lost persistent connection that runs this start, None for a send or a retain. While the
+    /// restart limit stops the sidecar, it starts nothing (docs/spec/terminal-runtime.md#service-transport).
     fn ensure<'a>(
         core: &'a Arc<Self>,
         mut state: MutexGuard<'a, State<O>>,
         name: &str,
+        lost: Option<&Revival>,
     ) -> Result<(MutexGuard<'a, State<O>>, bool), String> {
         loop {
             if state.running.contains_key(name) {
@@ -2008,9 +2036,12 @@ impl<O: Owner> Core<O> {
             }
             state = core.started.wait(state).map_err(|e| e.to_string())?;
         }
+        if restart_stopped(&state, name) {
+            return Err(format!("sidecar {name}: restart limit"));
+        }
         state.starting.insert(name.to_string());
         drop(state);
-        let started = Self::start(core, name);
+        let started = Self::start(core, name, lost);
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which the start amends; the
         // panic hook records the panic.
         let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
@@ -2031,13 +2062,14 @@ impl<O: Owner> Core<O> {
 
     /// Starts a sidecar. A persistent declaration attaches to the service, and otherwise it is started as a child
     /// process of the window. The write and read threads are returned so that they are started after the registration.
-    fn start(core: &Arc<Self>, name: &str) -> Result<Started, String> {
+    /// lost is the revival that runs the start of a persistent service, or None.
+    fn start(core: &Arc<Self>, name: &str, lost: Option<&Revival>) -> Result<Started, String> {
         let (program, persistent) = core
             .declaration(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
         // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
-            return Self::start_persistent(core, name, &program);
+            return Self::start_persistent(core, name, &program, lost);
         }
         let mut threads: Vec<Thread> = Vec::new();
         let mut command = Command::new(&program);
@@ -2146,7 +2178,30 @@ impl<O: Owner> Core<O> {
         })
     }
 
-    fn start_persistent(core: &Arc<Self>, name: &str, program: &Path) -> Result<Started, String> {
+    /// Counts a start failure of the creation path of the persistent service name for the restart limit and returns its
+    /// text. lost is the revival that runs the start, or None.
+    fn service_start_failure(
+        core: &Arc<Self>,
+        name: &str,
+        lost: Option<&Revival>,
+        text: String,
+    ) -> String {
+        // default: a lock that a panicking thread poisoned still holds the restart-limit records, which the count amends;
+        // the panic hook records the panic.
+        let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
+        count_service_failure(&mut state, name, lost);
+        text
+    }
+
+    /// Connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival
+    /// that runs it, or None: a revival that finds no live service counts the end of the service process before it
+    /// spawns, and the restart limit can stop it there (docs/spec/terminal-runtime.md#service-transport).
+    fn start_persistent(
+        core: &Arc<Self>,
+        name: &str,
+        program: &Path,
+        lost: Option<&Revival>,
+    ) -> Result<Started, String> {
         #[derive(Deserialize)]
         struct Endpoint {
             protocol: u64,
@@ -2181,11 +2236,19 @@ impl<O: Owner> Core<O> {
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not
                     // a fallback transport.
-                    return Self::start_persistent(core, name, program);
+                    return Self::start_persistent(core, name, program, lost);
                 }
                 endpoint
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if lost.is_some() {
+                    // default: a lock that a panicking thread poisoned still holds the restart-limit records, which the
+                    // count amends; the panic hook records the panic.
+                    let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
+                    if count_service_failure(&mut state, name, lost) {
+                        return Err(RESTART_LIMIT_REASON.to_string());
+                    }
+                }
                 // The service outlives this host, so it writes to its own log file and not to the standard error of the
                 // host (docs/spec/hosts.md#application-log). There is no endpoint, so no service writes to that file.
                 let service_log = crate::application_log::open_log(
@@ -2215,9 +2278,21 @@ impl<O: Owner> Core<O> {
                     .stdout
                     .take()
                     .ok_or("persistent service stdout is missing")?;
-                let line = service_endpoint_line(name, &mut spawned, stdout, core.ready_timeout)?;
+                let line = service_endpoint_line(name, &mut spawned, stdout, core.ready_timeout)
+                    .map_err(|(text, timed_out)| {
+                        if timed_out {
+                            Self::service_start_failure(core, name, lost, text)
+                        } else {
+                            text
+                        }
+                    })?;
                 if line.is_empty() {
-                    return Err(format!("sidecar {name}: service exited before endpoint"));
+                    return Err(Self::service_start_failure(
+                        core,
+                        name,
+                        lost,
+                        format!("sidecar {name}: service exited before endpoint"),
+                    ));
                 }
                 let endpoint: Endpoint = serde_json::from_str(&line)
                     .map_err(|e| format!("sidecar {name}: service endpoint: {e}"))?;
@@ -2274,10 +2349,17 @@ impl<O: Owner> Core<O> {
         response_reader
             .read_line(&mut response)
             .map_err(|e| match e.kind() {
-                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => format!(
-                    "sidecar {name}: the service did not answer hello within {}s",
-                    HELLO_TIMEOUT.as_secs()
-                ),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => {
+                    Self::service_start_failure(
+                        core,
+                        name,
+                        lost,
+                        format!(
+                            "sidecar {name}: the service did not answer hello within {}s",
+                            HELLO_TIMEOUT.as_secs()
+                        ),
+                    )
+                }
                 _ => format!("sidecar {name}: hello response: {e}"),
             })?;
         let response: serde_json::Value = serde_json::from_str(&response)
@@ -2548,6 +2630,7 @@ impl<O: Owner> Core<O> {
             })();
             let mut was_current = false;
             let stopping;
+            let stop;
             let mut owned = Vec::new();
             let mut changed = None;
             {
@@ -2558,6 +2641,10 @@ impl<O: Owner> Core<O> {
                 if stopping {
                     state.requests.forget(&sidecar);
                 }
+                // A connection that ends for a protocol violation while the host is not stopping is a failure of the
+                // service, which the restart limit counts here; the service keeps running
+                // (docs/spec/terminal-runtime.md#service-transport).
+                stop = violation.is_some() && !stopping && count_failure(&mut state, &sidecar);
                 let is_current = state
                     .running
                     .get(&sidecar)
@@ -2628,6 +2715,9 @@ impl<O: Owner> Core<O> {
                 // connect again at once, and the next send connects again through the creation path
                 // (docs/spec/terminal-runtime.md#service-transport).
                 log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
+                if stop {
+                    report_restart_limit(&sidecar);
+                }
                 fail_requests(&state, &sidecar, &reason);
                 for (surface, owner) in owned {
                     owner.deliver_failure(Failure {
@@ -2713,7 +2803,9 @@ fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
 /// does not replace the endpoint.
 fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
     await_replaced_service(core, name);
-    let mut outcome = revive_attempt(core, name);
+    // One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
+    let lost = Revival::default();
+    let mut outcome = revive_attempt(core, name, &lost);
     if let Err(reason) = &outcome
         && refused_connect(reason, name)
     {
@@ -2737,14 +2829,16 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
                 format!("remove refused endpoint: {error}"),
             );
         }
-        outcome = revive_attempt(core, name);
+        outcome = revive_attempt(core, name, &lost);
     }
-    let replaced = core
-        .state
-        .lock()
-        .expect("sidecar state")
-        .replacing
-        .remove(name);
+    let (replaced, stopped) = {
+        let mut state = core.state.lock().expect("sidecar state");
+        (state.replacing.remove(name), restart_stopped(&state, name))
+    };
+    // While the restart limit stops the sidecar, no revival runs and no connection notice is written.
+    if stopped && matches!(outcome, Ok(false)) {
+        return;
+    }
     match (&outcome, replaced) {
         (Ok(true), Some(replaced)) => {
             // The replacement closed the connection on purpose and the installed service started: an expected state.
@@ -2786,13 +2880,18 @@ pub fn connection_loss_report(
     }
 }
 
-/// One restart. It is Ok(false) when another path already started it again, and Err when the start failed.
-fn revive_attempt<O: Owner>(core: &Arc<Core<O>>, name: &str) -> Result<bool, String> {
+/// One restart of the disconnect lost. It is Ok(false) when another path already started it again or the restart limit
+/// stops the sidecar, and Err when the start failed.
+fn revive_attempt<O: Owner>(
+    core: &Arc<Core<O>>,
+    name: &str,
+    lost: &Revival,
+) -> Result<bool, String> {
     let state = core.state.lock().expect("sidecar state");
-    if state.stopped || state.running.contains_key(name) {
+    if state.stopped || state.running.contains_key(name) || restart_stopped(&state, name) {
         return Ok(false);
     }
-    let (mut state, started) = Core::ensure(core, state, name)?;
+    let (mut state, started) = Core::ensure(core, state, name, Some(lost))?;
     Ok(started && state.unannounced_loss.remove(name))
 }
 
@@ -2814,13 +2913,7 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
             .map(|(surface, owner)| (surface.clone(), owner.clone()))
             .collect()
     };
-    let value = match &outcome {
-        Ok(()) => serde_json::json!({"event": "connection", "connected": true}),
-        Err(reason) => {
-            serde_json::json!({"event": "connection", "connected": false, "reason": reason})
-        }
-    };
-    let body = match RawValue::from_string(value.to_string()) {
+    let body = match connection_notice(&outcome) {
         Ok(body) => body,
         Err(error) => {
             log_error(
@@ -2842,6 +2935,17 @@ fn notify_connection<O: Owner>(core: &Arc<Core<O>>, name: &str, outcome: Result<
             body: body.clone(),
         });
     }
+}
+
+/// The sidecar-message body of a persistent connection: connected, or not connected with the reason of the failure.
+fn connection_notice(outcome: &Result<(), String>) -> Result<Box<RawValue>, serde_json::Error> {
+    let value = match outcome {
+        Ok(()) => serde_json::json!({"event": "connection", "connected": true}),
+        Err(reason) => {
+            serde_json::json!({"event": "connection", "connected": false, "reason": reason})
+        }
+    };
+    RawValue::from_string(value.to_string())
 }
 
 /// One answer of a persistent connection (closed-owner, shutdown, retained).
@@ -3028,21 +3132,28 @@ fn exit_text(status: std::process::ExitStatus) -> String {
     }
 }
 
-/// Handles a standard-I/O sidecar whose output ended or whose protocol was violated. While terminating, stop waits for
-/// the process. Otherwise it removes the process from the running sidecars, ends it, and reports the failure to the
-/// owning window of each surface that sent to that process. The protocol state after a failure is undefined, so the
-/// process is ended.
-/// The sliding window and the number of counted failures of the restart limit of a standard input and output sidecar
+/// The sliding window and the number of counted failures of the restart limit of a sidecar of either transport
 /// (docs/spec/sidecars.md#failure).
 const RESTART_WINDOW: Duration = Duration::from_secs(300);
 const RESTART_LIMIT: usize = 4;
 
-/// The restart-limit record of one standard input and output sidecar. `failures` are the times of the counted failures,
-/// oldest first. When the limit stops the restarts, `stopped` is true.
+/// The restart-limit record of one sidecar. `failures` are the times of the counted failures, oldest first. When the
+/// limit stops the restarts, `stopped` is true.
 #[derive(Default)]
 struct RestartRecord {
     failures: Vec<Instant>,
     stopped: bool,
+}
+
+/// The reason of the connection notice of a persistent service whose restarts the restart limit stopped
+/// (docs/spec/terminal-runtime.md#service-transport).
+const RESTART_LIMIT_REASON: &str = "restart limit";
+
+/// The revival of one lost persistent connection. `counted` is true once a failure of that disconnect is counted,
+/// because one disconnect counts at most one failure (docs/spec/terminal-runtime.md#service-transport).
+#[derive(Default)]
+struct Revival {
+    counted: std::cell::Cell<bool>,
 }
 
 /// Counts a failure of the sidecar at the time of the clock of the state, among the failures within RESTART_WINDOW. It
@@ -3061,14 +3172,56 @@ fn count_failure<O>(state: &mut State<O>, sidecar: &str) -> bool {
     true
 }
 
+/// Writes the stop of the restarts of the sidecar by the restart limit to the log and as an event.
+fn report_restart_limit(sidecar: &str) {
+    log_error(
+        &format!("sidecar {sidecar}"),
+        format!(
+            "restart limit: {RESTART_LIMIT} failures within {} s",
+            RESTART_WINDOW.as_secs()
+        ),
+    );
+    emit_host(
+        Level::Error,
+        "host.sidecar.restart-limit",
+        serde_json::json!({"sidecar": sidecar}),
+    );
+}
+
+/// Counts a failure of the persistent service while the host is neither stopping its sidecars nor replacing the
+/// sidecar, and reports the stop when it is the RESTART_LIMIT-th one. lost is the revival of the disconnect that the
+/// failure belongs to, None for a start that a send or a retain runs; a disconnect whose failure is already counted
+/// counts nothing more. It returns true when the restarts are stopped by this failure.
+fn count_service_failure<O>(state: &mut State<O>, sidecar: &str, lost: Option<&Revival>) -> bool {
+    if state.stopped
+        || state.replacing.contains_key(sidecar)
+        || lost.is_some_and(|lost| lost.counted.get())
+    {
+        return false;
+    }
+    if let Some(lost) = lost {
+        lost.counted.set(true);
+    }
+    if !count_failure(state, sidecar) {
+        return false;
+    }
+    report_restart_limit(sidecar);
+    true
+}
+
+/// Whether the restart limit stops the restarts of the sidecar.
+fn restart_stopped<O>(state: &State<O>, sidecar: &str) -> bool {
+    state
+        .restarts
+        .get(sidecar)
+        .is_some_and(|record| record.stopped)
+}
+
 /// Applies the restart limit to a request from surface to the sidecar, which has no running process, and returns true
 /// when the sidecar is stopped: the request is refused and logged, whichever surface sent it. Only surface_opened clears
 /// the stop.
 fn restart_refused<O>(state: &mut State<O>, sidecar: &str, surface: &str) -> bool {
-    let stopped = state
-        .restarts
-        .get(sidecar)
-        .is_some_and(|record| record.stopped);
+    let stopped = restart_stopped(state, sidecar);
     if stopped {
         log_error(
             &format!("sidecar {sidecar}"),
@@ -3078,6 +3231,10 @@ fn restart_refused<O>(state: &mut State<O>, sidecar: &str, surface: &str) -> boo
     stopped
 }
 
+/// Handles a standard-I/O sidecar whose output ended or whose protocol was violated. While terminating, stop waits for
+/// the process. Otherwise it removes the process from the running sidecars, ends it, and reports the failure to the
+/// owning window of each surface that sent to that process. The protocol state after a failure is undefined, so the
+/// process is ended.
 fn fail<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
@@ -3159,18 +3316,7 @@ fn fail<O: Owner>(
     }
     log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
     if stop {
-        log_error(
-            &format!("sidecar {sidecar}"),
-            format!(
-                "restart limit: {RESTART_LIMIT} failures within {} s",
-                RESTART_WINDOW.as_secs()
-            ),
-        );
-        emit_host(
-            Level::Error,
-            "host.sidecar.restart-limit",
-            serde_json::json!({"sidecar": sidecar}),
-        );
+        report_restart_limit(sidecar);
     }
     fail_requests(state, sidecar, &reason);
     for (surface, owner) in owned {

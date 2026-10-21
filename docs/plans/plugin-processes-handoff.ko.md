@@ -160,8 +160,6 @@ the opened surface recorded no host.trace.sidecar.restart-reset
 
 **F212.6a-1-3-2-2** — Tauri host의 2.4초 main thread 멈춤 원인. 찾은 내용은 항목에 있다. 2초 이상 stall dump는 이제 기본으로 저장된다(F212.6a-1-3-2-1). 다음 dump가 나오면 `atos -o /System/Library/Frameworks/WebKit.framework/Versions/A/WebKit -l <load address> <addresses>`로 WebKit frame을 symbol화한다. OS build가 dump와 같으면 dyld shared cache로 풀린다. 그다음 `IPC::Connection`의 `m_incomingMessagesLock`과 run loop lock을 잡은 thread를 밝힌다. 상위 F212.6a-1-3은 하위가 끝나면 표시한다.
 
-**F212.8a-4** — 계속 연결하는 service의 재시작 한도(`docs/spec/terminal-runtime.md`, 연결이 끊길 때 한 번 시도). 먼저 결정이 필요하다. 계속 연결하는 service에서 어떤 event를 실패로 셀지다. host가 요청 없이 다시 붙이는 끊김은 지금 실패 event가 아니다. 범위를 적고 검증을 돌린 뒤, 두 host에 계약 case와 함께 명세하고 구현한다. F212.8a의 stdio 한도를 다시 쓴다(Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
-
 ### 2. Branch `feat/view-kind-F212.7`: checklist 상태
 
 여러 상위 항목이 하위가 모두 `[o]`인데 `[ ]`로 남아 있다: F212.3, F212.4, F212.6, F212.7(열린 하위는 F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.7-9). 각 상위의 하위를 읽고 규칙대로 표시한다. 모든 하위가 완료되고 검증되었을 때만 `[o]`, 하위가 `[~]`인 동안만 `[~]`다.

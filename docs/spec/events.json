@@ -799,7 +799,7 @@
       "fields": {
         "sidecar": "string"
       },
-      "description": "A standard input and output sidecar failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
+      "description": "A sidecar of either transport failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
     },
     "host.trace.sidecar.restart-reset": {
       "layer": "host",
@@ -809,7 +809,7 @@
         "sidecar": "string",
         "surface": "string"
       },
-      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record and started the sidecar (docs/spec/sidecars.md#failure)."
+      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record, and the next request starts the sidecar (docs/spec/sidecars.md#failure)."
     },
     "host.project.removal_allowed": {
       "layer": "host",
