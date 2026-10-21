@@ -136,7 +136,7 @@ func TestAWriterStoresTheEventsAndTheLossOfItsPullSource(t *testing.T) {
 	}
 }
 
-// contract: cli.log.writer-options.records-refused-placed-events-as-loss
+// contract: cli.log.writer-options.records-refused-events-as-loss-before-the-next-accepted-event
 func TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent(t *testing.T) {
 	options := optionsIn(t.TempDir(), "full-queue")
 	options.QueueEvents = 2
@@ -275,6 +275,7 @@ func TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 	}
 }
 
+// contract: host.stall.passes-every-gate
 // contract: host.stall.passes-every-gate
 func TestTheStallRecordsAreStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 	log, err := sok.StartEventLog(optionsIn(t.TempDir(), "b1"))
