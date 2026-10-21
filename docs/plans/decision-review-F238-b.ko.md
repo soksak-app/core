@@ -13,10 +13,10 @@
 
 ## 범위
 
-- D5: view 페이지가 어떤 level로 게이트하는지, level이 view에 어떻게 닿고 최신으로 유지되는지, view가 거부된 기록을 어떻게 세는지. 선언되지 않은 plugin 기록의 속도 상한, 대기 중인 거부의 flush 시점, 죽은 view의 손실 수 기록은 여기서 정하지 않는다. 이것들은 각 근거와 함께 하위 항목 S1부터 S3이다.
-- D6: view에 단축키 표가 필요한지, view가 어떤 키를 workbench로 넘기는지, Escape가 열린 페이지 picker를 어떻게 닫는지.
+- D5: 어떤 class가 view 기록을 게이트하는지, 거부된 기록을 누가 세는지, 종료된 view가 무엇을 잃는지. 라운드 7은 선언되지 않은 plugin 기록의 속도(S1), 대기 중인 거부의 flush(S2), 종료된 view의 기록(S3)을 각 근거와 함께 정한다.
+- D6: view가 키에 대해 workbench 명령을 실행하는지, 어떻게 실행하는지, view가 보낸 키에 호스트가 무엇을 하는지.
 
-범위 밖: 문구, 새 필드의 정확한 이름(하위 항목에서 정한다), 해당 모듈의 단위 테스트가 정하는 동작, 하위 항목 S1부터 S3.
+범위 밖: 문구, 새 필드의 정확한 이름(하위 항목에서 정한다), 해당 모듈의 단위 테스트가 정하는 동작.
 
 ## D5. View 로그 level (F233)
 
@@ -24,51 +24,46 @@
 
 `feat` `packages/plugin-api/view.js:116-135`: bridge가 첫 기록에서 `runtime.log.levels`를 호출하고(`storedLevel`, 127행), `levels === null`인 동안 모든 기록을 보내며(135행), 거부된 읽기는 오류 줄로 보고한다(`recordError`, 116행). 페이지는 plugin 기록의 level로 응답한다(`packages/workbench/view-calls.js:184-187`). 변경은 `log.levels` 이벤트로 온다(`view.js:130-131`; `packages/workbench/surface-modules.js:261-264`, `:308`; `packages/workbench/view-events.js`).
 
-### 결정 본문 (라운드 6, 축소)
+### 결정 본문 (라운드 7)
 
-감독자가 범위를 줄였다. 속도 상한, flush 규칙, 죽은 view의 손실 기록은 이 본문에서 빼고 S1부터 S3으로 등록한다. 라운드 5의 반론은 아래에 답하고 여기에 반영했다.
+감독자가 라운드 6의 열린 쟁점을 정했다. view에는 게이트가 없다. 기록기만 게이트이자 세는 주체다. view로 가는 시작 값, 정책과 class 맵의 게시, view 쪽 계수와 플러시 규칙을 모두 제거한다.
 
-1. **호스트는 주입할 때마다 시작 값을 만든다.** 생성 때와 재시작 때마다 호스트는 그 순간의 살아 있는 상태에서 두 멤버를 만들어 `window.sokSurface`(`ViewStart`, `packages/host/tauriv2/src/surfaces.rs:61`, `packages/host/wailsv3/src/surfaces.go:66`)에 주입한다. 두 멤버는 view의 저장된 시작 값(`ViewSpec`, `view_lifecycle.rs:28-29`, `view_lifecycle.go:25-26`)의 일부가 아니므로, 재시작이 오래된 정책을 다시 보내는 일은 없다.
-   - `logPolicy`: [클래스와 정책](../spec/logging.md#classes-and-policy)의 다섯 클래스이며, 값은 `off`, `error`, `warn`, `info`, `debug`, `trace` 중 하나다. 호스트가 마지막으로 적용한 정책에서 읽는다. 적용된 파일이 없으면 기본값이고, 있으면 마지막 유효한 `log-policy.json`이다. 거부된 파일은 값을 바꾸지 않는다(`logging.md:93`). 시작 값이 파일 텍스트인 경우는 없다.
-   - `logClasses`: surface plugin의 각 전체 이벤트 이름 `plugin.<id>.<event>`를 클래스에 대응시킨 것이며, catalog 적용기가 저장한 plugin 클래스 map에서 읽는다(`apply_plugin_event_classes`, `packages/host/tauriv2/src/installed.rs:492`가 `log.set_plugin_classes`를 호출하며, Go 쪽은 `packages/host/wailsv3/src/installed.go:463`). map은 D5-a가 추가하는 getter로 노출한다(`packages/sok/tauriv2/src/event_log.rs`의 `plugin_classes()`, `packages/sok/wailsv3/src/event_log.go`의 `PluginClasses()`). 호스트는 접두사 `plugin.<id>.`로 거른다.
-   페이지의 준비 값은 두 멤버를 싣지 않는다. 정책이나 클래스 map을 읽을 수 없으면 주입 단계의 오류이며, 그 파일이나 getter의 이름을 적는다. 멤버가 없는 것으로 다루지 않는다.
-2. **생산자는 이벤트마다 결정하고, 호스트 writer가 다시 결정한다.** bridge는 기록을 클래스로 게이트한다. `logEnabled(level, event)`는 `logClasses`와 `logPolicy`로 답하며, `fieldsOf`는 저장되는 이벤트에만 필드를 만든다. 공개 API의 한 인자 형식 `log.enabled(level)`은 두 인자 형식 `log.enabled(level, event)`로 바뀐다(`docs/spec/plugins.md:241`, `plugins.ko.md:242`; D5-e). 두 인자 형식도 같은 방식으로 답한다. 이름이 `logClasses`에 있는 기록은 `logPolicy[class]`가 그 level을 저장할 때 저장된다. 거부된 기록은 보내지 않고 센다(3단계). 페이지 batch는 view만이 아니라 모든 plugin의 plugin 계층 기록을 싣으므로, 호스트 writer는 batch의 `plugin` 계층 모든 이벤트에 자기 plugin 클래스 map의 클래스로 `enabled(class, level)`을 적용하고, 거부는 `log.gated`로 센다. 게이트 규칙은 [logging](../spec/logging.md#policy) 76행이며, 도달하는 이벤트마다 게이트에 묻도록 모든 writer에 요구한다. view의 게이트는 최적화이고, 경계는 writer다. writer는 현재 게이트되지 않는 main 페이지의 plugin 기록도 게이트한다. 회귀 테스트는 D5-a에 적는다. 페이지 batcher는 plugin 기록을 게이트하지 않는다. `classOf`가 이들에 undefined를 돌려주고(`packages/workbench/event-classes.js:137-143`), 페이지 gate는 클래스 없는 이벤트를 저장한다(`packages/workbench/log-gate.js:28`). 이름이 `logClasses`에 없는 기록은 선언되지 않은 이벤트다. 클래스가 없으므로 어떤 정책 값도 적용되지 않는다. 표지 `undeclared`와 함께 보내며(`logging.md` 40행, `undeclared` 필드), [logging](../spec/logging.md#policy) 76행에 따라 게이트를 통과한다. 그 속도는 S1이다.
-3. **거부된 기록은 view에서 센다.** view는 거부된 기록을 클래스와 level별로 세고, 그 수를 `runtime.log.gated {class, level, count}` 호출로 보낸다. 각 전송에는 `.catch(report)`가 붙는다. 페이지는 수를 batcher의 gated 맵에 더하며(`batcher.countGated`), `page.log.gated`로 보고된다. 수가 view를 떠나는 시점은 S2의 대상이다. 이 결정이 요구하는 것은 거부된 모든 기록이 세어지고, 어떤 수도 기록 없이 버려지지 않는다는 점뿐이다.
-4. **변경은 view channel로 view에 닿는다.** 호스트는 테마를 싣는 view channel(`view.channel.ready`, [호스트 계약](../spec/host-contract.md) 196-197행)로 view에 두 이벤트를 보낸다.
-   - `{sok: 1, event: "log-policy", data: {classes}}`, surface 문서가 이미 받는 호스트 이벤트의 payload다(`packages/host/tauriv2/src/log_policy.rs:120`, `packages/host/wailsv3/src/log_policy.go:178`);
-   - `{sok: 1, event: "log-classes", data: {classes}}`, 1단계의 map이다. catalog 적용기가 실행될 때마다 보낸다.
-   호스트는 테마처럼 ready 메시지에 현재 쌍을 보낸다. 변경은 기록된 ready 문서가 있는 view에만 보낸다. 아직 생성 중인 view는 ready 메시지에서 현재 쌍을 받으므로, 건너뛴 post는 오류가 아니다. 그 밖의 거부된 post는 호스트 오류로 기록한다. view는 bridge에서 두 이벤트를 적용한다. `keyOf`(`view.js:211-216`)는 각각을 자기 key로 대응시키고, `dispatch`(`view.js:268`)는 정책과 클래스를 bridge 상태에 저장한다. 페이지 쪽 `view-events.js`는 관여하지 않는다.
-5. **`recordError`는 보고한다.** `recordError`(`view.js:116-121`)는 실패한 오류 기록을 조용한 `catch`에서 버린다. 대신 bridge의 `report` 함수를 `{where, text, error}`와 함께 호출하므로 어떤 실패도 조용하지 않다.
-6. **제거.** 첫 사용 요청(`view.js:125-135`), `runtime.log.levels`(`view-calls.js:184-187`), `packages/workbench/view-events.js`의 `log.levels` 이벤트와 구독(주석 `view-events.js:14,19,22` 포함), `subscribe.logLevels`와 `surface-modules.js:261-264`, `:308`(주석 `:260` 포함), `view-calls.js:28,33`의 주석을 제거한다. 공개 `log.enabled(level)` 한 인자 형식은 두 인자 형식으로 바뀐다(2단계). `native-surfaces.md:111`의 페이지 게이트와 writer를 설명하는 문장은 다시 쓴다(D5-i). 테스트는 새 경로로 옮긴다: `packages/plugin-api/test/view.test.mjs:370-384`, `packages/workbench/test/view-calls.test.mjs:61,210-214`, `packages/workbench/test/view-events.test.mjs:48-52`.
-7. **대체.** 이 결정은 view에 대해 [logging](../spec/logging.md#policy) 71행과 74행을 대체한다. 시작 기록이 있는 view는 정책을 시작 값으로 받으며 기본 대기 구간이 없다. 호스트가 없는 페이지와 적용된 정책이 없는 호스트에는 기본 error-only 정책이 남는다. D5-f가 이 행들을 바꾼다.
+1. **view에는 게이트도 정책 사본도 없다.** view 브리지는 정책도 class 맵도 보관하지 않는다. 호스트는 로깅용으로 view에 아무것도 주입하지 않는다(`ViewStart`, `packages/host/tauriv2/src/surfaces.rs:61`, `packages/host/wailsv3/src/surfaces.go:66`은 그대로). view에 `log-policy`나 `log-classes`를 게시하지 않으며, view의 `runtime.log`는 다섯 level 메서드만 가진다. view는 각 기록의 필드를 만들어 페이지 배치로 보낸다. 페이지가 자기 기록에 쓰는 방식과 같다([logging](../spec/logging.ko.md#writer), 108행).
+   - 기각한 대안: 기록 전에 거르고 view 쪽에서 세는 view 게이트(라운드 1~6 설계). 이 설계는 동기화 경로 셋(시작 값, 게시, ready 시점)과 view 계수 및 그 플러시 규칙(S2), 종료 시 잃는 계수(S3)가 필요하다. 얻는 것은 거른 기록이 필드를 만들지 않는다는 점뿐인데, 이는 [logging](../spec/logging.ko.md#원칙)의 원칙 2다. 선택한 설계는 view에 대해 이 이득을 포기한다. 메인 페이지는 이미 같은 방식이다. 페이지 게이트는 plugin 기록을 class로 저장하지 않고(`packages/workbench/event-classes.js:137-143`, `packages/workbench/log-gate.js:28`), 기록기가 결정한다. 명시된 비용: 거른 view 기록도 필드를 만들고 배치에 넣는다. 배치 한계(100 ms 또는 256개, [logging](../spec/logging.ko.md#writer), 108행)가 호스트 호출 수를 묶는다.
+2. **기록기는 plugin 기록을 모두 class로 게이트하며, 미선언 기록도 포함한다.** 기록기는 `plugin` 층의 모든 이벤트에 `enabled(class, level)`을 적용하고, class는 해당 plugin 카탈로그의 것이다. 어떤 카탈로그도 선언하지 않은 이름의 이벤트는 plugin 층 기본 class `lifecycle`을 받는다. 기록기는 `class: "lifecycle"`과 `undeclared: true`로 쓰고, `lifecycle` 이벤트로 게이트한다. 기본값은 모든 plugin에 같은 고정 class 하나다. `plugin.json`에 필드를 더하지 않으며 plugin별 기본값도 없다.
+   - `lifecycle`을 고른 이유: class 표에서 plugin 자신의 수명 변화의 class이며([logging](../spec/logging.ko.md#class와-정책)), 빈도가 낮은 유일한 class이고, 어떤 카탈로그도 선언하지 않은 이름은 명명 오류이므로 가장 낮은 빈도 class에 남아야 한다. `lifecycle`을 off로 두면 미선언 plugin 기록이 막히고, 나머지 네 class는 영향이 없다.
+3. **미선언 plugin 기록에 따로 상한을 두지 않는다(S1은 닫힌다).** Principle 5([logging](../spec/logging.ko.md#원칙), 13행)는 미선언 이벤트를 마커와 함께 쓰고 세는 것을 요구하며, error level을 요구하지 않는다. 개발 단계에서 이름을 거른다. 이벤트 검사기는 모든 emit 지점을 카탈로그와 비교하고 선언되지 않은 이름을 쓰는 emit 지점을 보고한다(`packages/plugin-api/events-check.js`, 9~10행과 418~419행). 실행 시에는 class 게이트가 유일한 상한이다. 거른 미선언 기록은 4단계의 class 계수(`lifecycle`, 그 level)에 들어가며, 그 계수에는 이름을 남기지 않는다.
+4. **기록기가 센다. 기록과 시점.** 기록기는 게이트가 거른 plugin 기록을 class와 level별로 세고, 기존 보고 시점에 `log.gated {class, level, count}`를 쓴다. 앞 보고 뒤 1초가 지났을 때, 플러시 때, 멈출 때다([logging](../spec/logging.ko.md#정책), 77행). 이 기록은 모든 게이트를 통과한다. view는 자기 계수를 갖지 않으므로 view가 거른 것의 플러시(S2)는 존재하지 않는다. view의 보내지 않은 배치는 거른 것이 아니며 5단계가 다룬다.
+5. **종료된 view의 보내지 않은 배치(S3은 명시된 손실로 줄어든다).** 기록기는 받지 않은 기록을 셀 수 없다. 따라서 종료된 view의 보내지 않은 배치는 계수가 없는 유일한 손실이다. 상한은 1단계의 배치 규칙(100 ms 또는 256개)이다. 호스트가 이를 명시한다. view의 종료는 이벤트 `view.killed`(lifecycle, `warn`, 필드 `plugin`, `surface`, `unsent: true`, `log.closed`처럼 모든 게이트 통과, [logging](../spec/logging.ko.md#정책), 78행)로 쓴다. 본문은 view의 보내지 않은 기록이 사라질 수 있다고 말하므로, 손실은 명시되고 계수는 주장하지 않는다.
+6. **제거.** 첫 사용 요청(`packages/plugin-api/view.js:125-135`), `runtime.log.levels`(`packages/workbench/view-calls.js:184-187`, 주석 `:28,33`), 이벤트 `log.levels`와 그 구독(`packages/workbench/view-events.js`, 주석 `:14,19,22`), `subscribe.logLevels`와 `packages/workbench/surface-modules.js:260-264,308`, view의 `log.enabled`(`view.js:196`)과 plugin 런타임의 `log.enabled`(`packages/plugin-api/plugin-runtime.js:59-63,75`), `fields`의 함수 형태(`plugin-runtime.js:69`)를 제거하여 기록의 필드는 호출 시점에 만든다. 공개 API의 `log.enabled(level)` 서술(`docs/spec/plugins.md:241`, `plugins.ko.md:242`)도 제거한다. 확인된 사용처는 `plugins/terminal/ui/terminal.js:1214`(`runtime.log.enabled("debug")`) 하나이며, 그 소유자가 바꾼다(D5-e).
+7. **`recordError`는 보고한다.** `recordError`(`view.js:116-121`)는 기록이 실패하면 브리지의 `report({where, text, error})`를 호출하여 실패가 조용히 사라지지 않게 한다(D5-d). 이 문장은 라운드 6에서 바뀌지 않았다.
+8. **명세.** 이 결정의 view 규칙은 코드 변경 전에 [logging](../spec/logging.ko.md)에 쓴다(AGENTS.md: 명세가 먼저). 40행(`undeclared`: 기록은 class `lifecycle`과 마커를 가진다), 71행과 74행(view에는 게이트가 없으므로 기본 창이 적용되지 않는다), 76행(게이트는 묻고, view와 메인 페이지의 plugin 기록은 필드를 만들고 기록기가 결정한다), 77행(계수는 기록기만 쓴다), 291행(미선언 plugin 이벤트의 class)을 바꾸고 한국어 판도 같이 바꾼다. 원칙 2와 5는 1단계와 2단계의 예외를 적는다. [native-surfaces](../spec/native-surfaces.ko.md#view-표면), 111행은 기록기를 게이트로 서술하도록 다시 쓴다.
+9. **대체.** 이 결정은 라운드 6 본문의 1~4단계와 6단계를 대체한다. 그 단계들(시작 값, `log-policy`와 `log-classes` 게시, `runtime.log.gated`, view 계수, D5-a의 view 부분)은 구현하지 않는다.
 
 ### 근거와 증거
 
-- 원래 규칙은 응답 전에 모든 기록을 보냈다(`view.js:135`). 이는 `logging.md:74`가 surface에 주는 기본값과 맞지 않으며, 정책이 거부할 기록을 IPC로 보낸다(`logging.md:10`). 시작 값은 대기 구간을 없앤다. 호스트는 view를 만들기 전에 정책을 가지고 있다.
-- `main`의 페이지 gate는 첫 설정 갱신까지 `error`에서 시작한다(`packages/workbench/log-gate.js:23-24`). 그러나 plugin 기록은 게이트하지 않으므로(2단계), 오래된 시작 값은 페이지 gate의 문제가 아니다. 시작 값은 호스트에서 온다.
-- `plugin-runtime.js:72`(`if (!enabled(level)) return;`)는 거부된 기록을 세지 않고 버린다. `enabled`는 훅을 level만으로 호출한다(`plugin-runtime.js:59-63`). 이벤트별 확인(D5-g)과 view 쪽 수(3단계)가 둘 다 고친다.
-- `log.levels`는 배열을 전달했다(`view-events.js`, `view.js:131,135`). 새 data는 정책 객체이며, 배열 형식은 함께 제거한다.
-- Wails 호스트는 `main`에서 `log-policy`를 방출한다(`log_policy.go:178`). Tauri 호스트도 방출한다(`log_policy.rs:120`). `log-classes` 전송은 두 호스트의 새 부분이다.
+- 라운드 6 설계는 view마다 계수를 두었고, 플러시 규칙과 종료 손실(S2, S3)이 따랐다. 기록기는 이미 보고 규칙과 함께 자기 계수를 갖는다([logging](../spec/logging.ko.md#정책), 77행). 그러므로 계수를 아는 곳이 하나인 기록기로 옮기면 view 계수와 view 플러시 규칙이 필요 없다.
+- 기록기는 이미 plugin 카탈로그의 class를 가지고 plugin 이벤트를 게이트한다([logging](../spec/logging.ko.md#plugin-catalog), 291행). 따라서 view 기록은 정책 사본이 필요 없다. class는 기록기가 안다.
+- view의 게이트는 원칙 2를 위한 최적화였다. 메인 페이지는 오늘 plugin 기록을 class로 게이트하지 않는다(라운드 4 B-1, 검증됨). 그래서 view와 페이지가 같은 규칙을 쓰고, 거른 기록의 비용은 1단계에 명시된 것이다.
+- `log.enabled`는 view가 class 맵을 갖지 않으면 이벤트별로 답할 수 없다. 이 설계에서 view는 맵이 없다. 정책의 사본을 두 번째로 두는 것보다 제거가 단순하며, 터미널 호출이 유일한 사용처다(D5-e).
+- 미선언 이벤트는 명명 오류다. 이벤트 검사기가 개발 단계에서 거른다(`events-check.js`, 418~419행). 실행 시 명명 오류의 기록은 마커다([logging](../spec/logging.ko.md#원칙), 40행). 기록기가 거르면 계수한다.
 
 ### 필요한 변경
 
 | ID | 소유자 | 변경 |
 |---|---|---|
-| D5-a | `main`: `packages/host/tauriv2/src/surfaces.rs`, `packages/host/wailsv3/src/surfaces.go`(주입 script가 주입할 때마다 멤버를 만든다, `documents.rs:2132`, `documents.go:426`), `packages/sok/tauriv2/src/event_log.rs`(`set_plugin_classes` 옆 `plugin_classes()` getter), `packages/sok/wailsv3/src/event_log.go`(`SetPluginClasses` 옆 `PluginClasses()` getter); batch의 `plugin` 계층 모든 이벤트에 대한 host writer 게이트 | 호스트는 각 주입 때 `logPolicy`와 `logClasses`를 만들며, 저장된 시작 값에서 읽지 않는다. writer는 모든 `plugin` 계층 이벤트에 `enabled(class, level)`을 적용하고 거부를 `log.gated`로 센다. 회귀 테스트: 클래스 level 아래의 main 페이지 plugin 기록을 writer가 거부한다. |
-| D5-b | `feat`: `packages/plugin-api/view.js:116-121`과 테스트 | `recordError`가 실패한 오류 기록에서 `report({where, text, error})`를 호출한다. 거부된 `runtime.error`가 보고되는지 테스트한다. |
-| D5-c | `main`: 두 호스트의 ready와 각 `log-policy` 및 catalog 적용기 변경 시 post 경로; `feat`: `packages/plugin-api/view.js`(`keyOf` `:211-216`, `dispatch` `:268`) | 호스트는 ready에 쌍을 보내고, 각 변경은 기록된 ready 문서가 있는 view에만 보낸다. 테스트: 생성과 ready 사이의 변경은 오류 줄 없이 ready에서 적용된다; ready view에 대한 변경은 적용된다; ready view에 대한 거부된 post는 기록된다. |
-| D5-d | `feat`: `packages/plugin-api/view.js`와 테스트 | 거부된 기록을 클래스와 level별로 센다. 각 수는 `runtime.log.gated {class, level, count}`로 보내며 `.catch(report)`를 붙인다. flush 시점은 S2다. |
-| D5-e | `feat`: `view.js:125-135`, `view-calls.js:184-187`과 주석 `:28,33`, `packages/workbench/view-events.js`(`log.levels`, `subscribe.logLevels`, 주석 `:14,19,22`), `surface-modules.js:260-264`, `:308`; `docs/spec/plugins.md:241`과 `plugins.ko.md:242`(한 인자 `log.enabled(level)`을 `log.enabled(level, event)`로 바꾼다); 테스트 `packages/plugin-api/test/view.test.mjs:370-384`, `packages/workbench/test/view-calls.test.mjs:61,210-214`, `packages/workbench/test/view-events.test.mjs:48-52` | 첫 사용 요청, `runtime.log.levels`, `log.levels` 이벤트와 구독을 제거한다. 공개 `log.enabled` 시그니처와 명세 줄을 바꾸고 테스트를 옮긴다. |
-| D5-f | `main`: `docs/spec/logging.md:71,74`과 ko | view 규칙: 시작 값, 기본 대기 구간 없음(7단계). |
-| D5-g | `feat`: `packages/plugin-api/plugin-runtime.js:59-72`와 테스트, `packages/plugin-api/test/surface.test.mjs:142,172,195-198`(새 기대: 두 인자 형식은 이벤트마다 답하고, 선언되지 않은 이벤트는 `true`로 답한다) | `logEnabled(level, event)`와 `log.enabled(level, event)`가 이벤트마다 답한다(2단계). `fieldsOf`는 저장되는 이벤트에만 필드를 만든다. |
-| D5-h | `main`: `packages/workbench/log-batch.js`(view 수를 위한 `countGated`), `packages/workbench/view-calls.js`(`runtime.log.gated`) | batcher가 view의 수를 gated 맵에 받는다. 회귀 테스트: 페이지 batcher는 plugin 기록을 게이트하지 않는다. |
-| D5-i | `main`: `docs/spec/native-surfaces.md`(view call 목록에 `runtime.log.gated {class, level, count}`를 더하고, view 이벤트에 ready와 각 변경에서 보내는 `log-policy`와 `log-classes`를 더하며, 111행의 게이트와 writer 문장을 시작 값과 writer 재확인으로 다시 쓴다), ko | view channel 계약을 코드 변경 전에 명세에 적는다(AGENTS.md: 계약이 바뀌면 명세를 먼저 고친다). |
+| D5-a | `main`: `docs/spec/logging.md`(원칙 2와 5; 40, 71, 74, 76, 77, 291행과 그 ko), `docs/spec/native-surfaces.md:111`과 ko, `docs/spec/events.json`(`view.killed`: lifecycle, warn, 필드 `plugin`, `surface`, `unsent`; 모든 게이트 통과; class 표를 다시 만든다: `packages/sok/tauriv2/src/event_classes.rs`, `packages/sok/wailsv3/src/event_classes.go`, `packages/workbench/event-classes.js`) | 1~5단계의 규칙을 코드 변경 전에 명세에 쓴다. |
+| D5-b | `main`: `packages/sok/tauriv2/src/event_log.rs`, `packages/sok/wailsv3/src/event_log.go`(미선언 `plugin` 이벤트의 기록기 게이트: class `lifecycle`과 마커), `scripts/audit-run.mjs:155-156`(미선언 줄을 마커로 센다), `packages/log-contract`(class `lifecycle`을 가진 미선언 줄은 유효) | 기록기는 모든 `plugin` 이벤트를 class로 게이트하고, 미선언 이벤트는 `lifecycle`로 한다. 거른 것은 `log.gated`에 센다. 회귀 시험: `lifecycle`이 off일 때 미선언 plugin 기록은 거르고 센다. 메인 페이지의 plugin 기록이 class 수준 아래이면 기록기가 거른다. |
+| D5-c | `feat`: `packages/plugin-api/view.js`(`log.enabled`과 levels 요청 제거; `recordError`는 `report`를 호출, D5-d), `packages/plugin-api/plugin-runtime.js:59-75`(`enabled`과 `fields`의 함수 형태 제거), `packages/workbench/view-calls.js`(주석 `:28,33`; `runtime.log.levels` `:184-187`), `packages/workbench/view-events.js`(`log.levels`와 주석 `:14,19,22`), `packages/workbench/surface-modules.js:260-264,308`, `docs/spec/plugins.md:241`과 `plugins.ko.md:242`; 시험 `packages/plugin-api/test/view.test.mjs:370-384`, `packages/workbench/test/view-calls.test.mjs:61,210-214`, `packages/workbench/test/view-events.test.mjs:48-52`, `packages/plugin-api/test/surface.test.mjs:142,172,195-198` | view에는 게이트도, levels 요청도, `log.enabled`도, `runtime.log.gated`도 없다. 시험은 코드와 함께 옮기거나 지운다. |
+| D5-d | `feat`: `packages/plugin-api/view.js:116-121`과 시험 | 실패한 기록에서 `recordError`가 `report({where, text, error})`를 호출한다. 거른 `runtime.error`가 보고되는지 시험한다. |
+| D5-e | `plugins/terminal`: `ui/terminal.js:1214`(`runtime.log.enabled("debug")` 가드), 그리고 모든 `plugins/*` 체크아웃에서 `log.enabled`와 `fields`로 넘기는 함수를 6단계처럼 다시 검색 | plugin은 가드 없이 디버그 필드를 만들거나, 기록이 싸면 호출 지점을 그대로 둔다. 소유자 `plugins/terminal`(라운드 6 소유자 목록에 없었으며 여기서 등록). |
+| D5-f | `main`: `packages/host/tauriv2/src/surfaces.rs`, `packages/host/wailsv3/src/surfaces.go`(view 종료 경로가 `view.killed`를 쓴다) | 5단계의 종료 기록과 그 본문. |
 
-### D5의 하위 항목 (닫을 때 등록, 여기서 정하지 않음)
+### D5의 하위 항목 (닫을 때 등록)
 
-- **S1, 선언되지 않은 plugin 기록의 속도.** 선언되지 않은 plugin 기록에는 클래스가 없으므로 어떤 정책 값도 상한을 두지 않으며, `log.enabled`는 모든 level에서 true로 답한다. 모든 클래스가 `off`인 plugin도 선언되지 않은 기록을 상한 없이 쓸 수 있다. 근거: 라운드 4 A-3. `logging.md` 76행은 선언되지 않은 이벤트에 클래스와 게이트가 없다고 말하고, 13행은 표지를 말하며, 속도 경계는 어느 행에도 없다. 요구: 자체 적대적 검토를 거친 결정. surface마다 상한과 수 기록을 두거나, 상한이 없다는 진술을 두거나 둘 중 하나다.
-- **S2, 대기 중인 거부의 flush.** view는 거부된 기록을 센다(3단계). 그러나 명세는 수가 언제 view를 떠나는지 정하지 않는다. `logging.md`의 Count 단락(77행)은 수가 flush할 때와 마지막 보고 뒤 1초가 지났을 때 보고된다고 요구한다. 근거: 라운드 4 A-1은 microtask flush가 task마다 IPC를 하나 보낸다는 것을 보였고, 타이머 없는 flush는 뒤따르는 거부가 없을 때 수를 쥐고 있을 수 있다. 요구: 대기 수의 경계를 둔 flush 규칙, 각 전송의 `.catch(report)`, 그 경계를 적는 Bounds 항목.
-- **S3, 죽은 view와 함께 잃는 수.** 죽은 view는 대기 중인 수를 잃는다. 죽은 뒤에는 코드가 실행되지 않기 때문이다. 근거: `logging.md` Principle 3(11행)은 손실이 세어지고 명시된다고 말하며, Count 단락(77행)은 정확한 수를 준다. 요구: 죽은 view마다 모든 게이트를 통과하며 수가 잃어졌을 수 있다고 말하는 호스트 기록, `logging.md`의 예외, 그 예외의 경계. 자체 적대적 검토로 정한다.
+- S1은 3단계로 닫힌다(따로 상한 없음; class 게이트가 상한).
+- S2는 4단계로 닫힌다(view 계수가 없으므로 view 플러시도 없다).
+- S3은 5단계와 행 D5-f로 줄어든다. 종료된 view의 보내지 않은 배치는 배치 규칙에 묶인 명시된 손실이며 계수는 없다.
 
 ### 라운드
 
@@ -164,59 +159,46 @@ D5 본문에 대해 두 감사자(둘 다 새 감사자, 읽기 전용, 결정 �
 
 `feat` `packages/plugin-api/view.js:139-164`: view가 페이지에서 읽은 단축키 표를 등록한다(`runtime.shortcuts.read`, `viewShortcuts`가 응답, `packages/workbench/view-calls.js:86-88`). owner가 `workbench`인 행은 막고 명령 경로로 넘긴다(`runtime.shortcuts.run`, `view.js:153-158`, `view-calls.js:205-212`). 등록 전 첫 키는 `runtime.shortcuts.missing`을 보내고(`view.js:143-147`), 이는 `page.view.shortcut-table-missing`으로 기록된다. bridge는 `shortcuts.register()`를 내보낸다(`view.js:160-164`, `:331`에서 반환).
 
-### 결정 본문 (라운드 6, 축소)
+### 결정 본문 (라운드 7)
 
-감독자가 범위를 줄였다. Escape 통과는 `core.picker.close`에 대해 `runtime.shortcuts.run`을 쓰며, 별도의 `runtime.dismiss` 호출은 없다. 라운드 5의 반론은 아래에 답하고 여기에 반영했다.
+감독자가 라운드 6의 열린 쟁점을 정했다. view는 workbench 키를 자기 명령을 직접 실행하는 방식으로만 넘긴다. 호스트는 view의 키에 따라 어떤 동작도 하지 않는다.
 
-1. **view는 스스로 어떤 키도 막지 않는다.** view가 소유한 키(텍스트 입력, 자기 Escape 동작)는 기본 동작을 유지하고 view의 first responder에 닿는다. workbench 행을 view가 처리하는 일은 없다. workbench 행은 다른 context를 가지기 때문이다(`packages/workbench/shortcuts.json:17-23`). view가 workbench로 넘기는 키는 Escape뿐이며, 수식키가 없고 기본 동작이 막히지 않았을 때만이다(4단계).
-2. **표 등록, 그 API, 그 이벤트는 제거하고 통과 경로는 남기되 좁힌다.**
-   - keydown 리스너와 `shortcutTable`(`view.js:139-159`), 표만 쓰는 도우미 `MODIFIERS`와 `isKey`(`view.js:21-32`), 표의 주석(`view.js:137-138`).
-   - `shortcuts.register()`와 그 반환(`view.js:160-164`, `:331`).
-   - 페이지 쪽: `viewShortcuts`(`view-calls.js:82-89`), `runtime.shortcuts.read`와 `.missing` 분기(`view-calls.js:199-203`), 그리고 `shortcuts` 옵션(`surface-modules.js:21`, `:287`, `view-calls.js:15`). 이 변경 뒤에는 어느 호출도 쓰지 않는다.
-   - `runtime.shortcuts.run` 분기(`view-calls.js:205-212`)는 남기며 `{command}`를 받는다. 명령이 `core.picker.close`일 때만 `runCore`로 실행한다. 이것은 `packages/workbench/shortcuts.json:22`의 Escape 행 명령이다. 다른 명령은 `view call runtime.shortcuts.run: <command> is not the command of the Escape picker shortcut`으로 거부한다. 허용 목록은 이 한 이름이며, D6-b 테스트 (f)가 이를 확인한다.
-   - 실패한 명령은 `page.input.shortcut.failed {plugin, command}`를 쓴다. 이 호출에는 `key` 필드가 없으므로 그 필드는 `native-surfaces.md`에 적는다(D6-a).
-   - 이벤트 `page.view.shortcut-table-missing`(`docs/spec/events.json:690`)과 클래스 표의 그 행(`packages/sok/tauriv2/src/event_classes.rs:167`, `packages/sok/wailsv3/src/event_classes.go:125`, `packages/workbench/event-classes.js:112`), 재생성한다.
-   AGENTS.md: 쓰이지 않는 코드 경로는 제거한다. 쓰이지 않는 표는 두지 않는다.
-3. **명세, 용어, 표 문구.** 영문과 국문 모두:
-   - `packages/plugin-api/terms.json:394`("shortcut table"): "The workbench table of shortcuts, each with its owner and command (`packages/workbench/shortcuts.json`)"로 바꾼다.
-   - `main` `docs/spec/native-surfaces.md:137`(Input)과 `feat` `native-surfaces.md:141`: view는 표를 등록하지 않으며, Escape는 `runtime.shortcuts.run {command}`로 넘어간다(4단계). `page.input.shortcut.failed`의 이 호출에 대한 필드는 `{plugin, command}`다.
-   - `main` `docs/spec/plugin-processes.md:94-103`(규칙 7, 같은 이벤트 필드)과 이벤트 행 `:141`; `:166`(계약 사례 목록 "RPC, snapshot, restart, shortcut table"): 단축키 표 사례를 제거한다.
-   - `main` `docs/spec/exposure.md:67`(owner `view`): "a key that the view leaves to its default action, or the Escape of an open picker that the view passes to the workbench"로 고친다.
-   - `main` `docs/spec/exposure.md:94-95`와 ko: 두 표 행을 `shortcuts.json` 24행과 25행의 문구로 고친다(표의 행이며 단락이 아니다). `feat` `docs/spec/exposure.md:71`: 표에 대한 단락을 삭제한다.
-   - `feat` `docs/plans/plugin-processes.md:113-123`(규칙 7), `:162-163`(이벤트 행), `:190`(계약 사례 목록).
-   - `main` `packages/workbench/shortcuts.json` 24행(owner `view`, `Escape`): `when` 문구는 "A plugin view has keyboard focus; the view's own Escape action runs when its handler prevents the default, otherwise the Escape command of the open picker runs"가 되고, `exposure.md:94`가 이를 따른다. 25행(텍스트 입력 키): "A plugin view has a text input focused; the view handles the key itself and it keeps its default action".
-   - `scripts/test/shortcut-table.test.mjs`를 같은 변경에서 고친다.
-   - `CHANGELOG.md:8`, `CHANGELOG.ko.md:8`, `docs/features.md:1239`와 ko: F234 표 등록이 제거되고 대체되었으며, 제거된 API를 적는다.
-4. **Escape는 `runtime.shortcuts.run`으로 열린 페이지 picker를 닫는다.** view에 포커스가 있을 때 Escape는 페이지 picker의 리스너에 닿지 않는다(`packages/workbench/plane.js:745-746`, picker가 열린 동안에만 붙고 페이지에 포커스가 있을 때만 쓰인다). 그래서 view에 포커스가 있으면 열린 페이지 picker가 닫히지 않는다. 수정은 다음과 같다.
-   - view bridge는 Escape를 `window`의 bubble 단계에서 처리한다. 호출 `runtime.shortcuts.run {command: "core.picker.close"}`은 키가 수식키 없는 Escape이고, `event.repeat`가 false이고, `event.isComposing`이 false이고, `event.keyCode`가 229가 아닐 때만 보낸다(입력기 키). 검사는 이벤트 전파가 끝난 뒤 `setTimeout(0)` 안에서, 그 시점의 `event.defaultPrevented`를 읽어 수행한다. bridge는 이 호출을 Escape에 대해서만 보낸다.
-   - bridge는 view 자신의 Escape 규칙을 강제하지 않는다. 자기 Escape 동작(예: 팝오버)이 `preventDefault`를 부르지 않는 view도 열린 페이지 picker를 함께 닫는다. bridge는 `event.defaultPrevented`만 읽기 때문이다. 한 layer만 닫히는 결과는 `native-surfaces.md`에 적힌 계약을 따르는 view에서만 성립한다. 자기 Escape를 처리하는 view는 `preventDefault`를 부른다.
-   - `core.picker.close`는 이미 선언되어 있고(`packages/workbench/core-exposure.js:553`, `packages/workbench/exposure.json:3586`) 행 `shortcuts.json:22`의 명령이다. `closePicker`는 열린 picker가 없으면 돌아가므로(`packages/workbench/plane.js:756-757`) 명령은 멱등이다.
-   - 새 권한은 생기지 않는다. view plugin의 `runtime.command(name, params)`는 어떤 이름이든 `calls.request(name, params)`를 부른다. editor, shell, flowmark view의 plugin context가 그렇다(`plugins/editor/ui/view.js:128`, `plugins/shell/ui/view.js:104`, `plugins/flowmark/ui/view.js:78`). call layer는 모든 `core.` 이름을 `runCore`로 실행한다(`view-calls.js:244`, `feat`). 따라서 Escape 통과로 plugin이 못 하던 명령은 생기지 않는다.
-   - 페이지는 picker 슬롯을 하나만 가지므로(`plane.js:734`) Escape 한 번은 페이지 picker를 최대 하나만 닫는다. view 자신의 layer를 함께 닫는 것은 막지 못한다(앞 항목).
-   - 네이티브 picker나 modal WebView가 포커스를 가지면 keydown을 직접 받으므로, view는 이를 보지 못한다. 네이티브 modal은 `core.modal.dismiss`(`packages/workbench/picker-layer.js:103-105`)로 Escape에 답하며, 이는 바뀌지 않는다. view에 포커스가 있을 때 열린 네이티브 picker는 같은 Escape로 닫히며, 그 기대 결과는 D6-c에 있다.
-   Red 테스트는 D6-b에 있다. probe(D6-c)는 overlay마다 기대를 확인하며, 수정을 배포할지는 정하지 않는다.
-5. **view 포커스에서 cmd+k와 shift+cmd+n.** `cmd+k`(`core.focus.set`, `packages/workbench/shortcuts.json:18`)와 브라우저 빌드의 `shift+cmd+n`(`:17`)은 페이지 keydown에서만 처리되므로, view 포커스에서는 페이지에 닿지 않는다. 좁히기는 지금 배포한다(D6-d). `shortcuts.json:17-18`과 `exposure.md:87-88`(및 ko)의 `when` 문구는 `cmd+k`에 대해 "The library is shown and the page has keyboard focus", `shift+cmd+n`에 대해 "No host chrome (browser build) and the page has keyboard focus"가 된다. 단축키 표 테스트는 `when` 문구를 비교하므로 두 파일은 같은 커밋에서 바꾼다.
+1. **view는 어떤 키도 스스로 막지 않는다.** view가 소유한 키(텍스트 입력, 자신의 Escape 동작)는 기본 동작을 유지하고 view의 first responder에 도달한다. view는 자기 키를 소유하고, workbench는 `packages/workbench/shortcuts.json`에서 소유자가 `workbench`인 행을 소유한다.
+2. **암묵적 통과는 없다.** 브리지는 단축키 표를 위한 keydown 리스너를 설치하지 않으며, keydown에서 어떤 호출도 보내지 않는다. 호스트는 view가 넘기지 않은 키 때문에 페이지 선택기를 닫거나 workbench 명령을 실행하지 않는다. 편집 가능한 대상(찾기 막대의 Escape, 입력기 조합)은 view가 처리하며, 넘기지 않으므로 workbench가 덮어쓰지 않는다.
+3. **view는 명령을 실행하여 넘긴다.** view는 `runtime.shortcuts.read`로 workbench 행을 읽는다(유지, 읽기 전용: 소유자가 `workbench` 또는 `view`인 행을 돌려준다). view 자신의 처리기가 어떤 키를 workbench 키라고 판단하면 `runtime.command(row.command, {})`로 그 행의 명령을 실행한다. 규칙은 모든 행에 같은 하나다. 열린 페이지 선택기의 Escape(`core.picker.close`, `shortcuts.json:22`), cmd+k(`core.focus.set`, `:18`), 브라우저 빌드의 shift+cmd+n(`core.window.new`, `:17`), 그 밖의 모든 workbench 행이다. 키별 예외도, `when` 문구의 축소도 없다. 명령이 무엇을 할지는 명령이 정하며, 적용되지 않는 명령은 자기 오류로 거부하고 호출 계층이 그 오류를 보고한다.
+   - Escape는 view 자신의 Escape 처리기가 키를 처리하지 않을 때 view가 넘긴다. [native-surfaces](../spec/native-surfaces.ko.md#view-표면)의 view 계약이 이를 적는다. 자기 Escape 동작(팝오버, 찾기 막대)이 있는 view는 키를 처리하고 넘기지 않으며, 없는 view는 넘긴다.
+   - 네이티브 메뉴 행(`shortcuts.json`의 소유자 `native menu`, 예를 들어 `core.window.new`를 실행하는 shift+cmd+n 행)은 view가 넘길 수 있는 키로 읽지 않는다. 메뉴의 키 동등물이 키가 웹 view에 도달하기 전에 실행되기 때문이다(D6-c 탐침이 확인한다). 이는 키별 예외가 아니라 소유자 규칙이다.
+4. **검증: `runtime.command`가 이미 표의 명령에 닿으므로 `runtime.shortcuts.run`은 제거한다.** 호출 계층은 `core.`로 시작하는 모든 이름을 `runCore`로 실행한다(`packages/workbench/view-calls.js:244`, `feat/view-bridge-F231`). `core.picker.close`는 선언되어 있다(`packages/workbench/core-exposure.js:553`, `packages/workbench/exposure.json:3586`). plugin view는 `runtime.command`로 어떤 이름이든 `calls.request(name, params)`를 호출한다(`plugins/editor/ui/view.js:128`, `plugins/shell/ui/view.js:104`, `plugins/flowmark/ui/view.js:78`). 따라서 `runtime.command`로 `core.picker.close`를 실행하는 view는 이미 실행할 수 있는 명령 이상을 얻지 않는다. `runtime.shortcuts.run`과 그 허용 목록은 제거한다. 다른 경로로도 닿는 이름 하나짜리 허용 목록은 아무것도 보호하지 않는다. 일반 브리지(`packages/plugin-api/view.js`)도 같은 경로를 받는다. `command: (name, params) => calls.request(name, params)`이며, 모든 view가 경로 하나를 쓰게 한다. 소유자 검사는 호출 계층이 계속 한다.
+5. **제거하며, 대체 기간은 두지 않는다.** `shortcuts.register()`와 그 반환(`view.js:160-164,331`)은 대체 기간 없이 제거한다. F231은 출시되지 않았고 `main`에 없으며, core는 0.0.x이므로 호환 계층을 두지 않는다. 함께 제거하는 것: keydown 리스너와 `shortcutTable`(`view.js:137-159`), `MODIFIERS`와 `isKey`(`view.js:21-32`), 사례 `runtime.shortcuts.missing`과 그 이벤트 `page.view.shortcut-table-missing`(`docs/spec/events.json:690`, `packages/sok/tauriv2/src/event_classes.rs:167`, `packages/sok/wailsv3/src/event_classes.go:125`, `packages/workbench/event-classes.js:112`의 class 행), 사례 `runtime.shortcuts.run`(`view-calls.js:205-212`)과 그 이벤트 `page.input.shortcut.failed`(호출 계층이 실패한 호출을 이미 보고하므로). 유지하는 것: `runtime.shortcuts.read`(`view-calls.js:199-200`, `viewShortcuts` `:82-89`를 소유자 `workbench`와 `view`로 거른다)와, 그 읽기가 쓰는 `surface-modules.js:21,287`의 `shortcuts` 옵션.
+6. **명세, 용어와 표의 문구.** 모든 파일에 영문과 국문을 함께 쓴다.
+   - `packages/plugin-api/terms.json:394`("shortcut table"): "소유자와 명령을 가진 workbench 단축키 표(`packages/workbench/shortcuts.json`); view는 `runtime.shortcuts.read`로 읽고 행의 명령을 `runtime.command`로 실행한다."
+   - `native-surfaces.md:137`(Input)과 `feat`의 `:141`: view는 표를 등록하지 않는다. view는 workbench 행의 명령을 `runtime.command`로 실행한다(3단계). 호출 목록에 `runtime.shortcuts.run`은 없으며, `runtime.shortcuts.read`는 읽기로 적는다.
+   - `plugin-processes.md:94-103`(규칙 7), 이벤트 행 `:141`, 계약 사례 목록 `:166`(단축키 표 사례 제거); `docs/plans/plugin-processes.md:113-123,162-163,190`(feat). 규칙 7은 2단계와 3단계를 적는다.
+   - `exposure.md:67`(소유자 `view`): "view가 기본 동작에 맡기는 키, 또는 view가 넘긴 자신의 키에 대해 `runtime.command`로 실행하는 workbench 명령". `exposure.md:94-95`와 ko: 두 표 행은 `shortcuts.json` 24행과 25행의 문구를 따른다. `feat`의 `exposure.md:71`: 표에 관한 문단을 삭제한다.
+   - `packages/workbench/shortcuts.json` 24행(소유자 `view`, `Escape`): `when`은 "플러그인 view가 키보드 포커스를 가진다. view가 키를 직접 처리하며, 열린 선택기의 Escape 명령은 view가 넘길 때만 실행한다"가 된다. 25행(텍스트 입력 키): "플러그인 view가 텍스트 입력에 포커스를 가진다. view가 키를 직접 처리하며 기본 동작을 유지한다." `scripts/test/shortcut-table.test.mjs`는 행을 따른다.
+   - `CHANGELOG.md:8`과 `CHANGELOG.ko.md:8`: 호환성 깨짐 줄 "view 단축키 표(F234)와 `shortcuts.register()`를 제거한다. view는 `runtime.command`로 workbench 명령을 실행한다." `docs/features.md:1239`와 ko: F238-b D6로 대체되었음을 적고 제거된 API를 이름으로 적는다.
+7. **cmd+k와 shift+cmd+n의 `when` 문구는 바꾸지 않는다.** 라운드 6의 축소(`shortcuts.json:17-18`, `exposure.md:87-88`)는 두 키도 모든 행과 같은 규칙으로 view가 넘기므로 취소한다. 행은 `when` 문구를 유지한다.
+8. **사례와 시험.** view는 workbench 명령을 `runtime.command`로만 실행한다. 시험(새 동작은 현재 코드에서 실패해야 한다): (a) 어떤 키의 keydown도 브리지에서 호출을 보내지 않는다. (b) 열린 페이지 선택기가 있고 view가 `runtime.command("core.picker.close")`를 실행하면 한 번 닫힌다. (c) 열린 선택기가 없으면 같은 명령은 아무 일도 하지 않는다. (d) view가 넘기지 않은 편집 대상의 Escape는 페이지 선택기를 열어 둔다. (e) `runtime.shortcuts.run`과 `runtime.shortcuts.missing`은 지원하지 않는 것으로 거부된다(소유자 `runtime`). (f) `runtime.shortcuts.read`는 소유자 `workbench`와 `view`의 행을 돌려주고 네이티브 메뉴 행은 없다. (g) 브리지에 `shortcuts.register`가 없다. (h) `core.` 이름의 `runtime.command`는 `runCore`에 닿고, 다른 소유자의 이름은 거부된다.
 
 ### 근거와 증거
 
-- `viewShortcuts`는 owner `workbench` 행을 결코 돌려주지 않으므로, `runtime.shortcuts.run`은 모든 키를 거부한다(`view-calls.js:205-212`). 키를 넘기지 않는 view에는 표 등록이 필요 없다. 통과 경로는 Escape를 위해 남긴다.
-- 표는 view가 쓰는 것을 주지 않는다. `native menu`와 `view` 행은 기본 동작을 유지하고, view는 어차피 막지 않는다.
-- 새 `core.layer.dismiss`나 `runtime.dismiss` 호출은 `core.picker.close`와 `core.modal.dismiss`를 중복한다. 기존 `core.picker.close`를 기존 호출로 쓴다.
-- F212.6a의 rule-7 gate(`plugin-processes.md` feat `:267`)는 표와 함께 제거된다. 그 Escape 측정은 F212.6a에 연결된 D6-c에 남긴다.
-- 형제 plugin checkout(`../plugins/browser`, `editor`, `files`, `hwp`, `terminal`, `scripts/workspace-registry.json`에서)에서 `shortcuts.register`, `runtime.shortcuts`, `shortcut-table-missing`을 `git grep`으로 찾았고 일치하는 항목이 없었다. 따라서 선언된 plugin 중 제거되는 등록을 부르는 것은 없다.
-- `exposure.md:53`은 사용자 동작이 선언된 명령을 실행하도록 요구한다. `core.picker.close`는 선언되어 있으며 통과 경로가 실행하는 명령이다.
+- `viewShortcuts`는 라운드 6에서 `runtime.shortcuts.run`에 workbench 행을 돌려준 적이 없다(`view-calls.js:205-212`). 그래서 그 경로는 모든 키를 거부했다. 표 등록과 그 경로를 제거하면 view의 키로 동작하는 코드 경로가 남지 않는다.
+- `runtime.command`로 `core.picker.close`를 실행하는 view는 제거된 경로와 같은 동작이며 새 권한이 없다. 호출 계층과 4단계의 소유자 검사가 둘 모두에 적용된다.
+- 호스트가 view를 대신해 넘기는 통과(라운드 6의 4단계)는 편집 대상과 평범한 키를 구별하지 못하며, view의 Escape 기본 처리를 호스트가 볼 수 없다. view는 자기 상태를 알고, 넘기는 결정은 view에 속한다.
+- 라운드 5에서 모든 `plugins/*` 체크아웃을 `shortcuts.register`, `runtime.shortcuts`, `shortcut-table-missing`으로 검색했다(D6-e). 선언된 plugin 중 제거된 API를 부르는 것은 없다.
+- F212.6a의 규칙 7 게이트(`plugin-processes.md` feat `:267`)는 표와 함께 제거된다. 그 Escape 측정은 D6-c에 남으며 F212.6a에 연결된다.
 
 ### 필요한 변경
 
 | ID | 소유자 | 변경 |
 |---|---|---|
-| D6-a | `feat`: `packages/plugin-api/view.js:21-32,137-164,331`, `packages/plugin-api/terms.json:394`, `packages/workbench/view-calls.js:13-16`(헤더 주석), `:82-89`, `:199-203`, `:205-212`(`{command}` 허용 목록), `packages/workbench/surface-modules.js:21,287`(변경 뒤 `shortcuts` 옵션은 쓰이지 않으므로 제거), `docs/spec/events.json:690`, `page.view.shortcut-table-missing`의 클래스 표 행, `native-surfaces.md:141`, `exposure.md:71`, `docs/plans/plugin-processes.md:113-123,162-163,190`, `CHANGELOG.md:8`, `docs/features.md:1239`와 ko; `main`: `docs/spec/native-surfaces.md:137`(Escape 호출의 `page.input.shortcut.failed` 필드), `plugin-processes.md:94-103,141,166`(같은 필드), `exposure.md:67,94-95`(표 행)과 ko, `packages/workbench/shortcuts.json:24-25`, `scripts/test/shortcut-table.test.mjs` | 표 등록, read와 missing 분기, 표 전용 도우미, `shortcuts` 옵션, `page.view.shortcut-table-missing` 이벤트와 3단계의 명세·용어 문구를 제거한다. |
-| D6-b | `feat`: `packages/plugin-api/test/view.test.mjs:394-419`, `packages/workbench/test/view-calls.test.mjs:13,278-310`, `fakes()`의 `shortcuts` 옵션 | 표 테스트를 삭제한다. 추가(새 동작은 현재 코드에서 Red): (a) Escape가 아닌 키의 keydown은 `runtime.shortcuts.*` 호출을 보내지 않는다; (b) 페이지 picker가 열려 있으면 view Escape 한 번에 한 번 닫힌다; (c) view 자신의 요소에서 `preventDefault`를 부르는 핸들러는 아무것도 보내지 않으며, bridge의 것 뒤에 등록된 `window` bubble 리스너가 `preventDefault`를 불러도 페이지 picker는 열린 채 남는다(읽기는 전파 뒤에 일어난다); (d) picker가 없으면 `runtime.shortcuts.run {command: "core.picker.close"}`는 no-op; (e) `event.repeat`, `event.isComposing`, `keyCode` 229, 그리고 수식키가 있는 Escape는 아무것도 보내지 않는다; (f) `runtime.shortcuts.run`은 `core.picker.close`를 받고 `core.focus.set`을 2단계의 문구와 함께 거부한다; (g) 자기 Escape 핸들러가 `preventDefault`를 부르지 않는 view는 열린 페이지 picker를 닫는다(4단계가 받아들인 결과); (h) 실패한 `runtime.shortcuts.run`은 `key` 필드 없이 `page.input.shortcut.failed {plugin, command}`를 쓴다. |
-| D6-c | `feat`(probe) | overlay마다 view 포커스에서 macOS probe: 페이지 picker(4단계의 기대), view 포커스 중 열린 네이티브 picker(같은 명령으로 닫히는 것이 기대), 포커스를 가진 네이티브 modal(view는 keydown을 받지 않으므로 호출이 없다; 단위 테스트가 아니라 end-to-end 확인). 또한 view 포커스에서 cmd+k와 shift+cmd+n, 그리고 view에서 입력기 조합을 끝내거나 취소하는 Escape(기대: 호출 없음). F212.6a에 연결. |
-| D6-d | `main`: `packages/workbench/shortcuts.json:17-18`, `docs/spec/exposure.md:87-88`과 ko | 5단계의 `when` 문구를 지금 좁힌다. 한 커밋. |
-| D6-e | `main`(`docs/features.md`, F238-b 기록) | 근거의 형제 검사를 다섯 checkout이 아니라 모든 `plugins/*` checkout에 대해 `git grep`으로 기록한다(`shortcuts.register`, `runtime.shortcuts`, `shortcut-table-missing`). 제거된 등록을 설명하는 열린 행 두 개는 F238-b D6에 의해 대체되었다고 닫는다(ko 포함): `plugins/shell/docs/features.md`의 P11.6(34행), `plugins/flowmark/docs/features.md`의 P8.6(27행). 호환성 깨짐 changelog 줄을 적는다. |
-| D6-f | `main`: `docs/features.md`의 F212.6a와 F212.7 항목(+ko) | F212.6a(표 gate 제거, Escape 측정은 D6-c에 남김)와 F212.7(표 gate 없음)을 다시 범위 정한다. |
-| D6-g | 순서: `main` 먼저, 그다음 `feat`. `main`: `docs/spec/native-surfaces.md`(view 호출 목록의 `runtime.shortcuts.run {command}`와 허용 목록). `feat`: `packages/plugin-api/view.js`(4단계의 가드를 가진 window bubble Escape, 전파 뒤 `setTimeout(0)`에서 `defaultPrevented`를 읽고 `runtime.shortcuts.run {command: "core.picker.close"}` 전송), `packages/workbench/view-calls.js`(한 이름 허용 목록을 가진 `runtime.shortcuts.run` 분기) | 4단계의 Escape 통과를 구현한다. `feat` 변경은 `core.picker.close`가 `main`에 있은 뒤에 들어간다(이미 있다). D6-b (d)와 (f)가 레지스트리 명령과 거부를 확인한다. |
+| D6-a | `feat`: `packages/plugin-api/view.js:21-32,137-164,331`(5단계), `packages/plugin-api/terms.json:394`, `packages/workbench/view-calls.js:13-16`(머리 주석), `:82-89`(소유자 `workbench`와 `view`로 거름), `:199-203`(`runtime.shortcuts.missing` 제거), `:205-212`(`runtime.shortcuts.run` 제거), `docs/spec/events.json:690`과 class 표 행, `native-surfaces.md:141`, `exposure.md:71`, `docs/plans/plugin-processes.md:113-123,162-163,190`, `CHANGELOG.md:8`, `docs/features.md:1239`과 ko; `main`: `docs/spec/native-surfaces.md:137`, `plugin-processes.md:94-103,141,166`, `exposure.md:67,94-95`과 ko, `packages/workbench/shortcuts.json:24-25`, `scripts/test/shortcut-table.test.mjs`, `main`의 `CHANGELOG.md:8`과 ko | 등록, 키 표 처리기, missing과 run 사례와 그 이벤트, 표 전용 도우미를 제거한다. `runtime.shortcuts.read`는 유지한다. view 규칙을 적는다(3단계와 6단계). |
+| D6-b | `feat`: `packages/plugin-api/test/view.test.mjs:394-419`, `packages/workbench/test/view-calls.test.mjs:13,278-310`, `fakes()`의 `shortcuts` 옵션 | 표 시험을 지우고 8단계의 (a)~(h)를 추가한다. |
+| D6-c | `feat`(탐침) | view에 포커스가 있을 때의 macOS 탐침: 페이지 선택기(view가 자기 Escape에서 `core.picker.close`를 실행하면 한 번 닫혀야 한다), view에 포커스가 있는 동안 열린 네이티브 선택기(view는 호출을 보내지 않고, 네이티브 선택기는 자기 경로로 응답한다; 관찰된 결과로 기록), 포커스를 가진 네이티브 모달(view는 keydown을 받지 않는다; 종단 간 확인), cmd+k와 shift+cmd+n(view가 행의 명령을 실행한다; 네이티브 빌드의 shift+cmd+n은 view보다 먼저 메뉴 가속기가 처리하여 view는 keydown을 받지 않아야 한다), view에서 입력기 조합을 끝내는 Escape(view가 넘기지 않는다). F212.6a에 연결한다. |
+| D6-d | `feat`: `packages/plugin-api/view.js`(일반 브리지의 runtime에 `command: (name, params) => calls.request(name, params)`; 브리지는 keydown 리스너를 설치하지 않는다)와 `packages/workbench/view-calls.js`(`runCore`는 변경 없음) | view가 명령을 실행하는 경로 하나(4단계). |
+| D6-e | `main`(`docs/features.md`의 F238-b 기록) | 닫을 때 모든 `plugins/*` 체크아웃에서 `shortcuts.register`, `runtime.shortcuts`, `shortcut-table-missing`을 다시 검색한다. 제거된 등록을 설명하는 열린 행 두 개는 F238-b D6로 대체되었다고 닫는다(ko 포함): `plugins/shell/docs/features.md` P11.6(34행), `plugins/flowmark/docs/features.md` P8.6(27행). 호환성 깨짐 changelog 줄(6단계). |
+| D6-f | `main`: `docs/features.md`의 F212.6a와 F212.7 항목(+ko) | F212.6a는 범위를 다시 정한다(표 게이트 제거; Escape 측정은 D6-c에 남는다). F212.7은 표 게이트가 없다. |
+| D6-g | 순서: `main`이 먼저, 그다음 `feat`. `main`: `docs/spec/native-surfaces.md`(3단계의 view 규칙과 `runtime.shortcuts.read`, `runtime.command`가 있는 호출 목록)와 ko. `feat`: D6-d와 D6-a | 코드 변경 전에 명세가 규칙을 적는다. |
 
 ### 라운드
 
