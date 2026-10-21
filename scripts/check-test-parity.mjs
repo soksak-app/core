@@ -2234,6 +2234,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239",
+    implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
+    tests: [{ file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],
+    expected: "Each test runner names every test when it starts, reports its result and elapsed time, and ends a test at its own limit.",
+    levels: ["unit"],
+  },
+  {
     id: "F223",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
