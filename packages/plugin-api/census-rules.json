@@ -57,6 +57,13 @@
       "description": "The result of a channel send is dropped, so a closed or full channel loses the message silently."
     },
     {
+      "id": "rs.lock-result",
+      "language": "rs",
+      "pattern": "(?:\\blet\\s+Ok\\s*\\([^;{]*?\\.(?:lock|read|write)\\(\\)|\\bmatch\\s+[^;{]*?\\.(?:lock|read|write)\\(\\)\\s*\\{|\\.(?:lock|read|write)\\(\\)\\s*(?:\\.\\s*(?:map_err|expect|unwrap|ok)\\s*\\(|\\?))",
+      "requires": "recovery",
+      "description": "A poisoned lock is recovered with PoisonError::into_inner; a lock result that is matched, mapped to an error or dropped is a finding."
+    },
+    {
       "id": "m.registration",
       "language": "m",
       "pattern": "\\b(?:addObserver(?:ForName)?:|addGlobalMonitorForEventsMatchingMask:|addLocalMonitorForEventsMatchingMask:|scheduledTimerWithTimeInterval:|timerWithTimeInterval:|CFRunLoopAddObserver|CFRunLoopAddTimer|CFRunLoopAddSource|CFNotificationCenterAddObserver|dispatch_source_create|CGEventTapCreate|AXObserverCreate|IOServiceAddMatchingNotification)",

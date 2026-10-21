@@ -20,5 +20,7 @@
       "^packages/sok/tauriv2/src/routine\\.rs$"
     ]
   },
-  "pending": {}
+  "pending": {
+    "rs.lock-result": "F218-2.5"
+  }
 }

@@ -29,7 +29,7 @@ test("a rule waits only for an item of the checklist that is not complete, and a
     const entry = features.split("\n").find((line) => line.includes(`${item} —`));
     assert.ok(entry, `${rule} waits for ${item}, which docs/features.md does not list`);
     assert.doesNotMatch(entry, /\[o\]/, `${rule} waits for ${item}, which is complete`);
-    assert.match(output.stdout, new RegExp(`${rule.replace(".", "\\.")} (?:is outside its entrance files|has neither an event nor a stated reason)`), `${rule} is pending and has no finding`);
+    assert.match(output.stdout, new RegExp(`${rule.replace(".", "\\.")} (?:is outside its entrance files|has neither an event nor a stated reason|is a poisoned lock that is not recovered)`), `${rule} is pending and has no finding`);
   }
   assert.ok(censusRules().length > Object.keys(config.pending).length, "every rule is pending");
 });

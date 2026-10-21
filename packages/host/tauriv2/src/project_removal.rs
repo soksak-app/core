@@ -2,8 +2,8 @@
 //! (docs/spec/projects.md). A request resolves with the answer of that window, or with true when the window ends.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Mutex, PoisonError};
 
 #[derive(Default)]
 pub struct Removals {
@@ -21,7 +21,9 @@ impl Removals {
         if !valid {
             return Err(format!("project id {id:?} is not valid"));
         }
-        let mut pending = self.pending.lock().map_err(|e| e.to_string())?;
+        // default: the requests are held by id, and a panic while the lock is held leaves each entry whole, so the lock
+        // state is recovered; the panic hook records the panic that poisoned the lock.
+        let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
         if pending.contains_key(id) {
             return Err(format!("removal of project {id} is already being asked"));
         }
@@ -35,7 +37,9 @@ impl Removals {
         let (_, reply) = self
             .pending
             .lock()
-            .map_err(|e| e.to_string())?
+            // default: the requests are held by id, and a panic while the lock is held leaves each entry whole, so the lock
+            // state is recovered; the panic hook records the panic that poisoned the lock.
+            .unwrap_or_else(PoisonError::into_inner)
             .remove(id)
             .ok_or_else(|| format!("removal of project {id} is not being asked"))?;
         reply.send(allowed).map_err(|e| e.to_string())
@@ -44,9 +48,9 @@ impl Removals {
     /// Resolves every request that the window `owner` has not answered with true, because a window that ends keeps
     /// no tab. Each allowed removal is the event `host.project.removal_allowed` with the window and the project.
     pub fn abandon(&self, owner: &str) {
-        let Ok(mut pending) = self.pending.lock() else {
-            return;
-        };
+        // default: the requests are held by id, and a panic while the lock is held leaves each entry whole, so the lock
+        // state is recovered; the panic hook records the panic that poisoned the lock.
+        let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
         let ended: Vec<String> = pending
             .iter()
             .filter(|(_, (asked, _))| asked == owner)
@@ -67,3 +71,7 @@ impl Removals {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "project_removal_test.rs"]
+mod tests;

@@ -160,9 +160,9 @@ fn event(app: &AppHandle, raw: String) {
     match record_event(&raw) {
         Err(reason) => set_error(app, reason),
         Ok(Reported::State(state)) => {
-            if let Ok(mut current) = STATE.lock() {
-                *current = state;
-            }
+            // default: the permission state is replaced as a whole and only read otherwise, so a lock that a panicking
+            // thread poisoned still holds a complete state; the panic hook records the panic.
+            *STATE.lock().unwrap_or_else(PoisonError::into_inner) = state;
             emit_state(app);
         }
         Ok(Reported::Notice {
@@ -203,9 +203,9 @@ fn failed(app: &AppHandle, reason: String) {
 
 /// Reports the recorded failure to every window as the error of the notification state.
 fn set_error(app: &AppHandle, reason: String) {
-    if let Ok(mut state) = STATE.lock() {
-        state.error = Some(reason);
-    }
+    // default: the permission state is replaced as a whole and only read otherwise, so a lock that a panicking
+    // thread poisoned still holds a complete state; the panic hook records the panic.
+    STATE.lock().unwrap_or_else(PoisonError::into_inner).error = Some(reason);
     emit_state(app);
 }
 
@@ -222,10 +222,9 @@ fn emit_state(app: &AppHandle) {
 
 /// Returns the permission state that was reported last. The page reads it when it starts.
 pub(crate) fn state() -> Result<NotificationState, String> {
-    STATE
-        .lock()
-        .map(|state| state.clone())
-        .map_err(|error| error.to_string())
+    // default: the permission state is replaced as a whole and only read otherwise, so a lock that a panicking
+    // thread poisoned still holds a complete state; the panic hook records the panic.
+    Ok(STATE.lock().unwrap_or_else(PoisonError::into_inner).clone())
 }
 
 /// Posts the tab notification of the calling window as a system notification.
@@ -245,3 +244,7 @@ pub(crate) fn remove(window: &Window, request: NotificationRequest) -> Result<()
         platform::current()?.remove_notification(&name)
     })
 }
+
+#[cfg(test)]
+#[path = "notifications_test.rs"]
+mod tests;

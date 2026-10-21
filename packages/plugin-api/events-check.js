@@ -640,7 +640,7 @@ export function parseCensusConfig(file, text, rules = censusRules()) {
   const entrances = config.entrances ?? {};
   const pending = config.pending ?? {}; // default: a declaration without pending rules enforces every rule.
   for (const id of [...Object.keys(entrances), ...Object.keys(pending)]) if (!known.includes(id)) fail(`names the rule ${id}, which no census rule has`);
-  for (const [id, item] of Object.entries(pending)) if (!/^F\d+(?:\.\d+)*$/.test(item)) fail(`gives the rule ${id} the pending item ${JSON.stringify(item)}, which is no checklist id`);
+  for (const [id, item] of Object.entries(pending)) if (!/^F\d+(?:[.-]\d+)*$/.test(item)) fail(`gives the rule ${id} the pending item ${JSON.stringify(item)}, which is no checklist id`);
   for (const [id, patterns] of Object.entries(entrances)) {
     if (!Array.isArray(patterns) || patterns.some((pattern) => typeof pattern !== 'string')) fail(`gives the rule ${id} entrances that are not a list of patterns`);
   }
@@ -677,6 +677,11 @@ export function censusFindings(sources, config, rules = censusRules()) {
         const finding = (message) => findings.push({ file: path, line, rule: rule.id, message: `${path}:${line}: ${message}`, pending: config.pending[rule.id] ?? null });
         if (rule.requires === 'entrance') {
           finding(`${rule.id} is outside its entrance files`);
+          continue;
+        }
+        // default: a rule that requires recovery has no marker and no event that excuses its match.
+        if (rule.requires === 'recovery') {
+          finding(`${rule.id} is a poisoned lock that is not recovered`);
           continue;
         }
         const last = source.lineAt(match.index + match[0].length - 1);
