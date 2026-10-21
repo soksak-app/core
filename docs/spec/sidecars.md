@@ -51,6 +51,8 @@ A sidecar answers every `closed` it receives. A surface that sends again after i
 
 The operation selector in a sidecar request body is an existing transport detail. A plugin manifest does not copy that wire spelling: it declares the readable `background.operation` name, and the workbench sends the corresponding sidecar request at one transport boundary. Missing operations and sidecar errors are failures; they are not replaced or discarded.
 
+A sidecar declares its message form in `sidecar.json` as `message: {form, operationField}`: `form` is `json-object`, and `operationField` names the string field of a request body that selects the operation. A sidecar that lets a plugin host call operations lists them in `hostReadOperations`, the read-only operations that a plugin manifest may name in `hostOperations` ([plugins](plugins.md#pluginjson)). A sidecar with no list allows no operation to a plugin host. The main page checks each host request in the declared form and refuses every other operation before it reaches the sidecar ([plugin host](plugin-host.md#channel)). `@soksak/plugin-api` checks these declarations (`validateSidecar`, `checkHostOperations`).
+
 ## Failure
 
 A sidecar that uses standard input and output fails when:

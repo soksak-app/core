@@ -51,6 +51,8 @@
 
 사이드카 요청 body의 동작 선택자는 기존 전송 세부사항이다. 플러그인 manifest는 그 wire 표기를 복사하지 않고 읽기 쉬운 `background.operation` 이름을 선언하며, 워크벤치가 하나의 전송 경계에서 해당 사이드카 요청으로 보낸다. 동작 누락과 사이드카 오류는 실패이며 대체하거나 버리지 않는다.
 
+사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. plugin host가 작업을 부를 수 있게 하는 사이드카는 `hostReadOperations`에 읽기 전용 작업을 나열하며, plugin 매니페스트는 그 가운데 것만 `hostOperations`에 쓸 수 있다([plugins](plugins.ko.md#pluginjson)). 나열이 없는 사이드카는 plugin host에 작업을 허용하지 않는다. 메인 페이지는 선언된 형식으로 각 host 요청을 검사하고, 그 밖의 작업을 사이드카에 닿기 전에 거절한다([plugin host](plugin-host.ko.md#channel)). `@soksak/plugin-api`는 이 선언을 `validateSidecar`와 `checkHostOperations`로 검사한다.
+
 ## 실패
 
 표준 입출력을 쓰는 사이드카는 다음 경우에 실패한다.
