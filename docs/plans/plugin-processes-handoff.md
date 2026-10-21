@@ -57,6 +57,14 @@ Development comes first. An item runs only its own unit tests (Red and Green), i
 6. Mark the item `[o]` with its Red and Green, and add CHANGELOG entries in EN and KO.
 7. Commit with author `min-0-max <max@blue.tools>` and `type(scope): Subject (#ID)`. The subject has at most 50 characters. The body states what changed and why, wrapped at 72 columns. There is no footer and no trailer. The commit-msg hook rejects other forms. Stage explicit paths only; never use `git add -A`.
 
+### No coupling
+
+- Core, plugins, sidecars, kits, specifications and contracts are separate repositories (folders of the workspace), and none of them knows the implementation of another.
+- Registries (`environment.json`, the settings, `plugin.json`) state what is installed at which version. A relation between packages is declared only as `dependencies` of a manifest.
+- Packages exchange only the wire of a contract and the exposed commands, DOM and statuses. Common functions belong to core and features belong to plugins; a plugin feature never moves into core.
+- A test of package A never verifies the implementation of package B. A tests only its own boundary, with fakes and fixtures; B tests itself in its own repository; the common cases are defined by the contract and run by B. A test of A that reads the paths, SDK, build or real names of B is forbidden; fixtures use probe names (`probe`, `@scope/plugin-probe`, `@soksak/sidecar-probe`).
+- Exception: the installation-based window checks of core (`e2e/`) may install real plugins and sidecars and check their relations and behaviour together; that is the integration level. They install through the registries and manifests, never through repository paths or builds. The rule above applies to every other part of core: unit tests, scripts, product code and specifications.
+
 ### Branches and worktrees
 
 - Work on `main` directly by default. When an agent or the situation needs isolation, use the branch `{type}/{shortname}-{ID}` and the worktree `../core-{shortname}-{ID}`.
