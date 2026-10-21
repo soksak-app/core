@@ -123,6 +123,7 @@ function mountDeclared(entry, record) {
     body: entry.body,
     options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
     orientation: () => record.context.orientation,
+    // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     choose: () => chooseSource({ active: record.context.surface ?? null, registrants: registry.registrants("status", statusId) }),
     channel: declaredChannel,
     pull: declaredPull,
