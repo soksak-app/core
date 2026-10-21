@@ -150,11 +150,48 @@ Auditors: two fresh subagents, each reviewing all three decisions. Thirteen obje
 - The relay a view uses: the host delivers each sidecar message to the window that first sent for the surface, as the `sidecar-message` event `{sidecar, surface, body}` (`docs/spec/sidecars.md:46`). The relay is keyed by surface, so a surface-less plugin host has no route to sidecar events today. D9.2 is therefore a required spec change, not an existing path.
 - `docs/spec/plugin-host.md` on `main` (sections Declaration to State) defines no sidecar channel; `git show feat/plugin-host-F212.9:docs/spec/plugin-host.md` contains no `sidecar` text.
 
-(Round 2 auditor answers: pending.)
+## Round 2 answers and revised texts
+
+Round 2 auditors (two fresh subagents, read-only): auditor C returned seven objections (D2: 1, D8: 2, D9: 4); auditor D returned nine (D9). Each was checked against the files. Where this section and the earlier text differ, this section governs.
+
+### Answers
+
+- C-D2-1, `environment.json` settings: accepted. Verified: `apps/wailsv3/environment.json` has a `settings` key that names the plugin `terminal`. R2.3 text is now: "`environment.json` names plugins as tab references (`workspace`), sidebar link references (`sidebars`) and per-plugin settings keys (`settings`); it does not install them."
+- C-D8-2, `#[cfg(not(feature))]`: accepted. Verified: `packages/sok/tauriv2/tests/sok_test.rs:333-334` has `#[cfg(not(feature = "diagnostics"))]` between a declaration and `#[test]`. See D8.3 below.
+- C-D8-3, attributes above the declaration: accepted. Verified: `scripts/check-host-contract.mjs:78` returns on every `#[` line, and a declaration is attached only when seen, so a `#[should_panic]` above `// contract:` passes silently. See D8.3 below.
+- D-D9-1 and C-D9-5, host sidecar route: accepted. Verified: `sidecars.md:41` requires `{surface, root}` on each request, `:46` delivers messages only to the window that first sent for a surface, and `:65` routes `sidecar-failure` to the owning window. A surface-less host has no route, so the spec must add one. See D9.2 below.
+- D-D9-2 and C-D9-4, examination per item: accepted. Each item is now examined in the text below, and the sidecar alternative is answered with that result.
+- D-D9-3, Enter and double press: accepted. Verified: `declared-ui.md:130` gives declared elements no key handler, so Enter reaches a native `click`. See D9.1b below.
+- D-D9-4, folder rollup: accepted. The sidecar computes `detail` for each directory from its descendants' status. See D9.1d below.
+- D-D9-5 and C-D9-7, listing error and open failure: accepted. `AGENTS.md:44` requires that a user-visible error go through the one display path that writes it to the log, and `declared-ui.md:70` says a status line cannot draw an error. So the open failure and the listing error leave the declared tree and go through that path. See D9.1f below.
+- D-D9-6, arrow-key navigation: accepted as a recorded cost. The vocabulary has no key handler (`declared-ui.md:130`), so arrow navigation between rows is lost. See D9.9 below.
+- D-D9-7, cut rule: accepted. The tree caps at the declared limits. See D9.1h below.
+- D-D9-8, channel text: accepted. `plugin-host.md` (Channel) and the view channel text must change. See D9.3 below.
+- D-D9-9, `params` of the header star: accepted. Declared values are plugin-authored (`declared-ui.md:5`, `:27`). The plugin writes the `params` from its own selection; the host does not set them. See D9.1g below.
+- C-D9-6, shell placement: accepted. The placement is named below.
+
+### Revised texts
+
+- D8.3 (replaces the attribute rule): the allowed attribute lines are `#[test]`, `#[tokio::test]`, `#[cfg(feature = "...")]` and `#[cfg(not(feature = "..."))]`; each selects the configuration in which the test is compiled. The scan covers the whole contiguous block of attribute and comment lines directly above the `fn`, on either side of the declaration. Any other attribute in that block is an error. Red on the unchanged code: `#[should_panic]` above the declaration passes; Green after the change. The `cfg(not(feature))` line of `sok_test.rs:333-334` is a Green case.
+- D9.1b (replaces Enter and double press): `declared-ui.md:130` gains a keyboard rule. Enter keydown on a focused tree node runs `open` and prevents the native `click`. A double press is a `click` with `event.detail === 2`; that second click runs `open` instead of `command`, and the first click runs `command`. Red and Green cases: one `files.select` and one `open` for a double press; `open` alone for Enter.
+- D9.1d (replaces the git marker): a tree node may declare `detail`, plain text of at most 500 code points. The files sidecar computes it: a file's detail is its git status, and a directory's detail is the most significant status among its descendants, as `ui/vendor/trees.js` marks changed children (`data-item-contains-git-change`). Test: a directory with one modified descendant has a `detail`.
+- D9.1f (replaces notices): the open failure and the listing error are not declared statuses. They go through the core error display path, which writes `error: <where>: <text>` to the log at the moment of display. The declared tree draws no error (`declared-ui.md:70`). The files tree keeps only the no-project text, which is not an error: when `root` is null, the value holds one `status-line` with "프로젝트 없음"; a listing with no rows shows the tree's `empty` text.
+- D9.1g (replaces the header): the value of `files.tree` may hold `button` root elements before the `tree`. Refresh is one button. The header star's `params` are `{path}` built by the plugin from its own selection; the plugin sends a new value when the selection changes.
+- D9.1h (cut rule, new): the files tree shows at most 5000 visible rows and at most 16 levels (`declared-ui.md:56`, `:84`). Rows past the limit are cut, and the tree is followed by a `status-line` that states the number of rows not shown. A sub-item measures the redraw time of a large project, as F212.8-7 measured the tree (`plugin-processes-handoff.md:143`).
+- D9.2 (replaces the sidecar and host text): the host route. `docs/spec/plugin-host.md:59` changes to allow a host sidecar send. The host uses the route key `plugin-host:<plugin id>` as the `surface` of `{surface, root}` (`sidecars.md:41`). The window that owns the plugin host web view receives its `sidecar-message` and `sidecar-failure` (`sidecars.md:46`, `:65`), and it keeps the owner across a host restart (`sidecars.md:67`). Contract cases `plugin-host.sidecar.send` and `plugin-host.sidecar.failure` run in both hosts. The examination of each item:
+  - Listing, git status and the rollup `detail`: already produced by the files sidecar (`files.tree` description). They stay in the sidecar.
+  - Expanded set and selection: per project root. They move to the sidecar, which keeps them keyed by root, and the host relays them. The sidecar can hold them, so they are not host logic.
+  - Bookmarks: the plugin data store (`plugins/files/plugin.json` `data.bookmarks`). Core persists them; the host reads and writes them through the data calls. The host holds no bookmark logic.
+  - Result: the host holds no DOM-free logic. Its role is to serve the declared statuses, which a sidecar cannot do (`declared-ui.md:145`). This changes the stated purpose of the plugin host (`plugin-host.md:5`) and the layer rule (`plugin-processes.md:26-28`): a host is created to serve a status that needs a process without a view, and it holds only the relay. That change to the layer rule is itself a decision, so it goes to adversarial review in this round.
+- D9.3 (channel text, new): `plugin-host.md` (Channel) gains the sidecar route of D9.2. The host sends the `declared-ui.expanded` message (D9.3 expansion rule) to a host source, and `native-surfaces.md` gains the same message for a view source. Contract cases `declared-ui.expanded` run in both hosts and in `packages/workbench`.
+- D9.8 (shell placement, named): the shell sections are in the sidebar of the shell card. The source is the view of the card's active tab (`declared-ui.md:145`, first source). The decision sets no plugin override. A fixed window sidebar with no override has no source for them, so they are cleared (`declared-ui.md:145`). This is an accepted cost, stated in D9.9.
+- D9.9 (accepted costs, extended): the costs are the ones stated above (history and jobs cleared on unload; cwd restored from tab state; sections cleared while the card is closed or inactive), plus the loss of arrow-key navigation between tree rows (D9.1 and `declared-ui.md:130`). Arrow navigation is recorded as a follow-up item under F212.8 to decide whether it becomes a declared behavior; that decision goes to adversarial review. It is not a lowered standard: the current vocabulary has no key handler, and the change is recorded as the cost of the move.
+
+The round-3 auditors review these texts and the changed layer rule in D9.2.
 
 ## To record elsewhere
 
-Recorded on the owning repository or branch; this review does not change them.
+Recorded on the owning repository or branch; this review does not change them. Round 2 adds: `docs/spec/plugin-host.md` (Channel, the route of D9.2, and the layer statement at `:5`), `docs/spec/plugin-processes.md:26-28` (the host rule of D9.2), `docs/spec/native-surfaces.md` (the view `declared-ui.expanded` message of D9.3), and `docs/spec/sidecars.md:41,46,65,67` (the host route key).
 
 - Core main (follow-up of F218-2.4-1): D8.1 to D8.5 in `scripts/check-host-contract.mjs`, `scripts/test/check-host-contract.test.mjs` and `docs/spec/host-contract.md` (+ko), as a new change after the F218-2.4-1 change.
 - Core main (F212.8 follow-up IDs): D9.1a to D9.1g and D9.3 in `docs/spec/declared-ui.md` (+ko) and the vocabulary table, with tests in `packages/workbench`.

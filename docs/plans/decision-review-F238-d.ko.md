@@ -151,11 +151,48 @@
 - view가 쓰는 중계: 호스트는 각 사이드카 메시지를 표면에 처음 보낸 창에 `sidecar-message` 이벤트 `{sidecar, surface, body}`로 전달한다(`docs/spec/sidecars.md:46`). 중계는 표면 키이므로, 표면이 없는 플러그인 호스트는 오늘 사이드카 이벤트로 가는 경로가 없다. D9.2는 따라서 기존 경로가 아니라 필요한 스펙 변경이다.
 - `main`의 `docs/spec/plugin-host.md`(Declaration부터 State까지 절)는 사이드카 채널을 정의하지 않는다. `git show feat/plugin-host-F212.9:docs/spec/plugin-host.md`에는 `sidecar` 문구가 없다.
 
-(라운드 2 감사자 답변: 대기 중.)
+## 라운드 2 답변과 수정된 본문
+
+라운드 2 감사자(새 하위 에이전트 두 명, 읽기 전용): 감사자 C는 일곱 개(D2: 1, D8: 2, D9: 4), 감사자 D는 아홉 개(D9)의 반론을 냈다. 각 반론은 파일에서 확인했다. 이 절과 앞의 본문이 다르면 이 절이 우선한다.
+
+### 답변
+
+- C-D2-1, `environment.json`의 settings: 수락. 확인: `apps/wailsv3/environment.json`에 플러그인 `terminal`을 이름으로 가리키는 `settings` 키가 있다. R2.3 문장은 이제 "`environment.json` names plugins as tab references (`workspace`), sidebar link references (`sidebars`) and per-plugin settings keys (`settings`); it does not install them."이다.
+- C-D8-2, `#[cfg(not(feature))]`: 수락. 확인: `packages/sok/tauriv2/tests/sok_test.rs:333-334`에 선언과 `#[test]` 사이 `#[cfg(not(feature = "diagnostics"))]`가 있다. D8.3 참고.
+- C-D8-3, 선언 위의 속성: 수락. 확인: `scripts/check-host-contract.mjs:78`은 모든 `#[` 줄에서 반환하고, 선언은 나중에 보일 때만 붙으므로 선언 위의 `#[should_panic]`이 조용히 통과한다. D8.3 참고.
+- D-D9-1과 C-D9-5, 호스트의 사이드카 경로: 수락. 확인: `sidecars.md:41`은 각 요청에 `{surface, root}`를 요구하고, `:46`은 표면에 처음 보낸 창에만 메시지를 전달하며, `:65`는 `sidecar-failure`를 소유 창에 보낸다. 표면이 없는 호스트에는 경로가 없으므로 스펙에 경로를 추가해야 한다. D9.2 참고.
+- D-D9-2와 C-D9-4, 항목별 검토: 수락. 각 항목을 아래 본문에서 검토했고, 사이드카 대안에는 그 결과로 답했다.
+- D-D9-3, Enter와 두 번 누르기: 수락. 확인: `declared-ui.md:130`은 선언형 요소에 키 처리가 없다고 하므로 Enter는 네이티브 `click`으로 전달된다. D9.1b 참고.
+- D-D9-4, 폴더 롤업: 수락. 사이드카가 각 디렉터리의 `detail`을 자손 상태에서 계산한다. D9.1d 참고.
+- D-D9-5와 C-D9-7, 목록 오류와 열기 실패: 수락. `AGENTS.md:44`는 사용자에게 보이는 오류를 로그를 쓰는 한 표시 경로로 보내야 한다고 하고, `declared-ui.md:70`은 상태 줄이 오류를 그릴 수 없다고 한다. 따라서 열기 실패와 목록 오류는 선언형 tree를 떠나 그 표시 경로로 간다. D9.1f 참고.
+- D-D9-6, 화살표 키 탐색: 기록된 비용으로 수락. 어휘에 키 처리가 없으므로(`declared-ui.md:130`) 행 사이 화살표 탐색은 사라진다. D9.9 참고.
+- D-D9-7, 잘라내기 규칙: 수락. tree는 선언된 한도로 자른다. D9.1h 참고.
+- D-D9-8, 채널 문장: 수락. `plugin-host.md`(Channel)와 view 채널 문장을 바꿔야 한다. D9.3 참고.
+- D-D9-9, 헤더 별의 `params`: 수락. 선언된 값은 플러그인이 작성한다(`declared-ui.md:5`, `:27`). 플러그인이 자기 선택으로 `params`를 쓰며 호스트는 설정하지 않는다. D9.1g 참고.
+- C-D9-6, shell 배치: 수락. 배치를 아래에 명시한다.
+
+### 수정된 본문
+
+- D8.3(속성 규칙 대체): 허용되는 속성 줄은 `#[test]`, `#[tokio::test]`, `#[cfg(feature = "...")]`, `#[cfg(not(feature = "..."))]`이다. 각 `cfg`는 테스트가 컴파일되는 구성을 고른다. 검사는 `fn` 바로 위의, 선언의 위든 아래든 연속된 속성·주석 줄 블록 전체를 본다. 그 블록의 다른 속성은 오류다. 변경 전 코드에서 선언 위의 `#[should_panic]`은 통과하므로 Red이고, 변경 후 Green이다. `sok_test.rs:333-334`의 `cfg(not(feature))` 줄은 Green 사례다.
+- D9.1b(Enter와 두 번 누르기 대체): `declared-ui.md:130`에 키보드 규칙을 더한다. 초점이 있는 tree 노드의 Enter keydown은 `open`을 실행하고 네이티브 `click`을 막는다. 두 번 누르기는 `event.detail === 2`인 `click`이며, 그 두 번째 click은 `command` 대신 `open`을 실행한다. 첫 click은 `command`를 실행한다. Red와 Green 사례: 두 번 누르기는 `files.select` 한 번과 `open` 한 번, Enter는 `open`만 실행한다.
+- D9.1d(git 표시 대체): tree 노드는 500 코드 포인트 이하의 평문 `detail`을 선언할 수 있다. files 사이드카가 계산한다. 파일의 detail은 그 git 상태이고, 디렉터리의 detail은 자손 중 가장 중요한 상태다(`ui/vendor/trees.js`가 바뀐 자식을 `data-item-contains-git-change`로 표시하는 것과 같다). 테스트: 수정된 자손이 하나인 디렉터리는 `detail`을 가진다.
+- D9.1f(알림 대체): 열기 실패와 목록 오류는 선언된 status가 아니다. 핵심 오류 표시 경로로 가며, 그 경로는 표시 순간 `error: <where>: <text>`를 로그에 쓴다. 선언형 tree는 오류를 그리지 않는다(`declared-ui.md:70`). files tree에 남는 것은 프로젝트 없음 문구뿐이다. 이는 오류가 아니다. `root`가 null이면 값은 "프로젝트 없음" `status-line` 하나를 가진다. 행이 없는 목록은 tree의 `empty` 문구를 보인다.
+- D9.1g(헤더 대체): `files.tree` 값은 `tree` 앞에 `button` 루트 요소를 둘 수 있다. 새로고침은 한 버튼이다. 헤더 별의 `params`는 플러그인이 자기 선택으로 만든 `{path}`이며, 선택이 바뀌면 플러그인이 새 값을 보낸다.
+- D9.1h(잘라내기 규칙, 새로): files tree는 보이는 행 최대 5000개, 최대 16 단계를 보인다(`declared-ui.md:56`, `:84`). 한도를 넘는 행은 잘리며, tree 뒤에 빠진 행 수를 적은 `status-line`이 온다. 큰 프로젝트의 다시 그리기 시간은 하위 항목으로 측정한다. F212.8-7이 tree를 측정한 것과 같다(`plugin-processes-handoff.md:143`).
+- D9.2(사이드카와 호스트 문장 대체): 호스트 경로. `docs/spec/plugin-host.md:59`는 호스트의 사이드카 전송을 허용하도록 바뀐다. 호스트는 경로 키 `plugin-host:<plugin id>`를 `{surface, root}`의 `surface`로 쓴다(`sidecars.md:41`). 플러그인 호스트 web view를 가진 창이 그 `sidecar-message`와 `sidecar-failure`를 받으며(`sidecars.md:46`, `:65`), 호스트 재시작 뒤에도 소유를 유지한다(`sidecars.md:67`). 사례 `plugin-host.sidecar.send`와 `plugin-host.sidecar.failure`를 두 호스트에서 실행한다. 항목별 검토:
+  - 목록, git 상태와 롤업 `detail`: files 사이드카가 이미 만든다(`files.tree` 설명). 사이드카에 남는다.
+  - 펼친 집합과 선택: 프로젝트 루트별. 사이드카로 옮기고, 사이드카는 루트 키로 보관하며 호스트는 중계한다. 사이드카가 가질 수 있으므로 호스트 로직이 아니다.
+  - 북마크: 플러그인 데이터 저장소(`plugins/files/plugin.json`의 `data.bookmarks`). core가 저장하며, 호스트는 데이터 호출로 읽고 쓴다. 호스트는 북마크 로직을 갖지 않는다.
+  - 결과: 호스트는 DOM 없는 로직을 갖지 않는다. 역할은 선언된 status를 제공하는 것이며, 사이드카는 그것을 할 수 없다(`declared-ui.md:145`). 이는 플러그인 호스트의 목적(`plugin-host.md:5`)과 층 규칙(`plugin-processes.md:26-28`)을 바꾼다. 호스트는 view 없이 프로세스가 필요한 status를 제공하려고 만들어지며 중계만 가진다. 층 규칙의 이 변경도 결정이므로 이 라운드에서 적대적 검토로 보낸다.
+- D9.3(채널 문장, 새로): `plugin-host.md`(Channel)에 D9.2의 사이드카 경로를 더한다. 호스트는 호스트 source에 `declared-ui.expanded` 메시지(D9.3 펼침 규칙)를 보내고, `native-surfaces.md`는 view source에 같은 메시지를 더한다. 사례 `declared-ui.expanded`를 두 호스트와 `packages/workbench`에서 실행한다.
+- D9.8(shell 배치, 명시): shell 섹션은 shell 카드의 사이드바에 있다. 원천은 카드의 활성 탭 view다(`declared-ui.md:145`, 첫 원천). 이 결정은 플러그인 override를 정하지 않는다. override 없는 고정 창 사이드바는 그 섹션의 원천이 없으므로 지워진다(`declared-ui.md:145`). 받아들이는 비용이며 D9.9에 적었다.
+- D9.9(받아들이는 비용, 확장): 위의 비용(unload 시 history와 jobs 삭제, 탭 상태로 cwd 복원, 카드가 닫히거나 비활성인 동안 섹션 삭제)에 더해 tree 행 사이 화살표 키 탐색의 손실(D9.1과 `declared-ui.md:130`)이다. 화살표 탐색은 F212.8 아래 후속 항목으로 기록해 선언형 동작이 될지 정한다. 그 결정은 적대적 검토로 보낸다. 현재 어휘에 키 처리가 없고 이 변경은 이동의 비용으로 기록하므로 낮춘 기준이 아니다.
+
+라운드 3 감사자는 이 본문과 D9.2의 바뀐 층 규칙을 검토한다.
 
 ## 다른 곳에 기록할 것
 
-이 검토는 아래를 바꾸지 않는다. 각 항목은 소유 저장소나 브랜치에 기록된다.
+이 검토는 아래를 바꾸지 않는다. 각 항목은 소유 저장소나 브랜치에 기록된다. 라운드 2가 더한 항목: `docs/spec/plugin-host.md`(Channel의 D9.2 경로와 `:5`의 층 문장), `docs/spec/plugin-processes.md:26-28`(D9.2의 호스트 규칙), `docs/spec/native-surfaces.md`(D9.3의 view `declared-ui.expanded` 메시지), `docs/spec/sidecars.md:41,46,65,67`(호스트 경로 키).
 
 - core main(F218-2.4-1의 후속): `scripts/check-host-contract.mjs`, `scripts/test/check-host-contract.test.mjs`, `docs/spec/host-contract.md`(+ko)의 D8.1~D8.5. F218-2.4-1 변경 뒤의 새 변경으로 한다.
 - core main(F212.8 후속 ID): `docs/spec/declared-ui.md`(+ko)와 어휘 표의 D9.1a~D9.1g 및 D9.3. 테스트는 `packages/workbench`에 둔다.
