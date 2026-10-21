@@ -30,7 +30,7 @@
 - F8. [logging](../spec/logging.ko.md)의 `plugin` 층(`docs/spec/logging.md:34`, 층 `native`, `host`, `page`, `plugin`, `sidecar`, `sok`)은 일반적인 logging 층 이름이다. 한국어 번역은 `docs/spec/logging.ko.md:35`에 같은 내용을 적는다.
 - F9. `docs/spec/plugins.ko.md`의 42줄은 plugin과 sidecar의 버전이 자기 것이며 core 버전과 관계가 없다고 적는다. 따라서 설치된 terminal plugin은 core 버전이 바뀌어도 바뀌지 않는다. F4의 `#v0.0.11` 고정은 개발 의존성이다.
 - F10. `scripts/check-test-parity.mjs`는 helper를 다음 항목에서 이름으로 부른다. `F160.25`(2621줄, `export async function screenHash`), `F160.34`(`expected` 글이 "the view-state inputs of a session"을 적고, 시험이 replay 입력 파일을 인용한다), `F160.35`(2651줄, `export function screenFromMessage`, 2655줄과 2656줄의 시험).
-- F11. 이 결정이 옮기는 anchor를 가리키는 교차 참조는 모두 `scripts/check-docs.mjs`가 heading에 대해 검사한다. `docs/spec/replay.ko.md`의 20, 22, 26, 66줄(`#view-state`)과 83줄. `docs/spec/terminal-runtime.ko.md`의 117줄(`replay.md#view-state`)과 135줄(`#screen-message`). `docs/features.md`의 880줄(`replay.md#view-state`)과 885, 886줄(`terminal-runtime.md#screen-message`), 그리고 `docs/features.ko.md`의 같은 줄. `docs/plans/decouple-handoff.md`의 73줄과 그 한국어 번역. `CHANGELOG.md`의 538~550줄과 그 한국어 번역. 주석 `packages/plugin-api/test/validate.test.mjs:269`와 `packages/plugin-api/test/screen-hash.test.mjs:32`. 인용 `packages/sok/wailsv3/tests/replay_test.go:63`과 `packages/sok/tauriv2/tests/replay_test.rs:68`.
+- F11. 이 결정이 옮기는 anchor를 가리키는 교차 참조는 모두 `scripts/check-docs.mjs`가 heading에 대해 검사한다. `docs/spec/replay.ko.md`의 20, 22, 26, 66줄(`view-state anchor`)과 83줄. `docs/spec/terminal-runtime.ko.md`의 117줄(`replay.mdview-state anchor`)과 135줄(`#screen-message`). `docs/features.md`의 880줄(`replay.mdview-state anchor`)과 885, 886줄(`terminal-runtime.md screen-message anchor`), 그리고 `docs/features.ko.md`의 같은 줄. `docs/plans/decouple-handoff.md`의 73줄과 그 한국어 번역. `CHANGELOG.md`의 538~550줄과 그 한국어 번역. 주석 `packages/plugin-api/test/validate.test.mjs:269`와 `packages/plugin-api/test/screen-hash.test.mjs:32`. 인용 `packages/sok/wailsv3/tests/replay_test.go:63`과 `packages/sok/tauriv2/tests/replay_test.rs:68`.
 
 ## 결정
 
@@ -49,11 +49,11 @@
 
 - `docs/spec/replay.ko.md`와 `replay.md`:
   - 11~18줄(입력 종류 표)과 7~10, 24~32, 56~72줄은 유지한다. 13, 14줄("pseudo terminal")은 장치를 가리키므로 유지한다.
-  - 20줄(`[View state](#view-state)` 연결)은 "### Hashed members"를 가리키도록 바꾼다.
-  - 22줄과 26줄의 `[View state](#view-state)` 연결은 "### Hashed members"를 가리키도록 바꾼다.
-  - 28줄의 "[screen message](terminal-runtime.md#screen-message)"는 "the screen message (the Hashed members section of this document)"로 바꾼다.
+  - 20줄(`[View state] (view-state anchor)` 연결)은 "### Hashed members"를 가리키도록 바꾼다.
+  - 22줄과 26줄의 `[View state] (view-state anchor)` 연결은 "### Hashed members"를 가리키도록 바꾼다.
+  - 28줄의 "[screen message] (terminal-runtime.md screen-message anchor)"는 "the screen message (the Hashed members section of this document)"로 바꾼다.
   - 54줄의 "(`@soksak/plugin-api/screen-hash`, the golden vectors)"는 "(the golden vectors)"로 바꾼다.
-  - 66줄의 `#view-state` 연결은 "### Hashed members"로 바꾼다.
+  - 66줄의 `view-state anchor` 연결은 "### Hashed members"로 바꾼다.
   - 66~68줄(세 그려진 화면 vector의 행)은 vector가 남으므로 유지한다.
   - 74~98줄은 결정 3대로 바뀐다. "### Hashed members"가 일반 문장과 함께 추가되고, 74~98줄의 나머지는 sidecar 명세로 옮긴다.
   - 83줄은 `terminal-runtime.md` 링크를 빼고 일반 page 규칙을 남긴다. page는 자기 plugin의 파서와 `screenHash`로 메시지의 hash를 계산한다.
@@ -62,7 +62,7 @@
   - 101줄의 "terminal 엔진을 가진다"는 "sidecar의 replay 엔진을 가진다"로 바꾼다.
   - 103줄(실행 파일의 종료 규칙)은 유지하고, 결정 6의 거부 요구 문장을 더한다.
   - 105~109줄(명령)은 유지한다.
-- `docs/spec/terminal-runtime.ko.md`와 `terminal-runtime.md`: "Screen message"의 멤버 정의 표와 문장은 `replay.md`로 옮긴다(결정 1). `terminal.screen.read`의 응답(109줄)과 커서 모양(117줄)은 terminal 명령을 설명하므로 남는다. 117줄의 `replay.md#view-state` 연결은 "### Hashed members"로 바꾼다. 124줄(`screenFromMessage` 문단)은 plugin 명세로 옮긴다(결정 4). 135줄(`[Screen message](#screen-message)`)은 `replay.md#hashed-members`로 바꾼다.
+- `docs/spec/terminal-runtime.ko.md`와 `terminal-runtime.md`: "Screen message"의 멤버 정의 표와 문장은 `replay.md`로 옮긴다(결정 1). `terminal.screen.read`의 응답(109줄)과 커서 모양(117줄)은 terminal 명령을 설명하므로 남는다. 117줄의 `replay.mdview-state anchor` 연결은 "### Hashed members"로 바꾼다. 124줄(`screenFromMessage` 문단)은 plugin 명세로 옮긴다(결정 4). 135줄(`[Screen message] (screen-message anchor)`)은 `replay.md#hashed-members`로 바꾼다.
 - `docs/features.md`와 `docs/features.ko.md`의 880, 885, 886줄, `docs/plans/decouple-handoff.md`와 `.ko.md`의 73줄: 연결을 새 anchor로 바꾼다. 각 이력 항목의 글은 그대로 둔다.
 - `CHANGELOG.md`와 `CHANGELOG.ko.md`의 538~550줄: 연결만 바꾸고 글은 그대로 둔다.
 - `packages/plugin-api/test/validate.test.mjs:269`와 `packages/plugin-api/test/screen-hash.test.mjs:32`의 주석: 연결을 바꾼다.

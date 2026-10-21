@@ -30,7 +30,7 @@ Each fact was checked in this worktree. Paths are written from the workspace roo
 - F8. The `plugin` layer of [logging](../spec/logging.md) (`docs/spec/logging.md:34`, the layers `native`, `host`, `page`, `plugin`, `sidecar`, `sok`) is a generic logging layer name. The Korean twin states the same in `docs/spec/logging.ko.md:35`.
 - F9. `docs/spec/plugins.md:42` states that the version of a plugin or sidecar is its own and has no relation to a core version. The installed terminal plugin therefore does not change when core changes its version. The `#v0.0.11` pin of F4 is a development dependency.
 - F10. `scripts/check-test-parity.mjs` names the helper in: `F160.25` (line 2621, `export async function screenHash`), `F160.34` (its `expected` text names "the view-state inputs of a session" and its tests cite the replay input files), and `F160.35` (line 2651, `export function screenFromMessage`, with tests at lines 2655 and 2656).
-- F11. Cross-references to anchors that this decision moves, all of which `scripts/check-docs.mjs` checks against headings: `docs/spec/replay.md` lines 20, 22, 26, 66 (`#view-state`) and 83; `docs/spec/terminal-runtime.md` lines 117 (`replay.md#view-state`) and 135 (`#screen-message`); `docs/features.md` lines 880 (`replay.md#view-state`) and 885, 886 (`terminal-runtime.md#screen-message`), and the same in `docs/features.ko.md`; `docs/plans/decouple-handoff.md` line 73 and its Korean twin; `CHANGELOG.md` lines 538 to 550 and the Korean twin; the comments `packages/plugin-api/test/validate.test.mjs:269` and `packages/plugin-api/test/screen-hash.test.mjs:32`; the citations `packages/sok/wailsv3/tests/replay_test.go:63` and `packages/sok/tauriv2/tests/replay_test.rs:68`.
+- F11. Cross-references to anchors that this decision moves, all of which `scripts/check-docs.mjs` checks against headings: `docs/spec/replay.md` lines 20, 22, 26, 66 (`view-state anchor`) and 83; `docs/spec/terminal-runtime.md` lines 117 (`replay.mdview-state anchor`) and 135 (`#screen-message`); `docs/features.md` lines 880 (`replay.mdview-state anchor`) and 885, 886 (`terminal-runtime.md screen-message anchor`), and the same in `docs/features.ko.md`; `docs/plans/decouple-handoff.md` line 73 and its Korean twin; `CHANGELOG.md` lines 538 to 550 and the Korean twin; the comments `packages/plugin-api/test/validate.test.mjs:269` and `packages/plugin-api/test/screen-hash.test.mjs:32`; the citations `packages/sok/wailsv3/tests/replay_test.go:63` and `packages/sok/tauriv2/tests/replay_test.rs:68`.
 
 ## Decision
 
@@ -49,11 +49,11 @@ Documents and moves named above. Until a gate passes, no behaviour changes.
 
 - `docs/spec/replay.md` and `.ko.md`:
   - Lines 11 to 18 (input-kind table) and lines 7 to 10, 24 to 32, 56 to 72 stay. Lines 13 and 14 ("pseudo terminal") stay: they name the device.
-  - Line 20 (`defined in [View state](#view-state)`) changes to point at "### Hashed members".
-  - Lines 22 and 26 (`[View state](#view-state)`) change to point at "### Hashed members".
-  - Line 28 changes "[screen message](terminal-runtime.md#screen-message)" to "the screen message (the Hashed members section of this document)".
+  - Line 20 (`defined in [View state] (view-state anchor)`) changes to point at "### Hashed members".
+  - Lines 22 and 26 (`[View state] (view-state anchor)`) change to point at "### Hashed members".
+  - Line 28 changes "[screen message] (terminal-runtime.md screen-message anchor)" to "the screen message (the Hashed members section of this document)".
   - Line 54 changes "(`@soksak/plugin-api/screen-hash`, the golden vectors)" to "(the golden vectors)".
-  - Line 66 changes its link `#view-state` to "### Hashed members".
+  - Line 66 changes its link `view-state anchor` to "### Hashed members".
   - Lines 66 to 68 (the rows of the three drawn-screen vectors) stay, because their vectors stay.
   - Lines 74 to 98 change as decision 3 states: "### Hashed members" is added with the generic sentence; lines 74 to 98 except that sentence move to the sidecar specification.
   - Line 83 loses its link to `terminal-runtime.md` and keeps the generic page rule: the page computes the hash of the message with the parser of its plugin and `screenHash`.
@@ -62,7 +62,7 @@ Documents and moves named above. Until a gate passes, no behaviour changes.
   - Line 101 changes "it holds the terminal engine" to "it holds the replay engine of the sidecar".
   - Line 103 (the executable's exit rules) stays. Line 103 gains the sentence of decision 6 (the refusal requirement).
   - Lines 105 to 109 (the command) stay.
-- `docs/spec/terminal-runtime.md` and `.ko.md`: the table and the sentences of "Screen message" that define the members move to `replay.md` (decision 1). The sentences about the reply of `terminal.screen.read` (line 109) and the cursor shapes (line 117) stay, because they describe the terminal command. Line 117 changes its `replay.md#view-state` link to "### Hashed members". Line 124 (the `screenFromMessage` paragraph) moves to the plugin's specification (decision 4). Line 135 (`[Screen message](#screen-message)`) changes to `replay.md#hashed-members`.
+- `docs/spec/terminal-runtime.md` and `.ko.md`: the table and the sentences of "Screen message" that define the members move to `replay.md` (decision 1). The sentences about the reply of `terminal.screen.read` (line 109) and the cursor shapes (line 117) stay, because they describe the terminal command. Line 117 changes its `replay.mdview-state anchor` link to "### Hashed members". Line 124 (the `screenFromMessage` paragraph) moves to the plugin's specification (decision 4). Line 135 (`[Screen message] (screen-message anchor)`) changes to `replay.md#hashed-members`.
 - `docs/features.md`, `docs/features.ko.md` lines 880, 885 and 886 and `docs/plans/decouple-handoff.md`, `.ko.md` line 73: links repointed to the new anchors. The text of each history entry stays.
 - `CHANGELOG.md` and `CHANGELOG.ko.md` lines 538 to 550: links repointed; text unchanged.
 - `packages/plugin-api/test/validate.test.mjs:269` and `packages/plugin-api/test/screen-hash.test.mjs:32` comments: repointed.
