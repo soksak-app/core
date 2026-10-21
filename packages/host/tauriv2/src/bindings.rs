@@ -39,6 +39,12 @@ macro_rules! bindings {
         pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
             tauri::generate_handler![$($registered),*]
         }
+
+        /// Returns the names of the commands of the table, as the snake case names of their functions. The checks of the table use it.
+        #[cfg(test)]
+        pub(crate) fn command_names() -> &'static [&'static str] {
+            &[$(stringify!($registered)),*]
+        }
     };
     (@commands [$($registered:ident,)*]
         $(#[$meta:meta])* async fn $name:ident($($param:ident: $ty:ty),* $(,)?) -> $ret:ty $body:block

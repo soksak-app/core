@@ -1299,7 +1299,9 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 	}
 	stopping := time.Now()
 	sidecars.Stop()
-	if elapsed := time.Since(stopping); elapsed >= time.Second {
+	// Stop also waits for the standard input and output sidecar to exit, a child process whose exit takes longer under load than the
+	// 1 s bound that this check used before. The check is that the service does not make Stop wait the deadline, so the bound is the deadline.
+	if elapsed := time.Since(stopping); elapsed >= sidecars.StopTimeout {
 		t.Fatalf("stop took %v; the service answers close-owner and shutdown, so the stop must not wait the stop deadline of %v", elapsed, sidecars.StopTimeout)
 	}
 }

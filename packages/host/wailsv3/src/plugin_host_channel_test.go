@@ -430,3 +430,45 @@ func TestPluginHostStateEndsWithTheRemovalOrDisableOfThePlugin(t *testing.T) {
 		}
 	}
 }
+
+// contract: plugin-host.call.refuses-unlisted-commands
+func TestPluginHostChannelRefusesEveryCommandOutsideTheAllowlist(t *testing.T) {
+	// The plugin allowlist is the exposure reply and the region calls of a view. The names are fixtures of this check.
+	// Every other method of the Wails command table (the exported methods of Host) is refused by the channel of a plugin
+	// host page.
+	allowed := map[string]bool{}
+	for _, name := range []string{
+		"exposureReply",
+		"compositionDeclare", "compositionPlace",
+		"documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
+		"documentPost", "documentQuery", "documentInteractionState",
+		"imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
+	} {
+		allowed[name] = true
+	}
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	table := reflect.TypeOf(&Host{})
+	checked := 0
+	for i := 0; i < table.NumMethod(); i++ {
+		name := table.Method(i).Name
+		command := strings.ToLower(name[:1]) + name[1:]
+		if allowed[command] {
+			continue
+		}
+		checked++
+		if err := s.pluginHostMessage("probe", hostMessage(`{"id": 9, "command": "`+command+`"}`)); err != nil {
+			t.Fatalf("command %s: %v", command, err)
+		}
+		want := `{"error":{"code":-32000,"message":"plugin host call ` + command + ` is not served"},"id":9,"sok":1}`
+		if len(fake.posted) == 0 || fake.posted[len(fake.posted)-1] != want {
+			t.Fatalf("command %s posted %v, want the refusal %s", command, fake.posted, want)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("the command table has no command outside the allowlist")
+	}
+	if len(*events) != 0 {
+		t.Fatalf("a refused command was forwarded: %v", *events)
+	}
+}
