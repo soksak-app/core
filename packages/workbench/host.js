@@ -499,7 +499,7 @@ export const surfaces = native ? {
         // Whether this is the last update or updates continue. While they continue and the view grows,
         // the area that has not been rendered yet appears white.
         settled: record.settled !== false,
-        // The terminal raster must commit after the DOM frame of the page. Other
+        // The image raster must commit after the DOM frame of the page. Other
         // surfaces can commit consecutive frames immediately.
         waitForPresentation: record.surfaces.some(({ surface, visible }) =>
           visible === true && surface?.composition?.kind === "hybrid" &&

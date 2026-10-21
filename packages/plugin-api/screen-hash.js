@@ -102,7 +102,7 @@ function resolvedColor(name, color) {
 }
 
 /**
- * The screen that `screenHash` takes, from a `screen` message of a sidecar (docs/spec/terminal-runtime.md#screen-message).
+ * The screen that `screenHash` takes, from a `screen` message of a sidecar (docs/spec/persistent-services.md#screen-message).
  * The message carries `sequence`, `segment` and every member of the screen, with each cell's `fg` and `bg` resolved; the members that the
  * hash does not cover (`link`, the cursor shape and focus) are left out. A message that lacks a member throws an error that names
  * the member; the ranges of the values are checked by the screen hash. The page stores `message.sequence` and `message.segment` with the hash.

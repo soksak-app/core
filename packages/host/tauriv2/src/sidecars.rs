@@ -939,7 +939,7 @@ pub struct SidecarDeclaration {
 }
 
 /// A persistent sidecar whose running service has another version than the installed one
-/// (docs/spec/terminal-runtime.md#updates). `running` is `None` when the service sent no version; `sessions` counts
+/// (docs/spec/persistent-services.md#updates). `running` is `None` when the service sent no version; `sessions` counts
 /// the open surfaces of the application that have sent to the service.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OutdatedSidecar {
@@ -1543,7 +1543,7 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// The persistent sidecars whose running service has another version than the installed one, sorted by sidecar
-    /// (host.sidecars, docs/spec/terminal-runtime.md#updates).
+    /// (host.sidecars, docs/spec/persistent-services.md#updates).
     pub fn outdated(&self) -> Vec<OutdatedSidecar> {
         let state = self
             .core
@@ -1577,7 +1577,7 @@ impl<O: Owner> Sidecars<O> {
     /// Replaces the persistent service of the sidecar `name`, whose `hello` version differs from the installed
     /// version: it sends close-owner and shutdown and closes the transport, and the reconnection that follows starts
     /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
-    /// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
+    /// (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
     pub fn replace(&self, name: &str) -> Result<(), String> {
         let (outbox, close_waiters, shutdown_waiters, connected, owner_closed) = {
             let mut state = self
@@ -1732,7 +1732,7 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Closes the sessions of this application in each persistent service that are not in surfaces (surface, root), and
-    /// returns the number of closed sessions (docs/spec/terminal-runtime.md). A surface to which this process already
+    /// returns the number of closed sessions (docs/spec/persistent-services.md). A surface to which this process already
     /// sent a message is kept even if it is not in the list. When no service is running and there is no endpoint, there
     /// is no session, so it is skipped.
     pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
@@ -2132,11 +2132,11 @@ impl<O: Owner> Sidecars<O> {
     }
 }
 
-/// The upper limit of the time until the service answers hello (docs/spec/terminal-runtime.md).
+/// The upper limit of the time until the service answers hello (docs/spec/persistent-services.md).
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The default upper limit of the time until a newly started persistent service prints its endpoint
-/// (docs/spec/terminal-runtime.md).
+/// (docs/spec/persistent-services.md).
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends and
@@ -2192,7 +2192,7 @@ impl<O: Owner> Core<O> {
     /// a persistent service, so it is done with the lock released. Meanwhile requests of other sidecars do not wait,
     /// and requests of the same sidecar wait for that start to end. The second value is whether this call started it.
     /// lost is the revival of a lost persistent connection that runs this start, None for a send or a retain. While the
-    /// restart limit stops the sidecar, it starts nothing (docs/spec/terminal-runtime.md#service-transport).
+    /// restart limit stops the sidecar, it starts nothing (docs/spec/persistent-services.md#service-transport).
     fn ensure<'a>(
         core: &'a Arc<Self>,
         mut state: MutexGuard<'a, State<O>>,
@@ -2375,7 +2375,7 @@ impl<O: Owner> Core<O> {
 
     /// Connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival
     /// that runs it, or None: a revival that finds no live service counts the end of the service process before it
-    /// spawns, and the restart limit can stop it there (docs/spec/terminal-runtime.md#service-transport).
+    /// spawns, and the restart limit can stop it there (docs/spec/persistent-services.md#service-transport).
     fn start_persistent(
         core: &Arc<Self>,
         name: &str,
@@ -2564,7 +2564,7 @@ impl<O: Owner> Core<O> {
                 "sidecar {name}: service protocol mismatch in hello response"
             ));
         }
-        // A service that sends no version is of an earlier version (docs/spec/terminal-runtime.md#updates).
+        // A service that sends no version is of an earlier version (docs/spec/persistent-services.md#updates).
         let version = response
             .get("version")
             .and_then(|v| v.as_str())
@@ -2673,7 +2673,7 @@ impl<O: Owner> Core<O> {
             let _connection_guard = ConnectionGuard(Arc::clone(&reader_connected));
             let mut reader = BufReader::new(reader_stream);
             // None when the connection ends, and the reason when the service violates the protocol.
-            // (docs/spec/terminal-runtime.md#service-transport).
+            // (docs/spec/persistent-services.md#service-transport).
             let violation = (|| -> Option<String> {
                 let mut line = Vec::new();
                 loop {
@@ -2833,7 +2833,7 @@ impl<O: Owner> Core<O> {
                 }
                 // A connection that ends for a protocol violation while the host is not stopping is a failure of the
                 // service, which the restart limit counts here; the service keeps running
-                // (docs/spec/terminal-runtime.md#service-transport).
+                // (docs/spec/persistent-services.md#service-transport).
                 stop = violation.is_some() && !stopping && count_failure(&mut state, &sidecar);
                 let is_current = state
                     .running
@@ -2913,7 +2913,7 @@ impl<O: Owner> Core<O> {
             if let Some(reason) = violation {
                 // The service violated the protocol. The same message would end the next connection too, so it does not
                 // connect again at once, and the next send connects again through the creation path
-                // (docs/spec/terminal-runtime.md#service-transport).
+                // (docs/spec/persistent-services.md#service-transport).
                 log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
                 if stop {
                     report_restart_limit(&sidecar);
@@ -2966,7 +2966,7 @@ impl<O: Owner> Core<O> {
 }
 
 /// Waits until the process of the service that `replace` closed has ended, so the installed service starts after it
-/// (docs/spec/terminal-runtime.md#updates). A process that does not end within the stop timeout fails the replacement:
+/// (docs/spec/persistent-services.md#updates). A process that does not end within the stop timeout fails the replacement:
 /// the error line names the sidecar, and the reconnection that follows reaches the service that still runs, so the
 /// sidecar stays outdated.
 fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
@@ -3168,7 +3168,7 @@ struct Reply {
 }
 
 /// Checks the field types of an answer. If a type is wrong, it returns the reason to end the connection.
-/// (docs/spec/terminal-runtime.md#service-transport).
+/// (docs/spec/persistent-services.md#service-transport).
 fn reply_of(
     operation: &str,
     object: &serde_json::Map<String, serde_json::Value>,
@@ -3380,11 +3380,11 @@ impl RestartRecord {
 }
 
 /// The reason of the connection notice of a persistent service whose restarts the restart limit stopped
-/// (docs/spec/terminal-runtime.md#service-transport).
+/// (docs/spec/persistent-services.md#service-transport).
 const RESTART_LIMIT_REASON: &str = "restart limit";
 
 /// The revival of one lost persistent connection. `counted` is true once a failure of that disconnect is counted,
-/// because one disconnect counts at most one failure (docs/spec/terminal-runtime.md#service-transport).
+/// because one disconnect counts at most one failure (docs/spec/persistent-services.md#service-transport).
 #[derive(Default)]
 struct Revival {
     counted: std::cell::Cell<bool>,

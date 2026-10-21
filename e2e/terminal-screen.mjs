@@ -129,7 +129,7 @@ export async function cellBackgrounds(session, surface, cells) {
   }
 }
 
-/** Background of a selected cell when there is no highlight color. It is --rail of the current theme (docs/spec/terminal-runtime.md). */
+/** Background of a selected cell when there is no highlight color. It is --rail of the current theme (docs/spec/persistent-services.md). */
 export async function selectionBackground(session) {
   const { values } = await session.get("core.settings");
   const THEMES = await session.get("core.themes");

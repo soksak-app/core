@@ -35,6 +35,8 @@ Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별�
 | `../sidecars/vt` | Terminal engine: crate `vt-core`, `vt-alacritty`, 그리고 `vt-alacritty`의 sidecar `@soksak/sidecar-vt-alacritty` | `soksak-app/sidecar-vt` |
 | `../sidecars/files`, `../sidecars/shell` | Sidecar `@soksak/sidecar-files`, `@soksak/sidecar-shell` | `soksak-app/sidecar-files`. `shell`은 게시하지 않는다 |
 
+이름이 `@soksak/plugin-`으로 시작하는 `@soksak` scope의 package는 plugin이고(core의 `@soksak/plugin-api`는 제외), `@soksak/sidecar-`로 시작하는 package는 sidecar다. core source와 test는 이 중 어느 것도 부르지 않고, fixture는 `@scope/plugin-probe`, `@scope/sidecar-probe` 같은 다른 scope를 쓴다.
+
 Checkout은 repository를 이 sibling 폴더에 두고, repository 둘 이상이 필요한 workflow도 같은 방식으로 checkout한다. 그래서 `scripts/workspace-registry.json`의 상대 폴더가 어디서나 성립한다.
 
 Plugin이나 sidecar의 version은 자기 것이며 core version과 관계가 없다. Plugin의 `engines.soksak` 범위가 그 plugin을 설치하는 core version을 정한다. Plugin repository는 test를 위해 `@soksak/plugin-api`에 git 의존을 둔다. 자기 `package.json`이 지정한 core release tag와 `path:/packages/plugin-api`를 쓴다. Test가 `validateSidecar`로 `sidecar.json`을 검사하는 sidecar repository도 같은 방식으로 의존한다. Plugin이나 sidecar repository의 release workflow는 자기가 릴리스하는 tag와 무관하게, workflow가 `CORE_RELEASE`에 선언한 core release에서 `sok`를 build한다. Plugin repository는 build를 위해 sidecar에 의존하지 않고, `plugin.json`의 `dependencies`가 설치할 sidecar와 그 범위를 가리킨다. `make test`는 plugin repository의 test를 실행하고, `make pack OUT=<folder>`는 `sok plugin pack`으로 release를 쓴다. Sidecar repository에는 `make test`, `sidecar.json`이 가리키는 실행 파일을 쓰는 `make build`, 현재 platform으로 `sok sidecar release`를 실행하는 `make release OUT=<folder>`가 있다. Registry repository `../registry`는 제3자의 것을 포함해 새 plugin, sidecar, version을 항목 파일을 바꾸는 pull request로 받는다. 그 workflow가 pull request를 검사하고 merge한 뒤 index를 게시하며([공개 registry](registry.ko.md)), 그 `make build`는 `sok registry build`를 실행한다. `sok registry build`는 `index.json`을 쓰기 전에 모든 release를 그 항목과 대조한다.
@@ -259,6 +261,7 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
 | `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경에서 설치된 플러그인의 상태 모듈이 사이드카를 쓰면 로드가 실패한다. 기본값은 `true`다 |
 | `starter` | 선택. [첫 실행](installation.ko.md#첫-실행)이 설치하는 registry pack |
+| `install` | 선택. host가 없는 빌드가 애플리케이션을 스테이징하기 전에 설정 폴더에 설치하는 registry pack. browser 예제(`make browser-frontend`)는 pack `browser-example`의 plugin을 설치한다 |
 | `registry` | 선택. registry가 정해지지 않았을 때 첫 실행이 정하는 기본 registry index의 `https:` 또는 절대 `file:` URL([첫 실행](installation.ko.md#첫-실행)) |
 | `sidebars.links` | 기본 사이드바 선택: 일반 left/right 연결, 카드 네 변 연결, window-left/window-right 연결. 플러그인 left/right 형식, null 세트, 레일 연결은 거부한다. |
 

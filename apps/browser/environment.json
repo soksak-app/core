@@ -1,5 +1,6 @@
 {
   "runtime": "runtime",
+  "install": "browser-example",
   "sidecars": false,
   "workspace": {
     "focus": "terminal",

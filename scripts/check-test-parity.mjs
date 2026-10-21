@@ -2693,6 +2693,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F236",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "function packageOwner(name)" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "ownership audit classifies plugins and sidecars by their name prefix, without a list of real names" }],
+    expected: "The ownership audit names no real plugin or sidecar: it classifies a package by its name prefix. The decoupling items F236-1 to F236-12 keep their evidence in docs/features.md, and the moves they name are in docs/plans/decouple-handoff.md.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.35",
     implementation: [
       { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage" },
@@ -4521,15 +4528,17 @@ function isDeclaration(file) {
   return DECLARATION_FILE.test(file);
 }
 
+/**
+ * The owner of a package by its name (docs/spec/plugins.md#repositories): every `@soksak/plugin-*` package except
+ * `@soksak/plugin-api` is a plugin and every `@soksak/sidecar-*` package is a sidecar, so core holds no list of the
+ * packages of other repositories.
+ */
 function packageOwner(name) {
   const base = name.split("/").slice(0, 2).join("/");
   if (base === "@soksak/plugin-api" || base === "@soksak/runtime" || base === "@soksak/workbench") return "core";
-  if (base.startsWith("@soksak/plugin-") && (base.endsWith("-example") || [
-    "@soksak/plugin-browser", "@soksak/plugin-files", "@soksak/plugin-shell", "@soksak/plugin-terminal",
-  ].includes(base))) return "plugin";
-  if (base.startsWith("@soksak/sidecar-") && (base.endsWith("-example") || [
-    "@soksak/sidecar-files", "@soksak/sidecar-shell", "@soksak/sidecar-vt-alacritty", "@soksak/sidecar-vt-core",
-  ].includes(base))) return "sidecar";
+  if (base.startsWith("@soksak/plugin-")) return "plugin";
+  if (base.startsWith("@soksak/sidecar-")) return "sidecar";
+  // default: another name of the scope @soksak or a name of another scope has no owner that this audit compares.
   return null;
 }
 

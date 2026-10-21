@@ -2573,7 +2573,7 @@ fn service_runs(runs: &Path) -> usize {
     }
 }
 
-// The restart limit counts the failures of a persistent service (docs/spec/terminal-runtime.md#service-transport): three
+// The restart limit counts the failures of a persistent service (docs/spec/persistent-services.md#service-transport): three
 // failed starts that sends ran and the end of the service process that a revival finds are four failures, and a revival
 // that reattaches the live service counts none. The fourth failure stops the restarts before the revival spawns; a
 // refused send gets the connection notice, and the open of a surface of a dependent plugin clears the stop.
@@ -2743,7 +2743,7 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
 }
 
 // A connection that the reader ends for a protocol violation is a failure of the persistent service, so the fourth
-// violation within 300 seconds stops the restarts (docs/spec/terminal-runtime.md#service-transport).
+// violation within 300 seconds stops the restarts (docs/spec/persistent-services.md#service-transport).
 // contract: sidecars.restart.persistent-violation-counts
 #[test]
 fn persistent_protocol_violations_stop_the_restarts() {

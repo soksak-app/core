@@ -6,8 +6,8 @@ import { untilFolderState } from "./folder-wait.mjs";
 import { policyFile, readPolicy, requireStored } from "./log-policy.mjs";
 
 // The event files of the processes of the application (docs/spec/logging.md#files): the host and every sidecar service, each with its
-// main file (error, warn and info) and its debug file (debug and trace).
-const HOST_LOG = /^(host|vt|files|shell)-\d+-\d+(\.debug)?\.jsonl$/;
+// main file (error, warn and info) and its debug file (debug and trace). A sidecar file is named by its role, so the role is any name.
+const HOST_LOG = /^[a-z][a-z0-9-]*-\d+-\d+(\.debug)?\.jsonl$/;
 
 /**
  * The file that records the last read position of each file. It is placed next to the configuration folder, so there is
@@ -185,8 +185,18 @@ export async function untilEventLine(configDir, offsets, predicate, timeout, dec
   return lines.find(predicate);
 }
 
-// The prefixes of the events of the trace and the layer of the row that each one makes.
-const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host.sampler.", "sampler"], ["sidecar.vt.", "vt-core"]];
+// The prefixes of the events of the trace and the layer of the row that each one makes. The events `sidecar.<name>.*` of a sidecar
+// make the layer `<name>-core`; `sidecar.record.<level>` are the lines of its standard error, not trace events.
+const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host.sampler.", "sampler"]];
+const SIDECAR_TRACE = /^sidecar\.(?!record\.)([a-z][a-z0-9-]*)\./;
+
+// The prefix of a trace event and the layer of its row, or undefined when the event is not a trace event.
+function traceLayer(name) {
+  const known = TRACE_PREFIXES.find(([prefix]) => name.startsWith(prefix));
+  if (known) return known;
+  const sidecar = SIDECAR_TRACE.exec(name);
+  return sidecar ? [sidecar[0], `${sidecar[1]}-core`] : undefined;
+}
 
 /**
  * The events of the trace of the page, the host and the sampler as rows in the shape of the trace file of earlier runs: the
@@ -195,7 +205,7 @@ const TRACE_PREFIXES = [["page.trace.", "page"], ["host.trace.", "host"], ["host
 export function traceRows(events) {
   const rows = [];
   for (const event of events) {
-    const match = TRACE_PREFIXES.find(([prefix]) => event.event.startsWith(prefix));
+    const match = traceLayer(event.event);
     if (!match) continue;
     // The surface, the session and the correlation identifiers of an event are members of the line and not of its fields.
     const context = {};

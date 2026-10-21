@@ -15,6 +15,14 @@ test("each term has a definition and a list of rejected synonyms", () => {
   }
 });
 
+test("the replay and screen hash terms name no terminal", () => {
+  for (const name of ["replay", "screen hash"]) {
+    const entry = terms.find((term) => term.term === name);
+    assert.ok(entry, name);
+    assert.ok(!/terminal/i.test(entry.definition), `${name}: ${entry.definition}`);
+  }
+});
+
 test("a term is listed once and is no rejected synonym", () => {
   const names = terms.map((entry) => entry.term.toLowerCase());
   assert.equal(new Set(names).size, names.length);

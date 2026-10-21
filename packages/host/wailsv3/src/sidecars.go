@@ -203,11 +203,11 @@ type restartRecord struct {
 }
 
 // errRestartLimit is the reason of the connection notice of a persistent service whose restarts the restart limit stopped
-// (docs/spec/terminal-runtime.md#service-transport).
+// (docs/spec/persistent-services.md#service-transport).
 var errRestartLimit = errors.New("restart limit")
 
 // revival is the revival of one lost persistent connection. counted is true once a failure of that disconnect is counted, because one
-// disconnect counts at most one failure (docs/spec/terminal-runtime.md#service-transport).
+// disconnect counts at most one failure (docs/spec/persistent-services.md#service-transport).
 type revival struct{ counted bool }
 
 // serviceStartFailure is a start failure of the creation path of a persistent service that the restart limit counts: the service printed
@@ -323,7 +323,7 @@ type SidecarDeclaration struct {
 }
 
 // OutdatedSidecar is a persistent sidecar whose running service has another version than the installed one
-// (docs/spec/terminal-runtime.md#updates). Running is nil when the service sent no version; Sessions counts the open
+// (docs/spec/persistent-services.md#updates). Running is nil when the service sent no version; Sessions counts the open
 // surfaces of the application that have sent to the service.
 type OutdatedSidecar struct {
 	Sidecar   string  `json:"sidecar"`
@@ -719,7 +719,7 @@ func (c *Sidecars) Closing() []ClosingSurface {
 }
 
 // Outdated returns the persistent sidecars whose running service has another version than the installed one, sorted by
-// sidecar (host.sidecars, docs/spec/terminal-runtime.md#updates).
+// sidecar (host.sidecars, docs/spec/persistent-services.md#updates).
 func (c *Sidecars) Outdated() []OutdatedSidecar {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -766,7 +766,7 @@ type replacement struct {
 // Replace replaces the persistent service of the sidecar name, whose `hello` version differs from the installed
 // version: it sends close-owner and shutdown, closes the connection, and the reconnection that follows starts the
 // installed executable through the creation path and notifies the surfaces that sent to the sidecar
-// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
+// (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
 func (c *Sidecars) Replace(ctx context.Context, name string) error {
 	c.mu.Lock()
 	process, running := c.running[name]
@@ -1180,7 +1180,7 @@ func (c *Sidecars) closeOwnerAndShutdown(process *sidecar, ctx context.Context) 
 // waits for the process launch and for the connection and the authentication of a persistent service, so it happens with the lock released. Meanwhile the requests of other sidecars
 // do not wait, and the requests of the same sidecar wait for that start to end. started tells whether this call started it. lost is the revival
 // of a lost persistent connection that runs this start, nil for a send or a retain. While the restart limit stops the sidecar, it starts nothing;
-// a counted start failure of a persistent service can stop it (docs/spec/terminal-runtime.md#service-transport).
+// a counted start failure of a persistent service can stop it (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) process(name string, lost *revival) (process *sidecar, started bool, err error) {
 	for {
 		if process, ok := c.running[name]; ok {
@@ -1311,7 +1311,7 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 
 // processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
 // it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
-// there (docs/spec/terminal-runtime.md#service-transport).
+// there (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, error) {
 	program, _, ok := c.declaration(name)
 	if !ok {
@@ -1784,7 +1784,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	c.mu.Lock()
 	stopping := c.stopped
 	// A connection that ends for a protocol violation while the host is not stopping is a failure of the service, which the restart limit
-	// counts here; the service keeps running (docs/spec/terminal-runtime.md#service-transport).
+	// counts here; the service keeps running (docs/spec/persistent-services.md#service-transport).
 	stop := violation != "" && !stopping && c.countFailure(process.name)
 	waiters := make([]chan error, 0, len(process.closeWaiters))
 	for request, waiter := range process.closeWaiters {
@@ -1824,7 +1824,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	}
 	if violation != "" {
 		// The service violated the protocol. The same message would end the next connection too, so it is not connected again immediately, and the next send
-		// connects again through the creation path (docs/spec/terminal-runtime.md#service-transport).
+		// connects again through the creation path (docs/spec/persistent-services.md#service-transport).
 		LogError("sidecar "+process.name, "failed: "+violation)
 		if stop {
 			reportRestartLimit(process.name)
@@ -1861,7 +1861,7 @@ func recordReady(process *sidecar) {
 
 // readPersistentLines reads the lines of a persistent connection and passes replies and events. It returns an empty string when the connection ends and the reason when the protocol is
 // violated. When the part of a line before the line break exceeds sidecarMessageLimit bytes, it does not buffer more and
-// fails (docs/spec/terminal-runtime.md#service-transport).
+// fails (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) string {
 	scanner := bufio.NewScanner(reader)
 	// The buffer holds the limit and one line break. A longer line is bufio.ErrTooLong.
@@ -2035,7 +2035,7 @@ func (c *Sidecars) revivePersistent(name string) {
 }
 
 // awaitReplacedService waits until the process of the service that Replace closed has ended, so the installed service
-// starts after it (docs/spec/terminal-runtime.md#updates). A process that does not end within the stop timeout fails
+// starts after it (docs/spec/persistent-services.md#updates). A process that does not end within the stop timeout fails
 // the replacement: the error line names the sidecar, and the reconnection that follows reaches the service that still
 // runs, so the sidecar stays outdated.
 func (c *Sidecars) awaitReplacedService(name string) {

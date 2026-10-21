@@ -62,7 +62,7 @@ pub(crate) struct WindowData {
     pub composition_revisions: Mutex<HashMap<String, u64>>,
 }
 
-/// A reload of the app DOM replaces all plugin documents but does not end the terminal sessions.
+/// A reload of the app DOM replaces all plugin documents but does not end the sessions.
 ///
 /// The sidecars that a page reload reconnects for surface: the sidecars of its image regions and the running persistent
 /// sidecars to which surface has sent, each running persistent sidecar given with the surfaces that have sent to it,

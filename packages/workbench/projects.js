@@ -47,7 +47,7 @@ function projectTabs(project) {
 }
 
 /**
- * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project. A sidecar session of a surface that is not in this list has nowhere to attach again (docs/spec/terminal-runtime.md).
+ * Returns the tabs of the layouts of all spaces of all projects as surfaces with the root of their project. A sidecar session of a surface that is not in this list has nowhere to attach again (docs/spec/persistent-services.md).
  */
 export function layoutSurfaces() {
   return projects.flatMap((project) => project.spaces.flatMap((space) => {
@@ -255,7 +255,7 @@ async function readProjects() {
     await emptyToLibrary();
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
-    // The tabs of a removed project are in no layout. Whether this window removed the project or only showed it, this window first cleans up the surface modules of those surfaces and ends the sidecar sessions. If a module remains, it reopens the ended session, and when the folder of the removed project does not exist, that opening fails (F44). The host keeps the surface sessions of the remaining modules in retain (docs/spec/terminal-runtime.md).
+    // The tabs of a removed project are in no layout. Whether this window removed the project or only showed it, this window first cleans up the surface modules of those surfaces and ends the sidecar sessions. If a module remains, it reopens the ended session, and when the folder of the removed project does not exist, that opening fails (F44). The host keeps the surface sessions of the remaining modules in retain (docs/spec/persistent-services.md).
     const remaining = layoutSurfaces();
     await listener.retain(new Set(remaining.map((item) => item.surface)));
     await retainSidecarSessions(remaining);

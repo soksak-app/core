@@ -1524,7 +1524,7 @@ for (const app of Object.values(APPS)) {
     const top = view.document.y + view.y;
     const released = metrics.selectionReleases;
     await s.pointer(viewX + 0.5 * metrics.cellWidth, top + 0.5 * metrics.cellHeight, "down", { button: "left" });
-    // A selection covers a cell only when the pointer passes the horizontal middle of the cell (docs/spec/terminal-runtime.md). Dragging up to just before the middle of the fourth cell
+    // A selection covers a cell only when the pointer passes the horizontal middle of the cell (docs/spec/persistent-services.md). Dragging up to just before the middle of the fourth cell
     // selects the first three cells of the last row, and passing the middle selects four cells. The sidecar handles drags in order, so a screen read after a drag
     // names the frame that shows the selection, and cellBackgrounds reads the pixels after that frame is presented. The selection is visible only by color, so it is
     // measured in pixels.
