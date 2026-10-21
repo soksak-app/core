@@ -127,7 +127,6 @@ function mountDeclared(entry, record) {
     statusId,
     body: entry.body,
     options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
-    orientation: () => record.context.orientation,
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
     // (docs/spec/declared-ui.md#declared-status).
@@ -174,17 +173,15 @@ function sweep() {
 }
 
 /**
- * Applies the selected tab and the collapse to the elements and the mounts. At a change of orientation a declared section checks
- * its accepted value again, and a module section remounts, because its module can be chosen by orientation.
+ * Applies the selected tab and the collapse to the elements and the mounts. At a change of orientation a module section remounts,
+ * because its module can be chosen by orientation. A declared section keeps its accepted value and its source, because no declared
+ * value depends on orientation (docs/spec/declared-ui.md).
  */
 function apply(record, orientationChanged = false) {
   const choice = choiceOf(record.sidebar);
   for (const entry of record.entries) {
     const id = entry.section.id;
-    if (orientationChanged) {
-      if (entry.declared) entry.declared.orientationChanged();
-      else unmount(entry);
-    }
+    if (orientationChanged && !entry.declared) unmount(entry);
     if (record.layout === "tabs") {
       const selected = choice.tab === id;
       entry.tab.setAttribute("aria-selected", String(selected));
@@ -213,7 +210,7 @@ export function drawSet(container, sidebar, set, context) {
   const choice = choiceOf(sidebar);
   // default: a set without sections has no tab to select (null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
-  // The orientation is not part of the key: a change of orientation keeps the elements and checks the declared sections again.
+  // The orientation is not part of the key: a change of orientation keeps the elements, and a declared section keeps its value and source.
   const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.window === true]);
   let record = drawn.get(container);
   let orientationChanged = false;

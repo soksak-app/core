@@ -53,12 +53,13 @@ The field `kind` names each element's kind. `kind` is accepted on every root ele
 | `list` item | `detail` | string | no | Plain text, at most 500 code points, drawn after the label. |
 | `tree` | `key` | string | yes | Key rules below. |
 | `tree` | `empty` | string | yes | Plain text, at most 500 code points. Drawn in place of the nodes when `nodes` is empty. |
-| `tree` | `nodes` | array | yes | Root nodes. At most 5000 nodes in the whole tree, at most 16 levels (root nodes are level 1). A tree is not drawn in a horizontal section ([sidebar section form](#sidebar-section-form)). |
+| `tree` | `nodes` | array | yes | Root nodes. At most 5000 nodes in the whole tree, at most 16 levels (root nodes are level 1). |
 | `tree` node | `key` | string | yes | Unique among its siblings. |
 | `tree` node | `label` | string | yes | Plain text, at most 500 code points. |
 | `tree` node | `command`, `params`, `icon`, `enabled` | as `button` | no | A node with `command` runs it when its label is pressed. |
 | `tree` node | `expanded` | boolean | no | The plugin's value for a branch. Allowed only on a branch, so a leaf that carries it is rejected. Default `false`. [Status mapping](#status-mapping) gives its precedence. |
 | `tree` node | `selected` | boolean | no | Draws the node as selected. Default `false`. The plugin's value applies in every accepted value. |
+| `tree` node | `detail` | string | no | Plain text, at most 500 code points, drawn after the label as a list item's `detail` is drawn. |
 | `tree` node | `children` | array | no | Child nodes, with the same rules. A node whose `children` is present and not empty is a branch; any other node is a leaf. |
 | `status-line` | `key` | string | yes | Key rules below. |
 | `status-line` | `text` | string | yes | Plain text, at most 500 code points. Drawn as one line. |
@@ -82,7 +83,7 @@ Each limit is chosen by this document. Its reason is the work that the main page
 | List items | 1000 per list | Bounds the rows that one list draws per declared UI snapshot. |
 | Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per declared UI snapshot. |
 | Tree levels | 16 | Bounds the indent of a tree inside a section. |
-| Text field | 500 code points | Bounds the width of one line of text in a section. |
+| Text field | 500 code points | Bounds the length of one text field. It does not bound the drawn width: a tree box scrolls a label wider than the box; a list label wraps at spaces, and a label of one unbreakable word wider than the section is drawn past the section edge and scrolls with the set; status-line text is clipped at its box. |
 | Key | 128 code points | Bounds the identifier that the workbench keeps per element. |
 | Parameter keys | 16 per object | Bounds the parameter record that each binding keeps. |
 | Parameter key | 64 code points | Bounds the parameter record that each binding keeps. |
@@ -148,7 +149,7 @@ The source changes by these rules:
 
 - (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes, or the plugin override of the fixed window sidebar starts or stops applying.
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
-- (c) On a change of source, the workbench pulls the current value from the new source once. The workbench pulls only from the chosen source at the load of the main page, at a change of source and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
+- (c) On a change of source, the workbench pulls the current value from the new source once. The workbench pulls only from the chosen source at the load of the main page, at a change of source, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - A declared UI snapshot from a pair that is not the chosen source is acknowledged, then discarded without validation. A pull reply from such a pair, or a pull reply whose `seq` is lower than the `seq` of the last accepted value from its source, is discarded without validation. Neither changes the tree, the baseline, the kept state nor the error display.
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
@@ -168,8 +169,8 @@ A sidebar section with the `status` form is declared UI. A plugin that needs a v
 A declared section draws its root elements in order inside its body.
 
 - In vertical orientation the elements stack from top to bottom.
-- In horizontal orientation the elements sit left to right in one row that wraps at the section width. A `tree` in a horizontal section is rejected as a value, with `<pointer of the tree>: tree cannot be drawn in a horizontal section`. The check is a value check, because the orientation of the section is known when the value is accepted.
-The orientation check runs again when the section changes orientation, on the accepted value. A value that fails it is rejected with the rows of [Rejection](#rejection), its tree is removed, and the section is cleared. A change of orientation also pulls the current value from the source once, as on a change of source, because a value discarded for the previous orientation may be valid for the new one, and the source is the only holder of that value.
+- In horizontal orientation the elements sit left to right in one row that wraps at the section width. A `tree` takes one full line of that width, as the paragraph below describes.
+A tree in a horizontal section takes one full line of the section width and draws its outline as in vertical orientation, so the row wraps before and after it. A `list` keeps its content width, and shrinks to the line only when its content is wider. A tree's width follows its deepest visible row, so a branch that expands or collapses changes it; the full line keeps that change from reflowing the sibling elements. A tree box scrolls horizontally, with a thin scrollbar, when a label is wider than the box, so a label beyond the box is reached by scrolling. In a vertical section the tree box is the section width, so the scroll applies only when a label is wider than the section. No declared value depends on orientation: an orientation change neither checks nor pulls a declared value, and the accepted value stays drawn.
 
 A declared section keeps the header, the fold control, and the tab selection of a sidebar section without change. Its header is `core.sidebar.section.header`, and folding it runs `core.sidebar.section.fold`. A set of declared sections follows the set rules in [plugins](plugins.md#sections). A section of a plugin that is not loaded is not drawn, as for any section.
 
@@ -227,7 +228,6 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | A `command` name that is not declared | `undeclared command <name>` | the `command` field |
 | An icon name that is not in the core icon table | `unknown icon <name>` | the `icon` field |
 | `expanded` on a leaf node | `expanded is allowed only on a branch` | the `expanded` field |
-| A `tree` in a horizontal section | `tree cannot be drawn in a horizontal section` | the tree |
 
 Rejections that concern a manifest, the section form and the one-section rule, are reported when the manifest is read, with the reasons in [sidebar section form](#sidebar-section-form), and not with a value pointer.
 
