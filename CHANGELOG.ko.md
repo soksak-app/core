@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.9-2: plugin host web view의 platform 연산과 양쪽 host에서의 수명 주기. `document_view.m`의 `sp_plugin_host_create`는 `sp_document_create`가 이제 `pluginView`로 함께 쓰는 view 구성으로 plugin의 host web view를 만들고, window content view 자체에 zero frame으로 숨게 붙이며, input과 hit test를 받지 않고, `sp_document_close`가 없앤다. Go와 Rust host는 연산을 declare하고 darwin이 구현하며 Windows는 `plugin host web view is not implemented on windows`로 거절한다. 수명 주기는 창의 main page가 ready가 될 때 `host`를 declare한 설치되고 켜진 각 plugin의 host web view를 만들고, theme script와 함께 `sok://<plugin>/<page>`를 load하며, `host.trace.plugin-host.process-request {plugin, window}`를 쓰고, plugin의 remove나 disable, 다시 불러온 main page의 시작, window close에서 view들을 없앤다. `host`가 object가 아니거나 `page`가 비어 있지 않은 문자열이 아닌 manifest는 양쪽 host가 같은 문항으로 거절한다. contract case `plugin-host.create-loads-page`, `plugin-host.create-once-per-plugin`, `plugin-host.declaration-requires-page`, `plugin-host.change-disposes`, `plugin-host.reload-disposes`, `plugin-host.close-disposes`가 양쪽 host를 이 행동으로 묶는다. Red: 널을 돌려 주는 생성 stub에서 native 검사가 실패했고 아무것도 만들고 없애지 않는 stub에서 Go와 Rust 수명 주기 시험이 실패했다; Green: `plugin_host_view_test`, `document_view_test`, `view_channel_test`, 여섯 Go `TestPluginHost` 시험, Rust `plugin_host_test` 모듈의 여섯 시험과 37개 `documents_test` 시험이 통과했다.
 - F221: 확인: 전체 package 시험이 로컬에서 통과하고 수리 push의 CI 실행이 success로 끝났다.
 - F222: pre-push hook이 workflow 시험이 요구하는 형태인 `make -C "$(git rev-parse --show-toplevel)" push-check`를 다시 돌린다.
 - F223: window-check source 감사가 `report`로 관찰을 기록하는 timer를 받고, mock 시간으로 도는 harness 시험에는 timer 규칙을 적용하지 않는다. 이유는 주석에 적는다.

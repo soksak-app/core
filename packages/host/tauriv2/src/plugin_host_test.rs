@@ -3,9 +3,10 @@
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::plugin_host::{self, HostPlugin, HostView, PluginHosts};
 
-#[path = "support/folder.rs"]
+use crate::plugin_host::{self, HostPlugin, HostView, PluginHosts};
+
+#[path = "../tests/support/folder.rs"]
 mod folder;
 
 /// The record of the platform fake: the created host webviews with their configuration, the addresses that they load,

@@ -66,6 +66,9 @@ pub mod performance;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugin_host;
+#[cfg(test)]
+#[path = "plugin_host_test.rs"]
+mod plugin_host_test;
 pub mod plugins;
 pub mod presentation_wait;
 #[cfg(feature = "diagnostics")]
