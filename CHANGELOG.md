@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-a-5: A view overlay is traced to the native mask: `dom_overlays` keeps the declared order, insets and visibility, and `overlay_values` sends five values per overlay. The unit tests of both steps pass 2 of 2, and the native mask is covered by the view-surface check of the geometry test.
 - F238-a-4: A native hit test under a visible view overlay returns the DOM hit of the overlay or nothing, and never a native view. The surface hit test takes its point in the superview coordinates, as AppKit passes it, so a surface at a non-zero origin is hit correctly. The new hit-test checks of the geometry test failed on the unchanged code (5 cases) and pass now.
 - F238-a-14: The plugin-facing native handle is deny by default: `runtime.native.call` and `call` send only `exposureReply`, a host command outside the plugin allowlist is refused and never reaches the host. The allowlist is checked against the host command table. The test that forwarded `linkOpen` failed on the unchanged handle and passes now.
 - F238-a-2: `runtime.native.on` of a plugin and of a view accepts only the four region events, `document-stream`, `document-state`, `document-message` and `image-event`; a view-bridge event is refused. The subscription test failed on the unchanged gate, which subscribed the view-bridge events, and passes now (2 of 2).

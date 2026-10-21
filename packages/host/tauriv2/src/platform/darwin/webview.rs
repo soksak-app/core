@@ -191,10 +191,8 @@ pub fn hidden(webview: &PlatformWebview, hidden: bool) {
     unsafe { webviewSetSurfaceHidden(webview.inner().cast(), hidden) }
 }
 
-pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
-    unsafe extern "C" {
-        fn webviewSetSurfaceOverlays(view: *mut c_void, values: *const f64, count: usize);
-    }
+/// The values of the native overlay call: five per overlay, the left, top, right and bottom insets and then 1 when visible or 0 when not.
+fn overlay_values(overlays: &[DOMOverlay]) -> Vec<f64> {
     let mut values = Vec::with_capacity(overlays.len() * 5);
     for overlay in overlays {
         values.extend_from_slice(&[
@@ -205,8 +203,20 @@ pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
             if overlay.visible { 1.0 } else { 0.0 },
         ]);
     }
+    values
+}
+
+pub fn overlays(surface: Handle, overlays: &[DOMOverlay]) {
+    unsafe extern "C" {
+        fn webviewSetSurfaceOverlays(view: *mut c_void, values: *const f64, count: usize);
+    }
+    let values = overlay_values(overlays);
     unsafe { webviewSetSurfaceOverlays(surface as *mut c_void, values.as_ptr(), overlays.len()) }
 }
+
+#[cfg(test)]
+#[path = "webview_overlay_test.rs"]
+mod overlay_test;
 
 /// Returns the current position and size of the webview in page coordinates.
 pub fn frame(webview: &PlatformWebview) -> [f64; 4] {
