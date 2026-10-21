@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-d-9: Confirmed that F230 already implements and documents the horizontal declared-tree behavior in English and Korean. The owning workbench tests pass 72/72, covering horizontal acceptance, node detail, full-line placement, and scrolling.
+
 - F238-c-27: The screenHash contract runner rejects steps with no operation or multiple operations before execution. Red: the malformed-step assertion failed when the old runner reported an unknown operation as an ordinary error result; the corrected owning test passes 6/6.
 
 - F238-c-27: Publish ordered `validateDiagnostics` calls for a valid extension, duplicate names, missing surfaces, invalid module paths, and unknown fields. Core tests execute each call against the validator; the published-case regression and exposure tests pass 21/21. The owning package test suite passes 377/377, exercising all published cases.
