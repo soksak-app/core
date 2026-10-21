@@ -18,19 +18,6 @@ const UNREGISTERED_COMMAND = 1002;
 const FAILED_COMMAND = -32000;
 /** The code of a request whose parameters are invalid: EXPOSURE_ERRORS.invalidParams of index.js, which this module does not import. */
 const INVALID_PARAMS = -32602;
-/** The modifiers of a key of the shortcut table; cmd is the Command key on macOS and the Control key on the other hosts. */
-const MODIFIERS = ["shift", "opt", "cmd"];
-
-/** Whether the keydown event is the key of a row of the shortcut table, such as `opt+cmd+h` or `Escape`. */
-function isKey(key, event, mac) {
-  const parts = key.split("+");
-  const name = parts.pop();
-  if (!parts.every((part) => MODIFIERS.includes(part))) return false;
-  const [command, other] = mac ? [event.metaKey, event.ctrlKey] : [event.ctrlKey, event.metaKey];
-  return event.key.toLowerCase() === name.toLowerCase() && !other && command === parts.includes("cmd")
-    && event.shiftKey === parts.includes("shift") && event.altKey === parts.includes("opt");
-}
-
 /** Runs a command handler and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
 async function runCommand(run, params) {
   try {
@@ -133,35 +120,6 @@ export function createViewBridge({ handler, report }) {
       calls.request("runtime.log.levels", null).then((next) => { levels = next; }, recordError("log levels"));
     }
     return levels === null || levels.includes(level);
-  };
-  // The shortcut table of the view (docs/spec/native-surfaces.md#view-surfaces, input), null until it is registered. The view
-  // decides each key from it synchronously; before it is registered each key keeps its default action, and the first key of the
-  // document sends runtime.shortcuts.missing, which the page records as page.view.shortcut-table-missing.
-  let shortcutTable = null;
-  let missingSent = false;
-  const mac = /Mac/.test(window.navigator.platform);
-  window.addEventListener("keydown", (event) => {
-    if (shortcutTable === null) {
-      if (missingSent) return;
-      missingSent = true;
-      calls.request("runtime.shortcuts.missing", null).catch(recordError("shortcut table"));
-      return;
-    }
-    const row = shortcutTable.find((entry) => isKey(entry.key, event, mac));
-    // A key of the native menu reaches the menu first, a key of the view is handled by the view, and a key that is not in the
-    // table keeps its default action; only a key of the workbench is prevented and passed on.
-    if (row?.owner !== "workbench") return;
-    event.preventDefault();
-    calls.request("runtime.shortcuts.run", { key: row.key }).catch(() => {
-      // silent: the page writes page.input.shortcut.failed for a passed command that fails, and the call layer reports a call
-      // that ends without a reply; the default action is not run again.
-    });
-  }, { capture: true });
-  const shortcuts = {
-    /** Registers the shortcut table of the view: the page answers runtime.shortcuts.read with the rows that hold in a view. */
-    register: () => calls.request("runtime.shortcuts.read", null).then((rows) => {
-      shortcutTable = rows;
-    }),
   };
   // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
   const prefix = `plugin.${plugin}.`;
@@ -334,5 +292,5 @@ export function createViewBridge({ handler, report }) {
       point, plugin: entry.plugin, index: entry.index, reason: reason instanceof Error ? reason.message : String(reason),
     }).then(() => undefined),
   })));
-  return { calls, snapshots, runtime, commands, exposure, contributions, shortcuts };
+  return { calls, snapshots, runtime, commands, exposure, contributions };
 }

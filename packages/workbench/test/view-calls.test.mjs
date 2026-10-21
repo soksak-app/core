@@ -275,41 +275,35 @@ test("runtime.contributions.fail refuses an item that is not connected and a rea
   assert.deepEqual(ran.failed, []);
 });
 
-test("runtime.shortcuts.read returns the rows of the shortcut table that hold while a view has keyboard focus", async () => {
+test("runtime.shortcuts.read returns the rows of the workbench and view owners, and no native menu row", async () => {
   const { options } = fakes();
   const result = await answerViewCall({ id: 1, command: "runtime.shortcuts.read", params: null }, options).catch((error) => error);
   assert.deepEqual(result, [
-    { key: "cmd+q", owner: "native menu", command: "framework role" },
+    { key: "cmd+k", owner: "workbench", command: "core.focus.set" },
     { key: "cmd+j", owner: "workbench", command: "core.probe.jump" },
     { key: "Escape", owner: "view", command: "none" },
   ]);
 });
 
-test("runtime.shortcuts.missing writes page.view.shortcut-table-missing with the plugin at error level", async () => {
+test("runtime.shortcuts.missing and runtime.shortcuts.run are not served and write nothing", async () => {
   const { ran, options } = fakes();
-  const result = await answerViewCall({ id: 1, command: "runtime.shortcuts.missing", params: null }, options).catch((error) => error);
-  assert.equal(result, null);
-  assert.deepEqual(ran.events, [{ level: "error", event: "page.view.shortcut-table-missing", fields: { plugin: "probe" } }]);
-});
-
-test("runtime.shortcuts.run runs the command of a workbench row of the view table and refuses any other key", async () => {
-  const { ran, options } = fakes();
-  const result = await answerViewCall({ id: 1, command: "runtime.shortcuts.run", params: { key: "cmd+j" } }, options).catch((error) => error);
-  assert.deepEqual(result, { core: true });
-  assert.deepEqual(ran.core, [{ name: "core.probe.jump", params: {} }]);
-  for (const [id, key] of [[2, "cmd+k"], [3, "cmd+q"], [4, "Escape"]]) {
-    await assert.rejects(answerViewCall({ id, command: "runtime.shortcuts.run", params: { key } }, options),
-      new RegExp(`view call runtime\\.shortcuts\\.run: ${key.replace("+", "\\+")} is not a workbench shortcut of a view`));
+  for (const command of ["runtime.shortcuts.missing", "runtime.shortcuts.run"]) {
+    await assert.rejects(answerViewCall({ id: 1, command, params: { key: "cmd+j" } }, options),
+      new RegExp(`view call ${command.replace(/\./g, "\\.")} is not served`));
   }
-  assert.equal(ran.core.length, 1);
+  assert.deepEqual(ran.events, []);
+  assert.deepEqual(ran.core, []);
 });
 
-test("a passed shortcut whose command fails writes page.input.shortcut.failed and replies with the error", async () => {
+test("runtime.command runs a core command through runCore, and a failed workbench row writes page.input.shortcut.failed", async () => {
   const { ran, options } = fakes();
+  assert.deepEqual(await answerViewCall({ id: 1, command: "core.probe.jump", params: {} }, options), { core: true });
+  assert.deepEqual(ran.core, [{ name: "core.probe.jump", params: {} }]);
   options.runCore = async () => { throw new Error("no focus target"); };
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.shortcuts.run", params: { key: "cmd+j" } }, options), /no focus target/);
-  assert.deepEqual(ran.events, [{ level: "error", event: "page.input.shortcut.failed",
-    fields: { plugin: "probe", key: "cmd+j", command: "core.probe.jump" } }]);
+  await assert.rejects(answerViewCall({ id: 2, command: "core.probe.jump", params: {} }, options), /no focus target/);
+  assert.deepEqual(ran.events, [{ level: "error", event: "page.input.shortcut.failed", fields: { plugin: "probe", command: "core.probe.jump" } }]);
+  await assert.rejects(answerViewCall({ id: 3, command: "core.picker.close", params: {} }, options), /no focus target/);
+  assert.equal(ran.events.length, 1, "a core command that is not a workbench row wrote a shortcut record");
 });
 
 test("runtime.textSize.read returns the scale of the surface and runtime.textSize.on subscribes once", async () => {

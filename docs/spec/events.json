@@ -707,25 +707,15 @@
       },
       "description": "A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; seq is the number of the last pressure report, 0 before the first."
     },
-    "page.view.shortcut-table-missing": {
-      "layer": "page",
-      "class": "input",
-      "level": "error",
-      "fields": {
-        "plugin": "string"
-      },
-      "description": "A view received a key before it registered its shortcut table; the key kept its default action. Written once per view document."
-    },
     "page.input.shortcut.failed": {
       "layer": "page",
       "class": "input",
       "level": "error",
       "fields": {
         "plugin": "string",
-        "key": "string",
         "command": "string"
       },
-      "description": "The command of a workbench shortcut that a view passed on failed; the view prevented the default action of the key, which is not run again."
+      "description": "A command that a view ran through runtime.command failed, and the command is the command of a workbench shortcut row (packages/workbench/shortcuts.json); the view ran it for its own forwarded key."
     },
     "page.window.operation": {
       "layer": "page",

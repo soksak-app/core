@@ -127,7 +127,6 @@ var eventClasses = map[string]Class{
 	"page.trace.picker.close":                 ClassCall,
 	"page.trace.surface.mount":                ClassCall,
 	"page.update.operation":                   ClassCall,
-	"page.view.shortcut-table-missing":        ClassInput,
 	"page.window.operation":                   ClassCall,
 	"sok.command":                             ClassCall,
 	"sok.panic":                               ClassLifecycle,

@@ -169,7 +169,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.trace.picker.close" => Some(Class::Call),
         "page.trace.surface.mount" => Some(Class::Call),
         "page.update.operation" => Some(Class::Call),
-        "page.view.shortcut-table-missing" => Some(Class::Input),
         "page.window.operation" => Some(Class::Call),
         "sok.command" => Some(Class::Call),
         "sok.panic" => Some(Class::Lifecycle),

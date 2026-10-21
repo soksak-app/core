@@ -114,7 +114,6 @@ const EXACT = new Map([
   ["page.trace.picker.close", "call"],
   ["page.trace.surface.mount", "call"],
   ["page.update.operation", "call"],
-  ["page.view.shortcut-table-missing", "input"],
   ["page.window.operation", "call"],
   ["sok.command", "call"],
   ["sok.panic", "lifecycle"],

@@ -391,36 +391,16 @@ const keydown = (init) => {
   return event;
 };
 
-test("a key before the shortcut table is registered keeps its default action and sends runtime.shortcuts.missing once", (t) => {
+test("the bridge sends no call for a key and has no shortcut table", (t) => {
   const { posted } = setup(t);
-  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  const before = posted.length;
-  const first = keydown({ key: "j", ctrlKey: true });
-  keydown({ key: "a" });
-  assert.equal(first.defaultPrevented, false);
-  assert.deepEqual(posted.slice(before), [{ sok: 1, id: 1, command: "runtime.shortcuts.missing", params: null }]);
-});
-
-test("after shortcuts.register, a workbench key is prevented and passed on, and the other keys keep their default action", async (t) => {
-  const { posted, host } = setup(t);
   const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  assert.equal(typeof bridge.shortcuts?.register, "function", "the view bridge has no shortcuts.register");
-  const registering = bridge.shortcuts.register();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.shortcuts.read", params: null });
-  host({ sok: 1, id: 1, result: [
-    { key: "cmd+q", owner: "native menu", command: "framework role" },
-    { key: "cmd+j", owner: "workbench", command: "core.probe.jump" },
-    { key: "Escape", owner: "view", command: "none" },
-  ] });
-  assert.equal(await registering, undefined);
   const before = posted.length;
-  // The page is not on macOS in jsdom, so cmd is the Control key.
-  assert.equal(keydown({ key: "j", ctrlKey: true }).defaultPrevented, true);
-  assert.deepEqual(posted.slice(before), [{ sok: 1, id: 2, command: "runtime.shortcuts.run", params: { key: "cmd+j" } }]);
-  assert.equal(keydown({ key: "q", ctrlKey: true }).defaultPrevented, false);
-  assert.equal(keydown({ key: "Escape" }).defaultPrevented, false);
-  assert.equal(keydown({ key: "j", ctrlKey: true, shiftKey: true }).defaultPrevented, false);
-  assert.equal(posted.length, before + 1, "only the workbench key is passed on, and no table-missing record is sent");
+  // A workbench key, a view key and an ordinary key keep their default action: the view decides, and the bridge forwards nothing.
+  for (const init of [{ key: "j", ctrlKey: true }, { key: "Escape" }, { key: "a" }, { key: "k", metaKey: true }]) {
+    assert.equal(keydown(init).defaultPrevented, false, `the bridge prevented ${JSON.stringify(init)}`);
+  }
+  assert.equal(posted.length, before, "the bridge sent a call for a key");
+  assert.equal(bridge.shortcuts, undefined, "the view bridge still has a shortcut table");
 });
 
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {

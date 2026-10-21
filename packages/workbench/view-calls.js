@@ -84,7 +84,7 @@ const CORE_ROOT = "sok://core";
  * any focus and a row whose owner is the view. A workbench row of another context holds only while the page has the focus.
  */
 function viewShortcuts(shortcuts) {
-  return shortcuts.filter((row) => row.when === "Any focus" || row.owner === "view")
+  return shortcuts.filter((row) => row.owner === "workbench" || row.owner === "view")
     .map(({ key, owner, command }) => ({ key, owner, command }));
 }
 
@@ -198,21 +198,6 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     }
     case "runtime.shortcuts.read":
       return viewShortcuts(shortcuts);
-    case "runtime.shortcuts.missing":
-      // The view sends this at the first key of its document before its table is registered; the key kept its default action.
-      emitEvent("error", "page.view.shortcut-table-missing", { plugin });
-      return null;
-    case "runtime.shortcuts.run": {
-      const fields = objectOf(command, params);
-      const row = viewShortcuts(shortcuts).find((entry) => entry.owner === "workbench" && entry.key === fields.key);
-      if (!row) throw new Error(`view call ${command}: ${fields.key} is not a workbench shortcut of a view`);
-      try {
-        return await runCore(row.command, {});
-      } catch (error) {
-        emitEvent("error", "page.input.shortcut.failed", { plugin, key: row.key, command: row.command });
-        throw error;
-      }
-    }
     case "runtime.contributions": {
       // The module of an item is a path of the main page; a view imports it from the core root.
       const fields = objectOf(command, params);
@@ -239,9 +224,21 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     default:
       break;
   }
+  // A core command that the view runs through runtime.command. A failure is recorded only for the command of a workbench shortcut row,
+  // which the view ran for its own forwarded key (docs/spec/native-surfaces.md#view-surfaces); any other failure is only replied.
+  const runForwarded = async (name, args) => {
+    try {
+      return await runCore(name, args);
+    } catch (error) {
+      if (shortcuts.some((row) => row.owner === "workbench" && row.command === name)) {
+        emitEvent("error", "page.input.shortcut.failed", { plugin, command: name });
+      }
+      throw error;
+    }
+  };
   const dot = command.indexOf(".");
   const owner = dot < 0 ? "" : command.slice(0, dot);
-  if (owner === "core") return runCore(command, params);
+  if (owner === "core") return runForwarded(command, params);
   if (owner === plugin) return runOwned(command, params, plugin);
   if (owner === "") throw new Error(`view call ${command} names no owner`);
   // The tab and runtime names that the switch above does not serve are refused as not served, not as the names of another owner.
