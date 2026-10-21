@@ -91,7 +91,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 ## 섹션
 section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 settings·저장된 project data가 그것들을 참조하고, 이름을 바꾸면 어떤 마이그레이션도 닿지 않는 저장 file이 깨진다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
 
-섹션은 `module`과 `status` 가운데 정확히 하나를 선언한다. `status`는 같은 plugin이 `exposes.status`에 선언한 status 이름이다. workbench는 그 status의 값을 선언된 UI로 그리며, 섹션은 모듈이 없고 `mount` 호출이 없으며 `context.status`와 `context.bind`도 없다. 둘 다 선언하거나 둘 다 선언하지 않은 섹션은 manifest를 읽을 때 거부하며, status 하나는 섹션 하나만 뒷받침한다. 형태와 값 규칙은 [선언된 UI](declared-ui.ko.md#사이드바-section-형태)에 있다. `module` 형태는 지금의 형태이며 workbench 페이지에서 plugin 코드를 실행한다. [plugin 프로세스](../plans/plugin-processes.ko.md)의 규칙 1은 이를 금지하므로, 페이지 마운트와 함께 제거되며 그 전까지 두 형태가 함께 있다.
+섹션은 `module`과 `status` 가운데 정확히 하나를 선언한다. `status`는 같은 plugin이 `exposes.status`에 선언한 status 이름이다. 둘 다 선언하거나 둘 다 선언하지 않은 섹션은 manifest를 읽을 때 거부하며, status 하나는 섹션 하나만 뒷받침한다. 형태와 값 규칙은 [선언된 UI](declared-ui.ko.md#사이드바-section-형태)에 있다. `module` 형태는 지금의 형태이며 workbench 페이지에서 plugin 코드를 실행한다. [plugin 프로세스](../plans/plugin-processes.ko.md)의 규칙 1은 이를 금지하므로, 페이지 마운트와 함께 제거되며 그 전까지 두 형태가 함께 있다.
 
 섹션의 `module`은 두 방향에 공통인 JavaScript 경로 하나 또는 `{horizontal, vertical}` 경로 객체다. 객체는 두 키를 모두 요구하며 그 외 키를 허용하지 않는다. 각 값은 plugin 내부의 상대 `.js` 경로이고 두 파일 모두 배포 목록에 있어야 한다. 한 방향을 다른 방향으로 대체하지 않는다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택한다. 워크벤치는 선택한 구현의 `mount(root, context)`에 `context.orientation`을 전달하고 `core.sidebars`에 방향을 공개한다. 방향이 바뀌면 기존 구현을 해제하고 새 구현을 마운트하며 섹션 선택·접힘 상태는 유지한다. 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다.
 

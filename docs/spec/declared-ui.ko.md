@@ -65,7 +65,7 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 
 키 규칙: 키는 `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, `-`로 이루어진 1자에서 128자의 문자열이다. 키는 정확한 문자열로 비교한다.
 
-텍스트 규칙: 텍스트 필드는 평문이다. workbench는 그것을 마크업이 아니라 텍스트 내용으로 그린다. 제어 문자(U+0000에서 U+001F, 또는 U+007F)를 담은 텍스트 필드는 거부한다.
+텍스트 규칙: 텍스트 필드는 평문이다. workbench는 그것을 마크업이 아니라 텍스트 내용으로 그린다. 제어 문자(U+0000에서 U+001F, U+007F, 또는 U+0080에서 U+009F)를 담은 텍스트 필드는 거부한다.
 
 `status-line`에는 tone과 오류 값이 없다. 오류는 응용 프로그램 로그에 기록하는 표시 경로([AGENTS](../../AGENTS.ko.md))를 거쳐야 사용자에게 보이므로, 선언된 요소는 오류를 그릴 수 없다.
 
@@ -73,14 +73,14 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 
 ## 한도
 
-각 한도는 이 문서가 선택한 값이다. 그 이유는 main page가 snapshot 하나에 하는 일이다. 값을 UI thread에서 파싱하고 검사하고 그리며, 그린 트리를 모두 문서에 둔다. 표의 한도가 계약 값이다.
+각 한도는 이 문서가 선택한 값이다. 그 이유는 main page가 선언된 UI snapshot 하나에 하는 일이다. 값을 UI thread에서 파싱하고 검사하고 그리며, 그린 트리를 모두 문서에 둔다. 표의 한도가 계약 값이다.
 
 | 한도 | 값 | 이유 |
 | --- | --- | --- |
-| 직렬화한 값 | 1048576바이트 | snapshot마다 값 전체를 UI thread에서 파싱하고 검사한다. |
+| 직렬화한 값 | 1048576바이트 | 선언된 UI snapshot마다 값 전체를 UI thread에서 파싱하고 검사한다. |
 | 루트 요소 | 64 | section 본문 하나가 담는 별도 블록의 수다. |
-| list 항목 | list마다 1000 | list 하나가 snapshot마다 그리는 행을 제한한다. |
-| tree 노드 | tree마다 5000 | tree 하나가 snapshot마다 그리는 노드를 제한한다. |
+| list 항목 | list마다 1000 | list 하나가 선언된 UI snapshot마다 그리는 행을 제한한다. |
+| tree 노드 | tree마다 5000 | tree 하나가 선언된 UI snapshot마다 그리는 노드를 제한한다. |
 | tree 단계 | 16 | section 안에서 tree의 들여쓰기를 제한한다. |
 | 텍스트 필드 | 500자 | section 안 텍스트 한 줄의 너비를 제한한다. |
 | 키 | 128자 | workbench가 요소마다 보관하는 식별자를 제한한다. |
@@ -112,13 +112,15 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 | `tree` 가지의 펼침 제어 | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | 사이드바 section 머리 | `core.sidebar.section.fold` | `{sidebar, section}` |
 
-선언된 UI 값의 명령 이름은 `<plugin>.<name>`이며, `<plugin>`은 status의 plugin이다. core의 이름이나 다른 plugin의 이름은 거부한다. plugin 값은 자기 plugin의 명령만 이름으로 지정하기 때문이다. 선언되지 않은 이름은 사용자가 요소를 누를 때가 아니라 snapshot을 받을 때 거부한다. binder가 표시 시점에 선언되지 않은 이름을 거부하기 때문이다([노출](exposure.ko.md#사용자-인터페이스)).
+선언된 UI 값의 명령 이름은 `<plugin>.<name>`이며, `<plugin>`은 status의 plugin이다. core의 이름이나 다른 plugin의 이름은 거부한다. plugin 값은 자기 plugin의 명령만 이름으로 지정하기 때문이다. 선언되지 않은 이름은 사용자가 요소를 누를 때가 아니라 선언된 UI snapshot을 받을 때 거부한다. binder가 표시 시점에 선언되지 않은 이름을 거부하기 때문이다([노출](exposure.ko.md#사용자-인터페이스)).
 
-`core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 `tree` 요소가 구현될 때 그 처리기와 함께 선언한다. 이 명령은 설정 연산이다. 같은 인수로 다시 실행해도 한 번 실행한 것과 같은 결과다. `expanded` 인수는 제어가 요청하는 상태이며, 그릴 때 가지가 보이던 상태의 반대다. 명령은 `status`의 트리 `tree`에서 `path`에 있는 가지의 유지 상태를 설정하며, plugin에는 전달하지 않는다. `path`는 루트 노드에서 가지까지의 노드 key 배열이다. 그려진 가지가 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다.
+`core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 그 처리기와 함께 선언한다. 이 명령은 설정 연산이다. 같은 인수로 다시 실행해도 한 번 실행한 것과 같은 결과다. `expanded` 인수는 제어가 요청하는 상태이며, 그릴 때 가지가 보이던 상태의 반대다. 명령은 `status`의 트리 `tree`에서 `path`에 있는 가지의 유지 상태를 설정하며, plugin에는 전달하지 않는다. `path`는 루트 노드에서 가지까지의 노드 key 배열이다. 그려진 가지가 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다. 그 메시지의 `<path>`는 문자열의 JSON 배열이다.
 
 제어의 다음 요청은 workbench가 제어를 그릴 때의 유지 상태 값을 담는다. workbench가 다시 그리기 전의 반복 요청은 같은 인수를 보내므로 같은 상태를 설정한다. 다시 그린 뒤의 요청은 다시 그린 가지의 상태를 담는다.
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
+네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다.
+
 
 DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 이름 `core.sidebar.section.control`과, 자기 `key`를 담은 속성 `data-key`를 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
 
@@ -135,9 +137,17 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 - 받아들인 값에서, 이전에 받아들인 값의 `expanded`와 다르거나 새로운 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 유지된 상태가 없는 새 가지는 plugin의 값을 받는다.
 - 거부된 값은 유지된 상태를 바꾸지 않는다. 위 비교는 마지막으로 받아들인 값을 쓴다.
 - `selected`에는 유지된 상태가 없다. 이를 바꾸는 core 명령이 없으므로, plugin의 값이 받아들인 모든 값에 적용된다.
-- 유지된 상태는 받아들인 값에 그 경로가 없을 때, 그리고 plugin 프로세스가 다시 시작할 때 지운다. workbench는 plugin 재시작 때 이전 프로세스의 snapshot에 대해 [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2가 하는 것처럼 유지된 상태를 버린다.
+- 유지된 상태는 받아들인 값에 그 경로가 없을 때, 그리고 plugin 프로세스가 다시 시작할 때 지운다. workbench는 plugin 재시작 때 이전 프로세스의 선언된 UI snapshot에 대해 [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2가 하는 것처럼 유지된 상태를 버린다.
 - 유지된 상태는 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 값으로 되돌아간다.
-- 선언된 status는 plugin 프로세스가 제공한다. workbench는 그 status를 먼저 등록한 것에서 값을 읽는다. 첫째, 사이드바를 가진 카드의 활성 탭의 view이며, 그 view의 페이지가 status를 등록했을 때다. 카드 사이드바에서는 그 사이드바를 가진 카드다. 고정 창 사이드바에서는 재정의가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이며, 재정의가 적용되지 않으면 이 단계를 건너뛴다. 둘째, plugin의 plugin host이며 plugin이 host를 가질 때만 있다([plugin 프로세스](../plans/plugin-processes.ko.md)). 그 밖에는 누군가 등록할 때까지 section을 비운다. 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다.
+- 선언된 status는 plugin 프로세스가 제공한다. workbench는 그 status를 등록한 첫 출처에서 값을 읽는다. 첫째, 사이드바를 가진 카드의 활성 탭의 view이며, 그 view의 페이지가 status를 등록했을 때다. 카드 사이드바에서는 그 사이드바를 가진 카드다. 고정 창 사이드바에서는 재정의가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이며, 재정의가 적용되지 않으면 이 단계를 건너뛴다. 둘째, plugin의 plugin host이며 plugin이 host를 가질 때만 있다([plugin 프로세스](../plans/plugin-processes.ko.md)). 그 밖에는 누군가 등록할 때까지 section을 비운다. 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다.
+
+출처가 바뀌는 규칙은 다음과 같다.
+
+- (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌면 출처를 다시 고른다.
+- (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 유지된 상태는 경로별로 살아남는다([status 대응](#status-대응)).
+- (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2는 메인 페이지 load 때와 출처가 바뀔 때만 pull을 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다.
+- (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
+
 - 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
 - 선언된 UI 값은 변경 흐름이 아니다. plugin은 어떤 요소가 바뀌어도 값 전체를 다시 보낸다.
 
@@ -147,10 +157,9 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 `status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 section은 사이드바 section이 아니라 카드 표면이 되고, 사이드바는 그것을 여는 선언된 항목만 가진다([plugin 프로세스](../plans/plugin-processes.ko.md)의 계층 규칙).
 
 - `module`을 가진 section은 그 모듈이 그린다. workbench는 모듈을 적재하고 section 요소에서 `mount(root, context)`를 부른다. [plugin 프로세스](../plans/plugin-processes.ko.md)의 규칙 1은 workbench 페이지에서 plugin 코드를 실행하지 않는다고 하므로, 이 형태는 페이지 마운트와 함께 제거된다.
-- `status`를 가진 section은 그 status의 선언된 UI 값으로 그린다. status는 같은 plugin의 status이어야 하며, `exposes.status`가 선언해야 한다. section은 모듈이 없고 `mount` 호출이 없으며 `context.status`와 `context.bind`도 없다.
-- 두 필드가 모두 있거나 둘 다 없는 section은 `section <id> declares both module and status` 또는 `section <id> declares neither module nor status`로 거부한다. plugin의 status가 아닌 `status`는 `section <id> status <name> is not a status of plugin <plugin>`으로 거부한다.
+- `status`를 가진 section은 그 status의 선언된 UI 값으로 그린다. status는 같은 plugin의 status이어야 하며, `exposes.status`가 선언해야 한다.
+- 두 필드가 모두 있거나 둘 다 없는 section은 `section <id> declares both module and status` 또는 `section <id> declares neither module nor status`로 거부한다. plugin의 status가 아닌 `status`는 `section <id> status <name> is not a status of plugin <plugin>`으로 거부한다. `exposes.status`는 `plugin.json`의 `exposes.status` 항목만 뜻한다.
 - status 하나는 section 하나만 뒷받침한다. 같은 status를 이름 댄 두 번째 section은 manifest를 읽을 때 `status <plugin>.<name> backs section <first> and section <second>`로 거부한다. 이 검사는 manifest에서 하므로 값에 의존하지 않는다.
-- `state` 모듈만 등록하는 `status`를 가진 section은 manifest를 읽을 때 `section <id> status <name> is served only by a state module`로 거부한다.
 
 선언된 section은 루트 요소를 본문 안에 순서대로 그린다.
 
@@ -163,55 +172,54 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 `core.sidebars` status는 section마다 다음 필드를 보고한다.
 
 - `controls`는 section 본문에서 DOM 이름 `core.sidebar.section.control`을 가진 요소의 수다. 선언된 section에서는 그 조작 가능한 요소다.
-- `mounted`는 section이 받아들인 값을 그리는 동안 true다. section이 비워지면 false다. section은 받아들인 값이 없을 때 비워진 것이다. 첫 받아들인 값 전과 거부된 값 뒤가 그 경우다.
+- `mounted`는 section이 받아들인 값을 그리는 동안 true다. section이 비워지면 false다. section은 받아들인 값이 없을 때 비워진 것이다. 첫 받아들인 값 전, 거부된 값 뒤, 그리고 출처가 바뀐 뒤 새 출처의 첫 값을 받아들이기 전이 그 경우다([status 대응](#status-대응)의 (b) 규칙).
 - `error`는 마지막 값이 거부된 동안의 현재 거부 텍스트이며, 그 밖에는 null이다.
 - `text`는 본문의 텍스트다.
 
 ## 거부
 
-수신자는 그리기 전에 snapshot 값 전체를 검사한다. 이 문서의 규칙을 하나라도 어기는 값은 전체를 거부한다. 그 값의 어떤 요소도 그리지 않으며, 그 status의 이전 트리는 지운다. 거부 때 이전 트리를 남기지 않는다. 남긴 트리는 plugin이 더 이상 현재 값으로 보내지 않는 값을 보이기 때문이다.
+수신자는 그리기 전에 선언된 UI snapshot 값 전체를 검사한다. 이 문서의 규칙을 하나라도 어기는 값은 전체를 거부한다. 그 값의 어떤 요소도 그리지 않으며, 그 status의 이전 트리는 지운다. 거부 때 이전 트리를 남기지 않는다. 남긴 트리는 plugin이 더 이상 현재 값으로 보내지 않는 값을 보이기 때문이다.
 
-수신자는 snapshot에 응답한다. 응답은 수신 확인이지 유효성 확인이 아니므로, plugin은 거부 신호를 받지 않는다. 거부는 section에서만 보인다.
+수신자는 선언된 UI snapshot에 응답한다. 응답은 수신 확인이지 유효성 확인이 아니므로, plugin은 거부 신호를 받지 않는다. 거부는 section에서만 보인다.
 
 표시 경로는 `showError(element, where, text)`다. 거부한 값에서 `where`는 `declared UI <owner>.<status>`이고 `text`는 `<포인터>: <이유>`다. section 본문이 `showError`가 보이는 요소이므로, section의 텍스트가 거부의 표시다. 같은 호출이 쓰는 응용 프로그램 로그 줄이 기록이다: `error: declared UI <owner>.<status>: <포인터>: <이유>`. section은 같은 오류를 두 번째 표시로 보이지 않는다.
 
 `showError`는 같은 `where`와 같은 `text`에 대해 로그 줄을 한 번만 쓴다. 보이는 텍스트를 유지하므로, 같은 텍스트의 거부가 반복되면 같은 텍스트를 보이고 아무것도 더 쓰지 않는다. 다른 텍스트의 거부는 자기 줄을 쓴다. status의 다음 받아들인 값은 그 `where`에 대해 `hideError`를 부른다. 이는 표시를 거두므로, 그 뒤에 같은 텍스트가 다시 나오면 다시 쓴다.
 
-모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 포인터는 실패한 값의 JSON 포인터다. 루트와 값 전체의 크기는 `/`이며, 요소는 `/elements/<i>/...`이다. `<field>`는 JSON 필드 이름이다. 이유는 아래 행 가운데 하나다. 한도 이유는 `exceeds <n> <unit>` 형식이다.
-한도 이유는 초과한 배열, 객체, 문자열을 가리킨다. 루트 요소는 `/elements`, list의 항목은 `/elements/<i>/items`, tree의 노드는 `/elements/<i>/nodes`, 단계는 그 노드, 텍스트 필드와 키는 그 문자열, 매개변수 키는 `params` 객체, 매개변수 키와 문자열 값의 길이는 그 키 또는 값이며, 직렬화한 값의 크기는 `/`다.
+모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 표의 각 행의 포인터는 그 행을 어기는 값이며, 포인터 열이 이를 정한다. 개수나 크기 한도는 초과한 배열, 객체, 문자열을 가리킨다. 필드의 존재를 다루는 행(`unknown field`, `missing`, `requires command`)은 그 필드를 가진 객체를 가리킨다. 필드 값을 다루는 행은 그 필드를 가리킨다. 중복 키는 두 번째 키를 가리킨다. `/`는 루트와 직렬화한 값 전체다. `<field>`는 JSON 필드 이름이다.
 값이 여러 행을 어기면 표의 순서에서 첫 행이 적용된다. 이름 행은 소유자 행보다 앞에 있으므로, 소유자가 없는 이름은 이름이 잘못되었다고 보고된다.
 
-| 조건 | 이유 |
-| --- | --- |
-| 루트가 객체가 아니거나 `elements`가 배열이 아님 | `elements must be an array` (포인터 `/`) |
-| 직렬화한 값이 1048576바이트보다 큼 | `exceeds 1048576 bytes` (포인터 `/`) |
-| 루트 요소가 64개를 넘음 | `exceeds 64 elements` |
-| list의 항목이 1000개를 넘음 | `exceeds 1000 items` |
-| tree의 노드가 5000개를 넘음 | `exceeds 5000 nodes` |
-| tree 노드가 16단계를 넘음 | `exceeds 16 levels` |
-| 텍스트 필드가 500자를 넘음 | `exceeds 500 characters` |
-| 키가 128자를 넘음 | `exceeds 128 characters` |
-| 키가 키 규칙에 맞지 않음 | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` |
-| `params` 객체의 키가 16개를 넘음 | `exceeds 16 keys` |
-| 매개변수 키가 64자를 넘음 | `exceeds 64 characters` |
-| 매개변수 문자열 값이 1000자를 넘음 | `exceeds 1000 characters` |
-| 매개변수 값이 문자열, 유한한 숫자, 불리언, `null`이 아님 | `params values must be string, number, boolean or null` |
-| 객체가 나열하지 않은 필드: 루트, 요소, list 항목, tree 노드. 포인터는 그 객체이며 루트에서는 `/` | `unknown field <field>` |
-| 필수 필드가 없음 | `missing <field>` |
-| `command`가 없는 button, list 항목, tree 노드의 `params` 또는 `enabled` 필드 | `<field> requires command` |
-| 표에 없는 `kind` 값 | `unknown kind <value>` |
-| 필드의 형이 맞지 않음 | `<field> must be <type>` |
-| 텍스트 필드에 제어 문자가 있음 | `<field> contains a control character` |
-| 형제 사이, 또는 list의 항목 사이에 같은 키가 있음 | `duplicate key <key>` |
-| `command` 이름에 소유자가 없음(`.`이 없음) | `command <name> must be named <plugin>.<name>` |
-| `command` 이름의 소유자가 core이거나 다른 plugin임 | `command <name> is not a command of plugin <plugin>` |
-| `command` 이름이 선언되지 않음 | `undeclared command <name>` |
-| 아이콘 이름이 core 아이콘 표에 없음 | `unknown icon <name>` |
-| 잎 노드에 `expanded`가 있음 | `expanded is allowed only on a branch` |
-| 가로 section의 `tree` | `tree cannot be drawn in a horizontal section` |
+| 조건 | 이유 | 포인터 |
+| --- | --- | --- |
+| 루트가 객체가 아니거나 `elements`가 배열이 아님 | `elements must be an array` | `/` |
+| 직렬화한 값이 1048576바이트보다 큼 | `exceeds 1048576 bytes` | `/` |
+| 루트 요소가 64개를 넘음 | `exceeds 64 elements` | `/elements` |
+| list의 항목이 1000개를 넘음 | `exceeds 1000 items` | `/elements/<i>/items` |
+| tree의 노드가 5000개를 넘음 | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
+| tree 노드가 16단계를 넘음 | `exceeds 16 levels` | 그 노드 |
+| 텍스트 필드가 500자를 넘음 | `exceeds 500 characters` | 그 텍스트 필드 |
+| 키가 128자를 넘음 | `exceeds 128 characters` | 그 키 |
+| 키가 키 규칙에 맞지 않음 | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` | 그 키 |
+| `params` 객체의 키가 16개를 넘음 | `exceeds 16 keys` | `params` 객체 |
+| 매개변수 키가 64자를 넘음 | `exceeds 64 characters` | 그 매개변수 키 |
+| 매개변수 문자열 값이 1000자를 넘음 | `exceeds 1000 characters` | 그 매개변수 값 |
+| 매개변수 값이 문자열, 유한한 숫자, 불리언, `null`이 아님 | `params values must be string, number, boolean or null` | 그 매개변수 값 |
+| 객체가 나열하지 않은 필드(루트, 요소, list 항목, tree 노드) | `unknown field <field>` | 그 객체 |
+| 필수 필드가 없음 | `missing <field>` | 그 객체 |
+| list 항목이나 tree 노드에 `command` 필드 없이 `params` 또는 `enabled` 필드가 있음 | `<field> requires command` | 그 객체 |
+| 표에 없는 `kind` 값 | `unknown kind <value>` | `kind` 값 |
+| 필드의 형이 맞지 않음 | `<field> must be <type>` | 그 필드 |
+| 텍스트 필드에 제어 문자가 있음 | `<field> contains a control character` | 그 필드 |
+| 형제 사이, 또는 list 항목 사이에 같은 키가 있음 | `duplicate key <key>` | 두 번째 키 |
+| `command` 이름에 소유자가 없음(`.`이 없음) | `command <name> must be named <plugin>.<name>` | `command` 필드 |
+| `command` 이름의 소유자가 core이거나 다른 plugin임 | `command <name> is not a command of plugin <plugin>` | `command` 필드 |
+| `command` 이름이 선언되지 않음 | `undeclared command <name>` | `command` 필드 |
+| 아이콘 이름이 core 아이콘 표에 없음 | `unknown icon <name>` | `icon` 필드 |
+| 잎 노드에 `expanded`가 있음 | `expanded is allowed only on a branch` | `expanded` 필드 |
+| 가로 section의 `tree` | `tree cannot be drawn in a horizontal section` | 그 tree |
 
 manifest에 관한 거부, 즉 section 형태와 한 status 한 section 규칙은 값의 포인터가 아니라 manifest를 읽을 때 보고하며, 이유는 [사이드바 section 형태](#사이드바-section-형태)에 있다.
 
 ## 용어
 
-용어는 [용어 목록](terms.ko.md)에 있다. 선언된 UI, 선언된 UI snapshot, 선언된 요소, 선언된 status line, 선언된 UI 스키마다.
+용어는 [용어 목록](terms.ko.md)에 있다. 선언된 UI, 선언된 UI snapshot, 선언된 UI 값, 선언된 요소, 선언된 status line, 선언된 UI 스키마, 선언된 UI status, 가지, 선언된 section이다.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-0-5: 다섯 번째 검토 뒤 선언된 UI 명세를 고쳤다. 선언된 status 출처가 바뀌면 새 출처의 첫 값까지 section을 비우며, workbench는 현재 값을 한 번 pull한다. 계획 규칙 2의 pull 시기는 출처 변경까지 넓어진다. 모든 거부의 포인터는 포인터 열에 적고, `params` 또는 `enabled` 필드가 `command` 없이 있는 행은 list 항목과 tree 노드에 적용한다. 용어 선언된 UI 값, 선언된 UI status, 가지, 선언된 section을 적는다.
 - F212.8-0-4: 네 번째 검토 뒤 선언된 UI 명세를 고쳤다. 선언된 status는 등록한 카드 활성 탭의 view, 그다음 plugin host가 제공하며, 상태 모듈만 등록하는 status는 거부한다. 명세는 선언된 UI snapshot이라고 적고, 개수와 길이 거부는 초과한 값을 가리키며, 용어 선언된 UI status, branch, 선언된 section을 더했고, 추적 식별자와 계획의 문장을 명세에서 뺐다.
 - F212.8-0-3: 세 번째 검토 뒤 선언된 UI 명세를 고쳤다. status는 section의 `status` 형태로만 선언된 UI이며, 모듈 section 형태는 페이지 마운트가 제거되기 전까지 지금의 형태다. 어휘는 list, tree, button, status-line의 사이드바 section이다. 한도는 계약 값이고, 이름 행과 소유자 행은 순서가 정해졌으며, `core.sidebars` 설명은 선언된 section을 포함한다.
 - F212.8-0-2: 두 번째 검토 뒤 선언된 UI 명세를 고쳤다. section은 `module`과 `status` 가운데 정확히 하나를 선언하고, status 하나는 section 하나를 뒷받침한다. 어휘 요소 `command`는 `button`으로 바꾸며, tree는 `empty`를 요구하고, 값은 자기 plugin의 명령만 이름으로 지정한다. 모든 거부는 한 형식을 쓴다. plugin 명세는 section의 `status` 형태를 적고, workbench 노출은 선언된 section을 설명한다.

@@ -301,6 +301,12 @@
       "allowed": []
     },
     {
+      "term": "declared UI value",
+      "definition": "The value of a declared UI status: an object with the field `elements` that a declared UI snapshot carries (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "dirty mark",
       "definition": "The mark of a status whose value changed while its snapshot was in transit; the acknowledgement of that snapshot sends the latest value of the status and clears the mark.",
       "rejected": [],

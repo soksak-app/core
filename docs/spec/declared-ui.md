@@ -65,7 +65,7 @@ The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts 
 
 Key rules: a key is a string of 1 to 128 characters from `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, and `-`. Keys are compared as exact strings.
 
-Text rules: a text field is plain text. The workbench draws it as text content, never as markup. A text field that contains a control character (U+0000 to U+001F or U+007F) is rejected.
+Text rules: a text field is plain text. The workbench draws it as text content, never as markup. A text field that contains a control character (U+0000 to U+001F, U+007F, or U+0080 to U+009F) is rejected.
 
 The `status-line` has no tone and no error value. An error reaches the user only through the display path that writes it to the application log ([AGENTS](../../AGENTS.md)), so a declared element cannot draw an error.
 
@@ -73,14 +73,14 @@ A `list` is a column of rows, with its `empty` text when it has none. A `tree` i
 
 ## Limits
 
-Each limit is chosen by this document. Its reason is the work that the main page does for one snapshot: it parses, validates, and draws the value on the UI thread, and it keeps every drawn tree in the document. The limits in the table are the contract values.
+Each limit is chosen by this document. Its reason is the work that the main page does for one declared UI snapshot: it parses, validates, and draws the value on the UI thread, and it keeps every drawn tree in the document. The limits in the table are the contract values.
 
 | Limit | Value | Reason |
 | --- | --- | --- |
-| Serialized value | 1048576 bytes | The whole value is parsed and validated on the UI thread for each snapshot. |
+| Serialized value | 1048576 bytes | The whole value is parsed and validated on the UI thread for each declared UI snapshot. |
 | Root elements | 64 | One section body holds this many separate blocks. |
-| List items | 1000 per list | Bounds the rows that one list draws per snapshot. |
-| Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per snapshot. |
+| List items | 1000 per list | Bounds the rows that one list draws per declared UI snapshot. |
+| Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per declared UI snapshot. |
 | Tree levels | 16 | Bounds the indent of a tree inside a section. |
 | Text field | 500 characters | Bounds the width of one line of text in a section. |
 | Key | 128 characters | Bounds the identifier that the workbench keeps per element. |
@@ -112,13 +112,15 @@ Declared UI elements bind to these commands:
 | `tree` branch expand control | `core.declared-ui.tree.expand` | `{status, tree, path, expanded}` |
 | sidebar section header | `core.sidebar.section.fold` | `{sidebar, section}` |
 
-A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is the plugin of the status. A name of core, or of another plugin, is rejected, because a plugin value names only commands of its own plugin. A name that is not declared is rejected when the snapshot is received, not when the user presses the element, because the binder refuses an undeclared name at mark time ([exposure](exposure.md#user-interface)).
+A command name in a declared UI value is `<plugin>.<name>`, where `<plugin>` is the plugin of the status. A name of core, or of another plugin, is rejected, because a plugin value names only commands of its own plugin. A name that is not declared is rejected when the declared UI snapshot is received, not when the user presses the element, because the binder refuses an undeclared name at mark time ([exposure](exposure.md#user-interface)).
 
-`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler, when the `tree` element is implemented. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from a root node to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`.
+`core.declared-ui.tree.expand` is declared in `packages/workbench/exposure.json` together with its handler. It is a set operation: running it again with the same arguments has the same effect as running it once. Its `expanded` argument is the state that the control requests, which is the opposite of the state the branch showed when the control was drawn. The command sets the kept state of the branch at `path` in the tree `tree` of `status`, and it does not reach the plugin. `path` is the array of node keys from a root node to the branch. A `path` that names no drawn branch, or a `status` or `tree` that is not drawn, fails the command with `tree <tree> path <path> is not drawn`. In that message, `<path>` is a JSON array of strings.
 
 The control's next request carries the state that the kept state has when the workbench draws the control. A repeated request before the workbench draws again sends the same arguments, so it sets the same state. A request after the redraw carries the state of the redrawn branch.
 
 A disabled element (`enabled: false`) is rendered with the `disabled` attribute, so no click reaches its binding.
+The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button.
+
 
 Dom names. Every interactive element that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with its `key`. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
 
@@ -135,9 +137,16 @@ A declared UI status is drawn through its declared UI snapshots, as follows:
 - In an accepted value, a branch whose `expanded` differs from its `expanded` in the previous accepted value, or that is new, takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A new branch with no kept state takes the plugin's value.
 - A rejected value does not change the kept state. The comparison above uses the last accepted value.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
-- A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the snapshot of the previous process.
+- A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the declared UI snapshot of the previous process.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
-- A declared status is served by a plugin process. The workbench reads its value from the first of these that registered the status. First, the view of the active tab of the card that holds the sidebar, when that view's page registered the status. For a card sidebar, that card is the card that holds it. For a fixed window sidebar, the card is the focused content card and its active tab while a plugin override applies, as `core.sidebars` reports them; when no override applies, this step is skipped. Second, the plugin host of the plugin, when the plugin has one ([plugin processes](../plans/plugin-processes.md)). Otherwise the section is cleared until one of them registers the status. A process registers a status when its page calls `page.exposure.register("status", name)`, and the registration belongs to that process.
+- A declared status is served by a plugin process. The source of a status is the first of these that registered it. First, the view of the active tab of the card that holds the sidebar, when that view's page registered the status: for a card sidebar, that card; for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, as `core.sidebars` reports them, and this step is skipped when no override applies. Second, the plugin host of the plugin, when the plugin has one ([plugin processes](../plans/plugin-processes.md)). Otherwise the section is cleared until one of them registers the status. A process registers a status when its page calls `page.exposure.register("status", name)`, and the registration belongs to that process.
+
+The source changes by these rules:
+
+- (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes.
+- (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
+- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page and at a change of source, and at no other time, because a running view has no other way to send its last value to a new reader.
+- (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
 
@@ -147,10 +156,9 @@ A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) 
 A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds only a declared item that opens it ([plugin processes](../plans/plugin-processes.md) layer rules).
 
 - A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element. [Plugin processes](../plans/plugin-processes.md) rule 1 says that plugin code does not run on the workbench page, so this form is removed with that page mount.
-- A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares. The section has no module, no `mount` call, and no `context.status` or `context.bind`.
-- A section with both fields, or with neither, is rejected with `section <id> declares both module and status` or `section <id> declares neither module nor status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`.
+- A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares.
+- A section with both fields, or with neither, is rejected with `section <id> declares both module and status` or `section <id> declares neither module nor status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`. `exposes.status` means the entries of `exposes.status` in `plugin.json` only.
 - One status backs at most one section. A second section that names the same status is rejected when the manifest is read, with `status <plugin>.<name> backs section <first> and section <second>`. The check runs on the manifest, so it does not depend on the value.
-- A `status` that only a `state` module registers is rejected when the manifest is read, with `section <id> status <name> is served only by a state module`.
 
 A declared section draws its root elements in order inside its body.
 
@@ -163,55 +171,54 @@ A declared section keeps the header, the fold control, and the tab selection of 
 The `core.sidebars` status reports each section with these fields:
 
 - `controls` is the number of elements with the dom name `core.sidebar.section.control` in the body of the section. For a declared section these are its interactive elements.
-- `mounted` is true while the section draws an accepted value. It is false when the section is cleared. A section is cleared when it has no accepted value: before its first accepted value, and after a rejected value.
+- `mounted` is true while the section draws an accepted value. It is false when the section is cleared. A section is cleared when it has no accepted value: before its first accepted value, after a rejected value, and on a change of source until the first value from the new source is accepted (the transition rule (b) in [status mapping](#status-mapping)).
 - `error` is the text of the current rejection while the last value is rejected, and null otherwise.
 - `text` is the text of the body.
 
 ## Rejection
 
-The receiver validates a whole snapshot value before it draws anything. A value that breaks one rule of this document is rejected as a whole: no element of it is drawn, and the previous tree of the status is removed. The receiver keeps no previous tree on a rejection, because a kept tree would show a value that the plugin no longer sends as its current value.
+The receiver validates a whole declared UI snapshot value before it draws anything. A value that breaks one rule of this document is rejected as a whole: no element of it is drawn, and the previous tree of the status is removed. The receiver keeps no previous tree on a rejection, because a kept tree would show a value that the plugin no longer sends as its current value.
 
-The receiver acknowledges the snapshot. The acknowledgement confirms receipt, not validity, so the plugin receives no rejection signal. The rejection is shown only in the section.
+The receiver acknowledges the declared UI snapshot. The acknowledgement confirms receipt, not validity, so the plugin receives no rejection signal. The rejection is shown only in the section.
 
 The display path is `showError(element, where, text)`. For a rejected value, `where` is `declared UI <owner>.<status>` and `text` is `<pointer>: <reason>`. The section body is the element that `showError` shows, so the text in the section is the display of the rejection. The application log line that the same call writes is the record: `error: declared UI <owner>.<status>: <pointer>: <reason>`. The section does not show the error in a second display.
 
 `showError` writes the log line once for the same `where` and the same `text`. It keeps the shown text, so a repeated rejection with the same text shows the same text and writes nothing more. A rejection with a different text writes its own line. The next accepted value of the status calls `hideError` for its `where`, which withdraws the display, so the same text is written again if it recurs after that.
 
-Every rejection text has the form `<pointer>: <reason>`. The pointer is the JSON pointer of the failing value: `/` for the root and for the size of the whole value, and `/elements/<i>/...` for an element. `<field>` is the JSON field name. The reason is one of the rows below. A limit reason has the form `exceeds <n> <unit>`.
-A limit reason points to the array, object, or string that exceeds the limit: `/elements` for the root elements, `/elements/<i>/items` for the items of a list, `/elements/<i>/nodes` for the nodes of a tree, the node for a level, the string for a text field or a key, the `params` object for its keys, the parameter key or string value for its length, and `/` for the serialized value.
+Every rejection text has the form `<pointer>: <reason>`. The pointer of each row of the table is the value that breaks the row, as its Pointer column states. A count or size limit points to the array, object, or string that exceeds it. A field-presence row (`unknown field`, `missing`, `requires command`) points to the object that holds the field. A field-value row points to the field. A duplicate key points to the second key. `/` is the root and the whole serialized value. `<field>` is the JSON field name.
 When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
 
-| Condition | Reason |
-| --- | --- |
-| The root is not an object, or `elements` is not an array | `elements must be an array` (pointer `/`) |
-| The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` (pointer `/`) |
-| More than 64 root elements | `exceeds 64 elements` |
-| More than 1000 items in a list | `exceeds 1000 items` |
-| More than 5000 nodes in a tree | `exceeds 5000 nodes` |
-| A tree node deeper than 16 levels | `exceeds 16 levels` |
-| A text field longer than 500 characters | `exceeds 500 characters` |
-| A key longer than 128 characters | `exceeds 128 characters` |
-| A key that does not match the key rules | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` |
-| A `params` object with more than 16 keys | `exceeds 16 keys` |
-| A parameter key longer than 64 characters | `exceeds 64 characters` |
-| A parameter string value longer than 1000 characters | `exceeds 1000 characters` |
-| A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` |
-| A field that the object does not list: a root, an element, a list item, or a tree node. The pointer is that object, and `/` at the root | `unknown field <field>` |
-| A required field is missing | `missing <field>` |
-| A `params` or `enabled` field in a `button`, a list item, or a tree node, with no `command` field | `<field> requires command` |
-| A `kind` value that is not in the table | `unknown kind <value>` |
-| A field has the wrong type | `<field> must be <type>` |
-| A text field contains a control character | `<field> contains a control character` |
-| Two keys are equal among their siblings, or among the items of a list | `duplicate key <key>` |
-| A `command` name with no owner, that is, with no `.` | `command <name> must be named <plugin>.<name>` |
-| A `command` name whose owner is core or another plugin | `command <name> is not a command of plugin <plugin>` |
-| A `command` name that is not declared | `undeclared command <name>` |
-| An icon name that is not in the core icon table | `unknown icon <name>` |
-| `expanded` on a leaf node | `expanded is allowed only on a branch` |
-| A `tree` in a horizontal section | `tree cannot be drawn in a horizontal section` |
+| Condition | Reason | Pointer |
+| --- | --- | --- |
+| The root is not an object, or `elements` is not an array | `elements must be an array` | `/` |
+| The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` | `/` |
+| More than 64 root elements | `exceeds 64 elements` | `/elements` |
+| More than 1000 items in a list | `exceeds 1000 items` | `/elements/<i>/items` |
+| More than 5000 nodes in a tree | `exceeds 5000 nodes` | `/elements/<i>/nodes` |
+| A tree node deeper than 16 levels | `exceeds 16 levels` | the node |
+| A text field longer than 500 characters | `exceeds 500 characters` | the text field |
+| A key longer than 128 characters | `exceeds 128 characters` | the key |
+| A key that does not match the key rules | `key must be 1 to 128 characters of A-Z, a-z, 0-9, ., _, : or -` | the key |
+| A `params` object with more than 16 keys | `exceeds 16 keys` | the `params` object |
+| A parameter key longer than 64 characters | `exceeds 64 characters` | the parameter key |
+| A parameter string value longer than 1000 characters | `exceeds 1000 characters` | the parameter value |
+| A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` | the parameter value |
+| A field that the object does not list: a root, an element, a list item, or a tree node | `unknown field <field>` | the object |
+| A required field is missing | `missing <field>` | the object |
+| A `params` or `enabled` field in a list item or a tree node with no `command` field | `<field> requires command` | the object |
+| A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
+| A field has the wrong type | `<field> must be <type>` | the field |
+| A text field contains a control character | `<field> contains a control character` | the field |
+| Two keys are equal among their siblings, or among the items of a list | `duplicate key <key>` | the second key |
+| A `command` name with no owner, that is, with no `.` | `command <name> must be named <plugin>.<name>` | the `command` field |
+| A `command` name whose owner is core or another plugin | `command <name> is not a command of plugin <plugin>` | the `command` field |
+| A `command` name that is not declared | `undeclared command <name>` | the `command` field |
+| An icon name that is not in the core icon table | `unknown icon <name>` | the `icon` field |
+| `expanded` on a leaf node | `expanded is allowed only on a branch` | the `expanded` field |
+| A `tree` in a horizontal section | `tree cannot be drawn in a horizontal section` | the tree |
 
 Rejections that concern a manifest, the section form and the one-section rule, are reported when the manifest is read, with the reasons in [sidebar section form](#sidebar-section-form), and not with a value pointer.
 
 ## Terms
 
-The terms are in the [term list](terms.md): declared UI, declared UI snapshot, declared element, declared status line, and declared UI schema.
+The terms are in the [term list](terms.md): declared UI, declared UI snapshot, declared UI value, declared element, declared status line, declared UI schema, declared UI status, branch, and declared section.

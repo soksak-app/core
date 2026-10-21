@@ -25,7 +25,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 
 - **선언 UI:** 요소가 모두 목록, tree, 버튼, 상태줄 가운데 하나인 사이드바 section이 선언 UI다.
 - **view:** 그 밖의 화면은 view다. 인라인 이름 바꾸기가 필요한 tree, 끌어 놓기가 있는 tree, 포인터 위치에 놓는 문맥 메뉴가 있는 tree는 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
-- **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 plugin host가 필요하므로 F212.9를 요구한다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다.
+- **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 plugin host가 필요하므로 F212.9를 요구한다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다. `core.declared-ui.tree.expand` 명령은 tree 요소를 만들 때 그 처리기와 함께 `packages/workbench/exposure.json`에 선언한다(F212.8-2).
 - **모듈 section(지금):** 모듈 section은 sidebar section의 지금의 형태다. workbench는 모듈을 section 요소에 올리며, 문맥으로 `card`, `surface`, `orientation`, core `icon` 함수, plugin의 status를 위한 `status(name, fn)`, 명령을 위한 `bind(el, name, params, options)`를 준다. 모듈은 자기 DOM을 그리므로 workbench는 그 요소와 이름을 검사하지 못한다. 규칙 1이 workbench 페이지에서 plugin 코드를 실행하지 않는다고 하므로, 이 형태는 페이지 마운트(F212.11)가 제거될 때까지만 지금의 형태다.
 - **plugin host:** view나 sidecar가 DOM 없는 로직을 맡을 수 없을 때만 만든다. 그 로직을 files sidecar나 files view로 옮기는 것을 먼저 검토하고, 옮길 수 없을 때만 host를 둔다.
 - 화면의 층은 측정으로 정하지 않는다.
@@ -66,7 +66,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
-2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 그 페이지의 표면이 선언한 plugin view와 host의 각 status에 대해 snapshot을 한 번 요청한다(pull). 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
+2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 그 페이지의 표면이 선언한 plugin view와 host의 각 status에 대해 snapshot을 한 번 요청한다(pull). 메인 페이지가 load될 때 pull하는 것 외에, 상태의 출처가 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
    - status 하나에는 전송 중인 snapshot이 최대 1개다.
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
    - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
@@ -507,3 +507,17 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R4-8: `command`가 없는 `params`나 `enabled`에 대한 행이 없었다. 판정: 수용. 해결: `<field> requires command` 행을 더한다.
 - R4-9: 세 가지 view 사례(인라인 이름 바꾸기, 끌어 놓기, 포인터 위치 문맥 메뉴)가 계층 규칙에 없었다. 판정: 수용. 해결: 두 언어의 view 규칙에 더한다.
 - R4-10: 명세에 추적 식별자, plugin 명세 sections 문단의 보류 문장, "지금 section이 그리는 것" 절, "이 형태는 지금의 형태다" 문장, "이 버전에서"라는 말이 있었다. 판정: 수용. 해결: 식별자를 빼고 접근성 문장은 검사를 가리킨다. 보류 문장을 뺀다. 절을 빼고, 모듈 형태의 설명은 이 계획의 계층 규칙에 둔다. 모듈 bullet의 문장을 빼고, 모듈 형태는 이 계획에 적는다. 명세에서 "이 버전에서"를 뺀다.
+
+**선언된 UI 스키마 검토 5차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 다섯 번째 적대적 검토에 대한 답변이다. 아홉 건을 모두 수용한다.
+
+- R5-1: 선언된 status의 출처가 바뀌는데 명세가 바뀔 때의 동작을 말하지 않았다. 판정: 수용. 해결: 전이를 명세에 적는다. (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌면 출처를 다시 고른다. (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비우며, 유지된 상태는 경로별로 살아남는다. (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다. 계획의 규칙 2는 메인 페이지 load 때와 출처가 바뀔 때만 pull을 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다.
+- R5-2: manifest는 상태 모듈만 등록하는 status를 거부했으나, manifest는 상태 모듈이 어떤 status를 제공하는지 말하지 않는다. 판정: 수용. 해결: manifest 시점의 거부를 뺀다. `exposes.status`는 `plugin.json`의 `exposes.status` 항목만 뜻한다.
+- R5-3: status의 상태를 설명하는 문장이 계약을 되풀이했다. 판정: 수용. 해결: plugin 명세와 선언된 UI 명세에서 설명 문장을 뺀다. 계약은 남긴다.
+- R5-4: 포인터 규칙이 모든 행에 적용되지 않았다. 판정: 수용. 해결: 포인터 규칙 하나를 모든 행에 적용하며, 표는 두 언어 모두 포인터 열을 가진다. 중복 키는 두 번째 키를 가리킨다. 필드의 존재를 다루는 행은 그 필드를 가진 객체를 가리킨다. 개수나 크기 한도는 초과한 값을 가리킨다.
+- R5-5: 펼침 명령의 path 배열이 거부 메시지에서 타입으로 적혀 있지 않았다. 판정: 수용. 해결: `<path>`는 문자열의 JSON 배열이다.
+- R5-6: 네이티브 button을 가지는 요소가 나열되지 않았다. 판정: 수용. 해결: 명세가 나열한다. `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어.
+- R5-7: 용어 문단이 세 용어를 빠뜨렸고, "선언된 UI 값"이 용어가 아니었다. 판정: 수용. 해결: 용어 문단이 세 용어를 나열하며, "선언된 UI 값"을 용어 목록에 더한다. 제어 문자는 선언된 UI 명세에서 U+0000에서 U+001F, U+007F, U+0080에서 U+009F다. plugin 명세는 범위를 적지 않으므로 충돌이 없다.
+- R5-8: 펼침 명령의 시기가 명세에 있었고, "snapshot"이 일부 맨 말로 쓰였다. 판정: 수용. 해결: 시기는 이 계획의 계층 규칙으로 옮긴다(F212.8-2). 이의가 지정한 줄의 맨 "snapshot"을 "선언된 UI snapshot"으로 바꾸며, 같은 종류의 맨 말 두 곳(등록이 없는 요청 규칙과 이전 프로세스 규칙)도 바꾼다.
+- R5-9: `command`가 없음 행이 버튼에도 적용되었으나, 버튼의 명령이 없으면 이미 필드 누락이다. 판정: 수용. 해결: 행을 list 항목과 tree 노드로 한정한다.
