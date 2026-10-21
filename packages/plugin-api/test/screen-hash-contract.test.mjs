@@ -15,15 +15,16 @@ const EXPECTED_IDS = [
 export async function runScreenHashCase(testCase) {
   const outputs = [];
   for (const step of testCase.steps) {
+    assert.ok(step && typeof step === "object" && !Array.isArray(step), `${testCase.id}: step must be an object`);
+    const operations = ["bytes", "hash", "message"].filter((name) => Object.hasOwn(step, name));
+    assert.equal(operations.length, 1, `${testCase.id}: every step must have exactly one operation`);
     try {
-      if (step.bytes) {
+      if (operations[0] === "bytes") {
         outputs.push({ bytes: Buffer.from(screenBytes(step.bytes.screen)).toString("hex") });
-      } else if (step.hash) {
+      } else if (operations[0] === "hash") {
         outputs.push({ hash: await screenHash(step.hash.screen) });
-      } else if (step.message) {
-        outputs.push({ screen: screenFromMessage(step.message.value) });
       } else {
-        assert.fail(testCase.id + ": unknown step");
+        outputs.push({ screen: screenFromMessage(step.message.value) });
       }
     } catch (error) {
       outputs.push({ error: error.message });
@@ -41,3 +42,8 @@ for (const testCase of CONTRACT.cases) {
     assert.deepEqual(await runScreenHashCase(testCase), testCase.steps.map(({ output }) => output));
   });
 }
+
+test("screenHash contract runner refuses steps with no operation or multiple operations", async () => {
+  await assert.rejects(runScreenHashCase({ id: "invalid-missing", steps: [{ unknown: true }] }), /exactly one operation/);
+  await assert.rejects(runScreenHashCase({ id: "invalid-multiple", steps: [{ bytes: { screen: {} }, hash: { screen: {} } }] }), /exactly one operation/);
+});

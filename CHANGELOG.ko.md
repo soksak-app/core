@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-c-27: screenHash 계약 실행기는 실행 전에 operation이 없거나 여러 개인 단계를 거부한다. Red: 이전 실행기가 알 수 없는 operation을 일반 오류 결과로 보고해 잘못된 단계 단언이 실패했다. 수정 후 소유 테스트가 6/6 통과한다.
+
 - F238-c-27: 유효한 extension, 중복 이름, surface 누락, 잘못된 module 경로, 알 수 없는 필드에 대한 순서 있는 `validateDiagnostics` 호출을 공개한다. core 테스트는 각 호출을 validator에 실행하며 공개 사례 회귀와 exposure 테스트가 21/21 통과한다. 소유 package test 스위트가 377/377 통과하며 공개 사례를 모두 실행한다.
 
 - F238-c-27: 유효한 section-only plugin, 예약된 `core` id, 알 수 없는 필드에 대한 순서 있는 manifest validator 사례를 공개한다. core 테스트는 각 호출을 `validateManifest`에 실행하며 공개 사례 회귀 검사가 소유 validator 스위트와 함께 38/38 통과한다. diagnostics validator는 계속 미완료다.
