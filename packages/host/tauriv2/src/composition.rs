@@ -1,5 +1,7 @@
 //! Places all native regions and the declared DOM overlays of one surface as one complete snapshot.
 
+use std::sync::PoisonError;
+
 use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
@@ -218,7 +220,9 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
     let declaration = data
         .compositions
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only
+        // read; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(&request.surface)
         .cloned()
         .ok_or_else(|| {
@@ -240,7 +244,9 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
     let surface_handle = data
         .surface_hosts
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(&request.surface)
         .copied()
         .ok_or_else(|| format!("surface {:?} is not attached", request.surface))?;
@@ -252,7 +258,9 @@ pub(crate) fn place(webview: &Webview, request: CompositionPlaceRequest) -> Resu
         let mut revisions = applied_data
             .composition_revisions
             .lock()
-            .map_err(|e| e.to_string())?;
+            // default: a lock that a panicking thread poisoned still holds the composition revisions, which the
+            // placement amends; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
         // default: the last revision of a surface that has not received a placement is 0.
         if revision <= revisions.get(&surface).copied().unwrap_or_default() {
             return Err(format!("stale composition revision {revision}"));
