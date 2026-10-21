@@ -28,7 +28,7 @@ SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 
 
 명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
 
-가짜가 SDK에 충실하도록 적합성 검사를 둔다. core가 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`의 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리가 쓰는 모든 가짜의 export 이름과 인자 수를 그 스냅샷과 비교하고, 어긋나면 실패한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
+가짜가 SDK에 충실하도록 적합성 검사를 둔다. core가 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`의 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리가 쓰는 모든 가짜의 export 이름과 인자 수를 그 스냅샷과 비교한다. 형태만으로는 부족하므로 core는 계약 벡터도 커밋한다. 각 export 함수에 대해 core 테스트에서 가져온 입력과 기대 출력이다. 각 플러그인의 `check` 대상은 가짜가 맞는 함수의 벡터로 각 가짜를 실행하고, 어긋나면 실패한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
 
 결정은 각 플러그인 저장소에서 그 저장소의 sub-item이 들어갈 때 효력을 가진다. 그 전까지 현재 형태는 준수가 아니라 소유자가 있는 열린 결함이다.
 
@@ -94,7 +94,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 14. 명세: `docs/spec/plugins.md:40`의 "`make test`가 플러그인 저장소의 테스트를 실행"과 "테스트를 위해 `@soksak/plugin-api`에 의존"을 다음으로 바꾼다. `make test`는 플러그인 테스트를 실행하고, `make check`는 SDK 도구를 실행하며, 플러그인 저장소는 `@soksak/plugin-api`를 빌드 의존성으로 둔다. `docs/spec/plugins.md:171`("플러그인 저장소 테스트가 `checkViewPage`를 호출")은 "플러그인 빌드가 `checkViewPage`를 호출"로 바꾼다. 소유자는 core `main`이며 `.ko.md` 대응 문서도 함께 바꾼다.
 
 
-15. 적합성: core가 생성된 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`에 대해 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리의 모든 가짜를 그 스냅샷과 비교하고, 어긋나면 실패한다. 소유자: 스냅샷은 core `main`, 비교는 각 플러그인 저장소.
+15. 적합성: core가 생성된 export 표면 스냅샷(이름, 인자 수, 선언된 타입)을 `@soksak/plugin-api`, `@soksak/runtime`, `@soksak/workbench`에 대해 커밋한다. core는 계약 벡터(export 함수별 입력과 기대 출력, core 테스트에서 가져옴)도 커밋한다. 각 플러그인의 `check` 대상은 테스트 트리의 모든 가짜를 그 스냅샷과 비교하고, 가짜가 맞는 함수의 벡터로 실행해 어긋나면 실패한다. 소유자: 스냅샷은 core `main`, 비교는 각 플러그인 저장소.
 
 ### 범위 확인
 
@@ -112,7 +112,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 플러그인과 사이드카 이름의 소유자는 선언에서 정한다. core 이름은 `packages/*/package.json`과 `packages/host/*/package.json`에서 온다. 플러그인이나 사이드카 이름은 core 이름이 아닌 `@soksak/plugin-*` 또는 `@soksak/sidecar-*` 기준이다.
 
-1. `scripts/check-boundaries.mjs`(선언된 폴더를 읽고, core가 플러그인이나 사이드카 이름을 적지 않는다고 이미 밝힌다)는 루프에 패턴 규칙 하나를 더한다. core 소스(`packages/**`, 검사가 읽는 모든 확장자 포함: `.ts`, `.tsx`, `.cjs`)에 core 패키지 이름도 아니고 선언된 구성요소 이름도 아닌 `@soksak/` 기준이 있으면 실패한다. 접두사를 쓰지 않으므로 선언되지 않은 플러그인은 어떤 이름이든(`@soksak/hwp` 포함) 실패한다. 이 규칙은 새 경로를 읽지 않는다. `allowed` 면제(`check-boundaries.mjs:33-35`)는 이 이름들에 대해 제거한다. 이런 이름을 적는 core `package.json`은 core 이름인 `@soksak/plugin-api`뿐이다.
+1. `scripts/check-boundaries.mjs`(선언된 폴더를 읽고, core가 플러그인이나 사이드카 이름을 적지 않는다고 이미 밝힌다)는 루프에 패턴 규칙 하나를 더한다. 선언된 plugin과 sidecar 폴더(2번 규칙이 맡는다)를 뺀 workspace의 모든 추적 소스 파일(검사가 읽는 모든 확장자 포함: `.ts`, `.tsx`, `.cjs`)에 정확한 core 패키지 이름이 아닌 `@soksak/` 기준이 있으면, 선언되었는지와 무관하게 실패한다. 이 규칙은 선언을 쓰지 않으므로 core의 선언된 `@soksak/plugin-browser`도 실패하고, `apps/`, `e2e/`, `scripts/`의 선언되지 않은 `@soksak/hwp`도 실패한다. 규칙은 workspace의 추적 소스 파일만 읽는다. 이 규칙은 새 경로를 읽지 않는다. `allowed` 면제(`check-boundaries.mjs:33-35`)는 이 이름들에 대해 제거한다. 이런 이름을 적는 core `package.json`은 core 이름인 `@soksak/plugin-api`뿐이다.
 2. `scripts/check-test-parity.mjs`는 플러그인과 사이드카 코드의 소유자 검사를 유지한다. 한 소유자의 구현이나 테스트가 다른 소유자의 구현을 참조하면 발견 사항이다. 기준의 소유자는 `scripts/workspace-registry.json`을 읽는 `check-boundaries.mjs`의 `components()`에서, `package.json` 이름이 그 기준과 같은 선언 구성요소의 `kind`다. 플러그인이나 사이드카 코드에 있는 선언되지 않은 `@soksak/` 기준은 발견 사항("undeclared")이며, 어떤 접두사도 이를 분류하지 않는다.
 3. 정확 일치: 기준은 core 패키지 이름과 정확히 같을 때만 core 이름이다. `@soksak/plugin-api-x`는 `@soksak/plugin-api`가 아니다.
 4. `@soksak/` scope 밖의 이름은 소유자가 아니며 검사하지 않는다. `docs/spec/plugins.md`(Repositories)가 이 한계를 적는다(변경 6).
@@ -122,7 +122,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 ### 주장
 
-- 접두사는 계약이 아니며 `docs/spec/plugins.md`는 npm 이름 규칙을 적지 않는다. core에 플러그인 이름 목록을 두는 것은 core 안의 플러그인 지식이며 경계 규칙이 금하는 것이다. 1번 규칙은 접두사가 필요 없다. core의 모든 `@soksak/` 기준이 core 이름도 선언된 이름도 아니면 발견 사항이므로, 모양과 무관하게 선언되지 않은 이름은 실패한다. 2번 규칙은 선언된 종류로만 분류하며, 선언되지 않은 참조는 발견 사항으로 보고한다.
+- 접두사는 계약이 아니며 `docs/spec/plugins.md`는 npm 이름 규칙을 적지 않는다. core에 플러그인 이름 목록을 두는 것은 core 안의 플러그인 지식이며 경계 규칙이 금하는 것이다. 1번 규칙은 접두사도 선언도 필요 없다. 플러그인과 사이드카 폴더 밖의 모든 `@soksak/` 기준이 정확한 core 이름이 아니면 선언 여부와 무관하게 발견 사항이므로, 모양과 선언에 관계없이 이름이 실패한다. 2번 규칙은 선언된 종류로만 분류하며, 선언되지 않은 참조는 발견 사항으로 보고한다.
 - `check-boundaries.mjs`는 이미 선언된 폴더를 읽는다(`origin/main:scripts/check-boundaries.mjs:25-44`). 1번 규칙은 기존 루프의 패턴 하나이며 새 경로를 읽지 않는다. 2번 규칙은 `check-test-parity`가 이미 하는 소유자 검사이며, 이제 리터럴 대신 선언된 이름을 같은 `components()` 함수로 읽는다.
 - 세그먼트 목록도 계약이 아니다. `PRIVATE_SEGMENT`는 이름이 적히지 않은 `@soksak/runtime/lib/x.js`와 `@soksak/workbench/internal.js`를 통과시키므로, 공개되는 하위 경로는 선언된 `exports` 맵이 정한다.
 - private 규칙은 소유자 분류와 독립이다. 이 규칙이 없으면 플러그인이 core 패키지의 private 하위 경로를 import해도 통과하고, `check-boundaries`가 검사하지 않는 `apps/`와 `e2e/`가 발견 없이 빠진다.
@@ -143,11 +143,11 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 ### 필요한 변경
 
-1. `scripts/check-boundaries.mjs`: `SOURCE`(`:17`)에 `ts`, `tsx`, `cjs`를 더한다. 최상위 실행을 진입 가드 `if (import.meta.url === pathToFileURL(process.argv[1]).href)`로 감싼다. `components()`와 `checkNames(components, files)`를 export한다. `checkNames`가 1번 규칙의 패턴을 루프에 더한다. 플러그인과 사이드카 이름의 `allowed` 면제를 제거하고, core 패키지도 선언된 구성요소도 아닌 모든 `@soksak/` 기준을 실패시키는 규칙을 추가한다.
+1. `scripts/check-boundaries.mjs`: `SOURCE`(`:17`)에 `ts`, `tsx`, `cjs`를 더한다. 최상위 실행을 진입 가드 `if (import.meta.url === pathToFileURL(process.argv[1]).href)`로 감싼다. `components()`와 `checkNames(components, files)`를 export한다. `checkNames`가 1번 규칙의 패턴을 루프에 더한다. 플러그인과 사이드카 이름의 `allowed` 면제를 제거하고, 선언된 plugin과 sidecar 폴더 밖의 추적 소스 파일에서, 정확한 core 패키지 이름이 아닌 모든 `@soksak/` 기준을 선언 여부와 무관하게 실패시키는 규칙을 추가한다.
 2. `scripts/check-test-parity.mjs`(`main`의 `:4514-4523`; `fix/decouple-F236`의 `:4482-4491`): `packageOwner`에서 core 리터럴, 플러그인과 사이드카 목록, `-example`과 접두사 분기를 제거한다. 소유자 조회는 `check-boundaries.mjs`의 `components()`로 만든다(2번 규칙). `OWNER_ROOTS`는 유지한다. `auditOwnership`에 5번 private 규칙과 6번 추출 규칙을 주입된 읽기 함수(선언된 패키지의 `package.json` 이름과 `exports` 맵)와 함께 추가한다. `main` 변경과 `fix/decouple-F236` 변경은 별도 커밋이다.
 3. `scripts/test/test-parity.test.mjs:195-218`: "sidecar" 단언은 2번 규칙의 소유자 검사 사례가 되고, "private" 단언은 5번 규칙 아래 남는다. 새 사례: 선언된 `sidecar-y`를 `plugins/x/ui/a.js`가 import하면 "sidecar"로 실패; `plugins/x/ui/a.js`가 `@soksak/plugin-api/src/private.js`를 import하면 "private"으로 실패; `require.resolve("@soksak/runtime/src/x.js")`는 "private"으로 실패; 하위 경로가 없는 `@soksak/plugin-api`는 통과; `apps/`와 `e2e/`의 private 경로는 실패; `exports` 맵에 없는 `@soksak/runtime/lib/x.js`는 "private"으로 실패하고, 맵에 있는 하위 경로는 통과; core 소스의 `@soksak/hwp`는 선언되지 않은 것으로 실패한다.
 4. `library-plugins.test.mjs:35,98`과 `plugin-operations.test.mjs:63`의 `@soksak/sidecar-vt` 픽스처를 `@scope/sidecar-vt`로 바꾼다. 이 테스트들은 실제 사이드카를 검사하지 않는다.
-5. `checkNames`의 `scripts/test/` 테스트: `packages/**/x.js`의 선언되지 않은 `@soksak/plugin-foo`는 실패; 같은 이름이 `packages/**/x.ts`에 있어도 실패; core에서 선언된 `@soksak/sidecar-vt-alacritty`는 실패; `@soksak/sidecar-example`은 실패; `@soksak/plugin-api-x`는 실패; 선언되지 않은 `@soksak/hwp`는 실패; `@scope/sidecar-vt`는 통과; core의 `@soksak/plugin-api`는 통과. 이 사례들은 `checkNames`, `.ts` 확장자, 규칙이 아직 없으므로 현재 코드에서만 실패한다. main에서 `packageOwner`는 `@soksak/plugin-foo`에 소유자를 주지 않으므로, 1번 규칙은 새 규칙이다. 접두사 결함은 `fix/decouple-F236`(`:4484-4486`)에 있다.
+5. `checkNames`의 `scripts/test/` 테스트: `packages/**/x.js`의 선언되지 않은 `@soksak/plugin-foo`는 실패; 같은 이름이 `packages/**/x.ts`에 있어도 실패; core에서 선언된 `@soksak/sidecar-vt-alacritty`는 실패; `@soksak/sidecar-example`은 실패; `@soksak/plugin-api-x`는 실패; 선언되지 않은 `@soksak/hwp`는 실패; `packages/**/x.js`의 선언된 `@soksak/plugin-browser`는 실패; `apps/`의 `@soksak/hwp`는 실패; `@scope/sidecar-vt`는 통과; core의 `@soksak/plugin-api`는 통과. 이 사례들은 `checkNames`, `.ts` 확장자, 규칙이 아직 없으므로 현재 코드에서만 실패한다. main에서 `packageOwner`는 `@soksak/plugin-foo`에 소유자를 주지 않으므로, 1번 규칙은 새 규칙이다. 접두사 결함은 `fix/decouple-F236`(`:4484-4486`)에 있다.
 6. `docs/spec/plugins.md:34`(Repositories)를 registry 목록으로 고친다(선언된 플러그인 `browser, editor, files, hwp, terminal`, 선언되지 않은 저장소는 따로 적는다). 같은 절에 추가한다: core는 플러그인이나 사이드카 이름을 적지 않는다. core 소스에서 선언되지 않은 `@soksak/` 이름은 거부되고, 플러그인과 사이드카 코드의 선언되지 않은 참조는 발견 사항이다. `@soksak/` 밖의 이름은 검사하지 않는다. 소유자는 core `main`이며 `.ko.md`도 바꾼다.
 
 ### 범위 밖
@@ -186,4 +186,11 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 - D3 5번 규칙은 세그먼트 목록 `PRIVATE_SEGMENT`를 써서 적히지 않은 하위 경로가 통과한다. 수용: 규칙은 선언된 `exports` 맵을 쓴다.
 - D3 1번과 2번 규칙은 접두사로 이름을 고르므로, `@soksak/hwp` 같은 선언되지 않은 평범한 이름이 통과한다. 수용: 1번 규칙은 core 이름도 선언된 이름도 아닌 모든 `@soksak/` 기준을 실패시키고, 2번 규칙은 선언된 종류로만 분류한다.
 
-상태: 라운드 7 대기. 라운드 7 감사자는 이 텍스트를 받는다.
+### 라운드 7
+
+새 Haiku 감사자 2명이 결정 수준만 묻고(D1 또는 D3 자체가 틀렸는가) 이의를 보고했다:
+
+- D1: 형태만 비교하는 검사(이름, 인자 수, 선언된 타입)로는 동작 변경을 잡을 수 없어, 가짜가 시그니처는 유지하고 다른 값을 돌려줄 수 있다. 수용: core가 계약 벡터(export 함수별 입력과 기대 출력, core 테스트에서 가져옴)를 커밋하고, 각 플러그인의 `check`가 가짜를 그 벡터로 실행한다(15번 변경).
+- D3: 1번 규칙은 core 이름도 선언된 이름도 아닌 기준만 실패시켜서 core의 선언된 `@soksak/plugin-browser`가 통과했고, `packages/**`만 스캔해서 `apps/`, `e2e/`, `scripts/`의 선언되지 않은 `@soksak/hwp`가 통과했다. 수용: 1번 규칙은 선언된 plugin과 sidecar 폴더 밖의 모든 추적 소스 파일을 스캔하고, 정확한 core 패키지 이름이 아닌 모든 `@soksak/` 기준을 선언 여부와 무관하게 실패시킨다. 선언은 2번 규칙에서만 쓴다.
+
+상태: 라운드 8 대기. 라운드 8 감사자는 이 텍스트를 받는다.
