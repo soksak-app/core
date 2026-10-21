@@ -144,7 +144,7 @@ fn service(config: &Path) -> (Receiver<serde_json::Value>, JoinHandle<()>) {
                 return;
             }
             let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-            let _ = requests.send(request.clone());
+            requests.send(request.clone()).unwrap();
             let reply = match request["operation"].as_str() {
                 Some("hello") => {
                     serde_json::json!({"operation": "hello", "protocol": 1, "ok": true})
