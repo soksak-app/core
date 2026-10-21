@@ -1888,7 +1888,7 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
     let (sidecars, _directory) = script_sidecars(concat!(
         "#!/bin/sh\nread open1\nread open2\nread closed2\n",
         "printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n",
-        "read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec sleep 600\n",
+        "read answer\nprintf '{\"surface\":\"s1\",\"body\":%s}\\n' \"$answer\"\nexec cat >/dev/null\n",
     ));
     let (window, events, _failures) = failing_owner("a", "/projects/a");
     for surface in ["s1", "s2"] {
@@ -1917,6 +1917,15 @@ fn an_unfinished_line_at_the_end_of_the_output_is_not_a_message() {
         std::io::Cursor::new(b"{\"surface\":\"s1\"}\n{\"surface\":\"s2\",\"body\":\"cut".to_vec());
     let mut line = Vec::new();
     assert_eq!(
+    // The sidecar ends when its input closes, so the stop does not wait for its deadline.
+    let stopping = std::time::Instant::now();
+    sidecars.stop();
+    let elapsed = stopping.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "stop took {elapsed:?} after the answer; the sidecar ends with its input and must not wait the stop deadline of {:?}",
+        sidecars.stop_timeout
+    );
         read_message_line(&mut reader, 1024, &mut line).unwrap(),
         MessageLine::Complete
     );
