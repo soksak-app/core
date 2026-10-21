@@ -100,9 +100,12 @@ function enabledInstalledPlugins(configuration) {
   const file = join(configuration, "plugins", "installed.json");
   if (!existsSync(file)) throw new Error(`${file} does not exist; install plugins with sok first`);
   const installed = readJson(file);
-  // A format 1 file is converted to format 2 when sok or the application reads it.
-  if (installed?.format !== 2 || typeof installed.plugins !== "object" || installed.plugins === null) {
-    throw new Error(`${file}: expected format 2 with plugins`);
+  // The format that sok writes (INSTALLED_FORMAT of sok). No other format is read: an older file is refused by name, not converted.
+  if (installed?.format !== 3) {
+    throw new Error(`${file}: format ${installed?.format} is not 3, the format that sok writes`);
+  }
+  if (typeof installed.plugins !== "object" || installed.plugins === null) {
+    throw new Error(`${file}: expected format 3 with plugins`);
   }
   // default: sidecars is an optional field of the state; a state without it records no sidecar.
   const sidecars = installed.sidecars ?? {};
