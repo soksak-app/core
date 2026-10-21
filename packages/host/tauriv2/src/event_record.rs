@@ -92,7 +92,11 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
             log.count_loss(channel, events, bytes);
         }
     }
+    let attached = log.is_some();
     records.log = log;
+    if attached {
+        crate::routine::notify_writer_attached();
+    }
 }
 
 /// Stores a record as the event `<layer>.record.<level>`. The place and the text are cut to `RECORD_PLACE_BYTES` and

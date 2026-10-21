@@ -141,7 +141,8 @@ pub fn open_log(path: &Path) -> Result<File, String> {
 /// Opens the stderr file of this run, `logs/host-<boot>.stderr`, makes it the standard error of the process and of its
 /// children, installs the fatal handlers and the panic hook, and stores the run record (docs/spec/logging.md#files). The file
 /// holds only what no writer of the contract writes: the crash output of the runtime and the fatal lines of the native
-/// library. Call it once, after the process lock of the configuration directory is held.
+/// library. Call it once, after the process lock of the configuration directory is held. The panic hook is installed by
+/// [`install_panic_hook`] at the start of the process, not here.
 pub fn start_standard_error(config: &Path, identifier: &str) -> Result<(), String> {
     let platform = platform::current()?;
     let file = open_log(&crate::event_log::standard_error_path(config))
@@ -153,14 +154,14 @@ pub fn start_standard_error(config: &Path, identifier: &str) -> Result<(), Strin
     platform
         .install_fatal_handlers()
         .map_err(|error| format!("standard error file: {error}"))?;
-    install_panic_hook();
     log_info("run", format!("{identifier} pid {}", std::process::id()));
     Ok(())
 }
 
 /// Stores each panic of the host as the event `host.panic` before the previous hook prints its message, and starts the
-/// thread that ends the process once the event is stored (`routine::record_panic`). The hook never waits for the writer. The
-/// standard error is the stderr file once [`start_standard_error`] ran.
+/// thread that ends the process once the event is stored (`routine::record_panic`). The hook never waits for the writer. A
+/// panic before the writer exists stays in the start buffer until the writer opens, and the thread that ends the process
+/// waits for the writer for a bounded time. The standard error is the stderr file once [`start_standard_error`] ran.
 pub fn install_panic_hook() {
     crate::routine::start_panic_ender();
     let previous = std::panic::take_hook();

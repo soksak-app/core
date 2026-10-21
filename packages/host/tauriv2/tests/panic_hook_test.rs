@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host_tauriv2::application_log::start_standard_error;
+use soksak_host_tauriv2::application_log::{install_panic_hook, start_standard_error};
 use soksak_host_tauriv2::event_log::{self, Options};
 use soksak_host_tauriv2::event_record::use_host_event_log;
 
@@ -29,6 +29,8 @@ const HOOK_BOUND: Duration = Duration::from_millis(1500);
 fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_the_process_ends() {
     if let Some(config) = std::env::var_os(CHILD) {
         let config = std::path::Path::new(&config);
+        // The process start of the host installs the hook first (docs/spec/hosts.md#process-lifecycle).
+        install_panic_hook();
         if let Err(error) = start_standard_error(config, "com.soksak.test") {
             println!("{error}");
             std::process::exit(3);
@@ -109,5 +111,103 @@ fn the_panic_hook_does_not_wait_for_the_writer_and_the_record_is_stored_before_t
                 .as_str()
                 .is_some_and(|name| !name.is_empty()),
         "events {events:?}"
+    );
+}
+
+const BEFORE_WRITER_CHILD: &str = "SOKSAK_PANIC_BEFORE_WRITER_CHILD";
+
+// contract: log.panic.before-writer-is-stored-when-the-writer-opens
+#[test]
+fn a_panic_before_the_writer_exists_is_stored_when_the_writer_opens() {
+    if let Some(config) = std::env::var_os(BEFORE_WRITER_CHILD) {
+        let config = std::path::Path::new(&config);
+        // The process start of the host installs the hook first, before any writer exists; this child mirrors that order.
+        install_panic_hook();
+        let ended = std::panic::catch_unwind(|| panic!("the lock directory cannot be read"));
+        assert!(ended.is_err());
+        let log = event_log::start(Options {
+            directory: config.join("logs"),
+            role: "host".into(),
+            boot: "b2".into(),
+            queue_events: 64,
+            queue_bytes: 64 * 1024,
+            batch_interval: Duration::from_millis(20),
+            rotate_bytes: 1 << 30,
+            pull: None,
+            pull_loss: None,
+            policy_path: None,
+            retention_bytes: 1 << 40,
+        })
+        .unwrap();
+        use_host_event_log(Some(Arc::new(log)));
+        // The record ends the process with PANIC_STATUS once the writer stored it; reaching the end of the wait is the failure.
+        std::thread::sleep(Duration::from_secs(10));
+        std::process::exit(4);
+    }
+    let config = folder::Folder::new();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_panic_before_the_writer_exists_is_stored_when_the_writer_opens",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(BEFORE_WRITER_CHILD, config.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(101),
+        "child output {stdout:?} {:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let events = records::read_events(&records::event_log_path(config.path()));
+    let panics: Vec<&serde_json::Value> = events
+        .iter()
+        .filter(|event| event["event"] == "host.panic")
+        .collect();
+    assert!(
+        panics.len() == 1
+            && panics[0]["fields"]["text"]
+                .as_str()
+                .is_some_and(|text| text.ends_with(": the lock directory cannot be read")),
+        "events {events:?}"
+    );
+}
+
+const NO_WRITER_CHILD: &str = "SOKSAK_PANIC_NO_WRITER_CHILD";
+
+// contract: log.panic.without-writer-is-written-to-the-standard-error
+#[test]
+fn a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full() {
+    if std::env::var_os(NO_WRITER_CHILD).is_some() {
+        install_panic_hook();
+        let ended = std::panic::catch_unwind(|| panic!("the lock directory cannot be read"));
+        assert!(ended.is_err());
+        // The writer never opens, so the process ends by the bounded wait; reaching the end of the wait is the failure.
+        std::thread::sleep(Duration::from_secs(10));
+        std::process::exit(4);
+    }
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_panic_that_no_writer_stores_is_written_to_the_standard_error_in_full",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(NO_WRITER_CHILD, "1")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(101), "stderr {stderr:?}");
+    assert!(
+        stderr.contains("no writer opened within")
+            && stderr.contains("host.panic name=")
+            && stderr.contains("text=")
+            && stderr.contains("the lock directory cannot be read"),
+        "the standard error does not hold the record of the panic: {stderr:?}"
     );
 }
