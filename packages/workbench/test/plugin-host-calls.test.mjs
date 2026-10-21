@@ -47,21 +47,30 @@ mock.module("@soksak/plugin-api", { namedExports: {
     };
   },
   EXPOSURE_ERRORS: {},
+  LOG_LEVELS: { error: "error", warn: "warn", info: "info", debug: "debug" },
 } });
 const emit = (name, event) => { for (const listener of [...(listeners.get(name) ?? [])]) listener(event); };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 const { listenPluginHostCalls, hostCommandsOf, keepHostCommands } = await import("../plugin-host.js");
+const session = "plugin:probe:project-a:fixture-sidecar";
 
 const registered = [];
 const unregistered = [];
 const reports = [];
+// The sidecars of the probe plugin: fixture-sidecar declares one read operation, list (docs/plans/plugin-host-routes.md rule 8).
+const probeSidecars = [{
+  name: "fixture-sidecar",
+  declared: ["list"],
+  declaration: { executable: "build/worker", protocol: 1, message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] },
+}];
 function listen() {
   return listenPluginHostCalls({
     register: (plugin, kind, name) => registered.push({ plugin, kind, name }),
     unregister: (plugin) => unregistered.push(plugin),
     timeoutOf: () => undefined,
     report: (error) => reports.push(String(error?.message ?? error)),
+    sidecarsOf: (plugin) => (plugin === "probe" ? probeSidecars : []),
   });
 }
 
@@ -147,4 +156,61 @@ test("keepHostCommands keeps the layer that a later listener of the same plugin 
   assert.equal(hostCommandsOf("other"), layer);
   forget();
   assert.equal(hostCommandsOf("other"), null);
+});
+
+test("the served sidecar calls record a subscription and send the checked body to the host call", async () => {
+  const pluginHost = listen();
+  emit("plugin-host-call", { plugin: "probe", id: 7, command: "runtime.sidecar.on", params: { id: session, sidecar: "fixture-sidecar" } });
+  await tick();
+  assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 7, result: null } });
+  emit("plugin-host-call", { plugin: "probe", id: 8, command: "runtime.sidecar.onFailure", params: { id: session, sidecar: "fixture-sidecar" } });
+  await tick();
+  assert.deepEqual(calls.at(-1).arg, { plugin: "probe", id: 8, result: null });
+  emit("plugin-host-call", { plugin: "probe", id: 9, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: '{ "operation": "list", "path": "a" }', cids: ["c1"] } });
+  await tick();
+  assert.deepEqual(calls.at(-2), { name: "pluginHostSidecarSend", arg: { plugin: "probe", sidecar: "fixture-sidecar", id: session, body: '{"operation":"list","path":"a"}', cids: ["c1"] } });
+  assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 9, result: null } });
+  pluginHost.close();
+});
+
+test("a sidecar call refuses a sidecar the plugin does not declare, a session of another name and an undeclared operation", async () => {
+  const pluginHost = listen();
+  const refusals = [
+    [{ id: session, sidecar: "other-sidecar", body: '{"operation":"list"}' }, "plugin host probe cannot use sidecar other-sidecar"],
+    [{ id: "plugin:other:project-a:fixture-sidecar", sidecar: "fixture-sidecar", body: '{"operation":"list"}' }, `plugin host probe cannot use sidecar session plugin:other:project-a:fixture-sidecar`],
+    [{ id: "plugin:probe:project-a:fixture-sidecar:extra", sidecar: "fixture-sidecar", body: '{"operation":"list"}' }, "plugin host probe cannot use sidecar session plugin:probe:project-a:fixture-sidecar:extra"],
+    [{ id: session, sidecar: "fixture-sidecar", body: '{"operation":"write"}' }, "plugin host probe: operation write is not served"],
+  ];
+  for (const [params, message] of refusals) {
+    const count = calls.length;
+    emit("plugin-host-call", { plugin: "probe", id: 10, command: "runtime.sidecar.send", params });
+    await tick();
+    assert.equal(calls.some((call, index) => index >= count && call.name === "pluginHostSidecarSend"), false, `${message} reached the host call`);
+    assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message });
+  }
+  pluginHost.close();
+});
+
+test("a sidecar message of a plugin session reaches its host page only with a subscription, and the end of the host drops it", async () => {
+  // An earlier test may have subscribed the same session; the host of this test starts with none.
+  const pluginHost = listen();
+  emit("plugin-host-ended", { plugin: "probe" });
+  const posted = calls.length;
+  emit("sidecar-message", { surface: session, sidecar: "fixture-sidecar", body: { n: 1 } });
+  await tick();
+  assert.equal(calls.slice(posted).some((call) => call.name === "pluginHostEvent"), false, "a message with no subscription was posted");
+  emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.sidecar.on", params: { id: session, sidecar: "fixture-sidecar" } });
+  await tick();
+  emit("sidecar-message", { surface: session, sidecar: "fixture-sidecar", body: { n: 2 } });
+  await tick();
+  assert.deepEqual(calls.at(-1), { name: "pluginHostEvent", arg: { plugin: "probe", event: "message", sidecar: "fixture-sidecar", id: session, body: { n: 2 } } });
+  emit("sidecar-failure", { surface: session, sidecar: "fixture-sidecar", reason: "exited" });
+  await tick();
+  assert.equal(calls.some((call) => call.name === "pluginHostEvent" && call.arg.event === "failure"), false, "a failure with no failure subscription was posted");
+  emit("plugin-host-ended", { plugin: "probe" });
+  const after = calls.length;
+  emit("sidecar-message", { surface: session, sidecar: "fixture-sidecar", body: { n: 3 } });
+  await tick();
+  assert.equal(calls.slice(after).some((call) => call.name === "pluginHostEvent"), false, "the ended host still received a message");
+  pluginHost.close();
 });

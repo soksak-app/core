@@ -263,6 +263,18 @@ test("a sidecar failure without a handler becomes a page error", async () => {
   }
 });
 
+test("a failure of a plugin session is delivered to its plugin host and shows no page error", async () => {
+  const errors = windowErrors();
+  try {
+    const { windowSidecar } = await import("../host.js");
+    await windowSidecar("fixture-sidecar").send("plugin:probe:project-a:fixture-sidecar", { operation: "list" }).catch(() => {});
+    deliverFailure({ sidecar: "fixture-sidecar", surface: "plugin:probe:project-a:fixture-sidecar", reason: "exited" });
+    assert.deepEqual(errors.messages, [], "a plugin session failure was shown as a page error");
+  } finally {
+    errors.close();
+  }
+});
+
 test("the first sidecar request waits until the failure listener is installed", async () => {
   let install;
   installListener = (name) => name === "sidecar-failure"
