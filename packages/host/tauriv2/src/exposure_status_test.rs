@@ -120,3 +120,21 @@ fn a_poisoned_pending_lock_still_answers_a_request() {
         "the request failed while the pending lock was poisoned"
     );
 }
+// contract: host.locks.poisoned-state-is-recovered
+#[cfg(feature = "diagnostics")]
+#[test]
+fn the_pending_count_is_read_when_the_pending_lock_is_poisoned() {
+    let relay = Relay::default();
+    let (tx, _rx) = mpsc::channel();
+    relay
+        .pending
+        .lock()
+        .unwrap()
+        .insert(1, ("main".to_string(), tx));
+    poison(&relay.pending);
+    assert_eq!(
+        relay.pending_count("main"),
+        1,
+        "the waiting requests of a poisoned lock were not counted"
+    );
+}
