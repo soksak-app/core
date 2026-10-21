@@ -310,6 +310,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
         .plugin(tauri_plugin_deep_link::init())
         .manage(windows::Windows::default())
         .manage(exposure::Exposure::default())
+        .manage(plugin_host::PluginHostStates::default())
+        .manage(plugin_host::PluginHostRestarts::default())
         .plugin(endpoint)
         .manage(surfaces::Background)
         // The main page is fetched with a scheme that knows the webview that requested the start document

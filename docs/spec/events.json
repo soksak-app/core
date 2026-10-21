@@ -893,6 +893,34 @@
       },
       "description": "A sidecar of either transport failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
     },
+    "host.plugin-host.restart": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "plugin": "string",
+        "attempt": "number"
+      },
+      "description": "The page process of the plugin host of the plugin failed below the restart limit, so the host created the plugin host again; attempt counts the restarts since the last reset (docs/spec/plugin-host.md#restarts)."
+    },
+    "host.plugin-host.restart-limit": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "plugin": "string"
+      },
+      "description": "The plugin host of the plugin failed for the fourth time within 300 seconds over every window, so the host stopped its restarts and closed it in every window (docs/spec/plugin-host.md#restarts)."
+    },
+    "host.trace.plugin-host.restart-reset": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string"
+      },
+      "description": "The person opened a surface of a plugin whose plugin host was stopped at its restart limit: the host cleared the failure record and created the plugin host again (docs/spec/plugin-host.md#restarts)."
+    },
     "host.trace.sidecar.restart-reset": {
       "layer": "host",
       "class": "call",
