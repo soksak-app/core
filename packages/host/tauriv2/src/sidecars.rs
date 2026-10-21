@@ -744,6 +744,9 @@ type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>
 /// Receives the result of the service for every close and shutdown request.
 type ReplyWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<(), String>>>>>;
 
+/// A check hook called with the name of a persistent service that retain has started.
+type RetainHook = Box<dyn Fn(&str) + Send + Sync>;
+
 struct PersistentConnection {
     /// The version that the service sent in its hello reply, or `None` when the reply had none.
     version: Option<String>,
@@ -834,7 +837,7 @@ struct Core<O> {
     ready_timeout: Duration,
     /// Called with the name of each persistent service after retain has started it and before retain reads the sessions to
     /// keep (docs/plans/plugin-host-routes.md rule 7). A check injects a session here.
-    retain_sending: Option<Box<dyn Fn(&str) + Send + Sync>>,
+    retain_sending: Option<RetainHook>,
 }
 
 /// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
