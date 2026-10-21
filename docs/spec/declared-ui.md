@@ -134,7 +134,7 @@ A declared UI status is drawn through its declared UI snapshots, as follows:
 
 - Each accepted declared UI snapshot replaces the tree of its status. Elements are matched by their path of keys to keep workbench state.
 - The workbench keeps the expanded state of each branch, keyed by the status, the tree key, and the path of node keys from the root. A kept state is set by `core.declared-ui.tree.expand` only.
-- In an accepted value, a branch whose `expanded` differs from its `expanded` in the previous accepted value, or that is new, takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A new branch with no kept state takes the plugin's value.
+- In an accepted value, a branch whose `expanded` differs from its `expanded` in the baseline takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A branch is new only when a baseline exists and the baseline has no branch at its path. With no baseline, a branch that has kept state keeps it, and a branch without kept state takes the plugin's value.
 - A rejected value does not change the kept state. The baseline of the `expanded` comparison is the last accepted value. A rejection and a change of source remove the baseline. With no baseline, the kept state wins for every path that it holds.
 - A path that is a leaf in an accepted value loses its kept state. A branch with no kept state takes the plugin's `expanded` value.
 - A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot.
@@ -151,6 +151,7 @@ The source changes by these rules:
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
+- When the main page loads, the workbench pulls the current value of each declared status once, from the source chosen for it.
 
 ## Sidebar section form
 

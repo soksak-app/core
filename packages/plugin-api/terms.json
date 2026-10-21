@@ -254,7 +254,7 @@
     },
     {
       "term": "declared UI",
-      "definition": "A sidebar section whose every element is one of list, tree, button or status-line, which the workbench draws from the declared UI snapshots that a plugin sends (docs/spec/declared-ui.md).",
+      "definition": "A sidebar section whose every element is one of list, tree, button or status-line, which the workbench draws from the declared UI snapshots and pull replies that a plugin sends (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },
@@ -302,7 +302,7 @@
     },
     {
       "term": "declared UI value",
-      "definition": "The value of a declared UI status: an object with the field `elements` that a declared UI snapshot carries (docs/spec/declared-ui.md).",
+      "definition": "The value of a declared UI status: an object with the field `elements` that a declared UI snapshot or pull reply carries (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },

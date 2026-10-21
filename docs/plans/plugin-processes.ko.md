@@ -570,3 +570,12 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 - R9-4: (c) 전이가 load 경우를 되풀이했다("메인 페이지 load 때와 load 때 고른 출처에서의 load 때"). 판정: 수용. 해결: 규칙 2는 메인 페이지 load 때, 출처가 바뀔 때, 방향이 바뀔 때만 고른 출처에서 pull을 허용하며, 다른 때는 허용하지 않는다. load 경우는 한 번만 적는다.
 - R9-5: 계획의 규칙 2가 각 선언된 status의 snapshot을 한 번 요청한다고 적었으나, R9-3에 따라 pull 응답은 snapshot이 아니다. 판정: 수용. 해결: 규칙 2는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 요청한다(pull)고 적는다. 계획, 선언된 UI 명세, 노출 명세, 용어 목록을 두 언어로 검색하여 pull 응답을 snapshot이라고 부르는 다른 곳을 찾지 못했다. pull 응답의 seq를 적는 곳은 출처의 마지막 snapshot의 seq를 말하며 다른 진술이다.
+
+**선언된 UI 스키마 검토 10차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 열 번째 적대적 검토에 대한 답변이다. 네 건을 모두 수용한다.
+
+- R10-1: status 대응에 각 선언된 status의 load pull이 적혀 있지 않았다. 판정: 수용. 해결: 메인 페이지가 load되면 workbench는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 pull한다는 항목을 두 언어에 적는다.
+- R10-2: 기준 없이 적용된 가지의 "새" 의미 때문에 유지된 상태가 있는 가지를 잃을 수 있었다. 판정: 수용. 해결: 가지는 기준이 있고 기준의 그 경로에 가지가 없을 때만 새 것이다. 기준이 없으면 유지된 상태가 있는 가지는 그 상태를 유지하고, 유지된 상태가 없는 가지는 plugin의 값을 받는다.
+- R10-3: 노출 명세의 주소가 모든 요소에 같은 속성을 적었다. 판정: 수용. 해결: 요청은 control을 section id와 `data-key`로 지정하며, list 항목과 tree 노드의 control은 `data-path`와 `data-role`을 더한다. 두 언어에 적는다.
+- R10-4: 용어 정의가 선언된 UI snapshot만 적었으나, pull 응답도 snapshot과 같은 방식으로 검사된다. 판정: 수용. 해결: 선언된 UI와 선언된 UI 값의 정의가 용어 목록에서 선언된 UI snapshot과 pull 응답을 함께 적는다.

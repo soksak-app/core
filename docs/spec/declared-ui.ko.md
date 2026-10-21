@@ -134,7 +134,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 
 - 받아들인 선언된 UI snapshot마다 그 status의 트리를 대체한다. 요소는 key 경로로 맞춰서 workbench 상태를 유지한다.
 - workbench는 status, tree key, 루트부터의 노드 key 경로로 가지마다 펼침 상태를 보관한다. 유지된 상태는 `core.declared-ui.tree.expand`로만 설정된다.
-- 받아들인 값에서, 이전에 받아들인 값의 `expanded`와 다르거나 새로운 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 유지된 상태가 없는 새 가지는 plugin의 값을 받는다.
+- 받아들인 값에서, 기준(baseline)의 `expanded`와 다른 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 가지가 '새'것인 것은 기준이 있고 기준의 그 경로에 가지가 없을 때뿐이다. 기준이 없으면 유지된 상태가 있는 가지는 그 상태를 유지하고, 유지된 상태가 없는 가지는 plugin의 값을 받는다.
 - 거부된 값은 유지된 상태를 바꾸지 않는다. `expanded` 비교의 기준은 마지막으로 받아들인 값이다. 거부와 출처 변경은 기준을 없앤다. 기준이 없으면 유지된 상태가 그 상태를 가진 모든 경로에서 이긴다.
 - 잎 노드가 된 경로는 유지된 상태를 잃는다. 유지된 상태가 없는 가지는 plugin의 `expanded` 값을 받는다.
 - pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. `null`이 아닌 pull 응답은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
@@ -152,6 +152,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 
 - 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
 - 선언된 UI 값은 변경 흐름이 아니다. plugin은 어떤 요소가 바뀌어도 값 전체를 다시 보낸다.
+- 메인 페이지가 load되면 workbench는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 pull한다.
 
 ## 사이드바 section 형태
 

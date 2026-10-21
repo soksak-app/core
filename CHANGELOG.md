@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.8-0-11: The declared UI specification is revised after its tenth review. The status mapping states the load pull of each declared status, a branch is new only when a baseline exists, the exposure address of a control is section id and `data-key` with `data-path` and `data-role` for list items and tree nodes, and the term definitions name pull replies.
 - F212.8-0-10: Two defects in the ninth-review text are corrected. The transition rule states the load case once, and the plan's load pull requests the current value of each declared status once, because a pull reply is not a snapshot.
 - F212.8-0-9: The declared UI specification is revised after its ninth review. The load pull requests each declared status from its chosen source, every control carries `data-key` with its root element key, and list items and tree nodes also carry `data-path` and `data-role`. A pull reply is described as a reply, not as a snapshot.
 - F212.8-0-8: The declared UI specification is revised after its eighth review. A pull reply has a defined seq and a `null` value, a non-null pull reply is validated like a pushed snapshot, and the `expanded` comparison has a baseline. The element address is section, element key, path and role, and the rejection rows for a missing or non-string `kind` are added.

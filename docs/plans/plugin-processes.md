@@ -569,3 +569,12 @@ The objections below are the answers of the ninth adversarial review of [declare
 
 - R9-4: the (c) transition repeated the load case, as "at the load of the main page and at load, from the source chosen at load". Verdict: accepted. Resolution: rule 2 allows a pull from the chosen source at the load of the main page, at a change of source and at a change of orientation, and at no other time. The load case is stated once.
 - R9-5: plan rule 2 said that the workbench requests one snapshot of each declared status, although R9-3 makes a pull reply a reply and not a snapshot. Verdict: accepted. Resolution: rule 2 says that the workbench requests the current value of each declared status once, from the source chosen for it (pull). A search of the plan, the declared UI specification, the exposure specification, and the term list in both languages found no other place that calls a pull reply a snapshot. The places that name the seq of a pull reply name the seq of the source's last snapshot, which is a different statement.
+
+**Declared UI schema review round 10**
+
+The objections below are the answers of the tenth adversarial review of [declared UI](../spec/declared-ui.md). All four are accepted.
+
+- R10-1: the status mapping did not state the load pull of each declared status. Verdict: accepted. Resolution: a bullet states that when the main page loads, the workbench pulls the current value of each declared status once, from the source chosen for it, in both languages.
+- R10-2: the word "new" for a branch applied without a baseline, so a branch with kept state could lose it. Verdict: accepted. Resolution: a branch is new only when a baseline exists and the baseline has no branch at its path. With no baseline, a branch with kept state keeps it, and a branch without kept state takes the plugin value.
+- R10-3: the address in the exposure specification named the element attributes for every element. Verdict: accepted. Resolution: a request addresses a control by its section id and `data-key`, and controls of list items and tree nodes add `data-path` and `data-role`, in both languages.
+- R10-4: the term definitions named declared UI snapshots only, and a pull reply is validated like a snapshot. Verdict: accepted. Resolution: the definitions of declared UI and declared UI value name declared UI snapshots and pull replies in the term list.
