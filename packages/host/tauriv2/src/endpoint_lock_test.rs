@@ -322,3 +322,21 @@ fn a_refused_start_is_reverted_when_the_peer_list_lock_is_poisoned() {
         "a refused start was not reverted while the peer list lock was poisoned"
     );
 }
+
+// A state notification reaches the watching connections when the peer list lock is poisoned.
+#[test]
+fn a_state_notification_is_written_when_the_peer_list_lock_is_poisoned() {
+    let shared = shared(Pages::default());
+    let sink = Sink::default();
+    shared
+        .peers
+        .lock()
+        .unwrap()
+        .insert(1, peer(writer_of(&sink), &[watch("state")]));
+    poison(&shared.peers);
+    Notifier(shared.clone()).notify_watchers("state", &raw(&json!(1)).unwrap());
+    assert!(
+        !sink.0.lock().unwrap().is_empty(),
+        "a state notification was not written while the peer list lock was poisoned"
+    );
+}
