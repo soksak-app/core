@@ -9,6 +9,7 @@ fn seconds_after(start: Instant, seconds: u64) -> Instant {
     start + Duration::from_secs(seconds)
 }
 
+// contract: view.restart.limit
 #[test]
 fn view_restart_window_slides_past_old_failures() {
     // The failure at 0 seconds is out of the window at 350 seconds, so the failures at 100, 200, 350 and 360 seconds are the four

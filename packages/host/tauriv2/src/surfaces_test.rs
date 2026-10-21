@@ -59,6 +59,7 @@ fn a_status_read_during_surface_close_finds_the_registered_surface() {
     assert!(named.lock().unwrap().contains_key(&7));
 }
 
+// contract: view.composition.declares-page
 #[test]
 fn a_view_composition_declares_its_page_with_optional_regions() {
     use super::{SurfaceComposition, validate_composition};
@@ -90,6 +91,7 @@ fn a_view_composition_declares_its_page_with_optional_regions() {
     }
 }
 
+// contract: surface.composition.dom-removed
 #[test]
 fn a_dom_composition_is_refused_with_the_plugin_and_the_field() {
     use super::{SurfaceComposition, validate_composition};

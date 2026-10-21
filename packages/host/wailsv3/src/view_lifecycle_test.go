@@ -128,6 +128,7 @@ func endView(t *testing.T, s *Surfaces, fake *lifecyclePlatform) unsafe.Pointer 
 }
 
 // A process end closes the view and creates it again from its record, without a sync of the workbench.
+// contract: view.restart.limit
 func TestViewProcessEndClosesTheViewAndCreatesItAgain(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
@@ -145,6 +146,7 @@ func TestViewProcessEndClosesTheViewAndCreatesItAgain(t *testing.T) {
 }
 
 // Three failures within the window restart the view three times; the fourth failure within the window stops the restarts.
+// contract: view.restart.limit
 func TestViewRestartStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
@@ -166,6 +168,7 @@ func TestViewRestartStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 }
 
 // A failure older than the window is not counted, so the window slides past it.
+// contract: view.restart.limit
 func TestViewRestartWindowSlidesPastOldFailures(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)
@@ -186,6 +189,7 @@ func TestViewRestartWindowSlidesPastOldFailures(t *testing.T) {
 }
 
 // A stopped surface creates no view on a later sync, and its record stays until the surface is removed and opened again.
+// contract: view.restart.limit
 func TestViewStoppedSurfaceIsNotCreatedUntilItsRecordIsCleared(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, native := newLifecycleSurfaces(t, clock)
