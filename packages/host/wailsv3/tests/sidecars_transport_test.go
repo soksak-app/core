@@ -1707,6 +1707,16 @@ type replaceService struct {
 	secondAt   time.Time
 }
 
+// installedProcessRunning reports whether pid is a process that runs. A process that ended, or a zombie that is already ended (state Z), is not running.
+func installedProcessRunning(pid int) bool {
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return false
+	}
+	state := strings.TrimSpace(string(out))
+	return state != "" && !strings.HasPrefix(state, "Z")
+}
+
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
 	t.Helper()
 	socketDirectory := socketParent(t)
@@ -1739,10 +1749,34 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		t.Fatal(err)
 	}
 	folder := t.TempDir()
-	script := "#!/bin/sh\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
+	installedPID := filepath.Join(folder, "installed.pid")
+	script := "#!/bin/sh\necho $$ > " + installedPID + "\nprintf '{\"protocol\":1,\"pid\":%s,\"socket\":\"" + socket + "\",\"token\":\"harness-token\"}\\n' \"$$\"\nexec sleep 20\n"
 	if err := os.WriteFile(filepath.Join(folder, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// The installed service process that the host starts for the fixture ends with the test.
+	t.Cleanup(func() {
+		data, err := os.ReadFile(installedPID)
+		if err != nil {
+			return // default: the host started no installed service in this test, so no process remains.
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			t.Errorf("installed service pid file: %v", err)
+			return
+		}
+		// default: a process that already ended gives ESRCH, and the check below reports only a process that remains.
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		// The host waits for its own child (cmd.Wait in the sidecar exit path), so this test does not reap the pid: a reap here could take
+		// that child. A killed child is reaped by the host; a zombie that remains is already ended, and ps reports its state as Z.
+		deadline := time.Now().Add(time.Second)
+		for installedProcessRunning(pid) && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if installedProcessRunning(pid) {
+			t.Errorf("installed service process %d outlived the test", pid)
+		}
+	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}
 	go func() {
 		for index := 0; ; index++ {
