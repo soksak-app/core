@@ -1619,6 +1619,12 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 		t.Fatalf("the restarted sidecar failed: %+v", value)
 	case <-time.After(200 * time.Millisecond):
 	}
+	// The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
+	stopping := time.Now()
+	sidecars.Stop()
+	if elapsed := time.Since(stopping); elapsed > time.Second {
+		t.Fatalf("the stop took %v", elapsed)
+	}
 }
 
 // contract: sidecars.restart.fourth-failure-stops
@@ -1706,7 +1712,12 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	if err := sendAt(t, clock, sidecars, owner, "s1", 43*time.Second); err != nil {
 		t.Fatalf("send of the refused surface after the reset: %v", err)
 	}
+	// The restarted sidecar does not answer the shutdown, so the stop ends at the stop timeout of the sidecars.
+	stopping := time.Now()
 	sidecars.Stop()
+	if elapsed := time.Since(stopping); elapsed > time.Second {
+		t.Fatalf("the stop took %v", elapsed)
+	}
 	if err := log.Flush(5 * time.Second); err != nil {
 		t.Fatal(err)
 	}
