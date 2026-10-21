@@ -80,61 +80,35 @@
 
 ## D9. 플러그인 배치: files와 shell
 
-결정: files 사이드바는 선언형 UI로 옮긴다. `files.tree`는 `tree`와 알림을 담는 값을 가진 status 섹션이 되고, `files.bookmarks`는 `list`를 가진 status 섹션이 된다. 그들의 상태는 files 플러그인 호스트가 보유하며, 호스트가 status를 제공한다. shell 카드는 view로 남고, 그 세 사이드바 섹션은 그 view가 제공하는 선언된 status다.
+상태: 라운드 5에서 배치 결정만으로 줄였다. 라운드 1부터 4까지의 D9.1~D9.10 본문은 층 규칙(호스트 페이지가 표현을 만들고, 사이드카는 데이터만 준다)과 호스트 채널을 바꾸었다. 그 둘은 F229(`feat/host-routes-F229`)에 속하며 여기서 정하지 않는다. 라운드 1~4의 구현 발견은 모두 `docs/features.md`의 하위 항목 F238-d-9부터 F238-d-22까지가 필요한 변경이다. 라운드 1~4 본문은 git 이력에 있다.
 
-### files: 근거
+결정(배치만):
 
-- `plugins/files/plugin.json`은 섹션 `files.tree`와 `files.bookmarks`를 각각 `module` 형태(`horizontal`과 `vertical`)로 선언하고, `state.module`로 `ui/state.js`를 선언한다. 설명은 카드 표면이 없다고 말한다. 그 status인 `files.tree`, `files.bookmarks`, `files.git`, `files.selection`, `files.open`은 module 시대의 스키마를 가진다(예: `files.tree`는 `root`, `error`, `entries`).
-- files UI가 쓰는 것: 펼침 토글; 누르면 선택(`tree.js`와 `tree-horizontal.js:59`); 두 번 누르면 열기(`tree-horizontal.js:61`, `dblclick`의 `core.file.open`)와 선택된 파일에서 Enter(`tree.js:124`); 행마다 북마크 추가(`tree-horizontal.js:65`); 행마다 git 표시(`tree-horizontal.js:62`, `data-part="git"`의 `marker`); 열기 실패를 헤더 제목 옆에 보이는 알림(`tree-horizontal.js:15-17`, `:29`); 선택한 경로를 북마크에 넣는 헤더 별(`tree.js:82-85`, `:119`); 새로고침(`tree-horizontal.js:17`); 북마크 삭제(`bookmarks.js:39`); 아이콘 `star`와 `rotate-cw`(`tree.js:85`, `:90`)는 core 아이콘 표의 이름이다(`packages/workbench/icons.js:6`).
-- 컨텍스트 메뉴, 이름 바꾸기, 끌어 놓기는 없다: `ui/sections/*.js`와 `ui/state.js`에서 `contextmenu`, `rename`, `drag`를 찾으면 일치가 없다. `context`라는 단어는 `context.bind`와 `context.icon`에만 맞는다.
-- `ui/state.js`는 `./events.js`(3행)만 가져오고 DOM 참조가 없다(플러그인 저장소의 작업 트리에서 `document`, `window`, `innerHTML`, `createElement`, `querySelector`, `appendChild`를 찾으면 일치가 없다. 커밋 이력은 여기서 확인하지 않는다).
-- `docs/spec/declared-ui.md:145`: "A registration by a state module does not serve a declared UI status." 선언된 status는 카드의 view 또는 플러그인 호스트가 제공한다(`docs/spec/plugin-processes.md:28`). files 플러그인은 카드 표면이 없으므로 플러그인 호스트가 유일한 경로다.
-- `docs/spec/declared-ui.md:56`과 `:171`: `tree`는 가로 섹션에 그려지지 않는다. files 플러그인은 가로 tree module을 가진다(`tree-horizontal.js`).
-- `docs/spec/declared-ui.md:17-22`: 선언된 status는 `exposes.status`의 스키마를 노출 스펙이 받는 부분집합 `{"type":"object","properties":{"elements":{"type":"array"}}}`로 선언한다. 현재 files 스키마는 이 형태가 아니다.
-- `docs/spec/declared-ui.md:117`: 펼침 명령은 플러그인에 "닿지 않는다". 플러그인은 펼침을 알아야 한다. 그 `files.tree` status가 펼친 디렉터리의 자식을 나열하기 때문이다(`plugin.json`의 `files.tree` 설명).
-- `docs/spec/declared-ui.md:111-112`: `command`는 누를 때 실행된다. 두 번 누름을 위한 요소는 없다.
-- 가로 tree의 백로그 항목 F230은 `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`에 이름만 있다. 그 파일은 커밋되지 않았다. `git show feat/host-routes-F229:docs/plans/plugin-host-routes.md`는 실패하고, 그 브랜치의 `docs/features.md`에는 F230이 없다. 이 기록은 F230을 예정된 항목으로 보지 않는다.
-- files 나열과 git 상태는 files 사이드카에서 온다. 플러그인은 사이드카가 변경을 알리면 다시 나열한다(`files.tree` 설명). `docs/spec/plugin-host.md:5`는 플러그인 호스트가 view도 사이드카도 보유할 수 없는 DOM 없는 로직을 실행한다고 말한다. `main`의 `plugin-host.md`는 호스트에서 플러그인 사이드카 이벤트로 가는 채널을 정의하지 않는다. 한 감사자가 인용한 "no sidecar send"라는 문구는 그 문서에서 찾지 못했다.
-- 사이드카 메시지 중계의 기존 경로: 호스트는 각 사이드카 메시지를 그 표면에 처음 보낸 창에 `sidecar-message` 이벤트 `{sidecar, surface, body}`로 전달한다(`docs/spec/sidecars.md:46`). 중계는 표면 단위이므로, 표면이 없는 플러그인 호스트는 오늘 사이드카 이벤트로 가는 경로가 없다.
+- D9.A files 사이드바: view가 없다. 두 섹션은 선언형 UI다. 프로젝트 폴더의 선언형 tree(`files.tree`)와 북마크의 선언형 list(`files.bookmarks`)다. files 플러그인에는 카드 표면이 없다.
+- D9.B shell 카드: view로 남는다. 세 사이드바 섹션(`shell.history`, `shell.cwd`, `shell.jobs`)은 카드의 view가 값을 주는 선언형 status 섹션이다(`docs/spec/declared-ui.md:145`, 첫 원천). shell에는 플러그인 호스트를 만들지 않는다.
+- D9.C F229 의존: files 사이드바는 files 플러그인의 어떤 view도 열려 있지 않을 때도 값을 보여야 하며, `docs/spec/plugin-processes.md:27-28`은 그것을 플러그인 호스트에 맡긴다. 어떤 런타임이 그 값을 주는지, 어떤 층 규칙과 호스트 채널로 주는지는 F229가 정하며 여기서 정하지 않는다. F229가 그 값을 줄 런타임이 없다고 보면 D9.A를 다시 연다.
+- D9.D D9.B의 수용 비용, 전부 적는다: shell 섹션은 카드가 닫혀 있거나 카드의 활성 탭이 아닐 때 비워진다. 기록과 작업 목록은 view 상태라서, 탭 unload가 shell 세션을 끝내고 둘을 비운다. cwd는 탭 상태에서 복원된다.
 
-### files: 결정 본문
+배치의 근거:
 
-- D9.1 어휘. 각 빈틈은 view가 아니라 `declared-ui.md`의 스펙 변경으로 닫는다:
-  - (a) 가로 tree: 가로 섹션의 `tree`는 보이는 행(루트 노드와 펼친 가지의 자식을 순서대로)을 섹션 너비에서 줄바꿈하는 한 줄로 그린다. 세로 형태의 노드 컨트롤을 쓰고 들여쓰기는 없다. tree의 요소 한도는 그대로 적용된다. `declared-ui.md`의 `:56`과 `:171`은 이 규칙을 가리키도록 바뀐다.
-  - (b) `open` 노드 필드: 트리 노드는 `open`을 선언할 수 있다. 이는 `command`의 규칙(`<plugin>.<name>` 형식, `params` 한도, 선언된 명령 검사)을 따르는 명령이다. 노드의 두 번 누르기에서 두 번째 누름은 `command` 대신 `open`을 실행한다. 두 번 누르기의 첫 누름은 `command`를 실행하고, 두 번째는 `open`만 실행한다. 두 번 누르기는 플랫폼의 두 번 클릭 간격 안의 두 번 누름이다. 초점이 있는 노드에서 Enter는 `open`을 실행한다(두 번 누르기의 키보드 대응). 스펙이 쓰기 전에 새 제스처 용어는 `packages/plugin-api/terms.json`에 넣는다.
-  - (c) 선택: `files.select`는 누를 때 실행되고, 플러그인은 다음 값에서 `selected`를 정한다. 클릭마다 왕복이 생기며, 선언형 tree의 비용으로 받아들인다.
-  - (d) git 표시: 트리 노드는 라벨 뒤에 그려지는 평문 문자열 `detail`(최대 500 코드 포인트)을 선언할 수 있다. 호스트가 files 사이드카의 git 상태로 값을 정한다. `files.git` status를 대체한다.
-  - (e) 행 동작: 트리 노드는 `actions`를 선언할 수 있다. `button` 객체의 배열(최대 2개)이며 `button`의 규칙(`command`, `params`, `icon`, `enabled`)을 따르고, 라벨 뒤에 그려진다. 행별 북마크 추가가 한 동작이다. 노드의 `command`(누름)와 `actions`는 서로 다른 컨트롤이다.
-  - (f) 알림: `files.tree` 값은 `tree` 앞에 `status-line` 요소를 둘 수 있으며, 열기 실패 문구를 그린다. `files.open` status를 대체한다. 오류 색은 `AGENTS.md`가 로그 경로에만 허용하므로, 이 문구는 평문 상태 줄이다. 오류 자체는 나타나는 순간 로그에 쓴다(`AGENTS.md`의 표시 규칙).
-  - (g) 헤더: `files.tree` 값은 `tree` 앞에 `button` 루트 요소를 둘 수 있다. 새로고침은 한 버튼이다. 헤더 별은 `params`를 호스트가 선택 경로로 정하는 `button`이므로, 선택이 바뀌면 값이 바뀐다. 플러그인은 선택을 받아들일 때 새 값을 보낸다.
-- D9.2 플러그인 호스트와 사이드카. files 나열과 git 상태는 files 사이드카가 만들며, 호스트는 사이드카 이벤트 없이 그것을 가질 수 없다. 사이드카 데이터가 필요 없는 DOM 없는 로직(펼친 집합, 선택, 북마크 목록)은 호스트가 가질 수 있다. 결정: `docs/spec/plugin-host.md`에 표면 없는 중계를 추가한다. 플러그인 호스트는 자기 플러그인의 사이드카 이벤트를 view가 쓰는 것과 같은 중계로 받고, 실패는 사이드카 실패 계약(`docs/spec/sidecars.md#failure`)을 따른다. 두 호스트에 사례 `plugin-host.sidecar.events-delivered`를 둔다. 중계는 표면 키이므로, 표면 없는 호스트를 위한 키(플러그인 호스트 소유 키)를 정하는 것이 스펙 본문의 일부다. 대안인 나열을 view에 두는 것은 거부한다. files 플러그인에는 카드 표면이 없고, 카드 표면을 만들면 `plugin-processes.md:26`의 배치 규칙에 따른 배치 변경이 되기 때문이다.
-- D9.3 펼침. 펼침 명령은 status 원천에 닿는다. `declared-ui.md:117`에 규칙이 추가된다. 펼침 명령은 원천이 view 또는 플러그인 호스트일 때, `{status, tree, path, expanded}`를 메시지 `declared-ui.expanded`로 status 원천에 보낸다. 같은 변경이 `:137`을 갱신한다. 그 줄은 유지되는 상태가 `core.declared-ui.tree.expand`로만 정해진다고 말한다. 사례 `declared-ui.expanded`는 두 호스트의 테스트 집합과 `packages/workbench` 테스트에 추가된다.
-- D9.4 스키마. 각 files status는 `declared-ui.md:17-22`의 선언 부분집합으로 다시 쓰거나 제거한다:
-  - `files.tree`: `files.tree` 값의 스키마(요소: 알림, 헤더 버튼, `tree`). 옛 `root`, `error`, `entries` 형태는 제거한다.
-  - `files.bookmarks`: `list` 요소를 가진 값의 status.
-  - `files.git`: status로서 제거한다. 내용은 D9.1d의 노드 `detail`이다.
-  - `files.selection`: status로서 제거한다. 호스트 상태이며 헤더 별과 Enter가 쓴다.
-  - `files.open`: status로서 제거한다. 내용은 D9.1f의 알림이다.
-  이동과 함께 `files.git`, `files.selection`, `files.open`의 `exposes.status` 항목은 `plugin.json`에서 빠진다.
-- D9.5 순서와 재개 작업. `F212.8`은 `[o]`(`plugin-processes-handoff.md:143`)이며 `[o]`로 남는다. D9.1a, D9.1b, D9.1d부터 D9.1g, D9.3의 후속 항목은 F212.8 아래 새 ID로, 이 검토가 닫힐 때 `docs/features.md`(+ko)의 F212 아래에 적는다. D9.2는 F212.9 아래 새 항목이다. 그다음 F212.9-4-1(상태 호출, `plugin-processes.md`의 규칙 5), 그다음 files 이동(F212.10-files, files 저장소), 그리고 F212.11이 남은 섹션의 module 형태를 제거한다.
-- D9.6 이동 전까지 `files.tree`와 `files.bookmarks`의 module 형태는 남는다. `plugin-processes.md:27`("Module section (today)")이 그렇게 말한다. 이는 현재 형태이며 낮춘 기준이 아니다. 이동은 F212.11보다 먼저 온다.
-- D9.7 DOM 검사: `plugins/files/test/`에 이동의 호스트 로직 모듈을 읽고 DOM 참조(`document`, `window`, `innerHTML`, `createElement`, `querySelector`, `appendChild`)가 있으면 실패하는 테스트를 둔다. Red: `ui/state.js` 사본에 `document.createElement("div")`를 넣으면 실패한다. 변경 없는 state 모듈과 이동 후의 호스트 로직 모듈에서 Green이다.
+- `plugins/files/plugin.json`은 `files.tree`와 `files.bookmarks`를 module 형식으로만 선언하며, 설명은 카드 표면이 없다고 말한다.
+- 배치가 필요로 하는 files UI 상호작용은 tree(펼치기, 선택, 열기)와 list(북마크 추가와 제거)다. `ui/sections/tree.js`, `tree-horizontal.js`, `bookmarks.js`에 있다.
+- `ui/state.js`는 `./events.js`만 가져오고 DOM 참조가 없다(플러그인 저장소 작업 트리에서 확인).
+- `docs/spec/declared-ui.md:145`: state 모듈의 등록은 선언형 status를 제공하지 않는다. 선언형 status는 카드의 view나 플러그인 호스트가 제공한다.
+- `plugins/shell/plugin.json`은 카드 view `ui/index.html`과 `status` 형식의 세 섹션을 선언한다. 텍스트 입력은 view가 필요한 이유다(`docs/spec/plugin-processes.md:24-26`).
+- `plugins/shell/ui/shell.js:56`은 unload가 shell 세션을 끝낸다고 적는다. `shell.js:119`와 `:146-154`는 탭 상태에서 cwd를 복원한다.
 
-### shell: 근거
+라운드 1~4에서 찾은 구현 공백(여기서 정하지 않음, 필요한 변경은 하위 항목):
 
-- `plugins/shell/plugin.json`은 카드 표면 `ui/index.html`을 `view`로 선언하고, 섹션 `shell.history`, `shell.cwd`, `shell.jobs`를 `status` 형태로 선언한다. `surface.unload`는 format 1과 `maxBytes` 8192를 선언한다.
-- 카드는 텍스트 입력을 가진다(`plugins/shell/ui/shell.js:6`). `plugin-processes.md:24-26`의 층 규칙은 이를 view에 둔다("IME가 필요한 텍스트 입력").
-- `shell.history`는 페이지 배열 `history`(`shell.js:31`)이며, 페이지가 덧붙인다(`:71`). `shell.jobs`는 페이지의 `runs` 맵으로 만든다(`:32`, `:48-49`, `:59`). `shell.js:56`은 unload가 셸 세션을 끝낸다고 말하고, 실행 중인 명령은 탭을 적재된 채로 둔다. `shell.js:119`와 `:146-154`는 탭 상태에서 cwd를 복원한다.
-- 호스트를 요구하는 조건은 `plugin-processes.md:27-28`이다. 플러그인의 어떤 view도 열려 있지 않은 동안 값을 보여야 하는 사이드바 섹션은 플러그인 호스트가 필요하다. shell 섹션에는 그런 요구가 없다. 그 값은 열린 셸 세션의 상태이고, 카드의 view가 그 원천이다(`declared-ui.md:145`). 원천이 없으면 섹션은 지워진다(`declared-ui.md:145`, 단계 (b)).
+- 선언형 어휘에는 가로 tree, 두 번 누르기 open, tree 노드의 keydown, 행 detail, 행 action, 알림 요소, 헤더 버튼 root, `declared-ui.expanded` 메시지가 없다(`declared-ui.md:56`, `:117`, `:126`, `:128`, `:130`, `:171`). 하위 항목 F238-d-9, F238-d-11~F238-d-14.
+- `packages/plugin-api/terms.json:304`은 `branch`를 자식으로 정의하며, 용어 `unloaded branch`는 없다. 하위 항목 F238-d-13.
+- `docs/spec/exposure.md`에는 선언형 요소의 keydown 규칙이 없다("Keyboard shortcuts" 절은 단축키만 다룬다). 하위 항목 F238-d-11.
+- `docs/spec/plugin-host.md:59`에 "no sidecar send"가 있다. 하위 항목 F238-d-18.
+- files의 스키마와 status는 module 시대의 것(`files.git`, `files.selection`, `files.open`, `root`, `error`, `entries`를 가진 `files.tree`)이다. 하위 항목 F238-d-15. module 형식은 F212.11까지 남는다.
+- DOM 없는 테스트, files 사이드카 데이터 프로토콜, 호스트 채널, 오류 채널, shell 설명은 하위 항목 F238-d-16, F238-d-17, F238-d-18, F238-d-19, F238-d-21이다.
+- 층 규칙 문장, 표현 모듈의 위치, 자르기 위치(라운드 3과 4가 다르다)는 F229의 몫이다: F238-d-20.
 
-### shell: 결정 본문
-
-- D9.8 shell은 자기 view를 원천으로 하는 선언된 status 섹션 셋을 가진 view로 남는다. shell의 층은 F212.10 표의 view 층이다. shell에는 호스트를 만들지 않는다. 호스트 규칙의 전제는 명시한다: shell 섹션은 shell view가 열려 있지 않은 동안 값을 보여야 하는 것이 아니다.
-- D9.9 받아들이는 비용을 전부 적는다:
-  - `shell.history`와 `shell.jobs`는 페이지의 세션 상태다. 탭의 unload(메모리 세이버)는 셸 세션을 끝내고, 두 목록은 그와 함께 지워진다. `plugin.json`의 `shell.history` 설명은 "the nonblank lines written to the shell session ... oldest first"에서 "the nonblank lines written to the current shell session through shell.write, oldest first, cut to the last 1000; an unload of the tab ends the session and clears the list"로 바뀐다. 같은 변경을 shell 저장소에도 한다.
-  - `cwd`는 unload 뒤 탭 상태에서 복원된다(`shell.js:119`, `:146-154`).
-  - 카드가 닫혀 있거나 자기 카드의 활성 탭이 아닌 동안 세 섹션은 지워진다(`declared-ui.md:145`). `shell.jobs`의 중단 컨트롤은 페이지가 적재된 동안에만 실행된다.
-- D9.10 shell 항목 `F212.10-shell-layer`는 이 결정으로 닫힌다. shell 저장소 체크리스트 P10에 기록한다(다른 곳에 기록할 항목 참고).
+라운드 5 감사자에게 묻는 질문: D9.A~D9.D의 배치가 틀렸는가. 구현 발견은 이 질문에 들어가지 않으며 하위 항목이다.
 
 ## 검증 실행 (부모, 이 worktree)
 
@@ -299,19 +273,16 @@
 
 ## 다른 곳에 기록할 것
 
+이 검토는 아래를 바꾸지 않는다. 각 항목은 소유 저장소나 브랜치에 기록된다. D2와 D8 항목은 하위 항목 F238-d-1~F238-d-8(`docs/features.md`)이고, D9 구현 항목은 F238-d-9~F238-d-22다. 아래 라운드 2 목록은 기록으로 남기며, D9에 관해서는 하위 항목이 대신한다:
+`docs/spec/plugin-host.md`(Channel, D9.2 경로, `:5`의 층 문장), `docs/spec/plugin-processes.md:26-28`(D9.2의 호스트 규칙), `docs/spec/native-surfaces.md`(D9.3의 view `declared-ui.expanded` 메시지), `docs/spec/sidecars.md:41,46,65,67`(호스트 경로 키).
 
-이 검토는 아래를 바꾸지 않는다. 각 항목은 소유 저장소나 브랜치에 기록된다. 라운드 2가 더한 항목: `docs/spec/plugin-host.md`(Channel의 D9.2 경로와 `:5`의 층 문장), `docs/spec/plugin-processes.md:26-28`(D9.2의 호스트 규칙), `docs/spec/native-surfaces.md`(D9.3의 view `declared-ui.expanded` 메시지), `docs/spec/sidecars.md:41,46,65,67`(호스트 경로 키).
-
-- core main(F218-2.4-1의 후속): `scripts/check-host-contract.mjs`, `scripts/test/check-host-contract.test.mjs`, `docs/spec/host-contract.md`(+ko)의 D8.1~D8.5. F218-2.4-1 변경 뒤의 새 변경으로 한다.
-- core main(F212.8 후속 ID): `docs/spec/declared-ui.md`(+ko)와 어휘 표의 D9.1a~D9.1g 및 D9.3. 테스트는 `packages/workbench`에 둔다.
-- core main(F212.9 후속): `docs/spec/plugin-host.md`(+ko)의 D9.2 표면 없는 사이드카 중계와 두 호스트의 사례.
 - `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`(R2.3): 소유자는 사람이다. `AGENTS.md`는 사람의 파일이기 때문이다. 정확한 본문은 다음 문단에 있다. `docs/spec/plugins.md`(R2.1, R2.2), `scripts/test/workspace-registry.test.mjs`(R2.4): core main.
 
 R2.3의 정확한 본문(영문 `AGENTS.md` 32줄): "`environment.json` lists plugins, `plugin.json` lists"를 "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists"로 바꾼다. 33줄: "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version"을 "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries` and `make registry` read"로 바꾼다.
-- `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`에 이름만 있는 F230 백로그 항목은 `feat/host-routes-F229`에 커밋되지 않았다. 그 소유자가 브랜치에 기록하거나 참조를 버린다. D9.1a가 가로 tree 규칙을 정한다.
-- `plugins/files` 저장소: D9.4 스키마와 D9.7 테스트, core F212.9-4-1 뒤의 항목 F212.10-files.
-- `plugins/shell` 저장소: `plugin.json`의 `shell.history` 설명(D9.9), 체크리스트 P10을 D9.8과 D9.10으로 닫는다.
+- `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`에 이름만 있는 F230 백로그 항목은 `feat/host-routes-F229`에 커밋되지 않았다. 하위 항목 F238-d-10이다(소유자: F229 브랜치).
+- `plugins/files` 저장소: F238-d-15~F238-d-17. `plugins/shell` 저장소: F238-d-21(`plugin.json`의 `shell.history` 설명과 체크리스트 P10).
+- F229가 층 규칙, 표현 위치, 자르기 위치를 정한다: F238-d-20.
 
 ## 하위 항목
 
-결정이 닫힐 때 `docs/features.md`(+ko)의 F212 아래에 등록한다.
+D2와 D8의 하위 항목 F238-d-1~F238-d-8은 `docs/features.md`(+ko)의 F212 아래에 등록되어 있다. D9 구현 하위 항목 F238-d-9~F238-d-22도 거기에 등록한다. 소유자는 위 목록과 각 항목에 있다. 라운드 5는 D9의 배치만 정한다.

@@ -80,60 +80,35 @@ Decision text:
 
 ## D9. Plugin placement of files and shell
 
-Decision: the files sidebar moves to declared UI. `files.tree` becomes a status section whose value holds a `tree` and the notices, and `files.bookmarks` becomes a status section with a `list`. Their state is held by the files plugin host, which serves the statuses. The shell card stays a view whose three sidebar sections are declared statuses served by that view.
+Status: reduced to the placement decision in round 5. The round 1 to 4 texts of D9.1 to D9.10 changed the layer rule (the host page builds presentation, the sidecar supplies data) and the host channel. Those belong to F229 (`feat/host-routes-F229`) and are not decided here. Every implementation finding of rounds 1 to 4 is a required change in the sub-items F238-d-9 to F238-d-22 (`docs/features.md`). The round 1 to 4 texts are in git history.
 
-### Files: evidence
+Decision (placement only):
 
-- `plugins/files/plugin.json` declares the sections `files.tree` and `files.bookmarks`, each with a `module` form (`horizontal` and `vertical`), and the `state.module` `ui/state.js`. Its description says it has no card surface. Its statuses `files.tree`, `files.bookmarks`, `files.git`, `files.selection` and `files.open` have module-era schemas (for example `files.tree` has `root`, `error`, `entries`).
-- The files UI uses: expand toggle; select on press (`tree.js` and `tree-horizontal.js:59`); open on double press (`tree-horizontal.js:61`, `core.file.open` with `dblclick`) and Enter on the selected file (`tree.js:124`); bookmark add per row (`tree-horizontal.js:65`); a git marker per row (`tree-horizontal.js:62`, `marker` with `data-part="git"`); a notice beside the header title for open failures (`tree-horizontal.js:15-17`, `:29`); a header star that adds the selected path as a bookmark (`tree.js:82-85`, `:119`); refresh (`tree-horizontal.js:17`); bookmark remove (`bookmarks.js:39`); icons `star` and `rotate-cw` (`tree.js:85`, `:90`), names in the core icon table (`packages/workbench/icons.js:6`).
-- No context menu, rename, or drag and drop exists: a search of `ui/sections/*.js` and `ui/state.js` for `contextmenu`, `rename` and `drag` finds no match. The word `context` matches `context.bind` and `context.icon` only.
-- `ui/state.js` imports only `./events.js` (line 3) and has no DOM reference (a search for `document`, `window`, `innerHTML`, `createElement`, `querySelector` and `appendChild` finds no match in the working tree of the plugin repository; committed history is not checked here).
-- `docs/spec/declared-ui.md:145`: "A registration by a state module does not serve a declared UI status." A declared status is served by a view of the card or by the plugin host (`docs/spec/plugin-processes.md:28`). The files plugin has no card surface, so the plugin host is the only route.
-- `docs/spec/declared-ui.md:56` and `:171`: a `tree` is not drawn in a horizontal section. The files plugin has a horizontal tree module (`tree-horizontal.js`).
-- `docs/spec/declared-ui.md:17-22`: a declared status declares `exposes.status` schema as the subset `{"type":"object","properties":{"elements":{"type":"array"}}}` that the exposure spec accepts. The current files schemas are not in that form.
-- `docs/spec/declared-ui.md:117`: the expand command "does not reach the plugin". The plugin must learn expansion, because its `files.tree` status lists the children of expanded directories (`plugin.json` `files.tree` description).
-- `docs/spec/declared-ui.md:111-112`: a `command` runs on press. There is no element for double press.
-- The horizontal-tree backlog item F230 is named in `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`. That file is not committed: `git show feat/host-routes-F229:docs/plans/plugin-host-routes.md` fails, and the branch's `docs/features.md` has no F230. This record does not treat F230 as scheduled.
-- The files listing and git status come from the files sidecar, and the plugin re-lists when the sidecar reports a change (the `files.tree` description). `docs/spec/plugin-host.md:5` says a plugin host runs DOM-free logic that neither a view nor a sidecar can hold. The main spec of `plugin-host.md` (on `main`) defines no channel from a host to its plugin's sidecar events; the phrase "no sidecar send" from an auditor was not found in it.
+- D9.A Files sidebar: no view. Its two sections are declared UI: a declared tree of the project folders (`files.tree`) and a declared list of the bookmarks (`files.bookmarks`). The files plugin has no card surface.
+- D9.B Shell card: stays a view. Its three sidebar sections (`shell.history`, `shell.cwd`, `shell.jobs`) are declared status sections whose values come from the view of the card (`docs/spec/declared-ui.md:145`, first source). No plugin host is created for shell.
+- D9.C Dependency on F229: the files sidebar must show values while no view of the files plugin is open, which `docs/spec/plugin-processes.md:27-28` assigns to a plugin host. Which runtime serves those values, and under which layer rule and host channel, is F229's decision and is not made here. If F229 finds that no runtime can serve them, D9.A is reopened.
+- D9.D Accepted costs of D9.B, stated in full: the shell sections are cleared while the card is closed or is not the active tab of its card; the history and the jobs are view state, so an unload of the tab ends the shell session and clears them; the cwd is restored from the tab state.
 
-### Files: decision text
+Evidence for the placement:
 
-- D9.1 Vocabulary. Each gap is closed by a spec change in `declared-ui.md`, not by a view:
-  - (a) Horizontal tree: a `tree` in a horizontal section draws its visible rows (the root nodes and the children of each expanded branch, in order) as one row that wraps at the section width, with the node controls of the vertical form and no indentation. The element limits apply unchanged. This is a rule of `declared-ui.md` (`:56`, `:171` are changed to name it).
-  - (b) `open` node field: a tree node may declare `open`, a command with `params` that follows the rules of `command` (the `<plugin>.<name>` form, the `params` limits, the declared-command check). A double press of a node runs `open` in place of `command` on its second press: the first press of a double press runs `command`, the second runs only `open`. A double press is two presses within the platform double-click interval. Enter on a focused node runs `open` (the keyboard equivalent of the double press). A new gesture term goes to `packages/plugin-api/terms.json` before the spec uses it.
-  - (c) Selection: `files.select` runs on press, and the plugin sets `selected` in its next value. This is a round trip per click, accepted as the cost of a declared tree.
-  - (d) Git marker: a tree node may declare `detail`, a plain-text string of at most 500 code points drawn after the label. The host sets it from the git status of the files sidecar. It replaces the `files.git` status.
-  - (e) Row actions: a tree node may declare `actions`, an array of at most 2 `button` objects with the rules of `button` (`command`, `params`, `icon`, `enabled`), drawn after the label. The per-row bookmark add is one action. A node's `command` (press) and its `actions` are separate controls.
-  - (f) Notices: the value of `files.tree` may hold a `status-line` element before the `tree`, which draws the open-failure text. It replaces the `files.open` status. The text is a plain status line, not an error color, which `AGENTS.md` reserves for the log path. The error itself is written to the log at the moment it appears (`AGENTS.md`, display rule).
-  - (g) Header: the value of `files.tree` may hold `button` root elements before the `tree`. Refresh is one button. The header star is a `button` whose `params` the host sets to the selected path, so the value changes when the selection changes; the plugin sends the new value when it accepts the selection.
-- D9.2 Plugin host and the sidecar. The files listing and git status are produced by the files sidecar, and the host cannot hold them without the sidecar's events. The DOM-free logic that needs no sidecar data (the expanded set, the selection, the bookmark list) can be held by the host. The decision is: `docs/spec/plugin-host.md` gains a surface-less relay: the plugin host receives the sidecar events of its own plugin through the same relay that a view uses, and its failure follows the sidecar failure contract (`docs/spec/sidecars.md#failure`), with the contract case `plugin-host.sidecar.events-delivered` in both hosts. The relay path that a view uses must be checked before the spec text is written (round-2 check item). The alternative, keeping the listing in a view, is rejected: a view for files needs a card surface, which the files plugin does not have and which the placement rule of `plugin-processes.md:26` makes a placement change.
-- D9.3 Expansion. The expand command reaches the status source. `declared-ui.md:117` gains a rule: the expand command posts `{status, tree, path, expanded}` to the source of the status as the message `declared-ui.expanded` whenever the source is a view or a plugin host. The same change updates `:137`, which says the kept state is set only through the command. The contract case `declared-ui.expanded` is added in both hosts' test set and in `packages/workbench` tests.
-- D9.4 Schemas. Each files status is rewritten to the declared subset of `declared-ui.md:17-22`, or removed:
-  - `files.tree`: the schema of the `files.tree` value (elements: the notices, the header buttons and the `tree`). The old `root`, `error`, `entries` shape is removed.
-  - `files.bookmarks`: a status whose value holds a `list` element.
-  - `files.git`: removed as a status; its content is the node `detail` of D9.1d.
-  - `files.selection`: removed as a status; it is host state, used by the header star and Enter.
-  - `files.open`: removed as a status; its content is the notice of D9.1f.
-  The `exposes.status` entries of `files.git`, `files.selection` and `files.open` leave `plugin.json` with the move.
-- D9.5 Ordering and reopened work. `F212.8` is `[o]` (`plugin-processes-handoff.md:143`) and stays `[o]`. The follow-up items for D9.1a, D9.1b, D9.1d to D9.1g and D9.3 are new IDs under F212.8, recorded in `docs/features.md` (+ko) under F212 when this review closes. D9.2 is a new item under F212.9. Then F212.9-4-1 (state calls, rule 5 of `plugin-processes.md`), then the files move (F212.10-files, in the files repository), and F212.11 removes the module form of any section that remains.
-- D9.6 Until the move, the module form of `files.tree` and `files.bookmarks` stays, as `plugin-processes.md:27` ("Module section (today)") states. This is the current form, not a lowered standard; the move comes before F212.11.
-- D9.7 DOM test: `plugins/files/test/` gets a test that reads the host logic module of the move and fails on any DOM reference (`document`, `window`, `innerHTML`, `createElement`, `querySelector`, `appendChild`). Red: the test fails on a copy of `ui/state.js` with `document.createElement("div")` added. Green on the unchanged state module, and on the host logic module after the move.
+- `plugins/files/plugin.json` declares `files.tree` and `files.bookmarks` in the module form only, and its description says it has no card surface.
+- The files UI interactions that the placement needs are a tree (expand, select, open) and a list (bookmark add and remove), in `ui/sections/tree.js`, `tree-horizontal.js` and `bookmarks.js`.
+- `ui/state.js` imports only `./events.js` and has no DOM reference (checked in the working tree of the plugin repository).
+- `docs/spec/declared-ui.md:145`: a registration by a state module does not serve a declared status; a declared status is served by a view of the card or by the plugin host.
+- `plugins/shell/plugin.json` declares the card view `ui/index.html` and the three sections with the `status` form. The text input is a view need (`docs/spec/plugin-processes.md:24-26`).
+- `plugins/shell/ui/shell.js:56` states that an unload ends the shell session; `shell.js:119` and `:146-154` restore the cwd from the tab state.
 
-### Shell: evidence
+Implementation gaps found in rounds 1 to 4 (not decided here; required changes, see the sub-items):
 
-- `plugins/shell/plugin.json` declares the card surface `ui/index.html` as a `view`, and the sections `shell.history`, `shell.cwd` and `shell.jobs` with the `status` form. Its `surface.unload` declares format 1 and `maxBytes` 8192.
-- The card has a text input (`plugins/shell/ui/shell.js:6`), which the layer rule of `plugin-processes.md:24-26` places in a view ("text input that needs IME").
-- `shell.history` is the page array `history` (`shell.js:31`), appended by the page (`:71`). `shell.jobs` is built from the page's `runs` map (`:32`, `:48-49`, `:59`). `shell.js:56` states that an unload ends the shell session, and a running command keeps its tab loaded. `shell.js:119` and `:146-154` restore cwd from tab state.
-- The requirement that triggers a host is `plugin-processes.md:27-28`: a sidebar section that "must show values while none of its views is open" needs a plugin host. The shell sections have no such requirement: their values are the state of the open shell session, and the card's view is their source (`declared-ui.md:145`). The sections are cleared while no source exists (`declared-ui.md:145`, step (b)).
+- The declared vocabulary has no horizontal tree, no double-press open, no keydown on a tree node, no row detail, no row actions, no notice element, no header button root, and no `declared-ui.expanded` message (`declared-ui.md:56`, `:117`, `:126`, `:128`, `:130`, `:171`). Sub-items F238-d-9, F238-d-11 to F238-d-14.
+- `packages/plugin-api/terms.json:304` defines `branch` by its children; the term `unloaded branch` does not exist. Sub-item F238-d-13.
+- `docs/spec/exposure.md` has no keydown rule for declared elements (its "Keyboard shortcuts" section covers shortcuts only). Sub-item F238-d-11.
+- `docs/spec/plugin-host.md:59` contains "no sidecar send". Sub-item F238-d-18.
+- The files schemas and statuses are module-era (`files.git`, `files.selection`, `files.open`, `files.tree` with `root`, `error`, `entries`). Sub-item F238-d-15. The module form stays until F212.11.
+- The DOM-free test, the files sidecar data protocol, the host channel, the error channel, and the shell description are sub-items F238-d-16, F238-d-17, F238-d-18, F238-d-19, F238-d-21.
+- Layer rule text, the presentation module location, and the cut site (round 3 and round 4 disagree) are F229's: F238-d-20.
 
-### Shell: decision text
-
-- D9.8 Shell stays a view with three declared status sections, sourced from its own view. The shell layer is the view layer of the F212.10 table. No host is created for shell. The premise of the host rule is stated explicitly: shell sections do not have to show values while no shell view is open.
-- D9.9 Accepted cost, stated in full:
-  - `shell.history` and `shell.jobs` are page session state. An unload of the tab (the memory saver) ends the shell session, and both lists are cleared with it. The `shell.history` description in `plugin.json` changes from "the nonblank lines written to the shell session ... oldest first" to "the nonblank lines written to the current shell session through shell.write, oldest first, cut to the last 1000; an unload of the tab ends the session and clears the list". The same change is made in the shell repository.
-  - `cwd` is restored from the tab state after an unload (`shell.js:119`, `:146-154`).
-  - While the card is closed or is not the active tab of its card, the three sections are cleared (`declared-ui.md:145`). The interrupt control of `shell.jobs` runs only while the page is loaded.
-- D9.10 The shell item `F212.10-shell-layer` is closed by this decision, recorded in the shell repository's checklist (P10, see To record elsewhere).
+Round 5 question to the auditors: is the placement in D9.A to D9.D wrong? Implementation findings are not part of that question; they are sub-items.
 
 ## Verification run (parent, in this worktree)
 
@@ -296,18 +271,15 @@ Checked in the files of this worktree before the round-5 review. Each claim belo
 
 ## To record elsewhere
 
-Recorded on the owning repository or branch; this review does not change them. Round 2 adds: `docs/spec/plugin-host.md` (Channel, the route of D9.2, and the layer statement at `:5`), `docs/spec/plugin-processes.md:26-28` (the host rule of D9.2), `docs/spec/native-surfaces.md` (the view `declared-ui.expanded` message of D9.3), and `docs/spec/sidecars.md:41,46,65,67` (the host route key).
+Recorded on the owning repository or branch; this review does not change them. The D8 and D2 items are sub-items F238-d-1 to F238-d-8 (`docs/features.md`), and the D9 implementation items are F238-d-9 to F238-d-22. The round 2 list below is kept for the record and is superseded for D9 by the sub-items: `docs/spec/plugin-host.md` (Channel, the route of D9.2, and the layer statement at `:5`), `docs/spec/plugin-processes.md:26-28` (the host rule of D9.2), `docs/spec/native-surfaces.md` (the view `declared-ui.expanded` message of D9.3), and `docs/spec/sidecars.md:41,46,65,67` (the host route key).
 
-- Core main (follow-up of F218-2.4-1): D8.1 to D8.5 in `scripts/check-host-contract.mjs`, `scripts/test/check-host-contract.test.mjs` and `docs/spec/host-contract.md` (+ko), as a new change after the F218-2.4-1 change.
-- Core main (F212.8 follow-up IDs): D9.1a to D9.1g and D9.3 in `docs/spec/declared-ui.md` (+ko) and the vocabulary table, with tests in `packages/workbench`.
-- Core main (F212.9 follow-up): D9.2 in `docs/spec/plugin-host.md` (+ko), the surface-less sidecar relay, with the contract case in both hosts.
 - `AGENTS.md:32-33` and `AGENTS.ko.md:32-33` (R2.3): owner is the person, because `AGENTS.md` is the person's file. The exact text is in the next paragraph. `docs/spec/plugins.md` (R2.1, R2.2) and `scripts/test/workspace-registry.test.mjs` (R2.4): core main.
 
 Exact text for R2.3 (EN `AGENTS.md`, line 32): replace "`environment.json` lists plugins, `plugin.json` lists" with "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists". Line 33: replace "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version" with "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries` and `make registry` read".
-- The F230 backlog item named in `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55` is not committed on `feat/host-routes-F229`. Its owner records it on that branch or drops the reference; D9.1a is the horizontal rule this review sets.
-- `plugins/files` repository: D9.4 schemas and D9.7 test, and item F212.10-files after F212.9-4-1.
-- `plugins/shell` repository: `plugin.json` `shell.history` description (D9.9); checklist item P10 closed by D9.8 and D9.10.
+- The F230 backlog item named in `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55` is not committed on `feat/host-routes-F229`. It is F238-d-10 (owner: the F229 branch).
+- `plugins/files`: F238-d-15 to F238-d-17. `plugins/shell`: F238-d-21 (`plugin.json` `shell.history` description and checklist item P10).
+- F229 decides the layer rule, the presentation location and the cut site: F238-d-20.
 
 ## Sub-items
 
-Registered in `docs/features.md` (+ko) under F212 when the decisions close.
+D2 and D8 sub-items F238-d-1 to F238-d-8 are registered in `docs/features.md` (+ko) under F212. D9 implementation sub-items F238-d-9 to F238-d-22 are registered there too; their owners are in the list above and in each entry. Round 5 decides the placement of D9 only.
