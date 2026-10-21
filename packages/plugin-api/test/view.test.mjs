@@ -645,6 +645,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.deepEqual(plain(posted.slice(before)), [item.steps[1].output]);
       } else {
         const received = [];
+        assert.equal(item.steps[0].input, "theme");
         const subscription = bridge.runtime.theme((value) => received.push(value));
         for (const step of item.steps.slice(1)) {
           host({ sok: 1, event: step.input.event, data: step.input.data });
