@@ -347,6 +347,8 @@ The workbench uses only these exports and does not branch on the runtime. When `
 
 Plugin pages import from `@soksak/plugin-api/page` and do not import workbench files: `followTheme`, `page`, `expose` ([exposure](exposure.md)), `ownManifest()` (the page's validated `plugin.json`), and `createSurfaceComposition(...)` ([surface composition](surface-composition.md)). The exported `page` object does not expose raw document or image attach/place ports. Region handles come only from the validated composition. A plugin page finds its plugin from its location: a `sok://<plugin id>` page belongs to the plugin named by its host and reads `/plugin.json` from its own origin, a page under `/modules/<name>/` on the main origin reads that module's `plugin.json`, and any other location is refused with an error that names it. The plugin id of a page is its host for a `sok://` page, whose `plugin.json` `id` must equal it (`plugin.json id <id> differs from the page plugin <host>`), and the `id` of the entry of `/installed-plugins.json` whose `package` is the module name for a main-origin page; a module without an entry is an error that names the package.
 
+An image region of a surface composition has no placement of its own. The workbench no longer serves the `image.place` host call, and the region has no `visible` or `_place` member: the host places an image region with the composition of its surface (`composition.place`), so a resize of the element sends no image placement.
+
 ## Tests
 
 ### Browser sections

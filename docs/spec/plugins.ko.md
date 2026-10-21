@@ -348,6 +348,8 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 플러그인 페이지는 `@soksak/plugin-api/page`에서 다음을 가져오고 워크벤치 파일을 가져오지 않는다: `followTheme`, `page`, `expose`([공개 항목](exposure.ko.md)), `ownManifest()`(검사한 페이지의 `plugin.json`), `createSurfaceComposition(...)`([표면 합성](surface-composition.ko.md)). 내보낸 `page` 객체는 원시 문서·그림 attach/place 포트를 노출하지 않는다. 영역 손잡이는 검증된 합성에서만 얻는다. 플러그인 페이지는 자기 위치로 plugin을 찾는다: `sok://<plugin id>` 페이지는 host가 이름 붙인 plugin에 속하며 자기 origin의 `/plugin.json`을 읽고, 메인 origin의 `/modules/<name>/` 아래 페이지는 그 module의 `plugin.json`을 읽으며, 다른 위치는 그 위치를 밝힌 오류로 거부한다. 페이지의 plugin id는 `sok://` 페이지에서는 host이며 그 `plugin.json`의 `id`가 같아야 하고(`plugin.json id <id> differs from the page plugin <host>`), 메인 origin 페이지에서는 module 이름이 `package`인 `/installed-plugins.json` 항목의 `id`이다. 항목이 없는 module은 그 package 이름을 밝힌 오류이다.
 
+surface 구성의 image region은 자체 배치를 갖지 않는다. 워크벤치는 `image.place` 호스트 호출을 더 이상 제공하지 않고, region에는 `visible`과 `_place` 멤버가 없다. 호스트는 image region을 그 surface의 구성(`composition.place`)으로 배치하므로, 요소의 크기 변화는 image 배치를 보내지 않는다.
+
 ## 테스트
 
 ### 브라우저 섹션

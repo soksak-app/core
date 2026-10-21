@@ -79,7 +79,7 @@ const REGION_HOST_CALLS = new Set([
   "compositionDeclare", "compositionPlace",
   "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
   "documentPost",
-  "imageAttach", "imagePlace", "imageFocus", "imageCaret", "imageText", "imageDetach",
+  "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
 ]);
 
 /** The named fields of a region call, whose name is the region name. Any other value is refused. */

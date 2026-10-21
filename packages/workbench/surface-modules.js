@@ -107,7 +107,6 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
     },
     image: {
       attach: (name, sidecar) => invoke("imageAttach", { name, sidecar }),
-      place: (name, insets, visible) => composed("imagePlace", { name, insets, visible }),
       focus: (name) => invoke("imageFocus", { name }),
       caret: (name, x, y, width, height) => invoke("imageCaret", { name, x, y, width, height }),
       text: (name, text) => invoke("imageText", { name, text }),
