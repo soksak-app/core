@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-a-1: view의 region 호출은 플러그인 쪽 모든 경로에서 거부된다. `REGION_HOST_CALLS`는 표의 region 종류 호스트 명령을 담으며 `documentQuery`와 `documentInteractionState`를 포함하고, 플러그인 쪽 native 핸들(`pluginNativeGate`)은 `runtime.native.call`, `call`, view run의 region 호출과 view bridge 호출을 모두 거부한다. 허용 목록은 Tauri 명령 표의 region 종류 명령과 같고, 워크벤치 호스트 경로의 리터럴 검사는 목록 밖의 region 호출을 찾지 못한다. 시험은 바뀌지 않은 집합에서 실패했고 지금은 통과한다.
 - F238-a-3: surface 구성의 image region은 자체 배치를 갖지 않는다. 워크벤치는 `image.place` 호스트 호출을 더 이상 제공하지 않고, plugin-api의 `attachImage`는 관찰, `visible`, `_place`를 갖지 않는다. 호스트는 region을 그 구성으로 배치한다. 요소 크기 변화에 `place`를 기대하던 image-region 시험은 바뀌지 않은 코드에서 실패했고 지금은 통과한다(12/12). `surface-composition`은 15/15 통과한다.
 - F228-6: view process가 끝나면 두 호스트는 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내고, page는 그 표면의 영역 기록을 잊으므로 재시작한 view가 영역을 다시 붙이기 전의 memory saver 판단은 닫힌 영역을 query하지 않는다. Go, Rust, page 시험이 바뀌지 않은 코드에서 실패하고 통과한다. Go와 Rust의 process 종료 시험, `surface-view`와 `document-regions`(14/14)가 통과한다.
 - F228: view의 영역은 process 종료 때 닫히고 page가 잊으며, view의 overlay와 view web view는 native plane 아래에 놓인다(F228-5). 하위 항목 F228-1부터 F228-6까지 완료되었다.

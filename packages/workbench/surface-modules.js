@@ -1,7 +1,7 @@
 import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry, registerSurfacePort } from "./exposure.js";
-import { answerViewCall, viewStopState } from "./view-calls.js";
+import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
@@ -241,11 +241,13 @@ function tabState(surface, isDisposed) {
 function answerViewCalls(surface, scoped, page, context) {
   // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
   const { tab } = context;
+  // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
+  const gate = pluginNativeGate(scoped.native);
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   const pending = new Map();
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
-    native: (name, listener) => scoped.native.on(name, listener),
+    native: (name, listener) => gate.on(name, listener),
     // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
       on: (id, listener) => page.sidecar().on(id, listener),
@@ -276,7 +278,7 @@ function answerViewCalls(surface, scoped, page, context) {
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
     runtime: {
-      native: { call: (name, payload) => scoped.native.call(name, payload) },
+      native: gate,
       sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
       clipboard: scoped.clipboard,
       links: scoped.links,
@@ -458,7 +460,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,
-      runtime: { sidecar: page.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
+      runtime: { sidecar: page.sidecar, native: pluginNativeGate(scoped.native), exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         links: scoped.links,
         theme: scoped.theme,

@@ -75,12 +75,36 @@ function untilCancelled(promise, signal) {
 // The host calls of the composition and the regions. A view operates its regions only through the composition calls, because a
 // host call from the view would skip the revision of the document, the region lifetime and the region record
 // (docs/spec/native-surfaces.md#view-surfaces, regions).
-const REGION_HOST_CALLS = new Set([
+export const REGION_HOST_CALLS = new Set([
   "compositionDeclare", "compositionPlace",
   "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
-  "documentPost",
+  "documentPost", "documentQuery", "documentInteractionState",
   "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
 ]);
+
+// The host calls of the view bridge (docs/spec/native-surfaces.md#view-surfaces, view channel). The page sends them itself, so a
+// plugin never reaches them.
+export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply"]);
+
+/**
+ * The plugin-facing native handle of a surface: the host calls and the native events that plugin code reaches through runtime.native.
+ * call refuses the region calls and the view bridge calls, so a plugin reaches a region only through its composition. The refusal
+ * is in this handle, not in each caller, so every plugin-facing path passes it.
+ */
+export function pluginNativeGate(native) {
+  return {
+    call(name, payload) {
+      if (REGION_HOST_CALLS.has(name)) {
+        return Promise.reject(new Error(`host call ${name} is not served: a view operates its regions through its composition`));
+      }
+      if (VIEW_BRIDGE_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served: the view bridge is internal`));
+      return native.call(name, payload);
+    },
+    on(name, listener) {
+      return native.on(name, listener);
+    },
+  };
+}
 
 /** The named fields of a region call, whose name is the region name. Any other value is refused. */
 function regionOf(command, params) {
