@@ -2217,6 +2217,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F212.9-3-2",
+    implementation: [
+      { file: "packages/workbench/plugin-host.js", symbol: "listenPluginHostCalls" },
+      { file: "packages/workbench/exposure.js", symbol: "forwardHost" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a plugin host answers only a request without surface for a name that no surface registered" },
+      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "plugin-host-ended removes the registrations of the host and ends its open requests" },
+    ],
+    expected: "The main page answers the registration calls of a plugin host under plugin:<plugin id>, answers a request without surface through the host only when no surface page registered the name, and removes the registrations when the host ends.",
+    levels: ["unit"],
+  },
+  {
     id: "F227",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "answerViewCalls" }],
     tests: [

@@ -65,7 +65,7 @@ view와 다른 것은 상대와 call이다:
 
 plugin host 페이지는 자신이 선언한 status, command, dom 항목을 channel을 통해 등록한다. view 페이지가 쓰는 call, 즉 command의 `runtime.command.register`와 status와 dom 항목의 exposure 등록(`page.exposure.register(kind, name)`)으로 한다. plugin host의 모든 등록의 owner key는 `plugin:<plugin id>`다. surface 페이지는 자기 surface id 아래에 자기 plugin을 owner로 등록한다. plugin의 `exposes`가 선언하지 않는 이름은 registry 오류로 거부된다. plugin host의 등록은 자기 프로세스와 함께 끝나며, restart limit 안에서 다시 만들어진 프로세스는 같은 key로 다시 등록한다.
 
-plugin host는 surface가 아니다. plugin host가 등록한 이름에 대한 `surface` 없는 요청은, 그 이름을 등록한 surface 페이지와 state module이 없을 때 그 등록이 답한다([choosing a surface](exposure.ko.md#표면-선택)). `surface`를 naming하는 요청은 plugin host가 답하지 않는다.
+plugin host는 surface가 아니다. plugin host가 등록한 이름에 대한 `surface` 없는 요청은, 그 이름을 등록한 surface 페이지와 state module이 없을 때 그 등록이 답한다([choosing a surface](exposure.ko.md#표면-선택)). `surface`를 naming하는 요청은 plugin host가 답하지 않는다. plugin host는 `command.run`에 등록된 command를 선언된 시간 제한 안에서 channel로 실행해 답하고, `status.get`에는 그 status의 pull([declared UI snapshots](#declared-ui-snapshots))로 답하며 그 reply `{seq, value}`를 `{value, version: seq}`로 돌려준다. plugin host는 status를 declared UI snapshot으로 보내므로, plugin host만 답할 `status.watch`, `status.unwatch`, dom 요청은 `plugin host <plugin id> does not serve <method>`로 거부된다.
 
 ## Declared UI snapshots
 
