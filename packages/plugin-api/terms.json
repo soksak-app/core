@@ -260,7 +260,7 @@
     },
     {
       "term": "declared UI snapshot",
-      "definition": "The declared values of one status of a view or plugin host, pushed by the plugin with {plugin, status, seq, value, skipped} and acknowledged by seq (docs/plans/plugin-processes.md).",
+      "definition": "The message that carries one declared UI value of one status, pushed by the plugin with {plugin, status, seq, value, skipped} and acknowledged by seq.",
       "rejected": [],
       "allowed": []
     },
@@ -315,6 +315,18 @@
     {
       "term": "kept state",
       "definition": "The expanded state that the workbench keeps for a tree branch, keyed by its status, tree and path of node keys. The expand command sets it, and a changed expanded value from the plugin replaces it (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared status source",
+      "definition": "The pair of a process and its registration of a declared UI status (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "baseline",
+      "definition": "The last accepted value, used for the expanded comparison of a declared UI status's branches (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },

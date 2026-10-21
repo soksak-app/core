@@ -630,3 +630,12 @@ The objections below are the answers of the fifteenth adversarial review of [dec
 - R15-2: the term card surface named the sidebar section as the trigger, which is not the declaring plugin. Verdict: accepted. Resolution: the term names a `button` in the sidebar that the plugin that declares it opens when that plugin needs a view.
 - R15-3: a registration by a state module was not stated to serve no declared UI status. Verdict: accepted. Resolution: a registration by a state module does not serve a declared UI status, and a declared UI status that only a state module registers has no source, so its section is cleared.
 - R15-4: the restart rule named transition (b) alone, although the change of source also pulls the current value under transition (c). Verdict: accepted. Resolution: the restart is handled by transitions (b) and (c).
+
+**Declared UI schema review round 16**
+
+The objections below are the answers of the sixteenth adversarial review of [declared UI](../spec/declared-ui.md). All four are accepted, and each resolution is applied as the reviewer wrote it.
+
+- R16-1: the new-branch rule and the leaf rule stated the baseline cases in two places that conflicted. Verdict: accepted. Resolution: with a baseline, a branch is new when the baseline has no branch at its path; without a baseline, a branch with no kept state is new. The conflicting clause of the leaf rule is removed.
+- R16-2: the terms declared status source and baseline were not in the term list, and the specification used the word source for the pair of a process and its registration. Verdict: accepted. Resolution: both terms are added to the term list. The definitional sentences of the declared UI specification use declared status source for the pair. The source of the plugin specification keeps its meaning.
+- R16-3: the definition of the declared UI snapshot named the values of a status, rather than the message that carries one value. Verdict: accepted. Resolution: the message that carries one declared UI value of one status, pushed by the plugin with {plugin, status, seq, value, skipped} and acknowledged by seq.
+- R16-4: the root-elements limit gave a reason that is not the work of the main page, and it did not say that the value is a chosen contract. Verdict: accepted. Resolution: 64 is a chosen contract value with the same reason as the other limits, the main page's work per declared UI snapshot. The reason about separate blocks is removed. A draw-time measurement may revise it.
