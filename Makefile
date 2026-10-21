@@ -186,6 +186,8 @@ language-test: native-darwin
 MANIFEST ?= Cargo.toml
 # The limit in seconds of one Rust test in rust-tests-alone and rust-repeat; the runner kills a test at it (scripts/rust-tests.mjs).
 TEST_TIMEOUT ?= 120
+# The limit in seconds of one benchmark in benchmark-rust and benchmark-go; the runner kills a benchmark at it (scripts/benchmarks.mjs).
+BENCH_TIMEOUT ?= 300
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
@@ -195,10 +197,11 @@ rust-tests-alone:
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
 # Measures the cost of the recorder. It is not a test: it prints numbers and asserts nothing. The Rust writer is measured with cargo bench and the native ring with the benchmark of native/darwin.
 benchmark-rust:
-	@$(CARGO_ENV) cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark --bench event_native_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_log_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_log_benchmark
+	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- cargo bench --manifest-path $(MANIFEST) -p soksak-host-tauriv2 --bench event_native_benchmark
 
 benchmark-go:
-	@$(GO_ENV) go test -count=1 -ldflags "$(GO_LINK)" -run '^$$' -bench 'EventLogEmit|NativePull' -benchtime 1x -v ./packages/host/wailsv3/tests
+	@$(GO_ENV) node scripts/benchmarks.mjs go ./packages/host/wailsv3/tests 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
 
 rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac

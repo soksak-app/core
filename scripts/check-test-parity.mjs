@@ -95,6 +95,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/go-repeat.test.mjs"]),
   lane("Node repeat tests", "js-ts", ["scripts/node-repeat.mjs"], ["scripts/test/node-repeat.test.mjs"]),
   lane("push gate tests", "js-ts", ["scripts/gate-tests.mjs"], ["scripts/test/gate-tests.test.mjs"]),
+  lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
