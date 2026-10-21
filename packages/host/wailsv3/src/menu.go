@@ -70,7 +70,7 @@ var menuRoles = map[string]application.Role{
 }
 
 // menuCommands are the commands that the text size items send to the main window page (docs/spec/text-size.md).
-// Menu shortcuts work whichever view has the keyboard focus, so the commands also run from a native terminal region or a browser
+// Menu shortcuts work whichever view has the keyboard focus, so the commands also run from a native image region or a browser
 // document.
 var menuCommands = map[string]string{
 	"text-larger":  "core.text.larger",
