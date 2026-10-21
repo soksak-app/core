@@ -142,6 +142,7 @@ impl PluginHostChannels {
         self.lock()
             .get(plugin)
             .map(|channel| channel.calls.values().cloned().collect())
+            // default: a window without the host of plugin has no open calls.
             .unwrap_or_default()
     }
 
@@ -176,6 +177,7 @@ impl PluginHostChannels {
         let event = fields
             .get("event")
             .and_then(Value::as_str)
+            // default: a message without an event name is refused below as the unknown event "".
             .unwrap_or_default();
         match event {
             DECLARED_SNAPSHOT_EVENT => snapshot(plugin, fields)
@@ -184,10 +186,12 @@ impl PluginHostChannels {
                 let named = fields
                     .get("plugin")
                     .and_then(Value::as_str)
+                    // default: a missing plugin is an empty text, which the check below refuses.
                     .unwrap_or_default();
                 let document = fields
                     .get("document")
                     .and_then(Value::as_str)
+                    // default: a missing document is an empty text, which the check below refuses.
                     .unwrap_or_default();
                 if named != plugin || document.is_empty() {
                     return Err(format!(
@@ -206,6 +210,7 @@ impl PluginHostChannels {
             "view.error" => Err(fields
                 .get("reason")
                 .and_then(Value::as_str)
+                // default: a view.error without a reason is logged as the empty reason, which closes nothing.
                 .unwrap_or_default()
                 .to_string()),
             other => Err(format!("plugin {plugin}: event {other:?} is unknown")),
@@ -399,6 +404,7 @@ pub fn request_message(request: &PluginHostRequest) -> Result<Value, String> {
         "sok": 1,
         "id": request.id,
         "command": request.command,
+        // default: a request without params carries null, as the call envelope has no params for it.
         "params": request.params.clone().unwrap_or(Value::Null),
     }))
 }
@@ -473,10 +479,11 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
 /// Handles the end of the page process of the host webview handle of plugin: the end is written to the application log
 /// and the host is closed. The restart of the host page follows the restart limit (F212.9-4).
 pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
-    let current = window_data(window)
-        .map(|data| data.plugin_hosts.get(plugin) == Some(handle))
-        .unwrap_or(false);
-    if !current {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(error) => return log_error("plugin host", error),
+    };
+    if data.plugin_hosts.get(plugin) != Some(handle) {
         return;
     }
     log_error(
