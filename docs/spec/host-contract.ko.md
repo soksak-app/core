@@ -821,3 +821,9 @@ fn invalid_json_closes_connection() {
 | `log.batch.answers-the-clock-request` | `log` 중계는 `{action: "clock"}`에 host가 호출 시점에 읽은 `ts_us`와 `mono_ns`로 답하고 event를 저장하지 않는다. 두 번째 답은 어느 clock에서도 첫 번째 답보다 작지 않다. | both |
 | `startup.failure.exits-with-its-message` | setup 단계의 실패는 그 메시지를 쓰고, 실패를 event loop에 돌려주지 않고 상태 1로 프로세스를 끝낸다. 돌려주면 프로세스가 abort된다. | both |
 | `startup.ends-no-process` | 호스트의 시작은 어떤 프로세스도 끝내지 않는다: 이전 실행의 기록 파일이 나열한 다른 애플리케이션의 WebKit 프로세스는 설정 디렉터리를 준비한 뒤에도 살아 있다. | both |
+| `plugin-host.create-loads-page` | window의 main page가 ready가 되면 host는 `plugin.json`이 `host`를 declare한 설치되고 켜진 각 plugin에 대해 view 구성(channel script, data directory, installed folder, declaration의 plugin)으로 plugin host web view를 만들고 `sok://<plugin>/<page>`를 load한다; host를 declare하지 않은 plugin은 아무것도 만들지 않는다. | both |
+| `plugin-host.create-once-per-plugin` | 같은 page의 두 번째 ready는 plugin host web view를 더 만들지 않는다: host는 plugin당 window당 하나의 plugin host web view를 가진다. | both |
+| `plugin-host.declaration-requires-page` | `host`가 object가 아닌 `plugin.json`은 `plugin <id> declares host that is not an object`로, `page`가 비어 있지 않은 문자열이 아닌 `plugin.json`은 `plugin <id> declares host without a page`로 실패한다; 각 error는 application log에 쓰이며 host web view를 만들지 않는다. | both |
+| `plugin-host.change-disposes` | plugin을 remove하거나 disable하는 `pluginsRun` operation 뒤 host는 모든 window에서 그 plugin의 plugin host web view를 닫는다; host web view가 없는 plugin의 disposal은 아무것도 닫지 않는다. | both |
+| `plugin-host.reload-disposes` | window의 main page의 시작(reload의 start document)은 그 window의 모든 plugin host web view를 닫고, 다음 ready가 다시 만든다. | both |
+| `plugin-host.close-disposes` | window의 close는 그 window의 모든 plugin host web view를 닫는다. | both |
