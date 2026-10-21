@@ -138,7 +138,9 @@ pub(crate) fn require_region(
     kind: &str,
     sidecar: Option<&str>,
 ) -> Result<(), String> {
-    let all = compositions.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the composition declarations, which are only read;
+    // the panic hook records the panic.
+    let all = compositions.lock().unwrap_or_else(PoisonError::into_inner);
     let composition = all
         .get(surface)
         .ok_or_else(|| format!("surface {surface:?} has no composition declaration"))?;
@@ -176,8 +178,18 @@ pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> 
     }
     validate_composition(&request.composition)?;
     let data = window_data(&webview.window())?;
-    let mut all = data.compositions.lock().map_err(|e| e.to_string())?;
-    let mut plugins = data.surface_plugins.lock().map_err(|e| e.to_string())?;
+    let mut all = data
+        .compositions
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the composition declarations, which the declaration
+        // replaces in one step; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    let mut plugins = data
+        .surface_plugins
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface plugins, which the declaration replaces in
+        // one step; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
     if let Some(previous) = all.get(&request.surface) {
         if previous != &request.composition
             || plugins.get(&request.surface) != Some(&request.plugin)
@@ -199,7 +211,9 @@ pub(crate) fn surface_attached(window: &Window, surface: &str) -> Result<bool, S
     Ok(window_data(window)?
         .surface_hosts
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .contains_key(surface))
 }
 
@@ -207,7 +221,9 @@ pub(crate) fn surface_handle(window: &Window, surface: &str) -> Result<Handle, S
     window_data(window)?
         .surface_hosts
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .get(surface)
         .copied()
         .ok_or_else(|| format!("surface {surface:?} is not attached"))
@@ -232,7 +248,9 @@ pub(crate) fn press_at(window: &Window, x: f64, y: f64) -> Result<(), NativeFail
         let hit = platform.hit(handle, x, y)?;
         // Destroyed deletes the registration, so it is read in this step, while the window is open.
         let data = window_data(&target)?;
-        let named = data.views.0.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the surface names, which are only read; the panic
+        // hook records the panic.
+        let named = data.views.0.lock().unwrap_or_else(PoisonError::into_inner);
         let documents = data.documents.names();
         Ok(hit.chain.iter().find_map(|view| {
             surface_owner_id(&named, *view)
@@ -348,9 +366,17 @@ pub(crate) struct Running {
 #[cfg(feature = "diagnostics")]
 pub(crate) fn when_settled(running: &Running) -> Result<std::sync::mpsc::Receiver<()>, String> {
     let (tx, rx) = std::sync::mpsc::channel();
-    let going = running.going.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the run flag, which is only read; the panic hook
+    // records the panic.
+    let going = running.going.lock().unwrap_or_else(PoisonError::into_inner);
     if *going {
-        running.settled.lock().map_err(|e| e.to_string())?.push(tx);
+        running
+            .settled
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the settled senders, which the end of the run
+            // drains; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(tx);
     } else {
         tx.send(())
             .map_err(|error| format!("settled notification had no receiver: {error}"))?;
@@ -416,7 +442,14 @@ fn mark_first_commit(running: &Running) -> bool {
 /// A press on a surface is received by the surface view and not by the page, so the window is watched and the surface
 /// id is passed to the page.
 fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<(), String> {
-    if watching.0.lock().map_err(|e| e.to_string())?.is_some() {
+    if watching
+        .0
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the press watch handle, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .is_some()
+    {
         return Ok(());
     }
     let main = exposure::root_view_on_main(window)?;
@@ -428,7 +461,9 @@ fn watch_presses(window: &Window, views: &Views, watching: &Watching) -> Result<
     let host = window.clone();
     let pointing = window.clone();
     with_native_owner(window, move |handle| {
-        let mut started = watched.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the press watch handle, which is set once; the
+        // panic hook records the panic.
+        let mut started = watched.lock().unwrap_or_else(PoisonError::into_inner);
         if started.is_some() {
             return Ok(());
         }
@@ -594,8 +629,18 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
 
     let overlays = check_sync_request(
         &request,
-        &*context.compositions.lock().map_err(|e| e.to_string())?,
-        &*context.surface_plugins.lock().map_err(|e| e.to_string())?,
+        &*context
+            .compositions
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the composition declarations and the surface plugins,
+            // which the check reads; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner),
+        &*context
+            .surface_plugins
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the surface plugins, which the check reads;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner),
     )?;
 
     if !request.settled {
@@ -680,12 +725,16 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             context
                 .compositions
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the composition declarations, which the layout
+                // step replaces; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .insert(s.id.clone(), s.composition.clone());
             context
                 .surface_plugins
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the surface plugins, which the layout step
+                // replaces; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .insert(s.id.clone(), s.plugin.clone());
             // A webview of size 0 is not visible and some platforms reject it, so it is handled as a hidden surface.
             let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
@@ -694,7 +743,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             let solid = if s.dim { 0.45 } else { 1.0 };
             let existing = surface_hosts
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only
+                // read; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .get(&s.id)
                 .copied();
             let handle = if let Some(handle) = existing {
@@ -750,17 +801,23 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
             context
                 .compositions
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the composition declarations, which the close
+                // of a removed surface amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .remove(&id);
             context
                 .surface_plugins
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the surface plugins, which the close of a
+                // removed surface amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .remove(&id);
             context
                 .composition_revisions
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the composition revisions, which the close of
+                // a removed surface amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .remove(&id);
             exposure::surface_closed(window, &id);
         }
@@ -780,7 +837,9 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         for s in &request.surfaces {
             let Some(handle) = surface_hosts
                 .lock()
-                .map_err(|e| e.to_string())?
+                // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only
+                // read; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
                 .get(&s.id)
                 .copied()
             else {
@@ -943,7 +1002,9 @@ pub(crate) async fn present(
                             let handle = context
                                 .surface_hosts
                                 .lock()
-                                .map_err(|e| e.to_string())?
+                                // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                                // which are only read; the panic hook records the panic.
+                                .unwrap_or_else(PoisonError::into_inner)
                                 .get(&p.id)
                                 .copied()
                                 .ok_or_else(|| {
@@ -1016,13 +1077,22 @@ pub(crate) async fn present(
 /// only when that value changes.
 fn announce_run(window: &Window, running: &Running, going: bool) -> Result<(), String> {
     {
-        let mut held = running.going.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the run flag, which this call sets; the panic
+        // hook records the panic.
+        let mut held = running.going.lock().unwrap_or_else(PoisonError::into_inner);
         if *held == going {
             return Ok(());
         }
         *held = going;
         if !going {
-            for done in running.settled.lock().map_err(|e| e.to_string())?.drain(..) {
+            for done in running
+                .settled
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the settled senders, which the end of the run
+                // drains; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .drain(..)
+            {
                 if done.send(()).is_err() {
                     crate::application_log::log_info(
                         "surface",
@@ -1066,7 +1136,9 @@ pub fn create_named_surface(
     let handle = create_logical_surface_handle(create, id)?;
     named
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface names, which the creation fills; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(handle, id.to_string());
     Ok(handle)
 }
@@ -1082,7 +1154,9 @@ pub fn create_registered_surface(
     let handle = create_named_surface(named, id, create)?;
     hosts
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which the creation fills;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .insert(id.to_string(), handle);
     Ok(handle)
 }
@@ -1100,7 +1174,9 @@ pub fn close_registered_surface(
     close: impl FnOnce(Handle) -> Result<(), String>,
 ) -> Result<bool, String> {
     let registered = {
-        let mut hosts = hosts.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the surface registrations, which the close
+        // amends; the panic hook records the panic.
+        let mut hosts = hosts.lock().unwrap_or_else(PoisonError::into_inner);
         if hosts.get(id) == Some(&handle) {
             hosts.remove(id);
             true
@@ -1112,7 +1188,12 @@ pub fn close_registered_surface(
         return Ok(false);
     }
     let closed = close(handle);
-    named.lock().map_err(|e| e.to_string())?.remove(&handle);
+    named
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the surface names, which the close amends; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&handle);
     closed.map(|()| true)
 }
 
@@ -1123,7 +1204,9 @@ pub fn removed_surfaces(
     hosts: &Mutex<HashMap<String, Handle>>,
     alive: &HashSet<String>,
 ) -> Result<Vec<(String, Handle)>, String> {
-    let hosts = hosts.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the
+    // panic hook records the panic.
+    let hosts = hosts.lock().unwrap_or_else(PoisonError::into_inner);
     let mut removed: Vec<(String, Handle)> = hosts
         .iter()
         .filter(|(id, _)| !alive.contains(*id))

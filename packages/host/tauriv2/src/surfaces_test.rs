@@ -1,10 +1,11 @@
 //! Checks that a window status read during the creation and the close of a surface finds the registered surface.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use super::{
-    Running, create_registered_surface, mark_first_commit, pressed_surface, removed_surfaces,
+    Running, close_registered_surface, create_registered_surface, mark_first_commit,
+    pressed_surface, removed_surfaces,
 };
 
 // contract: exposure.host-window.reads-during-surface-creation
@@ -97,5 +98,44 @@ fn the_first_commit_of_a_page_is_marked_when_the_running_lock_is_poisoned() {
     assert!(
         !mark_first_commit(&running),
         "a second commit of a page was marked as the first"
+    );
+}
+
+#[test]
+fn a_poisoned_surface_lock_still_creates_and_closes_a_surface() {
+    let named = Mutex::new(HashMap::new());
+    let surface_hosts: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+    poison(&named);
+    poison(&surface_hosts);
+    let created = create_registered_surface(&named, &surface_hosts, "tab-poison", || Ok(9));
+    assert_eq!(
+        created.ok(),
+        Some(9),
+        "a creation failed while the surface locks were poisoned"
+    );
+    let removed = removed_surfaces(&surface_hosts, &HashSet::new())
+        .ok()
+        .unwrap();
+    assert_eq!(
+        removed,
+        vec![("tab-poison".to_string(), 9)],
+        "a removal found no surface while the surface lock was poisoned"
+    );
+    let closed = close_registered_surface(&named, &surface_hosts, "tab-poison", 9, |_| Ok(()));
+    assert_eq!(
+        closed.ok(),
+        Some(true),
+        "a close found no registration while the surface locks were poisoned"
+    );
+    assert!(
+        named
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_empty()
+            && surface_hosts
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_empty(),
+        "a close of a poisoned lock kept the surface registration or its name"
     );
 }
