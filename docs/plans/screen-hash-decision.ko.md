@@ -122,39 +122,39 @@ auditor 3명이 v3을 검토했다(반론 29개). v4에서 답했다.
 
 ## 분할 결정 9-1
 
-이 절은 한 가지 질문을 결정한다. 터미널 화면 hash의 바이트 정의를 누가 소유하는가이다. 여기에는 `screenBytes`, `screenHash`, golden vector, hash가 계산되는 화면 메시지 형식, 모든 구현이 이를 재현한다는 규칙이 포함된다. F236-9-2의 이동 목록과 F236-9-3의 core 쪽 변경은 결정하지 않는다. 위 절들은 이력이며, 이 절은 소유자만 결정한다.
+이 절은 한 가지 질문을 결정한다. 터미널 화면 hash의 바이트 정의를 누가 소유하는가이다. 여기에는 `screenBytes`, `screenHash`, golden vector, hash가 계산되는 화면 메시지 형식, 모든 구현이 이를 재현한다는 규칙이 포함된다. F236-9-2의 이동 목록과 F236-9-3의 core 쪽 변경은 결정하지 않는다. 이 절은 바이트 정의에 관해 위 제안의 결정 1, 2를 대체한다. 제안의 나머지는 이력으로 남는다.
 
-아래 각 사실은 해당 저장소의 HEAD(커밋된 트리, `git show HEAD:<path>`)에서 확인했다. `packages/`, `docs/`, `scripts/`, `e2e/`는 core이다. `../plugins/terminal`(terminal plugin), `../sidecars/vt`(terminal sidecar), `../registry`(공개 registry)는 인접한 별도 저장소이다.
+아래 각 사실은 해당 저장소의 HEAD(커밋된 트리, `git show HEAD:<path>`)에서 확인했다. `packages/`, `docs/`, `scripts/`, `e2e/`는 core이다. `../plugins/terminal`(terminal plugin), `../sidecars/vt`(terminal sidecar), `../registry`(공개 registry)는 인접한 별도 저장소이다. registry의 추적되는 원본은 `plugins/terminal.json`이며, `index.json`은 생성물이라 추적되지 않는다.
 
 ### 후보
 
-- **C1, core.** core가 정의, vector, 메시지 형식을 유지한다. 위 제안의 결정 1, 2이다.
-- **C2, 선언된 계약 저장소.** 별도 저장소가 정의, vector, 메시지 형식을 보유한다. 소비자가 이를 선언하며, core는 이를 알지 못한다.
+- **C1, core.** core가 정의, vector, 메시지 형식을 유지한다.
+- **C2, 선언된 계약 저장소.** 별도 저장소가 정의, vector, 메시지 형식을 보유한다. 소비자가 자기 manifest에 이를 선언하며, core는 이를 알지 못한다.
 - **C3, terminal plugin.** plugin이 정의를 보유하고 sidecar가 이를 따른다.
 
 ### 사실
 
-- H1. core는 `packages/plugin-api/screen-hash.js`에서 hash를 정의한다. `screenBytes`는 42줄, `screenHash`는 90줄, `screenFromMessage`는 110줄이다. 1줄은 "The hash of a terminal screen"이다. 이 모듈은 export `@soksak/plugin-api/screen-hash`(`packages/plugin-api/package.json` 15줄), `PAGE_IMPORTS` 항목(`packages/plugin-api/index.js` 55줄), 그리고 `packages/workbench/index.html`(12줄)과 `overlay.html`(25줄)의 import map 항목이다. `docs/spec/plugins.md` 309줄은 모든 page의 import map이 `PAGE_IMPORTS`와 같으며 이 항목을 포함한다고 적는다.
-- H2. core 명세가 바이트와 메시지를 정의한다. `docs/spec/replay.md`에는 "Screen hash"(33줄)와 "Golden vectors"(56줄)가 있다. 화면 메시지(구성원, cell, 색 형식, `screenFromMessage`의 거부 사유)는 `docs/spec/persistent-services.md`의 "Screen message", 51~68줄에 있다. page는 메시지만으로 화면 hash를 계산한다(53줄). cell 구성원과 색 형식은 55~64줄이며, `screenFromMessage`는 68줄에 나온다. `docs/spec/terminal-runtime.md`는 HEAD에 없다(F236-10이 그 문장을 옮겼다). 따라서 이 결정의 모든 인용은 `persistent-services.md`의 51, 53, 68줄을 쓴다. 제안 절의 `terminal-runtime.md` 인용은 이력이다.
+- H1. core는 `packages/plugin-api/screen-hash.js`에서 hash를 정의한다. `screenBytes`는 42줄, `screenHash`는 90줄, `screenFromMessage`는 110줄이다. 1줄은 "The hash of a terminal screen"이다. 이 모듈은 export `@soksak/plugin-api/screen-hash`(`packages/plugin-api/package.json` 15줄과 23줄), `PAGE_IMPORTS` 항목(`packages/plugin-api/index.js` 55줄), 그리고 `packages/workbench/index.html`(12줄)과 `overlay.html`(25줄)의 import map 항목이다. `docs/spec/plugins.md` 309줄은 모든 page의 import map이 `PAGE_IMPORTS`와 같으며 이 항목을 포함한다고 적는다. 이 모듈의 테스트 `packages/plugin-api/test/screen-hash.test.mjs`는 `../screen-hash.js`를 직접 import한다.
+- H2. core 명세가 바이트와 메시지를 정의한다. `docs/spec/replay.md`에는 "Screen hash"(33줄)와 "Golden vectors"(56줄)가 있다. 화면 메시지(구성원, cell, 색 형식, `screenFromMessage`의 거부 사유)는 `docs/spec/persistent-services.md`의 "Screen message", 51~68줄에 있다. page는 메시지만으로 화면 hash를 계산한다(53줄). cell 구성원과 색 형식은 55~64줄이며, `screenFromMessage`는 68줄에 나온다. `docs/spec/terminal-runtime.md`는 HEAD에 없다(F236-10이 그 문장을 옮겼다). 따라서 이 절의 모든 인용은 `persistent-services.md`의 51, 53, 68줄을 쓴다.
 - H3. core의 fixture와 테스트: `packages/log-contract/fixtures/replay/screen-hash.json`, `packages/log-contract/fixtures/replay/screen-message.json`, 그리고 테스트 `packages/log-contract/test/screen-hash.test.mjs`, `replay-vectors-named.test.mjs`, `screen-message.test.mjs`이다.
 - H4. sidecar는 `../sidecars/vt/vt-core/src/screen_hash.rs`에서 hash를 만든다. 이 파일의 첫 줄은 "The hash of a terminal screen (core docs/spec/replay.md#screen-hash)"이다. `vt-core/src/protocol.rs`는 `screen_message`(1267줄)에서 `message_cells`(1276줄)로 `screen` 메시지를 만들며 이를 hash하지 않는다. frame record의 hash는 1333줄에서 계산된다. replay 실행 파일은 `vt-alacritty/src/replay.rs` 309줄에서 계산한다(import는 18줄).
-- H5. sidecar의 Rust 테스트는 core fixture의 사본을 자기 폴더에서 읽는다. `vt-core/tests/screen_hash_test.rs`는 `vt-core/tests/fixtures/log-contract/screen-hash.json`을 읽고(8줄), `vt-core/tests/fixtures/log-contract/screen-message.json`은 세 번째 사본이다. 이 폴더의 README는 `policy-cases.json`, `replay-inputs.json`, `screen-hash.json`의 사본을 적고 "Core owns all three"라고 말한다. `screen-message.json`은 적지 않는다. `vt-core/Cargo.toml`은 crate 생태계 밖의 패키지를 적지 않으므로, Rust 쪽에는 JavaScript 패키지를 위한 manifest 수단이 없다.
-- H6. terminal page `../plugins/terminal/ui/terminal.js`는 `@soksak/plugin-api/screen-hash`에서 `screenFromMessage`와 `screenHash`를 가져온다(2줄). `screenFromMessage`는 1209줄에서 호출되고, `screenHash`는 1218줄에서 `if (runtime.log.enabled("debug"))`(1214줄) 안에서만 호출된다. 이 import는 plugin이 아니라 실행 중인 core의 import map(H1)이 해석한다.
-- H7. 선언. `../plugins/terminal/package.json` 26줄은 `@soksak/plugin-api`를 core 태그 `#v0.0.11`(`path:/packages/plugin-api`)에 고정하는 git 의존성이다. `../plugins/terminal/plugin.json`은 `dependencies` 키를 164줄에 두고, sidecar 항목 `@soksak/sidecar-vt-alacritty`를 165줄에 둔다. `../sidecars/vt/package.json` 9줄은 같은 core 태그를 `devDependencies`에 선언한다. 어떤 manifest도 sidecar가 plugin에 의존한다고 선언하지 않으며, plugin의 build는 sidecar에 의존하지 않는다(`docs/spec/plugins.md` 42줄).
+- H5. sidecar의 Rust 테스트는 core fixture의 사본을 자기 폴더에서 읽는다. `vt-core/tests/screen_hash_test.rs`는 `vt-core/tests/fixtures/log-contract/screen-hash.json`을 읽고(8줄), `vt-core/tests/fixtures/log-contract/screen-message.json`은 세 번째 사본이다. 이 폴더의 README(8~11줄)는 `policy-cases.json`, `replay-inputs.json`, `screen-hash.json`의 사본을 적고 "Core owns all three"라고 말한다. `screen-message.json`이나 태그는 적지 않는다. `vt-core/Cargo.toml`은 crate 밖의 패키지를 선언하지 않으므로, Rust 쪽에는 JavaScript 패키지를 위한 manifest 항목이 없다.
+- H6. terminal page `../plugins/terminal/ui/terminal.js`는 `@soksak/plugin-api/screen-hash`에서 `screenFromMessage`와 `screenHash`를 가져온다(2줄). `screenFromMessage`는 1209줄에서 호출되고, `screenHash`는 1218줄에서 `if (runtime.log.enabled("debug"))`(1214줄) 안에서만 호출된다. 이 import는 plugin이 아니라 실행 중인 core의 import map(H1)이 해석한다. 이는 plugin 저장소의 HEAD에서만 확인했다.
+- H7. 선언. `../plugins/terminal/package.json` 26줄은 `@soksak/plugin-api`를 core 태그 `#v0.0.11`(`path:/packages/plugin-api`)에 고정한다. `../plugins/terminal/plugin.json`은 `dependencies` 키를 164줄에, sidecar 항목 `@soksak/sidecar-vt-alacritty`를 165줄에 둔다. `../sidecars/vt/package.json` 9줄은 같은 core 태그를 `devDependencies`에 선언하며, 그 `make test`는 `node --test tests/`를 실행한다(`Makefile` 27줄). 어떤 manifest도 sidecar가 plugin에 의존한다고 선언하지 않으며, plugin의 build는 sidecar에 의존하지 않는다(`docs/spec/plugins.md` 42줄).
 - H8. 검사. `e2e/terminal-replay.test.mjs`는 설치된 plugin과 sidecar를 통해 page의 저장된 hash를 replay 실행 파일의 hash와 비교한다. 16줄에서 `EVERY_LEVEL`을 import하고 58, 80, 102, 156줄에서 이를 쓰므로, debug 수준의 page hash가 비교 입력 중 하나가 된다. `sok`는 저장된 hash가 소문자 16진수 64자인지만 검사한다(`packages/sok/tauriv2/src/replay.rs` 100줄, `packages/sok/wailsv3/src/replay.go` 26줄). 바이트를 계산하거나 비교하지 않는다.
-- H9. `sok`는 page frame의 화면 메시지 segment도 강제한다. `packages/sok/tauriv2/src/replay.rs` 274~280줄과 `packages/sok/wailsv3/src/replay.go` 181~187줄은 `fields.segment`가 없는 page frame record를 거부하며, 주석은 "A page frame names the segment of the screen message it received"이다. 테스트 `replay_test.rs` 590줄과 Go replay 테스트는 "The screen message carries the segment"라고 적는다. 규칙은 `layer == "plugin"`으로 frame을 고르지만, `docs/spec/replay.md` 28줄과 `docs/spec/events.json`은 layer 이름을 `page`라고 적는다. 따라서 코드의 layer 이름이 명세와 맞지 않으며, 이 검사는 page frame을 한 번도 고르지 않는다. 이는 core의 결함이며 이 절의 결정이 아니다.
-- H10. Registry. `scripts/workspace-registry.json`은 plugin, sidecar, pack을 선언하며 계약 저장소는 선언하지 않는다. `../registry/index.json`에서 terminal plugin 버전 `0.0.11`은 `engines.soksak` `>=0.0.11`이며, 그 release는 `@soksak/plugin-api/screen-hash`를 import한다(H6). `../registry/revoked.json`은 editor plugin `0.0.1`만 폐기한다.
+- H9. `sok`는 page frame의 segment도 강제한다. `packages/sok/tauriv2/src/replay.rs` 274~280줄과 `packages/sok/wailsv3/src/replay.go` 181~187줄은 `layer`가 `plugin`인 frame을 고르고, `fields.segment`가 없는 것을 거부한다. 주석은 "A page frame names the segment of the screen message it received"이다. layer 이름 `plugin`은 `docs/spec/replay.md` 22줄과 맞는다. 이 줄은 page frame이 layer `plugin`을 가진다고 말한다. 그러나 이벤트 카탈로그 `docs/spec/events.json`은 page layer를 `page`로 적는다(31개 항목). 따라서 명세와 카탈로그가 page frame의 layer에 대해 서로 다르다. 이 절은 어느 이름이 맞는지 결정하지 않으며, F236-9-3이 두 이름을 맞춰야 한다.
+- H10. Registry. `scripts/workspace-registry.json`은 plugin, sidecar, pack을 선언하며 계약 저장소는 선언하지 않는다. 추적되는 registry 원본 `../registry/plugins/terminal.json`은 terminal 버전과 `engines.soksak`을 적는다. `0.0.3`은 `^0.0.3`, `0.0.4`~`0.0.10`은 `*`, `0.0.11`~`0.0.14`는 `>=0.0.11`이다. 각 release가 `@soksak/plugin-api/screen-hash`를 import하는지는 plugin 저장소의 HEAD에서만 확인했다(H6). G1을 위해서는 release마다 따로 확인해야 한다. `../registry/revoked.json`은 editor plugin `0.0.1`만 폐기한다.
 - H11. 버전. plugin이나 sidecar의 버전은 core 버전과 관계가 없다(`docs/spec/plugins.md` 42줄). 설치된 page는 core가 바뀌어도 바뀌지 않지만, `@soksak/plugin-api/screen-hash`의 import는 실행 중인 core에서 해석된다. 따라서 그 항목을 제거하면 이를 import하는 released page가 모두 깨지며, 설치는 `engines.soksak` 범위로 선택된다(H10).
-- H12. 구속력 있는 규칙. `AGENTS.md` 10줄: 공통 기능은 plugin이 다시 구현하지 않도록 core에 속한다. `AGENTS.md` 32줄: core, plugin, sidecar는 코드나 테스트에서 서로를 이름으로 지칭하지 않는다. `AGENTS.md` 33줄: core, plugin, sidecar, kit, 명세, 계약은 별도의 저장소 경계이며, 선언된 wire 계약과 노출된 명령만 주고받는다. 패키지 간 관계는 manifest의 `dependencies`로만 선언한다. 테스트는 다른 패키지의 경로를 읽지 않는다. `docs/plans/plugin-processes-handoff.md`의 "No coupling"(62~64줄): plugin 기능은 core로 옮기지 않는다.
-- H13. core 명세의 일반적 문구. `docs/spec/persistent-services.md` 66줄은 "A screen-producing sidecar of any kind follows the same rule"이라고, `docs/spec/replay.md` 5줄은 screen을 만드는 sidecar가 "a hash of each screen it produces"를 저장한다고 말한다. 이 문장들은 문구상 일반적이다. 그러나 저장소에서 생산자는 terminal sidecar뿐이고(H4), cell 모델은 terminal의 형태이다(wide character, SGR flag, cursor 모양).
-- H14. core의 hash 사용처. `e2e/terminal-replay.test.mjs`(H8), `sok`의 형식 검사(H8), H3의 core 테스트. hash는 두 곳에서만 계산된다. terminal page(H6)와 terminal sidecar(H4)이다.
+- H12. 구속력 있는 규칙. `AGENTS.md` 10줄: 공통 기능은 plugin이 다시 구현하지 않도록 core에 속한다. `AGENTS.md` 32줄: core, plugin, sidecar는 코드나 테스트에서 서로를 이름으로 지칭하지 않는다. `AGENTS.md` 33줄: core, plugin, sidecar, kit, 명세, 계약은 별도의 저장소 경계이며, 선언된 wire 계약과 노출된 명령만 주고받는다. 패키지 간 관계는 manifest의 `dependencies`로만 선언한다. 테스트는 다른 패키지의 경로를 읽지 않는다. `docs/plans/plugin-processes-handoff.md`의 "No coupling"(62~64줄): plugin 기능은 core로 옮기지 않으며, 공통 함수는 core에 속한다.
+- H13. core 명세의 일반적 문구. `docs/spec/persistent-services.md` 66줄은 "A screen-producing sidecar of any kind follows the same rule"이라고, `docs/spec/replay.md` 5줄은 screen을 만드는 sidecar가 "a hash of each screen it produces"를 저장한다고 말한다. 저장소에서 생산자는 terminal sidecar뿐이고(H4), cell 모델은 terminal의 형태이다(wide character, SGR flag, cursor 모양).
+- H14. core의 hash 사용처. `e2e/terminal-replay.test.mjs`(H8), `sok`의 형식 검사(H8), H3의 core 테스트. core의 log 계약(`packages/log-contract`)은 명세가 정의하는 일반적인 event와 replay 형식을 보유한다. 그중 terminal 형태인 것은 화면 정의뿐이다(H13).
 
 ### 비교
 
-- **C1은 규칙과 충돌한다.** 바이트 정의, vector, 메시지 형식은 wire 계약이다(H1~H3). `AGENTS.md` 33줄은 계약을 core와 분리된 별도 저장소 경계로 든다. 따라서 wire 계약은 문구가 일반적이어도 core가 보유할 것이 아니다. 이것이 H13의 일반적 문구에 대한 답이다. 일반적인 계약도 계약 저장소에 속한다. 공통 기능 조항(H12, 10줄)은 plugin이 다시 구현할 기능에 관한 것이다. 계산은 terminal page와 sidecar에만 있고(H14), 다른 기능이 hash를 다시 구현하지 않는다. "plugin 기능은 core로 옮기지 않는다" 조항은 cell 모델이 terminal의 것이므로 적용된다(H13). 따라서 C1은 규칙과 충돌하며, 규칙이 허용하는 비용이 아니다. 아래 Sync 문제는 C2에서도 같으므로 C1에 유리하지 않다.
-- **C2는 규칙을 만족한다.** 계약은 별도의 저장소 경계이다(H12). page는 plugin의 패키지 의존성으로(H7), sidecar는 계약 태그에 고정된 vendored fixture로 이를 선언한다(Sync). core는 어느 쪽도 알지 못한다. 이동 후 core는 계약을 import하지 않으며 계약에 대한 registry 항목도 갖지 않는다. 비용은 모두 기록했으며 어느 것도 규칙 위반이 아니다. 새 저장소 하나, release 태그, 두 저장소의 pin, Rust 쪽 선언의 공백(Sync), F236-9-2의 전환 공백이다.
+- **C1은 규칙과 충돌한다.** `AGENTS.md` 10줄은 공통 함수를 core에 둔다. core는 event log와 frame record 같은 일반 형식을 보유한다(H14). 그러나 바이트 정의는 일반적이지 않다. 하나의 기능, terminal 화면의 wire이다(H13). 규칙은 기능을 plugin에 두고 core에 두지 않는다(H12). 이 hash의 생산자는 terminal page와 terminal sidecar이므로(H4, H6), 함수가 여러 기능에 공통이지도 않다. `AGENTS.md` 33줄의 계약 경계도 한 기능이 주고받는 wire를 계약 저장소에 둔다. 따라서 C1은 규칙과 충돌한다. 아래 Sync의 문제는 C2에서도 같으므로 C1에 유리하지 않다.
+- **C2는 규칙을 만족하며 선언되지 않은 공백이 하나 있다.** 계약은 별도의 저장소 경계이다(H12). page는 plugin의 패키지 의존성으로 이를 선언한다(H7). sidecar는 `package.json`의 `devDependencies`에 이를 선언한다. 이는 `sidecars/vt/package.json` 9줄이 `@soksak/plugin-api`에 이미 쓰는 형식이다(H7). sidecar의 `node --test` 검사는 선언된 패키지를 통해 계약의 vector를 import하고 Rust fixture 사본과 비교한다(Sync). core는 어느 쪽도 알지 못한다. 이동 후 core는 계약을 import하지 않으며 계약에 대한 registry 항목도 갖지 않는다. 비용은 모두 기록했으며 어느 것도 규칙 위반이 아니다. 새 저장소 하나, release 태그, 두 저장소의 pin, Rust fixture 사본과 그 비교(Sync), F236-9-2의 전환 공백이다.
 - **C3는 선언되지 않은 방향을 필요로 한다.** sidecar가 plugin을 따르면 sidecar가 plugin에 의존하게 된다. 어떤 manifest도 이를 선언하지 않고(H7), 규칙은 manifest 의존성으로 선언된 관계만 허용한다(H12). C3는 기각한다.
-- **Sync(모든 후보).** Rust 구현은 vector가 필요하다. C2에서 sidecar는 계약의 vector 사본을 자기 fixture 폴더에 vendored로 두고 계약 태그에 고정하며, 테스트는 그 사본만 읽는다. H5의 README가 이미 그렇게 한다. 계약의 경로를 읽는 테스트는 금지된다(H12). 태그는 fixture의 README에 적으며, `Cargo.toml`이 JavaScript 패키지를 적지 못하므로(H5) 이것이 Rust 쪽이 가진 유일한 선언이다. 이 선언은 manifest보다 약하다. 그 공백은 기록하며 F236-9-2가 gate를 준다. core 사본이 제거되기 전까지 core의 사본, 계약의 사본, sidecar의 사본이 나란히 존재하며, core가 실행할 수 있는 검사는 이들을 비교하지 않는다. 차이는 설치된 쌍을 통한 `e2e/terminal-replay.test.mjs`에서만 발견된다(H8). 이 공백은 기록하며 gate와 함께 닫힌다.
+- **Sync(모든 후보).** Rust 구현은 vector가 필요하다. C2에서 sidecar는 계약의 vector 사본을 자기 fixture 폴더에 vendored로 두고 계약 태그에 고정한다. Rust 테스트는 H5의 기존 방식대로 그 사본만 읽는다. 선언된 관계는 위의 `devDependencies` 항목이다. sidecar의 `node --test` 검사가 계약 패키지의 vector export를 import하고, Rust fixture 사본이 그와 다르면 실패한다. 계약의 경로를 읽는 Rust 테스트는 금지된다(H12). 따라서 Rust 사본은 경로나 README 문장이 아니라 선언된 의존성으로 검사된다. core 사본이 제거되기 전까지 core의 사본, 계약의 사본, sidecar의 사본이 나란히 존재하며, core가 실행할 수 있는 검사는 이들을 비교하지 않는다. 차이는 설치된 쌍을 통한 `e2e/terminal-replay.test.mjs`에서만 발견된다(H8). 이 공백은 기록하며 gate와 함께 닫힌다.
 
 ### 결정 9-1
 
@@ -165,38 +165,41 @@ auditor 3명이 v3을 검토했다(반론 29개). v4에서 답했다.
 3. 화면 메시지 형식과 그 검증기 `screenFromMessage`. 메시지가 sidecar와 page 사이의 wire이기 때문이다.
 4. 이 부분을 정의하는 현재 문장: `persistent-services.md` 51~68줄과 `replay.md` 33~70줄("Screen hash"와 "Golden vectors" 절).
 
-terminal page는 계약을 자기 plugin의 패키지 의존성으로 선언하고, 모듈을 자기 page 파일에 번들한다. 그러므로 page는 hash를 위해 core 항목을 import하지 않는다. terminal sidecar는 vector의 vendored 사본을 계약 태그에 고정해 둔다(Sync). core는 계약을 import하지 않으며 계약에 대한 registry 항목도 두지 않는다.
+terminal page는 계약을 자기 plugin의 패키지 의존성으로 선언하고, 모듈을 자기 page 파일에 번들한다. 그러므로 page는 hash를 위해 core 항목을 import하지 않는다. terminal sidecar는 `devDependencies`에 계약을 선언하고, vector의 vendored 사본을 계약 태그에 고정해 둔다(Sync). core는 계약을 import하지 않으며 계약에 대한 registry 항목도 두지 않는다.
 
 형식 규칙. 바이트가 바뀌면 magic(`SKSCR1`, H1과 H4)이 바뀌므로, 이는 새 계약 태그이다. plugin과 sidecar는 같은 변경에서 pin을 함께 옮긴다. released terminal page는 번들한 태그를 유지하며 계속 동작한다. 태그가 섞인 설치 쌍은 `e2e/terminal-replay.test.mjs`에서 divergence로 보고되며, 수용되지 않는다.
 
-C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들지 않는다. 이 결정 뒤에도 core에는 terminal 내용이 남는다. H9의 `sok` segment 규칙, `packages/plugin-api/terms.json`의 terminal 이름(150줄과 169줄), "View state"의 producer 규칙(`replay.md` 74~98줄), replay 입력 검증기(아래)가 그것이다. 각각은 이 결정이 아니라 F236-9-2 또는 F236-9-3이 처리한다.
+C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들지 않는다. 이 결정 뒤에도 core에는 terminal 내용이 남는다. H9의 `sok` segment 규칙과 그 layer 이름, `packages/plugin-api/terms.json`의 terminal 이름(150줄과 169줄), "View state"의 producer 규칙(`replay.md` 74~98줄), replay 입력 검증기(아래)가 그것이다. 각각은 이 결정이 아니라 F236-9-2 또는 F236-9-3이 처리한다.
 
 ### core가 제거하거나 일반화하는 것
 
-- **gate G1이 성립할 때 제거(F236-9-2):** `screen-hash.js`(H1)와 그 export, `PAGE_IMPORTS` 항목, 두 workbench import map 항목, `plugins.md` 309줄의 page import 문장, `validate.test.mjs` 270줄의 단언, `scripts/check-test-parity.mjs`의 F160.25와 F160.35 행, `terms.json` 169줄의 "screen hash" 용어.
-- **gate G1이 성립할 때 제거(F236-9-2):** `packages/log-contract`의 H3 fixture와 테스트, 그리고 sidecar의 `screen-hash.json`과 `screen-message.json` 사본(H5). sidecar는 계약의 vendored 사본으로 대체한다.
-- **gate G1이 성립할 때 제거(F236-9-2):** `replay.md`의 "Screen hash"와 "Golden vectors", 그리고 `persistent-services.md` 51~68줄(H2). 이 부분은 일반 문장으로 대체한다. 화면 메시지와 화면 hash는 생산자와 소비자가 선언한 계약이 정의하며, frame record의 `fields.hash`는 소문자 16진수 64자인 SHA-256 문자열이다.
+- **gate G1이 성립할 때 제거(F236-9-2):** `packages/plugin-api/screen-hash.js`(H1)와 그 export(`packages/plugin-api/package.json` 15줄과 23줄), `PAGE_IMPORTS` 항목, 두 workbench import map 항목, `docs/spec/plugins.md` 309줄의 page import 문장(그 한국어 번역은 310줄), `packages/plugin-api/test/validate.test.mjs` 270줄의 단언, 테스트 `packages/plugin-api/test/screen-hash.test.mjs`, `terms.json` 169줄의 "screen hash" 용어.
+- **gate G1이 성립할 때 제거(F236-9-2):** `packages/log-contract`의 H3 fixture와 테스트, 그리고 sidecar의 `screen-hash.json`과 `screen-message.json` 사본(H5). sidecar는 이를 계약의 vendored 사본으로 대체한다.
+- **gate G1이 성립할 때 제거(F236-9-2):** `replay.md`의 "Screen hash"와 "Golden vectors"(33~70줄), 그리고 `persistent-services.md` 51~68줄(H2). 한국어 번역(`replay.ko.md` 39, 54, 58, 83줄; `persistent-services.ko.md` 68줄)도 함께 제거한다. 이 부분은 일반 문장으로 대체한다. 화면 메시지와 화면 hash는 생산자와 소비자가 선언한 계약이 정의하며, frame record의 `fields.hash`는 소문자 16진수 64자인 SHA-256 문자열이다.
+- **재배정하며 삭제하지 않음(F236-9-2):** `scripts/check-test-parity.mjs`의 F160.25와 F160.35 행(2617~2660줄). 각 행은 주인이 테스트를 보유할 때 계약이나 plugin 저장소로 옮긴다. core에 남는 테스트(`sok`의 `replay_test.go`와 `replay_test.rs`, `e2e/terminal-replay.test.mjs`)는 남는 주인에게 다시 연결한다.
 - **주인이 보유할 때 이동(F236-9-2):** "View state"의 producer 규칙(`replay.md` 74~98줄). 이들은 terminal 엔진이 그려진 화면을 계산하는 방법(선택 강조, theme에 따른 trimming, viewport 밖의 cursor)을 설명한다. 이는 바이트 정의가 아니라 생산하는 sidecar의 동작이며, sidecar의 명세가 이를 보유할 때 core를 떠난다.
-- **지금 일반화(F236-9-3):** H9의 `sok` segment 규칙은 화면 메시지의 page frame 규칙이므로 그 문장은 메시지 형식과 함께 옮긴다. 코드의 layer 이름은 명세의 이름 `page`로 고치며, 이는 `sok`의 Red 테스트로 먼저 증명한다(F236-9-3). `terms.json` 150줄의 "replay" 용어는 terminal 문구를 잃는다.
+- **지금 맞춤(F236-9-3):** page frame의 layer 이름. `replay.md` 22줄과 `sok`은 `plugin`, `events.json`은 `page`라고 부른다(H9). F236-9-3은 한 이름을 고르고, 다른 출처를 그에 맞추며, 먼저 Red 테스트를 쓴다(명세와 이벤트 카탈로그의 대조 검사). `terms.json` 150줄의 "replay" 용어는 terminal 문구를 잃는다.
 - **유지, 일반적:** `sok`의 형식 검사(`replay.rs` 100줄의 `is_screen_hash`, `replay.go` 26줄의 `screenHashText`). 문자열 형식을 검사할 뿐 계산하지 않는다.
 - **유지, 설치 기반 window 검사:** `e2e/terminal-replay.test.mjs`. `AGENTS.md` 33줄이 패키지 규칙에서 이를 면제한다. 그 단언은 설치된 쌍에 대한 검사이다.
 - **여기서 결정하지 않음, 같은 종류의 core 문제:** replay 입력 검증기(`packages/log-contract/index.js`의 `replayInputProblem`과 `replaySessionProblem`, `packages/log-contract/fixtures/replay/inputs.json`, `sok`과 sidecar의 사본). 이는 바이트 정의가 아니라 terminal의 경계(grid에 대한 선택 범위, theme이 먼저 와야 함)를 담는다. F236-9-2가 별도의 이동 목록과 gate를 준다.
 
 ### gate G1(요약. 전체는 F236-9-2에 있다)
 
-위 첫 두 항목의 제거는 다음 조건이 모두 성립할 때에만 core release에서 일어난다. (a) 계약 저장소에 바이트, vector, 메시지 형식을 담은 태그가 있다. (b) 그 태그를 번들한 terminal plugin release가 게시되어 있다. (c) 제거를 적용할 core release가 여전히 설치할 버전 중에서 core의 항목을 import하는 terminal release가 없다. H10에 따라 검사 방법은 이렇다. 항목을 import하는 제공 중인 각 release는 폐기(`../registry/revoked.json`)되었거나, 그 `engines.soksak` 범위가 항목을 제거하는 core release를 제외한다. (c)는 지금 성립하지 않는다. index는 `engines.soksak` `>=0.0.11`인 terminal `0.0.11`을 제공하며, 이는 항목을 import한다(H10). (a)와 (b)도 지금 성립하지 않는다. 계약 저장소가 없고(H8), 어떤 terminal release도 계약 태그를 번들하지 않는다. gate가 성립할 때까지 core는 사본과 항목을 유지하며, Sync의 공백은 기록된 채 남는다.
+위 첫 세 항목의 제거는 core release에서 다음 조건이 모두 성립할 때에만 일어난다. (a) 계약 저장소에 바이트, vector, 메시지 형식을 담은 태그가 있다. (b) 그 태그를 번들한 terminal plugin release가 게시되어 있다. (c) 항목을 제거하는 core release에서도 설치될 수 있는, core의 항목을 import하는 terminal release가 없다. H10에 따른 검사는 release마다 한다. import가 확인된 각 release는 폐기(`../registry/revoked.json`)되었거나, 그 `engines.soksak` 범위가 항목을 제거하는 core release를 제외한다. (c)는 지금 성립하지 않는다. registry는 `engines.soksak`이 `*`인 `0.0.4`~`0.0.10`과 `>=0.0.11`인 `0.0.11`~`0.0.14`를 제공하며, 최소한 `0.0.11` 이후 줄은 항목을 import한다(H6, H10). 이전 release들의 import는 확인되지 않았다. (a)와 (b)도 지금 성립하지 않는다. 계약 저장소가 없고(H8과 H10에 계약 항목이 없다), 어떤 terminal release도 계약 태그를 번들하지 않는다. gate가 성립할 때까지 core는 사본과 항목을 유지하며, Sync의 공백은 기록된 채 남는다.
 
 ### 검토 기록
 
-1차 검토(두 명의 새 읽기 전용 auditor, 이 절의 첫 판에 대해). 받아들여 이 판에 반영했다.
+1차 검토(두 명의 새 읽기 전용 auditor, 이 절의 첫 판에 대해): core 명세의 일반적 문구, Rust 쪽 메커니즘의 부재, `plugin.json`과 sidecar pin의 인용 오류, plugins.md 172줄 논거, gate G1(c), 빠진 제거 항목을 받아들여 둘째 판에서 답했다.
 
-- core 명세의 일반적 문구(persistent-services.md 66줄, replay.md 5줄)는 H13과 비교 절이 다룬다. 일반적인 wire 계약도 계약 저장소에 속하며, C1의 충돌은 소비자 수가 아니라 규칙에 근거한다.
-- Rust 쪽에는 메커니즘이 없었다. Sync 문단은 계약 태그에 고정된 vendored fixture를 말하고, 그 선언이 manifest보다 약하다는 공백을 기록한다.
-- 인용 오류: `plugin.json`의 164줄은 `dependencies` 키이고 165줄이 항목이다(H7). core 고정은 sidecar에서 `devDependencies`, plugin에서 git 의존성이다(H7).
-- hash를 "두 곳만 사용한다"는 주장은 너무 좁았다. H14가 core의 사용처를 든다.
-- `plugins.md` 172줄 논거는 틀렸다. 그 줄은 view page에만 해당하며, terminal page는 `PAGE_IMPORTS`(309줄)를 통해 core 항목을 import한다. 번들 주장은 더 이상 172줄을 인용하지 않는다.
-- gate G1(c)은 성립하지 않는다(H10). Gate 문단에 적었다.
-- 제거 목록은 "View state" producer 규칙, `terms.json` 150줄과 169줄, sidecar의 `screen-message.json` 사본, `sok` segment 규칙(H9)을 빠뜨렸다. 모두 지금 gate나 주인과 함께 적었다.
-- sok의 layer 이름(코드 `plugin`, 명세 `page`, H9)은 결정이 아니라 결함이다. F236-9-3에 Red 테스트와 함께 배정했다.
+2차 검토(두 명의 새 읽기 전용 auditor, 둘째 판에 대해). 받아들여 이 판에 반영했다.
 
-2차 검토는 이 판에 대해 대기 중이다.
+- sidecar와 계약의 관계에 manifest 선언이 없었다(README는 태그를 적지 않았다). sidecar는 이제 `devDependencies`에 계약을 선언하고, Rust 사본을 `node --test` 비교로 검사한다(Sync).
+- C1의 기각은 명세의 일반적 문구에 근거했었다. 이제 C1은 기능 규칙과 terminal 전용 cell 모델에 근거한다(H13, 비교 절).
+- 제거 목록에 `packages/plugin-api/test/screen-hash.test.mjs`, `package.json` 23줄, 한국어 번역이 빠져 있었다. 모두 추가했다.
+- 파리티 행 F160.25와 F160.35는 남는 테스트를 덮으므로 삭제하지 않고 재배정한다.
+- registry 원본이 틀렸다. `index.json`은 생성물이고 추적되지 않는다. 이제 gate는 `plugins/terminal.json`을 쓰며, 이전 release의 import는 확인되지 않았다고 적는다.
+- sok layer 주장이 과했다. 코드는 replay.md 22줄과 맞고, `events.json`이 어긋난다. 이제 그 불일치를 적고, 선택은 F236-9-3에 배정한다.
+- 둘째 판이 제안의 결정 1, 2와 충돌한다고 지적했다(`screenHash`). 이 절이 바이트 정의에 관해 그 결정을 대체한다고 적었다.
+- 받아들이지 않음: `features.md`와 `decouple-handoff.md`의 anchor 주장은 이 절이 인용하지 않는 제안의 이력 절에 관한 것이다. 제안의 줄 단위 인용은 이력이다.
+
+3차 검토는 이 판에 대해 대기 중이다.
