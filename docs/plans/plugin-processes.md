@@ -589,3 +589,13 @@ The objections below are the answers of the eleventh adversarial review of [decl
 - R11-4: the source was not defined as a pair. Verdict: accepted. Resolution: a source is the pair of a process and its registration of the status. A change of source means a different pair, and a re-registration by the same process for the same status is not a change.
 - R11-5: the lengths did not say what a character is. Verdict: accepted. Resolution: lengths count Unicode code points, in the limits table and in the rejection rows, in both languages.
 - R11-6: the exposure specification repeated a sentence about controls of list items and tree nodes. Verdict: accepted. Resolution: the repeated sentence is removed in both languages.
+
+**Declared UI schema review round 12**
+
+The objections below are the answers of the twelfth adversarial review of [declared UI](../spec/declared-ui.md). All five are accepted.
+
+- R12-1: the attributes of a control were defined in the exposure specification as well as in the declared UI specification. Verdict: accepted. Resolution: the declared UI specification holds the one definition of the attributes. The exposure specification keeps one sentence that refers to it and defines nothing itself.
+- R12-2: the length rule said that every length counts code points, which did not separate the serialized value. Verdict: accepted. Resolution: every length of a key, a text field or a parameter counts code points, and the serialized value counts UTF-8 bytes.
+- R12-3: a snapshot that arrives from a pair that is not the chosen source had no defined handling. Verdict: accepted. Resolution: it is acknowledged, then discarded without validation, and it changes neither the tree, the baseline, the kept state nor the error display.
+- R12-4: the leaf rule and the rule for a new branch were stated only for the case with a baseline. Verdict: accepted. Resolution: a path that is a leaf loses its kept state with or without a baseline. A new branch takes the plugin's `expanded` value with or without a baseline, and without a baseline a branch that has no kept state is new.
+- R12-5: the address of a control was defined in two places. Verdict: accepted. Resolution: the declared UI specification defines the address once, from the attributes `data-key`, `data-path` and `data-role`, and the exposure specification refers to it.

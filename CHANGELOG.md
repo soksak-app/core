@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.8-0-13: The declared UI specification is revised after its twelfth review. The control attributes and their address are defined once there, lengths of keys, text fields and parameters count code points while the serialized value counts UTF-8 bytes, a snapshot from a pair that is not the chosen source is acknowledged and discarded, and the leaf and new-branch rules hold with or without a baseline.
 - F212.8-0-12: The declared UI specification states its own contracts for pulls, the source order, the sidebar section layer and accessibility. A source is a process and registration pair, lengths count Unicode code points, and the terms pull reply and kept state are added.
 - F212.8-0-11: The declared UI specification is revised after its tenth review. The status mapping states the load pull of each declared status, a branch is new only when a baseline exists, the exposure address of a control is section id and `data-key` with `data-path` and `data-role` for list items and tree nodes, and the term definitions name pull replies.
 - F212.8-0-10: Two defects in the ninth-review text are corrected. The transition rule states the load case once, and the plan's load pull requests the current value of each declared status once, because a pull reply is not a snapshot.
