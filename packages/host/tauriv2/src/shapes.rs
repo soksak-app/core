@@ -4,7 +4,7 @@
 //! the surface content.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde::Deserialize;
 use tauri::Window;
@@ -55,7 +55,9 @@ pub(crate) fn set(window: &Window, request: ShapeRequest) -> Result<(), String> 
         request.rect.w.max(1.0),
         h,
     );
-    let mut held = shapes.0.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the shapes of the window, which the placement reads
+    // and amends; the panic hook records the panic.
+    let mut held = shapes.0.lock().unwrap_or_else(PoisonError::into_inner);
     let view = match held.get(&request.id) {
         Some(&view) => {
             platform.place_shape(view, frame)?;
@@ -86,7 +88,9 @@ pub(crate) fn clear(window: &Window, id: String) -> Result<(), String> {
     let context = window_data(window)?;
     let shapes = &context.shapes;
 
-    let mut held = shapes.0.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the shapes of the window, which the close amends;
+    // the panic hook records the panic.
+    let mut held = shapes.0.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(view) = held.remove(&id) {
         platform::current()?.destroy_shape(view)?;
     }
