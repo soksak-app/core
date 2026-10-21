@@ -119,3 +119,66 @@ Three fresh auditors reviewed v3 (29 objections). Each is answered here.
 - R3-H3 and R3-G7 (the sidecar requirement sentence is not in Changes): accepted. Changes lists it.
 
 The round 4 auditors check this version, not the earlier ones.
+
+## Split decision 9-1
+
+This section decides one question: which owner holds the byte definition of a terminal screen hash. That is `screenBytes`, `screenHash`, the golden vectors, the screen message form that the hash is computed from, and the rule that every implementation reproduces them. It does not decide the move list (F236-9-2) or the core-side changes (F236-9-3). The sections above are history; this section decides only the owner.
+
+Each fact below was checked at HEAD of its repository (the committed tree, `git show HEAD:<path>`), not in a working copy. `packages/`, `docs/`, `scripts/` and `e2e/` are core. `../plugins/terminal` (the terminal plugin) and `../sidecars/vt` (the terminal sidecar) are sibling repositories.
+
+### Candidates
+
+- **C1, core.** Core keeps the definition, the vectors and the message form. This is decisions 1 and 2 of the proposal above.
+- **C2, a declared contract repository.** A separate repository, declared as a package dependency by its consumers, holds the definition, the vectors and the message form. Core, the terminal page and the terminal sidecar consume it; core does not know it.
+- **C3, the terminal plugin.** The plugin holds the definition and the sidecar follows it.
+
+### Facts
+
+- H1. Core defines the hash in `packages/plugin-api/screen-hash.js`: `screenBytes` at line 42, `screenHash` at line 90 and `screenFromMessage` at line 110. Line 1 reads "The hash of a terminal screen". The module is the export `@soksak/plugin-api/screen-hash` (`packages/plugin-api/package.json` line 15), an entry of `PAGE_IMPORTS` (`packages/plugin-api/index.js` line 55), and an entry of the import maps of `packages/workbench/index.html` (line 12) and `overlay.html` (line 25). `docs/spec/plugins.md` line 309 names it as a page import.
+- H2. Core's specification defines the bytes and the message. `docs/spec/replay.md` has "Screen hash" (line 33) and "Golden vectors" (line 56). The screen message (its members, cells, color forms and the refusals of `screenFromMessage`) is in `docs/spec/persistent-services.md` "Screen message", lines 51 to 68: the page computes the screen hash from the message alone (line 53), the cell members and color forms are in lines 55 to 64, and `screenFromMessage` is named at line 68. The earlier citations to `terminal-runtime.md` pointed at text that F236-10 moved; `docs/spec/terminal-runtime.md` no longer exists at HEAD, so every citation of this decision uses `persistent-services.md` lines 51, 53 and 68.
+- H3. Core's fixtures and tests: `packages/log-contract/fixtures/replay/screen-hash.json`, `packages/log-contract/fixtures/replay/screen-message.json`, and the tests `packages/log-contract/test/screen-hash.test.mjs`, `replay-vectors-named.test.mjs` and `screen-message.test.mjs`.
+- H4. The sidecar produces the hash in `../sidecars/vt/vt-core/src/screen_hash.rs`, whose first line reads "The hash of a terminal screen (core docs/spec/replay.md#screen-hash)". `vt-core/src/protocol.rs` builds the `screen` message in `screen_message` (line 1267) from `message_cells` (line 1276) and does not hash it; the frame record hash is computed at line 1333. The replay executable computes it at `vt-alacritty/src/replay.rs` line 309 (import at line 18).
+- H5. The terminal page `../plugins/terminal/ui/terminal.js` imports `screenFromMessage` and `screenHash` from `@soksak/plugin-api/screen-hash` (line 2), calls `screenFromMessage` at line 1209, and calls `screenHash` at line 1218 only inside `if (runtime.log.enabled("debug"))` (line 1214). The entry is resolved by the running core's import map (H1), not by the plugin.
+- H6. Declarations. `../plugins/terminal/package.json` line 26 pins `@soksak/plugin-api` to the core tag `#v0.0.11` (`path:/packages/plugin-api`). `../plugins/terminal/plugin.json` line 164 declares `@soksak/sidecar-vt-alacritty` in `dependencies`, and the file has no `engines` field. `../sidecars/vt/package.json` line 9 declares the same core tag as a devDependency. No manifest declares a dependency from a sidecar on a plugin, and a plugin's build does not depend on a sidecar (`docs/spec/plugins.md` line 42).
+- H7. Checks. `e2e/terminal-replay.test.mjs` compares the page's stored hashes with the replay executable's hashes through the installed plugin and sidecar. It imports `EVERY_LEVEL` (line 16) and runs with it (lines 58, 80, 102 and 156), so the page's debug-level hash is one of the compared inputs. The sidecar's `vt-core/tests/screen_hash_test.rs` reads its own copy `vt-core/tests/fixtures/log-contract/screen-hash.json`; the README of that folder says the copy is core's file and "Core owns all three". `sok` checks only that a stored hash has 64 lowercase hexadecimal characters (`packages/sok/tauriv2/src/replay.rs` line 100, `packages/sok/wailsv3/src/replay.go` line 26); it neither computes nor compares bytes.
+- H8. `scripts/workspace-registry.json` declares plugins, sidecars and packs. No contract repository is declared.
+- H9. The version of a plugin or sidecar has no relation to the core version (`docs/spec/plugins.md` line 42). An installed plugin page does not change when core changes, but its import of `@soksak/plugin-api/screen-hash` resolves against the core that is running. Removing the entry therefore breaks each released plugin page that imports it.
+- H10. The binding rules. `AGENTS.md` line 32: core, plugins and sidecars do not name each other in code or tests. `AGENTS.md` line 33: core, plugins, sidecars, kits, specifications and contracts are separate repository boundaries; they exchange only the declared wire contract and exposed commands; a relation between packages is declared only as `dependencies` of a manifest; a test does not read another package's paths. `docs/plans/plugin-processes-handoff.md` "No coupling" (lines 62 to 64): a plugin feature never moves into core, and common functions belong to core.
+- H11. Only two parts of the repositories use the hash: the terminal page (H5) and the terminal sidecar (H4). The `sok` checks (H7) use a string format, not the definition.
+
+### Comparison
+
+- **C1 breaks the rule.** The definition, the vectors and the message form are a terminal feature's wire contract (H1 to H3, H11). The rule states that a plugin feature never moves into core (H10). The rule's common-function clause does not apply: the only consumers are the terminal page and the terminal sidecar (H11), so the hash is not common. Core's precedent of copied event-contract fixtures (the sidecar README of H7) concerns the generic log contract, not a terminal feature, so it does not decide this. C1 is therefore a rule violation, not a cost to accept. The sync problem (below) is the same under C2, so it does not favour C1 either.
+- **C2 satisfies the rule.** A contract is a separate repository boundary (H10). The page and the sidecar each declare it as a dependency (H6, in the form `docs/spec/plugins.md` line 42 gives for `@soksak/plugin-api`), which is the declared relation the rule allows. Core knows neither: after the move core has no import of the contract and no registry entry for it. Costs, all of which are recorded and none of which is a rule violation: one new repository, a release tag, the pins of two repositories, and the transition gaps of F236-9-2. A contract is not installed, so it needs no `scripts/workspace-registry.json` entry (H8).
+- **C3 needs an undeclared direction.** The sidecar would follow the plugin, so the sidecar would depend on the plugin. No manifest declares that (H6), and the rule permits a relation only as a declared manifest dependency (H10). C3 is rejected.
+- **Sync (all candidates).** The Rust implementation needs the vectors. It gets them through a declared package export at a pinned tag, not through a path read (H10). Under C2 the export is the contract package. Until the core copy is removed in the F236-9-2 gate, two copies exist, and no check that core can run compares them; drift is detected only by `e2e/terminal-replay.test.mjs` through the installed pair (H7). This gap is recorded here and closes with the gate.
+
+### Decision 9-1
+
+The owner of the byte definition is **C2, a declared contract repository**. The screen contract repository (its folder and package name are set when the repository is created; this document calls it the screen contract) holds:
+
+1. the byte definition: `screenBytes` and `screenHash`, their JavaScript reference implementation, and the magic `SKSCR1`;
+2. the golden vectors and the refusal messages, with the tests that run them in that repository;
+3. the screen message form and its validator `screenFromMessage`, because the message is the wire between the sidecar and the page;
+4. the text now at `persistent-services.md` lines 51 to 68 and `replay.md` lines 33 to 70 (the sections "Screen hash" and "Golden vectors") that defines these parts.
+
+The terminal page and the terminal sidecar each declare the contract as a dependency at a contract tag, in the form `docs/spec/plugins.md` line 42 gives for `@soksak/plugin-api`. The plugin bundles the module into its page, because a view page imports only the four view entries (`docs/spec/plugins.md` line 172) and may not import core's entry. The sidecar's tests import the vectors through the contract's package export. Core keeps no import of and no registry entry for the contract.
+
+Format rule. A change of the bytes changes the magic (`SKSCR1`, H1 and H4), so it is a new contract tag. A plugin and a sidecar move their pins in the same change. A released terminal page keeps the tag it bundled and keeps working; an installed pair that mixes tags produces a divergence in `e2e/terminal-replay.test.mjs`, which is reported, not accepted.
+
+### What core removes or makes generic
+
+- **Removed when gate G1 holds (F236-9-2):** `screen-hash.js` (H1) with its export, its `PAGE_IMPORTS` entry, the two workbench import-map entries, the page-import sentence of `plugins.md` line 309, the assertion of `validate.test.mjs` line 270, and the rows F160.25 and F160.35 of `scripts/check-test-parity.mjs` (they move to the contract and plugin repositories).
+- **Removed when gate G1 holds (F236-9-2):** the fixtures and tests of H3 in `packages/log-contract`.
+- **Removed when gate G1 holds (F236-9-2):** `replay.md` "Screen hash" and "Golden vectors", and `persistent-services.md` lines 51 to 68 (H2), which are replaced by a generic sentence: a screen message and the hash of a screen are defined by the contract that the producer and the consumer declare, and the frame record's `fields.hash` is a SHA-256 string of 64 lowercase hexadecimal characters.
+- **Kept, generic:** `sok` (`is_screen_hash` in `replay.rs` line 100, `screenHashText` in `replay.go` line 26). It checks a string format, computes no screen and names no terminal rule, so there is nothing to remove. Its comments that name the screen are made generic in F236-9-3.
+- **Kept, an installation-based window check:** `e2e/terminal-replay.test.mjs`. `AGENTS.md` line 33 exempts it from the package rule; its assertions are checks of the installed pair.
+- **Not decided here, same kind of core objection:** the replay input validator (`replayInputProblem` and `replaySessionProblem` in `packages/log-contract/index.js`, `packages/log-contract/fixtures/replay/inputs.json`, and the copies in `sok`). It holds terminal bounds (a selection against the grid, a theme first), not the byte definition. F236-9-2 gives it its own move list and gate.
+
+### Gate G1 (summarized; F236-9-2 states it in full)
+
+Removal of the items in the first two bullets above happens in a core release only when (a) the contract repository has a tag that holds the bytes, the vectors and the message form; (b) a terminal plugin release that bundles that tag is published; and (c) no terminal release in the public registry (`../registry/index.json`) still imports core's entry, meaning each such release is revoked (`../registry/revoked.json`) or no longer served. Until then core keeps its copies and its entry, and the transition gap of Sync stays recorded.
+
+### Review record
+
+Not yet reviewed. The rounds of this section are recorded here after each review.
