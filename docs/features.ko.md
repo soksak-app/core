@@ -1234,6 +1234,8 @@
     - [ ] F212.9-4 — P0: plugin host의 restart limit과 상태 복구. sidecar failure 계약의 sliding window와 그 event와 reset, 양쪽 host에서 선언된 host state의 `state.write`와 `state.read` call.
       - [ ] F212.9-4-1 — P0: 양쪽 host에서 선언된 host state의 state call. `host` 선언의 `maxBytes`와 `format`을 가진 `state` field, plugin별 저장값 하나에서 host가 답하는 `state.write`와 `state.read`, field가 없을 때와 한도를 넘는 값과 다른 format의 거부, plugin 제거나 비활성화 시 값 제거, 계약 사례.
       - [ ] F212.9-4-2 — P0: 양쪽 host에서 plugin host의 restart limit. 모든 창에 걸친 plugin별 failure 기록과 300초 sliding window, `host.plugin-host.restart`를 쓰는 페이지 프로세스 재시작, 그 log 줄과 `host.plugin-host.restart-limit`을 쓰는 네 번째 failure의 정지, `host.trace.plugin-host.restart-reset`을 쓰는 plugin surface 열기의 reset, catalog 등재와 계약 사례. Retry 조건: F212.9-4-1 완료.
+  - [ ] F229 — P0: plugin host의 사이드카 경로. plugin host 채널은 plugin이 선언한 사이드카에 대해 `runtime.sidecar.send`, `on`, `onFailure`를 제공하며, 메인 페이지가 plugin 검사와 세션 id `plugin:<plugin id>:<sidecar name>`로 답한다. 송신은 plugin host 전용 호스트 호출을 쓴다. 결정과 검토는 docs/plans/plugin-host-routes.ko.md에 있다. 재시도 조건: 결정이 검토를 통과할 때. 경로 밖 동작은 하위 항목 F229-1~F229-8이 담는다.
+  - [ ] F230 — P0: 가로 사이드바 섹션의 선언된 tree는 거절된다. 가로 방향에서 tree가 무엇을 보여 줄지, tree 노드에 detail 필드를 둘지 정하고, packages/workbench/declared-ui.js에서 시험한다. 재시도 조건: F229가 정해질 때.
   - [ ] F212.9a — P0: 만들어진 plugin host의 footprint와 throttle 측정. F212.10 전에. Retry 조건: plugin이 `host`를 선언하고 F212.9가 그 host를 만들 때.
   - [ ] F212.10 — P0: plugin 이전. 각 plugin 저장소의 항목이고, release 전에 자기 view를 잰다.
   - [ ] F212.11 — P0: plugin 표면의 페이지 mount, parking, `dom` 구성, section과 state module의 페이지 mount를 지운다.
