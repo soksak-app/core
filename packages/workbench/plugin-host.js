@@ -16,6 +16,30 @@ export const hostKeyOf = (plugin) => `plugin:${plugin}`;
 /** The plugin of a host key, or null for a key that is not one. */
 export const pluginOfHostKey = (key) => (typeof key === "string" && key.startsWith("plugin:") ? key.slice("plugin:".length) : null);
 
+/**
+ * Checks a sidecar request of a plugin host on the main page (docs/plans/plugin-host-routes.md rule 8). declared lists the
+ * operations that the plugin manifest declares for the sidecar (hostOperations); sidecarDeclaration is the validated
+ * sidecar.json, whose message form the body takes and whose hostReadOperations allow the operation. Returns the body
+ * re-serialized from the parsed object, so the check and the sidecar read the same value; throws a named error otherwise.
+ */
+export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sidecarDeclaration, body }) {
+  const refuse = (reason) => new Error(`plugin host ${plugin}: ${reason}`);
+  const form = sidecarDeclaration?.message;
+  if (form === undefined) throw refuse(`sidecar ${sidecar} declares no message form`);
+  let object;
+  try {
+    object = typeof body === "string" ? JSON.parse(body) : undefined;
+  } catch {
+    object = undefined;
+  }
+  if (typeof object !== "object" || object === null || Array.isArray(object)) throw refuse("body is not a JSON object");
+  const operation = object[form.operationField];
+  if (typeof operation !== "string") throw refuse("operation is missing or not a string");
+  const readable = sidecarDeclaration.hostReadOperations ?? [];
+  if (!declared.includes(operation) || !readable.includes(operation)) throw refuse(`operation ${operation} is not served`);
+  return JSON.stringify(object);
+}
+
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */
 export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register";
 
