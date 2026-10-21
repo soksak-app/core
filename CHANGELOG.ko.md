@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-b-11: view bridge는 host가 거부한 view 기록과 view의 거부된 오류 줄을 모두 위치와 문장을 담아 페이지 보고로 보내므로, view 기록의 거부가 조용히 버려지지 않는다.
 - F238-a-15: tab은 로컬 절대 경로인 directory만 보고한다. `//` 또는 `/<letter>:` 접두사나 NUL 바이트를 담은 directory는 보고될 때 절대 경로가 아닌 경로와 같은 `TypeError`로 거부되며, 판정은 페이지가 쓰는 함수다.
 - F238-a-8: surface context는 origin을 요구한다. `createSurfaceContext`는 origin이 없는 값과 null 또는 로컬 절대 경로를 담은 `{directory}`가 아닌 모든 값을 실패한 검사의 문장과 함께 거부하며, `{directory: null}`을 채워 넣지 않는다.
 - F238-a-7: 로컬 절대 경로가 아닌 view 시작 값의 origin directory를 두 호스트가 거부한다. 상대 경로, `//` 또는 `/<letter>:` 접두사, NUL 바이트는 `surface <id>: view start origin directory is not an absolute path`로 거부되며, contract case `view.start-values.refuses-a-missing-origin`이 두 호스트의 시험에서 그 거부를 선언한다.

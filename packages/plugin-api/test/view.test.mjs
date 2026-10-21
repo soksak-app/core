@@ -481,3 +481,24 @@ test("a registration that the page refuses leaves no handler, so a request for i
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(posted.at(-1), { sok: 1, reply: 12, error: { code: 1002, message: "view command other.run is not registered" } });
 });
+
+test("a view record that the host refuses is reported, and so is its refused error line", async (t) => {
+  const { posted, host } = setup(t);
+  const reports = [];
+  const { runtime } = createViewBridge({
+    handler: { postMessage: (message) => posted.push(message) },
+    report: (event) => reports.push(event),
+  });
+  runtime.log.info("saved", { n: 1 });
+  host({ sok: 1, id: 1, result: null });
+  host({ sok: 1, id: 2, error: { code: -32000, message: "log refused" } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  host({ sok: 1, id: 3, error: { code: -32000, message: "error refused" } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The report also receives the counts and losses of the calls, which have no where.
+  const refused = reports.filter((event) => event.where !== undefined);
+  assert.equal(refused.length, 1, "the refused record is reported once, with its refused error line");
+  assert.equal(refused[0].where, "log plugin.probe.saved");
+  assert.equal(refused[0].text, "log refused");
+  assert.equal(refused[0].error?.message, "error refused");
+});

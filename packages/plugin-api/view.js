@@ -115,9 +115,9 @@ export function createViewBridge({ handler, report }) {
   // Records the refusal of a call that the view makes on its own as an error line of the view at the place where.
   const recordError = (where) => (error) => {
     // default: a refusal that is not an Error carries its value as the text.
-    runtime.error(where, String(error?.message ?? error)).catch(() => {
-      // silent: the error line of the refusal is itself refused, and the view has no other path to the application log.
-    });
+    const text = String(error?.message ?? error);
+    // A refused error line is reported through the bridge's report, which the page writes to the application log.
+    runtime.error(where, text).catch((failure) => report({ where, text, error: failure }));
   };
   // The stored levels of a record of the plugin, which the page tells at the first use of runtime.log and at each change
   // (docs/spec/native-surfaces.md#view-surfaces). Until the first answer every record is sent, and the level gate of the page
