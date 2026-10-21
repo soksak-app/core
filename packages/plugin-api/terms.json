@@ -254,19 +254,19 @@
     },
     {
       "term": "declared UI",
-      "definition": "A screen whose every element is expressed with the declared vocabulary (lists, trees, commands, status lines), which the workbench draws from the declared UI snapshots that a plugin sends.",
+      "definition": "A sidebar section whose every element is one of list, tree, button or status-line, which the workbench draws from the declared UI snapshots that a plugin sends (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },
     {
       "term": "declared UI snapshot",
-      "definition": "The declared values of one status of a view or plugin host, sent by the plugin to the workbench as {plugin, status, seq, value} and acknowledged by seq (docs/plans/plugin-processes.md).",
+      "definition": "The declared values of one status of a view or plugin host, sent by the plugin to the workbench as {plugin, status, seq, value, skipped} and acknowledged by seq (docs/plans/plugin-processes.md).",
       "rejected": [],
       "allowed": []
     },
     {
       "term": "declared element",
-      "definition": "One node of a declared UI value: a list, tree, command or status line, or an item or node of a list or tree (docs/spec/declared-ui.md).",
+      "definition": "One node of a declared UI value: a list, tree, button or status-line, or an item or node of a list or tree (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },

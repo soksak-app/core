@@ -8,14 +8,13 @@ Declared UI is a sidebar section whose every element is one of the vocabulary el
 
 - The vocabulary has four elements: `list`, `tree`, `button`, and `status-line`. Core declares no other element. A screen with text input, free DOM, a canvas, a document region, or an image region is a view ([plugin processes](../plans/plugin-processes.md) layer rules). A tree that needs inline rename, drag and drop, or a context menu placed at a pointer is a view for the same reason. Core declares no element for those interactions.
 - The workbench draws declared UI only in sidebar sections in this version. Cards and other screens do not draw declared UI.
-- The plugin's repository declares each of its surfaces as declared UI or as a view. Core does not classify a plugin's surface.
 - The transport of a snapshot is in [plugin processes](../plans/plugin-processes.md) rule 2. The name, command, and DOM rules are in [exposure](exposure.md). The sidebar layout is in [plugins](plugins.md#sections).
 - Accessibility: no accessibility claim is made for declared UI until F212.12 records the platform interface ([plugin processes](../plans/plugin-processes.md) rule 8). This document defines no ARIA role.
 - Core never truncates a value. A plugin that has more elements than a limit cuts its own value and states the cut in a `status-line`. A value above a limit is rejected, never shortened. This version has no lazy loading.
 
 ## Declared status
 
-A status is a declared UI status when a sidebar section names it with the `status` form of its section declaration ([sidebar section form](#sidebar-section-form)). A status is also declared UI when a surface declares it as declared UI. This version defines no surface declaration, so in this version a status is declared UI only through the section form. No schema marker identifies a declared UI status.
+A status is a declared UI status when a sidebar section names it with the `status` form of its section declaration ([sidebar section form](#sidebar-section-form)). That is the only route in this version. No schema marker identifies a declared UI status.
 
 A declared UI status declares its `schema` in `exposes.status` ([exposure](exposure.md#entry-fields)) as the subset that the exposure specification accepts:
 
@@ -74,14 +73,14 @@ A `list` is a column of rows, with its `empty` text when it has none. A `tree` i
 
 ## Limits
 
-Each limit is chosen by this document. Its reason is the work that the main page does for one snapshot: it parses, validates, and draws the value on the UI thread, and it keeps every drawn tree in the document. The limits for list items and tree nodes are revised from a measured draw time of 5000 tree nodes and 1000 list items in the workbench before they are final.
+Each limit is chosen by this document. Its reason is the work that the main page does for one snapshot: it parses, validates, and draws the value on the UI thread, and it keeps every drawn tree in the document. The limits in the table are the contract values.
 
 | Limit | Value | Reason |
 | --- | --- | --- |
 | Serialized value | 1048576 bytes | The whole value is parsed and validated on the UI thread for each snapshot. |
 | Root elements | 64 | One section body holds this many separate blocks. |
-| List items | 1000 per list | Bounds the rows that one list draws per snapshot. Revised from the draw-time measurement. |
-| Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per snapshot. Revised from the draw-time measurement. |
+| List items | 1000 per list | Bounds the rows that one list draws per snapshot. |
+| Tree nodes | 5000 per tree | Bounds the nodes that one tree draws per snapshot. |
 | Tree levels | 16 | Bounds the indent of a tree inside a section. |
 | Text field | 500 characters | Bounds the width of one line of text in a section. |
 | Key | 128 characters | Bounds the identifier that the workbench keeps per element. |
@@ -134,18 +133,20 @@ A declared UI status is drawn through its snapshots, as follows:
 - Each accepted snapshot replaces the tree of its status. Elements are matched by their path of keys to keep workbench state.
 - The workbench keeps the expanded state of each branch, keyed by the status, the tree key, and the path of node keys from the root. A kept state is set by `core.declared-ui.tree.expand` only.
 - In an accepted value, a branch whose `expanded` differs from its `expanded` in the previous accepted value, or that is new, takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A new branch with no kept state takes the plugin's value.
+- A rejected value does not change the kept state. The comparison above uses the last accepted value.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
 - A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart, as [plugin processes](../plans/plugin-processes.md) rule 2 does for the snapshot of the previous process.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
-- The workbench follows the status of a declared section with the follow rules of `context.status` in [plugins](plugins.md#sections), using the card and the active tab of the sidebar that draws the section. The section itself has no context.
+- The workbench follows the declared status of a section for the sidebar that draws it, by the rules that [plugins](plugins.md#sections) gives for `context.status`, with the card and the active tab of that sidebar in place of the section's context. The status of the state module is followed first. Otherwise the surface of the active tab is followed when it registered the name. Otherwise the surface that a request without `surface` would use is followed. Until a surface registers the name, the status receives null, so the section shows no tree. The workbench chooses again when registrations change, and a failure to follow the status is reported as a page error.
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
 
 ## Sidebar section form
 
 A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
+A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds only a declared item that opens it ([plugin processes](../plans/plugin-processes.md) layer rules).
 
-- A section with `module` is drawn by its module, as today. The workbench imports the module and calls `mount(root, context)` in the section element.
+- A section with `module` is drawn by its module. This is the current form. [Plugin processes](../plans/plugin-processes.md) rule 1 says that plugin code does not run on the workbench page, so this form is removed with that page mount, and until then both forms exist. The workbench imports the module and calls `mount(root, context)` in the section element.
 - A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares. The section has no module, no `mount` call, and no `context.status` or `context.bind`.
 - A section with both fields, or with neither, is rejected with `section <id> declares both module and status` or `section <id> declares neither module nor status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`.
 - One status backs at most one section. A second section that names the same status is rejected when the manifest is read, with `status <plugin>.<name> backs section <first> and section <second>`. The check runs on the manifest, so it does not depend on the value.
@@ -154,6 +155,7 @@ A declared section draws its root elements in order inside its body.
 
 - In vertical orientation the elements stack from top to bottom.
 - In horizontal orientation the elements sit left to right in one row that wraps at the section width. A `tree` in a horizontal section is rejected as a value, with `<pointer of the tree>: tree cannot be drawn in a horizontal section`. The check is a value check, because the orientation of the section is known when the value is accepted.
+The orientation check runs again when the section changes orientation, on the accepted value. A value that fails it is rejected with the rows of [Rejection](#rejection), its tree is removed, and the section is cleared.
 
 A declared section keeps the header, the fold control, and the tab selection of a sidebar section without change. Its header is `core.sidebar.section.header`, and folding it runs `core.sidebar.section.fold`. A set of declared sections follows the set rules in [plugins](plugins.md#sections). A section of a plugin that is not loaded is not drawn, as for any section.
 
@@ -175,6 +177,7 @@ The display path is `showError(element, where, text)`. For a rejected value, `wh
 `showError` writes the log line once for the same `where` and the same `text`. It keeps the shown text, so a repeated rejection with the same text shows the same text and writes nothing more. A rejection with a different text writes its own line. The next accepted value of the status calls `hideError` for its `where`, which withdraws the display, so the same text is written again if it recurs after that.
 
 Every rejection text has the form `<pointer>: <reason>`. The pointer is the JSON pointer of the failing value: `/` for the root and for the size of the whole value, and `/elements/<i>/...` for an element. `<field>` is the JSON field name. The reason is one of the rows below. A limit reason has the form `exceeds <n> <unit>`.
+When a value breaks more than one row, the first row in table order applies. The naming row comes before the ownership row, so a name with no owner is reported as unnamed.
 
 | Condition | Reason |
 | --- | --- |
@@ -191,14 +194,14 @@ Every rejection text has the form `<pointer>: <reason>`. The pointer is the JSON
 | A parameter key longer than 64 characters | `exceeds 64 characters` |
 | A parameter string value longer than 1000 characters | `exceeds 1000 characters` |
 | A parameter value that is not a string, a finite number, a boolean, or `null` | `params values must be string, number, boolean or null` |
-| A field that the kind does not list | `unknown field <field>` |
+| A field that the object does not list: a root, an element, a list item, or a tree node. The pointer is that object, and `/` at the root | `unknown field <field>` |
 | A required field is missing | `missing <field>` |
 | A `kind` value that is not in the table | `unknown kind <value>` |
 | A field has the wrong type | `<field> must be <type>` |
 | A text field contains a control character | `<field> contains a control character` |
 | Two keys are equal among their siblings, or among the items of a list | `duplicate key <key>` |
-| A `command` name without the prefix `<plugin>.` of the plugin of the status | `command <name> must be named <plugin>.<name>` |
-| A `command` name of core, or of another plugin | `command <name> is not a command of plugin <plugin>` |
+| A `command` name with no owner, that is, with no `.` | `command <name> must be named <plugin>.<name>` |
+| A `command` name whose owner is core or another plugin | `command <name> is not a command of plugin <plugin>` |
 | A `command` name that is not declared | `undeclared command <name>` |
 | An icon name that is not in the core icon table | `unknown icon <name>` |
 | `expanded` on a leaf node | `expanded is allowed only on a branch` |
@@ -208,7 +211,7 @@ Rejections that concern a manifest, the section form and the one-section rule, a
 
 ## What sections draw today
 
-A section today is a JavaScript module. The workbench mounts it in the section element with a context of `card`, `surface`, `orientation`, the core `icon` function, `status(name, fn)` for the statuses of the plugin, and `bind(el, name, params, options)` for its commands. The module draws its own DOM, so the workbench checks neither its elements nor its names. A declared section replaces that module with the vocabulary above, which the workbench validates and draws.
+A module section is the current form of a sidebar section. The workbench mounts the module in the section element with a context of `card`, `surface`, `orientation`, the core `icon` function, `status(name, fn)` for the statuses of the plugin, and `bind(el, name, params, options)` for its commands. The module draws its own DOM, so the workbench checks neither its elements nor its names. Plugin code runs on the workbench page only in this form, and [plugin processes](../plans/plugin-processes.md) rule 1 removes it with the page mount. A declared section is the form that replaces it, with the vocabulary above, which the workbench validates and draws.
 
 ## Terms
 

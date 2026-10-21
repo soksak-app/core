@@ -8,14 +8,13 @@
 
 - 어휘는 네 요소 `list`, `tree`, `button`, `status-line`이다. core는 다른 요소를 선언하지 않는다. 텍스트 입력, 자유 DOM, canvas, 문서 영역, 이미지 영역이 있는 화면은 view다([plugin 프로세스](../plans/plugin-processes.ko.md)의 계층 규칙). 인라인 이름 바꾸기, 끌어 놓기, 포인터 위치에 놓는 문맥 메뉴가 필요한 tree도 같은 이유로 view다. core는 그런 상호작용의 요소를 선언하지 않는다.
 - 이 버전에서 workbench는 사이드바 section에서만 선언된 UI를 그린다. 카드와 다른 화면은 선언된 UI를 그리지 않는다.
-- plugin의 저장소가 그 plugin의 각 surface를 선언된 UI 또는 view로 선언한다. core는 plugin의 surface를 분류하지 않는다.
 - snapshot의 전달은 [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2에 있다. 이름, 명령, DOM 규칙은 [노출](exposure.ko.md)에 있다. 사이드바 배치는 [plugin](plugins.ko.md#섹션)에 있다.
 - 접근성: 선언된 UI에 대해 접근성 주장은 하지 않는다. F212.12가 플랫폼 인터페이스를 기록할 때까지 그렇다([plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 8). 이 문서는 ARIA 역할을 정의하지 않는다.
 - core는 값을 자르지 않는다. 요소가 한도보다 많은 plugin은 자기 값을 스스로 자르고 자른 사실을 `status-line`에 적는다. 한도를 넘는 값은 줄이지 않고 거부한다. 이 버전에는 지연 적재가 없다.
 
 ## 선언된 status
 
-status는 사이드바 section이 그 section 선언의 `status` 형태로 이름을 대면 선언된 UI status다([사이드바 section 형태](#사이드바-section-형태)). surface가 그 status를 선언된 UI로 선언해도 선언된 UI status다. 이 버전은 surface 선언을 정하지 않으므로, 이 버전에서 status는 section 형태를 통해서만 선언된 UI다. 선언된 UI status를 표시하는 스키마 표지는 없다.
+status는 사이드바 section이 그 section 선언의 `status` 형태로 이름을 댈 때만 선언된 UI status다([사이드바 section 형태](#사이드바-section-형태)). 이 버전에서 다른 경로는 없다. 선언된 UI status를 표시하는 스키마 표지는 없다.
 
 선언된 UI status는 [노출](exposure.ko.md#항목-필드)이 받는 부분 집합으로 `exposes.status`에 `schema`를 선언한다.
 
@@ -74,14 +73,14 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 
 ## 한도
 
-각 한도는 이 문서가 선택한 값이다. 그 이유는 main page가 snapshot 하나에 하는 일이다. 값을 UI thread에서 파싱하고 검사하고 그리며, 그린 트리를 모두 문서에 둔다. list 항목과 tree 노드의 한도는 workbench에서 측정한 tree 노드 5000개와 list 항목 1000개의 그리기 시간으로 확정 전에 고친다.
+각 한도는 이 문서가 선택한 값이다. 그 이유는 main page가 snapshot 하나에 하는 일이다. 값을 UI thread에서 파싱하고 검사하고 그리며, 그린 트리를 모두 문서에 둔다. 표의 한도가 계약 값이다.
 
 | 한도 | 값 | 이유 |
 | --- | --- | --- |
 | 직렬화한 값 | 1048576바이트 | snapshot마다 값 전체를 UI thread에서 파싱하고 검사한다. |
 | 루트 요소 | 64 | section 본문 하나가 담는 별도 블록의 수다. |
-| list 항목 | list마다 1000 | list 하나가 snapshot마다 그리는 행을 제한한다. 그리기 시간 측정으로 고친다. |
-| tree 노드 | tree마다 5000 | tree 하나가 snapshot마다 그리는 노드를 제한한다. 그리기 시간 측정으로 고친다. |
+| list 항목 | list마다 1000 | list 하나가 snapshot마다 그리는 행을 제한한다. |
+| tree 노드 | tree마다 5000 | tree 하나가 snapshot마다 그리는 노드를 제한한다. |
 | tree 단계 | 16 | section 안에서 tree의 들여쓰기를 제한한다. |
 | 텍스트 필드 | 500자 | section 안 텍스트 한 줄의 너비를 제한한다. |
 | 키 | 128자 | workbench가 요소마다 보관하는 식별자를 제한한다. |
@@ -134,18 +133,20 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 - 받아들인 snapshot마다 그 status의 트리를 대체한다. 요소는 key 경로로 맞춰서 workbench 상태를 유지한다.
 - workbench는 status, tree key, 루트부터의 노드 key 경로로 가지마다 펼침 상태를 보관한다. 유지된 상태는 `core.declared-ui.tree.expand`로만 설정된다.
 - 받아들인 값에서, 이전에 받아들인 값의 `expanded`와 다르거나 새로운 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 유지된 상태가 없는 새 가지는 plugin의 값을 받는다.
+- 거부된 값은 유지된 상태를 바꾸지 않는다. 위 비교는 마지막으로 받아들인 값을 쓴다.
 - `selected`에는 유지된 상태가 없다. 이를 바꾸는 core 명령이 없으므로, plugin의 값이 받아들인 모든 값에 적용된다.
 - 유지된 상태는 받아들인 값에 그 경로가 없을 때, 그리고 plugin 프로세스가 다시 시작할 때 지운다. workbench는 plugin 재시작 때 이전 프로세스의 snapshot에 대해 [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2가 하는 것처럼 유지된 상태를 버린다.
 - 유지된 상태는 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 값으로 되돌아간다.
-- workbench는 선언된 section의 status를 [plugin](plugins.ko.md#섹션)의 `context.status` 따라가기 규칙으로 따라가며, 그 section을 그리는 사이드바의 카드와 활성 탭을 쓴다. section 자체는 문맥을 갖지 않는다.
+- workbench는 선언된 section의 status를 그 section을 그리는 사이드바의 카드와 활성 탭으로, [plugin](plugins.ko.md#섹션)의 `context.status` 규칙대로 따라간다. 상태 모듈이 등록한 status를 먼저 따라가고, 그 밖에는 활성 탭의 surface가 이름을 등록했으면 그것을, 그 밖에는 `surface` 없는 요청이 쓸 surface를 따라간다. 등록될 때까지 status는 null을 받으므로 section은 트리를 보이지 않는다. 등록이 바뀌면 다시 고르며, 따라가기 실패는 페이지 오류로 보고한다.
 - 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
 - 선언된 UI 값은 변경 흐름이 아니다. plugin은 어떤 요소가 바뀌어도 값 전체를 다시 보낸다.
 
 ## 사이드바 section 형태
 
 사이드바 section은 `plugin.json`에서 정확히 두 형태 가운데 하나로 선언한다([plugin](plugins.ko.md#섹션)). `module` 또는 `status`다. section은 `id`, `name`, 둘 중 하나, 선택 필드 `fill`을 선언한다. `fill: true`는 [plugin](plugins.ko.md#섹션)이 모듈 section에 주는 뜻과 같다. 펼친 section은 다른 section이 남긴 사이드바 높이를 나누어 갖고, 본문은 그 안에서 스크롤한다.
+`status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 section은 사이드바 section이 아니라 카드 표면이 되고, 사이드바는 그것을 여는 선언된 항목만 가진다([plugin 프로세스](../plans/plugin-processes.ko.md)의 계층 규칙).
 
-- `module`을 가진 section은 지금처럼 그 모듈이 그린다. workbench는 모듈을 적재하고 section 요소에서 `mount(root, context)`를 부른다.
+- `module`을 가진 section은 그 모듈이 그린다. 이것이 지금의 형태다. [plugin 프로세스](../plans/plugin-processes.ko.md)의 규칙 1은 workbench 페이지에서 plugin 코드를 실행하지 않는다고 하므로, 이 형태는 페이지 마운트와 함께 제거되며 그 전까지 두 형태가 함께 있다. workbench는 모듈을 적재하고 section 요소에서 `mount(root, context)`를 부른다.
 - `status`를 가진 section은 그 status의 선언된 UI 값으로 그린다. status는 같은 plugin의 status이어야 하며, `exposes.status`가 선언해야 한다. section은 모듈이 없고 `mount` 호출이 없으며 `context.status`와 `context.bind`도 없다.
 - 두 필드가 모두 있거나 둘 다 없는 section은 `section <id> declares both module and status` 또는 `section <id> declares neither module nor status`로 거부한다. plugin의 status가 아닌 `status`는 `section <id> status <name> is not a status of plugin <plugin>`으로 거부한다.
 - status 하나는 section 하나만 뒷받침한다. 같은 status를 이름 댄 두 번째 section은 manifest를 읽을 때 `status <plugin>.<name> backs section <first> and section <second>`로 거부한다. 이 검사는 manifest에서 하므로 값에 의존하지 않는다.
@@ -154,6 +155,7 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 
 - 세로 방향에서는 요소를 위에서 아래로 쌓는다.
 - 가로 방향에서는 요소를 왼쪽에서 오른쪽으로 한 행에 놓고, section 너비에서 줄바꿈한다. 가로 section의 `tree`는 값 검사로 `<tree의 포인터>: tree cannot be drawn in a horizontal section`이라고 거부한다. section의 방향은 값을 받아들일 때 알려지므로 이 검사는 값 검사다.
+section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한다. 검사에 실패한 값은 [거부](#거부)의 행으로 거부하며, 그 tree는 지우고 section은 비워진다.
 
 선언된 section은 사이드바 section의 머리, 접기 제어, 탭 선택을 바꾸지 않고 유지한다. 머리는 `core.sidebar.section.header`이며, 접으면 `core.sidebar.section.fold`를 실행한다. 선언된 section의 묶음은 [plugin](plugins.ko.md#섹션)의 묶음 규칙을 따른다. 적재되지 않은 plugin의 section은 다른 section과 같이 그리지 않는다.
 
@@ -175,6 +177,7 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 `showError`는 같은 `where`와 같은 `text`에 대해 로그 줄을 한 번만 쓴다. 보이는 텍스트를 유지하므로, 같은 텍스트의 거부가 반복되면 같은 텍스트를 보이고 아무것도 더 쓰지 않는다. 다른 텍스트의 거부는 자기 줄을 쓴다. status의 다음 받아들인 값은 그 `where`에 대해 `hideError`를 부른다. 이는 표시를 거두므로, 그 뒤에 같은 텍스트가 다시 나오면 다시 쓴다.
 
 모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 포인터는 실패한 값의 JSON 포인터다. 루트와 값 전체의 크기는 `/`이며, 요소는 `/elements/<i>/...`이다. `<field>`는 JSON 필드 이름이다. 이유는 아래 행 가운데 하나다. 한도 이유는 `exceeds <n> <unit>` 형식이다.
+값이 여러 행을 어기면 표의 순서에서 첫 행이 적용된다. 이름 행은 소유자 행보다 앞에 있으므로, 소유자가 없는 이름은 이름이 잘못되었다고 보고된다.
 
 | 조건 | 이유 |
 | --- | --- |
@@ -191,14 +194,14 @@ DOM 이름. 선언된 UI 값이 그리는 조작 가능한 요소는 모두 DOM 
 | 매개변수 키가 64자를 넘음 | `exceeds 64 characters` |
 | 매개변수 문자열 값이 1000자를 넘음 | `exceeds 1000 characters` |
 | 매개변수 값이 문자열, 유한한 숫자, 불리언, `null`이 아님 | `params values must be string, number, boolean or null` |
-| 종류가 나열하지 않은 필드 | `unknown field <field>` |
+| 객체가 나열하지 않은 필드: 루트, 요소, list 항목, tree 노드. 포인터는 그 객체이며 루트에서는 `/` | `unknown field <field>` |
 | 필수 필드가 없음 | `missing <field>` |
 | 표에 없는 `kind` 값 | `unknown kind <value>` |
 | 필드의 형이 맞지 않음 | `<field> must be <type>` |
 | 텍스트 필드에 제어 문자가 있음 | `<field> contains a control character` |
 | 형제 사이, 또는 list의 항목 사이에 같은 키가 있음 | `duplicate key <key>` |
-| `command` 이름에 `<plugin>.` 접두어가 없음 | `command <name> must be named <plugin>.<name>` |
-| `command` 이름이 core의 이름이거나 다른 plugin의 이름임 | `command <name> is not a command of plugin <plugin>` |
+| `command` 이름에 소유자가 없음(`.`이 없음) | `command <name> must be named <plugin>.<name>` |
+| `command` 이름의 소유자가 core이거나 다른 plugin임 | `command <name> is not a command of plugin <plugin>` |
 | `command` 이름이 선언되지 않음 | `undeclared command <name>` |
 | 아이콘 이름이 core 아이콘 표에 없음 | `unknown icon <name>` |
 | 잎 노드에 `expanded`가 있음 | `expanded is allowed only on a branch` |
@@ -208,7 +211,7 @@ manifest에 관한 거부, 즉 section 형태와 한 status 한 section 규칙�
 
 ## 지금 section이 그리는 것
 
-지금 section은 JavaScript 모듈이다. workbench는 그 모듈을 section 요소에 올리며, 문맥으로 `card`, `surface`, `orientation`, core `icon` 함수, plugin의 status를 위한 `status(name, fn)`, 명령을 위한 `bind(el, name, params, options)`를 준다. 모듈은 자기 DOM을 그리므로 workbench는 그 요소와 이름을 검사하지 못한다. 선언된 section은 이 모듈을 위의 어휘로 바꾸며, 그 어휘는 workbench가 검사하고 그린다.
+지금의 section 형태는 JavaScript 모듈이다. workbench는 그 모듈을 section 요소에 올리며, 문맥으로 `card`, `surface`, `orientation`, core `icon` 함수, plugin의 status를 위한 `status(name, fn)`, 명령을 위한 `bind(el, name, params, options)`를 준다. 모듈은 자기 DOM을 그리므로 workbench는 그 요소와 이름을 검사하지 못한다. plugin 코드가 workbench 페이지에서 실행되는 것은 이 형태뿐이며, [plugin 프로세스](../plans/plugin-processes.ko.md)의 규칙 1에 따라 페이지 마운트와 함께 제거된다. 선언된 section은 이 모듈을 대신하는 형태로, 위의 어휘를 workbench가 검사하고 그린다.
 
 ## 용어
 
