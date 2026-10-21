@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F236-4: The script tests of the workspace registry, the app usage measurement, the run and event audits, the event classes and the window-source audit use probe names in their fixtures instead of the browser, files, editor and terminal plugins and the vt sidecar; no behaviour change (70 of 70 pass).
 - F236-3: The ownership audit of `scripts/check-test-parity.mjs` treats every `@soksak/plugin-*` package except `@soksak/plugin-api` as a plugin and every `@soksak/sidecar-*` package as a sidecar instead of listing the real plugin and sidecar packages, so core holds none of their names and reports a core source that names any of them. docs/spec/plugins.md states the rule.
 - F236-2: The workbench tests of the plugin page and the plugin operations name the fixture sidecar `@scope/sidecar-probe` and `probe` instead of the terminal sidecar; no behaviour change (19 of 19 pass).
 - F236-1: The handoff document `docs/plans/plugin-processes-handoff.md` states the no-coupling rule under "How to work": separate repositories, relations only as manifest `dependencies`, exchange only through the contract wire and exposed entries, tests only at their own boundary with probe fixtures, and the exception of the installation-based window checks of `e2e/`.

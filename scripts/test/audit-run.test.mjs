@@ -176,19 +176,19 @@ test('a catalog without a budget, or a class of a run that the budget does not n
 });
 
 test('the logs of every layer under the configuration folders of the marks are audited, and a sidecar error is placed by time', (t) => {
-  const sidecar = (seq, text, offset) => JSON.stringify({ ts_us: US + offset, mono_ns: 7_000_000_000 + offset * 1000, seq, level: 'error', class: 'lifecycle', layer: 'sidecar', event: 'sidecar.record.error', fields: { where: 'vt', text } });
+  const sidecar = (seq, text, offset) => JSON.stringify({ ts_us: US + offset, mono_ns: 7_000_000_000 + offset * 1000, seq, level: 'error', class: 'lifecycle', layer: 'sidecar', event: 'sidecar.record.error', fields: { where: 'probe', text } });
   const { folder, config } = fixture(t, {
     files: {
       [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), event(3, 'host.window.event', { window: 'w' }), end(4, 't1')],
       // The error at 99 ms is after the last end mark of the run, so the run does not judge it.
-      'vt-3-4.jsonl': [open('vt', '3-4'), sidecar(2, 'inside', 2500), sidecar(3, 'late', 99000)],
+      'probe-3-4.jsonl': [open('probe', '3-4'), sidecar(2, 'inside', 2500), sidecar(3, 'late', 99000)],
     },
     marks: (mark) => [mark({ kind: 'start', boot: BOOT, seq: 2 }), mark({ kind: 'end', boot: BOOT, seq: 4 })],
   });
-  const vt = join(config, 'logs', 'vt-3-4.jsonl');
+  const probe = join(config, 'logs', 'probe-3-4.jsonl');
   assert.deepEqual(auditRun(catalog, folder), [
     `${join(config, 'logs', `host-${BOOT}.jsonl`)}:3: field kind is required by host.window.event`,
-    `${vt}:2: undeclared error vt: inside`,
+    `${probe}:2: undeclared error probe: inside`,
   ]);
   const [row] = judgment(folder).tests;
   assert.deepEqual(row.errors.map(({ line, declared }) => [line, declared]), [[2, false]]);

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F236-4: workspace registry, app usage 측정, run과 event 감사, event class, window-source 감사의 script 시험이 fixture에 browser, files, editor, terminal plugin과 vt sidecar 대신 probe 이름을 쓴다. 동작 변경은 없다(70개 중 70개 통과).
 - F236-3: `scripts/check-test-parity.mjs`의 소유 감사가 실제 plugin과 sidecar package를 나열하는 대신 `@soksak/plugin-api`를 뺀 모든 `@soksak/plugin-*` package를 plugin으로, 모든 `@soksak/sidecar-*` package를 sidecar로 다룬다. 그래서 core는 그 이름을 갖지 않고 그중 어느 것을 부르는 core source도 보고한다. docs/spec/plugins.md가 규칙을 말한다.
 - F236-2: plugin 화면과 plugin 연산의 workbench 시험이 terminal sidecar 대신 fixture sidecar `@scope/sidecar-probe`와 `probe`를 쓴다. 동작 변경은 없다(19개 중 19개 통과).
 - F236-1: 인계 문서 `docs/plans/plugin-processes-handoff.md`의 "작업 방법"이 결합 금지 규칙을 말한다: 별개의 repository, manifest `dependencies`로만 선언하는 관계, contract wire와 노출된 entry로만 하는 교환, probe fixture로 자기 경계만 하는 시험, `e2e/` 설치 기반 창 검사의 예외.
