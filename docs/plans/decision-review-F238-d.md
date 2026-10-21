@@ -18,6 +18,8 @@ This record reviews three decisions of F238 that were taken without adversarial 
 
 ## D2. Registry listings in core
 
+Status: closed in round 4. Neither round-4 auditor raised an objection. The required changes are the sub-items F238-d-1 to F238-d-4 in `docs/features.md`.
+
 Decision: core keeps `scripts/workspace-registry.json` as the declaration of the sibling repositories that core tools read, keeps the repository table of `docs/spec/plugins.md` as its documentation, and keeps the sibling checkouts in CI. Three statements that do not match the code are corrected.
 
 Evidence:
@@ -41,6 +43,16 @@ Required changes:
 Out of scope: moving the registry declaration to the registry repository.
 
 ## D8. Sok sources in the host contract check
+
+Status: closed in round 4. Neither round-4 auditor raised an objection to D8. The parent checked D8.2 to D8.5 in the code (below). The required changes are the sub-items F238-d-5 to F238-d-8 in `docs/features.md`.
+
+Parent check of D8.2 to D8.5 (round 4 record):
+
+- D8.1 masking: `groupResults` (`check-host-contract.mjs:91-100`) keys by run and name, and `statusOf` (`:103-114`) takes every match over `host.runs`, which holds the sok runs of wailsv3 (`GO_RUNS`, `:173-179`). Confirmed: a host pass covers a sok declaration.
+- D8.2: a scan of the `#[test]` leaf names of `packages/host/tauriv2` (601 tests) and `packages/sok/tauriv2` (139 tests) found no duplicate leaf in either crate. The new rule does not break the current tree. `discoverRust` lists each executable (`test-discovery.mjs:79-84`), so the aggregate check covers all targets.
+- D8.3: `parseDeclarations` returns on every `#[` line (`check-host-contract.mjs:78`), so `#[should_panic]` and `#[ignore]` above or between a declaration and its `fn` pass silently. A scan of 752 Rust declarations found no attribute outside the allowed set, and the `cfg(feature)` and `cfg(not(feature))` lines of `endpoint_test.rs:176-178` and `sok_test.rs:333-334` are the Green cases.
+- D8.4: `docs/spec/host-contract.md:22` lists only `packages/host/...` paths, so the sok paths are missing as stated.
+- D8.5: `scripts/test/check-host-contract.test.mjs` exists and has no case for the owner rule, the leaf rule or the attribute rule. The cases are new work.
 
 Decision: the host contract check keeps reading the sok declarations (`packages/sok/wailsv3/tests`, `packages/sok/wailsv3/src/*_test.go`, `packages/sok/tauriv2/tests`, `packages/sok/tauriv2/src`) and changes how a declaration is matched to a result. The F218-2.4-1 change is already on `origin/main`; it is not amended, and the fix is a new change.
 
@@ -239,7 +251,7 @@ Round 4 auditors (two fresh subagents, read-only): auditor G returned twelve obj
 - H-D9.2-3 and G-D9.2-3, stop clearing: accepted. `sidecars.md:67` says only the person's open of a surface clears the stop. Route creation on a project change is not a person's open, so it does not clear the stop. Refresh does not clear the stop either. A stopped sidecar stays stopped until the application restarts; this is an accepted cost, stated in D9.9.
 - H-D9.2-4, sidecar-built presentation: accepted. Presentation (labels, the no-project text, the cut, action layout) is plugin functionality. AGENTS says plugin functionality does not move into core, and a sidecar holds native functionality for one domain. The sidecar supplies data only, and the host page builds the declared value. The host therefore holds presentation logic. That is a standard change, so it is recorded in D9.2 with its reason and goes to review.
 - H-D9.2-5 and G layer-rule objection, criterion: accepted in part. The original criterion, a host only when logic cannot be held by a view or a sidecar, is kept as the base. The host is needed for a status that must be served while no view is open. A view cannot serve it, and a sidecar cannot register a status (`declared-ui.md:145`). The host holds the DOM-free presentation that serves that status. The new text states both facts.
-- H-D9.2-6 and G-D9.2-9, missing spec sentences: accepted. `plugins.md:58`, `:154`, `:259`, `:264` and `installation.md:134` gain `host` where they name `surface` or `state`. The sentence "no sidecar send" named for `plugin-host.md:59` is absent from the main text: a search of that file returned no match. The replacement rule applies only if the sentence exists, and the Round-4 check item records that.
+- H-D9.2-6 and G-D9.2-9, missing spec sentences: accepted. `plugins.md:58`, `:154`, `:259`, `:264` and `installation.md:134` gain `host` where they name `surface` or `state`. The sentence "no sidecar send" is in the main text: `plugin-host.md:59` reads "A plugin host has no `tab.state` call, no region operation, no sidecar send, and no clipboard or link call". D9.2 replaces that clause so that a host sidecar send is allowed (see Verification, round 4 record).
 - H-D9.7, DOM test target: accepted. The target is the host page presentation module that D9.2 now names.
 - G-D9.1e, action key collision: accepted. `declared-ui.md:128` fixes the address to five fields, with `key` the root key. The action is addressed by an `action` field, required with role `action`.
 - G-D9.1b, keydown binding: accepted. The binder allows only `click` (`declared-ui.md:103`). `exposure.md` gains the keydown event for declared tree nodes, and the Red case is Enter on a node without `open`, which does nothing.
@@ -274,6 +286,14 @@ Round 4 auditors (two fresh subagents, read-only): auditor G returned twelve obj
 
 The round-5 auditors review these texts, the presentation-placement standard change, and the layer-rule text.
 
+## Verification of unchecked claims (round 4 record)
+
+Checked in the files of this worktree before the round-5 review. Each claim below is corrected where it was wrong.
+
+- `packages/plugin-api/terms.json:304` has the term `branch`, defined as "A tree node with a children array that is not empty, which the workbench draws with an expand control". The term `unloaded branch` does not exist. The round-4 text (G-D9.1h) is right that `branch` is defined by its children; the new term is added before use.
+- `docs/spec/exposure.md` has no keydown rule for declared elements. Its "Keyboard shortcuts" section (`:61`) lists workbench and view shortcuts only. The only key-handler text is `docs/spec/declared-ui.md:130`: "A declared UI element has no key handler of its own." The keydown rule of D9.1b is therefore a new rule, not a change to an existing one.
+- `docs/spec/plugin-host.md:59` contains the sentence "A plugin host has no `tab.state` call, no region operation, no sidecar send, and no clipboard or link call". Round 4 wrote that this sentence was absent; that was wrong and is corrected here. The clause "no sidecar send" is replaced by D9.2.
+
 ## To record elsewhere
 
 Recorded on the owning repository or branch; this review does not change them. Round 2 adds: `docs/spec/plugin-host.md` (Channel, the route of D9.2, and the layer statement at `:5`), `docs/spec/plugin-processes.md:26-28` (the host rule of D9.2), `docs/spec/native-surfaces.md` (the view `declared-ui.expanded` message of D9.3), and `docs/spec/sidecars.md:41,46,65,67` (the host route key).
@@ -281,7 +301,9 @@ Recorded on the owning repository or branch; this review does not change them. R
 - Core main (follow-up of F218-2.4-1): D8.1 to D8.5 in `scripts/check-host-contract.mjs`, `scripts/test/check-host-contract.test.mjs` and `docs/spec/host-contract.md` (+ko), as a new change after the F218-2.4-1 change.
 - Core main (F212.8 follow-up IDs): D9.1a to D9.1g and D9.3 in `docs/spec/declared-ui.md` (+ko) and the vocabulary table, with tests in `packages/workbench`.
 - Core main (F212.9 follow-up): D9.2 in `docs/spec/plugin-host.md` (+ko), the surface-less sidecar relay, with the contract case in both hosts.
-- `AGENTS.md:32-33` and `AGENTS.ko.md:32-33` (R2.3), `docs/spec/plugins.md` (R2.1, R2.2) and `scripts/test/workspace-registry.test.mjs` (R2.4): core main.
+- `AGENTS.md:32-33` and `AGENTS.ko.md:32-33` (R2.3): owner is the person, because `AGENTS.md` is the person's file. The exact text is in the next paragraph. `docs/spec/plugins.md` (R2.1, R2.2) and `scripts/test/workspace-registry.test.mjs` (R2.4): core main.
+
+Exact text for R2.3 (EN `AGENTS.md`, line 32): replace "`environment.json` lists plugins, `plugin.json` lists" with "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists". Line 33: replace "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version" with "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries` and `make registry` read".
 - The F230 backlog item named in `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55` is not committed on `feat/host-routes-F229`. Its owner records it on that branch or drops the reference; D9.1a is the horizontal rule this review sets.
 - `plugins/files` repository: D9.4 schemas and D9.7 test, and item F212.10-files after F212.9-4-1.
 - `plugins/shell` repository: `plugin.json` `shell.history` description (D9.9); checklist item P10 closed by D9.8 and D9.10.

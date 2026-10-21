@@ -18,6 +18,8 @@
 
 ## D2. core의 레지스트리 목록
 
+상태: 라운드 4에서 닫힘. 라운드 4 감사자 두 명 모두 반론이 없었다. 필요한 변경은 `docs/features.md`의 하위 항목 F238-d-1부터 F238-d-4까지다.
+
 결정: core는 `scripts/workspace-registry.json`을 core 도구가 읽는 형제 저장소의 선언으로 유지하고, `docs/spec/plugins.md`의 저장소 표를 문서로 유지하며, CI에서 형제 checkout을 유지한다. 코드와 맞지 않는 세 문장을 바로잡는다.
 
 근거:
@@ -41,6 +43,16 @@
 범위 밖: 레지스트리 선언을 registry 저장소로 옮기는 일.
 
 ## D8. 호스트 계약 검사의 sok 소스
+
+상태: 라운드 4에서 닫힘. 라운드 4 감사자 두 명 모두 D8에 반론이 없었다. 부모는 D8.2부터 D8.5까지를 코드에서 확인했다(아래). 필요한 변경은 `docs/features.md`의 하위 항목 F238-d-5부터 F238-d-8까지다.
+
+라운드 4 기록의 D8.2~D8.5 부모 확인:
+
+- D8.1 가림: `groupResults`(`check-host-contract.mjs:91-100`)는 실행과 이름으로만 묶고, `statusOf`(`:103-114`)는 `host.runs`의 모든 일치를 취한다. `host.runs`에는 wailsv3의 sok 실행이 든다(`GO_RUNS`, `:173-179`). 확인됨: 호스트의 통과가 sok 선언을 덮는다.
+- D8.2: `packages/host/tauriv2`(테스트 601개)와 `packages/sok/tauriv2`(테스트 139개)의 `#[test]` 잎 이름을 훑어 두 크레이트 모두 중복 잎이 없었다. 새 규칙은 현재 트리를 깨지 않는다. `discoverRust`가 실행 파일마다 목록을 내므로(`test-discovery.mjs:79-84`) 합산 검사가 모든 타겟을 덮는다.
+- D8.3: `parseDeclarations`는 모든 `#[` 줄에서 반환한다(`check-host-contract.mjs:78`). 그래서 선언 위나 선언과 `fn` 사이의 `#[should_panic]`과 `#[ignore]`는 조용히 통과한다. Rust 선언 752개를 훑어 허용 집합 밖의 속성이 없었다. `endpoint_test.rs:176-178`과 `sok_test.rs:333-334`의 `cfg(feature)`와 `cfg(not(feature))` 줄이 Green 사례다.
+- D8.4: `docs/spec/host-contract.md:22`은 `packages/host/...` 경로만 나열하므로 sok 경로가 빠져 있다고 한 말이 맞다.
+- D8.5: `scripts/test/check-host-contract.test.mjs`는 있으나 소유자 규칙, 잎 규칙, 속성 규칙의 사례가 없다. 사례는 새 작업이다.
 
 결정: 호스트 계약 검사는 sok 선언(`packages/sok/wailsv3/tests`, `packages/sok/wailsv3/src/*_test.go`, `packages/sok/tauriv2/tests`, `packages/sok/tauriv2/src`)을 계속 읽고, 선언을 결과와 맞추는 방식을 바꾼다. F218-2.4-1 변경은 이미 `origin/main`에 있으며 수정(amend)하지 않는다. 수정은 새 변경이다.
 
@@ -242,7 +254,7 @@
 - H-D9.2-3과 G-D9.2-3, 정지 해제: 수락. `sidecars.md:67`은 사람이 표면을 여는 것만 정지를 푼다고 말한다. 프로젝트 변경에 따른 라우트 생성은 사람의 열기가 아니므로 정지를 풀지 않는다. 새로 고침도 정지를 풀지 않는다. 정지된 사이드카는 앱을 재시작할 때까지 정지된 채 있다. 이는 D9.9에 적은 비용이다.
 - H-D9.2-4, 사이드카가 만드는 표현: 수락. 표현(라벨, 프로젝트 없음 문구, 잘라내기, 동작 배치)은 플러그인 기능이다. AGENTS는 플러그인 기능을 core로 옮기지 않으며, 사이드카는 한 도메인의 네이티브 기능을 담는다. 사이드카는 데이터만 주고 호스트 페이지가 선언값을 만든다. 따라서 호스트는 표현 로직을 가진다. 이는 기준 변경이므로 D9.2에 이유와 함께 기록하고 이번 라운드에서 검토한다.
 - H-D9.2-5와 G의 층 규칙 기준: 일부 수락. 원래 기준(뷰나 사이드카가 로직을 가질 수 없을 때만 호스트)을 기반으로 둔다. 호스트는 뷰가 열려 있지 않을 때도 제공되어야 하는 status를 위해 필요하다. 뷰는 그것을 제공할 수 없고, 사이드카는 status를 등록할 수 없다(`declared-ui.md:145`). 호스트는 그 status를 제공하는 DOM 없는 표현을 가진다. 새 문장이 두 사실을 모두 말한다.
-- H-D9.2-6과 G-D9.2-9, 누락된 명세 문장: 수락. `plugins.md:58`, `:154`, `:259`, `:264`와 `installation.md:134`에 `surface`나 `state`를 적은 곳마다 `host`를 더한다. `plugin-host.md:59`에 적힌 "no sidecar send" 문장은 본문에 없다. 그 파일을 검색해도 일치하는 줄이 없었다. 교체 규칙은 그 문장이 있을 때만 적용하며, 라운드 4 확인 항목에 그 점을 적는다.
+- H-D9.2-6과 G-D9.2-9, 누락된 명세 문장: 수락. `plugins.md:58`, `:154`, `:259`, `:264`와 `installation.md:134`에 `surface`나 `state`를 적은 곳마다 `host`를 더한다. "no sidecar send" 문장은 본문에 있다. `plugin-host.md:59`는 "A plugin host has no `tab.state` call, no region operation, no sidecar send, and no clipboard or link call"이라고 적는다. D9.2가 호스트의 사이드카 전송을 허용하도록 그 절을 바꾼다(라운드 4 기록의 검증 참고).
 - H-D9.7, DOM 테스트 대상: 수락. 대상은 D9.2가 이제 이름 붙인 호스트 페이지 표현 모듈이다.
 - G-D9.1e, 동작 키 충돌: 수락. `declared-ui.md:128`은 주소를 다섯 필드로 고정하며 `key`는 루트 키다. 동작은 역할 `action`이 필요로 하는 `action` 필드로 주소를 갖는다.
 - G-D9.1b, keydown 바인딩: 수락. 바인더는 `click`만 허용한다(`declared-ui.md:103`). `exposure.md`에 선언형 tree 노드의 keydown 이벤트를 더한다. 빨간 사례는 `open`이 없는 노드에서 Enter를 누르면 아무 일도 없어야 함이다.
@@ -277,14 +289,25 @@
 
 라운드 5 감사자는 이 본문, 표현 배치의 기준 변경, 층 규칙 문장을 검토한다.
 
+## 미확인 주장의 검증 (라운드 4 기록)
+
+라운드 5 검토 전에 이 worktree의 파일에서 확인했다. 아래 각 주장은 틀렸던 곳을 바로잡았다.
+
+- `packages/plugin-api/terms.json:304`에 용어 `branch`가 있으며, "A tree node with a children array that is not empty, which the workbench draws with an expand control"로 정의된다. 용어 `unloaded branch`는 없다. 라운드 4 본문(G-D9.1h)은 `branch`가 자식으로 정의된다는 점에서 옳다. 새 용어는 쓰기 전에 추가한다.
+- `docs/spec/exposure.md`에는 선언형 요소의 keydown 규칙이 없다. "Keyboard shortcuts" 절(`:61`)은 워크벤치와 view 단축키만 나열한다. 키 처리에 관한 유일한 문장은 `docs/spec/declared-ui.md:130`의 "A declared UI element has no key handler of its own."이다. 그러므로 D9.1b의 keydown 규칙은 기존 규칙의 변경이 아니라 새 규칙이다.
+- `docs/spec/plugin-host.md:59`에는 "A plugin host has no `tab.state` call, no region operation, no sidecar send, and no clipboard or link call" 문장이 그대로 있다. 라운드 4는 이 문장이 없다고 적었는데 틀렸으며, 여기서 바로잡는다. "no sidecar send" 절은 D9.2가 바꾼다.
+
 ## 다른 곳에 기록할 것
+
 
 이 검토는 아래를 바꾸지 않는다. 각 항목은 소유 저장소나 브랜치에 기록된다. 라운드 2가 더한 항목: `docs/spec/plugin-host.md`(Channel의 D9.2 경로와 `:5`의 층 문장), `docs/spec/plugin-processes.md:26-28`(D9.2의 호스트 규칙), `docs/spec/native-surfaces.md`(D9.3의 view `declared-ui.expanded` 메시지), `docs/spec/sidecars.md:41,46,65,67`(호스트 경로 키).
 
 - core main(F218-2.4-1의 후속): `scripts/check-host-contract.mjs`, `scripts/test/check-host-contract.test.mjs`, `docs/spec/host-contract.md`(+ko)의 D8.1~D8.5. F218-2.4-1 변경 뒤의 새 변경으로 한다.
 - core main(F212.8 후속 ID): `docs/spec/declared-ui.md`(+ko)와 어휘 표의 D9.1a~D9.1g 및 D9.3. 테스트는 `packages/workbench`에 둔다.
 - core main(F212.9 후속): `docs/spec/plugin-host.md`(+ko)의 D9.2 표면 없는 사이드카 중계와 두 호스트의 사례.
-- `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`(R2.3), `docs/spec/plugins.md`(R2.1, R2.2), `scripts/test/workspace-registry.test.mjs`(R2.4): core main.
+- `AGENTS.md:32-33`과 `AGENTS.ko.md:32-33`(R2.3): 소유자는 사람이다. `AGENTS.md`는 사람의 파일이기 때문이다. 정확한 본문은 다음 문단에 있다. `docs/spec/plugins.md`(R2.1, R2.2), `scripts/test/workspace-registry.test.mjs`(R2.4): core main.
+
+R2.3의 정확한 본문(영문 `AGENTS.md` 32줄): "`environment.json` lists plugins, `plugin.json` lists"를 "`environment.json` names plugins only as references in `workspace`, `sidebars` and `settings`, and does not install them; `plugin.json` lists"로 바꾼다. 33줄: "manifests such as `environment.json`, `settings`, and `plugin.json` list what is installed at which version"을 "manifests such as `plugin.json` list what is installed at which version; `plugins/installed.json` lists the installed plugins, and `scripts/workspace-registry.json` declares the sibling folders that `make boundaries` and `make registry` read"로 바꾼다.
 - `../core-host-routes-F229/docs/plans/plugin-host-routes.md:55`에 이름만 있는 F230 백로그 항목은 `feat/host-routes-F229`에 커밋되지 않았다. 그 소유자가 브랜치에 기록하거나 참조를 버린다. D9.1a가 가로 tree 규칙을 정한다.
 - `plugins/files` 저장소: D9.4 스키마와 D9.7 테스트, core F212.9-4-1 뒤의 항목 F212.10-files.
 - `plugins/shell` 저장소: `plugin.json`의 `shell.history` 설명(D9.9), 체크리스트 P10을 D9.8과 D9.10으로 닫는다.
