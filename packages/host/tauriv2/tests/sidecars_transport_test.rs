@@ -1744,6 +1744,17 @@ struct ReplaceService {
     process_id: u32,
     /// The endpoint process, which ends with the fixture when the fixture is dropped.
     process: Arc<Mutex<std::process::Child>>,
+    /// The file where the installed service writes its process identifier.
+    installed_pid_path: std::path::PathBuf,
+}
+
+impl ReplaceService {
+    /// The process identifier that the installed service wrote, or None when the host started no installed service.
+    fn installed_process_id(&self) -> Option<u32> {
+        std::fs::read_to_string(&self.installed_pid_path)
+            .ok()
+            .map(|text| text.trim().parse().expect("the installed service writes its process identifier"))
+    }
 }
 
 impl Drop for ReplaceService {
@@ -1778,8 +1789,11 @@ fn serve_replace_service(
     let process_id = process.id();
     let process = Arc::new(Mutex::new(process));
     // The executable that the host starts for the installed service announces the endpoint of this fake service.
+    // It records its process identifier, so the check can see whether the process ends with the test.
+    let installed_pid_path = executable_directory.join("installed.pid");
     let script = format!(
-        "#!/bin/sh\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        installed_pid_path.display(),
         socket_path.display()
     );
     let executable = executable_directory.join("echo");
@@ -1873,6 +1887,7 @@ fn serve_replace_service(
         first_ended,
         process_id,
         process,
+        installed_pid_path,
     }
 }
 
@@ -2009,6 +2024,16 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
         ended.saturating_duration_since(second)
     );
     sidecars.stop();
+    // The installed service is a process the host started, and it ends with the test. A process that outlives the test
+    // keeps the output of the test open, so the runner waits for it to end.
+    let installed = service
+        .installed_process_id()
+        .expect("the installed service started");
+    drop(service);
+    assert!(
+        !process_is_running(installed),
+        "the installed service process {installed} outlived the test"
+    );
 }
 
 // contract: sidecars-transport.hello.client-is-the-configuration-directory
@@ -2224,6 +2249,18 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
 /// Whether a process of this identifier exists, which signal 0 checks without sending a signal.
 fn process_is_alive(process_id: u32) -> bool {
     unsafe { libc::kill(process_id as i32, 0) == 0 }
+}
+
+/// Whether a process of this identifier runs. A zombie has ended, releases its output, and does not count.
+fn process_is_running(process_id: u32) -> bool {
+    if !process_is_alive(process_id) {
+        return false;
+    }
+    let state = std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &process_id.to_string()])
+        .output()
+        .expect("ps lists the process state");
+    !String::from_utf8_lossy(&state.stdout).trim_start().starts_with('Z')
 }
 
 // contract: sidecars-transport.persistent.connection-events
