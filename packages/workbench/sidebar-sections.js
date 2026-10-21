@@ -5,7 +5,8 @@
 // This module holds the tab selection and the section collapse for each sidebar.
 import { bind } from "./commands.js";
 import { chooseSource, createDeclaredSection } from "./declared-section.js";
-import { declaredChannel, declaredPull } from "./declared-source.js";
+import { createDeclaredSource } from "./declared-source.js";
+import { trace } from "./performance.js";
 import { hasIcon, icon } from "./icons.js";
 import { registry } from "./exposure.js";
 import { hasSection, section } from "./registry.js";
@@ -112,12 +113,13 @@ function mountModule(entry, context) {
  * Draws a declared section from its status (docs/spec/declared-ui.md, sidebar section form and status mapping). The body draws
  * the accepted value through declared-ui.js, and a rejection shows in the body through the display path. The registration of a
  * state module does not serve, so the source is chosen among the surfaces that the registry holds for the status. The snapshot
- * channel and the pull come from the transport boundary of the main page (declared-source.js).
+ * channel and the pull come from the view transport of the main page (createDeclaredSource of declared-source.js).
  */
 function mountDeclared(entry, record) {
   const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
   const statusId = `${owner}.${entry.section.status}`;
   const context = sectionContext(entry, record.context);
+  const transport = createDeclaredSource({ plugin: owner, status: entry.section.status });
   const declared = createDeclaredSection({
     statusId,
     body: entry.body,
@@ -125,8 +127,10 @@ function mountDeclared(entry, record) {
     orientation: () => record.context.orientation,
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     choose: () => chooseSource({ active: record.context.surface ?? null, registrants: registry.registrants("status", statusId) }),
-    channel: declaredChannel,
-    pull: declaredPull,
+    channel: transport.channel,
+    pull: transport.pull,
+    // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
+    skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status: entry.section.status, count }),
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
   });
   entry.declared = declared;

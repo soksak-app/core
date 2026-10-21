@@ -1,6 +1,6 @@
 // The source and the state of one declared section (docs/spec/declared-ui.md, status mapping and transitions). The section takes its
-// value from the chosen source only. The snapshot channel and the pull request of a source are given by the caller, because the
-// main page has no production connection to a view or a plugin host for them yet.
+// value from the chosen source only. The snapshot channel and the pull of a source are given by the caller; the production
+// connection of a view source is createDeclaredSource() of declared-source.js.
 import { createSnapshotReceiver } from "@soksak/plugin-api";
 import { changeSource, receive } from "./declared-ui.js";
 import { hideError } from "./shown-errors.js";
@@ -26,7 +26,8 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  *     orientation() the current orientation of the section
  *     choose()      the chosen source {id, surface}, or null (chooseSource)
  *     channel(source) {send, onMessage} of the snapshot channel of a source, or null when the source has no channel
- *     pull(source)  a promise of the pull reply {seq, value}, or null when the source has no value; null when there is no pull path
+ *     pull(source)  a promise of the pull reply {seq, value}
+ *     skipped(count) receives the count of the values that a snapshot of the source overwrote while it was in transit
  *     failed(error) receives the error of a pull that failed
  *
  * reconcile() applies the choice of the source: a change of source clears the section, removes the baseline and withdraws the error,
@@ -35,7 +36,7 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  * pull reply whose seq is lower than the seq of the last accepted value. state() reports the section state of core.sidebars:
  * mounted while the section draws an accepted value, and the text of the current rejection while the last value is rejected.
  */
-export function createDeclaredSection({ statusId, body, options, orientation, choose, channel, pull, failed }) {
+export function createDeclaredSection({ statusId, body, options, orientation, choose, channel, pull, skipped, failed }) {
   const owner = statusId.slice(0, statusId.indexOf("."));
   const status = statusId.slice(statusId.indexOf(".") + 1);
   const receiveOptions = { ...options, owner, status };
@@ -102,8 +103,10 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
         plugin: owner,
         send: link.send,
         onMessage: link.onMessage,
-        onSnapshot: (received, seq, value) => {
+        onSnapshot: (received, seq, value, count) => {
           if (received !== statusId || current === null || current.id !== next.id) return;
+          // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
+          if (count > 0) skipped?.(count);
           accept(seq, value);
         },
       });

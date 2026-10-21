@@ -26,7 +26,7 @@ async function harness() {
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], pullReply: null, deferred: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], pullReply: null, deferred: [], skipped: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
@@ -47,13 +47,14 @@ async function harness() {
       }
       return Promise.resolve(world.pullReply ?? { seq: 0, value: null });
     },
+    skipped: (count) => { world.skipped.push(count); },
     failed: (error) => { throw error; },
   });
   return {
     statusId, body, world, section,
-    push(source, seq, value) {
+    push(source, seq, value, skipped = 0) {
       assert.ok(world.channels.get(source), `no channel is subscribed for ${source}`);
-      world.channels.get(source)({ event: "declared-ui.snapshot", plugin: "demo", status: statusId, seq, value, skipped: 0 });
+      world.channels.get(source)({ event: "declared-ui.snapshot", plugin: "demo", status: statusId, seq, value, skipped });
     },
     expand(path, expanded) {
       assert.doesNotThrow(() => setTreeExpanded({ status: statusId, tree: "t1", path, expanded }), "the tree was not drawn");
@@ -247,6 +248,18 @@ test("the active view serves only when it registered the status, and a plugin ho
   assert.equal(module.chooseSource({ statusId: "demo.s", active: null, registrants: ["view-a"] }), null, "a view served without an active tab");
   assert.deepEqual(module.chooseSource({ statusId: "demo.s", active: "view-a", registrants: [], host: "host:demo" }), { id: "host:demo", surface: null });
   assert.deepEqual(module.chooseSource({ statusId: "demo.s", active: "view-a", registrants: ["view-a"], host: "host:demo" }), { id: "view-a", surface: "view-a" }, "the host served before the view");
+});
+
+test("a snapshot that overwrote values reports their count once to skipped", async () => {
+  const h = await harness();
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.section.reconcile();
+  await settle();
+  h.push("view-a", 1, list(["a"]), 3);
+  assert.deepEqual(h.world.skipped, [3], "the count of the overwritten values was not reported");
+  h.push("view-a", 2, list(["b"]));
+  assert.deepEqual(h.world.skipped, [3], "a snapshot without overwrote values was reported");
 });
 
 test("the section reports mounted while it draws an accepted value and the rejection while the last value is rejected", async () => {
