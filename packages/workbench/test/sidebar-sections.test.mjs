@@ -1,6 +1,7 @@
-// Checks the context that a section module receives (status observation and command connection) and the section content of core.sidebars.
+// Checks the context that a section module receives (status observation and command connection), the drawing of a declared
+// section, and the section content of core.sidebars.
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { mock } from "node:test";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 
@@ -11,6 +12,17 @@ globalThis.document = dom.window.document;
 const reported = [];
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+
+// The snapshot channel and the pull of a declared section source are fakes at the transport boundary of the main page
+// (declared-source.js), which holds no production connection yet.
+const declaredWorld = { channel: () => null, pull: () => Promise.resolve({ seq: 0, value: null }) };
+mock.module("../declared-source.js", { namedExports: {
+  declaredChannel: (source) => declaredWorld.channel(source),
+  declaredPull: (source) => declaredWorld.pull(source),
+} });
+// Records the lines that the one error display path writes (shown-errors.js reports through host.js).
+const logged = [];
+mock.module("../host.js", { namedExports: { report: (line) => { logged.push(line); } } });
 
 const { registry } = await import("../exposure.js");
 const { audit } = await import("../commands.js");
@@ -182,4 +194,156 @@ test('a vertical fill section retains its intrinsic header and body minimum when
   assert.equal(styled.window.getComputedStyle(section.querySelector('.set__body')).minHeight,'min-content','the body must retain its intrinsic minimum');
   assert.equal(styled.window.getComputedStyle(section.parentElement).overflow,'auto','the sidebar must scroll instead of dropping section content');
  }finally{styled.window.close();}
+});
+
+/** Declares one plugin with one status and one command, registers its declared section, and registers the surface that owns the status. */
+function declareDeclaredPlugin(plugin, surface, section = {}) {
+  registry.configure({ surfacePlugin: () => plugin });
+  registry.declare(plugin, {
+    status: [{ name: `${plugin}.lines`, description: "Lines.", schema: { type: "array" } }],
+    commands: [{ name: `${plugin}.open`, description: "Opens.", params: { type: "object" }, result: {} }],
+    dom: [],
+  });
+  registerSection({ id: `${plugin}.view`, name: "선언", status: "lines", ...section });
+  registry.registered({ surface, kind: "status", name: `${plugin}.lines` });
+}
+
+/** Subscribes a channel per source and counts the pulls. */
+function declaredTransport() {
+  const listeners = new Map();
+  let pulls = 0;
+  declaredWorld.channel = (source) => ({
+    send: () => {},
+    onMessage: (listener) => { listeners.set(source.id, listener); return () => listeners.delete(source.id); },
+  });
+  declaredWorld.pull = () => { pulls += 1; return Promise.resolve({ seq: 0, value: null }); };
+  return { listeners, pulled: () => pulls };
+}
+
+const pushTo = (listeners, plugin, seq, value) =>
+  listeners.get("view-a")({ event: "declared-ui.snapshot", plugin, status: `${plugin}.lines`, seq, value, skipped: 0 });
+
+test("a declared section draws the value of its source, shows its rejection, and reports mounted, error, text and controls", async () => {
+  const plugin = "probe-d1";
+  declareDeclaredPlugin(plugin, "view-a", { fill: true });
+  const { listeners } = declaredTransport();
+  const value = { elements: [
+    { kind: "list", key: "l1", empty: "없음", items: [{ key: "a", label: "첫" }, { key: "b", label: "둘", command: `${plugin}.open` }] },
+  ] };
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  try {
+    drawSet(container, "rail-d1", { id: "set-d1", title: "세트", layout: "list", sections: [`${plugin}.view`] },
+      { card: "rail-d1", surface: "view-a", orientation: "vertical" });
+    await settle();
+    const section = container.querySelector(".set__section");
+    const body = section.querySelector(".set__body");
+    const report = () => sidebarsState().find((item) => item.sidebar === "rail-d1").sections[0];
+    assert.equal(section.dataset.fill, "true", "the declared section does not take the fill declaration");
+    const header = container.querySelector('[data-expose="core.sidebar.section.header"]');
+    assert.notEqual(header, null, "the declared section has no header");
+    assert.equal(header.dataset.command, "core.sidebar.section.fold", "the declared section header does not fold");
+    assert.ok(listeners.has("view-a"), "the chosen source was not subscribed");
+    assert.equal(report().mounted, false, "the section is mounted before its first accepted value");
+    assert.equal(report().error, null, "the section reports an error without a rejected value");
+    assert.equal(report().text, "", "the section drew something before its first accepted value");
+    assert.equal(report().controls, 0, "the cleared section reports controls");
+    pushTo(listeners, plugin, 1, value);
+    assert.equal(report().mounted, true, "the accepted value is not reported as mounted");
+    assert.equal(report().error, null, "an accepted value reported an error");
+    assert.equal(report().text, "첫둘", "the accepted value was not drawn");
+    assert.equal(report().controls, 1, "the section does not report its one control");
+    assert.equal(body.querySelector('button[data-key="l1"][data-path]').textContent, "둘", "the item button was not drawn");
+    pushTo(listeners, plugin, 2, { elements: [{ kind: "chart", key: "x" }] });
+    assert.equal(report().mounted, false, "a rejected value is reported as mounted");
+    assert.equal(report().error, '/elements/0/kind: unknown kind "chart"', "the rejection is not reported as the error");
+    assert.equal(body.dataset.error, `declared UI ${plugin}.lines`, "the rejection did not come from the display path");
+    assert.equal(report().text, '/elements/0/kind: unknown kind "chart"', "the section does not show the text of the display path");
+    assert.ok(logged.includes(`declared UI ${plugin}.lines: /elements/0/kind: unknown kind "chart"`), JSON.stringify(logged));
+    pushTo(listeners, plugin, 3, value);
+    assert.equal(report().mounted, true, "the next accepted value is not reported as mounted");
+    assert.equal(report().error, null, "the next accepted value did not clear the reported error");
+    assert.equal(body.dataset.error, undefined, "the next accepted value did not withdraw the error display");
+  } finally {
+    clearSet(container);
+    container.remove();
+  }
+});
+
+test("a declared section whose status the active surface did not register stays cleared and subscribes to nothing", async () => {
+  const plugin = "probe-d2";
+  declareDeclaredPlugin(plugin, "view-a");
+  const { listeners, pulled } = declaredTransport();
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  try {
+    drawSet(container, "rail-d2", { id: "set-d2", title: "세트", layout: "list", sections: [`${plugin}.view`] },
+      { card: "rail-d2", surface: "view-b", orientation: "vertical" });
+    await settle();
+    const report = () => sidebarsState().find((item) => item.sidebar === "rail-d2").sections[0];
+    assert.equal(listeners.size, 0, "a channel was subscribed without a chosen source");
+    assert.equal(pulled(), 0, "a value was pulled without a chosen source");
+    assert.equal(report().mounted, false, "the section is mounted without a chosen source");
+    assert.equal(report().error, null, "the section reports an error without a chosen source");
+    assert.equal(report().text, "", "the section drew something without a chosen source");
+  } finally {
+    clearSet(container);
+    container.remove();
+  }
+});
+
+test("an orientation change checks the accepted declared value again and pulls once", async () => {
+  const plugin = "probe-d3";
+  declareDeclaredPlugin(plugin, "view-a");
+  const listeners = new Map();
+  let pulls = 0;
+  declaredWorld.channel = (source) => ({
+    send: () => {},
+    onMessage: (listener) => { listeners.set(source.id, listener); return () => listeners.delete(source.id); },
+  });
+  const tree = { elements: [{ kind: "tree", key: "t1", empty: "없음", nodes: [{ key: "n", label: "가지", children: [{ key: "c", label: "잎" }] }] }] };
+  declaredWorld.pull = () => { pulls += 1; return Promise.resolve({ seq: 1, value: tree }); };
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  try {
+    const set = { id: "set-d3", title: "세트", layout: "list", sections: [`${plugin}.view`] };
+    drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "vertical" });
+    await settle();
+    const body = container.querySelector(".set__body");
+    const report = () => sidebarsState().find((item) => item.sidebar === "rail-d3").sections[0];
+    assert.equal(report().mounted, true, "the accepted tree value was not drawn");
+    assert.equal(body.textContent, "가지", "the accepted tree value was not drawn");
+    assert.equal(pulls, 1, "the source was not pulled once at the load");
+    drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "horizontal" });
+    await settle();
+    assert.equal(report().mounted, false, "the accepted value was not checked again at the orientation change");
+    assert.equal(body.textContent, "/elements/0: tree cannot be drawn in a horizontal section", "the accepted value was not checked again at the orientation change");
+    assert.equal(pulls, 2, "the orientation change did not pull once");
+    drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "vertical" });
+    await settle();
+    assert.equal(report().mounted, true, "the value of the new pull was not drawn after the orientation returned");
+    assert.equal(body.textContent, "가지", "the value of the new pull was not drawn after the orientation returned");
+    assert.equal(pulls, 3, "the orientation change did not pull once");
+  } finally {
+    clearSet(container);
+    container.remove();
+  }
+});
+
+test("a declared body stacks its elements in vertical orientation and wraps them in one row in horizontal orientation", () => {
+  const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+  const styled = new JSDOM(`<style>${css}</style><div class="set" data-layout="list" data-orientation="horizontal"><div class="set__body" data-declared=""></div></div><div class="set" data-layout="list" data-orientation="vertical"><div class="set__body" data-declared=""></div></div>`);
+  try {
+    const [horizontal, vertical] = styled.window.document.querySelectorAll(".set__body");
+    const style = styled.window.getComputedStyle(horizontal);
+    assert.equal(style.display, "flex", "the horizontal declared body is not a flex container");
+    assert.equal(style.flexDirection, "row", "the horizontal declared body does not lay its elements in a row");
+    assert.equal(style.flexWrap, "wrap", "the horizontal declared body does not wrap its elements");
+    assert.equal(styled.window.getComputedStyle(vertical).flexDirection, "column", "the vertical declared body does not stack its elements");
+  } finally {
+    styled.window.close();
+  }
 });

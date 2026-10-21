@@ -32,7 +32,8 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  * reconcile() applies the choice of the source: a change of source clears the section, removes the baseline and withdraws the error,
  * subscribes to the new channel, and pulls the value of the new source once. orientationChanged() checks the accepted value for the
  * new orientation and pulls once again. A snapshot or a pull reply of a source that is no longer chosen is discarded, and so is a
- * pull reply whose seq is lower than the seq of the last accepted value.
+ * pull reply whose seq is lower than the seq of the last accepted value. state() reports the section state of core.sidebars:
+ * mounted while the section draws an accepted value, and the text of the current rejection while the last value is rejected.
  */
 export function createDeclaredSection({ statusId, body, options, orientation, choose, channel, pull, failed }) {
   const owner = statusId.slice(0, statusId.indexOf("."));
@@ -43,11 +44,19 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
   let generation = 0;
   let lastSeq = 0;
   let accepted = null;
+  let rejected = null;
 
   function accept(seq, value) {
     const ok = receive(body, value, { ...receiveOptions, orientation: orientation() });
-    accepted = ok ? value : null;
-    if (ok) lastSeq = seq;
+    if (ok) {
+      lastSeq = seq;
+      accepted = value;
+      rejected = null;
+    } else {
+      accepted = null;
+      // The section shows the text that the display path wrote (docs/spec/declared-ui.md, rejection).
+      rejected = body.textContent;
+    }
   }
 
   /** Calls the pull of the current source; its reply is accepted only while that source is still chosen. */
@@ -74,6 +83,7 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
     generation += 1;
     lastSeq = 0;
     accepted = null;
+    rejected = null;
     changeSource(statusId);
     body.replaceChildren();
     hideError(body, `declared UI ${statusId}`);
@@ -107,5 +117,7 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
     pullCurrent();
   }
 
-  return { reconcile, orientationChanged, close: leave };
+  /** The state that core.sidebars reports (docs/spec/declared-ui.md, sidebar section form). */
+  const state = () => ({ mounted: accepted !== null, error: rejected });
+  return { reconcile, orientationChanged, close: leave, state };
 }

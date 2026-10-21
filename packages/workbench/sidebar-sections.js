@@ -4,7 +4,9 @@
 // list lays out all sections according to the direction, and tabs mounts only the one selected section.
 // This module holds the tab selection and the section collapse for each sidebar.
 import { bind } from "./commands.js";
-import { icon } from "./icons.js";
+import { chooseSource, createDeclaredSection } from "./declared-section.js";
+import { declaredChannel, declaredPull } from "./declared-source.js";
+import { hasIcon, icon } from "./icons.js";
 import { registry } from "./exposure.js";
 import { hasSection, section } from "./registry.js";
 
@@ -34,7 +36,7 @@ function unmount(entry) {
   entry.mounted = false;
   entry.error = null;
   // A mount failure and a release failure during the release are reported as page errors (docs/spec/plugins.md). The item has already been released,
-  // so it does not appear as the error of core.sidebars.
+  // so it does not appear as the error of core.sidebars. A declared section closes in the release, before the next value of the new section is drawn.
   pending.then((result) => result.dispose()).catch((error) => {
     dispatchEvent(new ErrorEvent("error", { message: `section ${entry.section.id}: ${error.message}` }));
   });
@@ -77,17 +79,11 @@ function sectionContext(entry, context) {
   };
 }
 
-function mount(entry, context) {
+function mount(entry, record) {
   if (entry.mount) return;
-  const path = typeof entry.section.module === "string" ? entry.section.module : entry.section.module[context.orientation];
-  const mountOnce = entry.mount = import(path).then(async (module) => {
-    if (typeof module.mount !== "function") throw new TypeError(`section ${entry.section.id} module has no mount()`);
-    const result = await module.mount(entry.body, sectionContext(entry, context));
-    if (!result || typeof result.dispose !== "function") {
-      throw new TypeError(`section ${entry.section.id} mount() must return { dispose() }`);
-    }
-    return result;
-  });
+  const mountOnce = entry.mount = entry.section.status !== undefined
+    ? mountDeclared(entry, record)
+    : mountModule(entry, record.context);
   mountOnce.then(() => {
     if (entry.mount !== mountOnce) return;
     entry.mounted = true;
@@ -97,6 +93,47 @@ function mount(entry, context) {
     entry.error = error.message;
     notify();
   });
+}
+
+/** Imports the module of a module section and mounts it into the body (docs/spec/plugins.md#sections). */
+function mountModule(entry, context) {
+  const path = typeof entry.section.module === "string" ? entry.section.module : entry.section.module[context.orientation];
+  return import(path).then(async (module) => {
+    if (typeof module.mount !== "function") throw new TypeError(`section ${entry.section.id} module has no mount()`);
+    const result = await module.mount(entry.body, sectionContext(entry, context));
+    if (!result || typeof result.dispose !== "function") {
+      throw new TypeError(`section ${entry.section.id} mount() must return { dispose() }`);
+    }
+    return result;
+  });
+}
+
+/**
+ * Draws a declared section from its status (docs/spec/declared-ui.md, sidebar section form and status mapping). The body draws
+ * the accepted value through declared-ui.js, and a rejection shows in the body through the display path. The registration of a
+ * state module does not serve, so the source is chosen among the surfaces that the registry holds for the status. The snapshot
+ * channel and the pull come from the transport boundary of the main page (declared-source.js).
+ */
+function mountDeclared(entry, record) {
+  const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
+  const statusId = `${owner}.${entry.section.status}`;
+  const context = sectionContext(entry, record.context);
+  const declared = createDeclaredSection({
+    statusId,
+    body: entry.body,
+    options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
+    orientation: () => record.context.orientation,
+    choose: () => chooseSource({ active: record.context.surface ?? null, registrants: registry.registrants("status", statusId) }),
+    channel: declaredChannel,
+    pull: declaredPull,
+    failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
+  });
+  entry.declared = declared;
+  declared.reconcile();
+  return Promise.resolve({ dispose() {
+    entry.declared = null;
+    declared.close();
+  } });
 }
 
 /** Releases all sections of one set element and clears its record. */
@@ -121,22 +158,29 @@ function sweep() {
   for (const container of [...drawn.keys()]) if (!container.isConnected) clearSet(container);
 }
 
-/** Applies the selected tab and the collapse to the elements and the mounts. */
-function apply(record) {
+/**
+ * Applies the selected tab and the collapse to the elements and the mounts. At a change of orientation a declared section checks
+ * its accepted value again, and a module section remounts, because its module can be chosen by orientation.
+ */
+function apply(record, orientationChanged = false) {
   const choice = choiceOf(record.sidebar);
   for (const entry of record.entries) {
     const id = entry.section.id;
+    if (orientationChanged) {
+      if (entry.declared) entry.declared.orientationChanged();
+      else unmount(entry);
+    }
     if (record.layout === "tabs") {
       const selected = choice.tab === id;
       entry.tab.setAttribute("aria-selected", String(selected));
       entry.element.hidden = !selected;
-      if (selected) mount(entry, record.context);
+      if (selected) mount(entry, record);
       else unmount(entry);
     } else {
       const folded = choice.folded.has(id);
       entry.element.dataset.folded = String(folded);
       entry.header.setAttribute("aria-expanded", String(!folded));
-      mount(entry, record.context);
+      mount(entry, record);
     }
   }
 }
@@ -154,8 +198,10 @@ export function drawSet(container, sidebar, set, context) {
   const choice = choiceOf(sidebar);
   // default: a set without sections has no tab to select (null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
-  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.orientation, context.window === true]);
+  // The orientation is not part of the key: a change of orientation keeps the elements and checks the declared sections again.
+  const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.window === true]);
   let record = drawn.get(container);
+  let orientationChanged = false;
   if (record?.key !== key) {
     if (record) clearSet(container);
     record = { container, sidebar, key, set: set.id, layout: set.layout, context, entries: [] };
@@ -183,8 +229,10 @@ export function drawSet(container, sidebar, set, context) {
       // A fill section shares the remaining height in the list layout (docs/spec/plugins.md#sections).
       if (section.fill) element.dataset.fill = "true";
       const entry = { section, element, header: null, tab: null, body: document.createElement("div"),
-        mount: null, mounted: false, error: null, observing: [] };
+        mount: null, mounted: false, error: null, declared: null, observing: [] };
       entry.body.className = "set__body";
+      // The body of a declared section lays its root elements by the orientation of the sidebar (docs/spec/declared-ui.md).
+      if (section.status !== undefined) entry.body.dataset.declared = "";
       if (context.surface) entry.body.dataset.surface = context.surface;
       if (context.window) entry.body.dataset.windowSidebar = "";
       // The content that a section drew is exposed as text of core.sidebars, so a change of the content is notified.
@@ -215,9 +263,12 @@ export function drawSet(container, sidebar, set, context) {
       container.append(element);
     }
     notify();
+  } else if (container.dataset.orientation !== context.orientation) {
+    orientationChanged = true;
+    container.dataset.orientation = context.orientation;
   }
   record.context = context;
-  apply(record);
+  apply(record, orientationChanged);
 }
 
 function recordsOf(sidebar, section) {
@@ -287,14 +338,20 @@ export function sidebarsState() {
         // default: the context of a card sidebar has no plugin and side of a window sidebar.
         side: record.context.side ?? null,
         rect: (() => { const {x,y,width:w,height:h} = record.container.getBoundingClientRect(); return {x,y,w,h}; })(),
-        sections: record.entries.map((entry) => ({
+        sections: record.entries.map((entry) => {
+          const declared = entry.declared?.state();
+          return {
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
-          mounted: entry.mounted, error: entry.error, text: entry.body.textContent,
+          // A declared section reports its accepted value and its rejection; a module section its mount state and mount error.
+          mounted: declared ? declared.mounted : entry.mounted,
+          error: declared ? declared.error : entry.error,
+          text: entry.body.textContent,
           // Whether the tab text fits in the tab width. It is true if wrapping or shrinking cuts it off.
           clipped: entry.tab ? entry.tab.scrollWidth > entry.tab.clientWidth || entry.tab.scrollHeight > entry.tab.clientHeight : false,
           controls: entry.body.querySelectorAll('[data-expose="core.sidebar.section.control"]').length,
-        })),
+          };
+        }),
       };
     });
 }

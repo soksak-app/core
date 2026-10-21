@@ -636,6 +636,10 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .declared-icon{display:flex;flex:0 0 1em;width:1em;height:1em}
 .declared-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .declared-status-line{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The body of a declared section stacks its root elements, and lays them left to right in one row that wraps at the section
+   width when the sidebar is horizontal (docs/spec/declared-ui.md, sidebar section form). */
+.set__body[data-declared]{display:flex;flex-direction:column;gap:6px}
+.set[data-orientation=horizontal] .set__body[data-declared]{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
 /* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
    the tabs fill the full height of the strip. */
 .set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;

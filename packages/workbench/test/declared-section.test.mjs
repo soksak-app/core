@@ -248,3 +248,21 @@ test("the active view serves only when it registered the status, and a plugin ho
   assert.deepEqual(module.chooseSource({ statusId: "demo.s", active: "view-a", registrants: [], host: "host:demo" }), { id: "host:demo", surface: null });
   assert.deepEqual(module.chooseSource({ statusId: "demo.s", active: "view-a", registrants: ["view-a"], host: "host:demo" }), { id: "view-a", surface: "view-a" }, "the host served before the view");
 });
+
+test("the section reports mounted while it draws an accepted value and the rejection while the last value is rejected", async () => {
+  const h = await harness();
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.world.pullReply = { seq: 1, value: list(["a"]) };
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.section.state(), { mounted: true, error: null }, "an accepted value is not reported as mounted");
+  h.push("view-a", 2, { elements: [{ kind: "chart", key: "x" }] });
+  assert.deepEqual(h.section.state(), { mounted: false, error: '/elements/0/kind: unknown kind "chart"' }, "the rejection is not reported");
+  h.push("view-a", 3, list(["b"]));
+  assert.deepEqual(h.section.state(), { mounted: true, error: null }, "the next accepted value did not clear the reported error");
+  h.world.registrants = ["view-b"];
+  h.world.active = "view-b";
+  h.section.reconcile();
+  assert.deepEqual(h.section.state(), { mounted: false, error: null }, "a change of source is not reported as cleared");
+});
