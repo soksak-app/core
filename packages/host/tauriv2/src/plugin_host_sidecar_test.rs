@@ -10,7 +10,8 @@ use std::thread::JoinHandle;
 use serde_json::value::RawValue;
 
 use crate::plugin_host_sidecar::{
-    close_plugin_host_sessions, is_plugin_session, is_plugin_session_of, is_project_session,
+    close_plugin_host_sessions, close_project_plugin_sessions, close_window_plugin_sessions,
+    is_plugin_session_of,
 };
 use crate::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
 use crate::test_folder::Folder;
@@ -256,9 +257,7 @@ fn a_project_release_closes_only_the_plugin_sessions_of_that_project() {
     open_session(&sidecars, &window, HELD, "/fixture/other");
     open_session(&sidecars, &window, "fixture-surface", ROOT);
 
-    sidecars
-        .close_owned(&window, &|surface| is_project_session(surface, "project-a"))
-        .unwrap();
+    close_project_plugin_sessions(&sidecars, &window, "project-a").unwrap();
     assert_eq!(
         closing_surfaces(&sidecars),
         [RELEASED],
@@ -395,9 +394,7 @@ fn a_page_start_closes_the_plugin_sessions_of_the_window_and_keeps_its_surfaces(
     open_session(&sidecars, &window, SESSION, ROOT);
     open_session(&sidecars, &window, "fixture-surface", ROOT);
 
-    sidecars
-        .close_owned(&window, &|surface| is_plugin_session(surface))
-        .unwrap();
+    close_window_plugin_sessions(&sidecars, &window).unwrap();
     assert_eq!(
         closing_surfaces(&sidecars),
         [SESSION],

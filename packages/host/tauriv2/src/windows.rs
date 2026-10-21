@@ -911,11 +911,11 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
                 // panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner)
                 .remove(&id);
-            window
-                .state::<crate::sidecars::WindowSidecars>()
-                .close_owned(&owner, &|surface| {
-                    crate::plugin_host_sidecar::is_project_session(surface, &id)
-                })?;
+            crate::plugin_host_sidecar::close_project_plugin_sessions(
+                &window.state::<crate::sidecars::WindowSidecars>(),
+                &owner,
+                &id,
+            )?;
             if empty {
                 window_data(&owner)?
                     .root
@@ -1023,11 +1023,10 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     dispose_plugin_hosts(window);
     // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
     // rule 7).
-    window
-        .state::<crate::sidecars::WindowSidecars>()
-        .close_owned(window, &|surface| {
-            crate::plugin_host_sidecar::is_plugin_session(surface)
-        })?;
+    crate::plugin_host_sidecar::close_window_plugin_sessions(
+        &window.state::<crate::sidecars::WindowSidecars>(),
+        window,
+    )?;
     data.overlay.discard()
 }
 

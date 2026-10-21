@@ -158,3 +158,22 @@ pub(crate) fn close_plugin_host_sessions<O: Owner>(
     crate::exposure::authorize_main_caller(caller, window, "plugin host sidecar close")?;
     sidecars.close_owned(owner, &|surface| is_plugin_session_of(surface, plugin))
 }
+
+/// Closes the plugin sessions of the project that the owner holds, when the project is released (docs/plans/plugin-host-routes.md
+/// rule 7). The caller clears the project root of the owner.
+pub(crate) fn close_project_plugin_sessions<O: Owner>(
+    sidecars: &Sidecars<O>,
+    owner: &O,
+    project: &str,
+) -> Result<(), String> {
+    sidecars.close_owned(owner, &|surface| is_project_session(surface, project))
+}
+
+/// Closes every plugin session that the owner holds, when the main page of the window starts (docs/plans/plugin-host-routes.md
+/// rule 7). The surfaces of the owner are kept.
+pub(crate) fn close_window_plugin_sessions<O: Owner>(
+    sidecars: &Sidecars<O>,
+    owner: &O,
+) -> Result<(), String> {
+    sidecars.close_owned(owner, &|surface| is_plugin_session(surface))
+}
