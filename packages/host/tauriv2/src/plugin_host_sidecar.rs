@@ -24,6 +24,22 @@ pub(crate) fn parse_session(id: &str) -> Option<(&str, &str, &str)> {
     }
 }
 
+/// Whether the surface is a plugin session of the project. A project release closes these (docs/plans/plugin-host-routes.md rule 7).
+pub(crate) fn is_project_session(surface: &str, project: &str) -> bool {
+    parse_session(surface).is_some_and(|(_, current, _)| current == project)
+}
+
+/// Whether the surface is a plugin session of the plugin. The close of a plugin host closes these (docs/plans/plugin-host-routes.md
+/// rule 7).
+pub(crate) fn is_plugin_session_of(surface: &str, plugin: &str) -> bool {
+    parse_session(surface).is_some_and(|(current, _, _)| current == plugin)
+}
+
+/// Whether the surface is a plugin session of any plugin. A page start closes these (docs/plans/plugin-host-routes.md rule 7).
+pub(crate) fn is_plugin_session(surface: &str) -> bool {
+    parse_session(surface).is_some()
+}
+
 /// A sidecar request of the host of plugin: the sidecar, the session id, the body and the correlation identifiers.
 #[derive(Deserialize)]
 pub struct PluginHostSidecarSend {
@@ -128,7 +144,5 @@ pub(crate) fn plugin_host_sidecar_close(webview: &Webview, plugin: &str) -> Resu
     )?;
     window
         .state::<WindowSidecars>()
-        .close_owned(&window, &|surface| {
-            parse_session(surface).is_some_and(|(session_plugin, _, _)| session_plugin == plugin)
-        })
+        .close_owned(&window, &|surface| is_plugin_session_of(surface, plugin))
 }

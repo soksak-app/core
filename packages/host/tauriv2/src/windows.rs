@@ -914,8 +914,7 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
             window
                 .state::<crate::sidecars::WindowSidecars>()
                 .close_owned(&owner, &|surface| {
-                    crate::plugin_host_sidecar::parse_session(surface)
-                        .is_some_and(|(_, project, _)| project == id)
+                    crate::plugin_host_sidecar::is_project_session(surface, &id)
                 })?;
             if empty {
                 window_data(&owner)?
@@ -1027,7 +1026,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     window
         .state::<crate::sidecars::WindowSidecars>()
         .close_owned(window, &|surface| {
-            crate::plugin_host_sidecar::parse_session(surface).is_some()
+            crate::plugin_host_sidecar::is_plugin_session(surface)
         })?;
     data.overlay.discard()
 }
