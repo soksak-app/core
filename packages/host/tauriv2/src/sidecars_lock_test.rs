@@ -9,9 +9,9 @@ use std::time::{Duration, Instant};
 use serde_json::value::RawValue;
 
 use super::{
-    Event, Failure, Message, Outgoing, Owner, ReplyWaiters, Sidecars, await_replaced_service,
-    close_answer, close_persistent_owner, fail, fail_requests, notify_connection, record_reply,
-    revive_attempt,
+    Event, Failure, Message, Outgoing, Owner, ReplyWaiters, Revival, Sidecars,
+    await_replaced_service, close_answer, close_persistent_owner, fail, fail_requests,
+    notify_connection, record_reply, revive_attempt,
 };
 
 #[derive(Clone)]
@@ -160,7 +160,7 @@ fn a_poisoned_state_lock_still_answers_the_sidecar_queries() {
     }
     sidecars.stop();
     assert_eq!(
-        revive_attempt(&sidecars.core, "missing"),
+        revive_attempt(&sidecars.core, "missing", &Revival::default()),
         Ok(false),
         "the restart of a stopped transport was not refused while the state lock was poisoned"
     );
