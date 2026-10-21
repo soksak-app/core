@@ -194,12 +194,12 @@ test("F0.1 evidence identifies its build by its checklist ID", { timeout: 1000 }
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
-// The declared owners of the fixtures: plugin-api and the sidecar and plugin that the cases name.
+// The package index of the fixtures: the packages that the cases name, with their owners and exports maps.
 const declared = new Map([
-  [scoped("plugin-api"), "core"],
-  [scoped("plugin-probe"), "plugin"],
-  [scoped("sidecar-probe"), "sidecar"],
-  [scoped("sidecar-example"), "sidecar"],
+  [scoped("plugin-api"), { dir: "packages/plugin-api", owner: "core", exports: { ".": "./index.js", "./view": "./view.js" } }],
+  [scoped("plugin-probe"), { dir: "/elsewhere/plugins/probe", owner: "plugin" }],
+  [scoped("sidecar-probe"), { dir: "/elsewhere/sidecars/probe", owner: "sidecar" }],
+  [scoped("sidecar-example"), { dir: "/elsewhere/sidecars/example", owner: "sidecar" }],
 ]);
 
 test("ownership audit rejects cross-owner implementation names and private paths", { timeout: 1000 }, () => {
@@ -243,6 +243,25 @@ test("ownership audit refuses an undeclared package in plugin and sidecar code",
   assert.deepEqual(errors, [
     `plugins/example/ui/a.js: plugin implementation names undeclared package ${scoped("plugin-undeclared")}`,
     `sidecars/example/src/b.js: sidecar implementation names undeclared package ${scoped("plugin-undeclared")}`,
+  ]);
+});
+
+test("ownership audit allows a subpath only when the exports map lists it or the package is its own", { timeout: 1000 }, () => {
+  const index = new Map([
+    ...declared,
+    [scoped("runtime"), { dir: "packages/runtime", owner: "core", exports: { ".": "./index.js", "./lib/*.js": "./lib/*.js" } }],
+    [scoped("bare"), { dir: "packages/bare", owner: "core" }],
+  ]);
+  const errors = auditOwnership([
+    "packages/plugin-api/own.js",
+    "packages/app/use.js",
+  ], (file) => file.endsWith("own.js")
+    ? `import "${scoped("plugin-api")}/src/private.js";\nimport "${scoped("plugin-api")}/view";\n`
+    : `import "${scoped("runtime")}/lib/x.js";\nimport "${scoped("runtime")}/src/x.js";\nimport "${scoped("bare")}/lib/x.js";\nimport "${scoped("bare")}";\n`,
+  index);
+  assert.deepEqual(errors, [
+    `packages/app/use.js: core implementation reads private path ${scoped("runtime")}/src/x.js`,
+    `packages/app/use.js: core implementation reads private path ${scoped("bare")}/lib/x.js`,
   ]);
 });
 

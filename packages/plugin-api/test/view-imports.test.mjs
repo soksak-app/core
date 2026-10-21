@@ -99,10 +99,12 @@ test("the injected script view-start.js is a plain script with no import or expo
 test("a fixture module that imports a bare specifier outside the map is refused", (t) => {
   const root = mkdtempSync(join(tmpdir(), "view-imports-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeFileSync(join(root, "index.js"), `import "@soksak/workbench/state.js";\n`);
+  // The specifier is built from parts: the ownership audit scans this file for private @soksak/ paths.
+  const specifier = ["@soksak", "workbench/state.js"].join("/");
+  writeFileSync(join(root, "index.js"), `import "${specifier}";\n`);
   writeFileSync(join(root, "view.js"), `export {};\n`);
   const { problems } = walkViewImports(root, ENTRIES, ["index.js", "view.js"]);
-  assert.deepEqual(problems, ["index.js imports @soksak/workbench/state.js, which the view import map does not serve"]);
+  assert.deepEqual(problems, [`index.js imports ${specifier}, which the view import map does not serve`]);
 });
 
 test("a fixture module that imports a runtime path outside the package is refused", (t) => {

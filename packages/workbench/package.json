@@ -106,6 +106,12 @@
     "staged.js",
     "replace-file.mjs"
   ],
+  "exports": {
+    "./host-store.js": "./host-store.js",
+    "./host-windows.js": "./host-windows.js",
+    "./host-calls.js": "./host-calls.js",
+    "./surface-calls.js": "./surface-calls.js"
+  },
   "scripts": {
     "test": "node --test --experimental-test-module-mocks test/"
   },

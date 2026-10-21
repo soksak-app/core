@@ -1,9 +1,9 @@
 // Checks the ownership of implementation and test files. This structural check does not replace behavior verification.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { basename, extname } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { components, corePackageNames } from "./check-boundaries.mjs";
+import { components } from "./check-boundaries.mjs";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 
@@ -4530,17 +4530,54 @@ function isDeclaration(file) {
 }
 
 /**
- * The owners of the packages by their exact names (decision D3, rules 2 and 3): every core package name is "core", and
- * every declared plugin or sidecar of scripts/workspace-registry.json is its kind. Core holds no list of the packages of
- * other repositories and classifies no name by its prefix. A name that is not in the map is undeclared.
+ * The packages of the checkout and of the declared repositories, by their exact names (decision D3, rules 2, 3 and 5):
+ * the folder (relative to the checkout for core packages, absolute for declared repositories), the owner, and the
+ * exports map of the package.json. Core holds no list of the packages of other repositories.
  */
-export function declaredOwners(root = ROOT) {
-  const owners = new Map();
-  for (const name of corePackageNames(root)) owners.set(name, "core");
-  for (const item of components(root)) {
-    if (item.kind !== "core") owners.set(item.name, item.kind);
+export function packageIndex(root = ROOT) {
+  const index = new Map();
+  for (const file of execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" }).split("\0")) {
+    if (!/(^|\/)package\.json$/.test(file)) continue;
+    const manifest = JSON.parse(readFileSync(`${root}/${file}`, "utf8"));
+    if (typeof manifest.name !== "string") continue;
+    const dir = dirname(file);
+    index.set(manifest.name, { dir: dir === "." ? "" : dir, owner: ownerFor(file) ?? "core", exports: manifest.exports });
   }
-  return owners;
+  for (const item of components(root)) {
+    if (item.kind === "core") continue;
+    index.set(item.name, { dir: item.dir, owner: item.kind, exports: JSON.parse(readFileSync(join(item.dir, "package.json"), "utf8")).exports });
+  }
+  return index;
+}
+
+/** The subpath of a bare @soksak/ reference (`@soksak/x/src/a.js` has `src/a.js`), or "" for the package itself. */
+function packageReference(value) {
+  const [scope, name, ...rest] = value.split("/");
+  return { base: `${scope}/${name}`, subpath: rest.join("/") };
+}
+
+/** Whether the exports map of a package lists the subpath (`./x`), exactly or through one `*` pattern. */
+function exported(exportsMap, subpath) {
+  if (!exportsMap || typeof exportsMap !== "object") return false;
+  return Object.keys(exportsMap).some((key) => {
+    if (!key.startsWith("./")) return false;
+    const star = key.indexOf("*");
+    if (star < 0) return key === subpath;
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    return subpath.startsWith(prefix) && subpath.endsWith(suffix) && subpath.length >= prefix.length + suffix.length;
+  });
+}
+
+/** The declared package that holds the file: the longest folder of the index that contains it. */
+function packageOfFile(file, index) {
+  let found = null;
+  for (const [name, entry] of index) {
+    if (entry.dir && file.startsWith(`${entry.dir}/`) && (!found || entry.dir.length > found.dir.length)) {
+      found = { name, dir: entry.dir };
+    }
+  }
+  return found?.name ?? null;
 }
 
 function ownerReferences(source) {
@@ -4558,7 +4595,7 @@ function ownerReferences(source) {
  * The apps and e2e consume the public contract, so they may use other public packages,
  * but the private, src and tests paths are forbidden for every owner.
  */
-export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), owners = declaredOwners()) {
+export function auditOwnership(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8"), index = packageIndex()) {
   const errors = [];
   for (const file of [...new Set(files)].sort()) {
     const owner = ownerFor(file);
@@ -4570,23 +4607,36 @@ export function auditOwnership(files, readSource = (file) => readFileSync(`${ROO
       continue;
     }
     const testFile = /(^|\/)(test|tests|e2e)\//.test(file) || /[._]test\./.test(file);
+    const kind = `${owner}${testFile ? " test" : " implementation"}`;
     for (const reference of ownerReferences(source)) {
       const value = reference.value;
+      if (value.startsWith("@soksak/")) {
+        const { base, subpath } = packageReference(value);
+        const entry = index.get(base);
+        if (!entry) {
+          if (owner === "plugin" || owner === "sidecar") errors.push(`${file}: ${kind} names undeclared package ${base}`);
+          continue;
+        }
+        // A subpath is public only when the package lists it in its exports map; a package without one exposes none.
+        // A package reads its own subpaths without the map.
+        if (subpath && packageOfFile(file, index) !== base && !exported(entry.exports, `./${subpath}`)) {
+          errors.push(`${file}: ${kind} reads private path ${value}`);
+          continue;
+        }
+        if (entry.owner === "core" || entry.owner === owner) continue;
+        if (owner === "application" || owner === "contract") continue;
+        errors.push(`${file}: ${kind} names ${entry.owner} implementation ${value}`);
+        continue;
+      }
       const pathOwner = OWNER_ROOTS.find(([root]) => value.includes(root))?.[1] ?? null;
-      const base = value.startsWith("@soksak/") ? value.split("/").slice(0, 2).join("/") : null;
-      const declared = base ? owners.get(base) : undefined;
-      if (!pathOwner && base && declared === undefined && (owner === "plugin" || owner === "sidecar")) {
-        errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} names undeclared package ${base}`);
+      if (!pathOwner) continue;
+      if (reference.private && pathOwner !== owner) {
+        errors.push(`${file}: ${kind} reads private path ${value}`);
         continue;
       }
-      const referencedOwner = pathOwner ?? declared ?? null;
-      if (reference.private && referencedOwner && referencedOwner !== owner) {
-        errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} reads private path ${value}`);
-        continue;
-      }
-      if (!referencedOwner || referencedOwner === owner || referencedOwner === "core") continue;
+      if (pathOwner === owner || pathOwner === "core") continue;
       if (owner === "application" || owner === "contract") continue;
-      errors.push(`${file}: ${owner}${testFile ? " test" : " implementation"} names ${referencedOwner} implementation ${value}`);
+      errors.push(`${file}: ${kind} names ${pathOwner} implementation ${value}`);
     }
   }
   return errors;
