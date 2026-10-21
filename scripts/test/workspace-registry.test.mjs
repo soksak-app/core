@@ -67,6 +67,15 @@ test("the registry releases every declared sidecar, also one that no workspace p
     /plugin user uses @scope\/sidecar-missing, which no declared sidecar or plugin folder holds/);
 });
 
+test("the repository table names the plugins that the workspace registry declares", { timeout: 1000 }, () => {
+  const declaration = JSON.parse(readFileSync(new URL("../workspace-registry.json", import.meta.url), "utf8"));
+  const declared = declaration.plugins.map((folder) => folder.replace(/^\.\.\/plugins\//, "")).sort();
+  const spec = readFileSync(new URL("../../docs/spec/plugins.md", import.meta.url), "utf8");
+  const sentence = spec.match(/The plugins are ([^;|]+?)[;|]/)?.[1] ?? "";
+  const listed = [...sentence.matchAll(/`([^`]+)`/g)].map((match) => match[1]).sort();
+  assert.deepEqual(listed, declared);
+});
+
 test("a declared repository folder resolves from the main checkout, also when the script runs in a worktree", { timeout: 1000 }, () => {
   // The git common directory of a worktree under <main>/.claude/worktrees/ is <main>/.git, so the main checkout is its parent.
   assert.equal(repositoryFolder("../plugins/probe", "/work/core/.git"), "/work/plugins/probe");
