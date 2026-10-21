@@ -17,6 +17,8 @@ import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { logGate } from "./log-gate.js";
+import { emitEvent } from "./page-log.js";
+import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
 const mounted = new Map();
@@ -282,6 +284,8 @@ function answerViewCalls(surface, scoped, page, context) {
     pending,
     tab,
     contributions: context.contributions,
+    shortcuts: shortcutTable.shortcuts,
+    emitEvent,
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
     runtime: {

@@ -384,6 +384,45 @@ test("runtime.log sends every record until the page tells the stored levels, the
   assert.equal(posted.filter((message) => message.command === "runtime.log.levels").length, 1);
 });
 
+/** Dispatches a cancelable keydown on the window of the view and returns the event. */
+const keydown = (init) => {
+  const event = new globalThis.window.KeyboardEvent("keydown", { cancelable: true, ...init });
+  globalThis.window.dispatchEvent(event);
+  return event;
+};
+
+test("a key before the shortcut table is registered keeps its default action and sends runtime.shortcuts.missing once", (t) => {
+  const { posted } = setup(t);
+  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const before = posted.length;
+  const first = keydown({ key: "j", ctrlKey: true });
+  keydown({ key: "a" });
+  assert.equal(first.defaultPrevented, false);
+  assert.deepEqual(posted.slice(before), [{ sok: 1, id: 1, command: "runtime.shortcuts.missing", params: null }]);
+});
+
+test("after shortcuts.register, a workbench key is prevented and passed on, and the other keys keep their default action", async (t) => {
+  const { posted, host } = setup(t);
+  const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof bridge.shortcuts?.register, "function", "the view bridge has no shortcuts.register");
+  const registering = bridge.shortcuts.register();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.shortcuts.read", params: null });
+  host({ sok: 1, id: 1, result: [
+    { key: "cmd+q", owner: "native menu", command: "framework role" },
+    { key: "cmd+j", owner: "workbench", command: "core.probe.jump" },
+    { key: "Escape", owner: "view", command: "none" },
+  ] });
+  assert.equal(await registering, undefined);
+  const before = posted.length;
+  // The page is not on macOS in jsdom, so cmd is the Control key.
+  assert.equal(keydown({ key: "j", ctrlKey: true }).defaultPrevented, true);
+  assert.deepEqual(posted.slice(before), [{ sok: 1, id: 2, command: "runtime.shortcuts.run", params: { key: "cmd+j" } }]);
+  assert.equal(keydown({ key: "q", ctrlKey: true }).defaultPrevented, false);
+  assert.equal(keydown({ key: "Escape" }).defaultPrevented, false);
+  assert.equal(keydown({ key: "j", ctrlKey: true, shiftKey: true }).defaultPrevented, false);
+  assert.equal(posted.length, before + 1, "only the workbench key is passed on, and no table-missing record is sent");
+});
+
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
   const { host } = setup(t);
   const reports = [];

@@ -68,6 +68,8 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`와 `Escape`는 키 이름이다.
 
+view의 shortcut table은 view가 keyboard focus를 가진 동안 성립하는 행, 곧 문맥이 `Any focus`인 행과 `view` 행을 담는다. main page는 view call `runtime.shortcuts.read`로 그것을 view에 준다([native surfaces](native-surfaces.ko.md#view-표면), 입력).
+
 | 키 | 소유자 | 명령 | 메뉴 항목 | 조건 |
 |---|---|---|---|---|
 | `cmd+h` | native menu | framework role | app/hide | 모든 포커스 |

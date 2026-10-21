@@ -68,6 +68,8 @@ Every keyboard shortcut of the workbench has one owner and one command. The mach
 
 In a key, `cmd` is the Command key on macOS and the Control key on the other hosts (`CmdOrCtrl`). `Enter` and `Escape` are key names.
 
+The shortcut table of a view holds the rows that hold while a view has keyboard focus: the rows whose context is `Any focus` and the `view` rows. The main page gives it to the view through the view call `runtime.shortcuts.read` ([native surfaces](native-surfaces.md#view-surfaces), Input).
+
 | Key | Owner | Command | Menu item | When |
 |---|---|---|---|---|
 | `cmd+h` | native menu | framework role | app/hide | Any focus |

@@ -26,6 +26,7 @@
     "declared-section.js",
     "section-address.js",
     "view-calls.js",
+    "shortcuts.json",
     "view-events.js",
     "view-commands.js",
     "commands.js",

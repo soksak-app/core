@@ -18,6 +18,18 @@ const UNREGISTERED_COMMAND = 1002;
 const FAILED_COMMAND = -32000;
 /** The code of a request whose parameters are invalid: EXPOSURE_ERRORS.invalidParams of index.js, which this module does not import. */
 const INVALID_PARAMS = -32602;
+/** The modifiers of a key of the shortcut table; cmd is the Command key on macOS and the Control key on the other hosts. */
+const MODIFIERS = ["shift", "opt", "cmd"];
+
+/** Whether the keydown event is the key of a row of the shortcut table, such as `opt+cmd+h` or `Escape`. */
+function isKey(key, event, mac) {
+  const parts = key.split("+");
+  const name = parts.pop();
+  if (!parts.every((part) => MODIFIERS.includes(part))) return false;
+  const [command, other] = mac ? [event.metaKey, event.ctrlKey] : [event.ctrlKey, event.metaKey];
+  return event.key.toLowerCase() === name.toLowerCase() && !other && command === parts.includes("cmd")
+    && event.shiftKey === parts.includes("shift") && event.altKey === parts.includes("opt");
+}
 
 /** Runs a command handler and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
 async function runCommand(run, params) {
@@ -100,6 +112,13 @@ export function createViewBridge({ handler, report }) {
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });
+  // Records the refusal of a call that the view makes on its own as an error line of the view at the place where.
+  const recordError = (where) => (error) => {
+    // default: a refusal that is not an Error carries its value as the text.
+    runtime.error(where, String(error?.message ?? error)).catch(() => {
+      // silent: the error line of the refusal is itself refused, and the view has no other path to the application log.
+    });
+  };
   // The stored levels of a record of the plugin, which the page tells at the first use of runtime.log and at each change
   // (docs/spec/native-surfaces.md#view-surfaces). Until the first answer every record is sent, and the level gate of the page
   // counts what it does not store, so no record is lost before the levels are known.
@@ -110,27 +129,46 @@ export function createViewBridge({ handler, report }) {
       levelsRequested = true;
       if (!listeners.has("log.levels")) listeners.set("log.levels", new Set());
       listeners.get("log.levels").add((next) => { levels = next; });
-      calls.request("runtime.log.levels", null).then((next) => { levels = next; }, (error) => {
-        // A refused read leaves every record sent, and the refusal is recorded as an error of the view.
-        // default: a refusal that is not an Error carries its value as the text.
-        runtime.error("log levels", String(error?.message ?? error)).catch(() => {
-          // silent: the error line of the refusal is itself refused, and the view has no other path to the application log.
-        });
-      });
+      // A refused read leaves every record sent, and the refusal is recorded as an error of the view.
+      calls.request("runtime.log.levels", null).then((next) => { levels = next; }, recordError("log levels"));
     }
     return levels === null || levels.includes(level);
+  };
+  // The shortcut table of the view (docs/spec/native-surfaces.md#view-surfaces, input), null until it is registered. The view
+  // decides each key from it synchronously; before it is registered each key keeps its default action, and the first key of the
+  // document sends runtime.shortcuts.missing, which the page records as page.view.shortcut-table-missing.
+  let shortcutTable = null;
+  let missingSent = false;
+  const mac = /Mac/.test(window.navigator.platform);
+  window.addEventListener("keydown", (event) => {
+    if (shortcutTable === null) {
+      if (missingSent) return;
+      missingSent = true;
+      calls.request("runtime.shortcuts.missing", null).catch(recordError("shortcut table"));
+      return;
+    }
+    const row = shortcutTable.find((entry) => isKey(entry.key, event, mac));
+    // A key of the native menu reaches the menu first, a key of the view is handled by the view, and a key that is not in the
+    // table keeps its default action; only a key of the workbench is prevented and passed on.
+    if (row?.owner !== "workbench") return;
+    event.preventDefault();
+    calls.request("runtime.shortcuts.run", { key: row.key }).catch(() => {
+      // silent: the page writes page.input.shortcut.failed for a passed command that fails, and the call layer reports a call
+      // that ends without a reply; the default action is not run again.
+    });
+  }, { capture: true });
+  const shortcuts = {
+    /** Registers the shortcut table of the view: the page answers runtime.shortcuts.read with the rows that hold in a view. */
+    register: () => calls.request("runtime.shortcuts.read", null).then((rows) => {
+      shortcutTable = rows;
+    }),
   };
   // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
   const prefix = `plugin.${plugin}.`;
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
     log: (level, event, fields, cids) => {
       calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
-        .catch((error) => {
-          // default: a refusal that is not an Error carries its value as the text.
-          runtime.error(`log ${event}`, String(error?.message ?? error)).catch(() => {
-            // silent: the error line of the refusal is itself refused, and the view has no other path to the application log.
-          });
-        });
+        .catch(recordError(`log ${event}`));
     },
     logEnabled: storedLevel,
   } });
@@ -290,5 +328,5 @@ export function createViewBridge({ handler, report }) {
       point, plugin: entry.plugin, index: entry.index, reason: reason instanceof Error ? reason.message : String(reason),
     }).then(() => undefined),
   })));
-  return { calls, snapshots, runtime, commands, exposure, contributions };
+  return { calls, snapshots, runtime, commands, exposure, contributions, shortcuts };
 }

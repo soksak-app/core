@@ -12,6 +12,8 @@
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
+ *               shortcuts: the rows of the shortcut table (packages/workbench/shortcuts.json)
+ *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
  *               contributions(point): the connected items of the point, as contributions of the surface context returns them
  *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
  *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), and state with
@@ -77,7 +79,16 @@ const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
 // The core root of a view, from which it imports the module of a contribution item (docs/plans/plugin-processes.md, rule 4).
 const CORE_ROOT = "sok://core";
 
-async function run(command, params, { plugin, surface, tab, contributions, runCore, runOwned, runtime }) {
+/**
+ * The rows of the shortcut table that hold while a view has keyboard focus (docs/spec/native-surfaces.md#view-surfaces): a row of
+ * any focus and a row whose owner is the view. A workbench row of another context holds only while the page has the focus.
+ */
+function viewShortcuts(shortcuts) {
+  return shortcuts.filter((row) => row.when === "Any focus" || row.owner === "view")
+    .map(({ key, owner, command }) => ({ key, owner, command }));
+}
+
+async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, runtime }) {
   switch (command) {
     case "tab.state.read":
       if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
@@ -184,6 +195,23 @@ async function run(command, params, { plugin, surface, tab, contributions, runCo
       if (typeof fields.text !== "string" || fields.text === "") throw new TypeError(`view call ${command} requires a non-empty text`);
       await runtime.report(`surface ${surface} ${fields.where}: ${fields.text}`);
       return null;
+    }
+    case "runtime.shortcuts.read":
+      return viewShortcuts(shortcuts);
+    case "runtime.shortcuts.missing":
+      // The view sends this at the first key of its document before its table is registered; the key kept its default action.
+      emitEvent("error", "page.view.shortcut-table-missing", { plugin });
+      return null;
+    case "runtime.shortcuts.run": {
+      const fields = objectOf(command, params);
+      const row = viewShortcuts(shortcuts).find((entry) => entry.owner === "workbench" && entry.key === fields.key);
+      if (!row) throw new Error(`view call ${command}: ${fields.key} is not a workbench shortcut of a view`);
+      try {
+        return await runCore(row.command, {});
+      } catch (error) {
+        emitEvent("error", "page.input.shortcut.failed", { plugin, key: row.key, command: row.command });
+        throw error;
+      }
     }
     case "runtime.contributions": {
       // The module of an item is a path of the main page; a view imports it from the core root.
