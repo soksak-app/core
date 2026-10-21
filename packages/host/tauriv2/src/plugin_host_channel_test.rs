@@ -60,11 +60,32 @@ fn a_reply_of_the_page_goes_to_the_main_page_as_plugin_host_reply_without_a_surf
 
 // contract: plugin-host.channel.call-served-set
 #[test]
+fn the_host_forwards_the_sidecar_calls_to_the_main_page() {
+    let channels = host_channels(true);
+    let params =
+        json!({"id": "plugin:probe:project-a:fixture-sidecar", "sidecar": "fixture-sidecar"});
+    for (id, command) in [
+        (7, "runtime.sidecar.send"),
+        (8, "runtime.sidecar.on"),
+        (9, "runtime.sidecar.onFailure"),
+    ] {
+        let message = format!(r#"{{"id": {id}, "command": "{command}", "params": {params}}}"#);
+        assert_eq!(
+            channels.receive("probe", &host_message(&message)),
+            Ok(Received::Emit(
+                "plugin-host-call",
+                json!({"plugin": "probe", "id": id, "command": command, "params": params})
+            ))
+        );
+    }
+}
+
+// contract: plugin-host.channel.call-served-set
+#[test]
 fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() {
     let channels = host_channels(true);
     for command in [
         "runtime.native.call",
-        "runtime.sidecar.send",
         "tab.state.read",
         "runtime.clipboard.read",
         "runtime.links.open",
@@ -474,4 +495,67 @@ fn the_state_ends_with_the_removal_or_disable_of_the_plugin() {
             "the {action} of the plugin kept the value"
         );
     }
+}
+
+// contract: plugin-host.sidecar.send-checks
+#[test]
+fn a_sidecar_request_of_a_host_is_checked_before_its_send() {
+    use crate::plugin_host_channel::{parse_session, plugin_send_root, refuse_surface_send};
+    let session = "plugin:probe:project-a:fixture-sidecar";
+    assert_eq!(
+        plugin_send_root(
+            "probe",
+            "fixture-sidecar",
+            session,
+            true,
+            Some("/fixture/root")
+        ),
+        Ok("/fixture/root".to_string())
+    );
+    assert_eq!(
+        plugin_send_root("probe", "fixture-sidecar", session, true, None),
+        Err("plugin host probe: project project-a is not held by this window".to_string())
+    );
+    assert_eq!(
+        plugin_send_root("probe", "fixture-sidecar", session, true, Some("")),
+        Err("plugin host probe: project project-a has no folder".to_string())
+    );
+    assert_eq!(
+        plugin_send_root(
+            "probe",
+            "fixture-sidecar",
+            session,
+            false,
+            Some("/fixture/root")
+        ),
+        Err("plugin host probe cannot use sidecar fixture-sidecar".to_string())
+    );
+    assert_eq!(
+        plugin_send_root(
+            "probe",
+            "fixture-sidecar",
+            "plugin:other:project-a:fixture-sidecar",
+            true,
+            Some("/r")
+        ),
+        Err(
+            "plugin host probe cannot use sidecar session plugin:other:project-a:fixture-sidecar"
+                .to_string()
+        )
+    );
+    assert_eq!(
+        parse_session(session),
+        Some(("probe", "project-a", "fixture-sidecar"))
+    );
+    assert_eq!(
+        parse_session("plugin:probe:project-a:fixture-sidecar:x"),
+        None
+    );
+    assert_eq!(
+        refuse_surface_send(session),
+        Err(format!(
+            "sidecar session {session} is reserved for a plugin host"
+        ))
+    );
+    assert_eq!(refuse_surface_send("tab-1"), Ok(()));
 }

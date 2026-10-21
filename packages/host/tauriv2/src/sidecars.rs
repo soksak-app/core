@@ -1224,6 +1224,33 @@ impl<O: Owner> Sidecars<O> {
         cids: &[String],
     ) -> Result<(), String> {
         let current = owner.root()?;
+        self.send_in_root(owner, name, surface, current, body, cids)
+    }
+
+    /// Sends a plugin session request with the project root that the plugin host passes, in place of the root of the window
+    /// (docs/plans/plugin-host-routes.md rule 3).
+    pub fn send_plugin_with_cids(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        root: &str,
+        body: &RawValue,
+        cids: &[String],
+    ) -> Result<(), String> {
+        self.send_in_root(owner, name, surface, root.to_string(), body, cids)
+    }
+
+    /// Sends a page request with current as the root of the surface unless the surface has a recorded root.
+    fn send_in_root(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        current: String,
+        body: &RawValue,
+        cids: &[String],
+    ) -> Result<(), String> {
         let root = {
             let state = self
                 .core
@@ -1399,6 +1426,19 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.
+    /// Reports whether the plugin lists the sidecar in its dependencies (docs/spec/plugins.md, manifest).
+    pub fn depends_on(&self, plugin: &str, name: &str) -> bool {
+        self.core
+            .declarations
+            .read()
+            // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .dependents
+            .get(name)
+            .is_some_and(|plugins| plugins.iter().any(|current| current == plugin))
+    }
+
     pub fn retain(&self, owner: &O, alive: &dyn Fn(&str) -> bool) -> Result<(), String> {
         self.close_owned(owner, &|surface| !alive(surface))
     }
