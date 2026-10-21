@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -56,5 +57,15 @@ func TestAnOpenRequestAtAHostStopGetsAnErrorRecord(t *testing.T) {
 	got := bufferedTraces(t, "host.sidecar.reply")
 	if len(got) != 1 || got[0]["name"] != "probe-sidecar" || got[0]["surface"] != "probe-surface" || got[0]["ok"] != false {
 		t.Fatalf("host.sidecar.reply records after the stop: %v, want one error for probe-sidecar and probe-surface", got)
+	}
+}
+
+// A Sidecars value that was not built by NewSidecars has no hello timeout. A zero timeout would fail every persistent service at once,
+// so the start of a persistent service refuses the value with a named error before it spawns anything.
+func TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts(t *testing.T) {
+	c := &Sidecars{}
+	_, err := c.processPersistent("probe-service", nil)
+	if err == nil || !strings.Contains(err.Error(), "HelloTimeout is not set") {
+		t.Fatalf("a persistent start with a zero HelloTimeout returned %v, want an error that names HelloTimeout is not set", err)
 	}
 }

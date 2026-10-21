@@ -1313,6 +1313,11 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 // it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
 // there (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, error) {
+	// A zero HelloTimeout is a value that NewSidecars never gives. It would fail the hello of every service at once, so the start refuses it
+	// before anything is spawned.
+	if c.HelloTimeout <= 0 {
+		return nil, fmt.Errorf("sidecar %s: HelloTimeout is not set; build Sidecars with NewSidecars", name)
+	}
 	program, _, ok := c.declaration(name)
 	if !ok {
 		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
