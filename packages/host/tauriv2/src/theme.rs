@@ -4,7 +4,7 @@
 //! therefore passed on, and each page sets it on its own root.
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 use tauri::Window;
@@ -25,7 +25,14 @@ pub(crate) struct CurrentTheme(Mutex<Theme>);
 /// Returns the current theme. The page requests it when it loads.
 pub(crate) fn get(window: &Window) -> Result<Theme, String> {
     let context = window_data(window)?;
-    let theme = context.theme.0.lock().map_err(|e| e.to_string())?.clone();
+    let theme = context
+        .theme
+        .0
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the theme of the window, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
     Ok(theme)
 }
 
@@ -38,7 +45,13 @@ pub(crate) fn is_dark(window: &Window) -> Result<bool, String> {
 /// selects a theme and not at every rendering.
 pub(crate) fn set(window: &Window, theme: Theme) -> Result<(), String> {
     let context = window_data(window)?;
-    *context.theme.0.lock().map_err(|e| e.to_string())? = theme.clone();
+    *context
+        .theme
+        .0
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the theme of the window, which this call replaces;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = theme.clone();
     let documents = context.documents.all();
     let dark = theme.scheme == "dark";
     if let Some(main) = crate::windows::root_view(window) {
