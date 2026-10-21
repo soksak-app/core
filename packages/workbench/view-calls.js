@@ -76,7 +76,7 @@ import { LOG_LEVELS } from "@soksak/plugin-api";
 // The place of an error line has no control character and no ": ", because the record splits the line at its first ": ".
 const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
 
-// The core root of a view, from which it imports the module of a contribution item (docs/plans/plugin-processes.md, rule 4).
+// The core root of a view, from which it imports the module of a contribution item (docs/spec/plugin-processes.md, rule 4).
 const CORE_ROOT = "sok://core";
 
 /**
