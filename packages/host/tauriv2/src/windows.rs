@@ -944,11 +944,11 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
                     .unwrap_or_else(PoisonError::into_inner),
                 &id,
             );
-            window
-                .state::<crate::sidecars::WindowSidecars>()
-                .close_owned(&owner, &|surface| {
-                    crate::plugin_host_sidecar::is_project_session(surface, &id)
-                })?;
+            crate::plugin_host_sidecar::close_project_plugin_sessions(
+                &window.state::<crate::sidecars::WindowSidecars>(),
+                &owner,
+                &id,
+            )?;
             if empty || shown_released {
                 window_data(&owner)?
                     .root
