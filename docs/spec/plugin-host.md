@@ -22,7 +22,7 @@ The manifest declares the plugin host in `plugin.json` under `host`:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `page` | yes | The page of the host web view. It follows the page rules of a `view` composition: a path inside the plugin release, relative, without a leading slash, with no empty, `.` or `..` segment and no `.binary` segment, ending in `.html`, and listed in the `files` of `package.json`; `sok plugin pack` fails when the page is not listed |
-| `state` | no | The state that the host page saves across a restart of its process, as `{ "format": <positive integer>, "maxBytes": <positive integer> }`, in the form of `surface.unload` ([plugins](plugins.md#memory-saver)). Without it the host saves no state ([state](#state)) |
+| `state` | no | The state that the host page saves across a restart of its process, as `{ "format": <positive integer>, "maxBytes": <positive integer> }`, in the form of `surface.unload` ([plugins](plugins.md#memory-saver)); an object with other fields or with a value that is not a positive integer is an error that names the plugin. Without it the host saves no state ([state](#state)) |
 
 The `host` declaration requires nothing beyond the requirement of a plugin to declare `surface`, `sections` or `contributes`. The host web view of a plugin exists only while the manifest of the loaded plugin declares it.
 
@@ -85,7 +85,7 @@ A restart restores the state from the last saved value ([state](#state)). A stat
 
 The plugin host state is the value that the host page of a plugin saves through its channel and that the host keeps for the next start of the page.
 
-- When the `host` declaration names `state`, the channel serves the calls `state.write {value}` and `state.read`. `state.write` refuses a value that is not JSON or that exceeds `maxBytes` with an error that names the plugin and the size, and it replaces the saved value of the plugin. `state.read` returns `{value}`, the last saved value, or `{value: null}` when nothing is saved. A page reads its state at its start and saves it whenever it changes, so a restart within the limit restores it.
+- When the `host` declaration names `state`, the channel serves the calls `state.write {value}` and `state.read`, which the host answers itself and forwards to no page. `state.write` refuses params without a `value` and a value whose compact JSON exceeds `maxBytes` bytes with an error that names the plugin and the size, and otherwise replaces the saved value of the plugin and returns `null`. `state.read` returns `{value}`, the last saved value, or `{value: null}` when nothing is saved. A page reads its state at its start and saves it whenever it changes, so a restart within the limit restores it.
 - The host keeps the last saved value until the application ends or the plugin is removed or disabled. The value is held in the host process and survives a restart of the plugin host page, not the end of the application.
 - The saved value carries the declared `format`. A page that reads a value of another format is refused with an error that names the plugin, the format found and the declared format, as a tab state of another format is refused ([plugins](plugins.md#memory-saver)).
 - Without the `state` field both calls are refused with an error that names the plugin, and a restart starts the page with no saved state.

@@ -16,10 +16,12 @@ import (
 	"sync"
 )
 
-// pluginHostChannel is the channel of one plugin host: its plugin, its ready document and its calls that the main page has
-// not answered. document is empty while the page has sent no ready message.
+// pluginHostChannel is the channel of one plugin host: its plugin, its declared state, its ready document and its calls
+// that the main page has not answered. document is empty while the page has sent no ready message, and state is nil when
+// the host declaration names no state.
 type pluginHostChannel struct {
 	plugin string
+	state  *hostState
 	// document is the ready document of the page, and processReady records the first ready message since the host was
 	// created, which writes host.trace.plugin-host.process-ready once.
 	document     string
@@ -37,11 +39,11 @@ func newPluginHostChannels() *pluginHostChannels {
 	return &pluginHostChannels{byID: map[string]*pluginHostChannel{}}
 }
 
-// register records the channel of plugin. It runs when the host web view is created.
-func (c *pluginHostChannels) register(plugin string) {
+// register records the channel of plugin with its declared state. It runs when the host web view is created.
+func (c *pluginHostChannels) register(plugin string, state *hostState) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.byID[plugin] = &pluginHostChannel{plugin: plugin, calls: map[uint64]string{}}
+	c.byID[plugin] = &pluginHostChannel{plugin: plugin, state: state, calls: map[uint64]string{}}
 }
 
 // unregister removes the channel of plugin. It runs when the host web view is disposed.
@@ -136,7 +138,7 @@ type pluginHostOverflow struct {
 func (e pluginHostOverflow) Error() string { return e.reason }
 
 // servedPluginHostCall reports whether the channel of a plugin host serves the call command. The served calls are the
-// registration calls of exposure (docs/spec/plugin-host.md#channel); the state calls are served by F212.9-4.
+// registration calls of exposure (docs/spec/plugin-host.md#channel); the host answers the state calls itself.
 func servedPluginHostCall(command string) bool {
 	switch command {
 	case "runtime.command.register", "page.exposure.register":
@@ -279,7 +281,8 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 	if received.Message == nil {
 		return fmt.Errorf("plugin %s: message has neither message nor error", plugin)
 	}
-	if _, ok := s.pluginHostChannels.channel(plugin); !ok {
+	channel, ok := s.pluginHostChannels.channel(plugin)
+	if !ok {
 		return fmt.Errorf("plugin %s: channel message of a window without the host", plugin)
 	}
 	reply, isReply, err := PluginHostReplyEvent(plugin, received.Message)
@@ -297,6 +300,13 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 	if isCall {
 		if id, ok := call["id"].(uint64); ok {
 			if command, ok := call["command"].(string); ok {
+				if pluginHostStateCall(command) {
+					// silent: PluginHostCallEvent sets the params of a call request as json.RawMessage.
+					params, _ := call["params"].(json.RawMessage)
+					// The host answers a state call itself from the saved value of the plugin and forwards it to no page
+					// (docs/spec/plugin-host.md#state).
+					return s.postPluginHost(plugin, s.pluginHostStates.answer(plugin, channel.state, id, command, params))
+				}
 				if !servedPluginHostCall(command) {
 					// A call that the channel does not serve is refused to the page and forwarded to no page
 					// (docs/spec/plugin-host.md#channel).

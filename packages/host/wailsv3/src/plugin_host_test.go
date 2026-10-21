@@ -224,20 +224,38 @@ func TestPluginHostCloseDisposesEveryHost(t *testing.T) {
 
 // contract: plugin-host.declaration-requires-page
 func TestPluginHostDeclarationWithoutPageIsAnError(t *testing.T) {
-	if _, err := hostPage("probe", []byte(`{"host":"ui/host.html"}`)); err == nil || err.Error() != "plugin probe declares host that is not an object" {
+	if _, _, err := hostDeclaration("probe", []byte(`{"host":"ui/host.html"}`)); err == nil || err.Error() != "plugin probe declares host that is not an object" {
 		t.Fatalf("host as a string: err %v, want plugin probe declares host that is not an object", err)
 	}
-	if _, err := hostPage("probe", []byte(`{"host":{}}`)); err == nil || err.Error() != "plugin probe declares host without a page" {
+	if _, _, err := hostDeclaration("probe", []byte(`{"host":{}}`)); err == nil || err.Error() != "plugin probe declares host without a page" {
 		t.Fatalf("host without a page: err %v, want plugin probe declares host without a page", err)
 	}
-	if _, err := hostPage("probe", []byte(`{"host":{"page":5}}`)); err == nil || err.Error() != "plugin probe declares host without a page" {
+	if _, _, err := hostDeclaration("probe", []byte(`{"host":{"page":5}}`)); err == nil || err.Error() != "plugin probe declares host without a page" {
 		t.Fatalf("host whose page is not a string: err %v, want plugin probe declares host without a page", err)
 	}
-	page, err := hostPage("probe", []byte(`{"host":{"page":"ui/host.html"}}`))
-	if err != nil || page != "ui/host.html" {
-		t.Fatalf("host with a page: page %q, err %v", page, err)
+	page, state, err := hostDeclaration("probe", []byte(`{"host":{"page":"ui/host.html"}}`))
+	if err != nil || page != "ui/host.html" || state != nil {
+		t.Fatalf("host with a page: page %q, state %v, err %v", page, state, err)
 	}
-	if page, err := hostPage("probe", []byte(`{"id":"probe"}`)); page != "" || err != nil {
+	if page, _, err := hostDeclaration("probe", []byte(`{"id":"probe"}`)); page != "" || err != nil {
 		t.Fatalf("manifest without host: page %q, err %v", page, err)
+	}
+}
+
+// contract: plugin-host.state.declaration
+func TestPluginHostStateDeclarationNeedsFormatAndMaxBytes(t *testing.T) {
+	page, state, err := hostDeclaration("probe", []byte(`{"host":{"page":"ui/host.html","state":{"format":2,"maxBytes":65536}}}`))
+	if err != nil || page != "ui/host.html" || state == nil || *state != (hostState{format: 2, maxBytes: 65536}) {
+		t.Fatalf("host with a state: page %q, state %v, err %v", page, state, err)
+	}
+	want := "plugin probe declares host state that is not {format, maxBytes} with positive integers"
+	for _, declared := range []string{
+		`null`, `1`, `{}`, `{"format":1}`, `{"maxBytes":1}`, `{"format":0,"maxBytes":1}`, `{"format":1,"maxBytes":-1}`,
+		`{"format":1.5,"maxBytes":1}`, `{"format":"1","maxBytes":1}`, `{"format":1,"maxBytes":1,"other":1}`,
+	} {
+		manifest := `{"host":{"page":"ui/host.html","state":` + declared + `}}`
+		if _, _, err := hostDeclaration("probe", []byte(manifest)); err == nil || err.Error() != want {
+			t.Fatalf("state %s: err %v, want %s", declared, err, want)
+		}
 	}
 }

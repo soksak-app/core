@@ -149,6 +149,7 @@ func (h *Host) notifyPlugins(change PluginsChanged) {
 		windows = append(windows, s)
 	}
 	h.mu.Unlock()
+	h.pluginHostStates.pluginChanged(change.Action, change.Plugin)
 	for _, s := range windows {
 		if change.Action == "remove" || change.Action == "disable" {
 			// The host web view of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).

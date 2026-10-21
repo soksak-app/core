@@ -3,8 +3,8 @@ package host
 // The plugin host web views of a window (docs/spec/plugin-host.md). The host creates the plugin host web view of a
 // plugin when the main page of the window loads a plugin whose manifest declares host, and disposes it when the plugin
 // is removed or disabled, when the application applies a plugin change that reloads the window, and when the window
-// closes. The channel of the host page is in plugin_host_channel.go; the restart limit and the state of the host page are
-// the work of F212.9-4.
+// closes. The channel of the host page is in plugin_host_channel.go; the saved state of the host pages is here
+// (docs/spec/plugin-host.md#state).
 
 import (
 	"bytes"
@@ -12,19 +12,28 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// hostPlugin is one enabled installed plugin whose manifest declares host, with its id and page.
+// hostPlugin is one enabled installed plugin whose manifest declares host, with its id, its page and its declared state,
+// which is nil when the declaration names no state.
 type hostPlugin struct {
 	id, page string
+	state    *hostState
+}
+
+// hostState is the state field of a host declaration: the format number of the saved value and its size limit in bytes
+// (docs/spec/plugin-host.md#declaration).
+type hostState struct {
+	format, maxBytes int
 }
 
 // hostPlugins returns the enabled installed plugins whose manifest declares host, in the order of their ids. A host
-// declaration that is not an object, or whose page is not a non-empty string, is an error
-// (docs/spec/plugin-host.md#declaration). The texts of the errors are the same in both hosts
+// declaration that is not an object, whose page is not a non-empty string, or whose state is not {format, maxBytes}
+// with positive integers, is an error (docs/spec/plugin-host.md#declaration). The texts of the errors are the same in both hosts
 // (docs/spec/host-contract.md).
 func hostPlugins(configDir string) ([]hostPlugin, error) {
 	plugins, _, err := enabledPlugins(configDir)
@@ -33,39 +42,66 @@ func hostPlugins(configDir string) ([]hostPlugin, error) {
 	}
 	var hosts []hostPlugin
 	for _, plugin := range plugins {
-		page, err := hostPage(plugin.id, plugin.manifest)
+		page, state, err := hostDeclaration(plugin.id, plugin.manifest)
 		if err != nil {
 			return nil, err
 		}
 		if page == "" {
 			continue
 		}
-		hosts = append(hosts, hostPlugin{id: plugin.id, page: page})
+		hosts = append(hosts, hostPlugin{id: plugin.id, page: page, state: state})
 	}
 	return hosts, nil
 }
 
-// hostPage returns the page of the host declaration of the manifest of plugin, or an empty string when the manifest
-// declares no host. data is the plugin.json of the plugin in compact form.
-func hostPage(plugin string, data []byte) (string, error) {
+// hostDeclaration returns the page and the state of the host declaration of the manifest of plugin, or an empty page when
+// the manifest declares no host. The state is nil when the declaration names none. data is the plugin.json of the plugin
+// in compact form.
+func hostDeclaration(plugin string, data []byte) (string, *hostState, error) {
 	var manifest struct {
 		Host json.RawMessage `json:"host"`
 	}
 	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&manifest); err != nil {
-		return "", fmt.Errorf("the manifest of plugin %s is not valid JSON", plugin)
+		return "", nil, fmt.Errorf("the manifest of plugin %s is not valid JSON", plugin)
 	}
 	if len(manifest.Host) == 0 || string(manifest.Host) == "null" {
-		return "", nil
+		return "", nil, nil
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(manifest.Host, &fields); err != nil {
-		return "", fmt.Errorf("plugin %s declares host that is not an object", plugin)
+		return "", nil, fmt.Errorf("plugin %s declares host that is not an object", plugin)
 	}
 	var page string
 	if raw, ok := fields["page"]; !ok || json.Unmarshal(raw, &page) != nil || page == "" {
-		return "", fmt.Errorf("plugin %s declares host without a page", plugin)
+		return "", nil, fmt.Errorf("plugin %s declares host without a page", plugin)
 	}
-	return page, nil
+	raw, ok := fields["state"]
+	if !ok {
+		return page, nil, nil
+	}
+	state, err := hostStateDeclaration(plugin, raw)
+	if err != nil {
+		return "", nil, err
+	}
+	return page, state, nil
+}
+
+// hostStateDeclaration returns the state field raw of the host declaration of plugin. It is an object of exactly format
+// and maxBytes, each a positive integer, in the form of surface.unload (docs/spec/plugin-host.md#declaration).
+func hostStateDeclaration(plugin string, raw json.RawMessage) (*hostState, error) {
+	invalid := fmt.Errorf("plugin %s declares host state that is not {format, maxBytes} with positive integers", plugin)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || len(fields) != 2 {
+		return nil, invalid
+	}
+	var state hostState
+	for name, value := range map[string]*int{"format": &state.format, "maxBytes": &state.maxBytes} {
+		field, ok := fields[name]
+		if !ok || json.Unmarshal(field, value) != nil || *value < 1 {
+			return nil, invalid
+		}
+	}
+	return &state, nil
 }
 
 // loadPluginHosts creates the plugin host web view of every loaded plugin whose manifest declares host and that the
@@ -106,22 +142,23 @@ func (s *Surfaces) createPluginHosts(window unsafe.Pointer, plugins []hostPlugin
 			LogError("plugin host", err)
 			continue
 		}
-		if err := s.createPluginHost(window, plugin.id, plugin.page, directory, folder); err != nil {
+		if err := s.createPluginHost(window, plugin, directory, folder); err != nil {
 			LogError("plugin host", err)
 		}
 	}
 }
 
-// createPluginHost creates the plugin host web view of plugin with the view configuration
+// createPluginHost creates the plugin host web view of declared with the view configuration
 // (docs/spec/native-surfaces.md#view-surfaces) and loads sok://<plugin>/<page> into it. It runs on the UI thread.
-func (s *Surfaces) createPluginHost(window unsafe.Pointer, plugin, page, directory, folder string) error {
+func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, directory, folder string) error {
+	plugin, page := declared.id, declared.page
 	handle, err := system.CreatePluginHost(window, directory, folder, plugin, viewChannelScript, func(state string) {
 		// A navigation of the page clears its ready document, so the next ready message is the first record of it
 		// (docs/spec/plugin-host.md#channel, view.channel.ready).
 		s.pluginHostState(plugin, state)
 	})
 	if err == nil {
-		s.pluginHostChannels.register(plugin)
+		s.pluginHostChannels.register(plugin, declared.state)
 		err = system.SetViewMessage(handle, func(value string) {
 			s.pluginHostReceived(plugin, value)
 		})
@@ -308,4 +345,87 @@ func (s *Surfaces) pushPluginHostEvent(req PluginHostEventRequest) error {
 		return fmt.Errorf("plugin host event %s has no data", req.Event)
 	}
 	return s.postPluginHost(req.Plugin, map[string]any{"event": req.Event, "data": req.Data})
+}
+
+// pluginHostStates are the saved values of the plugin hosts of the application, one per plugin, which the host page of
+// every window reads and writes (docs/spec/plugin-host.md#state). The host process holds them until it ends or the plugin
+// is removed or disabled, so a value survives a restart of the host page and not the end of the application.
+type pluginHostStates struct {
+	mu    sync.Mutex
+	saved map[string]savedHostState
+}
+
+// savedHostState is the saved value of one plugin host in compact JSON with the declared format it was written with.
+type savedHostState struct {
+	format int
+	value  json.RawMessage
+}
+
+func newPluginHostStates() *pluginHostStates {
+	return &pluginHostStates{saved: map[string]savedHostState{}}
+}
+
+// pluginHostStateCall reports whether command is a state call, which the host answers itself
+// (docs/spec/plugin-host.md#state).
+func pluginHostStateCall(command string) bool {
+	return command == "state.write" || command == "state.read"
+}
+
+// answer runs the state call command with params for the host of plugin, whose declared state is declared, and returns
+// the host message of its reply: {"id", "result"} or {"id", "error": {code, message}}.
+func (c *pluginHostStates) answer(plugin string, declared *hostState, id uint64, command string, params json.RawMessage) map[string]any {
+	result, err := c.run(plugin, declared, command, params)
+	if err != nil {
+		return map[string]any{"id": id, "error": map[string]any{"code": pluginHostRefusalCode, "message": err.Error()}}
+	}
+	return map[string]any{"id": id, "result": result}
+}
+
+// run runs the state call command and returns its result. state.read returns {"value"}, the last saved value or null;
+// state.write saves the value of {"value"} with the declared format and returns null. A host without a declared state,
+// a write without a value or over maxBytes in compact JSON, and a read of a value of another format are refused.
+func (c *pluginHostStates) run(plugin string, declared *hostState, command string, params json.RawMessage) (any, error) {
+	if declared == nil {
+		return nil, fmt.Errorf("plugin %s declares no host state", plugin)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if command == "state.read" {
+		saved, ok := c.saved[plugin]
+		if !ok {
+			return map[string]any{"value": nil}, nil
+		}
+		if saved.format != declared.format {
+			return nil, fmt.Errorf("plugin %s state format %d is not %d", plugin, saved.format, declared.format)
+		}
+		return map[string]any{"value": saved.value}, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(params, &fields); err != nil {
+		return nil, fmt.Errorf("plugin %s state.write has no value", plugin)
+	}
+	value, ok := fields["value"]
+	if !ok {
+		return nil, fmt.Errorf("plugin %s state.write has no value", plugin)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, value); err != nil {
+		return nil, fmt.Errorf("plugin %s state is not JSON: %w", plugin, err)
+	}
+	if compact.Len() > declared.maxBytes {
+		return nil, fmt.Errorf("plugin %s state of %d bytes exceeds %d", plugin, compact.Len(), declared.maxBytes)
+	}
+	c.saved[plugin] = savedHostState{format: declared.format, value: json.RawMessage(compact.Bytes())}
+	return nil, nil
+}
+
+// pluginChanged applies the plugin change action of plugin to the saved values: a removal or a disable removes the saved
+// value of the plugin, and every other change keeps it (docs/spec/plugin-host.md#state).
+func (c *pluginHostStates) pluginChanged(action, plugin string) {
+	if action != "remove" && action != "disable" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.saved, plugin)
 }

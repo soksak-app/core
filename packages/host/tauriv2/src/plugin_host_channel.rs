@@ -11,14 +11,14 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tauri::{Webview, Window};
+use tauri::{Manager, Webview, Window};
 
 use crate::application_log::log_error;
 use crate::documents::{ViewReplyError, theme_message};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform::{self, Handle};
-use crate::plugin_host::PluginHosts;
+use crate::plugin_host::{HostState, PluginHostStates, PluginHosts, state_call};
 use crate::view_lifecycle::is_queue_full;
 use crate::windows::{emit_window, window_data};
 
@@ -27,10 +27,12 @@ const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
 /// The code with which the host refuses a call that the channel does not serve: EXPOSURE_ERRORS.failed of plugin-api.
 const REFUSAL_CODE: i64 = -32000;
 
-/// The channel of one plugin host: its ready document, whether its first ready message arrived, and its calls that the
-/// main page has not answered. An empty document means that no ready document is recorded.
+/// The channel of one plugin host: its declared state, its ready document, whether its first ready message arrived, and
+/// its calls that the main page has not answered. An empty document means that no ready document is recorded, and no
+/// state means that the host declaration names none.
 #[derive(Default)]
 struct Channel {
+    state: Option<HostState>,
     document: String,
     process_ready: bool,
     calls: BTreeMap<u64, String>,
@@ -49,6 +51,14 @@ pub enum Received {
     Post(Value),
     /// The message made the page ready: the theme follows; first is true for the first ready message since the creation.
     Ready { first: bool },
+    /// A state call that the host answers itself from the saved value of the plugin with its declared state
+    /// (docs/spec/plugin-host.md#state).
+    State {
+        id: u64,
+        command: String,
+        params: Value,
+        declared: Option<HostState>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -58,7 +68,7 @@ struct HostReceived {
 }
 
 #[derive(Deserialize)]
-struct HostState {
+struct NavigationState {
     #[serde(default)]
     loading: bool,
 }
@@ -78,9 +88,15 @@ impl PluginHostChannels {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Records the channel of plugin. It runs when the host webview is created.
-    pub fn register(&self, plugin: &str) {
-        self.lock().insert(plugin.to_string(), Channel::default());
+    /// Records the channel of plugin with its declared state. It runs when the host webview is created.
+    pub fn register(&self, plugin: &str, state: Option<HostState>) {
+        self.lock().insert(
+            plugin.to_string(),
+            Channel {
+                state,
+                ..Channel::default()
+            },
+        );
     }
 
     /// Removes the channel of plugin. It runs when the host webview is disposed.
@@ -119,7 +135,7 @@ impl PluginHostChannels {
     /// Records the navigation state of the host of plugin. A loading document clears its ready document, so the next ready
     /// message of the new document is the first record of it.
     pub fn state(&self, plugin: &str, state: &str) -> Result<(), String> {
-        let loaded: HostState = serde_json::from_str(state)
+        let loaded: NavigationState = serde_json::from_str(state)
             .map_err(|error| format!("plugin {plugin}: state is not JSON: {error}"))?;
         if loaded.loading
             && let Some(channel) = self.lock().get_mut(plugin)
@@ -244,6 +260,17 @@ impl PluginHostChannels {
             .and_then(Value::as_str)
             .filter(|command| !command.is_empty())
             .ok_or_else(|| format!("plugin host {plugin}: call {id} has an empty command"))?;
+        if state_call(command) {
+            // The host answers a state call itself and forwards it to no page (docs/spec/plugin-host.md#state).
+            let declared = self.lock().get(plugin).and_then(|channel| channel.state);
+            return Ok(Received::State {
+                id,
+                command: command.to_string(),
+                // default: a call without params sends null to its command, as the call envelope has no params for it.
+                params: fields.get("params").cloned().unwrap_or(Value::Null),
+                declared,
+            });
+        }
         if !forwarded_call(command) {
             // A call that the channel does not serve is refused to the page and forwarded to no page
             // (docs/spec/plugin-host.md#channel).
@@ -512,6 +539,17 @@ pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str
             emit_window(window, name, payload).map_err(|error| error.to_string())
         }
         Ok(Received::Post(message)) => post(window, plugin, &message),
+        Ok(Received::State {
+            id,
+            command,
+            params,
+            declared,
+        }) => {
+            let reply = window
+                .state::<PluginHostStates>()
+                .answer(plugin, declared, id, &command, &params);
+            post(window, plugin, &reply)
+        }
         Ok(Received::Ready { first }) => {
             if first {
                 emit_host(

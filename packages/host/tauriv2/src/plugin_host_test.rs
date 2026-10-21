@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use serde_json::{Value, json};
 
-use crate::plugin_host::{self, HostPlugin, HostView, PluginHosts};
+use crate::plugin_host::{self, HostPlugin, HostState, HostView, PluginHosts};
 use crate::test_folder::Folder;
 
 /// The record of the platform fake: the created host webviews with their configuration, the addresses that they load,
@@ -82,7 +82,8 @@ fn the_host_creates_the_host_webview_of_a_plugin_that_declares_host_and_loads_it
         plugins,
         vec![HostPlugin {
             id: "probe".into(),
-            page: "ui/host.html".into()
+            page: "ui/host.html".into(),
+            state: None
         }],
         "only probe declares host"
     );
@@ -133,6 +134,7 @@ fn the_host_creates_one_host_webview_per_plugin_per_window() {
     let plugins = vec![HostPlugin {
         id: "probe".into(),
         page: "ui/host.html".into(),
+        state: None,
     }];
     assert_eq!(
         hosts.missing(&plugins),
@@ -187,6 +189,7 @@ fn a_page_start_disposes_every_host_webview_and_the_next_readiness_creates_them_
     let plugins = vec![HostPlugin {
         id: "probe".into(),
         page: "ui/host.html".into(),
+        state: None,
     }];
     assert_eq!(
         hosts.missing(&plugins),
@@ -216,7 +219,7 @@ fn the_window_close_disposes_every_host_webview() {
 fn a_host_declaration_without_a_page_is_an_error() {
     static LOCK: Mutex<()> = Mutex::new(());
     let _guard = LOCK.lock().unwrap();
-    let page = |manifest: Value| plugin_host::host_page("probe", &manifest);
+    let page = |manifest: Value| plugin_host::host_declaration("probe", &manifest);
     assert_eq!(
         page(json!({"host": "ui/host.html"})),
         Err("plugin probe declares host that is not an object".to_string()),
@@ -234,7 +237,7 @@ fn a_host_declaration_without_a_page_is_an_error() {
     );
     assert_eq!(
         page(json!({"host": {"page": "ui/host.html"}})),
-        Ok(Some("ui/host.html".to_string())),
+        Ok(Some(("ui/host.html".to_string(), None))),
         "the page of the host declaration is the page of the host webview"
     );
     assert_eq!(
@@ -242,4 +245,46 @@ fn a_host_declaration_without_a_page_is_an_error() {
         Ok(None),
         "a manifest without host declares no host"
     );
+}
+
+// contract: plugin-host.state.declaration
+#[test]
+fn a_host_state_declaration_needs_format_and_max_bytes() {
+    assert_eq!(
+        plugin_host::host_declaration(
+            "probe",
+            &json!({"host": {"page": "ui/host.html", "state": {"format": 2, "maxBytes": 65536}}})
+        ),
+        Ok(Some((
+            "ui/host.html".to_string(),
+            Some(HostState {
+                format: 2,
+                max_bytes: 65536
+            })
+        )))
+    );
+    for state in [
+        json!(null),
+        json!(1),
+        json!({}),
+        json!({"format": 1}),
+        json!({"maxBytes": 1}),
+        json!({"format": 0, "maxBytes": 1}),
+        json!({"format": 1, "maxBytes": -1}),
+        json!({"format": 1.5, "maxBytes": 1}),
+        json!({"format": "1", "maxBytes": 1}),
+        json!({"format": 1, "maxBytes": 1, "other": 1}),
+    ] {
+        assert_eq!(
+            plugin_host::host_declaration(
+                "probe",
+                &json!({"host": {"page": "ui/host.html", "state": state.clone()}})
+            ),
+            Err(
+                "plugin probe declares host state that is not {format, maxBytes} with positive integers"
+                    .to_string()
+            ),
+            "the state {state} is accepted"
+        );
+    }
 }

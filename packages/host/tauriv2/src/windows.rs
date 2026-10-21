@@ -373,6 +373,8 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
 
 /// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
+    app.state::<crate::plugin_host::PluginHostStates>()
+        .plugin_changed(&change.action, &change.plugin);
     for window in app.windows().values() {
         if change.action == "remove" || change.action == "disable" {
             // The host webview of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).
@@ -1026,7 +1028,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
         let host_plugin = plugin.id.clone();
         let theme = theme.clone();
         let host_window = window.clone();
-        data.plugin_host_channels.register(&plugin.id);
+        data.plugin_host_channels.register(&plugin.id, plugin.state);
         let view = crate::plugin_host::HostView {
             directory: &directory,
             folder: &folder,

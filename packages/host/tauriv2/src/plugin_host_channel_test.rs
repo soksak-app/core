@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 
 use crate::documents::ViewReplyError;
-use crate::plugin_host::PluginHosts;
+use crate::plugin_host::{HostState, PluginHostStates, PluginHosts};
 use crate::plugin_host_channel::{
     PluginHostChannels, PluginHostEvent, PluginHostReply, PluginHostRequest, Received, end_host,
     ended_event, event_message, reply_message, request_message,
@@ -13,7 +13,7 @@ use crate::view_lifecycle::is_queue_full;
 /// Returns the channels of a window with the host of plugin probe and, when ready is set, the ready document doc-1.
 fn host_channels(ready: bool) -> PluginHostChannels {
     let channels = PluginHostChannels::default();
-    channels.register("probe");
+    channels.register("probe", None);
     if ready {
         channels
             .receive(
@@ -252,11 +252,11 @@ fn the_end_of_the_current_host_tells_the_main_page_and_a_replaced_host_changes_n
     assert_eq!(ended_event("probe"), json!({"plugin": "probe"}));
     // The disposal on a removal of the plugin ends the host without a handle; a second end finds nothing.
     hosts.insert("probe", 13);
-    channels.register("probe");
+    channels.register("probe", None);
     assert_eq!(end_host(&hosts, &channels, "probe", None), Some(13));
     assert_eq!(end_host(&hosts, &channels, "probe", None), None);
     // The disposal of every host on a reload removes every channel.
-    channels.register("probe");
+    channels.register("probe", None);
     channels.unregister_all();
     assert!(channels.plugins().is_empty());
 }
@@ -316,4 +316,162 @@ fn the_posts_of_the_main_page_are_host_messages_and_need_a_ready_document() {
         Err("plugin probe has no ready document".to_string())
     );
     assert_eq!(host_channels(true).check_post("probe"), Ok(()));
+}
+
+/// Returns the channels of a window whose host of plugin probe declares declared and has the ready document doc-1.
+fn state_channels(declared: Option<HostState>) -> PluginHostChannels {
+    let channels = PluginHostChannels::default();
+    channels.register("probe", declared);
+    channels
+        .receive(
+            "probe",
+            &host_message(r#"{"event": "view.ready", "plugin": "probe", "document": "doc-1"}"#),
+        )
+        .expect("the ready message is accepted");
+    channels
+}
+
+/// Sends the state call command with params as the call request id of the host page of probe and returns the host
+/// message of the reply that the host posts for it.
+fn state_call(
+    channels: &PluginHostChannels,
+    states: &PluginHostStates,
+    id: u64,
+    command: &str,
+    params: &str,
+) -> Value {
+    let message = format!(r#"{{"id": {id}, "command": "{command}", "params": {params}}}"#);
+    match channels.receive("probe", &host_message(&message)) {
+        Ok(Received::State {
+            id,
+            command,
+            params,
+            declared,
+        }) => states.answer("probe", declared, id, &command, &params),
+        other => panic!("the state call {message} is {other:?}, want a state call of the host"),
+    }
+}
+
+/// Returns the host message of a refused state call id with message.
+fn refusal(id: u64, message: &str) -> Value {
+    json!({"sok": 1, "id": id, "error": {"code": -32000, "message": message}})
+}
+
+// contract: plugin-host.state.calls
+#[test]
+fn state_write_and_state_read_keep_one_value_per_plugin() {
+    let declared = Some(HostState {
+        format: 1,
+        max_bytes: 64,
+    });
+    let channels = state_channels(declared);
+    let states = PluginHostStates::default();
+    assert_eq!(
+        state_call(&channels, &states, 1, "state.read", "null"),
+        json!({"sok": 1, "id": 1, "result": {"value": null}})
+    );
+    assert_eq!(
+        state_call(
+            &channels,
+            &states,
+            2,
+            "state.write",
+            r#"{"value": {"n": 1}}"#
+        ),
+        json!({"sok": 1, "id": 2, "result": null})
+    );
+    assert_eq!(
+        state_call(&channels, &states, 3, "state.read", "null"),
+        json!({"sok": 1, "id": 3, "result": {"value": {"n": 1}}})
+    );
+    // The host page of another window reads and replaces the same value of the plugin, and no state call is open.
+    let second = state_channels(declared);
+    assert_eq!(
+        state_call(&second, &states, 4, "state.read", "null"),
+        json!({"sok": 1, "id": 4, "result": {"value": {"n": 1}}})
+    );
+    state_call(&second, &states, 5, "state.write", r#"{"value": [2]}"#);
+    assert_eq!(
+        state_call(&channels, &states, 6, "state.read", "null"),
+        json!({"sok": 1, "id": 6, "result": {"value": [2]}})
+    );
+    assert!(
+        channels.open_calls("probe").is_empty(),
+        "a state call is open"
+    );
+}
+
+// contract: plugin-host.state.refusals
+#[test]
+fn state_calls_are_refused_without_a_declaration_over_the_limit_and_for_another_format() {
+    let states = PluginHostStates::default();
+    let undeclared = state_channels(None);
+    for (id, command) in [(1, "state.read"), (2, "state.write")] {
+        assert_eq!(
+            state_call(&undeclared, &states, id, command, r#"{"value": 1}"#),
+            refusal(id, "plugin probe declares no host state")
+        );
+    }
+    let channels = state_channels(Some(HostState {
+        format: 1,
+        max_bytes: 8,
+    }));
+    assert_eq!(
+        state_call(
+            &channels,
+            &states,
+            3,
+            "state.write",
+            r#"{"value": "123456789"}"#
+        ),
+        refusal(3, "plugin probe state of 11 bytes exceeds 8")
+    );
+    for (id, params) in [(4, "null"), (5, r#"{"other": 1}"#), (6, "[1]")] {
+        assert_eq!(
+            state_call(&channels, &states, id, "state.write", params),
+            refusal(id, "plugin probe state.write has no value")
+        );
+    }
+    assert_eq!(
+        state_call(&channels, &states, 7, "state.read", "null"),
+        json!({"sok": 1, "id": 7, "result": {"value": null}}),
+        "a refused write saved a value"
+    );
+    // A value saved with format 1 is refused to a host that declares format 2 after an update of the plugin.
+    state_call(&channels, &states, 8, "state.write", r#"{"value": 5}"#);
+    let updated = state_channels(Some(HostState {
+        format: 2,
+        max_bytes: 8,
+    }));
+    assert_eq!(
+        state_call(&updated, &states, 9, "state.read", "null"),
+        refusal(9, "plugin probe state format 1 is not 2")
+    );
+}
+
+// contract: plugin-host.state.removal
+#[test]
+fn the_state_ends_with_the_removal_or_disable_of_the_plugin() {
+    let channels = state_channels(Some(HostState {
+        format: 1,
+        max_bytes: 64,
+    }));
+    let states = PluginHostStates::default();
+    state_call(&channels, &states, 1, "state.write", r#"{"value": 1}"#);
+    states.plugin_changed("update", "probe");
+    states.plugin_changed("remove", "other");
+    assert_eq!(
+        state_call(&channels, &states, 2, "state.read", "null"),
+        json!({"sok": 1, "id": 2, "result": {"value": 1}}),
+        "an update or the removal of another plugin dropped the value"
+    );
+    for (id, action) in [(10, "remove"), (11, "disable")] {
+        state_call(&channels, &states, id, "state.write", r#"{"value": 1}"#);
+        states.plugin_changed(action, "probe");
+        assert_eq!(
+            state_call(&channels, &states, id + 10, "state.read", "null"),
+            json!({"sok": 1, "id": id + 10, "result": {"value": null}}),
+            "the {action} of the plugin kept the value"
+        );
+    }
 }
