@@ -145,13 +145,22 @@ fn a_release_clears_the_shown_project_only_when_it_is_the_released_one() {
 fn a_release_ends_the_plugin_and_state_sessions_of_that_project() {
     use crate::plugin_host_sidecar::{is_project_session, parse_state_session};
     assert_eq!(
-        parse_state_session("state:files:project-a"),
-        Some(("files", "project-a"))
+        parse_state_session("state:fixture-plugin:project-a"),
+        Some(("fixture-plugin", "project-a"))
     );
-    assert_eq!(parse_state_session("state:files:project-a:x"), None);
-    assert_eq!(parse_state_session("plugin:files:project-a"), None);
-    assert!(is_project_session("state:files:project-a", "project-a"));
-    assert!(!is_project_session("state:files:project-b", "project-a"));
+    assert_eq!(
+        parse_state_session("state:fixture-plugin:project-a:x"),
+        None
+    );
+    assert_eq!(parse_state_session("plugin:fixture-plugin:project-a"), None);
+    assert!(is_project_session(
+        "state:fixture-plugin:project-a",
+        "project-a"
+    ));
+    assert!(!is_project_session(
+        "state:fixture-plugin:project-b",
+        "project-a"
+    ));
     assert!(is_project_session(
         "plugin:probe:project-a:fixture-sidecar",
         "project-a"
@@ -161,7 +170,6 @@ fn a_release_ends_the_plugin_and_state_sessions_of_that_project() {
         "project-a"
     ));
     assert!(!is_project_session("tab-1", "project-a"));
-
 }
 
 const SIDECAR: &str = "fixture-sidecar";
