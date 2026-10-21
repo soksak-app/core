@@ -8,7 +8,7 @@
 
 - 어휘는 네 요소 `list`, `tree`, `button`, `status-line`이다. core는 다른 요소를 선언하지 않는다. 텍스트 입력, 자유 DOM, canvas, 문서 영역, 이미지 영역이 있는 화면은 view다. 인라인 이름 바꾸기, 끌어 놓기, 포인터 위치에 놓는 문맥 메뉴가 필요한 tree도 같은 이유로 view다. core는 그런 상호작용의 요소를 선언하지 않는다.
 - workbench는 사이드바 section에서만 선언된 UI를 그린다. 카드와 다른 화면은 선언된 UI를 그리지 않는다.
-- snapshot의 전달은 [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2에 있다. 이름, 명령, DOM 규칙은 [노출](exposure.ko.md)에 있다. 사이드바 배치는 [plugin](plugins.ko.md#섹션)에 있다.
+- snapshot의 전달은 [plugin 프로세스](plugin-processes.ko.md) 규칙 2에 있다. 이름, 명령, DOM 규칙은 [노출](exposure.ko.md)에 있다. 사이드바 배치는 [plugin](plugins.ko.md#섹션)에 있다.
 - 접근성: 선언된 UI에 대해 접근성 주장은 하지 않는다. 플랫폼 접근성 인터페이스가 검사로 기록될 때까지 그렇다. 이 문서는 ARIA 역할을 정의하지 않는다.
 - core는 값을 자르지 않는다. 요소가 한도보다 많은 plugin은 자기 값을 스스로 자르고 자른 사실을 `status-line`에 적는다. 한도를 넘는 값은 줄이지 않고 거부한다. 지연 적재는 없다.
 
@@ -53,12 +53,13 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | `list` 항목 | `detail` | 문자열 | 아니오 | 평문, 500 코드 포인트 이하, label 뒤에 그린다. |
 | `tree` | `key` | 문자열 | 예 | 아래 키 규칙. |
 | `tree` | `empty` | 문자열 | 예 | 평문, 500 코드 포인트 이하. `nodes`가 비었을 때 노드 대신 그린다. |
-| `tree` | `nodes` | 배열 | 예 | 루트 노드. 전체 트리에서 5000개 이하의 노드, 16단계 이하(루트 노드는 1단계). 가로 section에서는 tree를 그리지 않는다([사이드바 section 형태](#사이드바-section-형태)). |
+| `tree` | `nodes` | 배열 | 예 | 루트 노드. 전체 트리에서 5000개 이하의 노드, 16단계 이하(루트 노드는 1단계). |
 | `tree` 노드 | `key` | 문자열 | 예 | 형제 사이에서 유일하다. |
 | `tree` 노드 | `label` | 문자열 | 예 | 평문, 500 코드 포인트 이하. |
 | `tree` 노드 | `command`, `params`, `icon`, `enabled` | `button`과 같음 | 아니오 | `command`가 있는 노드는 label을 누르면 그 명령을 실행한다. |
 | `tree` 노드 | `expanded` | 불리언 | 아니오 | 가지에 대한 plugin의 값. 가지에만 허용하므로, 잎에 두면 거부한다. 기본값 `false`. [status 대응](#status-대응)이 우선순위를 정한다. |
 | `tree` 노드 | `selected` | 불리언 | 아니오 | 노드를 선택된 것으로 그린다. 기본값 `false`. plugin의 값은 받아들인 모든 값에 적용된다. |
+| `tree` 노드 | `detail` | 문자열 | 아니오 | 평문, 최대 500 코드 포인트. 라벨 뒤에 `list` 항목의 `detail`과 같이 그린다. |
 | `tree` 노드 | `children` | 배열 | 아니오 | 하위 노드. 같은 규칙을 따른다. `children`이 있고 비어 있지 않은 노드는 가지이며, 그 밖의 노드는 잎이다. |
 | `status-line` | `key` | 문자열 | 예 | 아래 키 규칙. |
 | `status-line` | `text` | 문자열 | 예 | 평문, 500 코드 포인트 이하. 한 줄로 그린다. |
@@ -82,7 +83,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 | list 항목 | list마다 1000 | list 하나가 선언된 UI snapshot마다 그리는 행을 제한한다. |
 | tree 노드 | tree마다 5000 | tree 하나가 선언된 UI snapshot마다 그리는 노드를 제한한다. |
 | tree 단계 | 16 | section 안에서 tree의 들여쓰기를 제한한다. |
-| 텍스트 필드 | 500 코드 포인트 | section 안 텍스트 한 줄의 너비를 제한한다. |
+| 텍스트 필드 | 500 코드 포인트 | 텍스트 필드 하나의 길이를 제한한다. 그린 너비는 제한하지 않는다: `tree` 상자는 상자보다 넓은 라벨을 가로 스크롤로 그리고, `list` 라벨은 공백에서 줄바꿈하며, 공백이 없는 한 단어가 section보다 넓으면 section 가장자리 밖으로 그려져 set과 함께 스크롤된다. status 줄 텍스트는 자기 상자에서 잘린다. |
 | 키 | 128 코드 포인트 | workbench가 요소마다 보관하는 식별자를 제한한다. |
 | 매개변수 키 | 객체마다 16개 | 묶기마다 보관하는 매개변수 기록을 제한한다. |
 | 매개변수 키 길이 | 64 코드 포인트 | 묶기마다 보관하는 매개변수 기록을 제한한다. |
@@ -148,7 +149,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 
 - (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌거나, 고정 창 사이드바의 plugin override가 적용되기 시작하거나 멈추면 출처를 다시 고른다.
 - (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 유지된 상태는 경로별로 살아남는다([status 대응](#status-대응)).
-- (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때, 방향이 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
+- (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
 - 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 선택된 출처가 아닌 짝에서 온 pull 응답, 또는 `seq`가 출처에서 마지막으로 받아들인 값의 `seq`보다 낮은 pull 응답은 검사 없이 버린다. 트리, 기준, 유지된 상태, 오류 표시 중 어느 것도 바꾸지 않는다.
 
@@ -169,8 +170,8 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 선언된 section은 루트 요소를 본문 안에 순서대로 그린다.
 
 - 세로 방향에서는 요소를 위에서 아래로 쌓는다.
-- 가로 방향에서는 요소를 왼쪽에서 오른쪽으로 한 행에 놓고, section 너비에서 줄바꿈한다. 가로 section의 `tree`는 값 검사로 `<tree의 포인터>: tree cannot be drawn in a horizontal section`이라고 거부한다. section의 방향은 값을 받아들일 때 알려지므로 이 검사는 값 검사다.
-section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한다. 검사에 실패한 값은 [거부](#거부)의 행으로 거부하며, 그 tree는 지우고 section은 비운다. 방향이 바뀌면 workbench는 출처의 현재 값을 출처가 바뀔 때처럼 한 번 pull한다. 이전 방향에서 버린 값은 새 방향에서 유효할 수 있고, 그 값을 가진 것은 출처뿐이기 때문이다.
+- 가로 방향에서는 요소를 왼쪽에서 오른쪽으로 한 행에 놓고, section 너비에서 줄바꿈한다. `tree`는 그 너비의 한 줄을 모두 차지하며, 아래 문단이 그 방식을 설명한다.
+`tree`는 가로 section에서 section 너비의 한 줄을 모두 차지하고, 세로 방향과 같은 개요를 그린다. 그래서 줄바꿈은 tree 앞뒤에서만 일어난다. `list`는 내용 너비를 유지하며, 내용이 더 넓을 때만 그 줄의 너비로 줄어든다. tree의 너비는 가장 깊은 보이는 행을 따르므로, 가지를 펼치거나 접으면 너비가 바뀐다. 전체 줄은 그 변화가 옆 요소를 재배치하지 않게 한다. tree 상자는 라벨이 상자보다 넓으면 얇은 스크롤바와 함께 가로로 스크롤하며, 상자 밖 라벨은 스크롤로 닿는다. 세로 section에서 tree 상자는 section 너비이므로, 스크롤은 라벨이 section보다 넓을 때만 적용된다. 어떤 declared 값도 방향에 기대지 않으므로, 방향이 바뀌어도 declared 값을 검사하거나 pull하지 않으며 받아들인 값은 그대로 그린다.
 
 선언된 section은 사이드바 section의 머리, 접기 제어, 탭 선택을 바꾸지 않고 유지한다. 머리는 `core.sidebar.section.header`이며, 접으면 `core.sidebar.section.fold`를 실행한다. 선언된 section의 묶음은 [plugin](plugins.ko.md#섹션)의 묶음 규칙을 따른다. 적재되지 않은 plugin의 section은 다른 section과 같이 그리지 않는다.
 
@@ -228,7 +229,6 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 | `command` 이름이 선언되지 않음 | `undeclared command <name>` | `command` 필드 |
 | 아이콘 이름이 core 아이콘 표에 없음 | `unknown icon <name>` | `icon` 필드 |
 | 잎 노드에 `expanded`가 있음 | `expanded is allowed only on a branch` | `expanded` 필드 |
-| 가로 section의 `tree` | `tree cannot be drawn in a horizontal section` | 그 tree |
 
 manifest에 관한 거부, 즉 section 형태와 한 status 한 section 규칙은 값의 포인터가 아니라 manifest를 읽을 때 보고하며, 이유는 [사이드바 section 형태](#사이드바-section-형태)에 있다.
 

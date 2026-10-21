@@ -2,7 +2,7 @@
 //! `debug-log-changed`, and an endpoint client watches the host status `host.log`. The host publishes the notice after the index of a file
 //! covers the lines that announce a change.
 
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -62,9 +62,13 @@ impl LogNotices {
                 loop {
                     let notice = {
                         let (lock, wake) = &*worker_shared;
-                        let mut state = lock.lock().expect("the latest notice");
+                        // default: a lock that a panicking thread poisoned still holds the latest notice, which the
+                        // thread reads and amends; the panic hook records the panic.
+                        let mut state = lock.lock().unwrap_or_else(PoisonError::into_inner);
                         while !state.pending && !state.stopped {
-                            state = wake.wait(state).expect("the latest notice");
+                            // default: a wait that a poisoned lock ends still returns the guard of the latest notice,
+                            // which the thread reads; the panic hook records the panic.
+                            state = wake.wait(state).unwrap_or_else(PoisonError::into_inner);
                         }
                         if state.stopped {
                             return;
@@ -82,12 +86,19 @@ impl LogNotices {
                     emit(notice);
                     let (lock, wake) = &*worker_shared;
                     let deadline = Instant::now() + interval;
-                    let mut state = lock.lock().expect("the latest notice");
+                    // default: a lock that a panicking thread poisoned still holds the latest notice, which the thread
+                    // reads; the panic hook records the panic.
+                    let mut state = lock.lock().unwrap_or_else(PoisonError::into_inner);
                     while !state.stopped {
                         let Some(left) = deadline.checked_duration_since(Instant::now()) else {
                             break;
                         };
-                        state = wake.wait_timeout(state, left).expect("the latest notice").0;
+                        state = wake
+                            .wait_timeout(state, left)
+                            // default: a wait that a poisoned lock ends still returns the guard of the latest notice,
+                            // which the thread reads; the panic hook records the panic.
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .0;
                     }
                     if state.stopped {
                         return;
@@ -104,7 +115,9 @@ impl LogNotices {
     /// Announces a change of the file at `path` (`logs/<name>`) that has `size` bytes.
     pub fn observe(&self, path: &str, size: i64) {
         let (lock, wake) = &*self.shared;
-        let mut state = lock.lock().expect("the latest notice");
+        // default: a lock that a panicking thread poisoned still holds the latest notice, which the announcement
+        // amends; the panic hook records the panic.
+        let mut state = lock.lock().unwrap_or_else(PoisonError::into_inner);
         state.path = path.to_string();
         state.size = size;
         state.pending = true;
@@ -124,7 +137,9 @@ impl LogNotices {
         self.shared
             .0
             .lock()
-            .expect("the latest notice")
+            // default: a lock that a panicking thread poisoned still holds the latest notice, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .value
             .clone()
     }
@@ -132,9 +147,17 @@ impl LogNotices {
     /// Ends the thread and waits until it returned.
     pub fn stop(&self) {
         let (lock, wake) = &*self.shared;
-        lock.lock().expect("the latest notice").stopped = true;
+        // default: a lock that a panicking thread poisoned still holds the latest notice, which the stop amends; the
+        // panic hook records the panic.
+        lock.lock().unwrap_or_else(PoisonError::into_inner).stopped = true;
         wake.notify_all();
-        if let Some(worker) = self.worker.lock().expect("the worker").take()
+        if let Some(worker) = self
+            .worker
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the thread of the notices, which the stop
+            // takes; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
             && worker.join().is_err()
         {
             eprintln!("debug log notices: the thread ended with a panic");
@@ -149,16 +172,24 @@ static CURRENT: Mutex<Option<Arc<LogNotices>>> = Mutex::new(None);
 /// announces its lines too: the lines of a file that no writer of this host wrote (a file of a sidecar) and the lines that a query indexed
 /// before the indexer did would otherwise never be announced.
 pub fn use_log_notices(notices: Option<Arc<LogNotices>>) {
-    *CURRENT.lock().expect("the publisher of the notices") = notices;
+    // default: a lock that a panicking thread poisoned still holds the publisher of the notices, which the call
+    // replaces; the panic hook records the panic.
+    *CURRENT.lock().unwrap_or_else(PoisonError::into_inner) = notices;
 }
 
 /// Passes the update of an index to the publisher of the notices.
 pub fn announce_index_update(update: &IndexUpdate) {
     let current = CURRENT
         .lock()
-        .expect("the publisher of the notices")
+        // default: a lock that a panicking thread poisoned still holds the publisher of the notices, which is only
+        // read; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .clone();
     if let Some(notices) = current {
         notices.observe_update(update);
     }
 }
+
+#[cfg(test)]
+#[path = "debug_follow_lock_test.rs"]
+mod lock_test;

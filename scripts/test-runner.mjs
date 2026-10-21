@@ -108,8 +108,8 @@ export async function runTests(options) {
         await options.beforeEach(item);
       }
       running.set(item.name, performance.now());
-      write(`RUN  ${item.name} (${running.size} running)`);
       const limit = item.timeoutMs ?? defaultTimeoutMs;
+      write(`RUN  ${item.name} (${running.size} running, limit ${seconds(limit)}s)`);
       let entry = null;
       if (run) {
         const output = `${String(manifest.tests.length + 1).padStart(3, '0')}-${item.name.replace(/[^A-Za-z0-9._-]/g, '_')}.log`;

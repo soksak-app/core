@@ -201,7 +201,7 @@ type CoreRootFile struct {
 	ContentType string
 }
 
-// CoreRoot returns the file at urlPath of the core root for a view of plugin (docs/plans/plugin-processes.md, rule 4).
+// CoreRoot returns the file at urlPath of the core root for a view of plugin (docs/spec/plugin-processes.md, rule 4).
 // A core target is read from the bundled frontend. Any other path is read from an installed plugin folder only when the
 // granted item rule (sok.GrantedFiles) grants it to plugin; the rule reads the installation record at each request.
 // found is false for a refused path, and the refusal is written as an error record. err is set when the requester

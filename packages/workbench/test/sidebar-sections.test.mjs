@@ -19,7 +19,7 @@ const declaredWorld = { channel: () => null, pull: () => Promise.resolve({ seq: 
 mock.module("../declared-source.js", { namedExports: {
   createDeclaredSource: ({ plugin, status }) => ({
     channel: (source) => declaredWorld.channel(source),
-    pull: (source) => declaredWorld.pull(source),
+    pull: (source) => declaredWorld.pull(source, status),
     plugin, status,
   }),
 } });
@@ -178,6 +178,27 @@ test('section layout rejects an absent or invalid orientation explicitly',()=>{
  } finally {clearSet(container);container.remove();}
 });
 
+test('a declared tree in a horizontal body takes a full line of the row',()=>{
+ const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
+ const styled=new JSDOM(`<style>${css}</style><div class="set" data-orientation="horizontal"><div class="set__body" data-declared><div class="declared-tree"></div></div></div>`);
+ try {
+  const tree=styled.window.document.querySelector('.declared-tree');
+  assert.equal(styled.window.getComputedStyle(tree).flexBasis,'100%','a tree in a horizontal body must take the width of its line');
+ } finally {styled.window.close();}
+});
+
+test('a declared tree scrolls horizontally inside its box with a visible thin scrollbar in every orientation',()=>{
+ const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
+ const styled=new JSDOM(`<style>${css}</style><div class="set" data-orientation="horizontal"><div class="set__body" data-declared><div class="declared-tree"></div></div></div><div class="set" data-orientation="vertical"><div class="set__body" data-declared><div class="declared-tree"></div></div></div>`);
+ try {
+  for (const tree of styled.window.document.querySelectorAll('.declared-tree')) {
+   const style=styled.window.getComputedStyle(tree);
+   assert.equal(style.overflowX,'auto','a tree wider than its box must scroll inside the box');
+   assert.equal(style.scrollbarWidth,'thin','the scroll of a tree must show a scrollbar');
+  }
+ } finally {styled.window.close();}
+});
+
 test('horizontal list sections use a row while vertical lists use a column',()=>{
  const css=readFileSync(new URL('../app.css',import.meta.url),'utf8');
  const styled=new JSDOM(`<style>${css}</style><div class="set" data-layout="list" data-orientation="horizontal"></div><div class="set" data-layout="list" data-orientation="vertical"></div>`);
@@ -199,7 +220,8 @@ test('a vertical fill section retains its intrinsic header and body minimum when
  }finally{styled.window.close();}
 });
 
-/** Declares one plugin with one status and one command, registers its declared section, and registers the surface that owns the status. */
+/** Declares one plugin with one status and one command, registers its declared section, and registers the surface that owns the status.
+ * The section carries the full status name, as the manifest requires (validateManifest refuses a short name). */
 function declareDeclaredPlugin(plugin, surface, section = {}) {
   registry.configure({ surfacePlugin: () => plugin });
   registry.declare(plugin, {
@@ -207,29 +229,30 @@ function declareDeclaredPlugin(plugin, surface, section = {}) {
     commands: [{ name: `${plugin}.open`, description: "Opens.", params: { type: "object" }, result: {} }],
     dom: [],
   });
-  registerSection({ id: `${plugin}.view`, name: "선언", status: "lines", ...section });
+  registerSection({ id: `${plugin}.view`, name: "선언", status: `${plugin}.lines`, ...section });
   registry.registered({ surface, kind: "status", name: `${plugin}.lines` });
 }
 
 /** Subscribes a channel per source and counts the pulls. */
 function declaredTransport() {
   const listeners = new Map();
-  let pulls = 0;
+  const requested = [];
   declaredWorld.channel = (source) => ({
     send: () => {},
     onMessage: (listener) => { listeners.set(source.id, listener); return () => listeners.delete(source.id); },
   });
-  declaredWorld.pull = () => { pulls += 1; return Promise.resolve({ seq: 0, value: null }); };
-  return { listeners, pulled: () => pulls };
+  declaredWorld.pull = (source, status) => { requested.push(status); return Promise.resolve({ seq: 0, value: null }); };
+  return { listeners, requested };
 }
 
 const pushTo = (listeners, plugin, seq, value) =>
-  listeners.get("view-a")({ event: "declared-ui.snapshot", plugin, status: `${plugin}.lines`, seq, value, skipped: 0 });
+  // The snapshot of a view names the status in its plugin (docs/spec/declared-ui.md).
+  listeners.get("view-a")({ event: "declared-ui.snapshot", plugin, status: "lines", seq, value, skipped: 0 });
 
 test("a declared section draws the value of its source, shows its rejection, and reports mounted, error, text and controls", async () => {
   const plugin = "probe-d1";
   declareDeclaredPlugin(plugin, "view-a", { fill: true });
-  const { listeners } = declaredTransport();
+  const { listeners, requested } = declaredTransport();
   const value = { elements: [
     { kind: "list", key: "l1", empty: "없음", items: [{ key: "a", label: "첫" }, { key: "b", label: "둘", command: `${plugin}.open` }] },
   ] };
@@ -248,6 +271,7 @@ test("a declared section draws the value of its source, shows its rejection, and
     assert.notEqual(header, null, "the declared section has no header");
     assert.equal(header.dataset.command, "core.sidebar.section.fold", "the declared section header does not fold");
     assert.ok(listeners.has("view-a"), "the chosen source was not subscribed");
+    assert.deepEqual(requested, ["lines"], "the pull did not request the status of the plugin");
     assert.equal(report().mounted, false, "the section is mounted before its first accepted value");
     assert.equal(report().error, null, "the section reports an error without a rejected value");
     assert.equal(report().text, "", "the section drew something before its first accepted value");
@@ -277,7 +301,7 @@ test("a declared section draws the value of its source, shows its rejection, and
 test("a declared section whose status the active surface did not register stays cleared and subscribes to nothing", async () => {
   const plugin = "probe-d2";
   declareDeclaredPlugin(plugin, "view-a");
-  const { listeners, pulled } = declaredTransport();
+  const { listeners, requested } = declaredTransport();
   const container = document.createElement("div");
   container.className = "set";
   document.body.append(container);
@@ -287,7 +311,7 @@ test("a declared section whose status the active surface did not register stays 
     await settle();
     const report = () => sidebarsState().find((item) => item.sidebar === "rail-d2").sections[0];
     assert.equal(listeners.size, 0, "a channel was subscribed without a chosen source");
-    assert.equal(pulled(), 0, "a value was pulled without a chosen source");
+    assert.equal(requested.length, 0, "a value was pulled without a chosen source");
     assert.equal(report().mounted, false, "the section is mounted without a chosen source");
     assert.equal(report().error, null, "the section reports an error without a chosen source");
     assert.equal(report().text, "", "the section drew something without a chosen source");
@@ -297,7 +321,7 @@ test("a declared section whose status the active surface did not register stays 
   }
 });
 
-test("an orientation change checks the accepted declared value again and pulls once", async () => {
+test("an orientation change keeps the accepted declared tree and makes no pull", async () => {
   const plugin = "probe-d3";
   declareDeclaredPlugin(plugin, "view-a");
   const listeners = new Map();
@@ -322,14 +346,15 @@ test("an orientation change checks the accepted declared value again and pulls o
     assert.equal(pulls, 1, "the source was not pulled once at the load");
     drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "horizontal" });
     await settle();
-    assert.equal(report().mounted, false, "the accepted value was not checked again at the orientation change");
-    assert.equal(body.textContent, "/elements/0: tree cannot be drawn in a horizontal section", "the accepted value was not checked again at the orientation change");
-    assert.equal(pulls, 2, "the orientation change did not pull once");
+    assert.equal(report().mounted, true, "the tree was not drawn in a horizontal section");
+    assert.equal(report().error, null, "the tree in a horizontal section reported an error");
+    assert.equal(body.textContent, "가지", "the tree was not drawn in a horizontal section");
+    assert.equal(pulls, 1, "the orientation change pulled the source");
     drawSet(container, "rail-d3", set, { card: "rail-d3", surface: "view-a", orientation: "vertical" });
     await settle();
-    assert.equal(report().mounted, true, "the value of the new pull was not drawn after the orientation returned");
-    assert.equal(body.textContent, "가지", "the value of the new pull was not drawn after the orientation returned");
-    assert.equal(pulls, 3, "the orientation change did not pull once");
+    assert.equal(report().mounted, true, "the tree was not kept after the orientation returned");
+    assert.equal(body.textContent, "가지", "the tree was not kept after the orientation returned");
+    assert.equal(pulls, 1, "the orientation change pulled the source");
   } finally {
     clearSet(container);
     container.remove();

@@ -60,11 +60,11 @@ Coverage is judged in the running document. The binder's `audit(root)` lists int
 
 ## Keyboard shortcuts
 
-Every keyboard shortcut of the workbench has one owner and one command. The machine-readable table is [shortcuts.json](../../packages/workbench/shortcuts.json) (`packages/workbench/shortcuts.json`); the table below is its copy. `scripts/test/shortcut-table.test.mjs` requires that both match, that every key equivalent of the [application menu](host-contract.md#application-menu) is a `native menu` row, and that every key comparison of the workbench key handlers has a `workbench` or `view` row. The owners follow [plugin processes](../plans/plugin-processes.md) rule 7:
+Every keyboard shortcut of the workbench has one owner and one command. The machine-readable table is [shortcuts.json](../../packages/workbench/shortcuts.json) (`packages/workbench/shortcuts.json`); the table below is its copy. `scripts/test/shortcut-table.test.mjs` requires that both match, that every key equivalent of the [application menu](host-contract.md#application-menu) is a `native menu` row, and that every key comparison of the workbench key handlers has a `workbench` or `view` row. The owners follow [plugin processes](plugin-processes.md) rule 7:
 
 - `native menu`: a key equivalent of an application menu item. The menu receives the key before the view, so the view's default action is not prevented. A row with a core command reaches it through the menu; a row with `framework role` runs the role of the item.
 - `workbench`: a key that the workbench page or its native modals handle and prevent by default. The row names the command that the key runs.
-- `view`: a key that a plugin view handles inside itself under plan rule 7: Escape and the keys of a text input. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
+- `view`: a key that a plugin view handles inside itself under [plugin processes](plugin-processes.md) rule 7: Escape and the keys of a text input. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
 
 In a key, `cmd` is the Command key on macOS and the Control key on the other hosts (`CmdOrCtrl`). `Enter` and `Escape` are key names.
 
@@ -91,7 +91,7 @@ In a key, `cmd` is the Command key on macOS and the Control key on the other hos
 | `Enter` | workbench | core.library.form.submit | — | A library form field has focus |
 | `Escape` | workbench | core.picker.close | — | A picker layer is open |
 | `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
-| `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plan rule 7 |
+| `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plugin processes rule 7 |
 | `text input keys` | view | none | — | A plugin view has a text input focused; the first responder of the view receives them |
 
 ## Registration
@@ -147,7 +147,7 @@ The [memory saver](plugins.md#memory-saver) of the main page has these entries.
 
 ## Plugin processes
 
-The main page publishes three statuses of the [plugin process design](../plans/plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process connects its call layer, which reports the open calls and the losses of its plugin to the main page.
+The main page publishes three statuses of the [plugin process design](plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process connects its call layer, which reports the open calls and the losses of its plugin to the main page.
 
 - Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin that has one, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
 - Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
@@ -231,14 +231,14 @@ The host and the pages exchange these messages. They are internal to core and no
 | host → main page | event `exposure-request` | `{id, method, params}` for `exposure.list`, `status.*`, `command.run`, `dom.*` of core and plugin names. The host waits 10 seconds for the answer, except for `command.run`, which the main page answers within the command's timeout, whether it forwards the command or answers it itself; a main page that is not ready returns 1003, and requests to a main page that reloads or closes end with 1003 |
 | main page → host | call `exposureReply` | `{id, result}` or `{id, error: {code, message}}` |
 | main page → host | call `exposureChanged` | `{name, surface?, value}` for a watched status; `surface` is present when the watch named one. The host refuses a name that starts with `host.` with `the page cannot change host status <name>`; only the host changes a host status |
-| surface page → host | call `exposureRegister` | `{surface, kind, name}` |
+| surface page → host | call `exposureRegister` | `{surface, kind, name}`. The page of a view has no surface bridge: it calls `runtime.native.call` with `{name: "registered", payload: {kind, name}}` through the view channel ([view surfaces](native-surfaces.md#view-surfaces)), and the main page relays it with this call. A relay from the main page is accepted only for a surface that has a view |
 | host → main page | event `exposure-registered` | `{surface, kind, name}`; `{surface, closed: true}` when the surface is removed. Surfaces outlive a reload of the main page, so after the main page reports ready the host sends every live registration again |
 | main page → host | call `exposureForward` | `{id, surface, method, params, timeout?}` for a name that a surface page registered. `timeout` is an integer from 1 to 600000 milliseconds, taken from the command declaration; without it the host waits 10 seconds. `status.next` takes no `timeout`. An invalid `timeout` returns -32602 |
-| host → surface page | event `exposure-request` | `{id, method, params}` |
+| host → surface page | event `exposure-request` | `{id, method, params}`. For a view, the event carries `surface` and the main page relays it to the view through the view's `exposure-request` subscription (`runtime.native.on`), with `data` `{id, surface, method, params}` |
 | main page → surface page (through `exposureForward`) | `status.watch`, `status.unwatch` | `{name}`. The surface page starts or stops following the value |
 | main page → surface page (through `exposureForward`) | `status.next` | `{name, version}`. The surface page replies `{version, value}` when its value is newer than `version`, or `{closed: true}` after `status.unwatch`. The host applies no timeout to this request; it fails with 1003 when the surface closes |
 | host → main page | event `diagnostics-tick` | No payload. Diagnostic builds only: one per step of `diagnostics.drag` |
-| surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward` |
+| surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward`. The page of a view answers through `runtime.native.call` with `{name: "exposureReply", payload: {id, result|error}}`, which the main page sends as this call with the surface of the view |
 
 The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview. For a `core.sidebar.section.control` request, the main page validates `index` or `address` before it answers, and the hosts relay the request unread.
 
@@ -251,7 +251,7 @@ The runtime modules map these calls to framework bindings:
 | `exposureReply` | `ExposureReply` | `exposure_reply` |
 | `exposureChanged` | `ExposureChanged` | `exposure_changed` |
 | `exposureForward` | `ExposureForward` | `exposure_forward` |
-| `exposureRegister` | `ExposureRegister` (surface bridge) | `exposure_register` |
+| `exposureRegister` | `ExposureRegister` (surface bridge and main page) | `exposure_register` |
 
 The page interface for surface pages is `page.exposure`: `register(kind, name)`, `onRequest(fn)` where `fn({id, method, params})` is called for each forwarded request, and `reply(id, payload)`. The main page uses `host.on("exposure-request", fn)`, `host.on("exposure-registered", fn)`, and `host.call(...)` with the calls above. A reply without `surface` answers a request of the window's main document; a reply with `surface` answers a request of that surface document and names it with a nonempty string. A `surface` that is `null`, empty, or not a string is rejected as an error, not treated as a main-document reply.
 

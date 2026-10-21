@@ -11,14 +11,17 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tauri::{Webview, Window};
+use tauri::{Manager, Webview, Window};
 
-use crate::application_log::log_error;
+use crate::application_log::{log_error, log_failure};
 use crate::documents::{ViewReplyError, theme_message};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform::{self, Handle};
-use crate::plugin_host::PluginHosts;
+use crate::plugin_host::{
+    Failure, HostState, PluginHostRestarts, PluginHostStates, PluginHosts, state_call,
+};
+use crate::sidecars::{RESTART_LIMIT, RESTART_WINDOW};
 use crate::view_lifecycle::is_queue_full;
 use crate::windows::{emit_window, window_data};
 
@@ -27,10 +30,12 @@ const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
 /// The code with which the host refuses a call that the channel does not serve: EXPOSURE_ERRORS.failed of plugin-api.
 const REFUSAL_CODE: i64 = -32000;
 
-/// The channel of one plugin host: its ready document, whether its first ready message arrived, and its calls that the
-/// main page has not answered. An empty document means that no ready document is recorded.
+/// The channel of one plugin host: its declared state, its ready document, whether its first ready message arrived, and
+/// its calls that the main page has not answered. An empty document means that no ready document is recorded, and no
+/// state means that the host declaration names none.
 #[derive(Default)]
 struct Channel {
+    state: Option<HostState>,
     document: String,
     process_ready: bool,
     calls: BTreeMap<u64, String>,
@@ -49,6 +54,14 @@ pub enum Received {
     Post(Value),
     /// The message made the page ready: the theme follows; first is true for the first ready message since the creation.
     Ready { first: bool },
+    /// A state call that the host answers itself from the saved value of the plugin with its declared state
+    /// (docs/spec/plugin-host.md#state).
+    State {
+        id: u64,
+        command: String,
+        params: Value,
+        declared: Option<HostState>,
+    },
 }
 
 #[derive(Deserialize)]
@@ -58,7 +71,7 @@ struct HostReceived {
 }
 
 #[derive(Deserialize)]
-struct HostState {
+struct NavigationState {
     #[serde(default)]
     loading: bool,
 }
@@ -78,9 +91,15 @@ impl PluginHostChannels {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Records the channel of plugin. It runs when the host webview is created.
-    pub fn register(&self, plugin: &str) {
-        self.lock().insert(plugin.to_string(), Channel::default());
+    /// Records the channel of plugin with its declared state. It runs when the host webview is created.
+    pub fn register(&self, plugin: &str, state: Option<HostState>) {
+        self.lock().insert(
+            plugin.to_string(),
+            Channel {
+                state,
+                ..Channel::default()
+            },
+        );
     }
 
     /// Removes the channel of plugin. It runs when the host webview is disposed.
@@ -119,7 +138,7 @@ impl PluginHostChannels {
     /// Records the navigation state of the host of plugin. A loading document clears its ready document, so the next ready
     /// message of the new document is the first record of it.
     pub fn state(&self, plugin: &str, state: &str) -> Result<(), String> {
-        let loaded: HostState = serde_json::from_str(state)
+        let loaded: NavigationState = serde_json::from_str(state)
             .map_err(|error| format!("plugin {plugin}: state is not JSON: {error}"))?;
         if loaded.loading
             && let Some(channel) = self.lock().get_mut(plugin)
@@ -244,6 +263,17 @@ impl PluginHostChannels {
             .and_then(Value::as_str)
             .filter(|command| !command.is_empty())
             .ok_or_else(|| format!("plugin host {plugin}: call {id} has an empty command"))?;
+        if state_call(command) {
+            // The host answers a state call itself and forwards it to no page (docs/spec/plugin-host.md#state).
+            let declared = self.lock().get(plugin).and_then(|channel| channel.state);
+            return Ok(Received::State {
+                id,
+                command: command.to_string(),
+                // default: a call without params sends null to its command, as the call envelope has no params for it.
+                params: fields.get("params").cloned().unwrap_or(Value::Null),
+                declared,
+            });
+        }
         if !forwarded_call(command) {
             // A call that the channel does not serve is refused to the page and forwarded to no page
             // (docs/spec/plugin-host.md#channel).
@@ -477,7 +507,7 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
 }
 
 /// Handles the end of the page process of the host webview handle of plugin: the end is written to the application log
-/// and the host is closed. The restart of the host page follows the restart limit (F212.9-4).
+/// and handled as a failure of the host.
 pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
     let data = match window_data(window) {
         Ok(data) => data,
@@ -490,7 +520,69 @@ pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
         "plugin host",
         format!("plugin {plugin}: the host process ended"),
     );
+    failed(window, plugin, handle);
+}
+
+/// Handles a failure of the host webview handle of plugin in window: an end of its page process that the host did not
+/// cause, or the queue overflow of its channel. It closes the host and counts the failure in the record of the plugin
+/// over every window; below the limit it creates the host again in this window, and at the fourth failure within 300 s
+/// it stops the restarts and closes the host of the plugin in every window (docs/spec/plugin-host.md#restarts). It runs
+/// on the main thread.
+fn failed(window: &Window, plugin: &str, handle: Handle) {
     end(window, plugin, Some(handle));
+    match window.state::<PluginHostRestarts>().failed(plugin) {
+        Failure::Restart(attempt) => {
+            emit_host(
+                Level::Error,
+                "host.plugin-host.restart",
+                json!({"plugin": plugin, "attempt": attempt}),
+            );
+            crate::windows::load_plugin_hosts(window);
+        }
+        Failure::Stop => {
+            log_error(
+                &format!("plugin host {plugin}"),
+                format!(
+                    "restart limit: {RESTART_LIMIT} failures within {} s",
+                    RESTART_WINDOW.as_secs()
+                ),
+            );
+            emit_host(
+                Level::Error,
+                "host.plugin-host.restart-limit",
+                json!({"plugin": plugin}),
+            );
+            for other in window.app_handle().windows().into_values() {
+                end(&other, plugin, None);
+            }
+        }
+        // A failure that arrives after the stop restarts nothing; the stop closed the host in every window.
+        Failure::Stopped => {}
+    }
+}
+
+/// Handles the open of a surface of plugin by the person in window: when the limit stopped the restarts of its plugin
+/// host, it clears the record, writes host.trace.plugin-host.restart-reset, and creates the host again in every window
+/// (docs/spec/plugin-host.md#restarts).
+pub(crate) fn surface_opened(window: &Window, plugin: &str) {
+    if !window.state::<PluginHostRestarts>().reset(plugin) {
+        return;
+    }
+    emit_host(
+        Level::Debug,
+        "host.trace.plugin-host.restart-reset",
+        json!({"plugin": plugin}),
+    );
+    for other in window.app_handle().windows().into_values() {
+        let target = other.clone();
+        log_failure(
+            "plugin host",
+            crate::exposure::on_main(&other, move || {
+                crate::windows::load_plugin_hosts(&target);
+                Ok(())
+            }),
+        );
+    }
 }
 
 /// Records the navigation state of the host of plugin. A failure is written to the application log.
@@ -512,6 +604,17 @@ pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str
             emit_window(window, name, payload).map_err(|error| error.to_string())
         }
         Ok(Received::Post(message)) => post(window, plugin, &message),
+        Ok(Received::State {
+            id,
+            command,
+            params,
+            declared,
+        }) => {
+            let reply = window
+                .state::<PluginHostStates>()
+                .answer(plugin, declared, id, &command, &params);
+            post(window, plugin, &reply)
+        }
         Ok(Received::Ready { first }) => {
             if first {
                 emit_host(
@@ -527,8 +630,9 @@ pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str
             let overflow = is_queue_full(&error);
             log_error("plugin host channel", error);
             if overflow {
-                // The page has lost messages, so its host webview is closed (docs/spec/plugin-host.md#channel).
-                end(window, plugin, Some(handle));
+                // The page has lost messages, so its host webview is closed and restarted within the restart limit
+                // (docs/spec/plugin-host.md#channel).
+                failed(window, plugin, handle);
             }
             return;
         }

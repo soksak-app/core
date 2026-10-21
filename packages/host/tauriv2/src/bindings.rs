@@ -3,6 +3,8 @@
 //! Each command calls a function of the module of its role. The command names and the argument names must match the
 //! calls of the page runtime (`apps/tauriv2/runtime/index.js`).
 
+use std::sync::PoisonError;
+
 use serde_json::value::RawValue;
 
 use crate::arguments::Argument;
@@ -701,7 +703,9 @@ fn app_update_apply(
         .state::<crate::windows::Windows>()
         .update
         .lock()
-        .expect("pending update") = Some(crate::app_update::PendingStart {
+        // default: a lock that a panicking thread poisoned still holds the pending update, which the call replaces; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = Some(crate::app_update::PendingStart {
         command,
         relaunch: false,
     });

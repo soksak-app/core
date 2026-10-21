@@ -270,14 +270,17 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
-	  $(BUILD)/$(TEST) > /dev/null || { echo "FAIL: $(TEST) run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
+	  echo "START: $(TEST) run $$i of $(COUNT)"; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(TEST) || { echo "FAIL: $(TEST) run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: $(TEST) passed $(COUNT) consecutive runs"
 
-repeat-suite:
+# Each run of the suite is one run of scripts/native-tests.mjs over the suite, so every test is named, timed and limited as in test.
+repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-suite requires a positive COUNT" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
-	  $(MAKE) --no-print-directory test > /dev/null || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
+	  echo "START: test suite run $$i of $(COUNT)"; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS) || { echo "FAIL: test suite run $$i of $(COUNT) ($$(uptime))" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: test suite passed $(COUNT) consecutive runs"
 

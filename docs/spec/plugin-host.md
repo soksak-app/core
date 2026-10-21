@@ -4,7 +4,7 @@
 
 A plugin host is a process of a plugin, with a platform web view attached to the window, that runs DOM-free logic which neither a view nor a sidecar can hold; it exists only when the contract requires it. A plugin whose sidebar section must show values while none of its views is open needs its plugin host, because a [declared status source](declared-ui.md#declared-status) is the view of the active tab first and the plugin host second. A host is created only when moving its logic to a sidecar, into a view or into a state module is impossible.
 
-Plugin code does not run on the workbench page, and the main page never runs the code of a plugin host: the host page is a separate web view on the `sok://<plugin id>` origin, like the view of a view surface ([plugin processes](../plans/plugin-processes.md) rule 1). The native hosts and the workbench implement this specification; [feature status](../features.md) records its implementation. Plugin host code does not run on the workbench page; a state module is plugin code that the workbench imports ([plugins](plugins.md#plugin-state)).
+Plugin code does not run on the workbench page, and the main page never runs the code of a plugin host: the host page is a separate web view on the `sok://<plugin id>` origin, like the view of a view surface ([plugin processes](plugin-processes.md) rule 1). The native hosts and the workbench implement this specification; [feature status](../features.md) records its implementation. Plugin host code does not run on the workbench page; a state module is plugin code that the workbench imports ([plugins](plugins.md#plugin-state)).
 
 ## Declaration
 
@@ -22,7 +22,7 @@ The manifest declares the plugin host in `plugin.json` under `host`:
 | Field | Required | Meaning |
 | --- | --- | --- |
 | `page` | yes | The page of the host web view. It follows the page rules of a `view` composition: a path inside the plugin release, relative, without a leading slash, with no empty, `.` or `..` segment and no `.binary` segment, ending in `.html`, and listed in the `files` of `package.json`; `sok plugin pack` fails when the page is not listed |
-| `state` | no | The state that the host page saves across a restart of its process, as `{ "format": <positive integer>, "maxBytes": <positive integer> }`, in the form of `surface.unload` ([plugins](plugins.md#memory-saver)). Without it the host saves no state ([state](#state)) |
+| `state` | no | The state that the host page saves across a restart of its process, as `{ "format": <positive integer>, "maxBytes": <positive integer> }`, in the form of `surface.unload` ([plugins](plugins.md#memory-saver)); an object with other fields or with a value that is not a positive integer is an error that names the plugin. Without it the host saves no state ([state](#state)) |
 
 The `host` declaration requires nothing beyond the requirement of a plugin to declare `surface`, `sections` or `contributes`. The host web view of a plugin exists only while the manifest of the loaded plugin declares it.
 
@@ -69,7 +69,7 @@ The plugin host is not a surface: a request without `surface` for a name that a 
 
 ## Declared UI snapshots
 
-A plugin host pushes a [declared UI snapshot](declared-ui.md) of each declared status that it registered and answers the pull request, as a view does. The snapshot carries the plugin and no surface; the pull is the `declared-ui.snapshot.request` call and its reply is `{seq, value}` ([plugin processes](../plans/plugin-processes.md) rule 2). When the plugin host starts or starts again, the first snapshot of each status is the full value of that status, and a restarted plugin host builds its values from its saved state ([state](#state)); the workbench discards the stopped snapshot and the pending acknowledgement of the previous process ([plugin processes](../plans/plugin-processes.md) rule 2). A status that only a state module registers has no source, and a declared status that the host registered is served again by the new host process, which registers it again and pushes the full first snapshot, as the transitions of [declared status](declared-ui.md#declared-status) state; a view of the plugin that registers it becomes the source ([declared status](declared-ui.md#declared-status)).
+A plugin host pushes a [declared UI snapshot](declared-ui.md) of each declared status that it registered and answers the pull request, as a view does. The snapshot carries the plugin and no surface; the pull is the `declared-ui.snapshot.request` call and its reply is `{seq, value}` ([plugin processes](plugin-processes.md) rule 2). When the plugin host starts or starts again, the first snapshot of each status is the full value of that status, and a restarted plugin host builds its values from its saved state ([state](#state)); the workbench discards the stopped snapshot and the pending acknowledgement of the previous process ([plugin processes](plugin-processes.md) rule 2). A status that only a state module registers has no source, and a declared status that the host registered is served again by the new host process, which registers it again and pushes the full first snapshot, as the transitions of [declared status](declared-ui.md#declared-status) state; a view of the plugin that registers it becomes the source ([declared status](declared-ui.md#declared-status)).
 
 ## Restarts
 
@@ -77,7 +77,7 @@ The restart limit of a plugin host is the limit of a sidecar of standard input a
 
 While the plugin host is stopped, the host creates it again for no request: its registrations are removed, a request for one of its names returns the error of a name that is declared but not registered, and the declared sections it served stay cleared. The stop clears no failure record by itself.
 
-Only the person's open of a surface of the plugin clears the stop. When the person opens a surface of the plugin, the host clears the failure record of its plugin host, writes the event `host.trace.plugin-host.restart-reset {plugin}` at level `debug`, and creates the plugin host again. The creation of a surface of another plugin clears nothing.
+Only the person's open of a surface of the plugin clears the stop. When the person opens a surface of the plugin while its plugin host is stopped, the host clears the failure record of its plugin host, writes the event `host.trace.plugin-host.restart-reset {plugin}` at level `debug`, and creates the plugin host again in every window, as the stopped sidecar of [sidecars](sidecars.md#failure) is cleared. The open of a surface while the plugin host is not stopped clears nothing, and the creation of a surface of another plugin clears nothing.
 
 A restart restores the state from the last saved value ([state](#state)). A state that was not saved is lost, and each plugin states in its own documentation which state that is.
 
@@ -85,7 +85,7 @@ A restart restores the state from the last saved value ([state](#state)). A stat
 
 The plugin host state is the value that the host page of a plugin saves through its channel and that the host keeps for the next start of the page.
 
-- When the `host` declaration names `state`, the channel serves the calls `state.write {value}` and `state.read`. `state.write` refuses a value that is not JSON or that exceeds `maxBytes` with an error that names the plugin and the size, and it replaces the saved value of the plugin. `state.read` returns `{value}`, the last saved value, or `{value: null}` when nothing is saved. A page reads its state at its start and saves it whenever it changes, so a restart within the limit restores it.
+- When the `host` declaration names `state`, the channel serves the calls `state.write {value}` and `state.read`, which the host answers itself and forwards to no page. `state.write` refuses params without a `value` and a value whose compact JSON exceeds `maxBytes` bytes with an error that names the plugin and the size, and otherwise replaces the saved value of the plugin and returns `null`. `state.read` returns `{value}`, the last saved value, or `{value: null}` when nothing is saved. A page reads its state at its start and saves it whenever it changes, so a restart within the limit restores it.
 - The host keeps the last saved value until the application ends or the plugin is removed or disabled. The value is held in the host process and survives a restart of the plugin host page, not the end of the application.
 - The saved value carries the declared `format`. A page that reads a value of another format is refused with an error that names the plugin, the format found and the declared format, as a tab state of another format is refused ([plugins](plugins.md#memory-saver)).
 - Without the `state` field both calls are refused with an error that names the plugin, and a restart starts the page with no saved state.

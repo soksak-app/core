@@ -640,6 +640,11 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
    width when the sidebar is horizontal (docs/spec/declared-ui.md, sidebar section form). */
 .set__body[data-declared]{display:flex;flex-direction:column;gap:6px}
 .set[data-orientation=horizontal] .set__body[data-declared]{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
+/* A tree takes a full line of a horizontal section, because its width follows its deepest visible row, which changes when a branch expands
+   or collapses; in a row flow that change would reflow the sibling elements. A tree box scrolls horizontally, with a thin scrollbar, when a
+   label is wider than the box, so no label is hidden without a visible scrollbar (docs/spec/declared-ui.md, sidebar section form). */
+.set[data-orientation=horizontal] .set__body[data-declared] > .declared-tree{flex:1 1 100%;min-width:0}
+.declared-tree{overflow-x:auto;scrollbar-width:thin}
 /* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
    the tabs fill the full height of the strip. */
 .set__tabs{display:flex;flex:0 0 var(--head);height:var(--head);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;

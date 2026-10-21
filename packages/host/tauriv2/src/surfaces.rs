@@ -877,7 +877,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let surface = s.id.clone();
                 let plugin = s.plugin.clone();
                 let page = s.composition.page.clone();
-                // default: a view surface whose request carries no start values starts with the empty values.
+                // default: a view surface synced without start values injects empty ones, as wailsv3 does; values
+                // that are present were checked by validate_view_start.
                 let start = s.start.clone().unwrap_or_default();
                 exposure::on_main(window, move || {
                     documents::sync_view(
@@ -989,6 +990,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         window
             .state::<WindowSidecars>()
             .surface_opened(&plugin, &surface);
+        crate::plugin_host_channel::surface_opened(window, &plugin);
     }
     // Even if the image raster update fails after the placement was fitted, no started placement remains. A cancel
     // commits the transaction, so the title bar is restored first.

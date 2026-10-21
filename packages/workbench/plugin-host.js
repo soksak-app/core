@@ -109,6 +109,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report 
       if (!servedPluginHostCall(event.command)) {
         throw new Error(`plugin host call ${event.command} is not served`);
       }
+      // default: a call without params is a call with no arguments, as a command run without params is.
       const params = event.params ?? {};
       if (typeof params !== "object" || params === null || Array.isArray(params)) {
         throw new TypeError(`plugin host call ${event.command} requires an object`);
@@ -145,7 +146,9 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report 
     if (event.cancel === true) return;
     answer(event).then(
       (reply) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, ...reply }),
+      // default: a rejection that is not an Error replies, and a failed reply is reported, with its text.
       (error) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, error: { code: FAILED_COMMAND, message: String(error?.message ?? error) } }),
+    // default: a failed reply that is not an Error is reported with its text.
     ).catch((error) => report(new Error(`plugin host reply ${event.id}: ${error?.message ?? error}`)));
   };
   replies = bridge.on("plugin-host-reply", (event) => {
@@ -168,11 +171,13 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report 
   Promise.resolve(bridge.on("plugin-host-call", receive)).then((unsubscribe) => {
     if (closed) unsubscribe();
     else off = unsubscribe;
+  // default: a subscription failure that is not an Error is reported with its text.
   }, (error) => report(new Error(`plugin host calls: ${error?.message ?? error}`)));
   return {
     receive,
     close() {
       closed = true;
+// default: a layer closed before its subscription settled has no unsubscribe; the settle unsubscribes it.
       off?.();
       for (const subscription of [replies, ended]) Promise.resolve(subscription).then((unsubscribe) => unsubscribe(), report);
       for (const commands of layers.values()) commands.close();

@@ -373,6 +373,8 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
 
 /// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
+    app.state::<crate::plugin_host::PluginHostStates>()
+        .plugin_changed(&change.action, &change.plugin);
     for window in app.windows().values() {
         if change.action == "remove" || change.action == "disable" {
             // The host webview of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).
@@ -993,7 +995,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
 /// Creates the plugin host webview of every loaded plugin whose manifest declares host and that the window has none of.
 /// A failure of one creation is written to the application log. It runs on the main thread
 /// (docs/spec/plugin-host.md#lifetime).
-fn load_plugin_hosts(window: &Window) {
+pub(crate) fn load_plugin_hosts(window: &Window) {
     let result = load_plugin_hosts_on_main(window);
     log_failure("plugin host", result);
 }
@@ -1002,7 +1004,10 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
     let plugins = crate::plugin_host::host_plugins(&config)?;
-    let wanted = data.plugin_hosts.missing(&plugins);
+    let wanted = data.plugin_hosts.missing(
+        &plugins,
+        &window.state::<crate::plugin_host::PluginHostRestarts>(),
+    );
     if wanted.is_empty() {
         return Ok(());
     }
@@ -1026,7 +1031,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
         let host_plugin = plugin.id.clone();
         let theme = theme.clone();
         let host_window = window.clone();
-        data.plugin_host_channels.register(&plugin.id);
+        data.plugin_host_channels.register(&plugin.id, plugin.state);
         let view = crate::plugin_host::HostView {
             directory: &directory,
             folder: &folder,
@@ -1155,7 +1160,9 @@ pub(crate) fn window_close_kept(window: &Window) -> Result<(), String> {
         .state::<Windows>()
         .update
         .lock()
-        .expect("pending update") = None;
+        // default: a lock that a panicking thread poisoned still holds the pending update, which the cancellation
+        // clears; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = None;
     // A request of the operating system waits for its answer; the application does not quit, so the answer is the
     // cancellation.
     window
@@ -1173,7 +1180,9 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
     let waiting: Vec<_> = registry
         .windows
         .lock()
-        .expect("window registry")
+        // default: a lock that a panicking thread poisoned still holds the window registry, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .iter()
         .filter(|(_, context)| context.ready.load(Ordering::Relaxed))
         .map(|(label, _)| label.clone())

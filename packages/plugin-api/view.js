@@ -1,4 +1,4 @@
-// The view side of the view channel (docs/plans/plugin-processes.md, rule 4). A view page runs on sok://<plugin id>. The
+// The view side of the view channel (docs/spec/plugin-processes.md, rule 4). A view page runs on sok://<plugin id>. The
 // injected document-start script (view-start.js) posts the ready message, checks each host message, and keeps the host
 // messages until a listener attaches; this module reads them through window.sokView.attach and sends through the handler
 // of the view (the sok-view webkit message handler in the application).
@@ -152,7 +152,7 @@ export function createViewBridge({ handler, report }) {
       });
     },
   };
-  // The pull of the current value of a status (docs/plans/plugin-processes.md, rule 2 and messages and events): the reply is
+  // The pull of the current value of a status (docs/spec/plugin-processes.md, rule 2 and messages and events): the reply is
   // {seq, value}, with seq 0 and value null when the source has no value yet.
   const answerSnapshotRequest = (request) => {
     const status = request.params?.status;
@@ -170,7 +170,7 @@ export function createViewBridge({ handler, report }) {
     channel.send({ sok: 1, reply: request.id, result: value });
   };
   // A request of the page for a command of the view is answered with {sok: 1, reply: id, result} or {sok: 1, reply: id, error}.
-  // A command that the view did not register is refused with the unregistered code of the exposure errors (docs/plans/plugin-processes.md, rule 3).
+  // A command that the view did not register is refused with the unregistered code of the exposure errors (docs/spec/plugin-processes.md, rule 3).
   const answerRequest = (request) => {
     if (!Number.isInteger(request.id)) throw new TypeError("command request has no integer id");
     if (request.command === SNAPSHOT_REQUEST_COMMAND) {
@@ -200,6 +200,12 @@ export function createViewBridge({ handler, report }) {
     },
     report,
   });
+  // The exposure of the page: status and dom registrations go through the channel, and the reply to a forwarded exposure
+  // request carries the id of that request (docs/spec/exposure.md#relay, docs/spec/native-surfaces.md#view-surfaces).
+  const exposure = {
+    register: (kind, name) => calls.request("runtime.native.call", { name: "registered", payload: { kind, name } }),
+    reply: (id, payload) => calls.request("runtime.native.call", { name: "exposureReply", payload: { id, ...payload } }),
+  };
   const snapshots = createSnapshotSender({
     plugin,
     send: channel.send,
@@ -230,5 +236,5 @@ export function createViewBridge({ handler, report }) {
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots, runtime, commands };
+  return { calls, snapshots, runtime, commands, exposure };
 }

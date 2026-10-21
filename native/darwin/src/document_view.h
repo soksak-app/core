@@ -38,7 +38,7 @@ typedef void (*sp_view_message)(void *context, const char *json);
 // the installed
 // folder and the id of the plugin whose surface owns the region; sok://<plugin>/<path> serves <path> from that folder,
 // and NULL folder serves nothing. channel is NULL for a document region, which receives no core root grant
-// (docs/plans/plugin-processes.md, rule 4). A non-NULL channel is the text of the view channel script of a view
+// (docs/spec/plugin-processes.md, rule 4). A non-NULL channel is the text of the view channel script of a view
 // configuration: the script runs at document start in the page world, the sok-view handler is registered, and the
 // configuration may request sok://core/<path> from the core root resolver (sp_core_root_set_resolver). A view needs
 // folder and plugin. Returns NULL if the webview cannot be created.
@@ -57,7 +57,7 @@ void *sp_document_create(void *surface, const char *directory, const char *folde
 void *sp_plugin_host_create(void *window, const char *directory, const char *folder, const char *plugin,
     const char *channel, sp_document_changed changed, void *context);
 
-// Called when the WebContent process of a view ends, before the host closes the view (docs/plans/plugin-processes.md, rule 5). It
+// Called when the WebContent process of a view ends, before the host closes the view (docs/spec/plugin-processes.md, rule 5). It
 // is not called for a closed view. Called on the main thread.
 typedef void (*sp_view_ended)(void *context);
 
@@ -66,7 +66,7 @@ typedef void (*sp_view_ended)(void *context);
 void sp_document_set_view_ended(void *document, sp_view_ended ended, void *context);
 
 // Called when WebKit reports that the WebContent process of a view stops (responsive false) or resumes (responsive true) answering its
-// responsiveness check (docs/plans/plugin-processes.md, rule 6). The notice does not end the view or its calls. Called on the main thread.
+// responsiveness check (docs/spec/plugin-processes.md, rule 6). The notice does not end the view or its calls. Called on the main thread.
 typedef void (*sp_view_responsiveness)(void *context, bool responsive);
 
 // Sets the receiver of the responsiveness notices of a view. NULL reports none. A document region has no receiver. The caller keeps
@@ -82,7 +82,7 @@ void sp_document_add_user_script(void *document, const char *source);
 // document lives.
 void sp_document_set_view_message(void *document, sp_view_message message, void *context);
 
-// Resolves a request of the core root (docs/plans/plugin-processes.md, rule 4) of a view of plugin for the URL path path,
+// Resolves a request of the core root (docs/spec/plugin-processes.md, rule 4) of a view of plugin for the URL path path,
 // which names a file of the core host. When the path is served, it returns true and sets bytes to a copy of the file that
 // the caller releases with free, length to its size, and type to its content type that the caller releases with free. It
 // returns false for a path that is not served. Called on the main thread.

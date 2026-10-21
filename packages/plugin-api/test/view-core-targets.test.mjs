@@ -1,5 +1,5 @@
 // Checks viewCoreTargets(), which computes the core targets of the view import map from the import closure of the view entries
-// (docs/plans/plugin-processes.md, rule 4). The sources are fixtures, read through the reader that the function is given.
+// (docs/spec/plugin-processes.md, rule 4). The sources are fixtures, read through the reader that the function is given.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { viewCoreTargets } from "../index.js";

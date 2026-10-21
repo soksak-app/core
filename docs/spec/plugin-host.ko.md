@@ -4,7 +4,7 @@
 
 plugin host는 plugin의 프로세스로, 창에 붙는 platform web view에서 view나 sidecar가 담을 수 없는 DOM 없는 로직을 실행한다. 계약이 요구할 때만 존재한다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 자신의 plugin host가 필요하다. 선언된 status 출처([declared status](declared-ui.ko.md#선언된-status))는 활성 탭의 view가 첫째이고 plugin host가 둘째이기 때문이다. host는 그 로직을 sidecar, view 또는 상태 모듈로 옮기는 것이 불가능할 때만 만든다.
 
-plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](../plans/plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않는다. 상태 모듈은 workbench가 가져오는 plugin 코드다([plugins](plugins.ko.md#플러그인-상태)).
+plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않는다. 상태 모듈은 workbench가 가져오는 plugin 코드다([plugins](plugins.ko.md#플러그인-상태)).
 
 ## Declaration
 
@@ -22,7 +22,7 @@ manifest는 `plugin.json`의 `host` 아래에서 plugin host를 선언한다:
 | 필드 | 필수 | 의미 |
 | --- | --- | --- |
 | `page` | yes | host web view의 페이지. `view` composition의 페이지 규칙을 따른다. plugin release 안의 상대 경로, 선행 슬래시 없음, 빈 segment와 `.`과 `..` segment와 `.binary` segment 없음, `.html`로 끝남, `package.json`의 `files`에 등재. 페이지가 등재되지 않으면 `sok plugin pack`이 실패한다 |
-| `state` | no | host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태. `surface.unload`와 같은 꼴의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([plugins](plugins.ko.md#메모리-절약)). 이것이 없으면 host는 상태를 저장하지 않는다([state](#state)) |
+| `state` | no | host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태. `surface.unload`와 같은 꼴의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([plugins](plugins.ko.md#메모리-절약)). 다른 field를 가지거나 양의 정수가 아닌 값을 가진 object는 plugin을 naming하는 오류다. 이것이 없으면 host는 상태를 저장하지 않는다([state](#state)) |
 
 `host` 선언은 plugin이 `surface`, `sections` 또는 `contributes`를 선언해야 한다는 요구 외에 추가 요구가 없다. plugin의 host web view는 불러온 plugin의 manifest가 그것을 선언할 때만 존재한다.
 
@@ -69,7 +69,7 @@ plugin host는 surface가 아니다. plugin host가 등록한 이름에 대한 `
 
 ## Declared UI snapshots
 
-plugin host는 자신이 등록한 각 declared status의 [declared UI snapshot](declared-ui.ko.md)을 push하고 pull 요청에 답하며, view가 그러하듯 한다. snapshot은 plugin을 담고 surface를 담지 않는다. pull은 `declared-ui.snapshot.request` call이며 그 reply는 `{seq, value}`다([plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2). plugin host가 시작하거나 다시 시작할 때, 각 status의 첫 snapshot은 그 status의 전체 값이고, 다시 시작된 plugin host는 저장된 상태에서 자신의 값을 만든다([state](#state)). workbench는 이전 프로세스의 멈춘 snapshot과 대기 중인 acknowledgement를 버린다([plugin processes](../plans/plugin-processes.md) rule 2). state module만 등록하는 status에는 출처가 없고, host가 등록한 declared status는 새 host 프로세스가 다시 등록하고 전체 첫 snapshot을 push하여 다시 제공하며, 이는 [선언된 status](declared-ui.ko.md#선언된-status)의 전이를 따른다. plugin의 view가 그것을 등록하면 그 view가 출처가 된다([declared status](declared-ui.ko.md#선언된-status)).
+plugin host는 자신이 등록한 각 declared status의 [declared UI snapshot](declared-ui.ko.md)을 push하고 pull 요청에 답하며, view가 그러하듯 한다. snapshot은 plugin을 담고 surface를 담지 않는다. pull은 `declared-ui.snapshot.request` call이며 그 reply는 `{seq, value}`다([plugin 프로세스](plugin-processes.ko.md) 규칙 2). plugin host가 시작하거나 다시 시작할 때, 각 status의 첫 snapshot은 그 status의 전체 값이고, 다시 시작된 plugin host는 저장된 상태에서 자신의 값을 만든다([state](#state)). workbench는 이전 프로세스의 멈춘 snapshot과 대기 중인 acknowledgement를 버린다([plugin processes](plugin-processes.md) rule 2). state module만 등록하는 status에는 출처가 없고, host가 등록한 declared status는 새 host 프로세스가 다시 등록하고 전체 첫 snapshot을 push하여 다시 제공하며, 이는 [선언된 status](declared-ui.ko.md#선언된-status)의 전이를 따른다. plugin의 view가 그것을 등록하면 그 view가 출처가 된다([declared status](declared-ui.ko.md#선언된-status)).
 
 ## Restarts
 
@@ -77,7 +77,7 @@ plugin host의 restart limit은 표준 입력과 출력 sidecar의 한도다([si
 
 plugin host가 멈춘 동안 host는 어떤 요청으로도 그것을 다시 만들지 않는다. 그 등록은 제거되었고, 그 이름 중 하나에 대한 요청은 선언되었으나 등록되지 않은 이름의 오류를 돌려주며, 그것이 제공하던 declared section은 비어 있다. 멈춤은 그 자체로 실패 기록을 지우지 않는다.
 
-plugin의 surface를 열어 보는 사람의 행동만이 멈춤을 지운다. plugin의 surface가 열릴 때, host는 그 plugin host의 실패 기록을 지우고, event `host.trace.plugin-host.restart-reset {plugin}`을 `debug` level로 쓰고, plugin host를 다시 만든다. 다른 plugin의 surface 생성은 아무것도 지우지 않는다.
+plugin의 surface를 열어 보는 사람의 행동만이 멈춤을 지운다. plugin host가 멈춘 동안 plugin의 surface가 열릴 때, host는 [sidecars](sidecars.ko.md#실패)의 멈춘 사이드카를 지우듯 그 plugin host의 실패 기록을 지우고, event `host.trace.plugin-host.restart-reset {plugin}`을 `debug` level로 쓰고, 모든 창에서 plugin host를 다시 만든다. plugin host가 멈추지 않은 동안의 surface 열기는 아무것도 지우지 않고, 다른 plugin의 surface 생성도 아무것도 지우지 않는다.
 
 재시작은 마지막으로 저장된 값에서 상태를 복구한다([state](#state)). 저장되지 않은 상태는 잃어지며, 각 plugin은 자기 문서에 그것이 어느 상태인지 밝힌다.
 
@@ -85,7 +85,7 @@ plugin의 surface를 열어 보는 사람의 행동만이 멈춤을 지운다. p
 
 plugin host state는 plugin의 host 페이지가 자기 channel을 통해 저장하는 값이며, host는 페이지의 다음 시작을 위해 그것을 둔다.
 
-- `host` 선언이 `state`를 naming하면 channel은 `state.write {value}`와 `state.read` call을 받는다. `state.write`는 JSON이 아닌 값과 `maxBytes`를 넘는 값을 plugin과 크기를 naming하는 오류로 거부하고, plugin의 저장된 값을 대체한다. `state.read`는 마지막 저장된 값 `{value}` 또는 저장된 것이 없을 때 `{value: null}`을 돌려준다. 페이지는 시작 때 자기 상태를 읽고 변할 때마다 저장하므로, 한도 안의 재시작이 그것을 복구한다.
+- `host` 선언이 `state`를 naming하면 channel은 `state.write {value}`와 `state.read` call을 받으며, host가 직접 답하고 어느 페이지로도 보내지 않는다. `state.write`는 `value`가 없는 params와 compact JSON이 `maxBytes` byte를 넘는 값을 plugin과 크기를 naming하는 오류로 거부하고, 그 밖에는 plugin의 저장된 값을 대체하고 `null`을 돌려준다. `state.read`는 마지막 저장된 값 `{value}` 또는 저장된 것이 없을 때 `{value: null}`을 돌려준다. 페이지는 시작 때 자기 상태를 읽고 변할 때마다 저장하므로, 한도 안의 재시작이 그것을 복구한다.
 - host는 마지막 저장된 값을 application이 끝나거나 plugin이 제거되거나 사용하지 않게 될 때까지 둔다. 값은 host 프로세스에 있으므로 plugin host 페이지의 재시작은 살아남지만 application의 끝은 살아남지 않는다.
 - 저장된 값은 선언된 `format`을 담는다. 다른 format의 값을 읽는 페이지는 plugin과 발견된 format과 선언된 format을 naming하는 오류로 거부된다. 다른 format의 tab state가 거부되는 것과 같다([plugins](plugins.ko.md#메모리-절약)).
 - `state` 필드가 없으면 두 call 모두 plugin을 naming하는 오류로 거부되고, 재시작은 저장된 상태 없이 페이지를 시작한다.

@@ -28,6 +28,8 @@
  *                   registered
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
+ *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
+ *                   and relays it to the host (surface-modules.js)
  */
 export async function answerViewCall(event, options) {
   if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
@@ -75,6 +77,13 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
     case "runtime.native.call": {
       const fields = objectOf(command, params);
       if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+      // The status and dom registration of the view page (docs/spec/native-surfaces.md#view-surfaces, view exposure).
+      if (fields.name === "registered") {
+        const payload = objectOf(fields.name, fields.payload);
+        if (typeof payload.kind !== "string" || payload.kind === "") throw new TypeError(`view call ${fields.name} requires a non-empty kind`);
+        if (typeof payload.name !== "string" || payload.name === "") throw new TypeError(`view call ${fields.name} requires a non-empty name`);
+        return runtime.exposure.registered(payload);
+      }
       return runtime.native.call(fields.name, fields.payload);
     }
     case "runtime.sidecar.send": {
@@ -82,7 +91,7 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
       return runtime.sidecar.send(fields.id, fields.body, fields.cids);
     }
     case "runtime.clipboard.read":
-      // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/plans/plugin-processes.md, rule 3).
+      // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/spec/plugin-processes.md, rule 3).
       if (params !== "text" && params !== "fileURLs") throw new Error(`view call ${command} ${String(params)} is not served`);
       return runtime.clipboard.read(params);
     case "runtime.clipboard.writeText":

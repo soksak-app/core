@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use tauri::utils::assets::{AssetKey, AssetsIter, CspHash};
 use tauri::{Assets, Runtime};
@@ -86,7 +86,9 @@ impl<R: Runtime> Assets<R> for ReportingAssets<R> {
                     let first = self
                         .reported
                         .lock()
-                        .expect("the reported paths are not poisoned")
+                        // default: a lock that a panicking thread poisoned still holds the reported paths, which the
+                        // report amends; the panic hook records the panic.
+                        .unwrap_or_else(PoisonError::into_inner)
                         .insert(path.to_string());
                     if first {
                         (self.report)(path);
@@ -105,3 +107,7 @@ impl<R: Runtime> Assets<R> for ReportingAssets<R> {
         self.inner.csp_hashes(html_path)
     }
 }
+
+#[cfg(test)]
+#[path = "assets_lock_test.rs"]
+mod lock_test;

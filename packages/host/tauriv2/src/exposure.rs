@@ -400,7 +400,9 @@ impl Relay {
     pub fn pending_count(&self, target: &str) -> usize {
         self.pending
             .lock()
-            .expect("relay pending requests")
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, which are only read;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .values()
             .filter(|(waiting, _)| waiting == target)
             .count()
@@ -887,16 +889,44 @@ pub(crate) struct Register {
     name: String,
 }
 
-/// Passes the registration of a surface page to the main page. A surface page registers only with its own surface id.
+/// Verifies a registration caller: either the page view of the surface itself (surface_label is the label of that
+/// surface view), or the main page of the window registering for a surface with a view. The page of a view has no
+/// surface bridge of its own, so the main page relays its registration (docs/spec/exposure.md#relay).
+pub fn check_registration_caller(
+    caller: &str,
+    surface_label: &str,
+    requested: &str,
+    caller_is_main_page: bool,
+    has_view: bool,
+) -> Result<(), String> {
+    if caller == surface_label {
+        return Ok(());
+    }
+    if caller_is_main_page && has_view {
+        return Ok(());
+    }
+    Err(format!("{caller} cannot register for surface {requested}"))
+}
+
+/// Passes the registration of a surface page to the main page. A surface page registers only with its own surface id;
+/// the main page relays the registration of a view page (docs/spec/exposure.md#relay).
 pub(crate) fn register(webview: &Webview, request: Register) -> Result<(), String> {
     let window = webview.window();
-    if webview.label() != label_for(&window, &request.surface) {
-        return Err(format!(
-            "{} cannot register for surface {}",
-            webview.label(),
-            request.surface
-        ));
-    }
+    let caller = webview.label();
+    let caller_is_main_page = caller == window.label();
+    let has_view = caller_is_main_page && {
+        // default: a window whose data is not available holds no view, so the check below refuses the relay of
+        // the main page with its own error.
+        let data = window_data(&window).ok();
+        data.is_some_and(|data| data.documents.views().has(&request.surface))
+    };
+    check_registration_caller(
+        caller,
+        &label_for(&window, &request.surface),
+        &request.surface,
+        caller_is_main_page,
+        has_view,
+    )?;
     if !matches!(request.kind.as_str(), "status" | "command" | "dom") {
         return Err(format!("unknown exposure kind {}", request.kind));
     }

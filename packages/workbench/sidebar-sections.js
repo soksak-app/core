@@ -117,26 +117,29 @@ function mountModule(entry, context) {
  */
 function mountDeclared(entry, record) {
   const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
-  const statusId = `${owner}.${entry.section.status}`;
+  // The manifest holds the full status name in the section (validateManifest refuses a short name). The snapshot channel
+  // and the pull name the status inside the plugin (docs/spec/declared-ui.md, status mapping).
+  const statusId = entry.section.status;
+  const status = statusId.slice(owner.length + 1);
   const context = sectionContext(entry, record.context);
-  const transport = createDeclaredSource({ plugin: owner, status: entry.section.status });
+  const transport = createDeclaredSource({ plugin: owner, status });
   const declared = createDeclaredSection({
     statusId,
     body: entry.body,
     options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
-    orientation: () => record.context.orientation,
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
     // (docs/spec/declared-ui.md#declared-status).
     choose: () => chooseSource({
+// default: a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
       active: record.context.surface ?? null,
       registrants: registry.registrants("status", statusId),
       host: registry.hostRegistrant("status", statusId),
     }),
     channel: transport.channel,
     pull: transport.pull,
-    // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
-    skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status: entry.section.status, count }),
+    // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
+    skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status, count }),
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
   });
   entry.declared = declared;
@@ -170,17 +173,15 @@ function sweep() {
 }
 
 /**
- * Applies the selected tab and the collapse to the elements and the mounts. At a change of orientation a declared section checks
- * its accepted value again, and a module section remounts, because its module can be chosen by orientation.
+ * Applies the selected tab and the collapse to the elements and the mounts. At a change of orientation a module section remounts,
+ * because its module can be chosen by orientation. A declared section keeps its accepted value and its source, because no declared
+ * value depends on orientation (docs/spec/declared-ui.md).
  */
 function apply(record, orientationChanged = false) {
   const choice = choiceOf(record.sidebar);
   for (const entry of record.entries) {
     const id = entry.section.id;
-    if (orientationChanged) {
-      if (entry.declared) entry.declared.orientationChanged();
-      else unmount(entry);
-    }
+    if (orientationChanged && !entry.declared) unmount(entry);
     if (record.layout === "tabs") {
       const selected = choice.tab === id;
       entry.tab.setAttribute("aria-selected", String(selected));
@@ -209,7 +210,7 @@ export function drawSet(container, sidebar, set, context) {
   const choice = choiceOf(sidebar);
   // default: a set without sections has no tab to select (null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
-  // The orientation is not part of the key: a change of orientation keeps the elements and checks the declared sections again.
+  // The orientation is not part of the key: a change of orientation keeps the elements, and a declared section keeps its value and source.
   const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.window === true]);
   let record = drawn.get(container);
   let orientationChanged = false;

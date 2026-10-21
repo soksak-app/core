@@ -35,7 +35,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
-  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/language-repeat.test.mjs", "scripts/test/node-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
@@ -48,11 +48,11 @@ const MATRIX = [
   lane("test inventory", "js-ts", ["scripts/check-test-parity.mjs"], ["scripts/test/test-parity.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/check-host-contract.mjs"], ["scripts/test/check-host-contract.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
-lane("test runner", "js-ts", ["scripts/test-runner.mjs"], ["scripts/test/test-runner.test.mjs"]),
+lane("test runner", "js-ts", ["scripts/test-runner.mjs", "scripts/rust-tests.mjs"], ["scripts/test/test-runner.test.mjs", "scripts/test/rust-repeat.test.mjs"], { sharedTests: true }),
 lane("test discovery", "js-ts", ["scripts/test-discovery.mjs"], ["scripts/test/test-discovery.test.mjs"]),
 lane("node tests", "js-ts", ["scripts/node-tests.mjs"], ["scripts/test/node-tests.test.mjs"]),
 lane("test runs", "js-ts", ["scripts/test-runs.mjs"], ["scripts/test/test-runs.test.mjs"]),
-lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs"]),
+lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/native-tests.test.mjs", "scripts/test/native-repeat.test.mjs"]),
 lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
 lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
@@ -92,7 +92,10 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("application update check", "js-ts", ["scripts/check-app-update.mjs"], ["scripts/test/check-app-update.test.mjs"]),
-  lane("Go repeat result", "js-ts", ["scripts/go-repeat-result.mjs"], ["scripts/test/language-repeat.test.mjs"], { sharedTests: true }),
+  lane("Go repeat tests", "js-ts", ["scripts/go-tests.mjs"], ["scripts/test/go-repeat.test.mjs"]),
+  lane("Node repeat tests", "js-ts", ["scripts/node-repeat.mjs"], ["scripts/test/node-repeat.test.mjs"]),
+  lane("push gate tests", "js-ts", ["scripts/gate-tests.mjs"], ["scripts/test/gate-tests.test.mjs"]),
+  lane("benchmark runner tests", "js-ts", ["scripts/benchmarks.mjs"], ["scripts/test/benchmarks.test.mjs"]),
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
@@ -113,12 +116,12 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/src/plugin_host_test.rs", "packages/host/tauriv2/src/plugin_host_channel_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs", "packages/host/tauriv2/src/plugin_host_test.rs", "packages/host/tauriv2/src/plugin_host_channel_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go"]),
-  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs"]),
+  lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Darwin clipboard", "objective-c", ["native/darwin/src/clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { sharedTests: true }),
@@ -2197,6 +2200,40 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F224",
+    implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "declaredFiles" }],
+    tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a file the census declaration excludes is not a record of the repository" }],
+    expected: "The record check applies the census exclude of the checked repository, so a committed generated bundle is not read as a record.",
+    levels: ["unit"],
+  },
+  {
+    id: "F227",
+    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "tab.state.read" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a forwarded tab.state.read returns the tab state of its surface" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
+    ],
+    expected: "A view reads and writes the tab state of its surface through tab.state of the surface context.",
+    levels: ["unit"],
+  },
+  {
+    id: "F225",
+    implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
+    tests: [
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a manifest with a status-form section and a module-form section is checked by the form of each section" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a status-form section carries no module source, and a module violation is still reported" },
+    ],
+    expected: "The exposure check collects the module sources of a module-form section and none of a status-form section, so a manifest with a status section is checked instead of crashing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F226",
+    implementation: [{ file: "packages/workbench/sidebar-sections.js", symbol: "mountDeclared" }],
+    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section draws the value of its source, shows its rejection, and reports mounted, error, text and controls" }],
+    expected: "The workbench uses the declared full status name of a section for the registry and the display, so a declared section of a view matches its registration and draws.",
+    levels: ["unit"],
+  },
+  {
     id: "F223",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
@@ -2239,16 +2276,7 @@ const FEATURE_LINKS = [
     expected: "The source of a plugin host receives the snapshots of its plugin without a surface, acknowledges through pluginHostEvent and pulls through the request layer of the host.",
     levels: ["unit"],
   },
-  {
-    id: "F227",
-    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "answerViewCalls" }],
-    tests: [
-      { file: "packages/workbench/test/view-calls.test.mjs", id: "a forwarded tab.state.read returns the tab state of its surface" },
-      { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
-    ],
-    expected: "A view reads and writes the tab state of its surface through tab.state of the surface context.",
-    levels: ["unit"],
-  },
+
   {
     id: "F219",
     implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
@@ -3727,14 +3755,14 @@ const FEATURE_LINKS = [
   {
     id: "F93",
     implementation: [
-      { file: "Makefile", symbol: "node scripts/go-repeat-result.mjs" },
-      { file: "scripts/go-repeat-result.mjs", symbol: "has no test files built with tags" },
+      { file: "Makefile", symbol: "node scripts/go-tests.mjs" },
+      { file: "scripts/go-tests.mjs", symbol: "has no test files built with tags" },
     ],
     tests: [
-      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a package whose test files are not built" },
-      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat passes a run whose tested package passed while a support package has no test files" },
-      { file: "scripts/test/language-repeat.test.mjs", id: "go repeat fails a run in which no test matched" },
-      { file: "scripts/test/language-repeat.test.mjs", id: "rust repeat passes its features to every cargo test" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat fails a package whose test files are not built" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat passes a pattern whose tested package passed while a support package has no test files" },
+      { file: "scripts/test/go-repeat.test.mjs", id: "make go-repeat fails a run in which no test matched" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat passes its features to every cargo test call" },
     ],
     expected: "The Go and Rust repeat targets run tests behind build tags and features and fail when no test ran.",
     levels: ["unit"],

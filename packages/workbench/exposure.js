@@ -686,6 +686,7 @@ export async function connectExposure({ report, ...values }) {
     register: (plugin, kind, name) => registry.hostRegistered({ plugin, kind, name }),
     unregister: (plugin) => registry.hostUnregistered(plugin),
     timeoutOf: (name) => registry.commandTimeout(name),
+    // default: a rejection that is not an Error is reported with its text.
     report: (error) => report(`plugin host: ${String(error?.message ?? error)}`),
   });
 }

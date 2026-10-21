@@ -1,4 +1,4 @@
-//! The view join of the presentation wait (docs/plans/plugin-processes.md, rule 6): the shown view that waits for nothing joins the
+//! The view join of the presentation wait (docs/spec/plugin-processes.md, rule 6): the shown view that waits for nothing joins the
 //! open layout transaction, and a view that waits does not join again. The same cases run in the Go host.
 
 use super::views_to_join;

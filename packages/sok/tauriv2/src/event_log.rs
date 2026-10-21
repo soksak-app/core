@@ -308,7 +308,9 @@ impl EventLog {
     /// Sets the observer that the writer calls after it wrote a batch, with the path of the file and its size. It runs on the
     /// thread of the writer, so it must not wait.
     pub fn set_on_write(&self, observer: WriteObserver) {
-        *self.on_write.lock().expect("the observer of the writes") = Some(observer);
+        // default: a lock that a panicking thread poisoned still holds the write observer, which the call replaces; the
+        // panic hook records the panic.
+        *self.on_write.lock().unwrap_or_else(PoisonError::into_inner) = Some(observer);
     }
 
     /// Creates the folder (mode 0700) and the file (mode 0600, created new), writes `log.open` and starts the writer thread.
@@ -1073,7 +1075,9 @@ impl Output {
         } else if let Some(observer) = self
             .on_write
             .lock()
-            .expect("the observer of the writes")
+            // default: a lock that a panicking thread poisoned still holds the write observer, which the writer reads;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .as_ref()
         {
             observer(&file.path, file.size);
@@ -1299,3 +1303,7 @@ fn write_loop(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "event_log_lock_test.rs"]
+mod lock_test;

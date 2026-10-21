@@ -244,7 +244,7 @@
         "status": "string",
         "count": "number"
       },
-      "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/plans/plugin-processes.md, rule 2)."
+      "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/spec/plugin-processes.md, rule 2)."
     },
     "page.trace.surface.mount": {
       "layer": "page",
@@ -891,7 +891,35 @@
       "fields": {
         "sidecar": "string"
       },
-      "description": "A standard input and output sidecar failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
+      "description": "A sidecar of either transport failed for the fourth time within 300 seconds, so the host stopped its restarts (docs/spec/sidecars.md#failure)."
+    },
+    "host.plugin-host.restart": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "plugin": "string",
+        "attempt": "number"
+      },
+      "description": "The page process of the plugin host of the plugin failed below the restart limit, so the host created the plugin host again; attempt counts the restarts since the last reset (docs/spec/plugin-host.md#restarts)."
+    },
+    "host.plugin-host.restart-limit": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "plugin": "string"
+      },
+      "description": "The plugin host of the plugin failed for the fourth time within 300 seconds over every window, so the host stopped its restarts and closed it in every window (docs/spec/plugin-host.md#restarts)."
+    },
+    "host.trace.plugin-host.restart-reset": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string"
+      },
+      "description": "The person opened a surface of a plugin whose plugin host was stopped at its restart limit: the host cleared the failure record and created the plugin host again (docs/spec/plugin-host.md#restarts)."
     },
     "host.trace.sidecar.restart-reset": {
       "layer": "host",
@@ -901,7 +929,7 @@
         "sidecar": "string",
         "surface": "string"
       },
-      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record and started the sidecar (docs/spec/sidecars.md#failure)."
+      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record, and the next request starts the sidecar (docs/spec/sidecars.md#failure)."
     },
     "host.project.removal_allowed": {
       "layer": "host",
