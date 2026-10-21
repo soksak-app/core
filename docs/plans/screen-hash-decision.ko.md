@@ -171,7 +171,7 @@ terminal plugin은 npm 패키지를 `dependencies`에 선언하고, 릴리스 �
 
 형식 규칙. 바이트가 바뀌면 magic(`SKSCR1`, H1과 H4)이 바뀌므로, 이는 새 계약 태그이다. plugin과 sidecar는 같은 변경에서 pin을 함께 옮긴다. 태그가 섞인 설치 쌍은 `e2e/terminal-replay.test.mjs`에서 divergence로 보고되며, 수용되지 않는다.
 
-C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들지 않는다. 이 결정 뒤에도 core에는 terminal 내용이 남는다. H9의 `sok` segment 규칙과 그 layer 이름, `packages/plugin-api/terms.json`의 terminal 이름(150줄과 169줄), "View state"의 producer 규칙(`replay.md` 74~98줄), replay 입력 검증기(아래)가 그것이다. 각각은 이 결정이 아니라 F236-9-2 또는 F236-9-3이 처리한다.
+C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들지 않는다. 이 결정 뒤에도 core에는 terminal 내용이 남는다. `packages/plugin-api/terms.json`의 terminal 이름(150줄과 169줄), "View state"의 producer 규칙(`replay.md` 74~98줄), replay 입력 검증기(아래)가 그것이다. 각각은 이 결정이 아니라 F236-9-2 또는 F236-9-3이 처리한다.
 
 ### core가 제거하거나 일반화하는 것
 
@@ -181,7 +181,7 @@ C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들�
 - **crate가 들어올 때 sidecar에서 재배치(F236-9-2):** `vt-core/src/screen_hash.rs`는 hash의 소유자 자리에서 물러난다. 호출처는 crate로 옮긴다. `vt-core/src/protocol.rs` 1276줄(`message_cells`)과 1333줄(프레임 기록의 screen hash), `vt-alacritty/src/replay.rs` 18줄과 309줄, `vt-core/tests/screen_hash_test.rs` 8줄, `vt-core/tests/screen_message_test.rs` 6줄과 `screen-message.json`을 읽는 부분. `message_cells`는 엔진 화면의 producer로 sidecar에 남는다. `screen_hash.rs`에서 sidecar의 모듈로 옮기며, 메시지의 cell과 cursor 형식은 crate에서 온다. 폴더 `vt-core/tests/fixtures/log-contract/`의 사본 `screen-hash.json`과 `screen-message.json`(H5), 그리고 README 8~11줄("Core owns all three")은 제거한다.
 - **재배정하며 삭제하지 않음(F236-9-2):** `scripts/check-test-parity.mjs`의 F160.25와 F160.35 행(2617~2660줄). 각 행은 주인이 테스트를 보유할 때 계약이나 plugin 저장소로 옮긴다. core에 남는 테스트(`sok`의 `replay_test.go`와 `replay_test.rs`, `e2e/terminal-replay.test.mjs`)는 남는 주인에게 다시 연결한다.
 - **주인이 보유할 때 이동(F236-9-2):** "View state"의 producer 규칙(`replay.md` 74~98줄). 이들은 terminal 엔진이 그려진 화면을 계산하는 방법(선택 강조, theme에 따른 trimming, viewport 밖의 cursor)을 설명한다. 이는 바이트 정의가 아니라 생산하는 sidecar의 동작이며, sidecar의 명세가 이를 보유할 때 core를 떠난다.
-- **감독자가 정함(page frame의 layer):** layer는 `docs/spec/events.json`이 선언한 이름 `page`이다(H9). `plugin`이라고 쓴 나머지 두 곳은 F236-9-2의 필수 변경이다. `docs/spec/replay.md` 22줄(한국어 twin 포함), 그리고 `packages/sok/tauriv2/src/replay.rs` 274~280줄과 `packages/sok/wailsv3/src/replay.go` 181~187줄의 `sok` layer 검사이다. F236-9-3은 먼저 Red 테스트를 쓴다(그 출처를 `events.json`과 대조하는 검사). `terms.json` 150줄의 "replay" 용어는 terminal 문구를 잃는다.
+- **감독자가 정함(page frame의 layer, 아래 감독자 결정):** layer는 `plugin`이다. 명세 `docs/spec/replay.md` 22줄, `plugins.md` 242줄, `host-contract.md` 829줄, `logging.md` 34줄과 37줄이 그렇게 말한다. F236-9-2와 F236-9-3은 `replay.md` 22줄, `packages/sok/tauriv2/src/replay.rs` 274~280줄과 `packages/sok/wailsv3/src/replay.go` 181~187줄의 `sok` layer 검사, 어떤 layer 이름도 바꾸지 않는다. `terms.json`의 "replay" 용어는 terminal 문구를 잃는다(F236-9-3).
 - **유지, 일반적:** `sok`의 형식 검사(`replay.rs` 100줄의 `is_screen_hash`, `replay.go` 26줄의 `screenHashText`). 문자열 형식을 검사할 뿐 계산하지 않는다.
 - **유지, 설치 기반 window 검사:** `e2e/terminal-replay.test.mjs`. `AGENTS.md` 33줄이 패키지 규칙에서 이를 면제한다. 그 단언은 설치된 쌍에 대한 검사이며, G1의 (d) 관찰 검사이기도 하다.
 - **여기서 결정하지 않음, 같은 종류의 core 문제:** replay 입력 검증기(`packages/log-contract/index.js`의 `replayInputProblem`과 `replaySessionProblem`, `packages/log-contract/fixtures/replay/inputs.json`, `sok`과 sidecar의 사본). 이는 바이트 정의가 아니라 terminal의 경계(grid에 대한 선택 범위, theme이 먼저 와야 함)를 담는다. F236-9-2가 별도의 이동 목록과 gate를 준다.
@@ -195,7 +195,7 @@ C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들�
 감독자가 round 5에서 열린 채 남은 두 질문에 답했다. 두 답은 F236-9-2와 F236-9-3을 구속하며, round 6의 auditor는 이를 결정된 것으로 확인한다.
 
 - **설치된 terminal 버전.** 질문: core가 사본을 제거한 뒤에도 core를 import하는 설치된 terminal 버전이 계속 동작하는가? 답: 아니다. 구속하는 규칙(AGENTS.md 9줄)은 하위 호환 없음, 호환 계층 없음, 옛 경로 제거이며, 버전 조건이 없다. 이유: 설치된 복사본을 위해 항목을 남기면 그 규칙이 금지하는 호환 계층이 된다. 따라서 core에서 import하는 설치된 terminal 버전은 제거 뒤 동작을 멈추고 폐기되며, 새 terminal release가 계약 패키지를 복사한다(G1 (b)). 설치된 terminal 버전에 관한 질문은 G1 (e)에서 더 이상 열려 있지 않다. 감독자는 사용자에게 보이는 단절을 받아들인다. 폐기된 버전의 설치된 page는 사용자가 registry에서 새 terminal release를 설치할 때까지 멈춘다. G1 (e)는 이 답과, 사용자에게 보이는 결과를 적은 changelog 항목으로 충족된다.
-- **page frame의 layer.** page frame의 layer는 `docs/spec/events.json`이 선언한 이름 `page`이다. 명세 `replay.md` 22줄과 `sok`의 layer 검사에 있는 `plugin`은 F236-9-2에서 바꾼다. F236-9-3은 먼저 Red 테스트를 쓴다. 라운드 6은 이 답에 반하는 근거를 찾았다(라운드 6의 A1과 B1). 감독자가 F236-9-1을 닫기 전에 이를 확인하거나 바꾼다.
+- **page frame의 layer.** page frame의 layer는 `plugin`이다. `replay.md` 22줄이 그렇게 말한다. page는 `runtime.log`로 frame을 쓰고, `plugins.md` 242줄과 `host-contract.md` 829줄은 plugin의 `runtime.log` 이벤트를 layer `plugin`에 저장한다. 앞선 답 `page`는 `docs/spec/events.json`에 근거했는데, 이 catalog는 layer `page`를 `page.*` 이벤트 이름 31개에만 선언하고 frame 기록에 관해 말하지 않는다. 라운드 6은 그 근거가 frame 기록을 덮지 않음을 보였다(A1과 B1). 감독자는 답을 명세의 용어로 바꾼다. `logging.md` 34줄과 37줄도 `plugin`을 layer로 나열하므로 일치한다.
 
 ### 검토 기록
 
@@ -226,4 +226,4 @@ C2가 하지 않는 것. C2는 core를 전체적으로 규칙에 맞게 만들�
 - B2(호환 계층 없음의 근거): 반영했다. 근거는 버전 조건이 없는 AGENTS.md 9줄을 인용한다.
 - B3과 B4(소유자 선택, G1 일관성): 이의 없음.
 
-F236-9-1은 열려 있다. F236-9-2와 F236-9-3은 시작하지 않는다. 감독자가 layer 답을 확인하거나 바꾸고, 그다음 두 명의 새 auditor로 7차 검토를 한다.
+라운드 6에 대한 감독자의 답: A1과 B1을 받아들이고 layer 답을 `plugin`으로 바꾼다(감독자 결정). A2는 그 결정으로 답했다. A3, A4, B2, B3, B4는 위에 적은 대로 둔다. 라운드 6은 C2 또는 G1 (a)~(d)에서 결함을 찾지 못했다. 유일한 이의가 layer 답이었고 이제 명세의 용어이므로, F236-9-1은 다른 회차 없이 닫힌다.
