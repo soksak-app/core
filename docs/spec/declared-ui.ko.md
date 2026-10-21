@@ -32,7 +32,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 ## 요소 종류
 
-종류는 `list`, `tree`, `button`, `status-line`이다. 각 객체는 그 종류가 나열한 필드만 받는다. 나열되지 않은 필드는 거부한다.
+필드 `kind`가 각 요소의 종류를 정한다. 종류는 `list`, `tree`, `button`, `status-line`이다. 각 객체는 그 종류가 나열한 필드만 받는다. 나열되지 않은 필드는 거부한다.
 
 | 종류 | 필드 | 형 | 필수 | 한도와 뜻 |
 | --- | --- | --- | --- | --- |
@@ -133,13 +133,13 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 선언된 UI status는 선언된 UI snapshot을 거쳐 다음과 같이 그려진다.
 
 - 받아들인 선언된 UI snapshot마다 그 status의 트리를 대체한다. 요소는 key 경로로 맞춰서 workbench 상태를 유지한다.
-- workbench는 status, tree key, 루트부터의 노드 key 경로로 가지마다 펼침 상태를 보관한다. 유지된 상태는 `core.declared-ui.tree.expand`로만 설정된다.
+- workbench는 status, tree key, 루트부터의 노드 key 경로로 가지마다 펼침 상태를 보관한다. 사용자는 `core.declared-ui.tree.expand`로만 유지된 상태를 설정한다. 받아들인 값도 아래 규칙으로 유지된 상태를 설정한다.
 - 받아들인 값에서, 기준(baseline)의 `expanded`와 다른 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 가지가 '새'것인 것은 기준이 있고 기준의 그 경로에 가지가 없을 때뿐이다. 기준이 없으면 유지된 상태가 있는 가지는 그 상태를 유지하고, 유지된 상태가 없는 가지는 plugin의 값을 받는다.
 - 거부된 값은 유지된 상태를 바꾸지 않는다. `expanded` 비교의 기준은 마지막으로 받아들인 값이다. 거부와 출처 변경은 기준을 없앤다. 기준이 없으면 유지된 상태가 그 상태를 가진 모든 경로에서 이긴다.
 - 잎 노드가 된 경로는 기준이 있든 없든 유지된 상태를 잃는다. 새 가지는 기준이 있든 없든 plugin의 `expanded` 값을 받는다. 기준이 없으면 유지된 상태가 없는 가지가 새 가지다.
-- pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. `null`이 아닌 pull 응답은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
+- pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. `null`이 아닌 pull 응답은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다. 출처에서 마지막으로 받아들인 값의 `seq`보다 `seq`가 낮은 pull 응답은 버린다.
 - `selected`에는 유지된 상태가 없다. 이를 바꾸는 core 명령이 없으므로, plugin의 값이 받아들인 모든 값에 적용된다.
-- 유지된 상태는 받아들인 값에 그 경로가 없을 때, 그리고 plugin 프로세스가 다시 시작할 때 지운다. workbench는 plugin 재시작 때 이전 프로세스의 선언된 UI snapshot에 대해 유지된 상태를 버린다.
+- 유지된 상태는 받아들인 값에 그 경로가 없을 때 지운다. plugin 프로세스의 재시작은 프로세스 종료인 전이 (d)와, 새 프로세스의 등록인 전이 (a)로 처리하며, 그 출처 변경은 전이 (b)로 처리한다. 유지된 상태는 경로별로 살아남는다.
 - 유지된 상태는 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 값으로 되돌아간다.
 - 선언된 status는 plugin 프로세스가 제공한다. workbench는 그 status를 등록한 첫 출처에서 값을 읽는다. 첫째, 사이드바를 가진 카드의 활성 탭의 view이며, 그 view의 페이지가 status를 등록했을 때다. 카드 사이드바에서는 그 사이드바를 가진 카드다. 고정 창 사이드바에서는 재정의가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이며, 재정의가 적용되지 않으면 이 단계를 건너뛴다. 둘째, plugin의 plugin host이며 plugin이 host를 가질 때만 있다. 그 밖에는 누군가 등록할 때까지 section을 비운다. 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다. 출처는 프로세스와 그 프로세스의 status 등록의 짝이다. 출처가 바뀌는 것은 다른 짝이 되는 것이다. 같은 프로세스가 같은 status를 다시 등록하는 것은 바뀜이 아니다.
 
@@ -149,7 +149,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 - (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 유지된 상태는 경로별로 살아남는다([status 대응](#status-대응)).
 - (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때, 방향이 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
-- 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 트리, 기준, 유지된 상태, 오류 표시 중 어느 것도 바꾸지 않는다.
+- 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 선택된 출처가 아닌 짝에서 온 pull 응답, 또는 `seq`가 출처에서 마지막으로 받아들인 값의 `seq`보다 낮은 pull 응답은 검사 없이 버린다. 트리, 기준, 유지된 상태, 오류 표시 중 어느 것도 바꾸지 않는다.
 
 - 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
 - 선언된 UI 값은 변경 흐름이 아니다. plugin은 어떤 요소가 바뀌어도 값 전체를 다시 보낸다.
@@ -158,7 +158,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 ## 사이드바 section 형태
 
 사이드바 section은 `plugin.json`에서 정확히 두 형태 가운데 하나로 선언한다([plugin](plugins.ko.md#섹션)). `module` 또는 `status`다. section은 `id`, `name`, 둘 중 하나, 선택 필드 `fill`을 선언한다. `fill: true`는 [plugin](plugins.ko.md#섹션)이 모듈 section에 주는 뜻과 같다. 펼친 section은 다른 section이 남긴 사이드바 높이를 나누어 갖고, 본문은 그 안에서 스크롤한다.
-`status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 section은 사이드바 section이 아니라 카드 표면이 되고, 사이드바는 카드 표면을 여는 명령을 가진 `button`을 가진다.
+`status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 section은 사이드바 section이 아니라 카드 표면이 되고, 사이드바는 카드 표면을 여는 명령이 그 plugin의 명령인 `button`을 가진다.
 
 - `module`을 가진 section은 그 모듈이 그린다. workbench는 모듈을 적재하고 section 요소에서 `mount(root, context)`를 부른다.
 - `status`를 가진 section은 그 status의 선언된 UI 값으로 그린다. status는 같은 plugin의 status이어야 하며, `exposes.status`가 선언해야 한다.
@@ -200,6 +200,7 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 | `elements`가 배열이 아님 | `elements must be an array` | `/elements` |
 | 직렬화한 값이 1048576바이트보다 큼 | `exceeds 1048576 bytes` | `/` |
 | 루트 요소가 64개를 넘음 | `exceeds 64 elements` | `/elements` |
+| 요소, list 항목, tree 노드가 객체가 아님 | `<kind> must be an object` | 그 값 |
 | `kind`가 없는 요소 | `missing kind` | 그 요소 |
 | `kind`가 문자열이 아님 | `kind must be a string` | 그 요소 |
 | 표에 없는 `kind` 값 | `unknown kind <value>` | `kind` 값 |

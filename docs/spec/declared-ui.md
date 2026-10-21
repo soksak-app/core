@@ -32,7 +32,7 @@ A value is an object with the field `elements`, an array of 0 to 64 elements. Ea
 
 ## Element kinds
 
-The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts only the fields that its kind lists. An unlisted field is rejected.
+The field `kind` names each element's kind. The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts only the fields that its kind lists. An unlisted field is rejected.
 
 | Kind | Field | Type | Required | Limit and meaning |
 | --- | --- | --- | --- | --- |
@@ -133,13 +133,13 @@ Native keyboard operation uses the native `button` element, so Enter and Space r
 A declared UI status is drawn through its declared UI snapshots, as follows:
 
 - Each accepted declared UI snapshot replaces the tree of its status. Elements are matched by their path of keys to keep workbench state.
-- The workbench keeps the expanded state of each branch, keyed by the status, the tree key, and the path of node keys from the root. A kept state is set by `core.declared-ui.tree.expand` only.
+- The workbench keeps the expanded state of each branch, keyed by the status, the tree key, and the path of node keys from the root. The user sets a kept state only through `core.declared-ui.tree.expand`. An accepted value also sets a kept state by the rules below.
 - In an accepted value, a branch whose `expanded` differs from its `expanded` in the baseline takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A branch is new only when a baseline exists and the baseline has no branch at its path. With no baseline, a branch that has kept state keeps it, and a branch without kept state takes the plugin's value.
 - A rejected value does not change the kept state. The baseline of the `expanded` comparison is the last accepted value. A rejection and a change of source remove the baseline. With no baseline, the kept state wins for every path that it holds.
 - A path that is a leaf in an accepted value loses its kept state, with or without a baseline. A branch that is new takes the plugin's `expanded` value, with or without a baseline; without a baseline, a branch that has no kept state is new.
-- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot.
+- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot. A pull reply whose `seq` is lower than the `seq` of the last accepted value from its source is discarded.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
-- A kept state is removed when its path is absent from an accepted value, and when the plugin process restarts. The workbench discards the kept state on a plugin restart.
+- A kept state is removed when its path is absent from an accepted value. A plugin process restart is a process end, which removes the registrations of the old process as transition (d), followed by a registration from the new process, which chooses the source again as transition (a). That change of source is handled by transition (b), so the kept state survives by path.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
 - A declared status is served by a plugin process. The source of a status is the first of these that registered it. First, the view of the active tab of the card that holds the sidebar, when that view's page registered the status: for a card sidebar, that card; for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, as `core.sidebars` reports them, and this step is skipped when no override applies. Second, the plugin host of the plugin, when the plugin has one. Otherwise the section is cleared until one of them registers the status. A process registers a status when its page calls `page.exposure.register("status", name)`, and the registration belongs to that process. A source is the pair of a process and its registration of the status. A change of source means a different pair. A re-registration by the same process for the same status is not a change.
 
@@ -149,7 +149,7 @@ The source changes by these rules:
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
 - (c) On a change of source, the workbench pulls the current value from the new source once. The workbench pulls only from the chosen source at the load of the main page, at a change of source and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
-- A declared UI snapshot from a pair that is not the chosen source is acknowledged, then discarded without validation. It changes neither the tree, the baseline, the kept state nor the error display.
+- A declared UI snapshot from a pair that is not the chosen source is acknowledged, then discarded without validation. A pull reply from such a pair, or a pull reply whose `seq` is lower than the `seq` of the last accepted value from its source, is discarded without validation. Neither changes the tree, the baseline, the kept state nor the error display.
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
 - When the main page loads, the workbench pulls the current value of each declared status once, from the source chosen for it.
@@ -157,7 +157,7 @@ The source changes by these rules:
 ## Sidebar section form
 
 A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
-A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds a `button` whose command opens the card surface.
+A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds a `button` whose command is a command of the plugin that opens the card surface.
 
 - A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element.
 - A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares.
@@ -199,6 +199,7 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | `elements` is not an array | `elements must be an array` | `/elements` |
 | The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` | `/` |
 | More than 64 root elements | `exceeds 64 elements` | `/elements` |
+| An element, a list item, or a tree node that is not an object | `<kind> must be an object` | that value |
 | An element with no `kind` field | `missing kind` | the element |
 | A `kind` that is not a string | `kind must be a string` | the element |
 | A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
