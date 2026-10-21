@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-9: sidecar transport test의 replace fixture는 test가 끝날 때 host가 설치된 service를 위해 시작한 프로세스를 끝낸다. `a_replaced_service_starts_after_the_end_of_its_process` test는 이 프로세스가 test와 함께 끝나는지 검사한다. 변경 전 fixture에서 프로세스는 부모가 1인 `sleep 20`이었고, sleep이 끝날 때까지 test를 넘어 남았으며, assertion은 `the installed service process <pid> outlived the test`로 실패했다. 변경 후 test는 10회 중 10회 통과한다.
 - F239-3: `make rust-repeat`와 `make rust-tests-alone`은 Rust 패키지의 각 test를 test 실행 파일의 자기 프로세스(`<executable> --exact <name>`)로 `scripts/rust-tests.mjs`를 거쳐 돌린다. 각 test는 시작할 때 표시되고, 결과·경과 시간·자기 제한 `TEST_TIMEOUT`(기본 120초)을 보고한다. 제한을 넘은 test는 종료되고 `TIME`으로 보고된다. test runner는 `RUN` 줄에 제한을 표시한다. Red test(`scripts/test/rust-repeat.test.mjs`)는 변경 전 대상의 첫 `RUN` 줄에서 실패했고, 구현에서 통과한다.
 - F239-2: Tauri host의 detach test는 60초가 아니라 0.01초에 끝난다. fixture는 시작한 endpoint 프로세스를 test와 함께 종료하고, 테스트 출력을 그 프로세스에 넘겨주지 않아 runner가 프로세스의 종료를 기다리지 않는다.
 - F239-1: 플러그인 프로세스 handoff에 test 실행 규칙을 적는다. 각 항목은 소유 검사만 돌리고, 전체 모음·host contract 검사·창 검사는 활성 체크리스트가 완료될 때 한 번 돌린다. 각 test는 자기 제한을 갖고 전체 suite에는 일괄 제한이 없다(docs/plans/plugin-processes-handoff.ko.md, 항목마다).
