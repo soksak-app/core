@@ -265,6 +265,24 @@
       "allowed": []
     },
     {
+      "term": "declared element",
+      "definition": "One node of a declared UI value: a list, tree, menu, command or status line, or an item, node or menu item of one of them (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared status line",
+      "definition": "The declared element that shows one line of plain text in a declared UI value (docs/spec/declared-ui.md). It is not the status line that ends a window sidebar.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared UI schema",
+      "definition": "The schema of the value of a declared UI status, which the plugin declares in exposes.status and the receiver validates with the rules of docs/spec/declared-ui.md.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "dirty mark",
       "definition": "The mark of a status whose value changed while its snapshot was in transit; the acknowledgement of that snapshot sends the latest value of the status and clears the mark.",
       "rejected": [],

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.8-0: `docs/spec/declared-ui.md` defines the declared UI schema: the value of a declared UI status, the elements `list`, `tree`, `menu`, `command` and `status-line` with their fields and limits, their binding to declared commands and to the core commands `core.declared-ui.tree.toggle` and `core.declared-ui.menu.toggle`, their dom names, the status mapping, the rejection of a value with its reasons, and the sidebar section form with `status`. The terms declared element, declared status line and declared UI schema are added to the term list.
 - F212.7b-3-4: The workbench counts `losses.abandoned` of the plugin of a view surface for each `view-presentation-abandoned` notice. Both hosts send the notice with `{surface, reason}` at each end of a presentation wait that ended without presentation.
 - F212.7b-3-2, F212.7b-3-3: Each host joins the shown views that wait for nothing to the open layout transaction at each settled present. The native commit waits for each joined view to present, and each end without presentation (process end, hidden view, unresponsive notice) releases the join through the native abandon. The Go and Rust checks are `view_join_test` and `presentation_wait_test`.
 - F212.7b-3-1: The native layout transaction joins each view that enters the presentation wait. `surfaceLayoutJoinView` holds the commit until the view presents, and `surfaceLayoutAbandonView` ends a wait without presentation, so the next transaction starts after the commit. The check `checkViewJoin` in `surface_layout_test` covers both ends.

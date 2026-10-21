@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-0: `docs/spec/declared-ui.md`가 선언된 UI 스키마를 정한다. 선언된 UI status의 값, 필드와 한도가 있는 요소 `list`, `tree`, `menu`, `command`, `status-line`, 선언된 명령과 core 명령 `core.declared-ui.tree.toggle`, `core.declared-ui.menu.toggle`에 대한 묶기, DOM 이름, status 대응, 이유가 있는 값 거부, `status`를 가진 사이드바 section 형태다. 용어 선언된 요소, 선언된 status line, 선언된 UI 스키마를 용어 목록에 더했다.
 - F212.7b-3-4: workbench는 `view-presentation-abandoned` 알림마다 view surface의 plugin에 `losses.abandoned`를 센다. 두 host는 표시 없이 끝난 presentation wait의 각 끝에서 `{surface, reason}` 알림을 보낸다.
 - F212.7b-3-2, F212.7b-3-3: 두 host는 settled present마다 기다리는 것이 없는 표시 view를 열린 배치 트랜잭션에 참여시킨다. native commit은 참여한 각 view의 표시를 기다리며, 표시 없이 끝나는 경우(process 종료, 숨겨진 view, 응답 없음 알림)는 native abandon으로 참여를 푼다. Go와 Rust 검사는 `view_join_test`와 `presentation_wait_test`다.
 - F212.7b-3-1: native 배치 트랜잭션은 presentation wait에 들어가는 각 view를 참여시킨다. `surfaceLayoutJoinView`는 view가 표시될 때까지 commit을 잡고, `surfaceLayoutAbandonView`는 표시 없이 wait를 끝내 다음 트랜잭션이 commit 뒤에 시작하게 한다. `surface_layout_test`의 `checkViewJoin`이 두 끝을 검사한다.
