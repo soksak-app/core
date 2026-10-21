@@ -14,6 +14,7 @@ const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.surface?.
 export function recordStoredOrigins(kept, isViewTab = viewPlugin) {
   const refused = [];
   for (const card of kept.state.cards) {
+    // default: a format-1 card with no tab list has no tabs to restore.
     for (const tab of card.data?.tabs ?? []) {
       const text = restoreOrigin(tab, isViewTab(tab.plugin));
       if (text === null) continue;

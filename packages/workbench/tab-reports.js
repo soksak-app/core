@@ -142,6 +142,7 @@ export const tabLabel = (tabId) => labels.get(tabId) ?? null;
  * tab. A source tab that recorded no directory gives null, which is the value of the origin (docs/spec/projects.md#tab-origin).
  */
 export function recordOrigin(tabId, fromTabId) {
+  // default: no source tab, or no recorded directory, means a null origin directory.
   origins.set(tabId, Object.freeze({ directory: (fromTabId && directories.get(fromTabId)) ?? null }));
 }
 
@@ -167,6 +168,7 @@ export function restoreOrigin(tab, viewTab) {
 }
 
 /** The refusal text of a restored view tab, or null when it has none. */
+// default: a tab without a recorded refusal has no refusal text.
 export const viewRefusal = (tabId) => refusals.get(tabId) ?? null;
 
 /**

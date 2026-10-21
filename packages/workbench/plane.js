@@ -786,6 +786,7 @@ function addTab(cardId, plugin, params) {
   if (view.fullscreenCard !== cardId) restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
+  // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null);
   card.data.tabs.push(t);
   card.data.activeId = t.id;
@@ -803,6 +804,7 @@ function splitWith(cardId, side, plugin) {
   restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
+  // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, null, activeTab(card)?.id ?? null);
   // When there is no space, splitToward returns null. No tab was removed from the source card, so there is no state to
   // restore.

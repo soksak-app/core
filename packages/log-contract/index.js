@@ -101,6 +101,7 @@ function lineFindings(entry, catalog, channel = "other") {
   if (declared === undefined) {
     if (event.undeclared !== true) report(`event ${event.event} is not declared`);
     // An undeclared event of the layer plugin takes the class lifecycle and is gated as it; any other undeclared event has no class.
+    // default: the host contract assigns undeclared plugin events to lifecycle.
     else if (event.layer === "plugin" && event.class !== "lifecycle") report(`event ${event.event} is undeclared in the layer plugin, so it has the class lifecycle, found ${event.class ?? "none"}`);
     else if (event.layer !== "plugin" && event.class !== undefined) report(`event ${event.event} is undeclared, so it has no class, found ${event.class}`);
     return findings;
