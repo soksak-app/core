@@ -387,12 +387,12 @@ impl Notifier {
 
     /// Returns the watches of the window window.
     pub fn watches(&self, window: &str) -> Vec<Watch> {
-        // default: a lock that a panicking thread poisoned still holds the peers and their watches, which are only read; the
-        // panic hook records the panic.
         let mut watches: Vec<Watch> = self
             .0
             .peers
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers and their watches, which are only read; the
+            // panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .values()
             .flat_map(|peer| peer.watches.iter())
@@ -454,12 +454,12 @@ impl Notifier {
     }
 
     fn send<T: Serialize + ?Sized>(&self, wanted: impl Fn(&Peer) -> bool, message: &T) {
-        // default: a lock that a panicking thread poisoned still holds the peers, which are only read to select the writers; the
-        // panic hook records the panic.
         let writers: Vec<_> = self
             .0
             .peers
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers, which are only read to select the writers; the
+            // panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .values()
             .filter(|peer| wanted(peer))
@@ -803,12 +803,12 @@ impl Endpoint {
             },
         }
         self.shared.stopping.store(true, Ordering::Relaxed);
-        // default: a lock that a panicking thread poisoned still holds the connections, and each one is closed; the panic hook
-        // records the panic.
         let peers = self
             .shared
             .peers
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the connections, and each one is closed; the panic hook
+            // records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         for peer in peers.values() {
             // default: a lock that a panicking thread poisoned still holds the connection, which is closed as before; the panic
@@ -1013,11 +1013,11 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         }
     };
     let peer = shared.next.fetch_add(1, Ordering::Relaxed);
-    // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered in them; the
-    // panic hook records the panic.
     shared
         .peers
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered in them; the
+        // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .insert(
             peer,
@@ -1162,6 +1162,8 @@ fn change(
         // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the change updates in
         // order; the panic hook records the panic.
         let mut peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
+        // default: a lock that a panicking thread poisoned still holds the lines, which the change orders with the peers; the
+        // panic hook records the panic.
         let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
         let waiting = lines.get(&topic).map_or(0, |line| line.changes.len());
         if answer.is_some() && waiting >= ENDPOINT_TOPIC_CHANGES {
@@ -1352,11 +1354,11 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
     for topic in topics {
         change(shared, peer, topic, false, None, 0);
     }
-    // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is removed from them;
-    // the panic hook records the panic.
     shared
         .peers
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is removed from them;
+        // the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&peer);
 }

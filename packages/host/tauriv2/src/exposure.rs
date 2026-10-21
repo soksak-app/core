@@ -613,10 +613,10 @@ impl Relay {
     }
 
     fn forget(&self, id: u64) {
-        // default: a lock that a panicking thread poisoned still holds the waiting requests, and the request that ended is
-        // removed from them; the panic hook records the panic.
         self.pending
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, and the request that ended is
+            // removed from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&id);
     }
@@ -920,11 +920,11 @@ pub(crate) fn replay_registrations(window: &Window) {
     let Ok(data) = window_data(window) else {
         return;
     };
-    // default: a lock that a panicking thread poisoned still holds the registrations, which are only copied; the panic hook
-    // records the panic.
     let registrations = data
         .registrations
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the registrations, which are only copied; the panic hook
+        // records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     for (surface, kind, name) in registrations {
@@ -946,10 +946,10 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
         .relay
         .abandon(&label_for(window, surface));
     if let Ok(data) = window_data(window) {
-        // default: a lock that a panicking thread poisoned still holds the registrations, and the registrations of a closed
-        // surface are removed from them; the panic hook records the panic.
         data.registrations
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the registrations, and the registrations of a closed
+            // surface are removed from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .retain(|(owner, _, _)| owner != surface);
     }
@@ -1017,11 +1017,11 @@ pub(crate) fn window_closed(window: &Window) {
     state
         .relay
         .abandon_matching(|target| target == main || target.starts_with(&surfaces));
-    // default: a lock that a panicking thread poisoned still holds the record of the values sent, and the record of the closed
-    // window is removed from it; the panic hook records the panic.
     state
         .reported
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the record of the values sent, and the record of the closed
+        // window is removed from it; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .remove(&main);
 }
@@ -1219,11 +1219,11 @@ pub(crate) fn window_changed(window: &Window) {
             return;
         };
         let decision = {
-            // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides whether
-            // the value is sent; the panic hook records the panic.
             let mut reported = state
                 .reported
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the record of the values sent, which decides whether
+                // the value is sent; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             // The watch is read under the lock of the record. A watch that ends before this read clears the record after
             // this decision, so the next watch receives the next value.

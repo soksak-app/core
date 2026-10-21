@@ -156,16 +156,19 @@ pub(crate) struct Windows {
 
 /// Removes the window from the owner and window records, and returns whether no window is left while the application quits.
 fn remove_window_records(registry: &Windows, label: &str) -> bool {
-    // default: a lock that a panicking thread poisoned still holds the owner and window records, and the record of the destroyed
-    // window is removed from them; the panic hook records the panic.
-    registry
+    let mut owners = registry
         .owners
         .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .retain(|_, owner| owner != label);
+        // default: a lock that a panicking thread poisoned still holds the owner record, and the record of the destroyed window is
+        // removed from it; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    owners.retain(|_, owner| owner != label);
+    drop(owners);
     let mut windows = registry
         .windows
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the window record, and the record of the destroyed window is
+        // removed from it; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     windows.remove(label);
     windows.is_empty() && registry.quit.active()
@@ -655,23 +658,23 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     );
                 })),
             );
-            // default: a lock that a panicking thread poisoned still holds the input monitor, which is taken and removed; the panic
-            // hook records the panic.
             let monitor = context
                 .watching
                 .0
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the input monitor, which is taken and removed; the panic
+                // hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner)
                 .take();
             if let Some(monitor) = monitor {
                 log_failure("surface input", platform.unwatch_input(monitor));
             }
-            // default: a lock that a panicking thread poisoned still holds the shapes of the window, which are all destroyed; the
-            // panic hook records the panic.
             let mut shapes = context
                 .shapes
                 .0
                 .lock()
+                // default: a lock that a panicking thread poisoned still holds the shapes of the window, which are all destroyed; the
+                // panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             for (_, shape) in shapes.drain() {
                 log_failure("shape", platform.destroy_shape(shape));
