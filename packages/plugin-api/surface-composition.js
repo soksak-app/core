@@ -152,8 +152,10 @@ export async function createSurfaceCompositionController(
   viewport = null,
 ) {
   if (!declaration) throw new Error("this page has no surface composition declaration");
-  const declaredRegions = declaration.kind === "hybrid" ? declaration.regions : [];
-  const declaredOverlays = declaration.kind === "hybrid" ? declaration.overlays : [];
+  // A view declares its regions and overlays as a hybrid composition does; the composition of a view runs in the view document.
+  const native = declaration.kind === "hybrid" || declaration.kind === "view";
+  const declaredRegions = native ? declaration.regions : [];
+  const declaredOverlays = native ? declaration.overlays : [];
   sameNames(Object.keys(regions), declaredRegions.map((region) => region.name), "composition regions");
   sameNames(Object.keys(overlays), declaredOverlays, "composition overlays");
   for (const [name, element] of Object.entries({ ...regions, ...overlays })) {
@@ -234,7 +236,7 @@ export async function createSurfaceCompositionController(
       const element = regions[declared.name];
       const handle = declared.kind === "document"
         ? attachRegion(runtimePage.document, element, declared.name, view, { observe: false, report: runtimePage.surfaces.report })
-        : attachImage(runtimePage.image, element, declared.name, declared.sidecar, view, { observe: false, report: runtimePage.surfaces.report });
+        : attachImage(runtimePage.image, element, declared.name, declared.sidecar, { report: runtimePage.surfaces.report });
       internal.set(declared.name, { declared, element, handle });
     }
 

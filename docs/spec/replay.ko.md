@@ -25,7 +25,7 @@
 
 Session은 식별자가 유지되는 동안 이어지고, 그 session을 담당하는 sidecar는 다시 시작할 수 있다(process의 새 실행, 새 `boot`). `sequence`는 한 실행이 적용한 입력을 세므로 새 실행에서 1부터 다시 시작하며, 첫 입력은 theme다([보기 상태](#보기-상태)). *replay segment*(이하 segment)는 한 실행이 session에 대해 만든 층 `sidecar` event의 집합이며, 식별자는 그 실행의 event 파일(`logs/<role>-<boot>.jsonl`)의 `boot`다. [기록](#기록)의 session 규칙(theme가 먼저, 틈 없는 순번)은 각 segment 안에서 성립하고, segment는 첫 event의 시각 순서로 번호가 붙는다.
 
-- sidecar의 frame 기록은 자기 event 파일의 segment에 속한다. page의 frame 기록은 `fields.segment`를 가지며, 이는 page가 sidecar에서 받은 화면의 segment의 `boot`다([화면 message](terminal-runtime.ko.md#화면-메시지)가 순번과 함께 `segment`로 싣는다). `segment`가 없는 page frame 기록은 오류다. 순번만으로는 page가 어느 화면을 그렸는지 알 수 없기 때문이다.
+- sidecar의 frame 기록은 자기 event 파일의 segment에 속한다. page의 frame 기록은 `fields.segment`를 가지며, 이는 page가 sidecar에서 받은 화면의 segment의 `boot`다([화면 message](persistent-services.ko.md#화면-메시지)가 순번과 함께 `segment`로 싣는다). `segment`가 없는 page frame 기록은 오류다. 순번만으로는 page가 어느 화면을 그렸는지 알 수 없기 때문이다.
 - 재생은 segment마다 재생 실행 파일 process를 하나 시작하므로, 각 segment는 빈 화면에 자기 순번으로 적용되고, 그 segment의 저장된 hash만 그 segment의 재생 hash와 비교한다. sidecar의 frame 기록이 없는 segment는 아무것도 실행하지 않으며, 그 segment의 page frame 기록이 있으면 sidecar frame 기록이 없는 page frame으로서 불일치다.
 - 시각상 번갈아 나오는 두 segment의 event(두 번째 실행의 event 뒤에 첫 번째 실행의 event)는 재시작이 아니므로 재생이 거부한다.
 - *메모리.* 재생은 session의 frame 기록(각각 순번, 64자 hash, 층, segment)과 한 번에 한 segment의 event 줄을 보관한다. 파일을 두 번 읽는다. 첫 scan은 frame 기록과 segment를 모으고, 둘째 scan은 재생 중인 segment의 줄을 모아 비교한 뒤 버린다. 한 번에 보관하는 줄의 최댓값은 가장 큰 segment의 event 수이며 `ReplayResult`가 `held_lines`로 보고한다. session의 줄을 한꺼번에 보관하지 않는다.
@@ -80,7 +80,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 - **theme.** `colors`는 sidecar가 theme을 거쳐 정하는 색의 완전한 집합으로, 소문자 `#rrggbb` 값의 객체이며 최소한 `foreground`, `background`, `selection`을 가지고, 커서 색과 palette의 각 항목(`ansi0`~`ansi255`)은 더 있는 member이며 sidecar는 색을 정하는 데 쓰는 모든 항목을 적으므로 사용자 정의 palette도 재생된다. theme의 이름이 아니라 완전한 집합인 것은 사람이 정의한 theme에는 재생이 찾을 수 있는 이름이 없기 때문이다. 모든 session의 첫 입력, 곧 `sequence` 1은 theme이며, theme이 바뀔 때마다 또 하나가 온다. theme 입력은 theme만 바꾼다. 프로그램이 자기 출력 sequence로 정한 색은 엔진에 남아 엔진이 주는 우선순위를 따른다. 엔진이 행 끝에서 줄이는 빈 칸은 theme에 달려 있고 hash는 채워진 격자를 덮으므로, theme은 줄이기를 통해서도 hash에 들어간다.
 - **순서.** sidecar는 입력을 받은 순서가 아니라 엔진에 적용한 순서로, 모든 종류에 하나의 lock 아래에서 `sequence`를 정한다.
 - **커서.** hash의 커서는 viewport의 커서다. `visible`은 프로그램이 정한 표시 여부이고 커서 행이 viewport 밖이면 `false`다(그때 `row`는 `0`이고 `col`은 커서의 열). 깜박임 단계, focus, 입력기의 preedit는 hash에 들어가지 않는다.
-- **page.** sidecar가 page에 보내는 화면 메시지([터미널 런타임](terminal-runtime.ko.md#화면-메시지))는 hash가 덮는 칸(grapheme, 너비, 정해진 색, 속성), 커서, frame 기록의 `sequence`를 담고, 선택의 강조는 이미 칸에 들어 있다. page hash는 page가 *받은* 격자의 hash다. page는 메시지에서 `screenFromMessage`와 `screenHash`로 계산해 메시지의 `sequence`와 함께 저장한다. 따라서 같은 `sequence`의 sidecar hash와 다르면 host와 page 사이의 중계에서 손실이나 변경(중간에 바뀌거나 빠진 칸, 색, 속성, 커서, 크기, 또는 page가 거부한 메시지)을 찾은 것이다. 래스터 자체는 비교가 덮는 범위 밖이다. 픽셀은 sidecar가 그리므로 래스터의 결함(잘못된 글리프, 올바른 칸의 잘못된 위치)은 두 hash를 같게 두며 탐지되지 않는다.
+- **page.** sidecar가 page에 보내는 화면 메시지([영속 서비스](persistent-services.ko.md#화면-메시지))는 hash가 덮는 칸(grapheme, 너비, 정해진 색, 속성), 커서, frame 기록의 `sequence`를 담고, 선택의 강조는 이미 칸에 들어 있다. page hash는 page가 *받은* 격자의 hash다. page는 메시지에서 `screenFromMessage`와 `screenHash`로 계산해 메시지의 `sequence`와 함께 저장한다. 따라서 같은 `sequence`의 sidecar hash와 다르면 host와 page 사이의 중계에서 손실이나 변경(중간에 바뀌거나 빠진 칸, 색, 속성, 커서, 크기, 또는 page가 거부한 메시지)을 찾은 것이다. 래스터 자체는 비교가 덮는 범위 밖이다. 픽셀은 sidecar가 그리므로 래스터의 결함(잘못된 글리프, 올바른 칸의 잘못된 위치)은 두 hash를 같게 두며 탐지되지 않는다.
 - **엔진.** 스크롤백 한도와 첫 theme 입력 전의 기본 theme은 sidecar의 재생 실행 파일에 속하며, 그것은 session을 만든 엔진이기도 하다. 재생은 session을 저장한 sidecar 버전에 대해 정의된다. 다른 버전의 session은 어긋날 수 있고 그 어긋남은 그렇게 보고된다.
 - **class.** 이 입력들은 완전하게 저장하는 class `input`으로 저장한다. class `io`와 `input`을 저장하지 않는 정책은 순번에 빈틈을 남기고, 재생은 처음 빠진 `sequence`에서 session을 거부하며, session의 입력을 덮는 `log.dropped`도 버린 개수를 담은 오류로 거부한다. [logging](logging.ko.md#class와-정책)에서 class `frame`인 휠과 포인터 이동은 sidecar가 적용하기 전 page의 event이고, 적용된 변경에 대해 sidecar가 저장하는 입력은 class `input`이다. 재생 실행 파일은 모르는 종류의 `sequence`를 가진 session의 event를 거부하며 무시하지 않는다. 재생 명령은 실행 파일을 시작하기 전에 session의 입력에 `replaySessionProblem`을 실행한다.
 
@@ -98,7 +98,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 
 ## 재생 실행 파일
 
-화면을 만드는 sidecar는 `sidecar.json`에 `replay`를 선언한다([sidecars](sidecars.ko.md#선언과-시작)). 형식은 `{"role": <role>, "executable": <sidecar 안의 경로>}`다. `role`은 sidecar의 event 파일(`logs/<role>-<boot>.jsonl`)의 role이며, 그 파일의 `log.open`이 밝힌다. 실행 파일은 sidecar의 재생 엔진이다. 터미널 엔진은 거기에 있으므로 명령줄 도구는 어느 것도 이름으로 부르지 않는다.
+화면을 만드는 sidecar는 `sidecar.json`에 `replay`를 선언한다([sidecars](sidecars.ko.md#선언과-시작)). 형식은 `{"role": <role>, "executable": <sidecar 안의 경로>}`다. `role`은 sidecar의 event 파일(`logs/<role>-<boot>.jsonl`)의 role이며, 그 파일의 `log.open`이 밝힌다. 실행 파일은 sidecar의 재생 엔진이므로 명령줄 도구는 어느 것도 이름으로 부르지 않는다.
 
 도구는 sidecar 폴더에서 실행 파일을 [segment](#segment)마다 한 번 인자 없이 시작하고, 표준 입력에 role의 파일에 있는 그 segment의 층 `sidecar` event를 [질의](logging.ko.md#질의)의 순서(시각, process, `seq`)대로, 바꾸지 않고, 각각 줄바꿈으로 끝나게, `--until`이 준 `sequence`까지 쓴다. 실행 파일은 재생 입력을 `sequence` 순서로 빈 화면에 적용하고, 읽은 frame 기록마다 그 순번의 화면 hash를 담은 한 줄 `{"sequence": <n>, "hash": <hash>}`을 표준 출력에 쓴다. 입력이 끝나면 종료 상태 0으로 끝난다. 다른 종료 상태, 그 객체가 아닌 줄, 소문자 16진 64자가 아닌 hash, 줄을 받지 못한 frame 기록은 재생의 실패이며 실행 파일의 오류 글과 함께 보고한다.
 

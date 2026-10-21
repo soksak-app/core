@@ -409,3 +409,97 @@ test("a registration that the page refuses leaves no handler, so a request for i
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(posted.at(-1), { sok: 1, reply: 12, error: { code: 1002, message: "view command other.run is not registered" } });
 });
+
+/**
+ * Prepares a view page with one region element and a handler that answers each call of the view at once with the reply of its
+ * command in replies, or null. The window gets the observers and the viewport that the composition controller reads.
+ */
+function compositionSetup(t, replies) {
+  const { posted, host } = setup(t);
+  const view = globalThis.window;
+  view.document.body.innerHTML = '<div id="doc"></div><div id="picture"></div>';
+  view.ResizeObserver = class { observe() {} disconnect() {} };
+  view.requestAnimationFrame = () => 1;
+  view.cancelAnimationFrame = () => {};
+  view.visualViewport = { width: 800, height: 600 };
+  const rect = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
+  view.document.getElementById("doc").getBoundingClientRect = () => rect(10, 20, 300, 200);
+  view.document.getElementById("picture").getBoundingClientRect = () => rect(320, 20, 400, 400);
+  const handler = {
+    postMessage: (message) => {
+      posted.push(message);
+      if (typeof message.command !== "string") return;
+      const reply = replies[message.command];
+      queueMicrotask(() => host({ sok: 1, id: message.id, result: typeof reply === "function" ? reply(message.params) : reply ?? null }));
+    },
+  };
+  return { posted, host, view, handler };
+}
+
+const VIEW_DECLARATION = {
+  kind: "view",
+  regions: [
+    { name: "doc", kind: "document", input: "native" },
+    { name: "picture", kind: "image", sidecar: "@probe/sidecar", input: "dom" },
+  ],
+  overlays: [],
+};
+
+test("composition.create of a view attaches its declared regions and places one snapshot through view calls", async (t) => {
+  const { posted, host, view, handler } = compositionSetup(t, {
+    "composition.declaration": VIEW_DECLARATION,
+    "document.attach": { history: false },
+  });
+  const bridge = createViewBridge({ handler, report: () => {} });
+  assert.equal(typeof bridge.composition?.create, "function", "the view bridge has a composition");
+  const composition = await bridge.composition.create({
+    regions: { doc: view.document.getElementById("doc"), picture: view.document.getElementById("picture") },
+    overlays: {},
+  });
+  const calls = posted.filter((message) => typeof message.command === "string").map(({ command, params }) => ({ command, params }));
+  assert.deepEqual(calls, [
+    { command: "composition.declaration", params: null },
+    { command: "document.attach", params: { name: "doc" } },
+    { command: "runtime.native.on", params: { name: "document-state" } },
+    { command: "runtime.native.on", params: { name: "document-message" } },
+    { command: "runtime.native.on", params: { name: "document-stream" } },
+    { command: "image.attach", params: { name: "picture", sidecar: "@probe/sidecar" } },
+    { command: "runtime.native.on", params: { name: "image-event" } },
+    { command: "composition.place", params: {
+      regions: [
+        { name: "doc", left: 10, top: 20, right: 490, bottom: 380, visible: true },
+        { name: "picture", left: 320, top: 20, right: 80, bottom: 180, visible: true },
+      ],
+      overlays: [],
+    } },
+  ]);
+  // The region handles send their operations as view calls, and the region events arrive through runtime.native.on.
+  const doc = composition.region("doc");
+  const states = [];
+  doc.onState((state) => states.push(state));
+  host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "doc", state: { url: "https://example.test/" } } });
+  host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "other", state: { url: "https://other.test/" } } });
+  assert.deepEqual(plain(states), [{ url: "https://example.test/" }]);
+  await doc.load("https://example.test/");
+  await composition.region("picture").setCaret({ x: 1, y: 2, width: 3, height: 4 });
+  assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })), [
+    { command: "document.load", params: { name: "doc", url: "https://example.test/" } },
+    { command: "image.caret", params: { name: "picture", x: 1, y: 2, width: 3, height: 4 } },
+  ]);
+  await composition.dispose();
+  assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })).sort((a, b) => a.command.localeCompare(b.command)), [
+    { command: "document.detach", params: { name: "doc" } },
+    { command: "image.detach", params: { name: "picture" } },
+  ]);
+});
+
+test("composition.create of a view refuses elements that do not match its declaration and attaches nothing", async (t) => {
+  const { posted, view, handler } = compositionSetup(t, { "composition.declaration": VIEW_DECLARATION });
+  const bridge = createViewBridge({ handler, report: () => {} });
+  assert.equal(typeof bridge.composition?.create, "function", "the view bridge has a composition");
+  await assert.rejects(
+    bridge.composition.create({ regions: { doc: view.document.getElementById("doc") }, overlays: {} }),
+    { message: "composition regions must exactly match the surface declaration (expected doc, picture)" },
+  );
+  assert.deepEqual(posted.filter((message) => typeof message.command === "string").map((message) => message.command), ["composition.declaration"]);
+});

@@ -39,6 +39,12 @@ macro_rules! bindings {
         pub(crate) fn handler() -> impl Fn(Invoke) -> bool + Send + Sync + 'static {
             tauri::generate_handler![$($registered),*]
         }
+
+        /// Returns the names of the commands of the table, as the snake case names of their functions. The checks of the table use it.
+        #[cfg(test)]
+        pub(crate) fn command_names() -> &'static [&'static str] {
+            &[$(stringify!($registered)),*]
+        }
     };
     (@commands [$($registered:ident,)*]
         $(#[$meta:meta])* async fn $name:ident($($param:ident: $ty:ty),* $(,)?) -> $ret:ty $body:block
@@ -366,7 +372,7 @@ struct ReplaceRequest {
     sidecar: String,
 }
 
-/// Replaces the outdated persistent service of a sidecar (docs/spec/terminal-runtime.md#updates). The call waits
+/// Replaces the outdated persistent service of a sidecar (docs/spec/persistent-services.md#updates). The call waits
 /// for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result<(), String> {
@@ -375,7 +381,7 @@ fn sidecars_replace(window: Window, request: Argument<ReplaceRequest>) -> Result
 }
 
 /// Closes the sessions of the surfaces that no layout holds in the persistent sidecar service and returns the number
-/// closed (docs/spec/terminal-runtime.md). It waits for the service, so it is an async command.
+/// closed (docs/spec/persistent-services.md). It waits for the service, so it is an async command.
 #[tauri::command(async)]
 fn sidecars_retain(
     window: Window,

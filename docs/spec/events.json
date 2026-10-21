@@ -188,7 +188,7 @@
         "expected": "string",
         "found": "string"
       },
-      "description": "The first stored screen hash of a session that differs from the replayed hash: the segment (the boot of the run of the sidecar), the sequence, the layer of the stored hash (`sidecar` or `page`), the replayed hash (`none` for a page frame without a sidecar frame) and the stored hash."
+      "description": "The first stored screen hash of a session that differs from the replayed hash: the segment (the boot of the run of the sidecar), the sequence, the layer of the stored hash (`sidecar` or `plugin`), the replayed hash (`none` for a page frame without a sidecar frame) and the stored hash."
     },
     "sok.panic": {
       "layer": "sok",

@@ -272,6 +272,7 @@ fn close_persistent_owner(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
     shutdown_waiters: &ReplyWaiters,
+    connected: &AtomicBool,
     owner_closed: &Mutex<bool>,
     prefix: &str,
     deadline: std::time::Instant,
@@ -282,9 +283,38 @@ fn close_persistent_owner(
     if *closed {
         return Ok(false);
     }
-    send_close_owner_and_shutdown(outbox, close_waiters, shutdown_waiters, prefix, deadline)?;
+    send_close_owner_and_shutdown(
+        outbox,
+        close_waiters,
+        shutdown_waiters,
+        connected,
+        prefix,
+        deadline,
+    )?;
     *closed = true;
     Ok(true)
+}
+
+/// Registers the waiter of a request of a persistent connection, unless the connection is already lost. The read thread
+/// clears `connected` under the lock of the waiters before it fails them, so a waiter registered after the loss is failed
+/// here with `lost` and does not wait for its deadline.
+fn register_waiter(
+    waiters: &ReplyWaiters,
+    connected: &AtomicBool,
+    request: String,
+    tx: SyncSender<Result<(), String>>,
+    lost: &str,
+) -> Result<(), String> {
+    let mut waiters = waiters
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the waiters of the requests, which the call
+        // amends; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    if !connected.load(Ordering::Acquire) {
+        return Err(lost.to_string());
+    }
+    waiters.insert(request, tx);
+    Ok(())
 }
 
 /// Sends close-owner and shutdown through the outbox of a persistent service and waits for each answer until the
@@ -293,6 +323,7 @@ fn send_close_owner_and_shutdown(
     outbox: &SyncSender<Outgoing>,
     close_waiters: &ReplyWaiters,
     shutdown_waiters: &ReplyWaiters,
+    connected: &AtomicBool,
     prefix: &str,
     deadline: std::time::Instant,
 ) -> Result<(), CloseFailure> {
@@ -304,12 +335,17 @@ fn send_close_owner_and_shutdown(
     })?;
     bytes.push(b'\n');
     let (tx, rx) = sync_channel(1);
-    close_waiters
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the waiters of the close-owner replies, which
-        // the call amends; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(request, tx);
+    register_waiter(
+        close_waiters,
+        connected,
+        request,
+        tx,
+        "persistent service disconnected before close-owner ack",
+    )
+    .map_err(|text| CloseFailure {
+        text: format!("close owner: {text}"),
+        send_close: true,
+    })?;
     outbox
         .send(Outgoing::Line(QueuedLine::new(bytes)))
         .map_err(|error| CloseFailure {
@@ -338,12 +374,17 @@ fn send_close_owner_and_shutdown(
         serde_json::to_vec(&shutdown_line).expect("shutdown request serialization cannot fail");
     shutdown_bytes.push(b'\n');
     let (shutdown_tx, shutdown_rx) = sync_channel(1);
-    shutdown_waiters
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies, which the
-        // call amends; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(shutdown_request, shutdown_tx);
+    register_waiter(
+        shutdown_waiters,
+        connected,
+        shutdown_request,
+        shutdown_tx,
+        "persistent service disconnected before shutdown ack",
+    )
+    .map_err(|text| CloseFailure {
+        text: format!("shutdown: {text}"),
+        send_close: true,
+    })?;
     outbox
         .send(Outgoing::Line(QueuedLine::new(shutdown_bytes)))
         .map_err(|error| CloseFailure {
@@ -838,6 +879,8 @@ struct Core<O> {
     /// Called with the name of each persistent service after retain has started it and before retain reads the sessions to
     /// keep (docs/plans/plugin-host-routes.md rule 7). A check injects a session here.
     retain_sending: Option<RetainHook>,
+    /// The upper limit of the time until a persistent service answers hello. A check gives a short limit.
+    hello_timeout: Duration,
 }
 
 /// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
@@ -902,7 +945,7 @@ pub struct SidecarDeclaration {
 }
 
 /// A persistent sidecar whose running service has another version than the installed one
-/// (docs/spec/terminal-runtime.md#updates). `running` is `None` when the service sent no version; `sessions` counts
+/// (docs/spec/persistent-services.md#updates). `running` is `None` when the service sent no version; `sessions` counts
 /// the open surfaces of the application that have sent to the service.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OutdatedSidecar {
@@ -1003,6 +1046,7 @@ impl<O: Owner> Sidecars<O> {
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
                 retain_sending: None,
+                hello_timeout: HELLO_TIMEOUT,
             }),
             stop_timeout: Duration::from_secs(5),
         };
@@ -1145,6 +1189,15 @@ impl<O: Owner> Sidecars<O> {
         Arc::get_mut(&mut self.core)
             .expect("the retain hook is set before the sidecars are shared")
             .retain_sending = Some(Box::new(hook));
+        self
+    }
+
+    /// Changes the upper limit of the time until a persistent service answers hello. A check gives a short limit
+    /// instead of the default 5 seconds. Call it only right after creation, before another reference exists.
+    pub fn with_hello_timeout(mut self, limit: Duration) -> Self {
+        Arc::get_mut(&mut self.core)
+            .expect("the hello timeout is set before the sidecars are shared")
+            .hello_timeout = limit;
         self
     }
 
@@ -1574,7 +1627,7 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// The persistent sidecars whose running service has another version than the installed one, sorted by sidecar
-    /// (host.sidecars, docs/spec/terminal-runtime.md#updates).
+    /// (host.sidecars, docs/spec/persistent-services.md#updates).
     pub fn outdated(&self) -> Vec<OutdatedSidecar> {
         let state = self
             .core
@@ -1608,9 +1661,9 @@ impl<O: Owner> Sidecars<O> {
     /// Replaces the persistent service of the sidecar `name`, whose `hello` version differs from the installed
     /// version: it sends close-owner and shutdown and closes the transport, and the reconnection that follows starts
     /// the installed executable through the creation path and notifies the surfaces that sent to the sidecar
-    /// (docs/spec/terminal-runtime.md#updates). A sidecar without a running service of another version is refused.
+    /// (docs/spec/persistent-services.md#updates). A sidecar without a running service of another version is refused.
     pub fn replace(&self, name: &str) -> Result<(), String> {
-        let (outbox, close_waiters, shutdown_waiters, owner_closed) = {
+        let (outbox, close_waiters, shutdown_waiters, connected, owner_closed) = {
             let mut state = self
                 .core
                 .state
@@ -1637,6 +1690,7 @@ impl<O: Owner> Sidecars<O> {
                 process.outbox.clone(),
                 Arc::clone(&connection.close_waiters),
                 Arc::clone(&connection.shutdown_waiters),
+                Arc::clone(&connection.connected),
                 Arc::clone(&connection.owner_closed),
             );
             let running = connection.version.clone();
@@ -1666,6 +1720,7 @@ impl<O: Owner> Sidecars<O> {
             &outbox,
             &close_waiters,
             &shutdown_waiters,
+            &connected,
             &owner_closed,
             &prefix,
             deadline,
@@ -1761,7 +1816,7 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Closes the sessions of this application in each persistent service that are not in surfaces (surface, root), and
-    /// returns the number of closed sessions (docs/spec/terminal-runtime.md). A surface to which this process already
+    /// returns the number of closed sessions (docs/spec/persistent-services.md). A surface to which this process already
     /// sent a message is kept even if it is not in the list. When no service is running and there is no endpoint, there
     /// is no session, so it is skipped.
     pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
@@ -2055,6 +2110,7 @@ impl<O: Owner> Sidecars<O> {
                             &process.outbox,
                             &persistent.close_waiters,
                             &persistent.shutdown_waiters,
+                            &persistent.connected,
                             &persistent.owner_closed,
                             &prefix,
                             deadline,
@@ -2180,11 +2236,11 @@ impl<O: Owner> Sidecars<O> {
     }
 }
 
-/// The upper limit of the time until the service answers hello (docs/spec/terminal-runtime.md).
+/// The upper limit of the time until the service answers hello (docs/spec/persistent-services.md).
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The default upper limit of the time until a newly started persistent service prints its endpoint
-/// (docs/spec/terminal-runtime.md).
+/// (docs/spec/persistent-services.md).
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Reads the first line that a newly started service prints to stdout. When no line arrives within limit, it ends and
@@ -2240,7 +2296,7 @@ impl<O: Owner> Core<O> {
     /// a persistent service, so it is done with the lock released. Meanwhile requests of other sidecars do not wait,
     /// and requests of the same sidecar wait for that start to end. The second value is whether this call started it.
     /// lost is the revival of a lost persistent connection that runs this start, None for a send or a retain. While the
-    /// restart limit stops the sidecar, it starts nothing (docs/spec/terminal-runtime.md#service-transport).
+    /// restart limit stops the sidecar, it starts nothing (docs/spec/persistent-services.md#service-transport).
     fn ensure<'a>(
         core: &'a Arc<Self>,
         mut state: MutexGuard<'a, State<O>>,
@@ -2423,7 +2479,7 @@ impl<O: Owner> Core<O> {
 
     /// Connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival
     /// that runs it, or None: a revival that finds no live service counts the end of the service process before it
-    /// spawns, and the restart limit can stop it there (docs/spec/terminal-runtime.md#service-transport).
+    /// spawns, and the restart limit can stop it there (docs/spec/persistent-services.md#service-transport).
     fn start_persistent(
         core: &Arc<Self>,
         name: &str,
@@ -2555,7 +2611,7 @@ impl<O: Owner> Core<O> {
         // deadline of one day. The read thread that follows wakes up once a day with WouldBlock and waits again.
         const NO_READ_DEADLINE: Duration = Duration::from_secs(24 * 60 * 60);
         stream
-            .set_read_deadline(Some(HELLO_TIMEOUT))
+            .set_read_deadline(Some(core.hello_timeout))
             .map_err(|e| format!("sidecar {name}: hello deadline: {e}"))?;
         let hello = serde_json::json!({
             "operation": "hello",
@@ -2583,8 +2639,8 @@ impl<O: Owner> Core<O> {
                         name,
                         lost,
                         format!(
-                            "sidecar {name}: the service did not answer hello within {}s",
-                            HELLO_TIMEOUT.as_secs()
+                            "sidecar {name}: the service did not answer hello within {:?}",
+                            core.hello_timeout
                         ),
                     )
                 }
@@ -2612,7 +2668,7 @@ impl<O: Owner> Core<O> {
                 "sidecar {name}: service protocol mismatch in hello response"
             ));
         }
-        // A service that sends no version is of an earlier version (docs/spec/terminal-runtime.md#updates).
+        // A service that sends no version is of an earlier version (docs/spec/persistent-services.md#updates).
         let version = response
             .get("version")
             .and_then(|v| v.as_str())
@@ -2721,7 +2777,7 @@ impl<O: Owner> Core<O> {
             let _connection_guard = ConnectionGuard(Arc::clone(&reader_connected));
             let mut reader = BufReader::new(reader_stream);
             // None when the connection ends, and the reason when the service violates the protocol.
-            // (docs/spec/terminal-runtime.md#service-transport).
+            // (docs/spec/persistent-services.md#service-transport).
             let violation = (|| -> Option<String> {
                 let mut line = Vec::new();
                 loop {
@@ -2881,7 +2937,7 @@ impl<O: Owner> Core<O> {
                 }
                 // A connection that ends for a protocol violation while the host is not stopping is a failure of the
                 // service, which the restart limit counts here; the service keeps running
-                // (docs/spec/terminal-runtime.md#service-transport).
+                // (docs/spec/persistent-services.md#service-transport).
                 stop = violation.is_some() && !stopping && count_failure(&mut state, &sidecar);
                 let is_current = state
                     .running
@@ -2928,13 +2984,21 @@ impl<O: Owner> Core<O> {
             crate::performance::process_remove(reader_service_pid);
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
-            for (_, sender) in waiters
+            let error = Err("persistent service disconnected before shutdown ack".to_string());
+            // The flag is cleared under both waiter locks: a request registers its waiter under one of these locks only
+            // while the flag is set, so every registered waiter is failed here.
+            let mut close_waiters = waiters
                 .lock()
                 // default: a lock that a panicking thread poisoned still holds the waiters of the close-owner replies,
                 // which the reader amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .drain()
-            {
+                .unwrap_or_else(PoisonError::into_inner);
+            let mut shutdown_waiters = shutdown_waiters_for_reader
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies,
+                // which the reader amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            reader_connected.store(false, Ordering::Release);
+            for (_, sender) in close_waiters.drain() {
                 if sender.send(close_error.clone()).is_err() {
                     crate::application_log::log_info(
                         &format!("sidecar {sidecar}"),
@@ -2942,14 +3006,7 @@ impl<O: Owner> Core<O> {
                     );
                 }
             }
-            let error = Err("persistent service disconnected before shutdown ack".to_string());
-            for (_, sender) in shutdown_waiters_for_reader
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the waiters of the shutdown replies,
-                // which the reader amends; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .drain()
-            {
+            for (_, sender) in shutdown_waiters.drain() {
                 if sender.send(error.clone()).is_err() {
                     crate::application_log::log_info(
                         &format!("sidecar {sidecar}"),
@@ -2960,7 +3017,7 @@ impl<O: Owner> Core<O> {
             if let Some(reason) = violation {
                 // The service violated the protocol. The same message would end the next connection too, so it does not
                 // connect again at once, and the next send connects again through the creation path
-                // (docs/spec/terminal-runtime.md#service-transport).
+                // (docs/spec/persistent-services.md#service-transport).
                 log_error(&format!("sidecar {sidecar}"), format!("failed: {reason}"));
                 if stop {
                     report_restart_limit(&sidecar);
@@ -3013,7 +3070,7 @@ impl<O: Owner> Core<O> {
 }
 
 /// Waits until the process of the service that `replace` closed has ended, so the installed service starts after it
-/// (docs/spec/terminal-runtime.md#updates). A process that does not end within the stop timeout fails the replacement:
+/// (docs/spec/persistent-services.md#updates). A process that does not end within the stop timeout fails the replacement:
 /// the error line names the sidecar, and the reconnection that follows reaches the service that still runs, so the
 /// sidecar stays outdated.
 fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
@@ -3215,7 +3272,7 @@ struct Reply {
 }
 
 /// Checks the field types of an answer. If a type is wrong, it returns the reason to end the connection.
-/// (docs/spec/terminal-runtime.md#service-transport).
+/// (docs/spec/persistent-services.md#service-transport).
 fn reply_of(
     operation: &str,
     object: &serde_json::Map<String, serde_json::Value>,
@@ -3427,11 +3484,11 @@ impl RestartRecord {
 }
 
 /// The reason of the connection notice of a persistent service whose restarts the restart limit stopped
-/// (docs/spec/terminal-runtime.md#service-transport).
+/// (docs/spec/persistent-services.md#service-transport).
 const RESTART_LIMIT_REASON: &str = "restart limit";
 
 /// The revival of one lost persistent connection. `counted` is true once a failure of that disconnect is counted,
-/// because one disconnect counts at most one failure (docs/spec/terminal-runtime.md#service-transport).
+/// because one disconnect counts at most one failure (docs/spec/persistent-services.md#service-transport).
 #[derive(Default)]
 struct Revival {
     counted: std::cell::Cell<bool>,

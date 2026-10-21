@@ -1,5 +1,5 @@
 // The plugin page shows a persistent service that runs another version than the installed one, and its action
-// replaces the service (docs/spec/installation.md, Plugin screen; docs/spec/terminal-runtime.md#updates).
+// replaces the service (docs/spec/installation.md, Plugin screen; docs/spec/persistent-services.md#updates).
 //
 // No declared entry installs another version of a sidecar, so the check writes the installed version of the terminal
 // service into the installed.json of its own disposable configuration directory, with a copy of the installed

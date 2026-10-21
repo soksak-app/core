@@ -4,10 +4,12 @@
 // of the view (the sok-view webkit message handler in the application).
 //
 // The module imports nothing under runtime/ and no @soksak/workbench/ specifier, so the core root serves it to a view with
-// the view import map (rule 4). Its imports are the call layer and the snapshot channel, which import nothing else.
+// the view import map (rule 4). Its imports are the call layer, the snapshot channel and the composition controller with its
+// region handles, which import nothing else.
 
 import { createCalls } from "./calls.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
+import { createSurfaceCompositionController } from "./surface-composition.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
 /** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
@@ -70,7 +72,8 @@ export function createViewChannel({ handler }) {
  *     report    report(event) receives the counts and losses of the calls and the snapshots, as createCalls and createSnapshotSender
  *
  * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
- * theme, and textSize and settings with read and on each.
+ * theme, and textSize and settings with read and on each. composition.create({regions, overlays}) creates the composition of the
+ * declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
 export function createViewBridge({ handler, report }) {
   if (typeof report !== "function") throw new TypeError("createViewBridge requires the report function");
@@ -242,5 +245,45 @@ export function createViewBridge({ handler, report }) {
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots, runtime, commands, exposure };
+  // The port of the composition controller: each region operation is a view call that the main page runs with the page operations
+  // of the surface, and each region event arrives through runtime.native.on (docs/spec/native-surfaces.md#view-surfaces, regions).
+  const port = {
+    surfaces: { report: (message) => calls.request("composition.report", message) },
+    composition: {
+      // The main page numbers the placement with the composition revision of its document, so the revision of the view is not sent.
+      place: (_revision, regions, overlays) => calls.request("composition.place", { regions, overlays }),
+    },
+    document: {
+      attach: (name) => calls.request("document.attach", { name }),
+      load: (name, url) => calls.request("document.load", { name, url }),
+      zoom: (name, zoom) => calls.request("document.zoom", { name, zoom }),
+      go: (name, action, offset) => calls.request("document.go", offset === undefined ? { name, action } : { name, action, offset }),
+      post: (name, message) => calls.request("document.post", { name, message }),
+      subscribe: (name, stream) => calls.request("document.subscribe", { name, stream }),
+      unsubscribe: (name, handle) => calls.request("document.unsubscribe", { name, handle }),
+      detach: (name) => calls.request("document.detach", { name }),
+      onState: (listener) => runtime.native.on("document-state", (event) => listener(event.document, event.state)),
+      onMessage: (listener) => runtime.native.on("document-message", (event) => listener(event.document, event.message)),
+      onStream: (listener) => runtime.native.on("document-stream", (event) => listener(event.document, event.handle, event.message)),
+    },
+    image: {
+      attach: (name, sidecar) => calls.request("image.attach", { name, sidecar }),
+      focus: (name) => calls.request("image.focus", { name }),
+      caret: (name, x, y, width, height) => calls.request("image.caret", { name, x, y, width, height }),
+      text: (name, text) => calls.request("image.text", { name, text }),
+      detach: (name) => calls.request("image.detach", { name }),
+      on: (listener) => runtime.native.on("image-event", (event) => listener(event.name, event.event)),
+    },
+  };
+  const composition = {
+    /**
+     * Creates the composition of the declared regions and overlays of the view from elements of the view document, as
+     * createSurfaceComposition does for a page. The insets are measured against the viewport of the view, which is the view frame.
+     */
+    async create({ regions = {}, overlays = {} } = {}) {
+      const declaration = await calls.request("composition.declaration", null);
+      return createSurfaceCompositionController(port, declaration, { regions, overlays }, window);
+    },
+  };
+  return { calls, snapshots, runtime, commands, exposure, composition };
 }

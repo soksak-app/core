@@ -898,7 +898,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
     /// Waits until the service process `pid` ends, for at most `timeout`, and answers whether it ended. A process that
     /// does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
-    /// process that stays as a zombie, so it does not poll (docs/spec/terminal-runtime.md#updates).
+    /// process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
     fn wait_service_process_end(
         &self,
         pid: u32,

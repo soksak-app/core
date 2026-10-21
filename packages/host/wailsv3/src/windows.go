@@ -276,7 +276,7 @@ func cancelLayout(win *application.WebviewWindow) {
 	}
 }
 
-// An app DOM reload replaces all plugin documents but does not end the terminal sessions.
+// An app DOM reload replaces all plugin documents but does not end the sessions.
 func (s *Surfaces) reloadSurfaceDocuments() {
 	if err := system.CancelLayout(s.window.NativeWindow()); err != nil {
 		LogError("surface layout cancel", err)

@@ -148,7 +148,7 @@
     },
     {
       "term": "replay",
-      "definition": "Rebuilding the screen of a terminal session from its stored inputs with the replay executable of its sidecar, to compare the stored hashes of the screens (docs/spec/replay.md).",
+      "definition": "Rebuilding the screen of a session from its stored inputs with the replay executable of its sidecar, to compare the stored hashes of the screens (docs/spec/replay.md).",
       "rejected": [
         "session re-run",
         "session rerun"
@@ -167,7 +167,7 @@
     },
     {
       "term": "screen hash",
-      "definition": "The SHA-256 of the canonical bytes of a terminal screen that docs/spec/replay.md defines; a sidecar and a page store it per frame record.",
+      "definition": "The SHA-256 of the canonical bytes of a screen, a grid of cells with a cursor, that docs/spec/replay.md defines; a sidecar and a page store it per frame record.",
       "rejected": [
         "screen digest",
         "screen checksum",

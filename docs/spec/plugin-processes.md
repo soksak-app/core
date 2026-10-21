@@ -82,7 +82,7 @@ Every plugin view meets (i), (ii), (iii), (iii-b), (v) and (viii), and the resta
 5. **Restarts.** Sidecars, plugin hosts and view processes restart within the limit of pass value (vi). When the limit is exceeded, the host reports `error:` and stops.
    - A view process that ends is created again by the host, and the new view restores its state from its saved tab state. The limit is counted per view surface. After the limit is exceeded, the card shows the error through the error display, and the view is created again only when the person reopens the tab.
    - After the limit is exceeded, the next request fails with `sidecar-failure` (reason `restart limit`) without starting the process. The failure record is kept. It is cleared only when the person opens a surface that needs the process; the process then starts, and the host writes `host.trace.sidecar.restart-reset {sidecar, surface}`. A plugin host writes `host.trace.plugin-host.restart-reset {plugin}`.
-   - The restart limit of a sidecar of standard input and output is stated in [sidecars](sidecars.md#failure), and the restart rule of a persistent service in [terminal runtime](terminal-runtime.md).
+   - The restart limit of a sidecar of standard input and output is stated in [sidecars](sidecars.md#failure), and the restart rule of a persistent service in [persistent services](persistent-services.md).
    - A restart restores the state from the last saved value. A state that was not saved is lost, and each plugin states which state that is.
    - Fault injection exists only in diagnostic builds.
 6. **Presentation.** A plugin view joins the presentation wait only at the first display after a card layout change (the first change of a gesture).

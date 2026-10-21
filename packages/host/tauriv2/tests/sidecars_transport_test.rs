@@ -179,8 +179,14 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     assert_eq!(first_events.recv_timeout(STALL).unwrap().surface, "s1");
     assert_eq!(second_events.recv_timeout(STALL).unwrap().surface, "s2");
     // The hosts stop before the service ends, so no host connects again or starts the service.
+    let stopping = std::time::Instant::now();
     first.stop();
     second.stop();
+    let elapsed = stopping.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "stop of both hosts took {elapsed:?}; the service answers close-owner and shutdown, so the stop must not wait its deadline"
+    );
     service.join().unwrap();
     assert!(
         !config_directory.path().join("logs").exists(),
@@ -1400,12 +1406,19 @@ fn persistent_start_fails_when_hello_is_not_answered() {
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
-    .unwrap();
+    .unwrap()
+    .with_hello_timeout(Duration::from_millis(100));
     let (window, _events) = owner("hello", "/projects/hello");
+    let begun = std::time::Instant::now();
     let error = send_within(sidecars, window, Duration::from_secs(30)).unwrap_err();
+    let elapsed = begun.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "the start failed after {elapsed:?}; the check gives the hello a bound of 100ms, so the default bound of 5s must not apply"
+    );
     assert_eq!(
         error,
-        "sidecar @fixture/sidecar-echo: the service did not answer hello within 5s"
+        "sidecar @fixture/sidecar-echo: the service did not answer hello within 100ms"
     );
     release.send(()).unwrap();
     server.join().unwrap();
@@ -1744,10 +1757,30 @@ struct ReplaceService {
     process_id: u32,
     /// The endpoint process, which ends with the fixture when the fixture is dropped.
     process: Arc<Mutex<std::process::Child>>,
+    /// The file where the installed service writes its process identifier.
+    installed_pid_path: std::path::PathBuf,
+}
+
+impl ReplaceService {
+    /// The process identifier that the installed service wrote, or None when the host started no installed service.
+    fn installed_process_id(&self) -> Option<u32> {
+        std::fs::read_to_string(&self.installed_pid_path)
+            .ok()
+            .map(|text| {
+                text.trim()
+                    .parse()
+                    .expect("the installed service writes its process identifier")
+            })
+    }
 }
 
 impl Drop for ReplaceService {
     fn drop(&mut self) {
+        // The installed service is a process that the host started and that outlives the sessions, so the fixture ends it.
+        // The kill fails when the process has already ended, which the check of the installed service does not need to know.
+        if let Some(installed) = self.installed_process_id() {
+            let _ = unsafe { libc::kill(installed as i32, libc::SIGKILL) };
+        }
         let mut process = self.process.lock().unwrap();
         // The process may have ended after the shutdown answer already; then the kill fails and the wait returns its status.
         let _ = process.kill();
@@ -1778,8 +1811,11 @@ fn serve_replace_service(
     let process_id = process.id();
     let process = Arc::new(Mutex::new(process));
     // The executable that the host starts for the installed service announces the endpoint of this fake service.
+    // It records its process identifier, so the check can see whether the process ends with the test.
+    let installed_pid_path = executable_directory.join("installed.pid");
     let script = format!(
-        "#!/bin/sh\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        installed_pid_path.display(),
         socket_path.display()
     );
     let executable = executable_directory.join("echo");
@@ -1873,6 +1909,7 @@ fn serve_replace_service(
         first_ended,
         process_id,
         process,
+        installed_pid_path,
     }
 }
 
@@ -2009,6 +2046,16 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
         ended.saturating_duration_since(second)
     );
     sidecars.stop();
+    // The installed service is a process the host started, and it ends with the test. A process that outlives the test
+    // keeps the output of the test open, so the runner waits for it to end.
+    let installed = service
+        .installed_process_id()
+        .expect("the installed service started");
+    drop(service);
+    assert!(
+        !process_is_running(installed),
+        "the installed service process {installed} outlived the test"
+    );
 }
 
 // contract: sidecars-transport.hello.client-is-the-configuration-directory
@@ -2224,6 +2271,20 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
 /// Whether a process of this identifier exists, which signal 0 checks without sending a signal.
 fn process_is_alive(process_id: u32) -> bool {
     unsafe { libc::kill(process_id as i32, 0) == 0 }
+}
+
+/// Whether a process of this identifier runs. A zombie has ended, releases its output, and does not count.
+fn process_is_running(process_id: u32) -> bool {
+    if !process_is_alive(process_id) {
+        return false;
+    }
+    let state = std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", &process_id.to_string()])
+        .output()
+        .expect("ps lists the process state");
+    !String::from_utf8_lossy(&state.stdout)
+        .trim_start()
+        .starts_with('Z')
 }
 
 // contract: sidecars-transport.persistent.connection-events
@@ -2512,7 +2573,7 @@ fn service_runs(runs: &Path) -> usize {
     }
 }
 
-// The restart limit counts the failures of a persistent service (docs/spec/terminal-runtime.md#service-transport): three
+// The restart limit counts the failures of a persistent service (docs/spec/persistent-services.md#service-transport): three
 // failed starts that sends ran and the end of the service process that a revival finds are four failures, and a revival
 // that reattaches the live service counts none. The fourth failure stops the restarts before the revival spawns; a
 // refused send gets the connection notice, and the open of a surface of a dependent plugin clears the stop.
@@ -2682,7 +2743,7 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
 }
 
 // A connection that the reader ends for a protocol violation is a failure of the persistent service, so the fourth
-// violation within 300 seconds stops the restarts (docs/spec/terminal-runtime.md#service-transport).
+// violation within 300 seconds stops the restarts (docs/spec/persistent-services.md#service-transport).
 // contract: sidecars.restart.persistent-violation-counts
 #[test]
 fn persistent_protocol_violations_stop_the_restarts() {

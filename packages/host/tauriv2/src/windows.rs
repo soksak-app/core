@@ -67,7 +67,7 @@ pub(crate) struct WindowData {
     pub composition_revisions: Mutex<HashMap<String, u64>>,
 }
 
-/// A reload of the app DOM replaces all plugin documents but does not end the terminal sessions.
+/// A reload of the app DOM replaces all plugin documents but does not end the sessions.
 ///
 /// The sidecars that a page reload reconnects for surface: the sidecars of its image regions and the running persistent
 /// sidecars to which surface has sent, each running persistent sidecar given with the surfaces that have sent to it,
@@ -1066,11 +1066,10 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     dispose_plugin_hosts(window);
     // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
     // rule 7).
-    window
-        .state::<crate::sidecars::WindowSidecars>()
-        .close_owned(window, &|surface| {
-            crate::plugin_host_sidecar::parse_session(surface).is_some()
-        })?;
+    crate::plugin_host_sidecar::close_window_plugin_sessions(
+        &window.state::<crate::sidecars::WindowSidecars>(),
+        window,
+    )?;
     data.overlay.discard()
 }
 

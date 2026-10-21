@@ -23,6 +23,11 @@ test("sidecars must be a boolean", () => {
   assert.throws(() => validateEnvironment(environment({ starter: "" })), /starter must be a pack name/);
 });
 
+test("install names the registry pack that a build without a host installs, and rejects an empty name", () => {
+  assert.throws(() => validateEnvironment(environment({ install: "" })), /install must be a pack name/);
+  assert.equal(validateEnvironment(environment({ install: "browser-example" })).install, "browser-example");
+});
+
 test("an environment without sidecars rejects a state module that uses sidecars and accepts surfaces with sidecars", () => {
   assert.throws(() => checkReferences(environment({ sidecars: false }), [card, stateful]),
     /plugin probe has a state module that uses sidecars, which this environment cannot run/);

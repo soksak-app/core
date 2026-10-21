@@ -19,7 +19,7 @@ function configDir(t) {
 
 /** The declarations of the records that the waits of these tests read, in the form of docs/spec/events.json. */
 const CATALOG = { events: {
-  "sidecar.vt.frame": { layer: "sidecar", class: "frame", level: "debug" },
+  "sidecar.probe.frame": { layer: "sidecar", class: "frame", level: "debug" },
   "host.record.<level>": { layer: "host", class: "lifecycle", level: ["error", "info"] },
   "page.record.<level>": { layer: "page", class: "lifecycle", level: ["error", "info"] },
 } };
@@ -49,11 +49,11 @@ test("the events of the debug file of a process are read with its main file in t
     line(1, "info", "log.open") + line(2, "warn", "host.test.warned") + line(4, "error", "host.test.failed"));
   writeFileSync(join(dir, "logs", "host-1-10.debug.jsonl"),
     line(3, "info", "log.open") + line(5, "debug", "host.trace.mark", { event: "mark" }));
-  writeFileSync(join(dir, "logs", "vt-1-20.jsonl"), line(1, "info", "log.open", {}, "sidecar"));
+  writeFileSync(join(dir, "logs", "probe-1-20.jsonl"), line(1, "info", "log.open", {}, "sidecar"));
   const { events, offsets } = readEvents(dir, {});
   assert.deepEqual(events.map((event) => `${event.layer}:${event.seq}`), ["host:1", "host:2", "host:3", "host:4", "host:5", "sidecar:1"]);
-  assert.deepEqual(Object.keys(offsets).sort(), ["host-1-10.debug.jsonl", "host-1-10.jsonl", "vt-1-20.jsonl"]);
-  assert.deepEqual(Object.keys(currentEventOffsets(dir)).sort(), ["host-1-10.debug.jsonl", "host-1-10.jsonl", "vt-1-20.jsonl"]);
+  assert.deepEqual(Object.keys(offsets).sort(), ["host-1-10.debug.jsonl", "host-1-10.jsonl", "probe-1-20.jsonl"]);
+  assert.deepEqual(Object.keys(currentEventOffsets(dir)).sort(), ["host-1-10.debug.jsonl", "host-1-10.jsonl", "probe-1-20.jsonl"]);
   appendFileSync(join(dir, "logs", "host-1-10.debug.jsonl"), line(6, "debug", "host.trace.next", { event: "next" }));
   assert.deepEqual(readEventLines(dir, offsets).lines, ["debug host host.trace.next: {\"event\":\"next\"}"]);
 });
@@ -237,16 +237,17 @@ test("the event file of a sidecar is read with the files of the host, and its ev
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open", { schema: 2 }) + line(2, "error", "host.test.failed", { where: "w", text: "t" }));
   const sidecar = (seq, event, fields, extra = {}) =>
     `${JSON.stringify({ ts_us: 1791000000000000 + seq, seq, level: "info", layer: "sidecar", event, fields, ...extra })}\n`;
-  writeFileSync(join(dir, "logs", "vt-1-11.jsonl"),
-    sidecar(1, "log.open", { schema: 2, pid: 11, role: "vt", boot: "1-11" }) +
-    sidecar(2, "sidecar.vt.pty_write", { bytes: 1, hex: "0d", text: "\r", ok: true }, { session: "s-1", cids: ["b1.7"] }) +
-    sidecar(3, "sidecar.vt.request", { operation: "input", body: { surface: "tab-1" } }, { surface: "tab-1" }));
+  writeFileSync(join(dir, "logs", "probe-1-11.jsonl"),
+    sidecar(1, "log.open", { schema: 2, pid: 11, role: "probe", boot: "1-11" }) +
+    sidecar(2, "sidecar.probe.pty_write", { bytes: 1, hex: "0d", text: "\r", ok: true }, { session: "s-1", cids: ["b1.7"] }) +
+    sidecar(3, "sidecar.probe.request", { operation: "input", body: { surface: "tab-1" } }, { surface: "tab-1" }) +
+    sidecar(4, "sidecar.record.error", { text: "stderr line" }));
   const { events, errors } = readEventErrors(dir, {});
   assert.deepEqual(errors, ['error host host.test.failed: {"where":"w","text":"t"}']);
   const rows = traceRows(readEvents(dir, {}).events);
   assert.deepEqual(rows.map(({ layer, event, surface, session, cids, hex }) => ({ layer, event, surface, session, cids, hex })), [
-    { layer: "vt-core", event: "pty_write", surface: undefined, session: "s-1", cids: ["b1.7"], hex: "0d" },
-    { layer: "vt-core", event: "request", surface: "tab-1", session: undefined, cids: undefined, hex: undefined },
+    { layer: "probe-core", event: "pty_write", surface: undefined, session: "s-1", cids: ["b1.7"], hex: "0d" },
+    { layer: "probe-core", event: "request", surface: "tab-1", session: undefined, cids: undefined, hex: undefined },
   ]);
 });
 
@@ -285,8 +286,8 @@ test("untilEventLines rejects at once a record that the policy of the folder doe
   const dir = configDir(t);
   writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
   const started = performance.now();
-  await assert.rejects(untilEventLines(dir, {}, () => false, 3000, { catalog: CATALOG, records: ["sidecar.vt.frame"] }),
-    { message: "the check reads sidecar.vt.frame (class frame, level debug), which the log policy " +
+  await assert.rejects(untilEventLines(dir, {}, () => false, 3000, { catalog: CATALOG, records: ["sidecar.probe.frame"] }),
+    { message: "the check reads sidecar.probe.frame (class frame, level debug), which the log policy " +
       `{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"} of ${join(dir, "log-policy.json")} does not store` });
   assert.ok(performance.now() - started < 1000, `the rejection took ${Math.round(performance.now() - started)} ms`);
 });
