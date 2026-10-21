@@ -13,41 +13,48 @@
 ### 결정
 
 1. 영역 작업은 뷰 호출이다. 뷰는 `sok-view`로 호스트를 호출하고, 워크벤치가 각 호출에 발신 surface를 찍어 영역 기록을 거쳐 영역 호출을 보낸다.
-2. 거부: 합성, 문서, 이미지 호스트 호출의 원시 `runtime.native.call`은 거부한다. 거부 집합은 `REGION_HOST_CALLS`이며, 테스트가 `packages/workbench/surface-modules.js`와 `host.js`(및 `invoke(`, `composed(`, `hostClose(` 호출을 grep으로 찾은 `packages/workbench/` 내 다른 파일)에서 영역 종류 이름을 도출한다. 영역 종류 이름이 집합에 없으면 테스트가 실패한다.
-3. `runtime.native.on`은 `REGION_EVENTS`의 이름만 받는다. `REGION_EVENTS`는 두 브랜치 어디에도 없으며 `packages/workbench/view-calls.js`에 정의하고, 테스트가 `surface-modules.js`가 구독하는 이벤트 이름과 대조한다.
-4. 쌓임 순서(시각과 입력 모두, 위에서 아래): 뷰 DOM 오버레이, 뷰 영역, 뷰 페이지 DOM. 보이는 뷰 오버레이 사각형 안의 점은 오버레이의 DOM 뷰(`mainWebview` 또는 `webview`)로 가거나 아무에게도 가지 않는다. 영역이나 네이티브 평면으로 가지 않는다.
-5. 재적용: 이미지 영역은 로컬 `CATransaction` 안에서 insets를 다시 적용한다. 문서 영역은 배치 시점과 `NSViewFrameDidChangeNotification` 관찰자에서 다시 적용하며, 둘 다 `CATransaction` 안에서 실행되지 않는다. 명세는 문서 영역에 대해 창 트랜잭션을 주장하지 않는다.
-6. 열린 결함: 각각 소유 브랜치에서 수정과 테스트가 필요하다. 항목 4의 hit-test 결함(근거 E3), 항목 2의 거부 집합 누락(E2), 항목 3의 `REGION_EVENTS` 부재.
+2. 거부 집합. `packages/workbench/view-calls.js`의 `REGION_HOST_CALLS`는 합성, 문서, 이미지 종류의 호스트 명령 이름 집합이다. 권위 있는 원천은 호스트의 등록된 명령 표(`packages/host/tauriv2`, `packages/host/wailsv3`)다. 테스트는 그 표를 읽어 `REGION_HOST_CALLS`가 영역 종류 이름과 같음을 확인한다. 두 번째 테스트는 `packages/workbench/`에서 `invoke`, `composed`, `hostClose`, `bridge.call`, `scoped.native.call`에 전달되는 `document*`, `image*`, `composition*` 문자열 리터럴을 스캔하여 모두 집합에 있음을 확인한다.
+3. 플러그인 쪽 경로의 거부. 플러그인 쪽 `call`(`packages/workbench/host.js:235`, `surface-modules.js:77`의 `invoke`에 묶임)은 `REGION_HOST_CALLS`의 모든 이름을 영역 오류로 거부한다. 뷰와 앱 DOM surface가 모두 이 경로를 쓴다. 테스트는 집합의 각 이름으로 플러그인 쪽 `call`을 호출하고 거부를 확인한다. 이 경로로 영역 종류 이름이 `scoped.native.call`에 닿지 않는다.
+4. `runtime.native.on`은 `REGION_EVENTS`의 이름만 받는다. `REGION_EVENTS`는 `surface-modules.js`가 구독하는 네 영역 이벤트 `document-stream`(`:103`), `document-state`(`:105`), `document-message`(`:106`), `image-event`(`:115`)와 정확히 같다. 테스트는 (a) `REGION_EVENTS`가 이 네 리터럴과 같음을, (b) `runtime.native.on`이 뷰 브리지 내부 이벤트 `view-call`, `view-reply`, `view-stopped`, `view-responsiveness`, `view-presentation-abandoned`(`surface-modules.js:320-507`)를 거부함을 확인한다.
+5. 쌓임 순서(시각과 입력 모두, 위에서 아래): 뷰 DOM 오버레이, 뷰 영역, 뷰 페이지 DOM. 보이는 뷰 오버레이 사각형 안의 점은 오버레이의 DOM 뷰(`webview` 또는 `mainWebview`)로 가거나 아무에게도 가지 않는다. 영역이나 네이티브 평면으로 가지 않는다.
+6. 재적용: 이미지 영역은 로컬 `CATransaction` 안에서 insets를 다시 적용한다. 문서 영역은 배치 시점과 `NSViewFrameDidChangeNotification` 관찰자에서 다시 적용하며, 둘 다 `CATransaction` 안에서 실행되지 않는다. 명세는 문서 영역에 대해 창 트랜잭션을 주장하지 않는다.
+7. hit-test 소유자. hit-test 수정의 소유자는 하나, `fix/view-region-close-F228-5`다. 이 브랜치가 이미 `hitTest`(`webview_geometry.m:283-300`)를 고쳐 쓴다. `feat/view-region-F228`은 `hitTest`를 바꾸지 않는다. 그 버전은 fix 브랜치가 병합될 때 대체되며, feat 브랜치는 자체 `hitTest` 변경을 병합하지 않는다.
 
 ### 이유
 
-스탬프된 뷰 호출을 거친 라우팅은 revision, 영역 수명, 영역 기록을 영역에 닿는 유일한 경로로 만든다. 원시 호스트 호출은 이를 건너뛴다(`view-calls.js:74-76`, feat). 이것은 그 근거를 가진 워크벤치 선택이지, 플러그인 프로세스 규칙 9의 결과가 아니다. 규칙 9는 봉투 검사만 제공한다.
+스탬프된 뷰 호출을 거친 라우팅은 revision, 영역 수명, 영역 기록을 영역에 닿는 유일한 경로로 만든다. 원시 호스트 호출은 이를 건너뛴다(feat `view-calls.js:74-76`). 이것은 그 근거를 가진 워크벤치 선택이지, 플러그인 프로세스 규칙 9의 결과가 아니다. 규칙 9는 봉투 검사만 제공한다.
 
 쌓임은 표면 합성 계약을 따른다. "선언된 플러그인 오버레이와 워크벤치 메뉴/대화상자는 네이티브 문서 영역 위에서 입력을 소유한다"(main `docs/spec/surface-composition.md:24`), "네이티브 콘텐츠는 오버레이의 점을 소유할 수 없다"(`:28`). 영역은 네이티브 콘텐츠이므로 뷰 오버레이 아래에 놓인다.
 
 ### 근거
 
-- E1(라우팅). feat의 `packages/workbench/view-calls.js` `runtime.native.call` 분기(`:105-118`)는 `REGION_HOST_CALLS`(`:78-83`)의 이름을 "뷰는 합성을 통해서만 영역을 다룬다"라는 메시지로 거부한다.
-- E2(거부 집합 누락). feat의 `packages/workbench/surface-modules.js`에서 영역 종류 호출이 나온다. `invoke`는 `:92`부터 `:113`까지(`documentAttach`, `documentLoad`, `documentZoom`, `documentGo`, `documentSubscribe`, `documentUnsubscribe`, `documentPost`, `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`), `composed`는 `:110`(`imagePlace`)과 `:131`(`compositionPlace`), `invoke`는 `:120`(`compositionDeclare`). `packages/workbench/host.js:462-463`은 `documentQuery`와 `documentInteractionState`를 호출한다. `REGION_HOST_CALLS`(`view-calls.js:78-83`)에는 이 둘이 없다. `documentWebviews`는 호스트 호출이 아니다. `host.js`만 읽는 테스트는 18개 중 16개를 놓친다.
-- E3(hit test, 두 누출). feat의 `native/darwin/src/webview_geometry.m`, `SPSurfaceHost hitTest`(`:283-303`). 보이는 오버레이 사각형 안의 점에 대해: (a) `self.mainWebview`가 설정되면 메서드가 nil을 반환하여(`:287`) 오버레이 DOM이 그 점을 받지 못한다. (b) 오버레이 DOM이 nil을 반환하거나(`:288-292`, 투명한 점), `self.webview`가 없거나 숨겨져 있으면 루프가 반환하지 않고 점이 `self.nativePlane`으로 떨어진다(`:294-296`). 명세(`surface-composition.md:28`)는 둘 다 금지한다. `fix/view-region-close-F228-5`에서는 비뷰 분기가 `document_view.m:1070` 뒤에 네이티브 평면에 붙고(`webview_geometry.m:764`의 `sp_surface_place_view`), `hitTest`는 `self.webview`를 먼저 확인한다. 결함은 feat에만 기록한다.
-- E4(마스크 경로). `packages/host/tauriv2/src/composition.rs:315-325` → `platform/darwin/webview.rs:196-208` → `webview_geometry.m:761-771`(feat) / `:783-793`(fix) → `domOverlays` setter → `applyOverlayMask`. 마스크 경로는 존재한다. 통과 전에 뷰 오버레이가 마스크에 도달함을 단위 테스트로 증명해야 한다.
-- E5(재적용). `image_region.m`의 `applyInsetsNow`는 `:363-368`에 있으며 `CATransaction`(`:371-372`) 안에서 실행되고 `:1244-1249`에서 호출된다. `document_view.m:1068`(feat)과 `:1076`(fix)은 문서 영역을 네이티브 평면에 붙이고, `:1266`(feat)과 `:1275`(fix)은 배치 시점에 insets를 적용하며, `:898-938`은 프레임 변경 관찰자에서 다시 적용한다. 문서 경로를 감싸는 `CATransaction`은 없다.
-- E6(명세). main `docs/spec/native-surfaces.md:102`는 영역에 대해 "같은 네이티브 트랜잭션에서"라고 쓰며, 이는 이미지 영역에만 참이다(E5).
-- E7(거부 집합 범위). 거부 대상은 호스트 호출 이름이다. `runtime.native.on` 구독 이름은 `REGION_EVENTS`로 따로 검사한다(결정 항목 3).
+- E1(라우팅). feat의 `packages/workbench/view-calls.js` `runtime.native.call` 분기(`:105-118`)는 `REGION_HOST_CALLS`(`:78-83`)의 이름을 "뷰는 합성을 통해서만 영역을 다룬다" 메시지로 거부한다.
+- E2(거부 집합 누락). feat의 `surface-modules.js`에서 영역 종류 호출이 나온다. `invoke`는 `:92`부터 `:113`까지(`documentAttach`, `documentLoad`, `documentZoom`, `documentGo`, `documentSubscribe`, `documentUnsubscribe`, `documentPost`, `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`), `composed`는 `:110`(`imagePlace`)과 `:131`(`compositionPlace`), `invoke`는 `:120`(`compositionDeclare`). `host.js:462-463`은 `bridge.call("documentQuery")`와 `bridge.call("documentInteractionState")`를 호출한다. `REGION_HOST_CALLS`(`view-calls.js:78-83`)에는 둘 다 없다. `invoke(`만 grep하면 놓치므로 결정 항목 2의 리터럴 스캔에 `bridge.call`을 포함한다.
+- E3(플러그인 쪽 경로). `host.js:235`는 `call: invoke`를 노출하고, `surface-modules.js:77`은 `invoke`를 `scoped.native.call(name, payload)`로 정의한다. 변수로 전달된 이름은 리터럴 스캔으로 덮이지 않으므로 결정 항목 3의 실행 시 거부가 맡는다.
+- E4(hit test, fix 브랜치). `fix/view-region-close-F228-5:native/darwin/src/webview_geometry.m:283-300`. 보이는 오버레이 사각형 안의 점에 대해, `self.webview`가 보이고 그 DOM 히트가 nil이 아니면 반환한다(`:292-293`). `self.mainWebview`가 설정되면 nil을 반환한다(`:296`). 그 밖에는 루프가 `continue`하고(`:287`) 점이 `self.nativePlane`으로 떨어진다(`:298-300`). 따라서 `webview`와 `mainWebview`가 없는 DOM 전용 surface에서 보이는 오버레이의 점은 네이티브 콘텐츠가 받는다. 명세(`surface-composition.md:28`)가 금지하는 상태다. fix 브랜치 주석(`:289-290`)은 하이브리드 앱 DOM이 "오버레이 아래 입력을 유지한다"고 쓰는데, 네이티브 평면이 그 입력을 받는 것이 결함이다.
+- E5(hit test, feat 브랜치). `feat/view-region-F228:webview_geometry.m:283-303`은 `mainWebview`가 설정되면 보이는 오버레이 아래에서 nil을 반환하고(`:287`), `webview`가 nil이거나 그 DOM 히트가 nil이면 네이티브 평면으로 떨어진다(`:288-299`). 이 버전은 E4의 브랜치로 대체된다(결정 항목 7).
+- E6(마스크 경로). `packages/host/tauriv2/src/composition.rs:315-325` → `platform/darwin/webview.rs:196-208` → `webview_geometry.m:761-771`(feat) / `:783-793`(fix) → `domOverlays` setter → `applyOverlayMask`. 마스크 경로는 존재한다. 통과 전에 뷰 오버레이가 마스크에 도달함을 단위 테스트로 증명해야 한다.
+- E7(재적용). `image_region.m`의 `applyInsetsNow`는 `:363-368`에 있으며 `CATransaction`(`:371-372`) 안에서 실행되고 `:1244-1249`에서 호출된다. `document_view.m:1068`(feat)과 `:1076`(fix)은 문서 영역을 네이티브 평면에 붙이고, `:1266`(feat)과 `:1275`(fix)은 배치 시점에 insets를 적용하며, `:898-938`은 프레임 변경 관찰자에서 다시 적용한다. 문서 경로를 감싸는 `CATransaction`은 없다.
+- E8(명세). main `docs/spec/native-surfaces.md:102`는 영역에 대해 "같은 네이티브 트랜잭션에서"라고 쓰며, 이는 이미지 영역에만 참이다(E7).
 
 ### 필요한 변경
 
-- 소유 `feat/view-region-F228`: `REGION_HOST_CALLS`에 `documentQuery`와 `documentInteractionState`를 추가한다. 결정 항목 2가 명시한 워크벤치 모듈을 스캔하여 모든 영역 종류 이름이 집합에 있음을 확인하는 테스트를 추가한다(현재 집합에서 Red).
-- 소유 `feat/view-region-F228`: `view-calls.js`에 `REGION_EVENTS`를 정의하고, `runtime.native.on`이 그 이름을 검사하게 한다. 테스트가 `surface-modules.js`의 구독 이름과 대조한다(Red 먼저).
-- 소유 `feat/view-region-F228`: `SPSurfaceHost hitTest`(`webview_geometry.m:283-303`)를 고쳐, 보이는 오버레이 사각형 안의 점이 오버레이 DOM 히트 또는 nil을 반환하고 네이티브 평면에 닿지 않게 한다. 단위 테스트는 mainWebview 경우, 투명한 오버레이 점(DOM이 nil), `webview`가 nil인 경우를 다룬다(수정 전 Red, 수정 후 Green).
-- 소유 `feat/view-region-F228` 또는 `fix/view-region-close-F228-5`(먼저 병합되는 쪽): 뷰 오버레이가 `applyOverlayMask`에 도달함을 확인하는 단위 테스트(E4).
-- main 명세(`docs/spec/surface-composition.md`, `docs/spec/native-surfaces.md:102`, ko 대응본): 결정 항목 4의 쌓임 순서를 적고, "같은 네이티브 트랜잭션"을 이미지 영역에만 한정한다.
+- 소유 `feat/view-region-F228`: `REGION_HOST_CALLS`에 `documentQuery`와 `documentInteractionState`를 추가한다. 결정 항목 2와 4의 테스트를 추가한다(수정 전 집합과 `runtime.native.on`에서 Red). 결정 항목 3의 거부를 플러그인 쪽 `call`에 추가한다(Red 먼저).
+- 소유 `feat/view-region-F228`: `view-calls.js`에 `REGION_EVENTS`를 결정 항목 4의 네 이벤트로 정의하고, `runtime.native.on`이 그 이름을 검사하게 한다.
+- 소유 `fix/view-region-close-F228-5`(`hitTest`를 바꾸는 유일한 브랜치): `webview_geometry.m:283-300`의 루프에서, 보이는 오버레이 사각형 안의 점은 오버레이의 DOM 히트 또는 nil을 반환하고 `self.nativePlane`에 닿지 않게 한다. 수정 전 코드에서 Red인 단위 테스트: (a) DOM 전용 surface, 네이티브 평면 위의 오버레이 점, nil 기대; (b) 투명한 DOM 점의 뷰 오버레이, 네이티브 히트 없음 기대; (c) 숨겨진 `webview`, 보이는 오버레이 사각형에서 네이티브 히트 없음 기대; (d) `mainWebview` 설정, nil 기대.
+- 소유 `fix/view-region-close-F228-5` 또는 `feat/view-region-F228`(먼저 병합되는 쪽): 뷰 오버레이가 `applyOverlayMask`에 도달함을 확인하는 단위 테스트(E6).
+- main 명세(`docs/spec/surface-composition.md`, `docs/spec/native-surfaces.md:102`, ko 대응본): 결정 항목 5의 쌓임 순서를 적고, "같은 네이티브 트랜잭션"을 이미지 영역에만 한정한다.
 
 ### 반론과 답변
 
-- 1라운드, 감사자 A, 반론 1: 테스트는 `host.js`가 아니라 `surface-modules.js`를 스캔해야 하고, `REGION_EVENTS`는 두 브랜치 모두에 정의되어 있지 않다. 수용. 테스트 원천과 `REGION_EVENTS` 정의는 결정 항목 2와 3에 있다.
-- 1라운드, 감사자 B, 반론 1: 같은 원천 누락, `hostClose`와 `composed` 래퍼 포함. 수용. 결정 항목 2가 `invoke`, `composed`, `hostClose`를 모두 다룬다.
-- 1라운드, 감사자 B, 반론 2: hit-test에 두 번째 누출(투명한 DOM 점과 nil `webview`가 네이티브로 떨어짐). 수용. E3와 필요한 변경이 두 경우를 모두 다룬다. 이전 본문은 mainWebview 경우만 다루었다.
+- 1라운드, 감사자 A: 테스트는 `host.js`가 아니라 `surface-modules.js`를 스캔해야 하고, `REGION_EVENTS`는 정의되지 않았다. 수용.
+- 1라운드, 감사자 B: 같은 원천 누락, `hostClose`와 `composed`, 두 번째 hit-test 누출. 수용.
+- 2라운드, 감사자 D, 반론 1: 변수로 전달되는 이름과 플러그인 쪽 `call`(`host.js:235`). 수용. 결정 항목 3이 그 경로에서 실행 시 거부한다.
+- 2라운드, 감사자 D, 반론 2: `REGION_EVENTS`가 뷰 내부 이벤트를 누출할 수 있다. 수용. 결정 항목 4가 네 이벤트로 고정하고 다섯 내부 이벤트를 테스트한다.
+- 2라운드, 감사자 D, 반론 3, 그리고 감사자 C, 반론 3: fix 브랜치는 `webview`와 `mainWebview`가 없을 때 오버레이 점을 네이티브 콘텐츠에 누출한다(E4). 수용. 이전 본문은 fix 브랜치가 깨끗하다고 잘못 적었다. 수정은 fix 브랜치에 있다(필요한 변경).
+- 2라운드, 감사자 C, 반론 1: `REGION_EVENTS`는 "모든 구독"이 아니다. 수용(결정 항목 4).
+- 2라운드, 감사자 C, 반론 2: `bridge.call` 이름에 리터럴 스캔이 필요하다. 수용(결정 항목 2).
+- 2라운드, 감사자 D, 반론 3: hit-test 수정은 한 브랜치가 소유해야 한다. 수용(결정 항목 7).
 
 ## D7. origin 형식(F235, F237)
 
@@ -55,46 +62,55 @@
 
 1. `origin`은 항상 정확히 `directory`라는 한 멤버를 가진 객체 `{directory}`이다.
 2. `directory`는 절대 경로 또는 null이다. null은 탭이 디렉터리를 기록하지 않았음을 뜻한다.
-3. 절대 경로는 첫 글자가 `/`인 경로다. Windows 드라이브 경로와 UNC 경로는 거부한다. 워크벤치가 이미 거부하기 때문이다(근거 E5). 각 호스트와 페이지는 같은 문자열 검사를 쓴다: TypeScript는 `path.startsWith("/")`, Go는 `strings.HasPrefix(path, "/")`, Rust는 `path.starts_with('/')`. 플랫폼 경로 API를 쓰지 않으므로 결과는 호스트 OS에 따라 달라지지 않는다.
+3. 절대 경로는 첫 글자가 `/`인 경로다. Windows 드라이브 경로와 UNC 경로는 거부한다. 워크벤치가 이미 거부하기 때문이다(E5). 각 호스트와 페이지는 같은 문자열 검사를 쓴다: TypeScript `path.startsWith("/")`, Go `strings.HasPrefix(path, "/")`, Rust `path.starts_with('/')`. 플랫폼 경로 API는 쓰지 않는다.
 4. 부재한 origin, null origin, 다른 형식의 객체, 문자열이 아닌 null이 아닌 `directory`, 빈 경로, `/`로 시작하지 않는 경로는 명시적 오류로 거부한다. 다섯 문구는 다음과 같다.
    - `surface "<id>": view start origin is missing` (부재)
    - `surface "<id>": view start origin is not {directory} with a path or null` (그 밖의 형식)
    - `surface "<id>": view start origin directory is empty` (빈 경로)
    - `surface "<id>": view start origin directory is not an absolute path` (`/`로 시작하지 않는 경로)
 5. 페이지는 강제 변환하지 않는다. `packages/plugin-api/surface.js:12`(기본값 `origin = { directory: null }`)과 `:72`(`origin.directory ?? null`)를 제거한다. `createSurfaceContext`는 origin이 정확히 `{directory}`이고 값이 null 또는 `/`로 시작하는 문자열이 아니면 `TypeError`를 던진다.
-6. 워크벤치는 origin 기본값을 두지 않는다. main의 `tabOrigin`(`packages/workbench/tab-reports.js:141`, `?? Object.freeze({ directory: null })`)을 제거한다. 기록된 origin이 없는 탭은 뷰 시작 시 오류이며, 모든 탭 생성 경로가 `recordOrigin`을 호출한다.
-7. 복원은 origin을 유지한다. 탭의 origin은 상호작용 상태와 함께 탭 세션 파일 `tab-sessions/<tab>.json`에 기록되고, 복원 시 그 파일에서 읽는다. 메모리 `origins` 맵(`tab-reports.js:5`, `:194`에서 삭제)만이 저장소가 아니다. 이 하위 항목이 들어가기 전까지 명세는 복원된 탭이 origin을 유지한다고 주장하지 않는다(필요한 변경 참조).
+6. 모든 탭 생성은 origin을 명시적으로 넘긴다. `newTab(kind, params)`(`packages/workbench/plane.js:142`)는 필수 인자 `fromTabId`(원천 탭이 없으면 null)를 받고 스스로 `recordOrigin(tab.id, fromTabId)`를 호출한다. 호출자는 원천을 명시한다: 카드 생성 경로 `plane.js:779`, `:797`(이미 `recordOrigin` 호출), 마지막 탭 닫힘 경로 `plane.js:518`(`newTab(..., null)`, `{directory: null}` 기록).
+7. origin은 탭 세션이 아니라 탭 레이아웃과 함께 저장된다. 저장된 레이아웃 항목에 각 탭의 `origin`을 담는다. 탭 세션 파일 `tab-sessions/<tab>.json`은 저장소가 아니다. `packages/workbench/tab-session.js`가 문서 영역이 없는 탭의 파일을 지우기 때문이다(`put(tab, null)`, `:55`, `:65`). 복원 시 저장된 레이아웃에서 탭을 다시 만드는 함수가 탭이 마운트되기 전에 `recordOrigin(tab.id, storedOrigin)`을 호출한다. 하위 항목은 복원 코드에서 찾은 뒤 그 함수 이름을 정한다. 이 기록은 이름을 주장하지 않는다.
+8. 워크벤치 폴백 제거는 마지막 단계다. `tabOrigin`(`packages/workbench/tab-reports.js:141`, `?? Object.freeze({ directory: null })`)은 결정 항목 6과 7이 들어가고 테스트가 Green이 될 때까지 폴백을 유지한다. 그 뒤에 기록되지 않은 탭에 대해 던지며, 뷰 시작 경로가 그 오류를 드러낸다.
 
 ### 이유
 
-워크벤치는 항상 객체를 보내므로(`packages/workbench/tab-reports.js:137`), 부재하거나 null인 origin을 거부해도 어떤 코드 경로도 깨지지 않는다. 부재한 origin에 `{directory: null}`을 강제로 채우면 누락된 기록이 숨겨지며, `AGENTS.md`가 금지하는 일("경계에서 잘못된 값을 거부한다")이다. `/` 규칙은 워크벤치가 이미 디렉터리에 적용하는 규칙이다(`reportDirectory`, main `tab-reports.js:125`). 따라서 뷰의 origin과 탭의 디렉터리가 어긋나지 않는다. Windows 지원은 그 워크벤치 규칙을 바꾸는 별도 변경이며, 이 결정의 차이가 아니다.
+워크벤치는 항상 객체를 보내므로(`tab-reports.js:137`), 호스트와 페이지에서 부재하거나 null인 origin을 거부해도 origin을 기록하는 코드 경로는 깨지지 않는다. 기록이 없을 때 `{directory: null}`을 강제로 채우면 결함이 숨겨지며, `AGENTS.md`가 금지하는 일("경계에서 잘못된 값을 거부한다")이다. `/` 규칙은 워크벤치가 이미 디렉터리에 적용하는 규칙이므로(`reportDirectory`, `tab-reports.js:125`), 뷰의 origin과 탭의 디렉터리가 어긋나지 않는다. Windows 지원은 그 규칙을 바꾸는 별도 변경이다.
+
+origin을 탭 세션이 아니라 레이아웃에 저장하는 이유는 E4에 있다. 탭 세션 파일은 평범한 surface에서 지워지므로 거기 저장된 origin은 사라진다.
 
 ### 근거
 
-- E1(호스트, fix). `fix/view-origin-F237:packages/host/tauriv2/src/surfaces.rs:58-61`은 `origin`을 원시 값(`Option<Value>`, `present_value`)으로 보관한다. `view_origin_directory`(`:76-94`)는 부재(`:78`), 객체가 아니거나 멤버가 둘 이상인 값(`:82-86`), `directory`의 누락이나 잘못된 타입, 빈 경로를 거부한다. 절대 경로 검사는 아직 없다.
-- E2(호스트, fix). `fix/view-origin-F237:packages/host/wailsv3/src/surfaces.go:62-112`: `viewOriginDirectory`는 nil origin(`:70`), 맵이 아닌 값(`:76`), `directory` 누락(`:81`), 빈 경로(`:91`)를 거부한다. 절대 경로 검사는 아직 없다.
-- E3(페이지, main). `packages/plugin-api/surface.js:12`는 origin 기본값을 `{directory: null}`로 둔다. `:72`는 `origin.directory ?? null`로 강제 변환한다. 이 때문에 E1과 E2의 호스트 거부는 페이지 경로에서 도달할 수 없다.
-- E4(shell 페이지). `plugins/shell/ui/view.js:22`와 `plugins/shell/test/view.test.mjs:47-53`은 null origin을 기본 디렉터리로 취급한다. 이들은 shell 저장소에서 바뀐다.
-- E5(워크벤치 규칙, main). `packages/workbench/tab-reports.js:125`는 `startsWith("/")`가 아닌 모든 디렉터리를 거부하므로, Windows나 UNC origin은 워크벤치를 거쳐 뷰에 도달할 수 없다.
-- E6(복원, main). `docs/spec/plugins.md:223`은 "언로드된 탭을 보이게 하면 같은 `origin`으로 surface를 마운트한다"라고 쓰며 세션 한정 표현이 없다. 앱 재시작 후에는 메모리 `origins` 맵이 비어 있고 `tabOrigin`이 `{directory: null}`을 반환한다(`tab-reports.js:141`). 따라서 재시작에 대해 이 문장은 거짓이다. `plugins.md:225`는 탭이 언로드되었는지를 저장하지 않는다고 쓰며, 탭 세션 파일은 상호작용 상태만 저장한다(`plugins.md:223`).
-- E7(`directory: null`은 유효하다). 디렉터리 없이 열린 탭은 아무것도 기록하지 않는다(원천 탭이 없을 때의 `recordOrigin`, `tab-reports.js:137`).
+- E1(호스트, fix). `fix/view-origin-F237:packages/host/tauriv2/src/surfaces.rs:58-61`은 `origin`을 원시 값(`Option<Value>`, `present_value`)으로 보관한다. `view_origin_directory`(`:76-94`)는 부재(`:78`), 객체가 아니거나 멤버가 둘 이상인 값(`:82-86`), `directory`의 누락이나 잘못된 타입, 빈 경로를 거부한다. 절대 경로 검사는 없다.
+- E2(호스트, fix). `fix/view-origin-F237:packages/host/wailsv3/src/surfaces.go:62-112`: `viewOriginDirectory`는 nil origin(`:70`), 맵이 아닌 값(`:76`), `directory` 누락(`:81`), 빈 경로(`:91`)를 거부한다. 절대 경로 검사는 없다.
+- E3(페이지, main). `packages/plugin-api/surface.js:12`는 origin 기본값을 `{directory: null}`로 둔다. `:72`는 `origin.directory ?? null`로 강제 변환한다.
+- E4(저장, main). `packages/workbench/tab-session.js`의 `put(tab, regions)`(`:33`)과 `:55`, `:65`의 호출(`put(tab, null)`)은 문서 영역이 없는 탭의 세션 파일을 지운다. `capture`는 상호작용 상태가 없으면 일찍 반환한다. 저장 형식(`docs/spec/plugins.md:142`)과 `host-store.js:16`(`tabSessionPut(tab, regions)`)에는 origin 필드가 없다.
+- E5(워크벤치 규칙, main). `packages/workbench/tab-reports.js:125`는 `startsWith("/")`가 아닌 모든 디렉터리를 거부한다. origin은 같은 맵에서 복사된다(`:137`).
+- E6(origin 원천, main). `recordOrigin`은 `plane.js:779`와 `:797`에서만 호출된다. `newTab`은 `plane.js:518`(마지막 탭이 닫히고 카드가 남음)에서도 호출되지만 `recordOrigin`은 없다. 따라서 그 탭은 `origins`에 항목이 없다. `origins`는 메모리에만 있으므로(`tab-reports.js:5`) 앱 재시작 후에는 모든 탭에 대해 비어 있다.
+- E7(뷰 시작, main). `surface-modules.js:193`과 `:448`은 `tabOrigin(surface.surfaceId)`을 읽는다. 폴백을 E6보다 먼저 제거하면 E6의 탭에서 이 호출이 던진다.
+- E8(복원 명세, main). `docs/spec/plugins.md:223`은 "언로드된 탭을 보이게 하면 같은 `origin`으로 surface를 마운트한다"라고 쓰며 세션 한정 표현이 없다. 결정 항목 7이 들어가기 전까지 재시작 뒤의 문장은 거짓이다. 그 전까지 명세는 복원된 탭의 origin이 `{directory: null}`이라고 적는다.
 
 ### 필요한 변경
 
-- 소유 `fix/view-origin-F237`: 아직 없는 절대 경로 검사를 결정 항목 3의 `/` 접두 검사로 대체한다. `view_origin_directory`(`surfaces.rs`)와 `viewOriginDirectory`(`surfaces.go`)에서 빈 경로 검사 뒤에 둔다. 각 호스트 테스트에 `/`와 `C:\` 경우를 추가한다(수정 전 Red).
-- 소유 main, `packages/plugin-api/surface.js`: `:12`의 기본값과 `:72`의 강제 변환을 제거한다. `createSurfaceContext`는 결정 항목 5에 따라 거부한다. `packages/plugin-api`에 단위 테스트를 둔다(Red 먼저).
-- 소유 main, `packages/workbench/tab-reports.js`: `tabOrigin`의 폴백(`:141`)을 제거한다. 뷰 시작 시 origin이 없으면 명명된 오류를 던진다. `recordOrigin` 없이 뷰를 시작할 수 없음을 확인하는 테스트를 둔다(Red 먼저).
-- 소유 main, 워크벤치(`tab-reports.js`, 탭 세션 파일): origin을 탭 세션과 함께 저장하고 복원한다. 재시작 후 복원된 탭이 origin을 유지하는 테스트를 둔다(Red 먼저). 이것이 들어가기 전까지 `plugins.md:223`과 `:225`는 앱 재시작 후 복원된 탭의 origin이 유지되지 않는다고 적는다.
-- 소유 shell 저장소: `plugins/shell/ui/view.js:22`와 그 테스트 `view.test.mjs:47-53`이 null을 기본값으로 취급하지 않게 한다. "다른 곳에 기록"에 적는다.
-- 소유 main(명세, EN과 KO): `native-surfaces.md:136`, `host-contract.md:196`, `plugins.md:223`, `:225`에 다섯 문구와 `/` 규칙을 적는다.
+- 소유 `fix/view-origin-F237`: 결정 항목 3의 `/` 접두 검사를 `view_origin_directory`(`surfaces.rs`)와 `viewOriginDirectory`(`surfaces.go`)에서 빈 경로 검사 뒤에 추가한다. 각 호스트 테스트에 `/` 경우와 `C:\` 경우를 둔다(Red 먼저).
+- 소유 main, `packages/plugin-api/surface.js`: `:12`의 기본값과 `:72`의 강제 변환을 제거한다(결정 항목 5). 단위 테스트(Red 먼저).
+- 소유 main, `packages/workbench/plane.js`와 `tab-reports.js`: 결정 항목 6. 테스트: 마지막 탭 닫힘(`plane.js:518`)은 `{directory: null}`로 뷰를 시작하고 던지지 않는다. 새 탭은 원천 origin을 기록한다.
+- 소유 main, 워크벤치 레이아웃과 복원: 결정 항목 7. 테스트: 문서 영역이 없는 복원된 탭은 재시작 후 저장된 origin으로 뷰를 시작한다(Red 먼저). 저장된 origin이 없는 복원된 탭은 명명된 오류로 거부된다.
+- 소유 main, `tab-reports.js`: 위 두 테스트가 Green인 뒤에만 `tabOrigin` 폴백을 제거한다(결정 항목 8).
+- 소유 shell 저장소: `plugins/shell/ui/view.js:22`와 `plugins/shell/test/view.test.mjs:47-53`이 null을 기본값으로 취급하지 않게 한다. "다른 곳에 기록"에 적는다.
+- 소유 main(명세, EN과 KO): `native-surfaces.md:136`, `host-contract.md:196`, `plugins.md:142`, `:223`, `:225`에 다섯 문구, `/` 규칙, 레이아웃 origin 필드를 적는다.
 
 ### 반론과 답변
 
-- 1라운드, 감사자 A, 반론 2: 단일 규칙은 플랫폼 API로 만족될 수 없고 워크벤치는 `/`가 아닌 경로를 거부한다. 수용. 규칙은 이제 워크벤치의 기존 규칙인 `/` 접두 검사뿐이다. Windows는 워크벤치 규칙이 바뀌기 전까지 범위 밖이다.
-- 1라운드, 감사자 A, 반론 3: 복원이 소유자 없이 남아 있고, `plugins.md:223`은 재시작 후 거짓이다. 수용. 복원은 소유자가 있는 필요 변경이 되었고(탭 세션 파일에 origin 저장), 들어가기 전까지 명세 문장은 거짓으로 적는다.
-- 1라운드, 감사자 B, 반론 3: `tabOrigin` 폴백은 결정이 금지하는 강제 변환과 같다. 수용. 폴백을 제거한다(결정 항목 6).
-- 1라운드, 감사자 B, 반론 4: 순수 문자열 술어가 필요하다. 수용. `/` 접두 문자열 검사가 그 술어다(결정 항목 3).
+- 1라운드, 감사자 A, 반론 2: 단일 규칙은 플랫폼 API로 만족될 수 없고 워크벤치는 `/`가 아닌 경로를 거부한다. 수용. 규칙은 `/` 접두 검사다.
+- 1라운드, 감사자 A, 반론 3: 복원이 소유자 없이 남아 있고 `plugins.md:223`은 재시작 후 거짓이다. 수용. 결정 항목 7과 E8.
+- 1라운드, 감사자 B, 반론 3: `tabOrigin` 폴백은 같은 강제 변환이다. 수용. 다만 먼저 제거하면 회귀한다(2라운드). 결정 항목 8이 마지막 단계로 둔다.
+- 1라운드, 감사자 B, 반론 4: 순수 문자열 술어가 필요하다. 수용(결정 항목 3).
+- 2라운드, 감사자 D, 반론 4(a): `tab-sessions`의 origin은 평범한 surface에서 지워지고 `capture`는 일찍 반환한다. 수용. origin은 레이아웃으로 옮긴다(결정 항목 7, E4).
+- 2라운드, 감사자 D, 반론 4(b): 복원 경로는 `recordOrigin`을 호출하지 않는다. 수용(결정 항목 7).
+- 2라운드, 감사자 C, 반론 1: `plane.js:518`과 복원된 탭은 `recordOrigin`을 우회하고, 폴백을 먼저 제거하면 회귀한다. 수용(결정 항목 6, 7, 8, E6, E7).
 
 ## 라운드 기록
 
-- 1라운드: 두 감사자가 반론했다(A 3건, B 4건). 모두 수용해 위에 반영했다. 판정은 2라운드 대기 중이다.
+- 1라운드: 감사자 A와 B가 반론했다(각 3건과 4건). 모두 수용해 본문을 고쳤다.
+- 2라운드: 감사자 C와 D가 반론했다(D4에서 각 3건과 3건, D7에서 각 1건과 2건). 모두 수용해 본문을 고쳤다. 판정은 3라운드 대기 중이다.
