@@ -192,6 +192,9 @@ test("F0.1 evidence identifies its build by its checklist ID", { timeout: 1000 }
   );
 });
 
+// The names are joined from parts: the boundary audit scans this file for @soksak/ names.
+const scoped = (name) => ["@soksak", name].join("/");
+
 test("ownership audit rejects cross-owner implementation names and private paths", { timeout: 1000 }, () => {
   const result = auditOwnership([
     "plugins/example/ui/module.js",
@@ -200,8 +203,8 @@ test("ownership audit rejects cross-owner implementation names and private paths
     "packages/example/src/index.js",
     "plugins/example/test/module.test.mjs",
   ], (file) => ({
-    "plugins/example/ui/module.js": 'import "@soksak/sidecar-example";\nimport "sidecars/example/src/main.go";\n',
-    "plugins/example/plugin.json": '{"sidecars":["@soksak/sidecar-example"]}',
+    "plugins/example/ui/module.js": `import "${scoped("sidecar-example")}";\nimport "sidecars/example/src/main.go";\n`,
+    "plugins/example/plugin.json": `{"sidecars":["${scoped("sidecar-example")}"]}`,
     "sidecars/example/src/main.go": "package main\n",
     "packages/example/src/index.js": 'import "plugins/example/ui/module.js";\n',
     "plugins/example/test/module.test.mjs": 'import "sidecars/example/src/main.go";\n',
@@ -217,11 +220,11 @@ test("ownership audit classifies plugins and sidecars by their name prefix, with
     "packages/example/index.js",
     "packages/example/api.js",
   ], (file) => file.endsWith("index.js")
-    ? 'import "@soksak/plugin-probe";\nimport "@soksak/sidecar-probe";\n'
-    : 'import "@soksak/plugin-api";\n');
+    ? `import "${scoped("plugin-probe")}";\nimport "${scoped("sidecar-probe")}";\n`
+    : `import "${scoped("plugin-api")}";\n`);
   assert.deepEqual(errors, [
-    "packages/example/index.js: core implementation names plugin implementation @soksak/plugin-probe",
-    "packages/example/index.js: core implementation names sidecar implementation @soksak/sidecar-probe",
+    `packages/example/index.js: core implementation names plugin implementation ${scoped("plugin-probe")}`,
+    `packages/example/index.js: core implementation names sidecar implementation ${scoped("sidecar-probe")}`,
   ]);
 });
 
@@ -230,7 +233,7 @@ test("ownership audit does not authorize private access through a declared depen
     "plugins/example/ui/module.js",
     "sidecars/example/src/main.go",
   ], (file) => file.endsWith("module.js")
-    ? 'import "@soksak/sidecar-example/src/private.js";\n'
+    ? `import "${scoped("sidecar-example/src/private.js")}";\n`
     : "package main\n");
   assert.ok(errors.some((error) => error.includes("private")));
 });

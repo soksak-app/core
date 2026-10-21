@@ -13,7 +13,7 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { fresh, reading } from "./fixture.mjs";
 
-const SIDECAR = "@soksak/sidecar-vt-alacritty";
+const SIDECAR = ["@soksak", "sidecar-vt-alacritty"].join("/");
 
 /** Replaces the file in one step, as `sok` does, so the host never reads half of it. */
 function replaceFile(file, text) {

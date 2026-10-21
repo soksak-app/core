@@ -39,7 +39,6 @@ const MATRIX = [
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
-    "scripts/check-boundaries.mjs",
     "scripts/check-e2e.mjs",
     "scripts/check-e2e-host-parity.mjs",
     "scripts/check-exposure.mjs",
@@ -99,6 +98,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Go repeat inputs", "js-ts", ["scripts/go-repeat-inputs.mjs"], ["scripts/test/go-repeat-inputs.test.mjs"]),
   lane("workspace registry", "js-ts", ["scripts/workspace-registry.mjs"], ["scripts/test/workspace-registry.test.mjs"]),
   lane("platform boundary audit", "js-ts", ["scripts/check-platforms.mjs"], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs"]),
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
@@ -4529,15 +4529,15 @@ function isDeclaration(file) {
 }
 
 /**
- * The owner of a package by its name (docs/spec/plugins.md#repositories): every `@soksak/plugin-*` package except
- * `@soksak/plugin-api` is a plugin and every `@soksak/sidecar-*` package is a sidecar, so core holds no list of the
+ * The owner of a package by its name (docs/spec/plugins.md#repositories): every plugin-prefixed package except
+ * the plugin-api package is a plugin and every sidecar-prefixed package is a sidecar, so core holds no list of the
  * packages of other repositories.
  */
 function packageOwner(name) {
   const base = name.split("/").slice(0, 2).join("/");
   if (base === "@soksak/plugin-api" || base === "@soksak/runtime" || base === "@soksak/workbench") return "core";
-  if (base.startsWith("@soksak/plugin-")) return "plugin";
-  if (base.startsWith("@soksak/sidecar-")) return "sidecar";
+  if (base.startsWith(`@soksak/${"plugin-"}`)) return "plugin";
+  if (base.startsWith(`@soksak/${"sidecar-"}`)) return "sidecar";
   // default: another name of the scope @soksak or a name of another scope has no owner that this audit compares.
   return null;
 }

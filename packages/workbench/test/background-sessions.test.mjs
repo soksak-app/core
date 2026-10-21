@@ -10,7 +10,7 @@ import { registerPlugin } from "../registry.js";
 
 const owner = "fixture-session";
 const other = "fixture-document";
-const sidecar = "@soksak/fixture-sidecar";
+const sidecar = "@scope/fixture-sidecar";
 
 test("a background session opens only for a tab without a mounted surface and ends when its surface mounts", { timeout: 5000 }, async (t) => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");

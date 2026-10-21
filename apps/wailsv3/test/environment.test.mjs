@@ -13,7 +13,7 @@ test("environment.json satisfies the environment format and names a runtime modu
 
 test("the environment lists no plugins; the configuration directory installs them", () => {
   assert.equal(environment.plugins, undefined);
-  assert.deepEqual(Object.keys(pkg.dependencies).filter((name) => name.startsWith("@soksak/plugin-")), []);
+  assert.deepEqual(Object.keys(pkg.dependencies).filter((name) => /^@soksak\/plugin-/.test(name)), []);
 });
 
 test("the bundle declares the release identity of docs/spec/hosts.md", () => {

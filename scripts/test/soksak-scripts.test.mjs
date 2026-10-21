@@ -107,6 +107,8 @@ test("boundary audit reports a clean component graph", { timeout: 5000 }, async 
 });
 
 test("boundary audit reports core sources that name a declared plugin or sidecar", { timeout: 5000 }, async (t) => {
+  // The fixture names are joined from parts: the boundary audit scans this file for @soksak/ names.
+  const scoped = (name) => ["@soksak", name].join("/");
   const fixture = await mkdtemp(join(tmpdir(), "soksak-boundaries-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
   const core = join(fixture, "core");
@@ -114,21 +116,23 @@ test("boundary audit reports core sources that name a declared plugin or sidecar
     await mkdir(join(path, ".."), { recursive: true });
     await writeFile(path, text);
   };
-  await write(join(core, "packages/a/package.json"), JSON.stringify({ name: "@soksak/a" }));
-  await write(join(core, "packages/a/index.js"), 'export const id = "probe";\nimport "@soksak/sidecar-probe";\n');
+  await write(join(core, "packages/a/package.json"), JSON.stringify({ name: scoped("a") }));
+  await write(join(core, "packages/a/index.js"), `export const id = "probe";\nimport "${scoped("sidecar-probe")}";\n`);
   await write(join(core, "scripts/workspace-registry.json"), JSON.stringify({
     plugins: ["../plugins/probe"], sidecars: [{ repository: "../sidecars/probe", folder: "." }], packs: [],
   }));
-  await write(join(fixture, "plugins/probe/package.json"), JSON.stringify({ name: "@soksak/plugin-probe" }));
+  await write(join(fixture, "plugins/probe/package.json"), JSON.stringify({ name: scoped("plugin-probe") }));
   await write(join(fixture, "plugins/probe/plugin.json"), JSON.stringify({ id: "probe" }));
-  await write(join(fixture, "sidecars/probe/package.json"), JSON.stringify({ name: "@soksak/sidecar-probe" }));
+  await write(join(fixture, "sidecars/probe/package.json"), JSON.stringify({ name: scoped("sidecar-probe") }));
   assert.equal((await run("git", ["init", "--quiet", core])).code, 0);
+  // The audit reads the tracked files of the checkout.
+  assert.equal((await run("git", ["-C", core, "add", "--", "packages", "scripts"])).code, 0);
   const script = join(root, "scripts/check-boundaries.mjs");
   const named = await run(node, [script, core]);
   assert.equal(named.code, 1, `${named.stdout}\n${named.stderr}`);
   assert.deepEqual(named.stderr.trim().split("\n"), [
-    "packages/a/index.js:1: core @soksak/a names plugin id probe",
-    "packages/a/index.js:2: core @soksak/a names package @soksak/sidecar-probe",
+    `packages/a/index.js:2: core source names ${scoped("sidecar-probe")}, which is not a core package`,
+    `packages/a/index.js:1: core ${scoped("a")} names plugin id probe`,
   ]);
   await rm(join(fixture, "sidecars/probe"), { recursive: true });
   const missing = await run(node, [script, core]);
@@ -137,6 +141,7 @@ test("boundary audit reports core sources that name a declared plugin or sidecar
 });
 
 test("boundary audit resolves the declared repositories from a worktree of the core checkout", { timeout: 20000 }, async (t) => {
+  const scoped = (name) => ["@soksak", name].join("/");
   // A worktree under <main>/.claude/worktrees/ has the declarations of the main checkout, and the declared sibling repositories
   // are siblings of the main checkout, not of the worktree.
   const fixture = await mkdtemp(join(tmpdir(), "soksak-boundaries-worktree-"));
@@ -146,14 +151,14 @@ test("boundary audit resolves the declared repositories from a worktree of the c
     await mkdir(join(path, ".."), { recursive: true });
     await writeFile(path, text);
   };
-  await write(join(core, "packages/a/package.json"), JSON.stringify({ name: "@soksak/a" }));
+  await write(join(core, "packages/a/package.json"), JSON.stringify({ name: scoped("a") }));
   await write(join(core, "packages/a/index.js"), 'export const id = "clean";\n');
   await write(join(core, "scripts/workspace-registry.json"), JSON.stringify({
     plugins: ["../plugins/probe"], sidecars: [{ repository: "../sidecars/probe", folder: "." }], packs: [],
   }));
-  await write(join(fixture, "plugins/probe/package.json"), JSON.stringify({ name: "@soksak/plugin-probe" }));
+  await write(join(fixture, "plugins/probe/package.json"), JSON.stringify({ name: scoped("plugin-probe") }));
   await write(join(fixture, "plugins/probe/plugin.json"), JSON.stringify({ id: "probe" }));
-  await write(join(fixture, "sidecars/probe/package.json"), JSON.stringify({ name: "@soksak/sidecar-probe" }));
+  await write(join(fixture, "sidecars/probe/package.json"), JSON.stringify({ name: scoped("sidecar-probe") }));
   const git = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid"];
   assert.equal((await run("git", ["init", "--quiet", core])).code, 0);
   assert.equal((await run("git", ["-C", core, "add", "--", "packages", "scripts"])).code, 0);

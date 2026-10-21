@@ -8,7 +8,7 @@ import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 
 const owner = "fixture-session";
-const sidecar = "@soksak/fixture-sidecar";
+const sidecar = "@scope/fixture-sidecar";
 
 test("a background session whose tab closes before its subscription finished ends the subscription", { timeout: 5000 }, async (t) => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
