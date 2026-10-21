@@ -62,7 +62,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 - Core, plugin, sidecar, kit, specification, contract는 서로 다른 repository(workspace의 폴더)이고, 어느 것도 다른 것의 구현을 알지 않는다.
 - Registry(`environment.json`, settings, `plugin.json`)는 무엇이 어떤 version으로 설치되는지를 말한다. package 사이의 관계는 manifest의 `dependencies`로만 선언한다.
 - Package는 contract의 wire와 노출된 command, DOM, status로만 주고받는다. 공통 기능은 core에, 기능은 plugin에 둔다. plugin 기능은 core로 옮기지 않는다.
-- Package A의 시험은 package B의 구현을 검증하지 않는다. A는 fake와 fixture로 자기 경계만 시험하고, B는 자기 repository에서 자신을 시험하며, 공통 case는 contract가 정의하고 B가 실행한다. B의 경로, SDK, build, 실제 이름을 읽는 A의 시험은 금지다. fixture는 probe 이름(`probe`, `@scope/plugin-probe`, `@soksak/sidecar-probe`)을 쓴다.
+- Package A의 시험은 package B의 구현을 검증하지 않는다. A는 fake와 fixture로 자기 경계만 시험하고, B는 자기 repository에서 자신을 시험하며, 공통 case는 contract가 정의하고 B가 실행한다. B의 경로, SDK, build, 실제 이름을 읽는 A의 시험은 금지다. fixture는 probe 이름(`probe`, `@scope/plugin-probe`, `@scope/sidecar-probe`)을 쓴다.
 - 예외: core의 설치 기반 창 검사(`e2e/`)는 실제 plugin과 sidecar를 설치하고 그 관계와 동작을 함께 검사할 수 있다. 이것은 통합 수준이다. 설치는 registry와 manifest로만 하고, repository 경로나 build로 하지 않는다. 위 규칙은 core의 나머지 모두, 즉 unit test, script, product code, specification에 적용된다.
 
 ### Branch와 worktree

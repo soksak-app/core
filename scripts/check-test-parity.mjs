@@ -4474,15 +4474,17 @@ function isDeclaration(file) {
   return DECLARATION_FILE.test(file);
 }
 
+/**
+ * The owner of a package by its name (docs/spec/plugins.md#repositories): every `@soksak/plugin-*` package except
+ * `@soksak/plugin-api` is a plugin and every `@soksak/sidecar-*` package is a sidecar, so core holds no list of the
+ * packages of other repositories.
+ */
 function packageOwner(name) {
   const base = name.split("/").slice(0, 2).join("/");
   if (base === "@soksak/plugin-api" || base === "@soksak/runtime" || base === "@soksak/workbench") return "core";
-  if (base.startsWith("@soksak/plugin-") && (base.endsWith("-example") || [
-    "@soksak/plugin-browser", "@soksak/plugin-files", "@soksak/plugin-shell", "@soksak/plugin-terminal",
-  ].includes(base))) return "plugin";
-  if (base.startsWith("@soksak/sidecar-") && (base.endsWith("-example") || [
-    "@soksak/sidecar-files", "@soksak/sidecar-shell", "@soksak/sidecar-vt-alacritty", "@soksak/sidecar-vt-core",
-  ].includes(base))) return "sidecar";
+  if (base.startsWith("@soksak/plugin-")) return "plugin";
+  if (base.startsWith("@soksak/sidecar-")) return "sidecar";
+  // default: another name of the scope @soksak or a name of another scope has no owner that this audit compares.
   return null;
 }
 
