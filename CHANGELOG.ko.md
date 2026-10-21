@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-a-4: 보이는 view 오버레이 아래의 native 히트 검사는 오버레이의 DOM 히트 또는 없음을 돌려주며, native view를 돌려주지 않는다. surface 히트 검사는 AppKit이 넘기는 대로 superview 좌표의 점을 받으므로 0이 아닌 원점의 surface도 올바르게 히트된다. 기하 시험의 새 히트 검사(5개 항목)는 바뀌지 않은 코드에서 실패했고 지금은 통과한다.
 - F238-a-14: plugin 쪽 native 핸들은 기본 거부다. `runtime.native.call`과 `call`은 `exposureReply`만 보내며, 허용 목록 밖의 host 명령은 거부되고 host에 닿지 않는다. 허용 목록은 host 명령 표와 대조한다. `linkOpen`을 host로 넘기던 시험은 바뀌지 않은 핸들에서 실패했고 지금은 통과한다.
 - F238-a-2: plugin과 view의 `runtime.native.on`은 네 region event `document-stream`, `document-state`, `document-message`, `image-event`만 받는다. view bridge event는 거부된다. 구독 시험은 바뀌지 않은 gate가 view bridge event를 구독하면서 실패했고 지금은 통과한다(2/2).
 - F238-a-1: view의 region 호출은 플러그인 쪽 모든 경로에서 거부된다. `REGION_HOST_CALLS`는 표의 region 종류 호스트 명령을 담으며 `documentQuery`와 `documentInteractionState`를 포함하고, 플러그인 쪽 native 핸들(`pluginNativeGate`)은 `runtime.native.call`, `call`, view run의 region 호출과 view bridge 호출을 모두 거부한다. 허용 목록은 Tauri 명령 표의 region 종류 명령과 같고, 워크벤치 호스트 경로의 리터럴 검사는 목록 밖의 region 호출을 찾지 못한다. 시험은 바뀌지 않은 집합에서 실패했고 지금은 통과한다.

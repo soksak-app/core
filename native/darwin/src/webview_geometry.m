@@ -18,6 +18,12 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
     if (!NSEqualRects(coordinates.bounds, expected)) coordinates.bounds = expected;
 }
 
+// The DOM hit of a web view for a point of the view `from`. The web view takes the point in its superview coordinates. A hidden web view has no DOM hit.
+static NSView *domHit(WKWebView *web, NSView *from, NSPoint point) {
+    if (!web || web.hidden) return nil;
+    return [web hitTest:[web.superview convertPoint:point fromView:from]];
+}
+
 // Native-owned boundary, one per surface. Only this view has the outer surface frame, and it clips and moves
 // all native regions and DOM web views together.
 @interface SPSurfaceNativePlane : NSView
@@ -186,7 +192,7 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     if (!NSPointInRect(local, self.bounds)) return nil;
     NSPoint domPoint = [self.mainWebview convertPoint:local fromView:self];
     for (NSValue *overlay in self.overlays) {
-        if (NSPointInRect(domPoint, overlay.rectValue)) return [self.mainWebview hitTest:local];
+        if (NSPointInRect(domPoint, overlay.rectValue)) return domHit(self.mainWebview, self, local);
     }
     NSView *native = [self.coordinates hitTest:local];
     if (native) return native;
@@ -280,29 +286,23 @@ static void notifyScale(NSView *view) {
     if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
     [self applyOverlayMask];
 }
-- (NSView *)hitTest:(NSPoint)point {
+- (NSView *)hitTest:(NSPoint)superviewPoint {
+    // AppKit passes the point in the superview coordinates, and the overlay rectangles are in the local coordinates of the surface.
+    NSPoint point = [self convertPoint:superviewPoint fromView:self.superview];
     if (self.hidden || self.alphaValue <= 0 || !NSPointInRect(point, self.bounds)) return nil;
     for (NSValue *rectValue in [[self visibleOverlayRects] reverseObjectEnumerator]) {
         NSRect rect = rectValue.rectValue;
         if (!NSPointInRect(point, rect)) continue;
-        // The DOM of a view draws its own overlays, so the input under them goes to the view web view. The app DOM
-        // of a hybrid surface has no view web view and keeps the input under its overlays.
-        if (self.webview && !self.webview.hidden) {
-            NSPoint domPoint = [self.webview convertPoint:point fromView:self];
-            NSView *dom = [self.webview hitTest:domPoint];
-            if (dom) return dom;
-        }
-        if (self.mainWebview) return nil;
+        // A point inside a visible overlay never reaches the native plane. The DOM of a view draws its own overlays, so the
+        // input under them goes to the view web view. The app DOM of a hybrid surface has no view web view and keeps the input under its overlays.
+        NSView *dom = domHit(self.webview, self, point);
+        if (dom) return dom;
+        return domHit(self.mainWebview, self, point);
     }
     NSPoint nativePoint = [self.nativePlane convertPoint:point fromView:self];
     NSView *native = [self.nativePlane hitTest:nativePoint];
     if (native) return native;
-    if (self.webview && !self.webview.hidden) {
-        NSPoint domPoint = [self.webview convertPoint:point fromView:self];
-        NSView *dom = [self.webview hitTest:domPoint];
-        if (dom) return dom;
-    }
-    return nil;
+    return domHit(self.webview, self, point);
 }
 - (void)setFrameSize:(NSSize)size {
     [CATransaction begin];
@@ -344,9 +344,9 @@ static void notifyScale(NSView *view) {
     NSPoint local = NSMakePoint(x, NSMinY(self.bounds) + yFraction * NSHeight(self.bounds));
     if (!NSPointInRect(local, self.bounds)) return nil;
     // Asks the topmost host first, and a gap between hosts passes through to the main web view below.
+    // The children are placed in the local coordinates of this view, which is the superview coordinate system of each child.
     for (NSView *child in [self.subviews reverseObjectEnumerator]) {
-        NSPoint childPoint = [child convertPoint:local fromView:self];
-        NSView *hit = [child hitTest:childPoint];
+        NSView *hit = [child hitTest:local];
         if (hit) return hit;
     }
     return nil;
