@@ -86,6 +86,11 @@ export const REGION_HOST_CALLS = new Set([
 // plugin never reaches them.
 export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply"]);
 
+// The host commands that plugin code may send through its native handle (docs/spec/native-surfaces.md#view-surfaces). A plugin
+// reaches a host command only through this allowlist: a command that is not listed is refused, so a command added to the host
+// stays closed to plugins until it is listed here.
+export const PLUGIN_HOST_CALLS = new Set(["exposureReply"]);
+
 // The native events of the region record that a view subscribes to (docs/spec/native-surfaces.md#view-surfaces, regions). The other
 // events are internal to the view bridge.
 export const REGION_EVENTS = new Set(["document-stream", "document-state", "document-message", "image-event"]);
@@ -102,6 +107,7 @@ export function pluginNativeGate(native) {
         return Promise.reject(new Error(`host call ${name} is not served: a view operates its regions through its composition`));
       }
       if (VIEW_BRIDGE_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served: the view bridge is internal`));
+      if (!PLUGIN_HOST_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served to plugins`));
       return native.call(name, payload);
     },
     on(name, listener) {
