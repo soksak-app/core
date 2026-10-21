@@ -314,7 +314,7 @@ function drawItem(listKey, item, bind) {
     label.dataset.role = "label";
     label.dataset.expose = CONTROL_NAME;
     if (item.enabled === false) label.disabled = true;
-    bind(label, item.command, item.params ?? {}, { event: "click" });
+    bind(label, item.command, item.params, { event: "click" });
   } else {
     label = document.createElement("span");
   }
