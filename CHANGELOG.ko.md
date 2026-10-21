@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.8-7: 한도에서의 declared UI 값 그리기 시간: 워크벤치 시험 `declared-ui-draw-time.test.mjs`는 16 level 안의 5000 node tree와 1000 item list에 대해 jsdom에서 `validateValue`와 `drawValue`를 잴 때 값마다 경과 밀리초를 출력 줄에 기록한다. 5회 실행에서 load average 40.99에서 tree 중앙값은 501.2 ms, list 중앙값은 116.4 ms다. 한도(2000 ms와 500 ms)는 jsdom이 layout이나 paint 없이 DOM node를 만드므로 구성과 연결만을 다룬다. 중앙값이 declared-ui.md의 한도가 정당화하는 범위를 넘지 않으므로 한도는 그대로 둔다.
 - F212.6a-1-3-2-2: page close 멈춤의 원인을 특정했다. `CFRunLoopWakeUp`의 pthread mutex는 main run loop의 `_lock`이며, main thread가 WebKit page close 일을 하는 동안 짧게 반복해 잡는다. 뒤따르는 대기자는 그 뒤에 줄 서고 IPC receive queue와의 원형 대기가 멈춤을 늘린다. 원인이 host code가 아니므로 코드는 바꾸지 않는다.
 - F212.8-6-4: 선언 section의 그리기와 보고: 워크벤치는 `status`가 있는 section을 선언 section 상태로 mount하고, body는 받아들인 declared UI 값을 그리며, 거부는 하나의 표시 경로로 보이고 다음 받아들인 값이 거둔다. root 요소는 세로 방향에서 쌓이고 가로 방향에서 한 줄로 줄을 바꿔 놓이며, 방향이 바뀌면 받아들인 값을 다시 검사한다. `core.sidebars`는 선언 section의 `mounted`와 `error`를 보고한다. snapshot 전송과 pull은 아직 실제 연결이 없어서 응용에서 선언 section은 비어 있다. 단위 시험은 stub에서 실패(assertion 오류 4개)하고 구현에서 통과한다(81 of 81).
 - F212.8-0-21: control 주소는 사이드바, section, key, path와 역할 때문에 유일하며, DOM 항목은 여러 요소가 이름을 공유하므로 `many`로 선언된다는 사실만 적는다.
