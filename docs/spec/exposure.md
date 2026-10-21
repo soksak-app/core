@@ -202,7 +202,7 @@ Clients call these JSON-RPC 2.0 methods.
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
 
-A request gives either `index` or `address`, never both. A request with both is rejected with an explicit error. An `address` object is `{section, key, path?, role?}` and names a control of a declared section that carries the dom name `core.sidebar.section.control`, as [declared UI](declared-ui.md) defines it.
+A request gives either `index` or `address`, never both. An `address` object is `{sidebar, section, key, path?, role?}`, as [declared UI](declared-ui.md) defines it. The `core.sidebar.section.control` dom entry is declared `many`, so its requests give `index` or `address`. A request with both, a value of the wrong type, or a forbidden or missing `path` or `role` is refused with -32602, and an address that matches no control is refused with 1009.
 
 Native pointer injection retains the pressed view separately for each window and button. Drag and release go to that view even when the pointer crosses another view; release receipt waits for the pressed document. A drag or release without a matching press, a second press while that button is held, or a removed pressed view returns an explicit input rejection. Scroll and button-free movement continue to use the current pointer position.
 
@@ -238,7 +238,7 @@ The host and the pages exchange these messages. They are internal to core and no
 | host → main page | event `diagnostics-tick` | No payload. Diagnostic builds only: one per step of `diagnostics.drag` |
 | surface page → host | call `exposureReply` | `{id, result}` or `{id, error}`; the host returns it to the main page as the result of `exposureForward` |
 
-The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview.
+The main page validates names against the declarations before it registers or forwards them. It keeps a registration from a surface that no loaded layout contains yet, and applies or rejects it when a layout containing the surface is loaded. `exposureReply` from the main page answers an `exposure-request` of the host; `exposureReply` from a surface page answers a forwarded request. The host identifies the caller by its webview. For a `core.sidebar.section.control` request, the main page validates `index` or `address` before it answers, and the hosts relay the request unread.
 
 A surface page can answer a forwarded request after its surface was removed, for example a `status.next` that it answers as the surface closes. The host already ended every request to that surface with 1003 when it removed the surface, so the reply has no request to answer: the host discards it and writes the observation `exposure reply <id> of removed surface "<surface>" arrived after its request ended` to the application log instead of refusing the call.
 
@@ -258,7 +258,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | Code | Meaning |
 | --- | --- |
 | -32601 | Undeclared method |
-| -32602 | Invalid params |
+| -32602 | Invalid params, including a `core.sidebar.section.control` request with both `index` and `address`, a value of the wrong type, or a forbidden or missing `path` or `role` |
 | 1001 | Unknown name |
 | 1002 | Name is declared but not registered |
 | 1003 | Owner document no longer exists |
@@ -267,6 +267,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | 1006 | The window is not active: a pointer `move` needs the key window, or the system did not activate the application |
 | 1007 | AppKit reports a nonzero `NSEvent.pressedMouseButtons` mask, so a synthetic pointer `down` or `up` was not delivered; the message reports the mask and the frontmost application at the refusal |
 | 1008 | A synthetic press of that button is still open in the window, so a pointer `down` was not delivered |
+| 1009 | No control matches the `address` of a `core.sidebar.section.control` request |
 | -32000 | A registered command or status handler failed; `message` is its error message |
 
 A 1005 error of a relayed request has the message `the document did not reply within <ms> ms`. Both hosts remember the 256 most recent requests that timed out, dropping the oldest; a reply to one of them fails with `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`, and a reply to no remembered request fails with `exposure reply <id> has no matching request`, so the delay of a late reply is in the error that the page reports. A command forwarded to a surface page that times out writes the event `host.call.timeout` with its plugin and command, and a late reply to such a command writes `host.trace.call.late-reply` with its delay.

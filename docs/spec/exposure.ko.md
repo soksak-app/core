@@ -202,7 +202,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
 
-요청은 `index`나 `address` 가운데 하나만 준다. 둘 다 주면 명시적 오류로 거부한다. `address` 객체는 `{section, key, path?, role?}`이며, [선언된 UI](declared-ui.ko.md)가 정하는 대로 `core.sidebar.section.control` DOM 이름을 가진 선언된 section의 control을 지정한다.
+요청은 `index`나 `address` 가운데 하나만 준다. `address` 객체는 [선언된 UI](declared-ui.ko.md)가 정하는 대로 `{sidebar, section, key, path?, role?}`이다. `core.sidebar.section.control` DOM 항목은 `many`로 선언되어 있으므로, 그 요청은 `index`나 `address`를 준다. 둘 다 주거나, 타입이 틀리거나, 허용되지 않거나 빠진 `path`나 `role`이 있는 요청은 -32602로 거부하며, 어느 control과도 맞지 않는 주소는 1009로 거부한다.
 
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
@@ -238,7 +238,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.next` | `{name, version}`. 표면 페이지는 값이 `version`보다 새로우면 `{version, value}`를, `status.unwatch` 뒤에는 `{closed: true}`를 응답한다. 호스트는 이 요청에 제한 시간을 두지 않으며, 표면이 닫히면 1003으로 실패한다 |
 | 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
 
-메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다.
+메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다. `core.sidebar.section.control` 요청에서는 메인 페이지가 응답하기 전에 `index`나 `address`를 검증하며, 호스트는 그 요청을 읽지 않고 중계한다.
 
 표면 페이지는 표면이 제거된 뒤에 전달된 요청에 답할 수 있다. 예를 들어 표면이 닫히면서 답하는 `status.next`가 그렇다. 호스트는 표면을 제거할 때 그 표면에 보낸 모든 요청을 이미 1003으로 끝냈으므로 그 답에는 답할 요청이 없다. 호스트는 호출을 거부하지 않고 그 답을 버리며, 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`를 애플리케이션 로그에 쓴다.
 
@@ -258,7 +258,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 코드 | 의미 |
 | --- | --- |
 | -32601 | 선언되지 않은 메서드 |
-| -32602 | 잘못된 매개변수 |
+| -32602 | 잘못된 매개변수. `core.sidebar.section.control` 요청에서 `index`와 `address`를 둘 다 준 경우, 타입이 틀린 경우, 허용되지 않거나 빠진 `path`나 `role`을 포함한다 |
 | 1001 | 알 수 없는 이름 |
 | 1002 | 선언되었지만 등록되지 않은 이름 |
 | 1003 | 소유 문서가 더 이상 없음 |
@@ -267,6 +267,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | 1006 | 창이 활성 상태가 아님: 포인터 `move`에는 키 창이 필요하거나, 시스템이 애플리케이션을 활성화하지 않음 |
 | 1007 | AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` 마스크를 보고해 합성 포인터 `down`이나 `up`을 전달하지 않음. 메시지는 거부 시점의 마스크와 frontmost 애플리케이션을 보고함 |
 | 1008 | 그 창에서 그 버튼의 합성 누름이 아직 열려 있어 포인터 `down`을 전달하지 않음 |
+| 1009 | `core.sidebar.section.control` 요청의 `address`가 어느 control과도 맞지 않음 |
 | -32000 | 등록된 명령이나 status 처리기가 실패함. `message`는 그 오류 메시지다 |
 
 중계한 요청의 1005 오류 메시지는 `the document did not reply within <ms> ms`다. 두 host는 시간이 초과된 최근 요청 256개를 기억하고 가장 오래된 것을 버린다. 그중 하나에 온 답은 `exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`로 실패하고, 기억하지 않는 요청에 온 답은 `exposure reply <id> has no matching request`로 실패하므로, 늦은 답의 지연이 page가 보고하는 오류에 들어간다. 표면 페이지로 전달한 command가 시간 초과되면 `host.call.timeout`을 plugin과 command와 함께 쓰고, 그 늦은 답은 `host.trace.call.late-reply`를 지연과 함께 쓴다.

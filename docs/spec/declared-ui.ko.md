@@ -124,7 +124,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. `command`가 없는 잎 노드는 두 속성 집합을 모두 갖지 않는다. `command`가 없는 가지는 펼침 제어의 속성만 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
 
-선언된 section의 control에 대한 요청은 section id와 그 속성으로 지정한다. `data-key`는 루트 요소의 key다. `data-path`(list 항목과 tree 노드)는 루트 요소 아래의 key들의 JSON 배열이며, button의 control은 `data-path`를 갖지 않는다. `data-role`(list 항목과 tree 노드)은 `label` 또는 `expand`다. 키는 형제 사이에서 유일하고 역할은 tree 노드의 두 control을 구별하므로, section id와 이 속성들은 유일한 주소다.
+선언된 section의 control에 대한 요청은 `{sidebar, section, key, path?, role?}` `address` 객체로 지정한다. `sidebar`는 `core.sidebars`가 보고하는 사이드바 인스턴스(`left`, `right`, `cardId:side`)이고, `section`은 section id이며, `key`는 그 control을 가진 루트 요소의 key다. `path`는 루트 요소 아래의 key들로 이루어진 문자열 배열이고, `role`은 `label` 또는 `expand`다. control이 list 항목이나 tree 노드에 속하면 `path`와 `role`이 필수이고, button이면 둘 다 허용하지 않는다. 이 필드들로 주소는 유일하다. 사이드바마다 section id는 한 번씩이고, 키는 형제 사이에서 유일하며, 역할은 tree 노드의 두 control을 구별한다. `core.sidebar.section.control` DOM 항목은 `many`로 선언되어 있으므로 어떤 주소도 둘 이상의 control과 맞지 않는다. 어느 control과도 맞지 않는 주소는 [노출](exposure.ko.md#오류)의 오류 코드로 실패한다.
 
 키보드 조작은 네이티브 `button` 요소를 쓰므로, Enter와 Space가 같은 묶기를 거쳐 명령에 닿는다. 선언된 UI 요소는 자기 키 처리기를 가지지 않는다.
 
@@ -191,7 +191,7 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 `showError`는 같은 `where`와 같은 `text`에 대해 로그 줄을 한 번만 쓴다. 보이는 텍스트를 유지하므로, 같은 텍스트의 거부가 반복되면 같은 텍스트를 보이고 아무것도 더 쓰지 않는다. 다른 텍스트의 거부는 자기 줄을 쓴다. status의 다음 받아들인 값은 그 `where`에 대해 `hideError`를 부른다. 이는 표시를 거두므로, 그 뒤에 같은 텍스트가 다시 나오면 다시 쓴다.
 출처가 바뀌거나, 프로세스가 끝나거나, surface가 닫히면 그 status에 대해 `hideError`를 부르고 `error`를 null로 둔다.
 
-모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 표의 각 행의 포인터는 그 행을 어기는 값이며, 포인터 열이 이를 정한다. 개수나 크기 한도는 초과한 배열, 객체, 문자열을 가리킨다. 필드의 존재를 다루는 행(`unknown field`, `missing`, `requires command`)은 그 필드를 가진 객체를 가리킨다. 필드 값을 다루는 행은 그 필드를 가리킨다. 중복 키는 두 번째 키를 가리킨다. `/`는 루트와 직렬화한 값 전체다. `<field>`는 JSON 필드 이름이다. 포인터는 JSON Pointer(RFC 6901)다. `<owner>`는 status의 plugin id다.
+모든 거부 텍스트는 `<포인터>: <이유>` 형식이다. 표의 각 행의 포인터는 그 행을 어기는 값이며, 포인터 열이 이를 정한다. 개수나 크기 한도는 초과한 배열, 객체, 문자열을 가리킨다. 필드의 존재를 다루는 행(`unknown field`, `missing`, `requires command`)은 그 필드를 가진 객체를 가리킨다. 필드 값을 다루는 행은 그 필드를 가리킨다. 중복 키는 두 번째 키를 가리킨다. `/`는 루트와 직렬화한 값 전체다. `<field>`는 JSON 필드 이름이다. 포인터는 JSON Pointer(RFC 6901)다. `<owner>`는 status의 plugin id다. 이유에 넣는 이름이나 값은 JSON 문자열로 쓰며, 제어 문자는 JSON 이스케이프로 바꾼다. 127 코드 포인트에서 자르고 표지 `…`(U+2026)를 붙여 잘린 값이 128 코드 포인트가 되게 한다.
 요소의 필드 행은 `kind` 값이 고른 그 종류의 필드 목록을 쓰므로, `missing kind`, `kind must be a string`, `unknown kind` 행은 종류에 따라 달라지는 행보다 앞에 있다. 값이 여러 행을 어기면 값의 어느 부분이라도 어기는 표의 순서에서 첫 행이 적용된다. 그 행이 여럿 나타나면 문서 순서에서 첫 번째를 보고한다. 이름 행은 소유자 행보다 앞에 있으므로, 소유자가 없는 이름은 이름이 잘못되었다고 보고된다.
 
 | 조건 | 이유 | 포인터 |
@@ -215,11 +215,11 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 | `params` 객체의 키가 16개를 넘음 | `exceeds 16 keys` | `params` 객체 |
 | 매개변수 키가 64 코드 포인트를 넘음 | `exceeds 64 code points` | 그 매개변수 키 |
 | 매개변수 문자열 값이 1000 코드 포인트를 넘음 | `exceeds 1000 code points` | 그 매개변수 값 |
-| 매개변수 값이 문자열, 유한한 숫자, 불리언, `null`이 아님 | `params values must be string, number, boolean or null` | 그 매개변수 값 |
+| 매개변수 값이 문자열, 유한한 숫자, 불리언, `null`이 아님 | `params values must be string, finite number, boolean or null` | 그 매개변수 값 |
 | 객체가 나열하지 않은 필드(루트, 요소, list 항목, tree 노드) | `unknown field <field>` | 그 객체 |
 | 필수 필드가 없음 | `missing <field>` | 그 객체 |
 | list 항목이나 tree 노드에 `command` 필드 없이 `params` 또는 `enabled` 필드가 있음 | `<field> requires command` | 그 객체 |
-| 필드의 형이 맞지 않음 | `<field> must be <type>` | 그 필드 |
+| 있는 필드의 형이 맞지 않음. 없는 필드는 `missing <field>`다 | `<field> must be <type>` | 그 필드 |
 | 텍스트 필드에 제어 문자가 있음 | `<field> contains a control character` | 그 필드 |
 | 형제 사이, 또는 list 항목 사이에 같은 키가 있음 | `duplicate key <key>` | 두 번째 키 |
 | `command` 이름에 소유자가 없음(`.`이 없음) | `command <name> must be named <owner>.<name>` | `command` 필드 |
