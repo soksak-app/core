@@ -5,6 +5,8 @@
 //! of the table, and an item whose source is "system" keeps the title and shortcut that the framework provides.
 //! scripts/check-host-parity.mjs checks mechanically that both hosts carry the same table.
 
+use std::sync::PoisonError;
+
 use tauri::menu::{AboutMetadata, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Wry};
 
@@ -149,10 +151,9 @@ pub fn initial_language() -> Result<String, String> {
 pub fn set_language(app: &AppHandle, language: &str) -> Result<(), String> {
     language_column(language)?;
     let state = app.state::<MenuLanguage>();
-    let mut current = state
-        .0
-        .lock()
-        .map_err(|_| "the menu language state is poisoned".to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the language of the menu, which is compared and then
+    // replaced; the panic hook records the panic.
+    let mut current = state.0.lock().unwrap_or_else(PoisonError::into_inner);
     if *current == language {
         return Ok(());
     }

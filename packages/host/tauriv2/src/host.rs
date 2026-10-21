@@ -167,6 +167,9 @@ pub fn launch_activates_ignoring_other_apps() -> bool {
 /// context is the `tauri::generate_context!()` of the application. background is the script that the surface webviews
 /// run before the document, and the application passes it including the `background.js` of the frontend.
 pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
+    // The panic hook is the first action of the process, so a panic before the writer exists is recorded in the start buffer
+    // and stored when the writer opens (docs/spec/hosts.md#process-lifecycle).
+    application_log::install_panic_hook();
     // The arguments are read before a window opens. An invalid argument ends with status 2
     // (docs/spec/hosts.md#application-arguments).
     match command_line::parse_arguments(std::env::args().skip(1))

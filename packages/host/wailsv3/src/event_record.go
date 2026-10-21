@@ -20,16 +20,48 @@ import (
 // process ends.
 const panicFlushDeadline = 2 * time.Second
 
+// panicWriterDeadline is how long the entrance of the goroutines waits for the writer when the panic happened before the writer
+// was attached. The writer attaches during the start of the host; the bound ends a process whose start never attaches it.
+const panicWriterDeadline = 5 * time.Second
+
+// writerAttached is closed when the writer of the host is attached for the first time.
+var writerAttached = make(chan struct{})
+
+var writerAttachedOnce sync.Once
+
 func init() {
 	routine.Record = recordPanic
 }
 
-// recordPanic stores the panic of a goroutine as the event `host.panic` and waits until it is in the event log. A flush that
-// fails is reported on the standard error, which holds the stack as well.
+// recordPanic stores the panic of a goroutine as the event `host.panic` and waits until it is in the event log. A panic before
+// the writer is attached waits for the writer, at most panicWriterDeadline, so the event enters the writer and not only the start
+// buffer that the process end would drop. A flush that fails is reported on the standard error, which holds the stack as well.
 func recordPanic(name, text, stack string) {
+	if !waitForWriter(panicWriterDeadline) {
+		// No writer exists to store the record, so the record is written to the standard error in full.
+		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: no writer opened within %s\nhost.panic name=%s text=%s\n%s", panicWriterDeadline, name, text, stack)
+		return
+	}
 	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})
 	if err := FlushRecords(panicFlushDeadline); err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record of the panic of %s is not stored: %v\n", name, err)
+	}
+}
+
+// waitForWriter waits at most deadline until the writer is attached, and reports whether it is.
+func waitForWriter(deadline time.Duration) bool {
+	select {
+	case <-writerAttached:
+		return true
+	default:
+	}
+	timer := time.NewTimer(deadline)
+	defer timer.Stop()
+	select {
+	case <-writerAttached:
+		return true
+	case <-timer.C:
+		return false
 	}
 }
 
@@ -83,6 +115,9 @@ func UseHostEventLog(log *EventLog) {
 	defer records.Unlock()
 	records.log = log
 	activeLog.Store(log)
+	if log != nil {
+		writerAttachedOnce.Do(func() { close(writerAttached) })
+	}
 	buffered, lost := records.buffer, records.lost
 	records.buffer, records.bufferBytes, records.lost = nil, 0, [sok.ChannelCount]struct{ count, bytes uint64 }{}
 	if log == nil {

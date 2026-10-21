@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 #[path = "support/records.rs"]
 mod records;
 
-use soksak_host_tauriv2::application_log::start_standard_error;
+use soksak_host_tauriv2::application_log::{install_panic_hook, start_standard_error};
 use soksak_host_tauriv2::routine::spawn_named;
 
 const CHILD: &str = "SOKSAK_ROUTINE_CHILD";
@@ -18,6 +18,8 @@ const CHILD: &str = "SOKSAK_ROUTINE_CHILD";
 #[test]
 fn a_panic_of_a_thread_is_recorded_as_an_event_before_the_process_ends() {
     if let Some(config) = std::env::var_os(CHILD) {
+        // The process start of the host installs the hook first (docs/spec/hosts.md#process-lifecycle).
+        install_panic_hook();
         if let Err(error) = start_standard_error(std::path::Path::new(&config), "com.soksak.test") {
             println!("{error}");
             std::process::exit(3);
