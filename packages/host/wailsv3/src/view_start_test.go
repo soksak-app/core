@@ -6,7 +6,8 @@ import (
 	"unsafe"
 )
 
-func startPtr(text string) *string { return &text }
+// nullOriginStart is the start values of a view whose tab recorded no directory: its origin is {"directory": null}.
+func nullOriginStart() ViewStart { return ViewStart{Origin: json.RawMessage(`{"directory":null}`)} }
 
 // contract: view.start-values.first-script
 // A view that the host creates receives, before its page loads, the document-start script that sets window.sokSurface to the
@@ -25,7 +26,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	native := unsafe.Pointer(new(int))
 	start := ViewStart{
 		Params:       json.RawMessage(`{"path":"a.md"}`),
-		Origin:       &SurfaceOrigin{Directory: startPtr("/work/one")},
+		Origin:       json.RawMessage(`{"directory":"/work/one"}`),
 		Project:      &SurfaceProject{Root: "/work/one"},
 		Declarations: json.RawMessage(`{"commands":[]}`),
 	}
@@ -60,7 +61,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptCarriesAbsentValuesAsNull(t *testing.T) {
 	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({})});`
-	got, err := surfaceStartScript("probe-surface", ViewStart{})
+	got, err := surfaceStartScript("probe-surface", nullOriginStart())
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start project root is empty` {
 		t.Fatalf("empty project root: %v", err)
 	}
-	entries[0].Start = &ViewStart{Origin: &SurfaceOrigin{Directory: startPtr("")}}
+	entries[0].Start = &ViewStart{Origin: json.RawMessage(`{"directory":""}`)}
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start origin directory is empty` {
 		t.Fatalf("empty origin directory: %v", err)
 	}
@@ -95,5 +96,60 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 	entries[0].Composition = SurfaceComposition{Kind: "hybrid", Regions: []SurfaceRegion{{Name: "main", Kind: "image", Input: "dom", Sidecar: "probe"}}, Overlays: []string{}}
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": only a view surface carries start values` {
 		t.Fatalf("start values beside another composition: %v", err)
+	}
+}
+
+// A view surface whose start values carry no origin, or an origin that is not {directory} with a path or null, is refused
+// with its reason; the host never injects a directory in its place. The fixed form with a null directory is accepted.
+// contract: view.start-values.refuses-a-missing-origin
+func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
+	const view = `"id":"probe","plugin":"probe","composition":{"kind":"view","page":"ui/page.html"}`
+	const missing = `surface "probe": view start origin is missing`
+	const malformed = `surface "probe": view start origin is not {directory} with a path or null`
+	cases := []struct{ name, surface, want string }{
+		{"no start values", `{` + view + `}`, missing},
+		{"no origin", `{` + view + `,"start":{"params":null}}`, missing},
+		{"null origin", `{` + view + `,"start":{"origin":null}}`, malformed},
+		{"origin without directory", `{` + view + `,"start":{"origin":{}}}`, malformed},
+		{"directory that is not a string", `{` + view + `,"start":{"origin":{"directory":1}}}`, malformed},
+		{"origin with another member", `{` + view + `,"start":{"origin":{"directory":"/work/one","root":"/work/one"}}}`, malformed},
+		{"null directory", `{` + view + `,"start":{"origin":{"directory":null}}}`, ""},
+	}
+	for _, tc := range cases {
+		var surface Surface
+		if err := json.Unmarshal([]byte(tc.surface), &surface); err != nil {
+			t.Fatalf("%s: surface fixture: %v", tc.name, err)
+		}
+		_, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: []Surface{surface}}, map[string]SurfaceComposition{}, map[string]string{})
+		if tc.want == "" {
+			if err != nil {
+				t.Fatalf("%s: %v, want accepted", tc.name, err)
+			}
+		} else if err == nil || err.Error() != tc.want {
+			t.Fatalf("%s: %v, want %q", tc.name, err, tc.want)
+		}
+	}
+	if _, err := surfaceStartScript("probe", ViewStart{}); err == nil {
+		t.Fatalf("start values script without an origin: no error, want a refusal")
+	}
+}
+
+// The origin directory is an absolute path in the one local form: a relative path, the // and /<letter>: prefixes and a NUL
+// byte are refused with the same text, and an absolute local path is accepted.
+// contract: view.start-values.refuses-a-missing-origin
+func TestViewOriginDirectoryRefusesAPathThatIsNotLocalAbsolute(t *testing.T) {
+	const notAbsolute = `surface "probe-surface": view start origin directory is not an absolute path`
+	for _, path := range []string{"relative", `C:\x`, "/C:/x", "//server/share", "a\x00b"} {
+		raw, err := json.Marshal(map[string]string{"directory": path})
+		if err != nil {
+			t.Fatalf("%q: origin fixture: %v", path, err)
+		}
+		if _, err := viewOriginDirectory("probe-surface", raw); err == nil || err.Error() != notAbsolute {
+			t.Fatalf("directory %q: %v, want %q", path, err, notAbsolute)
+		}
+	}
+	dir, err := viewOriginDirectory("probe-surface", json.RawMessage(`{"directory":"/a"}`))
+	if err != nil || dir == nil || *dir != "/a" {
+		t.Fatalf("absolute local directory: %v %v, want /a", dir, err)
 	}
 }

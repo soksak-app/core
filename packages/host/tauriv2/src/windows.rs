@@ -58,6 +58,11 @@ pub(crate) struct WindowData {
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
     /// The plugin of each surface that declared its composition; its document regions serve that plugin's package.
     pub surface_plugins: Mutex<HashMap<String, String>>,
+    /// The folder root of each project that the window holds, by project id (docs/plans/plugin-host-routes.md rule 3).
+    pub projects: Mutex<HashMap<String, String>>,
+    /// The project that the window shows, empty when it shows none (docs/plans/plugin-host-routes.md F229-1). A release of the
+    /// shown project clears it, and the root, at once.
+    pub shown: Mutex<String>,
     /// The complete composition revision applied last for each surface.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
 }
@@ -375,6 +380,12 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     app.state::<crate::plugin_host::PluginHostStates>()
         .plugin_changed(&change.action, &change.plugin);
+    // The enable of a plugin clears its plugin host stop and the sidecar stops of its manifest in one step, as a surface open does.
+    if change.action == "enable" {
+        app.state::<crate::sidecars::WindowSidecars>()
+            .plugin_enabled(&change.plugin);
+        crate::plugin_host_channel::plugin_enabled(app, &change.plugin);
+    }
     for window in app.windows().values() {
         if change.action == "remove" || change.action == "disable" {
             // The host webview of the plugin ends with its removal or disable (docs/spec/plugin-host.md#lifetime).
@@ -813,12 +824,19 @@ fn project_open_on_main(
         let owner = window
             .get_window(&label)
             .ok_or("project window is closed")?;
+        record_project(&owner, &request.id, &folder.root)?;
         *window_data(&owner)?
             .root
             .lock()
             // default: a lock that a panicking thread poisoned still holds the root webview of the window, which this call
             // replaces; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner) = folder.root;
+        *window_data(&owner)?
+            .shown
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the shown project, which this call replaces; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner) = request.id.clone();
         owner
             .set_title(&format!("{} / Tauri v2", request.title))
             .map_err(|e| e.to_string())?;
@@ -849,6 +867,13 @@ fn project_open_on_main(
     } else {
         window.clone()
     };
+    record_project(&owner, &request.id, &folder.root)?;
+    *window_data(&owner)?
+        .shown
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the shown project, which this call replaces; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner) = request.id.clone();
     registry
         .owners
         .lock()
@@ -878,27 +903,77 @@ fn project_open_on_main(
     Ok(serde_json::json!({"local": owner.label() == window.label()}))
 }
 
+/// Records the folder root of the project id that the window holds (docs/plans/plugin-host-routes.md rule 3).
+fn record_project(owner: &Window, id: &str, root: &str) -> Result<(), String> {
+    window_data(owner)?
+        .projects
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the project roots, which this call amends; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(id.to_string(), root.to_string());
+    Ok(())
+}
+
 /// Releases the link between a project id and a window. A window with no remaining project shows the library, so the
 /// project root and the title are cleared.
 pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String> {
     let registry = window.state::<Windows>();
     let (released, empty) = release_owner(&registry.owners, &id);
-    if let (Some(label), true) = (released, empty) {
+    if let Some(label) = released {
         // When the window is already closed, there is no state to clear.
         if let Some(owner) = window.app_handle().get_window(&label) {
+            // The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md
+            // rule 7).
             window_data(&owner)?
-                .root
+                .projects
                 .lock()
-                // default: a lock that a panicking thread poisoned still holds the root webview of the window, which
-                // this call clears; the panic hook records the panic.
+                // default: a lock that a panicking thread poisoned still holds the project roots, which this call amends; the
+                // panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner)
-                .clear();
-            owner.set_title(WINDOW_TITLE).map_err(|e| e.to_string())?;
-            crate::exposure::windows_changed(window.app_handle());
+                .remove(&id);
+            // A release of the shown project clears the shown root at once, even when another project is still held: the window
+            // shows no project until the page shows one explicitly (docs/plans/plugin-host-routes.md F229-1).
+            let data = window_data(&owner)?;
+            let shown_released = clear_released_shown(
+                &mut data
+                    .shown
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the shown project, which this call may clear;
+                    // the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner),
+                &id,
+            );
+            crate::plugin_host_sidecar::close_project_plugin_sessions(
+                &window.state::<crate::sidecars::WindowSidecars>(),
+                &owner,
+                &id,
+            )?;
+            if empty || shown_released {
+                window_data(&owner)?
+                    .root
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the root webview of the window, which
+                    // this call clears; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clear();
+                owner.set_title(WINDOW_TITLE).map_err(|e| e.to_string())?;
+                crate::exposure::windows_changed(window.app_handle());
+            }
         }
     }
     notify_workspace(window.app_handle());
     Ok(())
+}
+
+/// Clears the shown project of a window when it is the released project id, and reports whether it cleared it
+/// (docs/plans/plugin-host-routes.md F229-1). A shown project that is still held is kept.
+pub(crate) fn clear_released_shown(shown: &mut String, id: &str) -> bool {
+    let released = *shown == id;
+    if released {
+        shown.clear();
+    }
+    released
 }
 
 /// Removes the link of the project id from the owner record, and returns the released window label and whether no other
@@ -989,6 +1064,12 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     crate::exposure::page_reloaded(window);
     reload_surface_documents(window)?;
     dispose_plugin_hosts(window);
+    // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
+    // rule 7).
+    crate::plugin_host_sidecar::close_window_plugin_sessions(
+        &window.state::<crate::sidecars::WindowSidecars>(),
+        window,
+    )?;
     data.overlay.discard()
 }
 

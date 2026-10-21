@@ -155,9 +155,11 @@ struct Pending {
     page: Option<String>,
     level: Level,
     event: String,
-    /// The class that the catalog declares for the event; `None` for a name the catalog does not declare, which the line marks
-    /// `undeclared`.
+    /// The class that the catalog declares for the event, or lifecycle for an undeclared event of the layer plugin; `None`
+    /// for another name that the catalog does not declare.
     class: Option<Class>,
+    /// Whether the line marks the event `undeclared`: a name that no catalog declares (docs/spec/logging.md#event).
+    undeclared: bool,
     /// The fields as JSON text, serialized once by the producer.
     fields: Box<RawValue>,
     bytes: usize,
@@ -176,6 +178,7 @@ impl Pending {
         event: &str,
         fields: Box<RawValue>,
     ) -> Pending {
+        let class = class_of(event);
         Pending {
             ts_us: now_us(),
             mono_ns: clock(),
@@ -184,7 +187,8 @@ impl Pending {
             page: None,
             level,
             event: event.into(),
-            class: class_of(event),
+            undeclared: class.is_none(),
+            class,
             fields,
             bytes: 0,
             truncated: None,
@@ -270,7 +274,7 @@ const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 pub fn passes_every_gate(event: &str) -> bool {
     matches!(
         event,
-        "page.start" | "host.stall" | "host.stall.sampled" | "host.stall.dump"
+        "page.start" | "host.stall" | "host.stall.sampled" | "host.stall.dump" | "host.view.killed"
     )
 }
 
@@ -444,6 +448,16 @@ impl EventLog {
         })
     }
 
+    /// The class that the gate and the line give an event, and whether the line marks it `undeclared`: the class of the catalog;
+    /// for an event of the layer plugin that no catalog declares, lifecycle with the marker (docs/spec/logging.md#principles).
+    fn classify(&self, event: &str, layer: &str) -> (Option<Class>, bool) {
+        match self.class(event) {
+            Some(class) => (Some(class), false),
+            None if layer == "plugin" => (Some(Class::Lifecycle), true),
+            None => (None, true),
+        }
+    }
+
     /// The main file of this writer (error, warn and info).
     pub fn path(&self) -> &Path {
         &self.path
@@ -609,7 +623,8 @@ impl EventLog {
             ));
         }
         // An event that passes every gate is named by passes_every_gate (docs/spec/logging.md#policy).
-        if let Some(class) = self.class(event)
+        let (class, _) = self.classify(event, layer);
+        if let Some(class) = class
             && !passes_every_gate(event)
             && !self.gate(class, level)
         {
@@ -658,7 +673,7 @@ impl EventLog {
             return Err(Refusal::Queue);
         }
         // A closed gate stores nothing and counts the event; an event that passes every gate is named by passes_every_gate.
-        let class = self.class(event);
+        let (class, undeclared) = self.classify(event, &layer);
         if let Some(class) = class
             && !passes_every_gate(event)
             && !self.gate(class, level)
@@ -674,6 +689,7 @@ impl EventLog {
             level,
             event: event.to_string(),
             class,
+            undeclared,
             fields,
             bytes,
             truncated,
@@ -824,7 +840,7 @@ fn line(seq: u64, pending: &Pending) -> String {
         Some(class) => format!(",\"class\":\"{}\"", class.as_str()),
         None => String::new(),
     };
-    let undeclared = if pending.class.is_none() {
+    let undeclared = if pending.undeclared {
         ",\"undeclared\":true"
     } else {
         ""
@@ -1158,6 +1174,7 @@ impl PullSink for Output {
     fn accept(&mut self, event: RelayedEvent) {
         let class = class_of(&event.event);
         self.push(&Pending {
+            undeclared: class.is_none(),
             ts_us: event.ts_us,
             mono_ns: event.mono_ns,
             cids: event.cids,

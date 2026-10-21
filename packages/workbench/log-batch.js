@@ -9,6 +9,8 @@ const DEFAULT_MAX_EVENTS = 4096;
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 // The interval in milliseconds between two reports of the counts of the gate (docs/spec/logging.md#policy).
 const GATED_REPORT_MS = 1000;
+// The most queued events that one batch call carries (docs/spec/logging.md#bounds). The rest stays queued and the next call sends it.
+const BATCH_EVENTS = 256;
 
 // The fields of an event over this many bytes of JSON text are replaced by their head, which keeps the first HEAD_BYTES bytes of
 // the text, and the event says `truncated` (docs/spec/logging.md#bounds).
@@ -67,8 +69,6 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   let gatedAt = now();
   let gatedTimer = false;
   const gatedDue = () => gated.size > 0 && now() - gatedAt >= GATED_REPORT_MS;
-  // The functions that end the waits of the events that the next batch carries.
-  let waiters = [];
   let scheduled = false;
   let sending = null;
   let anchor = null;
@@ -106,11 +106,12 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     scheduled = false;
     const reportGated = gated.size > 0 && (force || gatedDue());
     if (sending || (queue.length === 0 && lost.size === 0 && !reportGated)) return;
-    const events = queue;
-    const mine = waiters;
-    queue = [];
-    queueBytes = 0;
-    waiters = [];
+    // A batch carries at most BATCH_EVENTS queued events. The rest stays queued, and the chain after this call sends it at once.
+    const events = queue.slice(0, BATCH_EVENTS);
+    queue = queue.slice(BATCH_EVENTS);
+    for (const entry of events) queueBytes -= entry.charge;
+    // The waits end with the batch that carries their record, so each record names its own waiter.
+    const mine = events.filter((entry) => entry.waiter !== undefined).map((entry) => entry.waiter);
     {
       // The refused events had no place in the queue; each loss is stored in front of the events that follow it.
       for (const [reason, { count, bytes }] of [...lost].reverse()) {
@@ -137,7 +138,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
             fields: { trip_us: Math.round(base.trip * 1000), resolution_us: base.resolution_us } });
         }
         // Every event names the document that wrote it by its time origin, as page.start states it (docs/spec/logging.md#event).
-        const stamped = events.map(({ at, cids, ...rest }) => ({
+        const stamped = events.map(({ at, cids, charge, waiter, ...rest }) => ({
           ts_us: Math.round(base.ts_us + (at - base.at) * 1000),
           mono_ns: Math.round(base.mono_ns + (at - base.at) * 1e6),
           page,
@@ -210,7 +211,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     if (queue.length >= maxEvents) return refuse("the page queue was full", charge);
     if (queueBytes + charge > maxBytes) return refuse(`the page queue reached ${maxBytes} bytes`, charge);
     const checked = checkedCids(event, cids);
-    queue.push({ at: now(), level, event, fields: stored, ...(checked === undefined ? {} : { cids: checked }) });
+    queue.push({ at: now(), level, event, fields: stored, charge, ...(checked === undefined ? {} : { cids: checked }) });
     queueBytes += charge;
     schedule();
     return true;
@@ -223,7 +224,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
       resolve();
       return;
     }
-    waiters.push(resolve);
+    queue[queue.length - 1].waiter = resolve;
   });
 
   const flush = async () => {

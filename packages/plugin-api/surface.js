@@ -7,9 +7,30 @@ const callable = (value, name) => {
 };
 const readyReleases = new WeakMap();
 
+// The one rule of a view origin directory (docs/spec/native-surfaces.md#view-surfaces): an absolute path in the local form. The
+// // (UNC) and /<letter>: (drive) prefixes and a NUL byte are refused, so every host applies the same string test on every platform.
+export function isLocalAbsolutePath(path) {
+  return path.startsWith("/") && !path.startsWith("//") && !/^\/[A-Za-z]:/.test(path) && !path.includes("\u0000");
+}
+
+// The fault of the origin of a surface, or null when it has the form {directory} with null or a local absolute path. The texts are
+// those of docs/spec/native-surfaces.md#view-surfaces; the checks run in order and the first match gives the text.
+export function originFault(surfaceId, origin) {
+  const at = `surface "${surfaceId}": view start origin`;
+  if (origin === undefined) return `${at} is missing`;
+  const isObject = origin !== null && typeof origin === "object" && !Array.isArray(origin);
+  if (!isObject || Object.keys(origin).length !== 1 || !("directory" in origin)
+    || (origin.directory !== null && typeof origin.directory !== "string")) {
+    return `${at} is not {directory} with a path or null`;
+  }
+  if (origin.directory === "") return `${at} directory is empty`;
+  if (origin.directory !== null && !isLocalAbsolutePath(origin.directory)) return `${at} directory is not an absolute path`;
+  return null;
+}
+
 export function createSurfaceContext({
   root, surfaceId, pluginId, declarations = {}, composition = null, closing, diagnostics = () => null, runtime = {},
-  tab, origin = { directory: null }, project = null, icon,
+  tab, origin, project = null, icon,
   // default: the surface of a plugin without extension points has no contributions, and every point is undeclared.
   contributions = (point) => { throw new Error(`extension point ${point} is not declared by ${pluginId}`); },
 } = {}) {
@@ -29,6 +50,9 @@ export function createSurfaceContext({
   if (tab.state !== undefined && (typeof tab.state?.read !== "function" || typeof tab.state?.write !== "function")) {
     throw new TypeError("surface context tab.state requires read and write");
   }
+  // The origin is required: a value of another form is refused with the text of its first failed check, and the page never fills it in.
+  const fault = originFault(surfaceId, origin);
+  if (fault !== null) throw new TypeError(fault);
   if (typeof icon !== "function") throw new TypeError("surface context requires icon(name)");
   if (!(closing instanceof AbortSignal)) throw new TypeError("surface context requires the closing signal");
   if (typeof diagnostics !== "function") throw new TypeError("surface context requires diagnostics()");
@@ -67,9 +91,8 @@ export function createSurfaceContext({
       ...(tab.state === undefined ? {} : { state: Object.freeze({ read: tab.state.read, write: tab.state.write }) }),
       // default: a tab opened without parameters has none (docs/spec/plugins.md#pluginjson).
       params: tab.params === undefined || tab.params === null ? null : Object.freeze(structuredClone(tab.params)) }),
-    // The working directory that the active tab of the card that created this tab recorded at that time.
-    // default: origin.directory is null when the active tab of the original card did not record a directory.
-    origin: Object.freeze({ directory: origin.directory ?? null }),
+    // The working directory that the active tab of the card that created this tab recorded at that time, or null when it recorded none.
+    origin: Object.freeze({ directory: origin.directory }),
     // The canonical root of the project shown in the surface window. It is null in a window without a project.
     project: project === null ? null : Object.freeze({ root: project.root }),
     // Core icons (docs/spec/plugins.md#icons): the stroke SVG string of a name on a 24-unit grid. A name that does not exist fails.

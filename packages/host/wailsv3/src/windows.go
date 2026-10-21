@@ -23,12 +23,18 @@ const (
 	titleSuffix = " / Wails v3"
 )
 
+// titleSetter is the native window of a window record, which holds the title of the window. NewSurfaces sets the real window,
+// and a test sets a recorder in its place.
+type titleSetter interface {
+	SetTitle(title string) application.Window
+}
+
 // setTitle changes the window title and records it as the value that windows.list returns.
 func (s *Surfaces) setTitle(title string) {
 	s.mu.Lock()
 	s.title = title
 	s.mu.Unlock()
-	s.window.SetTitle(title)
+	s.titles.SetTitle(title)
 	if s.host != nil {
 		routine.Go("windows-changed", s.host.windowsChanged)
 	}
@@ -594,6 +600,8 @@ func (s *Surfaces) close() {
 		for id, view := range s.views {
 			handles[id] = view.handle
 			views[view.handle] = view
+			// A view of the surface ends with its window (docs/spec/logging.md#principles).
+			s.viewRecords().recordEnd(id)
 		}
 		s.disposePluginHosts()
 		err := CloseWindowSurfaces(handles, s.documents, s.streams, s.images, func(native WindowNative) error {

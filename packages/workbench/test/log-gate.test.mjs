@@ -15,6 +15,20 @@ const everything = { lifecycle: "trace", input: "trace", call: "trace", io: "tra
 
 const onlyErrors = Object.fromEntries(Object.keys(everything).map((name) => [name, "error"]));
 
+test("onChange calls its listener at each policy that changes the policy in force and at no policy that keeps it", () => {
+  const gate = createLogGate();
+  assert.equal(typeof gate.onChange, "function", "the gate has no onChange");
+  let changes = 0;
+  const off = gate.onChange(() => { changes += 1; });
+  gate.set(onlyErrors);
+  assert.equal(changes, 0, "the policy in force did not change");
+  gate.set({ ...onlyErrors, call: "info" });
+  assert.equal(changes, 1);
+  off();
+  gate.set(everything);
+  assert.equal(changes, 1, "a removed listener is not called");
+});
+
 test("the gate stores only errors until a policy is set, and a policy decides each class and level", () => {
   const gate = createLogGate();
   for (const klass of Object.keys(everything)) {

@@ -20,6 +20,12 @@
 6. 재적용: 이미지 영역은 로컬 `CATransaction` 안에서 insets를 다시 적용한다. 문서 영역은 배치 시점과 `NSViewFrameDidChangeNotification` 관찰자에서 다시 적용하며, 둘 다 `CATransaction` 안에서 실행되지 않는다. 명세는 문서 영역에 대해 창 트랜잭션을 주장하지 않는다.
 7. hit-test 소유자. hit-test 수정의 소유자는 하나, `fix/view-region-close-F228-5`다. 이 브랜치가 이미 `hitTest`(`webview_geometry.m:283-300`)를 고쳐 쓴다. 같은 파일의 `SPWindowComposition.hitTest`(`:183-194`)도 같은 소유자가 고친다. 하이브리드 대응 경로이며, `:189`가 DOM 검사 없이 `mainWebview`의 히트를 반환한다. `feat/view-region-F228`은 `hitTest`를 바꾸지 않는다. 그 버전은 fix 브랜치가 병합될 때 대체되며, feat 브랜치는 자체 `hitTest` 변경을 병합하지 않는다.
 
+### 감독자 결정 F238-a-14-5(확정)
+
+F238-a-2는 `runtime.native.on`으로 view가 구독할 수 있는 event를 네 영역 event로 제한했다. 그 제한은 `exposure-request`도 함께 제거했다. 이 event는 view exposure의 선언된 경로(`docs/spec/exposure.ko.md`, F212.7-12)이며 영역 event가 아니다. 이를 되돌리는 것은 허용 목록을 넓히는 것이 아니다. 제한이 실수로 제거한 선언된 core 경로를 복원하는 것이다. 구독할 수 있는 집합은 네 영역 event와 `exposure-request`이며, `packages/workbench/view-calls.js`의 명시적 목록 `PLUGIN_NATIVE_EVENTS`에 한 번만 적는다(spec: `docs/spec/native-surfaces.ko.md#플러그인-host-호출`). 그 밖의 event 이름은 `native event <name> is not served`로 계속 거부한다. `REGION_EVENTS`는 네 영역 event를 유지한다. Red: `exposure-request`를 구독하고 요청을 받는 view 시험은 바뀌지 않은 gate에서 거부되었다(`native event exposure-request is not served`). 목록에 추가한 뒤 Green이며, 목록에 없는 event에 대한 거부 시험은 그대로 둔다.
+
+이 결정으로 해결되는 항목: F238-a-14-3과 F238-a-14-4(shell과 editor의 `exposure-request` 구독)는 plugin 변경이 필요 없다. F238-a-14-1과 F238-a-14-2(`report` 호출)는 각 저장소 소유로 열려 있다.
+
 ### 이유
 
 스탬프된 뷰 호출을 거친 라우팅은 revision, 영역 수명, 영역 기록을 영역에 닿는 유일한 경로로 만든다. 원시 호스트 호출은 이를 건너뛴다(feat `view-calls.js:74-76`). 이것은 그 근거를 가진 워크벤치 선택이지, 플러그인 프로세스 규칙 9의 결과가 아니다. 규칙 9는 봉투 검사만 제공한다.
@@ -74,6 +80,14 @@
 ### 감독자 결정(15라운드, 읽기 경계와 형식 문구는 16라운드로 대체)
 
 데이터의 이동은 없다. 항목 4의 origin 형식을 갖추지 못한 영속 탭은 탭별로 이름 붙은 오류로 거부된다. 오류는 로그에 기록되고 그 탭에 표시되며, 탭은 조용히 버려지지 않는다. 사용자는 탭을 다시 연다. 이유: Core는 0.0.x이고 공개되지 않은 뷰는 보존할 설치 상태가 없다. 바인딩 규칙은 하위 호환, 호환 계층, 폴백, 이동을 금지하고, 잘못된 입력을 그럴듯한 값으로 바꾸는 것을 금지한다. 이동이 쓰는 `{directory: null}`도 그런 값이므로, 이동과 11·14라운드의 논거를 제거한다. `projects.json`의 형식 번호는 1로 남는다(항목 7). 바뀌는 것은 항목 7의 업그레이드 부분뿐이다.
+
+### 감독자 결정: 뷰가 아닌 탭(구속력 있음, 비뷰 탭의 읽기에 대해 R1을 대체)
+
+1. 저장. 이제부터 쓰이는 모든 탭은 뷰 탭과 뷰가 아닌 탭 모두 origin을 `{directory}`로 저장한다(F238-a-9, F238-a-10). `capture()`는 콘텐츠 카드 탭마다 이를 쓴다.
+2. 읽기, 뷰 탭. origin 멤버가 없거나 유효하지 않은 뷰 탭은 항목 4의 문구로 탭별 거부된다(16라운드 결정대로).
+3. 읽기, 뷰가 아닌 탭. origin 멤버가 없는 뷰가 아닌 탭은 릴리스된 형식 1의 형태다. 그 릴리스된 읽기 규칙은 그대로 둔다. origin은 `{directory: null}`이다. 이를 바꾸면 릴리스된 형태의 읽기가 바뀌어 AGENTS.md의 형식 규칙이 발동한다. 규칙은 `packages/workbench/tab-reports.js`의 이름 붙은 함수 하나 `releasedNonViewOrigin()`이며, `docs/spec/projects.md`(및 ko 대응)에 형식 1의 뷰가 아닌 탭 읽기 규칙으로 적는다. 새 폴백이 아니다. `tabOrigin`의 일반 폴백을 포함해 다른 모든 폴백은 제거한다(F238-a-12).
+4. 시험. 하나는 멤버가 없는 뷰가 아닌 탭의 분기(`releasedNonViewOrigin()`으로 `{directory: null}`을 읽음)이고, 다른 하나는 멤버가 없는 뷰 탭의 분기(항목 4의 origin 부재 문구로 거부됨)다.
+5. 이유. 릴리스된 형태는 읽기를 유지해야 한다. 읽기가 바뀌면 형식 규칙이 발동한다. 뷰가 아닌 탭의 거부는 지킬 뷰 없이 오류만 보인다(R1). 이름 붙은 함수 하나는 릴리스된 규칙을 보이게 하고 나머지 코드는 폴백 없이 둔다.
 
 ### 결정
 

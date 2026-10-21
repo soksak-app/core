@@ -243,13 +243,27 @@ func (s *Surfaces) pluginHostFailed(plugin string) {
 // host, it clears the record, writes host.trace.plugin-host.restart-reset, and creates the host again in every window
 // through invoke, which runs a function on the UI thread (docs/spec/plugin-host.md#restarts).
 func (s *Surfaces) pluginHostReset(plugin string, invoke func(func())) {
-	if !s.pluginHostRestarts.reset(plugin) {
+	resetPluginHost(s.pluginHostRestarts, s.hostWindows(), plugin, invoke)
+}
+
+// resetPluginHost clears the record of the plugin host of plugin in records when the limit stopped it, and then creates the
+// host again in each of windows through invoke. It is the step that the open of a surface and the enable of a plugin share.
+func resetPluginHost(records *pluginHostRestarts, windows []*Surfaces, plugin string, invoke func(func())) {
+	if !records.reset(plugin) {
 		return
 	}
 	EmitHost(LevelDebug, "host.trace.plugin-host.restart-reset", map[string]any{"plugin": plugin})
-	for _, window := range s.hostWindows() {
+	for _, window := range windows {
 		invoke(window.recreatePluginHosts)
 	}
+}
+
+// pluginEnabled handles the enable of plugin by the person in one step, as the open of its surface does: the stop of its plugin
+// host and the stops of the sidecars that its manifest lists are cleared (docs/spec/plugin-host.md#restarts,
+// docs/spec/sidecars.md#failure).
+func (h *Host) pluginEnabled(plugin string) {
+	h.sidecars.PluginEnabled(plugin)
+	resetPluginHost(h.pluginHostRestarts, h.allWindows(), plugin, application.InvokeSync)
 }
 
 // recreatePluginHosts creates the plugin host web view of every loaded plugin that the window has none of and whose
@@ -277,10 +291,15 @@ func (s *Surfaces) hostWindows() []*Surfaces {
 	if s.host == nil {
 		return nil
 	}
-	s.host.mu.Lock()
-	defer s.host.mu.Unlock()
-	windows := make([]*Surfaces, 0, len(s.host.windows))
-	for _, window := range s.host.windows {
+	return s.host.allWindows()
+}
+
+// allWindows returns the windows of the application at the moment of the call.
+func (h *Host) allWindows() []*Surfaces {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, window := range h.windows {
 		windows = append(windows, window)
 	}
 	return windows

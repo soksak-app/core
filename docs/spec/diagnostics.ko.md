@@ -63,6 +63,7 @@
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error page start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
 | host가 page가 요청한 파일을 내줄 수 없다 | `error host page asset: <path>: not found`, 경로마다 한 번 |
 | main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error page <where>: <text>` |
+| view가 자기 page에 오류를 보여 준다 | view call `runtime.error`가 쓰는 `error page surface <surface> <where>: <text>`([native surfaces](native-surfaces.ko.md#view-표면)) |
 | Wails host에서 surface나 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |
 | 창의 WebContent process가 끝난다 | `error host page process: <window>: terminated`. 앱 DOM webview가 등록되어 있으면 native 계층은 WebKit 종료 이유(`reason`과 `code`)를 담은 `native.webview.process_ended` 이벤트도 저장한다 |
 | Tauri host가 main thread 감시의 heartbeat를 그 thread에 보내지 못한다 | `error host stall watch: heartbeat: <reason>`, 그리고 감시가 끝난다([logging](logging.ko.md), 정지) |

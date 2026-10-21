@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use crate::plugin_host::{
     self, Failure, HostPlugin, HostState, HostView, PluginHostRestarts, PluginHosts,
 };
+use crate::plugin_host_channel::clear_enabled_stop;
 use crate::test_folder::Folder;
 
 /// The record of the platform fake: the created host webviews with their configuration, the addresses that they load,
@@ -398,5 +399,40 @@ fn the_open_of_a_surface_of_the_plugin_clears_the_stop() {
         fail_at(&restarts, &offset, 40),
         Failure::Restart(1),
         "the reset kept the failures or the attempts"
+    );
+}
+
+// contract: plugin-host.restart.enable-clears-stops
+#[test]
+fn the_enable_of_the_plugin_clears_the_stop_and_reloads_every_window_once() {
+    let (restarts, offset) = moved_restarts();
+    let labels = vec!["main".to_string(), "aux".to_string()];
+    assert_eq!(fail_at(&restarts, &offset, 0), Failure::Restart(1));
+    let mut reloaded = Vec::new();
+    assert!(
+        !clear_enabled_stop(&restarts, "probe", &labels, |label| reloaded
+            .push(label.to_string())),
+        "the enable of a running host cleared a stop"
+    );
+    assert!(
+        reloaded.is_empty(),
+        "the enable of a plugin with no stop reloaded {reloaded:?}"
+    );
+    for seconds in [10, 20, 30] {
+        fail_at(&restarts, &offset, seconds);
+    }
+    assert!(restarts.stopped("probe"), "probe is not stopped");
+    let mut reloaded = Vec::new();
+    assert!(
+        clear_enabled_stop(&restarts, "probe", &labels, |label| reloaded
+            .push(label.to_string())),
+        "the enable of a stopped plugin cleared no stop"
+    );
+    assert_eq!(reloaded, labels, "the enable reloaded the wrong windows");
+    assert!(!restarts.stopped("probe"), "the enable left probe stopped");
+    assert_eq!(
+        fail_at(&restarts, &offset, 40),
+        Failure::Restart(1),
+        "the enable kept the failures or the attempts"
     );
 }

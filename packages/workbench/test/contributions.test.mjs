@@ -29,6 +29,8 @@ test("a provider receives the connected items of its declared points, and a fail
     { plugin: "two", point: "probe.language", index: 0, state: "connected", reason: null },
   ]);
   assert.deepEqual(contributionsOf("probe", "language").map((entry) => entry.plugin), ["two"]);
+  assert.deepEqual(items.map(({ plugin, index }) => ({ plugin, index })), [{ plugin: "one", index: 0 }, { plugin: "two", index: 0 }],
+    "each item names the index of its entry in the contributes of its plugin");
   assert.throws(() => contributionsOf("probe", "format"), /extension point format is not declared by probe/);
   assert.throws(() => contributionsOf("one", "language"), /extension point language is not declared by one/);
 });

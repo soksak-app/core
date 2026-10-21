@@ -48,20 +48,20 @@ test("the channel of a view source acknowledges a snapshot through the view even
 });
 
 test("an expansion update reaches the plugin view as declared-ui.expanded", async () => {
-  const { expanded } = createDeclaredSource({ plugin: "probe", status: "files.tree" });
-  await expanded({ id: "view-a", surface: "view-a" }, { status: "files.tree", tree: "files", path: ["folder"], expanded: true });
+  const { expanded } = createDeclaredSource({ plugin: "probe", status: "tree" });
+  await expanded({ id: "view-a", surface: "view-a" }, { status: "tree", tree: "file-tree", path: ["folder"], expanded: true });
   assert.deepEqual(calls.at(-1), {
     name: "viewEvent",
-    arg: { surface: "view-a", event: "declared-ui.expanded", data: { status: "files.tree", tree: "files", path: ["folder"], expanded: true } },
+    arg: { surface: "view-a", event: "declared-ui.expanded", data: { status: "tree", tree: "file-tree", path: ["folder"], expanded: true } },
   });
 });
 
 test("an expansion update reaches a plugin host as declared-ui.expanded", async () => {
-  const { expanded } = createDeclaredSource({ plugin: "probe", status: "files.tree" });
-  await expanded({ id: "plugin:probe", surface: null }, { status: "files.tree", tree: "files", path: ["folder"], expanded: false });
+  const { expanded } = createDeclaredSource({ plugin: "probe", status: "tree" });
+  await expanded({ id: "plugin:probe", surface: null }, { status: "tree", tree: "file-tree", path: ["folder"], expanded: false });
   assert.deepEqual(calls.at(-1), {
     name: "pluginHostEvent",
-    arg: { plugin: "probe", event: "declared-ui.expanded", data: { status: "files.tree", tree: "files", path: ["folder"], expanded: false } },
+    arg: { plugin: "probe", event: "declared-ui.expanded", data: { status: "tree", tree: "file-tree", path: ["folder"], expanded: false } },
   });
 });
 

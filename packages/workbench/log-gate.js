@@ -22,6 +22,8 @@ export function logPolicyOf(setting) {
 /** A gate that stores only the errors of every class until a policy is set. */
 export function createLogGate() {
   let max = Object.fromEntries(CLASSES.map((name) => [name, 0]));
+  // The listeners of the changes of the policy in force.
+  const listeners = new Set();
   return {
     /** Whether an event of the class and the level is stored. An event whose class the catalog does not give is not gated. */
     enabled(klass, level) {
@@ -50,7 +52,15 @@ export function createLogGate() {
       }
       const changed = CLASSES.some((name) => next[name] !== max[name]);
       max = next;
+      if (changed) for (const listener of [...listeners]) listener();
       return changed;
+    },
+
+    /** Calls listener after each set that changes the policy in force, and returns the function that removes it. */
+    onChange(listener) {
+      if (typeof listener !== "function") throw new TypeError("onChange requires a listener");
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
 
     /** The policy in force, as `set` takes it. */

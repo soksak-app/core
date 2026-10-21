@@ -5,6 +5,7 @@
 // as replies that the host relays as the events plugin-host-reply.
 
 import { host as bridge } from "@soksak/runtime";
+import { reportRecord } from "./page-log.js";
 import { createViewCommands } from "./view-commands.js";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
@@ -16,8 +17,113 @@ export const hostKeyOf = (plugin) => `plugin:${plugin}`;
 /** The plugin of a host key, or null for a key that is not one. */
 export const pluginOfHostKey = (key) => (typeof key === "string" && key.startsWith("plugin:") ? key.slice("plugin:".length) : null);
 
+/**
+ * The plugin and sidecar of a plugin session id plugin:<plugin id>:<project id>:<sidecar name>, or null for an id that is
+ * not one (docs/plans/plugin-host-routes.md rule 2). No id contains a colon, so the split is unambiguous.
+ */
+export function pluginSessionOf(id) {
+  if (typeof id !== "string" || !id.startsWith("plugin:")) return null;
+  const parts = id.split(":");
+  if (parts.length !== 4 || parts.some((part) => part === "")) return null;
+  return { plugin: parts[1], project: parts[2], sidecar: parts[3] };
+}
+
+/**
+ * Checks a sidecar request of a plugin host on the main page (docs/plans/plugin-host-routes.md rule 8). declared lists the
+ * operations that the plugin manifest declares for the sidecar (hostOperations); sidecarDeclaration is the validated
+ * sidecar.json, whose message form the body takes and whose hostReadOperations allow the operation. Returns the body
+ * re-serialized from the parsed object, so the check and the sidecar read the same value; throws a named error otherwise.
+ */
+export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sidecarDeclaration, body }) {
+  const refuse = (reason) => new Error(`plugin host ${plugin}: ${reason}`);
+  const form = sidecarDeclaration?.message;
+  if (form === undefined) throw refuse(`sidecar ${sidecar} declares no message form`);
+  let object;
+  try {
+    object = typeof body === "string" ? JSON.parse(body) : undefined;
+  } catch {
+    object = undefined;
+  }
+  if (typeof object !== "object" || object === null || Array.isArray(object)) throw refuse("body is not a JSON object");
+  const operation = object[form.operationField];
+  if (typeof operation !== "string") throw refuse("operation is missing or not a string");
+  // default: hostReadOperations is an optional field of sidecar.json; without it the sidecar allows no operation to a plugin host.
+  const readable = sidecarDeclaration.hostReadOperations ?? [];
+  if (!declared.includes(operation) || !readable.includes(operation)) throw refuse(`operation ${operation} is not served`);
+  return JSON.stringify(object);
+}
+
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */
-export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register";
+export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register"
+  || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure";
+
+/*
+ * The sidecars that each installed plugin declares as dependencies: plugin id -> [{name, declared, declaration}]. declared is the
+ * operations that the plugin manifest names for the sidecar (hostOperations), and declaration is the validated sidecar.json, or null
+ * when the page holds none. The installed document carries the facts of each sidecar dependency, so the sidecar check refuses every
+ * operation of a sidecar that the document holds no facts for (docs/plans/plugin-host-routes.md rule 8).
+ */
+const declaredSidecars = new Map();
+
+/** Records the sidecars that a plugin declares for its plugin host (docs/plans/plugin-host-routes.md rule 8). */
+export function declarePluginSidecars(plugin, sidecars) {
+  declaredSidecars.set(plugin, sidecars);
+}
+
+/** The sidecars that a plugin declares for its plugin host. default: a plugin that declared none has no sidecars (an empty list). */
+export const pluginSidecarsOf = (plugin) => declaredSidecars.get(plugin) ?? [];
+
+/*
+ * The sessions of the sidecars that each plugin host subscribed to: plugin -> session id -> the event kinds (message, failure)
+ * that the host page listens to. A reply to a session with no subscription of its kind is dropped (docs/plans/plugin-host-routes.md
+ * rule 4), so the page subscribes before its first send.
+ */
+const sessions = new Map();
+
+function subscribeSession(plugin, session, kind) {
+  let kinds = sessions.get(plugin);
+  if (!kinds) sessions.set(plugin, kinds = new Map());
+  let set = kinds.get(session);
+  if (!set) kinds.set(session, set = new Set());
+  set.add(kind);
+}
+
+/** Removes every session subscription of plugin, which ends with its host (plugin-host-ended). */
+export function forgetSessions(plugin) {
+  sessions.delete(plugin);
+}
+
+/** The page-side route of a sidecar event of a plugin session: it posts the event to the host page of its plugin. */
+function routeSessionEvent(kind, event, sidecar, session, payload) {
+  const plugin = pluginSessionOf(session)?.plugin;
+  const subscribed = sessions.get(plugin)?.get(session)?.has(kind) === true;
+  if (!subscribed) {
+    // default: a sidecar event with no subscription of its kind is a loss, written at warn (docs/spec/logging.md).
+    reportRecord("warn", `plugin host ${plugin}: sidecar ${sidecar} ${kind} for ${session} dropped: no subscription`);
+    return;
+  }
+  const fields = kind === "message" ? { body: payload } : { reason: payload };
+  // default: a post that the host refuses is written at error with its reason.
+  bridge.call("pluginHostEvent", { plugin, event: kind, sidecar, id: session, ...fields }).catch((error) => {
+    // default: a rejection that is not an Error is reported by its text, so the record names the failure either way.
+    reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: ${error?.message ?? error}`);
+  });
+}
+
+// The sidecar listeners of the page, installed once when a host first subscribes to a session.
+let sessionListeners = null;
+function listenSessionEvents() {
+  // default: the listeners are installed on the first subscription and kept after it, so the assignment runs once.
+  sessionListeners ??= Promise.all([
+    bridge.on("sidecar-message", (event) => {
+      if (pluginSessionOf(event?.surface) !== null) routeSessionEvent("message", event, event.sidecar, event.surface, event.body);
+    }),
+    bridge.on("sidecar-failure", (event) => {
+      if (pluginSessionOf(event?.surface) !== null) routeSessionEvent("failure", event, event.sidecar, event.surface, event.reason);
+    }),
+  ]);
+  return sessionListeners;
+}
 
 // The command layer of each plugin host, by plugin id. The answers of a host keep its layer here, so every sender of a
 // request to the host (the exposure requests and the declared UI pull) sends through one layer, and each reply of the host
@@ -75,10 +181,36 @@ export function createHostCommands({ plugin, timeoutOf, report }) {
  * Returns {receive(event), close()}. receive takes one plugin-host-call event; close() ends the subscription and every open
  * call of every host with surface-closed.
  */
-export function listenPluginHostCalls({ register, unregister, timeoutOf, report }) {
-  if ([register, unregister, timeoutOf, report].some((value) => typeof value !== "function")) {
-    throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf and report functions");
+export function listenPluginHostCalls({ register, unregister, timeoutOf, report, sidecarsOf = () => [] }) {
+  if ([register, unregister, timeoutOf, report, sidecarsOf].some((value) => typeof value !== "function")) {
+    throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf, report and sidecarsOf functions");
   }
+  // The declared sidecar of the plugin named by a request, with the operations its host may call (rule 8). default: a plugin
+  // with no sidecarsOf entries declares none, so every sidecar request of its host is refused by name.
+  const declaredSidecar = (plugin, name) => {
+    const sidecar = sidecarsOf(plugin).find((entry) => entry.name === name);
+    if (!sidecar) throw new Error(`plugin host ${plugin} cannot use sidecar ${name}`);
+    return sidecar;
+  };
+  const answerSidecar = async (event, params) => {
+    const { plugin } = event;
+    if (typeof params.sidecar !== "string" || params.sidecar === "") throw new TypeError(`plugin host call ${event.command} requires a sidecar name`);
+    const declared = declaredSidecar(plugin, params.sidecar);
+    const session = pluginSessionOf(params.id);
+    if (session === null || session.plugin !== plugin || session.sidecar !== params.sidecar) {
+      throw new Error(`plugin host ${plugin} cannot use sidecar session ${params.id}`);
+    }
+    if (event.command === "runtime.sidecar.on" || event.command === "runtime.sidecar.onFailure") {
+      // The subscription is recorded before the reply, so a reply of the sidecar that follows the answer is delivered.
+      subscribeSession(plugin, params.id, event.command === "runtime.sidecar.on" ? "message" : "failure");
+      await listenSessionEvents();
+      return { result: null };
+    }
+    const body = checkHostSidecarRequest({ plugin, sidecar: params.sidecar, declared: declared.declared, sidecarDeclaration: declared.declaration, body: params.body });
+    await listenSessionEvents();
+    await bridge.call("pluginHostSidecarSend", { plugin, sidecar: params.sidecar, id: params.id, body, cids: params.cids });
+    return { result: null };
+  };
   const answer = async (event) => {
     const { plugin, id } = event;
     try {
@@ -97,6 +229,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report 
         commands = createHostCommands({ plugin, timeoutOf, report });
         keepHostCommands(plugin, commands);
       }
+      if (event.command.startsWith("runtime.sidecar.")) return await answerSidecar(event, params);
       if (event.command === "runtime.command.register") {
         if (typeof params.name !== "string" || params.name === "") throw new TypeError(`plugin host call ${event.command} requires a non-empty name`);
       } else if (params.kind !== "status" && params.kind !== "dom") {
@@ -137,6 +270,9 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report 
     if (closed || typeof event?.plugin !== "string") return;
     const commands = hostCommandsOf(event.plugin);
     layers.delete(event.plugin);
+    forgetSessions(event.plugin);
+    // The host closes the plugin sessions that this window owns (docs/plans/plugin-host-routes.md rule 7).
+    bridge.call("pluginHostSidecarClose", { plugin: event.plugin }).catch((error) => report(error));
     commands?.close();
     try {
       unregister(event.plugin);

@@ -63,6 +63,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a module of the main page fails to load or throws while it loads | `error page start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
 | the host cannot serve a file that the page requests | `error host page asset: <path>: not found`, once for each path |
 | the main page throws or rejects after its first screen | `error page <where>: <text>` of the page's error display |
+| a view shows an error on its own page | `error page surface <surface> <where>: <text>`, written by the view call `runtime.error` ([native surfaces](native-surfaces.md#view-surfaces)) |
 | the WebContent process of a surface or a modal ends in the Wails host | `error native surface webview: web content process terminated: <address>`; the Tauri host writes the end of every web view, including a surface and a modal, as `error host page process: <label>: terminated` |
 | the WebContent process of a window ends | `error host page process: <window>: terminated`; the native layer also stores the event `native.webview.process_ended` with the WebKit termination reason of the end (`reason` and `code`), when the window's app DOM webview is registered |
 | the Tauri host cannot send the heartbeat of the watch of its main thread to that thread | `error host stall watch: heartbeat: <reason>`, and the watch ends ([logging](logging.md), stalls) |

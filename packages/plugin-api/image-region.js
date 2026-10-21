@@ -1,18 +1,15 @@
-// The image region attached to one element of a surface page.
-//
-// The host places an image region inside the surface webview, positioned with the viewport margins that this module reports. The
-// position and size of the element are followed with ResizeObserver and the window resize and scroll events.
-
-import { regionInsets, observeRegionInsets } from "./document-region.js";
+// The image region of a surface composition. The host places it with the composition of the surface, so this module only attaches the
+// region and forwards its operations and events.
 
 /** The name rule. The host checks with the same rule. */
 export const IMAGE_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /**
- * Attaches the image region name to element. port is page.image of the runtime and view is the window of the element.
+ * Attaches the image region name of the composition of a surface. port is page.image of the runtime. The host places the region
+ * with the composition, so the region observes no element and sends no placement of its own (docs/spec/plugins.md#view-surfaces).
  * The calls on the returned region run in order after the attachment finishes. It cannot be called after detach.
  */
-export function attachImage(port, element, name, sidecar, view = element.ownerDocument.defaultView, options = {}) {
+export function attachImage(port, element, name, sidecar, options = {}) {
   if (!IMAGE_NAME.test(name)) throw new Error(`invalid image name ${JSON.stringify(name)}`);
   // A failure that does not return to a caller (a placement during observation, an event with no handler) is reported as an error with this function.
   const { report } = options;
@@ -44,11 +41,6 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
     for (const fn of handlers) fn(event);
   }));
 
-  const placeAt = ({ insets, visible }) => queue(() => port.place(name, insets, visible));
-  // default: the thrown value may not be an Error, so without message the value itself is written.
-  const failed = (error) => report(`image ${name} place: ${error?.message ?? error}`);
-  const stopObserving = options.observe === false ? () => {} : observeRegionInsets(element, view, placeAt, failed);
-
   return {
     name,
     _ready: chain,
@@ -66,15 +58,9 @@ export function attachImage(port, element, name, sidecar, view = element.ownerDo
     setAccessibleText(text) {
       return queue(() => port.text(name, text));
     },
-    visible(v) {
-      const { insets } = regionInsets(element, view);
-      return placeAt({ insets, visible: v });
-    },
-    _place: placeAt,
     detach() {
       const done = queue(() => port.detach(name));
       detached = true;
-      stopObserving();
       listeners.clear();
       unlisten.then((stop) => stop());
       return done;

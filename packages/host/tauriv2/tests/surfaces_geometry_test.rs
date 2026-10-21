@@ -166,3 +166,52 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
         r#"surface "tab-1": only a view surface carries start values"#
     );
 }
+
+// A view surface whose start values carry no origin, or an origin that is not {directory} with a path or null, is refused with
+// its reason; the host never injects a directory in its place. The fixed form with a null directory is accepted.
+// contract: view.start-values.refuses-a-missing-origin
+#[test]
+fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
+    let held = HashMap::new();
+    let view = |start: Option<serde_json::Value>| {
+        let mut surface = serde_json::json!({
+            "id": "tab-1", "module": null, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+            "visible": true, "dim": false, "plugin": "page",
+            "composition": {"kind": "view", "page": "ui/page.html"},
+        });
+        if let Some(start) = start {
+            surface["start"] = start;
+        }
+        surface
+    };
+    let missing = r#"surface "tab-1": view start origin is missing"#;
+    let malformed = r#"surface "tab-1": view start origin is not {directory} with a path or null"#;
+    let cases = [
+        (None, missing),
+        (Some(serde_json::json!({"params": null})), missing),
+        (Some(serde_json::json!({"origin": null})), malformed),
+        (Some(serde_json::json!({"origin": {}})), malformed),
+        (
+            Some(serde_json::json!({"origin": {"directory": 1}})),
+            malformed,
+        ),
+        (
+            Some(serde_json::json!({"origin": {"directory": "/work/one", "root": "/work/one"}})),
+            malformed,
+        ),
+    ];
+    for (start, want) in cases {
+        let request = sync_request(serde_json::json!({
+            "settled": true, "titlebar": 40.0, "surfaces": [view(start)],
+        }));
+        assert_eq!(
+            check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+            want
+        );
+    }
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}})))],
+    }));
+    assert!(check_sync_request(&request, &held, &HashMap::new()).is_ok());
+}

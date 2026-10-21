@@ -65,9 +65,11 @@ Every keyboard shortcut of the workbench has one owner and one command. The mach
 
 - `native menu`: a key equivalent of an application menu item. The menu receives the key before the view, so the view's default action is not prevented. A row with a core command reaches it through the menu; a row with `framework role` runs the role of the item.
 - `workbench`: a key that the workbench page or its native modals handle and prevent by default. The row names the command that the key runs.
-- `view`: a key that a plugin view handles inside itself under [plugin processes](plugin-processes.md) rule 7: Escape and the keys of a text input. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
+- `view`: a key that the view handles itself, or a workbench command that the view runs with `runtime.command` for a key that it forwards under [plugin processes](plugin-processes.md) rule 7. A view row names no command, because the view decides synchronously; it is a rule, not a binding.
 
 In a key, `cmd` is the Command key on macOS and the Control key on the other hosts (`CmdOrCtrl`). `Enter` and `Escape` are key names.
+
+The view reads the rows that it may forward with the view call `runtime.shortcuts.read`: the rows whose owner is `workbench` or `view` ([native surfaces](native-surfaces.md#view-surfaces), Input). A view registers no table.
 
 | Key | Owner | Command | Menu item | When |
 |---|---|---|---|---|
@@ -92,8 +94,8 @@ In a key, `cmd` is the Command key on macOS and the Control key on the other hos
 | `Enter` | workbench | core.library.form.submit | — | A library form field has focus |
 | `Escape` | workbench | core.picker.close | — | A picker layer is open |
 | `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
-| `Escape` | view | none | — | A plugin view has keyboard focus; the view decides it under plugin processes rule 7 |
-| `text input keys` | view | none | — | A plugin view has a text input focused; the first responder of the view receives them |
+| `Escape` | view | none | — | A plugin view has keyboard focus; the view handles the key itself, and runs the Escape command of an open picker only when it forwards the key |
+| `text input keys` | view | none | — | A plugin view has a text input focused; the view handles the key itself and it keeps its default action |
 
 ## Registration
 

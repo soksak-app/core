@@ -8,28 +8,41 @@
  *
  *     event     {id, command, params} of a call request, or {id, cancel: true} of a cancel
  *     options   plugin: the plugin id of the view
+ *               surface: the surface id of the view, which names the place of the error lines of the view
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
+ *               shortcuts: the rows of the shortcut table (packages/workbench/shortcuts.json)
+ *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
+ *               contributions(point): the connected items of the point, as contributions of the surface context returns them
  *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
  *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), and state with
  *                 {read, write} only when the plugin declares surface.unload
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
- *                 sidecar.send(id, body, cids): the send to the declared sidecar, as runtime.sidecar().send
+ *                 sidecar.send(id, body, cids, name): the send to the declared sidecar name, as runtime.sidecar(name).send
  *                 clipboard: {read(type), writeText(text)}, the clipboard bridge without the PNG bytes
  *                 links.open(url): opens a link, as runtime.links.open
- *                 log: the log levels of the page, as runtime.log of the surface context has; the level gate of the page
- *                   applies at delivery, and a gated record is counted there
+ *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
+ *                   display of the page
+ *                 log: the log levels of the page and enabled(level), as runtime.log of the surface context has; the level
+ *                   gate of the page applies at delivery, and a gated record is counted there
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
  *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
  *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
- *                   subscribe.settings(): register the page subscriptions of the view (view-events.js); each resolves when it is
+ *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
  *                   registered
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
  *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
  *                   and relays it to the host (surface-modules.js)
+ *               composition: the page operations of the surface that a hybrid composition uses (surface-modules.js)
+ *                 declaration(): the declared {kind, regions, overlays} of the surface
+ *                 place(regions, overlays): places one complete snapshot with the composition revision of the document
+ *                 report(text): reports a failure of the composition through the report host call of the surface
+ *                 document: {attach, load, zoom, go, post, subscribe, unsubscribe, detach} of the surface; attach goes through the
+ *                   region record of the memory saver (document-regions.js)
+ *                 image: {attach, focus, caret, text, detach} of the surface
  */
 export async function answerViewCall(event, options) {
   if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
@@ -65,7 +78,83 @@ function untilCancelled(promise, signal) {
   });
 }
 
-async function run(command, params, { plugin, tab, runCore, runOwned, runtime }) {
+import { LOG_LEVELS } from "@soksak/plugin-api";
+
+// The place of an error line has no control character and no ": ", because the record splits the line at its first ": ".
+const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
+
+// The core root of a view, from which it imports the module of a contribution item (docs/spec/plugin-processes.md, rule 4).
+const CORE_ROOT = "sok://core";
+
+/**
+ * The rows of the shortcut table that hold while a view has keyboard focus (docs/spec/native-surfaces.md#view-surfaces): a row of
+ * any focus and a row whose owner is the view. A workbench row of another context holds only while the page has the focus.
+ */
+function viewShortcuts(shortcuts) {
+  return shortcuts.filter((row) => row.owner === "workbench" || row.owner === "view")
+    .map(({ key, owner, command }) => ({ key, owner, command }));
+}
+
+
+// The host calls of the composition and the regions. A view operates its regions only through the composition calls, because a
+// host call from the view would skip the revision of the document, the region lifetime and the region record
+// (docs/spec/native-surfaces.md#view-surfaces, regions).
+export const REGION_HOST_CALLS = new Set([
+  "compositionDeclare", "compositionPlace",
+  "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
+  "documentPost", "documentQuery", "documentInteractionState",
+  "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
+]);
+
+// The host calls of the view bridge (docs/spec/native-surfaces.md#view-surfaces, view channel). The page sends them itself, so a
+// plugin never reaches them.
+export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply"]);
+
+// The host commands that plugin code may send through its native handle (docs/spec/native-surfaces.md#view-surfaces). A plugin
+// reaches a host command only through this allowlist: a command that is not listed is refused, so a command added to the host
+// stays closed to plugins until it is listed here.
+export const PLUGIN_HOST_CALLS = new Set(["exposureReply"]);
+
+// The native events of the region record that a view subscribes to (docs/spec/native-surfaces.md#view-surfaces, regions). The other
+// events are internal to the view bridge.
+export const REGION_EVENTS = new Set(["document-stream", "document-state", "document-message", "image-event"]);
+
+// The native events that plugin code may subscribe to through its native handle (docs/spec/native-surfaces.md#plugin-host-calls, docs/spec/exposure.md#relay).
+// The four region events, and exposure-request, the declared route of view exposure: the forwarded exposure request reaches the view
+// through this subscription. Every other event name is refused.
+export const PLUGIN_NATIVE_EVENTS = new Set([...REGION_EVENTS, "exposure-request"]);
+
+/**
+ * The plugin-facing native handle of a surface: the host calls and the native events that plugin code reaches through runtime.native.
+ * call refuses the region calls and the view bridge calls, so a plugin reaches a region only through its composition. The refusal
+ * is in this handle, not in each caller, so every plugin-facing path passes it.
+ */
+export function pluginNativeGate(native) {
+  return {
+    call(name, payload) {
+      if (REGION_HOST_CALLS.has(name)) {
+        return Promise.reject(new Error(`host call ${name} is not served: a view operates its regions through its composition`));
+      }
+      if (VIEW_BRIDGE_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served: the view bridge is internal`));
+      if (!PLUGIN_HOST_CALLS.has(name)) return Promise.reject(new Error(`host call ${name} is not served to plugins`));
+      return native.call(name, payload);
+    },
+    on(name, listener) {
+      if (!PLUGIN_NATIVE_EVENTS.has(name)) return Promise.reject(new Error(`native event ${name} is not served: the view bridge is internal`));
+      return native.on(name, listener);
+    },
+  };
+}
+
+/** The named fields of a region call, whose name is the region name. Any other value is refused. */
+function regionOf(command, params) {
+  const fields = objectOf(command, params);
+  if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty region name`);
+  return fields;
+}
+
+async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, runtime, composition }) {
+
   switch (command) {
     case "tab.state.read":
       if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
@@ -84,11 +173,15 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
         if (typeof payload.name !== "string" || payload.name === "") throw new TypeError(`view call ${fields.name} requires a non-empty name`);
         return runtime.exposure.registered(payload);
       }
+      if (REGION_HOST_CALLS.has(fields.name)) {
+        throw new Error(`view call ${command} ${fields.name} is not served: a view operates its regions through its composition`);
+      }
       return runtime.native.call(fields.name, fields.payload);
     }
     case "runtime.sidecar.send": {
       const fields = objectOf(command, params);
-      return runtime.sidecar.send(fields.id, fields.body, fields.cids);
+      if (typeof fields.sidecar !== "string" || fields.sidecar === "") throw new TypeError(`view call ${command} requires a non-empty sidecar`);
+      return runtime.sidecar.send(fields.id, fields.body, fields.cids, fields.sidecar);
     }
     case "runtime.clipboard.read":
       // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/spec/plugin-processes.md, rule 3).
@@ -155,7 +248,37 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
       if (typeof send !== "function") {
         throw new TypeError(`view call ${command} log level must be one of error, warn, info, debug, trace`);
       }
-      send(fields.event, fields.fields);
+      send(fields.event, fields.fields, fields.cids === undefined ? undefined : { cids: fields.cids });
+      return null;
+    }
+    case "runtime.log.levels":
+      // The view keeps the levels and skips the fields of a level that is not stored; each change arrives as log.levels.
+      await runtime.subscribe.logLevels();
+      return LOG_LEVELS.filter((level) => runtime.log.enabled(level));
+    case "runtime.error": {
+      // An error that the view shows on its own page is recorded at the moment it appears, as the error display of the page
+      // records its errors (docs/spec/native-surfaces.md#view-surfaces).
+      const fields = objectOf(command, params);
+      if (typeof fields.where !== "string" || !ERROR_PLACE.test(fields.where)) {
+        throw new TypeError(`view call ${command} requires a non-empty where without a control character or ": "`);
+      }
+      if (typeof fields.text !== "string" || fields.text === "") throw new TypeError(`view call ${command} requires a non-empty text`);
+      await runtime.report(`surface ${surface} ${fields.where}: ${fields.text}`);
+      return null;
+    }
+    case "runtime.shortcuts.read":
+      return viewShortcuts(shortcuts);
+    case "runtime.contributions": {
+      // The module of an item is a path of the main page; a view imports it from the core root.
+      const fields = objectOf(command, params);
+      return contributions(fields.point).map(({ plugin: owner, index, item, module }) => ({ plugin: owner, index, item, module: `${CORE_ROOT}${module}` }));
+    }
+    case "runtime.contributions.fail": {
+      const fields = objectOf(command, params);
+      if (typeof fields.reason !== "string" || fields.reason === "") throw new TypeError(`view call ${command} requires a non-empty reason`);
+      const entry = contributions(fields.point).find((item) => item.plugin === fields.plugin && item.index === fields.index);
+      if (!entry) throw new Error(`view call ${command}: ${fields.point} has no connected item ${fields.index} of ${fields.plugin}`);
+      entry.fail(fields.reason);
       return null;
     }
     case "runtime.textSize.read":
@@ -168,12 +291,82 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
     case "runtime.settings.on":
       await runtime.subscribe.settings();
       return null;
+    // The composition and the regions of the view run the page operations of its surface with the named fields only, so a field such
+    // as surface in the params reaches no host call (docs/spec/native-surfaces.md#view-surfaces, regions).
+    case "composition.declaration":
+      return composition.declaration();
+    case "composition.place": {
+      const fields = objectOf(command, params);
+      if (!Array.isArray(fields.regions) || !Array.isArray(fields.overlays)) {
+        throw new TypeError(`view call ${command} requires the arrays regions and overlays`);
+      }
+      return composition.place(fields.regions, fields.overlays);
+    }
+    case "composition.report":
+      if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty text`);
+      return composition.report(params);
+    case "document.attach":
+      return composition.document.attach(regionOf(command, params).name);
+    case "document.load": {
+      const fields = regionOf(command, params);
+      return composition.document.load(fields.name, fields.url);
+    }
+    case "document.zoom": {
+      const fields = regionOf(command, params);
+      return composition.document.zoom(fields.name, fields.zoom);
+    }
+    case "document.go": {
+      const fields = regionOf(command, params);
+      return composition.document.go(fields.name, fields.action, fields.offset);
+    }
+    case "document.post": {
+      const fields = regionOf(command, params);
+      return composition.document.post(fields.name, fields.message);
+    }
+    case "document.subscribe": {
+      const fields = regionOf(command, params);
+      return composition.document.subscribe(fields.name, fields.stream);
+    }
+    case "document.unsubscribe": {
+      const fields = regionOf(command, params);
+      return composition.document.unsubscribe(fields.name, fields.handle);
+    }
+    case "document.detach":
+      return composition.document.detach(regionOf(command, params).name);
+    case "image.attach": {
+      const fields = regionOf(command, params);
+      return composition.image.attach(fields.name, fields.sidecar);
+    }
+    case "image.focus":
+      return composition.image.focus(regionOf(command, params).name);
+    case "image.caret": {
+      const fields = regionOf(command, params);
+      return composition.image.caret(fields.name, fields.x, fields.y, fields.width, fields.height);
+    }
+    case "image.text": {
+      const fields = regionOf(command, params);
+      return composition.image.text(fields.name, fields.text);
+    }
+    case "image.detach":
+      return composition.image.detach(regionOf(command, params).name);
     default:
       break;
   }
+  // A core command that the view runs through runtime.command. A failure is recorded only for the command of a workbench shortcut row,
+  // which the view ran for its own forwarded key (docs/spec/native-surfaces.md#view-surfaces); any other failure is only replied.
+  const runForwarded = async (name, args) => {
+    try {
+      return await runCore(name, args);
+    } catch (error) {
+      if (shortcuts.some((row) => row.owner === "workbench" && row.command === name)) {
+        emitEvent("error", "page.input.shortcut.failed", { plugin, command: name });
+      }
+      throw error;
+    }
+  };
   const dot = command.indexOf(".");
   const owner = dot < 0 ? "" : command.slice(0, dot);
-  if (owner === "core") return runCore(command, params);
+  if (owner === "core") return runForwarded(command, params);
   if (owner === plugin) return runOwned(command, params, plugin);
   if (owner === "") throw new Error(`view call ${command} names no owner`);
   // The tab and runtime names that the switch above does not serve are refused as not served, not as the names of another owner.

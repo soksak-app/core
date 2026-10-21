@@ -1,0 +1,72 @@
+{
+  "format": 1,
+  "projects": [
+    {
+      "id": "prj-origin",
+      "root": "/work/origin",
+      "activeSpaceId": "spc-origin",
+      "spaces": [
+        {
+          "id": "spc-origin",
+          "layout": {
+            "focusedId": "main",
+            "named": 1,
+            "state": {
+              "xs": [0, 1],
+              "ys": [0, 1],
+              "cards": [
+                {
+                  "id": "main",
+                  "c0": 0,
+                  "c1": 1,
+                  "r0": 0,
+                  "r1": 1,
+                  "data": {
+                    "activeId": "tab-view",
+                    "tabs": [
+                      { "id": "tab-view", "plugin": "probe-view", "title": "view", "params": {}, "origin": { "directory": "/work/origin" } },
+                      { "id": "tab-plain", "plugin": "probe-plain", "title": "plain", "params": {} }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "prj-legacy",
+      "root": "/work/legacy",
+      "activeSpaceId": "spc-legacy",
+      "spaces": [
+        {
+          "id": "spc-legacy",
+          "layout": {
+            "focusedId": "main",
+            "named": 1,
+            "state": {
+              "xs": [0, 1],
+              "ys": [0, 1],
+              "cards": [
+                {
+                  "id": "main",
+                  "c0": 0,
+                  "c1": 1,
+                  "r0": 0,
+                  "r1": 1,
+                  "data": {
+                    "activeId": "tab-legacy",
+                    "tabs": [
+                      { "id": "tab-legacy", "plugin": "probe-view", "title": "legacy", "params": {} }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

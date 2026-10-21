@@ -265,10 +265,10 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
   const bodies = [];
   const reasons = [];
-  const onMessage = runtime.sidecar().on("probe-surface", (body) => bodies.push(body));
-  const onFailure = runtime.sidecar().onFailure("probe-surface", (reason) => reasons.push(reason));
-  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface" } });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface" } });
+  const onMessage = runtime.sidecar("fixture-sidecar").on("probe-surface", (body) => bodies.push(body));
+  const onFailure = runtime.sidecar("fixture-sidecar").onFailure("probe-surface", (reason) => reasons.push(reason));
+  assert.deepEqual(posted.at(-2), { sok: 1, id: 1, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.onFailure", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
   host({ sok: 1, id: 1, result: null });
   host({ sok: 1, id: 2, result: null });
   await onMessage;
@@ -278,6 +278,25 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
   host({ sok: 1, event: "sidecar.failure", data: { id: "probe-surface", reason: "exited" } });
   assert.deepEqual(bodies, [{ n: 1 }]);
   assert.deepEqual(reasons, ["exited"]);
+});
+
+test("runtime.sidecar(name) sends to the named sidecar and its requests carry the name and the id", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.throws(() => runtime.sidecar(), TypeError);
+  assert.throws(() => runtime.sidecar(""), TypeError);
+  const port = runtime.sidecar("fixture-sidecar");
+  const sent = port.send("probe-surface", '{"operation":"list"}', ["c1"]);
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.sidecar.send", params: { id: "probe-surface", sidecar: "fixture-sidecar", body: '{"operation":"list"}', cids: ["c1"] } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, null);
+  const bodies = [];
+  const onMessage = port.on("probe-surface", (body) => bodies.push(body));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  host({ sok: 1, id: 2, result: null });
+  await onMessage;
+  host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", body: { n: 1 } } });
+  assert.deepEqual(bodies, [{ n: 1 }]);
 });
 
 test("runtime.theme gives the listener the last theme that the host sent, then each later theme", (t) => {
@@ -330,6 +349,77 @@ test("runtime.settings.read reads the settings of the plugin and runtime.setting
   (await off)();
   host({ sok: 1, event: "settings", data: { home: "" } });
   assert.deepEqual(seen, [{ home: "sok://core/start" }]);
+});
+
+test("runtime.error sends the error line of the view as the call runtime.error and resolves on the reply", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.error, "function", "the view bridge has no runtime.error");
+  const sent = runtime.error("save", "disk full");
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.error", params: { where: "save", text: "disk full" } });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, undefined);
+});
+
+test("contributions(point) returns the connected items of the point, and fail(reason) makes one invalid through the page", async (t) => {
+  const { posted, host } = setup(t);
+  const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof bridge.contributions, "function", "the view bridge has no contributions");
+  const read = bridge.contributions("language");
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.contributions", params: { point: "language" } });
+  host({ sok: 1, id: 1, result: [{ plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/one.js" }] });
+  const items = await read;
+  assert.deepEqual(items.map(({ plugin, index, item, module }) => ({ plugin, index, item, module })),
+    [{ plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/one.js" }]);
+  const failing = items[0].fail(new Error("extend is not a function"));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.contributions.fail",
+    params: { point: "language", plugin: "one", index: 0, reason: "extend is not a function" } });
+  host({ sok: 1, id: 2, result: null });
+  assert.equal(await failing, undefined);
+});
+
+test("runtime.log sends every record until the page tells the stored levels, then builds no fields of a level it does not store", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.log?.info, "function", "the view bridge has no runtime.log");
+  let built = 0;
+  const fields = () => { built += 1; return { n: built }; };
+  runtime.log.info("saved", fields, { cids: ["b.1"] });
+  assert.deepEqual(posted.slice(-2), [
+    { sok: 1, id: 1, command: "runtime.log.levels", params: null },
+    { sok: 1, id: 2, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } },
+  ]);
+  host({ sok: 1, id: 1, result: ["error"] });
+  host({ sok: 1, id: 2, result: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(runtime.log.enabled("info"), false);
+  runtime.log.info("saved", fields);
+  assert.equal(built, 1, "the fields of a level that is not stored were built");
+  assert.equal(posted.length, 3);
+  runtime.log.error("failed", { n: 2 });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.log", params: { level: "error", event: "failed", fields: { n: 2 } } });
+  host({ sok: 1, event: "log.levels", data: ["error", "warn", "info"] });
+  assert.equal(runtime.log.enabled("info"), true);
+  assert.equal(posted.filter((message) => message.command === "runtime.log.levels").length, 1);
+});
+
+/** Dispatches a cancelable keydown on the window of the view and returns the event. */
+const keydown = (init) => {
+  const event = new globalThis.window.KeyboardEvent("keydown", { cancelable: true, ...init });
+  globalThis.window.dispatchEvent(event);
+  return event;
+};
+
+test("the bridge sends no call for a key and has no shortcut table", (t) => {
+  const { posted } = setup(t);
+  const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const before = posted.length;
+  // A workbench key, a view key and an ordinary key keep their default action: the view decides, and the bridge forwards nothing.
+  for (const init of [{ key: "j", ctrlKey: true }, { key: "Escape" }, { key: "a" }, { key: "k", metaKey: true }]) {
+    assert.equal(keydown(init).defaultPrevented, false, `the bridge prevented ${JSON.stringify(init)}`);
+  }
+  assert.equal(posted.length, before, "the bridge sent a call for a key");
+  assert.equal(bridge.shortcuts, undefined, "the view bridge still has a shortcut table");
 });
 
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
@@ -389,4 +479,131 @@ test("a registration that the page refuses leaves no handler, so a request for i
   host({ sok: 1, id: 12, command: "other.run", params: null });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(posted.at(-1), { sok: 1, reply: 12, error: { code: 1002, message: "view command other.run is not registered" } });
+});
+
+test("a view record that the host refuses is reported, and so is its refused error line", async (t) => {
+  const { posted, host } = setup(t);
+  const reports = [];
+  const { runtime } = createViewBridge({
+    handler: { postMessage: (message) => posted.push(message) },
+    report: (event) => reports.push(event),
+  });
+  runtime.log.info("saved", { n: 1 });
+  host({ sok: 1, id: 1, result: null });
+  host({ sok: 1, id: 2, error: { code: -32000, message: "log refused" } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  host({ sok: 1, id: 3, error: { code: -32000, message: "error refused" } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  // The report also receives the counts and losses of the calls, which have no where.
+  const refused = reports.filter((event) => event.where !== undefined);
+  assert.equal(refused.length, 1, "the refused record is reported once, with its refused error line");
+  assert.equal(refused[0].where, "log plugin.probe.saved");
+  assert.equal(refused[0].text, "log refused");
+  assert.equal(refused[0].error?.message, "error refused");
+});
+
+test("runtime.command sends a command name through the view call route and resolves on the reply", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.command, "function", "the view bridge has no runtime.command");
+  const sent = runtime.command("core.picker.close", {});
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "core.picker.close", params: {} });
+  host({ sok: 1, id: 1, result: "closed" });
+  assert.equal(await sent, "closed");
+  assert.throws(() => runtime.command(""), /runtime\.command requires a non-empty name/);
+
+});
+
+/**
+ * Prepares a view page with one region element and a handler that answers each call of the view at once with the reply of its
+ * command in replies, or null. The window gets the observers and the viewport that the composition controller reads.
+ */
+function compositionSetup(t, replies) {
+  const { posted, host } = setup(t);
+  const view = globalThis.window;
+  view.document.body.innerHTML = '<div id="doc"></div><div id="picture"></div>';
+  view.ResizeObserver = class { observe() {} disconnect() {} };
+  view.requestAnimationFrame = () => 1;
+  view.cancelAnimationFrame = () => {};
+  view.visualViewport = { width: 800, height: 600 };
+  const rect = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
+  view.document.getElementById("doc").getBoundingClientRect = () => rect(10, 20, 300, 200);
+  view.document.getElementById("picture").getBoundingClientRect = () => rect(320, 20, 400, 400);
+  const handler = {
+    postMessage: (message) => {
+      posted.push(message);
+      if (typeof message.command !== "string") return;
+      const reply = replies[message.command];
+      queueMicrotask(() => host({ sok: 1, id: message.id, result: typeof reply === "function" ? reply(message.params) : reply ?? null }));
+    },
+  };
+  return { posted, host, view, handler };
+}
+
+const VIEW_DECLARATION = {
+  kind: "view",
+  regions: [
+    { name: "doc", kind: "document", input: "native" },
+    { name: "picture", kind: "image", sidecar: "@probe/sidecar", input: "dom" },
+  ],
+  overlays: [],
+};
+
+test("composition.create of a view attaches its declared regions and places one snapshot through view calls", async (t) => {
+  const { posted, host, view, handler } = compositionSetup(t, {
+    "composition.declaration": VIEW_DECLARATION,
+    "document.attach": { history: false },
+  });
+  const bridge = createViewBridge({ handler, report: () => {} });
+  assert.equal(typeof bridge.composition?.create, "function", "the view bridge has a composition");
+  const composition = await bridge.composition.create({
+    regions: { doc: view.document.getElementById("doc"), picture: view.document.getElementById("picture") },
+    overlays: {},
+  });
+  const calls = posted.filter((message) => typeof message.command === "string").map(({ command, params }) => ({ command, params }));
+  assert.deepEqual(calls, [
+    { command: "composition.declaration", params: null },
+    { command: "document.attach", params: { name: "doc" } },
+    { command: "runtime.native.on", params: { name: "document-state" } },
+    { command: "runtime.native.on", params: { name: "document-message" } },
+    { command: "runtime.native.on", params: { name: "document-stream" } },
+    { command: "image.attach", params: { name: "picture", sidecar: "@probe/sidecar" } },
+    { command: "runtime.native.on", params: { name: "image-event" } },
+    { command: "composition.place", params: {
+      regions: [
+        { name: "doc", left: 10, top: 20, right: 490, bottom: 380, visible: true },
+        { name: "picture", left: 320, top: 20, right: 80, bottom: 180, visible: true },
+      ],
+      overlays: [],
+    } },
+  ]);
+  // The region handles send their operations as view calls, and the region events arrive through runtime.native.on.
+  const doc = composition.region("doc");
+  const states = [];
+  doc.onState((state) => states.push(state));
+  host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "doc", state: { url: "https://example.test/" } } });
+  host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "other", state: { url: "https://other.test/" } } });
+  assert.deepEqual(plain(states), [{ url: "https://example.test/" }]);
+  await doc.load("https://example.test/");
+  await composition.region("picture").setCaret({ x: 1, y: 2, width: 3, height: 4 });
+  assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })), [
+    { command: "document.load", params: { name: "doc", url: "https://example.test/" } },
+    { command: "image.caret", params: { name: "picture", x: 1, y: 2, width: 3, height: 4 } },
+  ]);
+  await composition.dispose();
+  assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })).sort((a, b) => a.command.localeCompare(b.command)), [
+    { command: "document.detach", params: { name: "doc" } },
+    { command: "image.detach", params: { name: "picture" } },
+  ]);
+});
+
+test("composition.create of a view refuses elements that do not match its declaration and attaches nothing", async (t) => {
+  const { posted, view, handler } = compositionSetup(t, { "composition.declaration": VIEW_DECLARATION });
+  const bridge = createViewBridge({ handler, report: () => {} });
+  assert.equal(typeof bridge.composition?.create, "function", "the view bridge has a composition");
+  await assert.rejects(
+    bridge.composition.create({ regions: { doc: view.document.getElementById("doc") }, overlays: {} }),
+    { message: "composition regions must exactly match the surface declaration (expected doc, picture)" },
+  );
+  assert.deepEqual(posted.filter((message) => typeof message.command === "string").map((message) => message.command), ["composition.declaration"]);
 });

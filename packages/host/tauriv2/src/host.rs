@@ -72,6 +72,10 @@ pub mod plugin_host_channel;
 #[cfg(test)]
 #[path = "plugin_host_channel_test.rs"]
 mod plugin_host_channel_test;
+pub mod plugin_host_sidecar;
+#[cfg(test)]
+#[path = "plugin_host_sidecar_test.rs"]
+mod plugin_host_sidecar_test;
 #[cfg(test)]
 #[path = "plugin_host_test.rs"]
 mod plugin_host_test;

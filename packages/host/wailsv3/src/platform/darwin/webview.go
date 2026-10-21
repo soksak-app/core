@@ -285,15 +285,24 @@ func (implementation) SetWebviewAlpha(view unsafe.Pointer, alpha float64) {
 	C.webviewSetSurfaceAlpha(view, C.double(alpha))
 }
 
-func (implementation) SetSurfaceOverlays(view unsafe.Pointer, overlays []platform.DOMOverlay) {
-	values := make([]C.double, 0, len(overlays)*5)
+// surfaceOverlayValues returns the values of the native overlay call: five per overlay, the left, top, right and bottom insets and then 1 when visible or 0 when not.
+func surfaceOverlayValues(overlays []platform.DOMOverlay) []float64 {
+	values := make([]float64, 0, len(overlays)*5)
 	for _, overlay := range overlays {
-		visible := C.double(0)
+		visible := 0.0
 		if overlay.Visible {
 			visible = 1
 		}
-		values = append(values, C.double(overlay.Left), C.double(overlay.Top), C.double(overlay.Right),
-			C.double(overlay.Bottom), visible)
+		values = append(values, overlay.Left, overlay.Top, overlay.Right, overlay.Bottom, visible)
+	}
+	return values
+}
+
+func (implementation) SetSurfaceOverlays(view unsafe.Pointer, overlays []platform.DOMOverlay) {
+	floats := surfaceOverlayValues(overlays)
+	values := make([]C.double, len(floats))
+	for index, value := range floats {
+		values[index] = C.double(value)
 	}
 	var data *C.double
 	if len(values) > 0 {

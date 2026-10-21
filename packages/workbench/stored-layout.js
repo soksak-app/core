@@ -1,7 +1,29 @@
 // Checks a stored space layout. Opening a layout and the library preview use the same check, so the preview
 // filters out a layout that cannot be opened and does not draw it (docs/spec/projects.md).
 import { pluginUnits } from "./environment.js";
+import { reportError, restoreOrigin } from "./tab-reports.js";
 import { windowSidebar } from "./window-sidebars.js";
+
+// A plugin whose declared surface is a view (docs/spec/native-surfaces.md#view-surfaces). A plugin that is not loaded is not a view.
+const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.surface?.composition?.kind === "view";
+
+/**
+ * Restores the origin of each tab of a stored layout, before any tab is created (docs/spec/projects.md#tab-origin). A refused view tab shows
+ * its text on the tab. The refusals are returned as {tabId, text} so the caller logs them; a refusal never throws.
+ */
+export function recordStoredOrigins(kept, isViewTab = viewPlugin) {
+  const refused = [];
+  for (const card of kept.state.cards) {
+    // default: a format-1 card with no tab list has no tabs to restore.
+    for (const tab of card.data?.tabs ?? []) {
+      const text = restoreOrigin(tab, isViewTab(tab.plugin));
+      if (text === null) continue;
+      reportError(tab.id, text);
+      refused.push({ tabId: tab.id, text });
+    }
+  }
+  return refused;
+}
 
 /** Throws an exception with the reason if the stored layout kept cannot be opened in the current environment. */
 export function checkStoredLayout(kept) {

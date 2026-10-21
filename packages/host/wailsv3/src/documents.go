@@ -433,8 +433,12 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 		params = string(start.Params)
 	}
 	directory := "null"
-	if start.Origin != nil && start.Origin.Directory != nil {
-		text, err := json.Marshal(*start.Origin.Directory)
+	origin, err := viewOriginDirectory(surface, start.Origin)
+	if err != nil {
+		return "", err
+	}
+	if origin != nil {
+		text, err := json.Marshal(*origin)
 		if err != nil {
 			return "", fmt.Errorf("view start origin cannot be serialized: %w", err)
 		}
@@ -767,6 +771,8 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 
 // closeSurfaceDocuments closes all document regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
+	// The view of the surface closes with its documents (docs/spec/logging.md#principles).
+	s.viewRecords().recordEnd(surface)
 	// The regions close with their documents, so their stream effects are not applied.
 	s.streams.RemoveSurface(surface)
 	handles := s.documents.RemoveSurface(surface)
@@ -1407,6 +1413,8 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
 		return
 	}
+	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
+	s.viewRecords().recordEnd(surface)
 	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
 	openCalls := s.documents.endViewCalls(surface)
 	if _, err := s.documents.Remove(key); err != nil {
@@ -1414,11 +1422,18 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 		return
 	}
 	system.CloseDocument(handle)
+	// The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
+	// again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
+	s.closeSurfaceDocuments(surface)
+	s.closeSurfaceImages(surface)
+	s.images.BeginGeneration(surface)
 	// Each call that the view had open ends with the reason process-ended, and the host writes its peer-lost event.
 	for _, call := range openCalls {
 		EmitHost(LevelError, "host.call.peer-lost", map[string]any{"plugin": call.plugin, "command": call.command, "reason": "process-ended"})
 	}
 	s.endPresentationWait(surface, "process-ended")
+	// The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface})
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {

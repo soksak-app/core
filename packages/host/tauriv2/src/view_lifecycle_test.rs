@@ -11,6 +11,52 @@ fn seconds_after(start: Instant, seconds: u64) -> Instant {
     start + Duration::from_secs(seconds)
 }
 
+// contract: host.view.killed.is-written-on-every-end
+#[test]
+fn a_view_end_stores_host_view_killed_with_its_plugin_and_surface() {
+    use serde_json::json;
+    let lifecycle = ViewLifecycle::default();
+    // A view that ends by a kill (its process ended) and a view that ends with its surface (a close).
+    lifecycle.track(
+        "end-kill",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
+    lifecycle.record_end("end-kill");
+    lifecycle.track(
+        "end-close",
+        8,
+        "probe",
+        "ui/page.html",
+        true,
+        ViewStart::default(),
+    );
+    lifecycle.record_end("end-close");
+    lifecycle.forget("end-close");
+    // A surface without a view stores nothing, and a view that already ended stores nothing again.
+    lifecycle.record_end("end-untracked");
+    lifecycle.record_end("end-close");
+    lifecycle.record_end("end-kill");
+    let stored: Vec<serde_json::Value> = crate::event_record::buffered_fields("host.view.killed")
+        .into_iter()
+        .filter(|fields| {
+            fields["surface"] == "end-kill"
+                || fields["surface"] == "end-close"
+                || fields["surface"] == "end-untracked"
+        })
+        .collect();
+    assert_eq!(
+        stored,
+        vec![
+            json!({"plugin": "probe", "surface": "end-kill", "unsent": true}),
+            json!({"plugin": "probe", "surface": "end-close", "unsent": true}),
+        ]
+    );
+}
+
 // contract: view.restart.limit
 #[test]
 fn view_restart_window_slides_past_old_failures() {

@@ -77,15 +77,51 @@ func PluginFolder(configDir, plugin string) (string, error) {
 	return plugins[index].dir, nil
 }
 
+// sidecarFacts are the facts of a sidecar dependency that the installed document carries: the operations that a plugin host may call and
+// the message form (docs/spec/sidecars.md#messages). Each field is copied from sidecar.json as it is, and the page validates it. A field that
+// sidecar.json lacks is omitted.
+type sidecarFacts struct {
+	HostReadOperations json.RawMessage `json:"hostReadOperations,omitempty"`
+	Message            json.RawMessage `json:"message,omitempty"`
+}
+
+// sidecarFactsOf returns, for each plugin id, the facts of its sidecar dependencies by sidecar name. A plugin without sidecar dependencies has no entry.
+func sidecarFactsOf(configDir string) (map[string]map[string]sidecarFacts, error) {
+	declarations, err := InstalledSidecars(configDir)
+	if err != nil {
+		return nil, err
+	}
+	facts := map[string]map[string]sidecarFacts{}
+	for _, declaration := range declarations {
+		file := filepath.Join(declaration.Folder, "sidecar.json")
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(declaration.Data, &fields); err != nil {
+			return nil, fmt.Errorf("%s: %w", file, err)
+		}
+		// default: a sidecar.json that is the JSON null has no fields, and it is refused as not an object.
+		if fields == nil {
+			return nil, fmt.Errorf("%s: expected an object", file)
+		}
+		for _, dependent := range declaration.Dependents {
+			if facts[dependent] == nil {
+				facts[dependent] = map[string]sidecarFacts{}
+			}
+			facts[dependent][declaration.Name] = sidecarFacts{HostReadOperations: fields["hostReadOperations"], Message: fields["message"]}
+		}
+	}
+	return facts, nil
+}
+
 // InstalledPluginsDocument is the content of /installed-plugins.json. For each plugin, it holds the installed plugin.json as a manifest so that
-// the page registers the plugins before the first screen. When the install state cannot be read, it is a { "error" } document.
+// the page registers the plugins before the first screen, and the facts of its sidecar dependencies. When the install state cannot be read, it is a { "error" } document.
 func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	type entry struct {
-		ID          string          `json:"id"`
-		Package     string          `json:"package"`
-		Version     string          `json:"version"`
-		Manifest    json.RawMessage `json:"manifest"`
-		Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
+		ID          string                  `json:"id"`
+		Package     string                  `json:"package"`
+		Version     string                  `json:"version"`
+		Manifest    json.RawMessage         `json:"manifest"`
+		Sidecars    map[string]sidecarFacts `json:"sidecars,omitempty"`
+		Diagnostics json.RawMessage         `json:"diagnostics,omitempty"`
 	}
 	failure := func(err error) []byte {
 		data, marshalErr := json.Marshal(map[string]string{"error": err.Error()})
@@ -98,9 +134,13 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	if err != nil {
 		return failure(err)
 	}
+	facts, err := sidecarFactsOf(configDir)
+	if err != nil {
+		return failure(err)
+	}
 	entries := []entry{}
 	for _, plugin := range plugins {
-		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Manifest: plugin.manifest}
+		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Manifest: plugin.manifest, Sidecars: facts[plugin.id]}
 		if diagnostics {
 			file := filepath.Join(plugin.dir, "diagnostics.json")
 			data, err := os.ReadFile(file)

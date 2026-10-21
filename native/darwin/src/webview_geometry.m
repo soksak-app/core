@@ -18,6 +18,12 @@ static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
     if (!NSEqualRects(coordinates.bounds, expected)) coordinates.bounds = expected;
 }
 
+// The DOM hit of a web view for a point of the view `from`. The web view takes the point in its superview coordinates. A hidden web view has no DOM hit.
+static NSView *domHit(WKWebView *web, NSView *from, NSPoint point) {
+    if (!web || web.hidden) return nil;
+    return [web hitTest:[web.superview convertPoint:point fromView:from]];
+}
+
 // Native-owned boundary, one per surface. Only this view has the outer surface frame, and it clips and moves
 // all native regions and DOM web views together.
 @interface SPSurfaceNativePlane : NSView
@@ -186,7 +192,7 @@ static void reconfigureSurfaceWebviews(NSView *root) {
     if (!NSPointInRect(local, self.bounds)) return nil;
     NSPoint domPoint = [self.mainWebview convertPoint:local fromView:self];
     for (NSValue *overlay in self.overlays) {
-        if (NSPointInRect(domPoint, overlay.rectValue)) return [self.mainWebview hitTest:local];
+        if (NSPointInRect(domPoint, overlay.rectValue)) return domHit(self.mainWebview, self, local);
     }
     NSView *native = [self.coordinates hitTest:local];
     if (native) return native;
@@ -280,26 +286,23 @@ static void notifyScale(NSView *view) {
     if (self.webview && self.webview.superview == self) self.webview.frame = self.bounds;
     [self applyOverlayMask];
 }
-- (NSView *)hitTest:(NSPoint)point {
+- (NSView *)hitTest:(NSPoint)superviewPoint {
+    // AppKit passes the point in the superview coordinates, and the overlay rectangles are in the local coordinates of the surface.
+    NSPoint point = [self convertPoint:superviewPoint fromView:self.superview];
     if (self.hidden || self.alphaValue <= 0 || !NSPointInRect(point, self.bounds)) return nil;
     for (NSValue *rectValue in [[self visibleOverlayRects] reverseObjectEnumerator]) {
         NSRect rect = rectValue.rectValue;
-        if (NSPointInRect(point, rect) && self.mainWebview) return nil;
-        if (NSPointInRect(point, rect) && self.webview && !self.webview.hidden) {
-            NSPoint domPoint = [self.webview convertPoint:point fromView:self];
-            NSView *dom = [self.webview hitTest:domPoint];
-            if (dom) return dom;
-        }
+        if (!NSPointInRect(point, rect)) continue;
+        // A point inside a visible overlay never reaches the native plane. The DOM of a view draws its own overlays, so the
+        // input under them goes to the view web view. The app DOM of a hybrid surface has no view web view and keeps the input under its overlays.
+        NSView *dom = domHit(self.webview, self, point);
+        if (dom) return dom;
+        return domHit(self.mainWebview, self, point);
     }
     NSPoint nativePoint = [self.nativePlane convertPoint:point fromView:self];
     NSView *native = [self.nativePlane hitTest:nativePoint];
     if (native) return native;
-    if (self.webview && !self.webview.hidden) {
-        NSPoint domPoint = [self.webview convertPoint:point fromView:self];
-        NSView *dom = [self.webview hitTest:domPoint];
-        if (dom) return dom;
-    }
-    return nil;
+    return domHit(self.webview, self, point);
 }
 - (void)setFrameSize:(NSSize)size {
     [CATransaction begin];
@@ -341,9 +344,9 @@ static void notifyScale(NSView *view) {
     NSPoint local = NSMakePoint(x, NSMinY(self.bounds) + yFraction * NSHeight(self.bounds));
     if (!NSPointInRect(local, self.bounds)) return nil;
     // Asks the topmost host first, and a gap between hosts passes through to the main web view below.
+    // The children are placed in the local coordinates of this view, which is the superview coordinate system of each child.
     for (NSView *child in [self.subviews reverseObjectEnumerator]) {
-        NSPoint childPoint = [child convertPoint:local fromView:self];
-        NSView *hit = [child hitTest:childPoint];
+        NSView *hit = [child hitTest:local];
         if (hit) return hit;
     }
     return nil;
@@ -756,6 +759,25 @@ void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done 
         }
         done(context, [counts[0] longValue], [counts[1] longValue], document ? 0 : [counts[2] longValue], NULL);
     }];
+}
+
+bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    SPSurfaceHost *host = surfaceHost((NSView *)surfaceHandle);
+    if (!host || !host.nativePlane) return false;
+    NSView *view = (NSView *)viewHandle;
+    view.frame = host.bounds;
+    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    host.webview = (WKWebView *)view;
+    [host addSubview:view positioned:NSWindowBelow relativeTo:host.nativePlane];
+    return true;
+}
+
+void sp_surface_unplace_view(void *viewHandle) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    SPSurfaceHost *host = surfaceHost((NSView *)viewHandle);
+    // Not a surface view: the view is not the web view of its surface host, so the host keeps its state.
+    if (host && host.webview == (WKWebView *)viewHandle) host.webview = nil;
 }
 
 void webviewSetSurfaceOverlays(void *handle, const double *values, size_t count) {

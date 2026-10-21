@@ -114,7 +114,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	system = fake
 	t.Cleanup(func() { system = saved })
 	s := &Surfaces{documents: NewDocuments()}
-	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", ViewStart{}); err != nil {
+	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
 	if len(fake.created) != 1 || fake.created[0].channel != "channel-script" || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" {
@@ -177,7 +177,7 @@ func newViewChannelSurfaces(t *testing.T) (*Surfaces, *channelPlatform) {
 	system = fake
 	t.Cleanup(func() { system = saved })
 	s := &Surfaces{documents: NewDocuments()}
-	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", ViewStart{}); err != nil {
+	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
 	return s, fake
@@ -258,7 +258,7 @@ func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *
 	reopened := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	reopened.directory, reopened.folder = "/config/document-data", "/plugins/probe"
 	clock.set(240 * time.Second)
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, ViewStart{}); err != nil {
+	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
 		t.Fatalf("sync after the tab is reopened: %v", err)
 	}
 	if len(fake.created) != 5 {

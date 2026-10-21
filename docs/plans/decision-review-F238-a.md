@@ -20,6 +20,12 @@ Branches: `feat/view-region-F228`, `fix/view-region-close-F228-5`, `fix/view-ori
 6. Reapply: an image region reapplies its insets inside a local `CATransaction`. A document region reapplies at placement and in its `NSViewFrameDidChangeNotification` observer; neither runs in a `CATransaction`. The spec does not claim a window transaction for document regions.
 7. Hit-test owner. The hit-test fix has one owner: `fix/view-region-close-F228-5`, which already rewrites `hitTest` (`webview_geometry.m:283-300`), and `SPWindowComposition.hitTest` (`webview_geometry.m:183-194`), the hybrid counterpart, which returns `self.mainWebview`'s hit at `:189` without a DOM test. Both are under this one owner. `feat/view-region-F228` does not change `hitTest`; its version is superseded when the fix branch merges, and the feat branch must not merge a `hitTest` change of its own.
 
+### Supervisor decision F238-a-14-5 (final)
+
+F238-a-2 limited the events a view may subscribe to through `runtime.native.on` to the four region events. That also removed `exposure-request`, which is the declared route of view exposure (`docs/spec/exposure.md`, F212.7-12) and is not a region event. Restoring it is not widening the allowlist: it is a declared core route that the narrowing removed by mistake. The subscribable set is the four region events plus `exposure-request`, named once in the explicit list `PLUGIN_NATIVE_EVENTS` of `packages/workbench/view-calls.js` (spec: `docs/spec/native-surfaces.md#plugin-host-calls`). Every other event name stays refused with `native event <name> is not served`. `REGION_EVENTS` keeps the four region events. Red: a view test that subscribes to `exposure-request` and receives the request was refused on the unchanged gate (`native event exposure-request is not served`). Green after the list adds it; the refusal test for an unlisted event stays.
+
+Resolved by this decision: F238-a-14-3 and F238-a-14-4 (the shell and editor `exposure-request` subscriptions) need no plugin change. F238-a-14-1 and F238-a-14-2 (the `report` call) stay open under their repositories.
+
 ### Why
 
 Routing through the stamped view call makes the revision, the region lifetime and the region record the only path to a region. A raw host call would skip them (`view-calls.js:74-76`, feat). This is a workbench choice with that basis, not a consequence of rule 9 of the plugin process rules. Rule 9 supplies only the envelope check.
@@ -74,6 +80,14 @@ These decisions are binding. Each states its reason. The Decision items below ap
 ### Supervisor decision (round 15, read boundary and format wording superseded by round 16)
 
 There is no migration of persisted data for D7. A persisted tab whose state lacks the origin form of item 4 is refused per tab with its named error: the error is reported in the log and shown on that tab, and the tab is not dropped silently. The user reopens the tab. Reason: Core is 0.0.x and unreleased views have no installed state to preserve; the binding rules forbid backward compatibility, compatibility layers, fallbacks and migrations, and forbid turning bad input into a plausible value. A migrated `{directory: null}` would be such a value, so the migration and its round 11 and round 14 argument are removed. The format number of `projects.json` stays 1 (item 7). Only the upgrade part of item 7 changes.
+
+### Supervisor decision on non-view tabs (binding, supersedes R1 for the read of a non-view tab)
+
+1. Storing. Every tab written from now on stores its origin as `{directory}`, view and non-view tabs alike (F238-a-9 and F238-a-10). `capture()` writes it for each content-card tab.
+2. Reading, view tabs. A view tab without a valid origin member is refused per tab, with the item 4 text, as decided (round 16).
+3. Reading, non-view tabs. A non-view tab without an origin member is a released format-1 shape. Its released reading rule stays exactly as released: its origin is `{directory: null}`. Changing it would change the reading of a released shape and trigger the format rule of AGENTS.md. The rule is one named function in `packages/workbench/tab-reports.js`, `releasedNonViewOrigin()`, and it is stated as the reading rule of format 1 for non-view tabs in `docs/spec/projects.md` (and the ko mirror). It is not a new fallback. Every other fallback is removed, including the general fallback of `tabOrigin` (F238-a-12).
+4. Tests. One test covers the branch of a non-view tab without the member (it reads `{directory: null}` through `releasedNonViewOrigin()`) and the branch of a view tab without the member (it is refused with the item 4 missing-origin text).
+5. Reason. The released shape must keep its reading, because a changed reading of a released shape triggers the format rule. A refusal of a non-view tab would show an error with no view to protect (R1). The one named function keeps the released rule visible and the rest of the code free of fallbacks.
 
 ### Decision
 

@@ -319,6 +319,27 @@ test("the installed plugin document lists plugins with their manifests and diagn
   assert.throws(() => validateInstalledPlugins({ plugins: [{ ...plugins[0], manifest: { id: "alpha" } }] }), /name/);
 });
 
+// The sidecar facts of an installed plugin are the message form and the host read operations of each sidecar dependency (docs/spec/sidecars.md#messages).
+test("the installed plugin document validates the sidecar facts of each sidecar dependency", () => {
+  const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
+    dependencies: { "@fixture/sidecar-probe": "^0.1.0" }, hostOperations: { "@fixture/sidecar-probe": ["list"] } };
+  const facts = { message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] };
+  const plugin = { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest };
+  const withSidecars = (sidecars) => ({ plugins: [{ ...plugin, sidecars }] });
+  assert.deepEqual(validateInstalledPlugins({ plugins: [plugin] }), [plugin]);
+  assert.deepEqual(validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": facts })), withSidecars({ "@fixture/sidecar-probe": facts }).plugins);
+  assert.deepEqual(validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": {} })).length, 1, "a sidecar with no declared facts is valid");
+  assert.throws(() => validateInstalledPlugins(withSidecars([])), /sidecars must map sidecars to facts/);
+  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/other": facts })), /sidecars @fixture\/other is not a dependency/);
+  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { executable: "build/worker" } })), /unknown field executable/);
+  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { message: { form: "text", operationField: "operation" } } })),
+    /message form must be json-object/);
+  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { message: { form: "json-object", operationField: "" } } })),
+    /message operationField must be a field name/);
+  assert.throws(() => validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": { hostReadOperations: ["list", "list"] } })),
+    /hostReadOperations must be a list of distinct operation names/);
+});
+
 test("a rejected installed manifest names the plugin, its version and package", () => {
   const plugin = { id: "alpha", package: "plugin-alpha", version: "0.0.3",
     manifest: { id: "alpha", name: "Alpha", description: "검사용.", sidecars: ["@fixture/sidecar"] } };

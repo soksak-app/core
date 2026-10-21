@@ -16,7 +16,7 @@ import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
 import { arrangeWindowSidebars, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, standingLink, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
-import { checkStoredLayout } from "./stored-layout.js";
+import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { chooseOpener } from "./file-open.js";
 import { standIn } from "./compositor.js";
@@ -30,7 +30,7 @@ import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
-import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, tabButtonData, tabError, tabFooter,
+import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
   tabModified, tabNotice } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
@@ -138,10 +138,15 @@ const focusedPlugin = () => activeTab(grid.card(focusedId))?.plugin ?? null;
 // A modified tab shows a dot before its name (docs/spec/plugins.md#tab-reports).
 const tabName = (t) => tabButtonData(t).name;
 
-/** One new tab. The number is only a displayed name; ids.js issues the id. */
-function newTab(kind, params) {
+/**
+ * One new tab. The number is only a displayed name; ids.js issues the id. fromTabId is the source tab whose directory the new tab
+ * records as its origin, or null when there is no source tab (docs/spec/projects.md#tab-origin).
+ */
+function newTab(kind, params, fromTabId) {
+  if (fromTabId === undefined) throw new TypeError("newTab requires fromTabId, null when there is no source tab");
   const t = tab(kind, "", params);
   t.title = `${plugin(kind).mark} 탭 ${++named}`;
+  recordOrigin(t.id, fromTabId);
   return t;
 }
 
@@ -160,7 +165,12 @@ function initial() {
   const { grid: declared } = environment().workspace;
   const cards = declared.cards.map(({ tabs, ...card }) => {
     if (!tabs) return { ...card };
-    const made = tabs.map((t) => tab(t.plugin, t.title));
+    // A tab of a new space has no source tab, so it records null (docs/spec/projects.md#tab-origin).
+    const made = tabs.map((t) => {
+      const opened = tab(t.plugin, t.title, null);
+      recordOrigin(opened.id, null);
+      return opened;
+    });
     return { ...card, data: { tabs: made, activeId: made[0].id } };
   });
   return { xs: [...declared.xs], ys: [...declared.ys], cards };
@@ -515,7 +525,8 @@ async function closeTab(cardId, tabId) {
     // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
     if (grid.canClose(cardId)) grid.close(cardId);
     // default: as the comment above says, when no plugin is focused, a tab of the first registered plugin is opened.
-    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null)];
+    // The closed tab leaves no source tab, so the new tab records null, as the released workbench does (docs/spec/projects.md#tab-origin).
+    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null)];
   }
   if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
     // default: a card with no tabs left has no active tab (null).
@@ -775,8 +786,8 @@ function addTab(cardId, plugin, params) {
   if (view.fullscreenCard !== cardId) restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
-  const t = newTab(plugin, params);
-  recordOrigin(t.id, activeTab(card)?.id);
+  // default: a card without an active tab has no tab to inherit.
+  const t = newTab(plugin, params, activeTab(card)?.id ?? null);
   card.data.tabs.push(t);
   card.data.activeId = t.id;
   focusedId = cardId;
@@ -793,8 +804,8 @@ function splitWith(cardId, side, plugin) {
   restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
-  const t = newTab(plugin, null);
-  recordOrigin(t.id, activeTab(card)?.id);
+  // default: a card without an active tab has no tab to inherit.
+  const t = newTab(plugin, null, activeTab(card)?.id ?? null);
   // When there is no space, splitToward returns null. No tab was removed from the source card, so there is no state to
   // restore.
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
@@ -1410,9 +1421,15 @@ function restoreWindowState(kept) {
   return restoreWindowSidebars(Object.hasOwn(kept, "windowSidebars") ? kept.windowSidebars : {});
 }
 
+/** Each refused view tab is logged; its text is also shown on the tab (docs/spec/projects.md#tab-origin). */
+function logRefusals(refused) {
+  for (const { text } of refused) report(text);
+}
+
 /** Rebuilds the plane from the start. */
 function build(kept) {
   const restored = restoreWindowState(kept);
+  logRefusals(recordStoredOrigins(kept));
   view?.destroy();
   named = kept.named;
   // The tab and the folded sections chosen for each sidebar. A layout without sidebars has no stored selection (docs/spec/projects.md#persistence).
@@ -1554,7 +1571,8 @@ export function setGap(half) {
 export const capture = () => {
   keepWindowSidebarWidths(grid.cards, windowSidebars);
   return {
-    state: grid.toJSON(), focusedId,
+    // Each content-card tab stores its origin with the layout (docs/spec/projects.md#tab-origin).
+    state: storedLayoutState(grid.toJSON()), focusedId,
     windowSidebars: structuredClone(windowSidebars),
     named, sidebars: sidebarChoices(),
   };
@@ -1564,6 +1582,7 @@ export const capture = () => {
 export function adopt(kept) {
   if (!grid) return build(kept);
   const restored = restoreWindowState(kept);
+  logRefusals(recordStoredOrigins(kept));
   grid.replace(kept.state);
   focusedId = kept.focusedId;
   windowSidebars = restored;

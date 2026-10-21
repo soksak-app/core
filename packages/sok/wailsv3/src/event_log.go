@@ -549,14 +549,17 @@ func (l *EventLog) Close() {
 }
 
 // classify gives the event the class that the catalog declares for its name: the core catalog, or the catalog of the installed
-// plugin of a plugin event. A name that no catalog declares is stored without a class and marked undeclared
-// (docs/spec/logging.md#event).
+// plugin of a plugin event. An event of the layer plugin that no catalog declares takes the class lifecycle and is marked
+// undeclared, and it is gated as lifecycle (docs/spec/logging.md#principles); another name that no catalog declares is stored
+// without a class and marked undeclared (docs/spec/logging.md#event).
 func (l *EventLog) classify(e *pendingEvent) {
 	e.class, e.undeclared = "", false
 	if class, declared := EventClassOf(e.event); declared {
 		e.class = class
 	} else if classes := l.pluginClasses.Load(); classes != nil && (*classes)[e.event] != "" {
 		e.class = (*classes)[e.event]
+	} else if e.layer == "plugin" {
+		e.class, e.undeclared = ClassLifecycle, true
 	} else {
 		e.undeclared = true
 	}

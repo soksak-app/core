@@ -152,8 +152,9 @@ export function auditRun(catalog, folder) {
     const minutes = (last - spanStart) / 60_000_000;
     const classes = {};
     for (const { event, bytes } of inside) {
-      // default: a line without a class is refused by the line check above and counted under `undeclared`.
-      const name = event.class ?? 'undeclared';
+      // A line marked undeclared is counted under `undeclared` whatever its class: an undeclared event of the layer plugin has the
+      // class lifecycle (docs/spec/logging.md#principles). A line without a class is refused by the line check above.
+      const name = event.undeclared === true ? 'undeclared' : (event.class ?? 'undeclared');
       classes[name] ??= { events: 0, bytes: 0 };
       classes[name].events += 1;
       classes[name].bytes += bytes;

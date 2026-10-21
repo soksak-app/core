@@ -2,9 +2,9 @@
 
 [English](plugin-host.md)
 
-plugin host는 plugin의 프로세스로, 창에 붙는 platform web view에서 view나 sidecar가 담을 수 없는 DOM 없는 로직을 실행한다. 계약이 요구할 때만 존재한다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 자신의 plugin host가 필요하다. 선언된 status 출처([declared status](declared-ui.ko.md#선언된-status))는 활성 탭의 view가 첫째이고 plugin host가 둘째이기 때문이다. host는 그 로직을 sidecar나 view로 옮기는 것이 불가능할 때만 만든다.
+plugin host는 plugin의 프로세스로, 창에 붙는 platform web view에서 view나 sidecar가 담을 수 없는 DOM 없는 로직을 실행한다. 계약이 요구할 때만 존재한다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 자신의 plugin host가 필요하다. 선언된 status 출처([declared status](declared-ui.ko.md#선언된-status))는 활성 탭의 view가 첫째이고 plugin host가 둘째이기 때문이다. host는 그 로직을 sidecar, view 또는 상태 모듈로 옮기는 것이 불가능할 때만 만든다.
 
-plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다.
+plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않는다. 상태 모듈은 workbench가 가져오는 plugin 코드다([plugins](plugins.ko.md#플러그인-상태)).
 
 ## Declaration
 
@@ -56,10 +56,10 @@ view와 다른 것은 상대와 call이다:
 - 중계되는 모든 message는 plugin을 담고 surface를 담지 않는다. host 페이지는 surface를 가지지 않기 때문이다.
 - host는 페이지의 call request `{sok: 1, id, command, params}`(`id`가 정수이고 `command`가 [exposure](#exposure)의 등록 call)를 창의 main page에 event `plugin-host-call {plugin, id, command, params}`로 보내고, cancel `{sok: 1, id, cancel: true}`를 `plugin-host-call {plugin, id, cancel: true}`로 보낸다. main page는 `pluginHostReply {plugin, id, result}` 또는 `pluginHostReply {plugin, id, error: {code, message}}`로 답하고, host는 `{sok: 1, id, result}` 또는 `{sok: 1, id, error}`를 ready document에 보낸다. 다른 잘못된 필드를 가진 message는 `error: plugin host channel: <reason>`으로 application log에 쓰이고 중계되지 않는다.
 - 페이지는 [view command](native-surfaces.ko.md#view-표면)에 view가 답하듯 `sok-view`를 통해 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error: {code, message}}`로 요청에 답한다. 명령의 선언된 `timeout`이 대기를 한정하며, 한계 뒤의 reply는 늦은 reply로 버려진다.
-- channel이 받는 페이지의 call은 main page가 답하는 [exposure](#exposure)의 등록 call과 host가 직접 답하는 [state](#state)의 call이다. [snapshot](#declared-ui-snapshots)은 call이 아니라 페이지의 message다. host는 그 밖의 빈 문자열이 아닌 command의 call request에 직접 `{sok: 1, id, error: {code: -32000, message: "plugin host call <name> is not served"}}`로 답하고 아무것도 중계하지 않는다. plugin host에는 `tab.state` call이, region 동작이, sidecar 전송이, clipboard나 link call이 없다. 그것들이 필요한 로직은 plugin host가 아니라 view나 sidecar에 속한다.
+- channel이 받는 페이지의 call은 main page가 답하는 [exposure](#exposure)의 등록 call과, 선언된 sidecar에 대해 main page가 답하는 sidecar call `runtime.sidecar.send`, `runtime.sidecar.on`, `runtime.sidecar.onFailure`([sidecars](sidecars.ko.md#plugin-host-sessions))와, host가 직접 답하는 [state](#state)의 call이다. [snapshot](#declared-ui-snapshots)은 call이 아니라 페이지의 message다. host는 그 밖의 빈 문자열이 아닌 command의 call request에 직접 `{sok: 1, id, error: {code: -32000, message: "plugin host call <name> is not served"}}`로 답하고 아무것도 중계하지 않는다. plugin host에는 `tab.state` call이, region 동작이, clipboard나 link call이 없다. sidecar 전송은 매니페스트가 sidecar 의존마다 선언하고(`hostOperations`) 사이드카가 읽기 전용으로 선언한(`hostReadOperations`) 작업만 제공한다([plugins](plugins.ko.md#pluginjson), [sidecars](sidecars.ko.md#메시지)). 메인 페이지는 그 밖의 작업을 `plugin host <plugin>: operation <op> is not served`로 거절한다. 그 밖의 call이 필요한 로직은 plugin host가 아니라 view나 sidecar에 속한다.
 - theme은 view에 닿는 것과 같이 host 페이지에 닿는다. document-start script가 토큰을 담고, 각 later theme 변경은 각 ready message 뒤에 host message로 보내진다.
 - host가 web view를 만든 뒤 첫 ready message는 view의 첫 ready message가 `host.trace.view.process-ready`를 쓰듯 `host.trace.plugin-host.process-ready {plugin, window}`를 `debug` level로 쓴다.
-- host가 plugin의 제거나 비활성화 또는 queue overflow로 그 plugin host web view를 처분하거나 host의 페이지 프로세스가 끝나면, host는 창의 main page에 event `plugin-host-ended {plugin}`을 보낸다. main page는 `plugin:<plugin id>` 아래의 모든 등록([exposure](#exposure))을 지우고, view가 닫힐 때처럼 그 host에 대한 자신의 열린 요청을 모두 `surface-closed`로 끝낸다. 창의 reload나 닫기는 event를 보내지 않는다. 등록을 가진 main page가 그와 함께 교체되거나 끝나기 때문이다.
+- host가 plugin의 제거나 비활성화 또는 queue overflow로 그 plugin host web view를 처분하거나 host의 페이지 프로세스가 끝나면, host는 창의 main page에 event `plugin-host-ended {plugin}`을 보낸다. main page는 `plugin:<plugin id>` 아래의 모든 등록([exposure](#exposure))을 지우고, plugin host의 sidecar 구독을 지우며, view가 닫힐 때처럼 그 host에 대한 자신의 열린 요청을 모두 `surface-closed`로 끝낸다. host의 sidecar 세션은 [sidecars](sidecars.ko.md#plugin-host-sessions)가 정하는 대로 host가 닫는다. 창의 reload나 닫기는 event를 보내지 않는다. 등록을 가진 main page가 그와 함께 교체되거나 끝나기 때문이다.
 
 ## Exposure
 
@@ -77,7 +77,7 @@ plugin host의 restart limit은 표준 입력과 출력 sidecar의 한도다([si
 
 plugin host가 멈춘 동안 host는 어떤 요청으로도 그것을 다시 만들지 않는다. 그 등록은 제거되었고, 그 이름 중 하나에 대한 요청은 선언되었으나 등록되지 않은 이름의 오류를 돌려주며, 그것이 제공하던 declared section은 비어 있다. 멈춤은 그 자체로 실패 기록을 지우지 않는다.
 
-plugin의 surface를 열어 보는 사람의 행동만이 멈춤을 지운다. plugin host가 멈춘 동안 plugin의 surface가 열릴 때, host는 [sidecars](sidecars.ko.md#실패)의 멈춘 사이드카를 지우듯 그 plugin host의 실패 기록을 지우고, event `host.trace.plugin-host.restart-reset {plugin}`을 `debug` level로 쓰고, 모든 창에서 plugin host를 다시 만든다. plugin host가 멈추지 않은 동안의 surface 열기는 아무것도 지우지 않고, 다른 plugin의 surface 생성도 아무것도 지우지 않는다.
+plugin의 surface를 열어 보는 사람의 행동과 그 plugin을 사용하는 사람의 행동만이 멈춤을 지운다. plugin host가 멈춘 동안 plugin의 surface가 열릴 때, host는 [sidecars](sidecars.ko.md#실패)의 멈춘 사이드카를 지우듯 그 plugin host의 실패 기록을 지우고, event `host.trace.plugin-host.restart-reset {plugin}`을 `debug` level로 쓰고, 모든 창에서 plugin host를 다시 만든다. plugin host가 멈추지 않은 동안의 surface 열기는 아무것도 지우지 않고, 다른 plugin의 surface 생성도 아무것도 지우지 않는다. plugin의 surface를 여는 것과 그 사용은 같은 단계에서 그 `dependencies`에 적힌 사이드카의 멈춤도 지운다([sidecars](sidecars.ko.md#실패)). 두 기록은 이 트리거들을 공유한다. 사용은 같은 방식으로 plugin host를 모든 창에서 다시 만든다.
 
 재시작은 마지막으로 저장된 값에서 상태를 복구한다([state](#state)). 저장되지 않은 상태는 잃어지며, 각 plugin은 자기 문서에 그것이 어느 상태인지 밝힌다.
 

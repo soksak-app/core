@@ -74,6 +74,25 @@ function copyPackage(dir, dest) {
 }
 
 /**
+ * The sidecar facts that the installed document carries for a plugin: for each sidecar dependency, the message form and the host read
+ * operations of its sidecar.json (docs/spec/sidecars.md#messages). Each field is copied as it is, and the page validates it. A field that
+ * sidecar.json lacks is omitted. A plugin without sidecar dependencies has no facts.
+ */
+function sidecarFactsOf(configuration, sidecars, packages, manifest) {
+  const facts = {};
+  // default: dependencies is an optional field of plugin.json; without it the plugin has no sidecar dependencies.
+  for (const name of Object.keys(manifest.dependencies ?? {})) {
+    if (packages.has(name)) continue;
+    const sidecar = sidecars[name];
+    // default: a sidecar that the state does not record is not installed, so staging fails with its name.
+    if (sidecar === undefined) throw new Error(`${join(configuration, "plugins", "installed.json")}: sidecar ${name} has no installed version`);
+    const declaration = readJson(join(configuration, sidecar.path, "sidecar.json"));
+    facts[name] = Object.fromEntries(Object.entries(declaration).filter(([key]) => key === "message" || key === "hostReadOperations"));
+  }
+  return facts;
+}
+
+/**
  * Reads the enabled plugins in id order from plugins/installed.json of the configuration directory. The format is written and validated by the command line sok
  * (docs/spec/installation.md). Here it only checks that the fields in use exist, and fails if they do not.
  */
@@ -81,10 +100,19 @@ function enabledInstalledPlugins(configuration) {
   const file = join(configuration, "plugins", "installed.json");
   if (!existsSync(file)) throw new Error(`${file} does not exist; install plugins with sok first`);
   const installed = readJson(file);
-  // A format 1 file is converted to format 2 when sok or the application reads it.
-  if (installed?.format !== 2 || typeof installed.plugins !== "object" || installed.plugins === null) {
-    throw new Error(`${file}: expected format 2 with plugins`);
+  // The format that sok writes (INSTALLED_FORMAT of sok). No other format is read: an older file is refused by name, not converted.
+  if (installed?.format !== 3) {
+    throw new Error(`${file}: format ${installed?.format} is not 3, the format that sok writes`);
   }
+  if (typeof installed.plugins !== "object" || installed.plugins === null) {
+    throw new Error(`${file}: expected format 3 with plugins`);
+  }
+  // default: sidecars is an optional field of the state; a state without it records no sidecar.
+  const sidecars = installed.sidecars ?? {};
+  // A dependency that names the package of any installed plugin, enabled or not, is a plugin dependency and not a sidecar.
+  // default: a plugin entry without a path is refused below, so only the entries with a path are read here.
+  const packages = new Set(Object.values(installed.plugins).filter((plugin) => typeof plugin.path === "string")
+    .map((plugin) => readJson(join(configuration, plugin.path, "package.json")).name));
   return Object.entries(installed.plugins)
     .filter(([, plugin]) => plugin.enabled === true)
     .map(([id, plugin]) => {
@@ -97,7 +125,7 @@ function enabledInstalledPlugins(configuration) {
       const dir = join(configuration, plugin.path);
       const { name } = readJson(join(dir, "package.json"));
       if (typeof name !== "string") throw new Error(`${join(dir, "package.json")}: expected a package.json name`);
-      return { id, package: name, version: plugin.version, dir };
+      return { id, package: name, version: plugin.version, dir, sidecars: sidecarFactsOf(configuration, sidecars, packages, readJson(join(dir, "plugin.json"))) };
     })
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }
@@ -133,6 +161,8 @@ if (installedDirectory) {
   for (const plugin of plugins) {
     cpSync(plugin.dir, join(target, modulePath(plugin.package, "")), { recursive: true });
     const entry = { id: plugin.id, package: plugin.package, version: plugin.version, manifest: readJson(join(plugin.dir, "plugin.json")) };
+    // default: a plugin without sidecar dependencies has no sidecars field in the document.
+    if (Object.keys(plugin.sidecars).length > 0) entry.sidecars = plugin.sidecars;
     // Places the shared modules of extension points where a host serves /shared/<plugin id>.<point>/<specifier>.js (docs/spec/installation.md).
     // default: extends is an optional field of plugin.json; a plugin without it shares no module.
     for (const [point, declaration] of Object.entries(entry.manifest.extends ?? {})) {

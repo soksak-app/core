@@ -110,6 +110,7 @@
       "class": "lifecycle",
       "level": [
         "error",
+        "warn",
         "info"
       ],
       "fields": {
@@ -707,6 +708,16 @@
       },
       "description": "A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; seq is the number of the last pressure report, 0 before the first."
     },
+    "page.input.shortcut.failed": {
+      "layer": "page",
+      "class": "input",
+      "level": "error",
+      "fields": {
+        "plugin": "string",
+        "command": "string"
+      },
+      "description": "A command that a view ran through runtime.command failed, and the command is the command of a workbench shortcut row (packages/workbench/shortcuts.json); the view ran it for its own forwarded key."
+    },
     "page.window.operation": {
       "layer": "page",
       "class": "call",
@@ -927,9 +938,10 @@
       "level": "debug",
       "fields": {
         "sidecar": "string",
-        "surface": "string"
+        "surface": "string",
+        "plugin": "string"
       },
-      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened: the host cleared the failure record, and the next request starts the sidecar (docs/spec/sidecars.md#failure)."
+      "description": "A surface that did not send to a sidecar stopped at its restart limit was opened, or the person enabled a plugin that lists it: the host cleared the failure record, and the next request starts the sidecar. The surface field names the opened surface and the plugin field names the enabled plugin (docs/spec/sidecars.md#failure)."
     },
     "host.project.removal_allowed": {
       "layer": "host",
@@ -1006,6 +1018,17 @@
         "previous?": "string"
       },
       "description": "A process.lock that was not locked when this run started was left by an earlier run that ended without removing it, and this run took it over. boot and pid are the boot identifier and the process identifier of that run when the file is the current form, and null otherwise; previous holds the content of the file, cut to 256 bytes, when the file is not the current form."
+    },
+    "host.view.killed": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "unsent": "boolean"
+      },
+      "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
     },
     "host.stall": {
       "layer": "host",

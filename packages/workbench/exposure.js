@@ -8,7 +8,7 @@
 // In a browser runtime without a host, the registry also works inside this document. Then there is no path that
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
-import { hostKeyOf, hostCommandsOf, listenPluginHostCalls } from "./plugin-host.js";
+import { hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
 import { SNAPSHOT_REQUEST_COMMAND } from "@soksak/plugin-api";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
@@ -688,5 +688,7 @@ export async function connectExposure({ report, ...values }) {
     timeoutOf: (name) => registry.commandTimeout(name),
     // default: a rejection that is not an Error is reported with its text.
     report: (error) => report(`plugin host: ${String(error?.message ?? error)}`),
+    // The sidecars that environment.js declared for each plugin (docs/plans/plugin-host-routes.md rule 8).
+    sidecarsOf: pluginSidecarsOf,
   });
 }

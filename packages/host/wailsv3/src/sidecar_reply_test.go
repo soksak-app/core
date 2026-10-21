@@ -60,6 +60,7 @@ func TestAnOpenRequestAtAHostStopGetsAnErrorRecord(t *testing.T) {
 	}
 }
 
+// contract: sidecars.start.refuses-zero-hello-timeout
 // A Sidecars value that was not built by NewSidecars has no hello timeout. A zero timeout would fail every persistent service at once,
 // so the start of a persistent service refuses the value with a named error before it spawns anything.
 func TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts(t *testing.T) {

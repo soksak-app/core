@@ -4,11 +4,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { answerViewCall, viewStopState } from "../view-calls.js";
 
+// A shortcut table in the form of packages/workbench/shortcuts.json, with rows that hold while a view has keyboard focus and a
+// row that does not.
+const SHORTCUTS = [
+  { key: "cmd+q", owner: "native menu", command: "framework role", menu: "app/quit", when: "Any focus" },
+  { key: "cmd+k", owner: "workbench", command: "core.focus.set", menu: null, when: "The library is shown" },
+  { key: "cmd+j", owner: "workbench", command: "core.probe.jump", menu: null, when: "Any focus" },
+  { key: "Escape", owner: "view", command: "none", menu: null, when: "A plugin view has keyboard focus" },
+];
+
 function fakes() {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [] };
+    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [], failed: [], events: [], composition: [] };
+  const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
+    fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
   const options = {
     plugin: "probe",
+    surface: "probe-surface",
     pending: new Map(),
     tab: {
       state: {
@@ -23,28 +35,39 @@ function fakes() {
       error: (text) => { ran.reports.push({ error: text }); },
       keep: (reason, on) => { ran.reports.push({ keep: reason, on }); },
     },
+    contributions: (point) => {
+      if (point !== "language") throw new Error(`extension point ${point} is not declared by probe`);
+      return [item("one", 0), item("two", 1)];
+    },
+    shortcuts: SHORTCUTS,
+    emitEvent: (level, event, fields) => { ran.events.push({ level, event, fields }); },
     runCore: async (name, params) => { ran.core.push({ name, params }); return { core: true }; },
     runOwned: async (name, params, owner) => { ran.owned.push({ name, params, owner }); return { owned: true }; },
     runtime: {
       native: { call: async (name, payload) => { ran.native.push({ name, payload }); return { native: true }; } },
-      sidecar: { send: async (id, body, cids) => { ran.sidecar.push({ id, body, cids }); return { sidecar: true }; } },
+      sidecar: { send: async (id, body, cids, sidecar) => { ran.sidecar.push({ id, body, cids, sidecar }); return { sidecar: true }; } },
       clipboard: {
         read: async (type) => { ran.clipboard.push({ read: type }); return "text value"; },
         writeText: async (text) => { ran.clipboard.push({ write: text }); },
       },
       links: { open: async (url) => { ran.links.push(url); } },
+      report: (line) => { ran.errors.push(line); },
       subscribe: {
         native: async (name) => { ran.subscribed.push({ native: name }); return null; },
         sidecarMessage: async (id) => { ran.subscribed.push({ sidecarMessage: id }); return null; },
         sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
         textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
         settings: async () => { ran.subscribed.push({ settings: true }); return null; },
+        logLevels: async () => { ran.subscribed.push({ logLevels: true }); return null; },
       },
       command: {
         register: async (name) => { ran.declared.push(name); return null; },
       },
-      log: Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level,
-        (event, fields) => { ran.log.push({ level, event, fields }); }])),
+      log: {
+        ...Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level,
+          (event, fields, options) => { ran.log.push({ level, event, fields, ...(options === undefined ? {} : { options }) }); }])),
+        enabled: (level) => level === "error" || level === "warn",
+      },
       textSize: {
         read: () => { ran.textSize.push("read"); return 1.5; },
         on: (listener) => { ran.textSize.push("on"); return () => {}; },
@@ -57,6 +80,18 @@ function fakes() {
         registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
       },
     },
+    // The page operations of the surface that a hybrid composition uses; each records its arguments.
+    composition: (() => {
+      const record = (name) => async (...args) => { ran.composition.push([name, ...args]); return { [name]: true }; };
+      return {
+        declaration: () => ({ kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] }),
+        place: record("place"),
+        report: record("report"),
+        document: Object.fromEntries(["attach", "load", "zoom", "go", "post", "subscribe", "unsubscribe", "detach"]
+          .map((name) => [name, record("document." + name)])),
+        image: Object.fromEntries(["attach", "focus", "caret", "text", "detach"].map((name) => [name, record("image." + name)])),
+      };
+    })(),
   };
   return { ran, options };
 }
@@ -108,9 +143,9 @@ test("tab.state.write is refused when the surface declares no tab state", async 
 
 test("runtime.native.call runs the host call of the surface with its name and payload", async () => {
   const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "documentAttach", payload: { document: "a" } } }, options),
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "probeCall", payload: { value: "a" } } }, options),
     { native: true });
-  assert.deepEqual(ran.native, [{ name: "documentAttach", payload: { document: "a" } }]);
+  assert.deepEqual(ran.native, [{ name: "probeCall", payload: { value: "a" } }]);
 });
 
 test("runtime.native.call refuses a missing or empty name and runs nothing", async () => {
@@ -119,11 +154,14 @@ test("runtime.native.call refuses a missing or empty name and runs nothing", asy
   assert.deepEqual(ran.native, []);
 });
 
-test("runtime.sidecar.send sends the body with its correlation identifiers through the declared sidecar", async () => {
+test("runtime.sidecar.send sends the body with its correlation identifiers through the named sidecar", async () => {
   const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.sidecar.send", params: { id: "probe", body: { n: 1 }, cids: ["c1"] } }, options),
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 1 }, cids: ["c1"] } }, options),
     { sidecar: true });
-  assert.deepEqual(ran.sidecar, [{ id: "probe", body: { n: 1 }, cids: ["c1"] }]);
+  assert.deepEqual(ran.sidecar, [{ id: "probe", body: { n: 1 }, cids: ["c1"], sidecar: "fixture-sidecar" }]);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options), /requires a non-empty sidecar/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "", body: 1, cids: [] } }, options), /requires a non-empty sidecar/);
+  assert.equal(ran.sidecar.length, 1, "a send without a sidecar name reached the runtime");
 });
 
 test("runtime.clipboard.read returns the text of the clipboard and refuses the png type", async () => {
@@ -178,6 +216,19 @@ test("runtime.log sends the record of the level through the writer of the page a
   assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 } }]);
 });
 
+test("runtime.log passes the cids of the record to the writer of the page", async () => {
+  const { ran, options } = fakes();
+  await answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } }, options);
+  assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 }, options: { cids: ["b.1"] } }]);
+});
+
+test("runtime.log.levels registers the change subscription of the stored levels and replies with them", async () => {
+  const { ran, options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.log.levels", params: null }, options).catch((error) => error);
+  assert.deepEqual(result, ["error", "warn"]);
+  assert.deepEqual(ran.subscribed, [{ logLevels: true }]);
+});
+
 test("runtime.log refuses a level that the writer does not serve and writes nothing", async () => {
   const { ran, options } = fakes();
   await assert.rejects(
@@ -186,6 +237,88 @@ test("runtime.log refuses a level that the writer does not serve and writes noth
   );
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.log", params: "info" }, options), /requires an object/);
   assert.deepEqual(ran.log, []);
+});
+
+test("runtime.error writes the error line of the view to the application log with its surface and replies null", async () => {
+  const { ran, options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.error", params: { where: "save", text: "disk full" } }, options)
+    .catch((error) => error);
+  assert.equal(result, null);
+  assert.deepEqual(ran.errors, ["surface probe-surface save: disk full"]);
+});
+
+test("runtime.error refuses a place or a text that the error line cannot carry and writes nothing", async () => {
+  const { ran, options } = fakes();
+  const call = (id, params) => answerViewCall({ id, command: "runtime.error", params }, options);
+  await assert.rejects(call(1, "disk full"), /view call runtime\.error requires an object/);
+  for (const [id, where] of [[2, ""], [3, "save: now"], [4, "save\nnow"], [5, 7]]) {
+    await assert.rejects(call(id, { where, text: "disk full" }), /view call runtime\.error requires a non-empty where without a control character or ": "/);
+  }
+  for (const [id, text] of [[6, ""], [7, null]]) {
+    await assert.rejects(call(id, { where: "save", text }), /view call runtime\.error requires a non-empty text/);
+  }
+  assert.deepEqual(ran.errors, []);
+});
+
+test("runtime.contributions returns the connected items of the point with their modules on the core root", async () => {
+  const { options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.contributions", params: { point: "language" } }, options)
+    .catch((error) => error);
+  assert.deepEqual(result, [
+    { plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/@scope/plugin-one/ui/one.js" },
+    { plugin: "two", index: 1, item: { name: "two" }, module: "sok://core/modules/@scope/plugin-two/ui/two.js" },
+  ]);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.contributions", params: { point: "format" } }, options),
+    /extension point format is not declared by probe/);
+});
+
+test("runtime.contributions.fail makes the named connected item invalid with its reason and replies null", async () => {
+  const { ran, options } = fakes();
+  const params = { point: "language", plugin: "two", index: 1, reason: "extend is not a function" };
+  const result = await answerViewCall({ id: 1, command: "runtime.contributions.fail", params }, options).catch((error) => error);
+  assert.equal(result, null);
+  assert.deepEqual(ran.failed, [{ plugin: "two", index: 1, reason: "extend is not a function" }]);
+});
+
+test("runtime.contributions.fail refuses an item that is not connected and a reason that is not text", async () => {
+  const { ran, options } = fakes();
+  const call = (id, params) => answerViewCall({ id, command: "runtime.contributions.fail", params }, options);
+  await assert.rejects(call(1, { point: "language", plugin: "two", index: 0, reason: "broken" }),
+    /view call runtime\.contributions\.fail: language has no connected item 0 of two/);
+  await assert.rejects(call(2, { point: "language", plugin: "two", index: 1, reason: "" }),
+    /view call runtime\.contributions\.fail requires a non-empty reason/);
+  assert.deepEqual(ran.failed, []);
+});
+
+test("runtime.shortcuts.read returns the rows of the workbench and view owners, and no native menu row", async () => {
+  const { options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.shortcuts.read", params: null }, options).catch((error) => error);
+  assert.deepEqual(result, [
+    { key: "cmd+k", owner: "workbench", command: "core.focus.set" },
+    { key: "cmd+j", owner: "workbench", command: "core.probe.jump" },
+    { key: "Escape", owner: "view", command: "none" },
+  ]);
+});
+
+test("runtime.shortcuts.missing and runtime.shortcuts.run are not served and write nothing", async () => {
+  const { ran, options } = fakes();
+  for (const command of ["runtime.shortcuts.missing", "runtime.shortcuts.run"]) {
+    await assert.rejects(answerViewCall({ id: 1, command, params: { key: "cmd+j" } }, options),
+      new RegExp(`view call ${command.replace(/\./g, "\\.")} is not served`));
+  }
+  assert.deepEqual(ran.events, []);
+  assert.deepEqual(ran.core, []);
+});
+
+test("runtime.command runs a core command through runCore, and a failed workbench row writes page.input.shortcut.failed", async () => {
+  const { ran, options } = fakes();
+  assert.deepEqual(await answerViewCall({ id: 1, command: "core.probe.jump", params: {} }, options), { core: true });
+  assert.deepEqual(ran.core, [{ name: "core.probe.jump", params: {} }]);
+  options.runCore = async () => { throw new Error("no focus target"); };
+  await assert.rejects(answerViewCall({ id: 2, command: "core.probe.jump", params: {} }, options), /no focus target/);
+  assert.deepEqual(ran.events, [{ level: "error", event: "page.input.shortcut.failed", fields: { plugin: "probe", command: "core.probe.jump" } }]);
+  await assert.rejects(answerViewCall({ id: 3, command: "core.picker.close", params: {} }, options), /no focus target/);
+  assert.equal(ran.events.length, 1, "a core command that is not a workbench row wrote a shortcut record");
 });
 
 test("runtime.textSize.read returns the scale of the surface and runtime.textSize.on subscribes once", async () => {
@@ -214,7 +347,7 @@ test("a runtime or tab entry that the route does not serve is refused as not ser
 test("a cancel ends the pending call, which replies cancelled, and the pending call is removed", async () => {
   const { options } = fakes();
   options.runtime.sidecar.send = () => new Promise(() => {});
-  const call = answerViewCall({ id: 5, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options);
+  const call = answerViewCall({ id: 5, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: 1, cids: [] } }, options);
   // The rejection is observed below; this handler only keeps a failed earlier step from being reported as unhandled.
   call.catch(() => {});
   assert.equal(options.pending.size, 1);
@@ -234,7 +367,7 @@ test("a cancel of a call that has no pending call ends nothing", async () => {
 test("a call whose id is pending is refused", async () => {
   const { options } = fakes();
   options.runtime.sidecar.send = () => new Promise(() => {});
-  const first = answerViewCall({ id: 6, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options);
+  const first = answerViewCall({ id: 6, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: 1, cids: [] } }, options);
   first.catch(() => {});
   await assert.rejects(answerViewCall({ id: 6, command: "runtime.links.open", params: "https://example.test" }, options), /view call 6 is already pending/);
   await answerViewCall({ id: 6, cancel: true }, options);
@@ -320,4 +453,68 @@ test("a restarted view reads the tab state of its surface as it was saved before
     await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: { ...restarted.tab, state: surfaceTab } }),
     { page: 3 },
   );
+});
+
+test("the composition and region calls of a view run the page operations of its surface with their named fields", async () => {
+  const { ran, options } = fakes();
+  const requests = [
+    ["composition.declaration", null],
+    ["composition.place", { regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [], surface: "other" }],
+    ["composition.report", "surface composition failed: probe"],
+    ["document.attach", { name: "doc", surface: "other" }],
+    ["document.load", { name: "doc", url: "https://example.test/" }],
+    ["document.zoom", { name: "doc", zoom: 1.5 }],
+    ["document.go", { name: "doc", action: "back" }],
+    ["document.go", { name: "doc", action: "entry", offset: -2 }],
+    ["document.post", { name: "doc", message: { a: 1 } }],
+    ["document.subscribe", { name: "doc", stream: "elements" }],
+    ["document.unsubscribe", { name: "doc", handle: 3 }],
+    ["document.detach", { name: "doc" }],
+    ["image.attach", { name: "picture", sidecar: "@probe/sidecar" }],
+    ["image.focus", { name: "picture" }],
+    ["image.caret", { name: "picture", x: 1, y: 2, width: 3, height: 4 }],
+    ["image.text", { name: "picture", text: "probe" }],
+    ["image.detach", { name: "picture" }],
+  ];
+  const settled = await Promise.allSettled(requests.map(([command, params], index) => answerViewCall({ id: index + 1, command, params }, options)));
+  assert.deepEqual(settled.map((result) => result.status), requests.map(() => "fulfilled"),
+    settled.map((result) => result.reason?.message).filter(Boolean).join("; "));
+  assert.deepEqual(settled[0].value, { kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] });
+  assert.deepEqual(ran.composition, [
+    ["place", [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], []],
+    ["report", "surface composition failed: probe"],
+    ["document.attach", "doc"],
+    ["document.load", "doc", "https://example.test/"],
+    ["document.zoom", "doc", 1.5],
+    ["document.go", "doc", "back", undefined],
+    ["document.go", "doc", "entry", -2],
+    ["document.post", "doc", { a: 1 }],
+    ["document.subscribe", "doc", "elements"],
+    ["document.unsubscribe", "doc", 3],
+    ["document.detach", "doc"],
+    ["image.attach", "picture", "@probe/sidecar"],
+    ["image.focus", "picture"],
+    ["image.caret", "picture", 1, 2, 3, 4],
+    ["image.text", "picture", "probe"],
+    ["image.detach", "picture"],
+  ]);
+  assert.deepEqual(ran.native, []);
+});
+
+test("a region call without a region name or with params that are not its fields is refused and runs nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "document.attach", params: { name: "" } }, options), /document.attach requires a non-empty region name/);
+  await assert.rejects(answerViewCall({ id: 2, command: "image.focus", params: "picture" }, options), /image.focus requires an object/);
+  await assert.rejects(answerViewCall({ id: 3, command: "composition.place", params: { regions: {}, overlays: [] } }, options),
+    /composition.place requires the arrays regions and overlays/);
+  assert.deepEqual(ran.composition, []);
+});
+
+test("runtime.native.call of a composition or region host call is refused and runs nothing", async () => {
+  const { ran, options } = fakes();
+  for (const [index, name] of ["compositionDeclare", "compositionPlace", "documentAttach", "documentLoad", "imageAttach", "documentQuery"].entries()) {
+    await assert.rejects(answerViewCall({ id: index + 1, command: "runtime.native.call", params: { name, payload: {} } }, options),
+      { message: "view call runtime.native.call " + name + " is not served: a view operates its regions through its composition" });
+  }
+  assert.deepEqual(ran.native, []);
 });

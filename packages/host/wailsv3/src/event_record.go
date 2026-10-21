@@ -142,10 +142,12 @@ func emitRecord(e Entry) {
 	switch e.Level {
 	case "error":
 		level = LevelError
+	case "warn":
+		level = LevelWarn
 	case "info":
 		level = LevelInfo
 	default:
-		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s has the level %q, which is not error or info\n", e.Where, e.Layer, e.Level)
+		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s has the level %q, which is not error, warn or info\n", e.Where, e.Layer, e.Level)
 		return
 	}
 	var body string

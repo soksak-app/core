@@ -27,6 +27,8 @@ A DOM-only surface paints its content in the shared DOM plane and has no native 
 
 The DOM/native order above describes logical ownership and clipping, not an unqualified AppKit subview order. On macOS, a transparent `WKWebView` backing can still cover native sibling pixels when the native plane is below it in the AppKit hierarchy. The Darwin host therefore places the clipped native plane above the transparent app-DOM backing at the platform compositor level. DOM overlays and input routing still follow the logical order below; native content is never allowed to escape its `SurfaceHost` or to own an overlay's point, so the Darwin host cuts the native plane out under every visible declared overlay and the overlay's DOM pixels show there. A platform adapter must document and enforce the equivalent compositor rule rather than assuming that CSS transparency changes native sibling ordering.
 
+For a view surface the stacking order of input and visual ownership, from the top, is: the view's DOM overlays, then its view regions, then the view page DOM. A point inside a visible view overlay rect is delivered to the overlay's DOM view when that view's DOM has a hit at the point, and to nothing otherwise. It is never delivered to a region or to the native plane. A hybrid surface's `mainWebview` is hit-tested the same way as its `webview`.
+
 ## Declaration
 
 Every `plugin.json` surface declares one composition.

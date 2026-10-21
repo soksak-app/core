@@ -4,10 +4,13 @@
 // of the view (the sok-view webkit message handler in the application).
 //
 // The module imports nothing under runtime/ and no @soksak/workbench/ specifier, so the core root serves it to a view with
-// the view import map (rule 4). Its imports are the call layer and the snapshot channel, which import nothing else.
+// the view import map (rule 4). Its imports are the call layer, the snapshot channel, the plugin runtime and the composition
+// controller with its region handles, which import nothing else.
 
 import { createCalls } from "./calls.js";
+import { createPluginRuntime } from "./plugin-runtime.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
+import { createSurfaceCompositionController } from "./surface-composition.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
 /** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
@@ -16,7 +19,6 @@ const UNREGISTERED_COMMAND = 1002;
 const FAILED_COMMAND = -32000;
 /** The code of a request whose parameters are invalid: EXPOSURE_ERRORS.invalidParams of index.js, which this module does not import. */
 const INVALID_PARAMS = -32602;
-
 /** Runs a command handler and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
 async function runCommand(run, params) {
   try {
@@ -69,8 +71,9 @@ export function createViewChannel({ handler }) {
  *     handler   the sok-view message handler of the view, as for createViewChannel
  *     report    report(event) receives the counts and losses of the calls and the snapshots, as createCalls and createSnapshotSender
  *
- * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar().on and .onFailure,
- * theme, and textSize and settings with read and on each.
+ * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
+ * theme, and textSize and settings with read and on each. composition.create({regions, overlays}) creates the composition of the
+ * declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
 export function createViewBridge({ handler, report }) {
   if (typeof report !== "function") throw new TypeError("createViewBridge requires the report function");
@@ -98,6 +101,37 @@ export function createViewBridge({ handler, report }) {
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });
+  // Records the refusal of a call that the view makes on its own as an error line of the view at the place where.
+  const recordError = (where) => (error) => {
+    // default: a refusal that is not an Error carries its value as the text.
+    const text = String(error?.message ?? error);
+    // A refused error line is reported through the bridge's report, which the page writes to the application log.
+    runtime.error(where, text).catch((failure) => report({ where, text, error: failure }));
+  };
+  // The stored levels of a record of the plugin, which the page tells at the first use of runtime.log and at each change
+  // (docs/spec/native-surfaces.md#view-surfaces). Until the first answer every record is sent, and the level gate of the page
+  // counts what it does not store, so no record is lost before the levels are known.
+  let levels = null;
+  let levelsRequested = false;
+  const storedLevel = (level) => {
+    if (!levelsRequested) {
+      levelsRequested = true;
+      if (!listeners.has("log.levels")) listeners.set("log.levels", new Set());
+      listeners.get("log.levels").add((next) => { levels = next; });
+      // A refused read leaves every record sent, and the refusal is recorded as an error of the view.
+      calls.request("runtime.log.levels", null).then((next) => { levels = next; }, recordError("log levels"));
+    }
+    return levels === null || levels.includes(level);
+  };
+  // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
+  const prefix = `plugin.${plugin}.`;
+  const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
+    log: (level, event, fields, cids) => {
+      calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
+        .catch(recordError(`log ${event}`));
+    },
+    logEnabled: storedLevel,
+  } });
   const runtime = {
     native: {
       on: (name, listener) => {
@@ -105,10 +139,16 @@ export function createViewBridge({ handler, report }) {
         return listen(`native:${name}`, () => subscribe(name), listener);
       },
     },
-    sidecar: () => ({
-      on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id }), (data) => listener(data.body)),
-      onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id }), (data) => listener(data.reason)),
-    }),
+    // The sidecar is named by the view, and each request carries the name with the session id (docs/plans/plugin-host-routes.md rule 4).
+    sidecar: (name) => {
+      if (typeof name !== "string" || name === "") throw new TypeError("runtime.sidecar requires a sidecar name");
+      return {
+        on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id, sidecar: name }), (data) => listener(data.body)),
+        onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id, sidecar: name }), (data) => listener(data.reason)),
+        // default: cids is optional; without it the send carries no correlation identifiers.
+        send: (id, body, cids = []) => calls.request("runtime.sidecar.send", { id, sidecar: name, body, cids }),
+      };
+    },
     // The scale of the surface and the settings of the plugin: read reads the current value, and on registers one listener
     // under the one subscription of its key, which the page registers once (docs/spec/native-surfaces.md#view-surfaces).
     textSize: {
@@ -118,6 +158,17 @@ export function createViewBridge({ handler, report }) {
     settings: {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
+    },
+    // The event log of the page: log.<level>(event, fields, {cids}) and log.enabled(level), as runtime.log of the surface context.
+    log,
+    // The error line of an error that the view shows on its own page: the page writes `surface <surface> <where>: <text>` to the
+    // application log at the moment the view shows it (docs/spec/native-surfaces.md#view-surfaces).
+    error: (where, text) => calls.request("runtime.error", { where, text }).then(() => undefined),
+    // The one route of a view to run a command that core or the view declares (docs/spec/native-surfaces.md#view-surfaces, input).
+    // The call layer keeps the owner check of each name; the bridge adds no set of names.
+    command: (name, params = null) => {
+      if (typeof name !== "string" || name === "") throw new TypeError("runtime.command requires a non-empty name");
+      return calls.request(name, params);
     },
     theme: (listener) => {
       if (typeof listener !== "function") throw new TypeError("runtime.theme requires a listener");
@@ -130,7 +181,9 @@ export function createViewBridge({ handler, report }) {
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (message.event === "theme" || message.event === "textSize" || message.event === "settings") return message.event;
+    if (message.event === "theme" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
+      return message.event;
+    }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
     return `native:${message.event}`;
   };
@@ -236,5 +289,56 @@ export function createViewBridge({ handler, report }) {
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots, runtime, commands, exposure };
+  /**
+   * The connected items of the extension point point that the plugin declares (docs/spec/plugins.md#extension-points), each
+   * {plugin, index, item, module, fail(reason)}; module is the URL on the core root. fail makes that item invalid through the page
+   * and leaves the other items connected; an Error reason carries its message.
+   */
+  const contributions = (point) => calls.request("runtime.contributions", { point }).then((items) => items.map((entry) => Object.freeze({
+    ...entry,
+    fail: (reason) => calls.request("runtime.contributions.fail", {
+      point, plugin: entry.plugin, index: entry.index, reason: reason instanceof Error ? reason.message : String(reason),
+    }).then(() => undefined),
+  })));
+  // The port of the composition controller: each region operation is a view call that the main page runs with the page operations
+  // of the surface, and each region event arrives through runtime.native.on (docs/spec/native-surfaces.md#view-surfaces, regions).
+  const port = {
+    surfaces: { report: (message) => calls.request("composition.report", message) },
+    composition: {
+      // The main page numbers the placement with the composition revision of its document, so the revision of the view is not sent.
+      place: (_revision, regions, overlays) => calls.request("composition.place", { regions, overlays }),
+    },
+    document: {
+      attach: (name) => calls.request("document.attach", { name }),
+      load: (name, url) => calls.request("document.load", { name, url }),
+      zoom: (name, zoom) => calls.request("document.zoom", { name, zoom }),
+      go: (name, action, offset) => calls.request("document.go", offset === undefined ? { name, action } : { name, action, offset }),
+      post: (name, message) => calls.request("document.post", { name, message }),
+      subscribe: (name, stream) => calls.request("document.subscribe", { name, stream }),
+      unsubscribe: (name, handle) => calls.request("document.unsubscribe", { name, handle }),
+      detach: (name) => calls.request("document.detach", { name }),
+      onState: (listener) => runtime.native.on("document-state", (event) => listener(event.document, event.state)),
+      onMessage: (listener) => runtime.native.on("document-message", (event) => listener(event.document, event.message)),
+      onStream: (listener) => runtime.native.on("document-stream", (event) => listener(event.document, event.handle, event.message)),
+    },
+    image: {
+      attach: (name, sidecar) => calls.request("image.attach", { name, sidecar }),
+      focus: (name) => calls.request("image.focus", { name }),
+      caret: (name, x, y, width, height) => calls.request("image.caret", { name, x, y, width, height }),
+      text: (name, text) => calls.request("image.text", { name, text }),
+      detach: (name) => calls.request("image.detach", { name }),
+      on: (listener) => runtime.native.on("image-event", (event) => listener(event.name, event.event)),
+    },
+  };
+  const composition = {
+    /**
+     * Creates the composition of the declared regions and overlays of the view from elements of the view document, as
+     * createSurfaceComposition does for a page. The insets are measured against the viewport of the view, which is the view frame.
+     */
+    async create({ regions = {}, overlays = {} } = {}) {
+      const declaration = await calls.request("composition.declaration", null);
+      return createSurfaceCompositionController(port, declaration, { regions, overlays }, window);
+    },
+  };
+  return { calls, snapshots, runtime, commands, exposure, contributions, composition };
 }

@@ -22,9 +22,11 @@ use crate::event_record::emit_host;
 use crate::exposure::{self, on_main, with_view};
 use crate::platform::{self, Handle, Platform};
 use crate::presentation_wait::{PresentationWait, presentation_abandoned_payload, views_to_join};
-use crate::surfaces::ViewStart;
 use crate::surfaces::{Placement, require_region, surface_handle};
-use crate::view_lifecycle::{ViewLifecycle, is_queue_full, view_stop_reason, view_stopped_event};
+use crate::surfaces::{ViewStart, view_origin_directory};
+use crate::view_lifecycle::{
+    ViewLifecycle, is_queue_full, view_process_ended_event, view_stop_reason, view_stopped_event,
+};
 use crate::windows::{emit_window, window_data, with_native_owner};
 
 /// The directory inside the configuration directory that holds the persistent site data of document regions. It differs
@@ -1209,7 +1211,7 @@ fn attach_view(
             let theme = crate::theme::get(window)?;
             let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
             platform.add_document_script(document, &theme_script(&theme))?;
-            platform.add_document_script(document, &surface_start_script(surface, &start))?;
+            platform.add_document_script(document, &surface_start_script(surface, &start)?)?;
             record_view_process_request(surface, plugin);
             Ok(document)
         },
@@ -1327,9 +1329,19 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         Ok(current) if current == document => {}
         _ => return,
     }
+    // The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
+    data.documents.lifecycle().record_end(surface);
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
     end_presentation_wait(window, surface, "process-ended");
+    // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
+    if let Err(error) = emit_window(
+        window,
+        "view-process-ended",
+        view_process_ended_event(surface),
+    ) {
+        log_error("view channel", error);
+    }
     if let Err(error) = data.documents.remove(&key) {
         return log_error("view channel", error);
     }
@@ -1337,6 +1349,20 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
         record_view_call_peer_lost(plugin, command);
     }
     log_failure("view channel", platform.close_document(document));
+    // The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
+    // again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
+    let (region_documents, region_images) =
+        remove_view_regions(&data.documents, &data.streams, &data.images, surface);
+    let regions_closed = !region_documents.is_empty() || !region_images.is_empty();
+    for handle in region_documents {
+        log_failure("view channel", platform.close_document(handle));
+    }
+    for handle in region_images {
+        log_failure("view channel", platform.close_image(handle));
+    }
+    if regions_closed {
+        exposure::window_changed(window);
+    }
     let record = data.documents.lifecycle().spec(surface);
     if !data.documents.lifecycle().fail(surface, Instant::now()) {
         log_error("view channel", format!("{surface}: {}", view_stop_reason()));
@@ -1790,8 +1816,27 @@ pub fn remove_surface_for_reload(
     streams: &Streams,
     surface: &str,
 ) -> Vec<Handle> {
+    // The view of the surface closes with its documents (docs/spec/logging.md#principles).
+    documents.lifecycle().record_end(surface);
     streams.remove_surface(surface);
     documents.remove_surface(surface)
+}
+
+/// Removes the document and image regions of a view surface whose view process ended, after the view itself was removed, and
+/// returns their handles for the caller to close. The regions belong to the composition of the ended document, so the view that
+/// is created again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions). The image generation of the
+/// surface advances, so a frame of a closed region is stale.
+pub fn remove_view_regions(
+    documents: &Documents,
+    streams: &Streams,
+    images: &crate::images::Images,
+    surface: &str,
+) -> (Vec<Handle>, Vec<Handle>) {
+    // The regions close with the ended document, so their stream effects are not applied.
+    streams.remove_surface(surface);
+    let closed_documents = documents.remove_surface(surface);
+    images.begin_generation(surface);
+    (closed_documents, images.remove_surface(surface))
 }
 
 /// Ends every subscription of the main page of a window whose web content process ended, and turns off the streams that
@@ -1819,6 +1864,8 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         Ok(platform) => platform,
         Err(error) => return log_error("document close", error),
     };
+    // A view of the surface ends with it (docs/spec/logging.md#principles).
+    data.documents.lifecycle().record_end(surface);
     data.documents.lifecycle().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();
@@ -2128,20 +2175,16 @@ pub fn theme_script(theme: &Value) -> String {
 
 /// The document-start script that sets window.sokSurface to the frozen start values of the view of surface, which the first page
 /// script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface has none of is carried as JSON
-/// null.
-pub fn surface_start_script(surface: &str, start: &ViewStart) -> String {
+/// null, except the origin, which must be present and of its form; a missing or malformed origin is refused.
+pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, String> {
     let params = start
         .params
         .as_ref()
         .map_or_else(|| "null".to_string(), |value| value.to_string());
-    let directory = start
-        .origin
-        .as_ref()
-        .and_then(|origin| origin.directory.as_deref())
-        .map_or_else(
-            || "null".to_string(),
-            |directory| Value::String(directory.to_string()).to_string(),
-        );
+    let directory = view_origin_directory(surface, start.origin.as_ref())?.map_or_else(
+        || "null".to_string(),
+        |directory| Value::String(directory).to_string(),
+    );
     let project = start.project.as_ref().map_or_else(
         || "null".to_string(),
         |project| {
@@ -2154,9 +2197,9 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> String {
         .as_ref()
         .map_or_else(|| "{}".to_string(), |value| value.to_string());
     let id = Value::String(surface.to_string());
-    format!(
+    Ok(format!(
         "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations})}});"
-    )
+    ))
 }
 
 #[cfg(test)]

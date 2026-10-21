@@ -1,7 +1,7 @@
-import { createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
+import { LOG_LEVELS, createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry, registerSurfacePort } from "./exposure.js";
-import { answerViewCall, viewStopState } from "./view-calls.js";
+import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
@@ -11,11 +11,14 @@ import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, tabOrigin,
-  unloadTab } from "./tab-reports.js";
+  unloadTab, viewRefusal } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
+import { logGate } from "./log-gate.js";
+import { emitEvent } from "./page-log.js";
+import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
 const mounted = new Map();
@@ -107,7 +110,6 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
     },
     image: {
       attach: (name, sidecar) => invoke("imageAttach", { name, sidecar }),
-      place: (name, insets, visible) => composed("imagePlace", { name, insets, visible }),
       focus: (name) => invoke("imageFocus", { name }),
       caret: (name, x, y, width, height) => invoke("imageCaret", { name, x, y, width, height }),
       text: (name, text) => invoke("imageText", { name, text }),
@@ -187,6 +189,9 @@ function tabStates() {
  * project that the window shows, or null in a window without one.
  */
 export function viewStartValues(surface, project) {
+  // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
+  const refusal = viewRefusal(surface.surfaceId);
+  if (refusal !== null) throw new TypeError(refusal);
   return {
     // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
     params: surface.params ?? null,
@@ -242,11 +247,13 @@ function tabState(surface, isDisposed) {
 function answerViewCalls(surface, scoped, page, context) {
   // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
   const { tab } = context;
+  // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
+  const gate = pluginNativeGate(scoped.native);
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   const pending = new Map();
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
-    native: (name, listener) => scoped.native.on(name, listener),
+    native: (name, listener) => gate.on(name, listener),
     // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
       on: (id, listener) => page.sidecar().on(id, listener),
@@ -254,6 +261,11 @@ function answerViewCalls(surface, scoped, page, context) {
     },
     textSize: (listener) => context.runtime.textSize.on(listener),
     settings: (listener) => context.runtime.settings.on(listener),
+    // The stored levels of a record of the plugin, read again at each change of the policy of the page gate.
+    logLevels: {
+      read: () => LOG_LEVELS.filter((level) => context.runtime.log.enabled(level)),
+      on: (listener) => Promise.resolve(logGate.onChange(listener)),
+    },
     push: (event, data) => scoped.native.call("viewEvent", { event, data }),
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
   });
@@ -272,15 +284,27 @@ function answerViewCalls(surface, scoped, page, context) {
   const removeExposurePort = registerSurfacePort(surface.surfaceId, () => {});
   const options = {
     plugin: surface.pluginId,
+    surface: surface.surfaceId,
     pending,
     tab,
+    contributions: context.contributions,
+    shortcuts: shortcutTable.shortcuts,
+    emitEvent,
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
     runtime: {
-      native: { call: (name, payload) => scoped.native.call(name, payload) },
-      sidecar: { send: (id, body, cids) => page.sidecar().send(id, body, cids) },
+      native: gate,
+      sidecar: {
+        // A view names the sidecar of its send; the name must be the one the surface declares, so no other sidecar is reached.
+        send: (id, body, cids, name) => {
+          if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
+          return page.sidecar().send(id, body, cids);
+        },
+      },
       clipboard: scoped.clipboard,
       links: scoped.links,
+      // The record path of the error display: the host call report of the surface writes the error line to the application log.
+      report: (line) => scoped.native.call("report", line),
       // The log levels of the surface context: the level gate of the page applies at delivery, and a gated record is counted there.
       log: context.runtime.log,
       textSize: context.runtime.textSize,
@@ -291,6 +315,7 @@ function answerViewCalls(surface, scoped, page, context) {
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
+        logLevels: () => subscriptions.logLevels(),
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
@@ -305,6 +330,16 @@ function answerViewCalls(surface, scoped, page, context) {
           return null;
         },
       },
+    },
+    // The composition of the view runs the page operations of the surface that a hybrid composition uses: the revision of the
+    // document, the region lifetime of a place and the region record (docs/spec/native-surfaces.md#view-surfaces, regions).
+    composition: {
+      // default: a view without regions or overlays declares none of them.
+      declaration: () => ({ kind: surface.composition.kind, regions: surface.composition.regions ?? [], overlays: surface.composition.overlays ?? [] }),
+      place: (regions, overlays) => page.composition.place(0, regions, overlays),
+      report: (text) => page.surfaces.report(text),
+      document: page.document,
+      image: page.image,
     },
   };
   const answering = scoped.native.on("view-call", (event) => {
@@ -449,7 +484,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,
-      runtime: { sidecar: page.sidecar, native: scoped.native, exposure: scoped.exposure, emit, on,
+      runtime: { sidecar: page.sidecar, native: pluginNativeGate(scoped.native), exposure: scoped.exposure, emit, on,
         clipboard: scoped.clipboard,
         links: scoped.links,
         theme: scoped.theme,
@@ -495,11 +530,15 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
       // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
       const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
+      // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
+      // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
+      const ending = scoped.native.on("view-process-ended", () => documentRegions.released(surface.surfaceId));
       closing.signal.addEventListener("abort", () => {
         answering.then((off) => off());
         stopping.then((off) => off());
         responding.then((off) => off());
         abandoning.then((off) => off());
+        ending.then((off) => off());
         forgetView(surface.surfaceId);
       }, { once: true });
     }

@@ -94,13 +94,12 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 7. **입력.**
    - workbench 단축키는 주인과 명령을 함께 [키보드 단축키](exposure.ko.md#키보드-단축키)에 적는다.
    - 명령 단축키는 native 메뉴를 거쳐 core 명령에 간다.
-   - view는 시작할 때 호스트에 단축키 표를 등록한다. 표에는 workbench 단축키와 각각의 주인이 들어 있다. 표가 등록되기 전에는 키가 기본 동작을 지키며, view는 `page.view.shortcut-table-missing {plugin}`을 쓴다.
-   - view는 그 표를 보고 자기 안에서 동기로 판단한다.
-     - 주인이 workbench인 키만 기본 동작을 막고, event 정보와 함께 넘긴다.
-     - 주인이 view인 키는 view가 처리하고 넘기지 않는다.
-     - 주인이 native 메뉴인 키는 메뉴가 먼저 받으므로 view의 기본 동작을 막지 않는다.
-     - 표에 없는 키는 기본 동작을 그대로 지킨다.
-   - 넘긴 명령이 실패하면 `page.input.shortcut.failed {plugin, key, command}`로 알리고, 기본 동작을 다시 실행하지 않는다.
+   - view에는 단축키 표도 키 listener도 없다. view가 주인인 키는 기본 동작을 유지하고 first responder가 받아 처리한다.
+   - view는 넘길 키에 대해 `runtime.command(name, params)`로 workbench 명령을 실행한다. host는 view의 키로 아무것도 하지 않는다. bridge는 키 event에 대해 call을 보내지 않으며, main page는 view가 넘기지 않은 키 때문에 명령을 실행하지 않는다.
+   - view는 `runtime.shortcuts.read`로 자기 행을 읽는다. 주인이 `workbench` 또는 `view`인 행을 `{key, owner, command}`로 받는다. native 메뉴 행은 돌려주지 않으므로 이 규칙을 따르는 view는 그것을 넘기지 않는다.
+   - Escape는 보통의 키다. 자기 Escape 동작이 있는 view는 자기 handler에서 정하고, 없는 view는 page picker가 열려 있을 때 Escape에 `core.picker.close`를 실행한다. bridge는 이 규칙들을 강제하지 않는다.
+   - 넘기지 않은 키나 workbench 행이 아닌 키는 기본 동작을 그대로 지킨다.
+   - 넘긴 workbench 명령이 실패하면 `page.input.shortcut.failed {plugin, command}`로 알리고, call은 그 오류로 답한다.
    - IME는 view의 first responder가 받는다. 입력기 activation 검사로 확인한다.
    - Escape와 글 입력 키의 주인은 view다. view의 first responder가 이 키들을 받기 때문이다. View 메뉴의 메뉴 단축키(Command `=`, `-`, `0`)는 글자 크기 명령을 실행하는 native 메뉴 단축키다([글자 크기](text-size.ko.md)).
    - 단축키 표 전체는 [키보드 단축키](exposure.ko.md#키보드-단축키)이며, 기계가 읽는 선언은 `packages/workbench/shortcuts.json`이다. `scripts/test/shortcut-table.test.mjs`가 이 표를 두 호스트의 메뉴 표와 workbench 키 처리기에 대해 검사한다.
@@ -138,8 +137,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned`. host가 wait를 소유하므로 host가 쓴다 |
-| `page.view.shortcut-table-missing` | input | error | `{plugin}` |
-| `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
+| `page.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
 | `host.trace.plugin-host.restart-reset` | call | debug | `{plugin}` |
@@ -163,7 +161,7 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 - 플러그인 저장소 요구: 기여 module이나 공용 module을 제공하는 plugin의 저장소는 자기 시험에서 그 module이 각각 자체완결 ES module 하나인지 확인한다. 그 안의 상대 import는 그 plugin의 빌드 오류다.
 - 시험:
   - core 시험은 자기 경계를 fake plugin fixture로 검증한다.
-  - 공통 계약 case(RPC, snapshot, 재시작, 단축키 표)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다.
+  - 공통 계약 case(RPC, snapshot, 재시작)는 소유 package인 core와 두 호스트가 구현하고 실행한다. core는 소비자에게 필요한 fixture를 공개한다. 각 plugin 저장소는 그 fixture로 자기 module만 시험하며, core의 case를 실행하거나 core의 경로를 읽지 않는다.
   - 실제 plugin을 띄우는 측정과 창 검사는 설치된 환경의 end-to-end 검사이고, package 시험이 아니다.
 ## 탭과 프로세스
 

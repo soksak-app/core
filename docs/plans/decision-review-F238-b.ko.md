@@ -40,6 +40,10 @@
 8. **명세.** 이 결정의 view 규칙은 코드 변경 전에 [logging](../spec/logging.ko.md)에 쓴다(AGENTS.md: 명세가 먼저). 40행(`undeclared`: 기록은 class `lifecycle`과 마커를 가진다), 74행(기본 창은 surface 문서에 적용되며, 게이트가 없는 view에는 적용되지 않는다), 76행(「선언되지 않은 이벤트는 class도 게이트도 없다」 문장은 `plugin` 계층에서 다음으로 바뀐다: 카탈로그가 선언하지 않은 `plugin` 이벤트는 class `lifecycle`을 받고 `lifecycle`로 게이트된다; 다른 계층은 유지한다. 게이트는 묻고, view와 메인 페이지의 plugin 기록은 필드를 만들고 기록기가 결정한다), 77행(view는 계수를 쓰지 않는다; 네이티브 라이브러리와 생산자는 자기 계수를 유지한다), 291행(미선언 plugin 이벤트의 class)을 바꾸고 한국어 판도 같이 바꾼다. 원칙 2는 1단계의 예외를 적고, 배치 행이 Bounds에 더해진다. 원칙 3은 `host.view.killed`를 손실 기록 목록에 더한다. 그리고 통과 기록 목록(`logging.md` 78행; `passes_every_gate`와 `PassesEveryGate`)에 더한다. 원칙 5는 3단계의 규칙을 적는다. 3단계의 규칙은 `plugin` 계층에만 적용된다. `host`나 `page` 계층의 미선언 이벤트는 [logging](../spec/logging.ko.md#class와-정책)의 규칙(class 없음, 게이트 없음)을 따르며, 이 결정은 바꾸지 않는다. [native-surfaces](../spec/native-surfaces.ko.md#view-표면), 111행은 기록기를 게이트로 서술하도록 다시 쓴다.
 9. **대체.** 이 결정은 라운드 6 본문의 1~4단계와 6단계를 대체한다. 또한 라운드 5 B-O4의 두 인자 `log.enabled` 선택을 대체한다; 공개 서술은 제거한다. 그 단계들(시작 값, `log-policy`와 `log-classes` 게시, `runtime.log.gated`, view 계수, D5-a의 view 부분)은 구현하지 않는다.
 
+### 수정 (F238-b-14)
+
+페이지 배치 상한의 100 ms 부분(1단계, 8단계, 행 D5-g)을 뺀다. 페이지 배치 상한은 호출당 event 256개이며, [상한](../spec/logging.ko.md#상한)의 `page 배치 호출` 행이다. 이유: `runtime.log` 호출은 한 번에 하나만 날아가고 page는 turn이 끝날 때 비우므로, 타이머는 배치를 더 일찍 보내지도 못하고 개수가 이미 묶지 못하는 것을 묶지도 못한다. [logging](../spec/logging.ko.md#writer)의 글은 이에 맞춰 영어와 한국어로 바꾼다.
+
 ### 근거와 증거
 
 - 라운드 6 설계는 view마다 계수를 두었고, 플러시 규칙과 종료 손실(S2, S3)이 따랐다. 기록기는 이미 보고 규칙과 함께 자기 계수를 갖는다([logging](../spec/logging.ko.md#정책), 77행). 그러므로 계수를 아는 곳이 하나인 기록기로 옮기면 view 계수와 view 플러시 규칙이 필요 없다.

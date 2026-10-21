@@ -83,6 +83,8 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 		s.reloadSurfaceDocuments()
 		s.disposePluginHosts()
 	})
+	// The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md rule 7).
+	s.sidecars.closePluginSessions(s, func(pluginSession) bool { return true })
 	s.discardOverlay()
 	snapshot, err := h.runWorkspace(WorkspaceRequest{Kind: "snapshot"})
 	if err != nil {

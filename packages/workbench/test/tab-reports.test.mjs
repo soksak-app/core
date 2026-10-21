@@ -37,7 +37,7 @@ test("a new tab's origin is the directory its source tab recorded at that moment
   assert.deepEqual(tabOrigin("tab-e"), { directory: null });
   recordOrigin("tab-f", undefined);
   assert.deepEqual(tabOrigin("tab-f"), { directory: null });
-  assert.deepEqual(tabOrigin("tab-unknown"), { directory: null });
+  assert.throws(() => tabOrigin("tab-unknown"), /tab tab-unknown has no origin/, "a tab with no record throws, it reads no fallback");
   for (const invalid of ["relative", "", 3]) {
     assert.throws(() => reportDirectory("tab-c", invalid), /a tab directory must be an absolute path/);
   }
@@ -146,4 +146,12 @@ test("the data of a tab button carries the memory state and the label that the t
   assert.deepEqual(tabButtonData(tab), { name: "● vim notes.md", tabState: "restoring" });
   forgetTab("tab-button");
   assert.deepEqual(tabButtonData(tab), { name: "Shell", tabState: "loaded" });
+});
+
+test("a reported directory is refused unless it is a local absolute path", () => {
+  for (const invalid of ["//server/share", "/C:/x", "C:\\x", "/a\u0000b", "relative", ""]) {
+    assert.throws(() => reportDirectory("tab-g", invalid), TypeError, `${JSON.stringify(invalid)} is refused at report`);
+  }
+  assert.doesNotThrow(() => reportDirectory("tab-g", "/a"), "an absolute local path is accepted");
+  reportDirectory("tab-g", null);
 });
