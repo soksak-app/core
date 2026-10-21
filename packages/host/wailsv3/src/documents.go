@@ -1432,6 +1432,16 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		s.emitToSurface(surface, "view-call", payload)
 		return nil
 	}
+	snapshot, isSnapshot, err := DeclaredSnapshotEvent(surface, channel.plugin, received.Message)
+	if err != nil {
+		return err
+	}
+	if isSnapshot {
+		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
+		// (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
+		s.emitToSurface(surface, declaredSnapshotEvent, snapshot)
+		return nil
+	}
 	var event struct {
 		Event    string `json:"event"`
 		Plugin   string `json:"plugin"`
@@ -1560,6 +1570,47 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 		params = json.RawMessage(`null`)
 	}
 	return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}, true, nil
+}
+
+// The event name of a declared UI snapshot of a view (docs/plans/plugin-processes.md, messages and events).
+const declaredSnapshotEvent = "declared-ui.snapshot"
+
+// DeclaredSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the view of surface, which has the
+// plugin id. A snapshot is {"event": "declared-ui.snapshot", "plugin", "status", "seq", "value", "skipped"}, whose seq is an integer
+// from 1 and whose skipped is a count of 0 or more. It returns false when message is not a snapshot, and an error for a snapshot
+// whose fields are invalid. The host relays the snapshot and writes no event for it (docs/plans/plugin-processes.md, rule 2).
+func DeclaredSnapshotEvent(surface, plugin string, message json.RawMessage) (map[string]any, bool, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(message, &fields); err != nil {
+		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
+	}
+	if string(fields["event"]) != `"`+declaredSnapshotEvent+`"` {
+		return nil, false, nil
+	}
+	var named string
+	if raw, ok := fields["plugin"]; !ok || json.Unmarshal(raw, &named) != nil || named == "" {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot names no plugin", surface)
+	}
+	if named != plugin {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot names plugin %q, want plugin %q", surface, named, plugin)
+	}
+	var status string
+	if raw, ok := fields["status"]; !ok || json.Unmarshal(raw, &status) != nil || status == "" {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot has no status", surface)
+	}
+	var seq uint64
+	if raw, ok := fields["seq"]; !ok || json.Unmarshal(raw, &seq) != nil || seq < 1 {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no seq from 1", surface, status)
+	}
+	var skipped uint64
+	if raw, ok := fields["skipped"]; !ok || json.Unmarshal(raw, &skipped) != nil {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no skipped count", surface, status)
+	}
+	value, ok := fields["value"]
+	if !ok {
+		return nil, true, fmt.Errorf("%s: declared UI snapshot of status %q has no value", surface, status)
+	}
+	return map[string]any{"surface": surface, "plugin": plugin, "status": status, "seq": seq, "skipped": skipped, "value": value}, true, nil
 }
 
 // ViewReplyRequest is the reply of the main page to a call request of the view of Surface. It has a result or an error, not both.
