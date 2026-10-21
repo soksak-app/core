@@ -27,11 +27,11 @@ Two rules make this work:
 .declared-tree{overflow-x:auto}
 ```
 
-The first rule gives a tree its line. The second rule applies to a tree in every orientation: when the tree's content is wider than its box, the tree scrolls horizontally inside its own box, so no label is cut and no text leaves the tree box. In a vertical section the box is the section width, so the rule changes nothing unless the content is wider than the section, where it replaces an overflow that today runs past the section into the set scroll.
+The first rule gives a tree its line. The second rule applies to a tree in every orientation: when the tree's content is wider than its box, the tree scrolls horizontally inside its own box, with a thin scrollbar (`scrollbar-width:thin`), so a label beyond the box is reached by scrolling and is not hidden without a visible signal. In a vertical section the box is the section width, so the scroll applies only where a label is wider than the section; there the label used to run past the section edge into the set scroll, and it now scrolls inside the tree box. The visibility of the scrollbar follows the system scrollbar setting (overlay scrollbars show while scrolling).
 
 Reason for the full line, from the code: a tree's width is set by its deepest visible row, which includes the indent of each level. Expanding or collapsing a branch changes the visible depth, so it changes the tree's width. In a row flow at content width, that change reflows the sibling elements beside the tree. A full line confines the change to the tree itself. A `list` has no expand control, so its width does not change with a user action in this way, and it keeps its content width. This reason is code-based; the reflow is a consequence of the CSS, and it is not a measured result.
 
-Reason for the scroll rule: the indent takes width from the label at each level, so at narrow widths a deep label has little or no room (the arithmetic in Problem). The scroll keeps every label readable and reachable inside its own tree box, and does not depend on the section width. It does not remove the indent: the indent stays one step per level, as the outline requires. The narrow-width layout is therefore a scroll, not a clipped label, and the scroll is the tree's own, not the set's.
+Reason for the scroll rule: the indent takes width from the label at each level, so at narrow widths a deep label has little or no room (the arithmetic in Problem). The scroll keeps every label readable and reachable inside its own tree box, and does not depend on the section width. It does not remove the indent: the indent stays one step per level, as the outline requires. The narrow-width layout is therefore a scroll with a visible scrollbar, and the scroll is the tree's own, not the set's. This item does not reduce the indent: a deep label still has less room, and the scroll keeps it reachable.
 
 Reasons (the decision):
 
@@ -75,17 +75,17 @@ Alternative rejected: a `tone` or `status` enumeration on a node. The vocabulary
 Each change is made in the English document and in the Korean translation in the same change.
 
 - [declared UI](../spec/declared-ui.md) (`declared-ui.ko.md`), element table: the `tree` node row `detail` (string, optional, at most 500 code points, drawn after the label). The `tree` row loses "A tree is not drawn in a horizontal section".
-- [declared UI](../spec/declared-ui.md) (line 171 in English; line 172 in `declared-ui.ko.md`), sidebar section form: the bullet about a tree in a horizontal section becomes: "A `tree` takes one full line of that width and draws its outline as in vertical orientation, so the row wraps before and after it. A `list` keeps its content width. A tree expands and collapses in place: its width follows its deepest visible row, so it has its own line, and a label wider than the tree scrolls horizontally inside the tree."
+- [declared UI](../spec/declared-ui.md) (line 171 in English; line 172 in `declared-ui.ko.md`), sidebar section form: the bullet about a tree in a horizontal section becomes: "A `tree` takes one full line of that width and draws its outline as in vertical orientation, so the row wraps before and after it. A `list` keeps its content width, and shrinks to the line only when its content is wider. A tree expands and collapses in place: its width follows its deepest visible row, so it has its own line, and a label wider than the tree scrolls horizontally inside the tree."
 - [declared UI](../spec/declared-ui.md) (line 172 in English; line 173 in `declared-ui.ko.md`), sidebar section form: the paragraph "The orientation check runs again when the section changes orientation ..." is removed, together with the reason sentence of the orientation pull.
 - [declared UI](../spec/declared-ui.md) (line 151 in English), status mapping: "at a change of orientation" is removed from the pull rule. The Korean line is the matching line of `declared-ui.ko.md`.
 - [declared UI](../spec/declared-ui.md) (line 230 in English; line 231 in `declared-ui.ko.md`), rejection table: the row "A `tree` in a horizontal section" is removed.
-- [declared UI](../spec/declared-ui.md) (line 85 in English), Limits table: "Text field | 500 code points | Bounds the width of one line of text in a section." becomes "Bounds the length of one text field. It does not bound the drawn width: a tree draws a label wider than its box inside a horizontal scroll of the tree; other text is drawn past the section edge and scrolls with the set."
+- [declared UI](../spec/declared-ui.md) (line 85 in English), Limits table: "Text field | 500 code points | Bounds the width of one line of text in a section." becomes "Bounds the length of one text field. It does not bound the drawn width: a tree draws a label wider than its box inside a horizontal scroll of the tree; a list label wraps at spaces, and a label of one unbreakable word wider than the section is drawn past the section edge and scrolls with the set; status-line text is clipped at its box."
 - [plugin processes](../spec/plugin-processes.md) (line 51 and the pull row at line 124 in English; the matching lines of `plugin-processes.ko.md`), rule 2: the clause "once when the section changes orientation" and the clause "and a value discarded for the previous orientation may be valid for the new one, which only the source holds" are removed; the sentence "A running view has no other way to send its last value to a new reader" stays. The pull row of the messages table reads "load, source change".
 
 ## Checklist entries
 
 - F230 (`docs/features.md`, `docs/features.ko.md`): marked `[o]` when this item completes, with its Red and Green results. Its registered retry text ("Retry when: F229 is decided.") is superseded by the instruction to work the item now; the change adds this line under F230 in both files, stating that the F229 condition is superseded by that instruction. F229 is not on this branch.
-- No follow-up ID is registered. The narrow-width label cases are handled by Decision 1 (the scroll), so no defect is left open by this item.
+- No follow-up ID is registered. Every label stays reachable by the tree's scroll (Decision 1), so no label is hidden without a visible signal and no reachable defect is left open by this item.
 
 ## Verification plan
 
@@ -145,4 +145,14 @@ Two fresh auditors (G, H) read the Round 3 revision.
 - G-O5 (Limits table sentence "Bounds the width of one line of text in a section" is false). Accepted. The Limits row is rewritten in Specification changes.
 - H-5 (96 px and 120 pt units). Accepted; the unit assumption is stated once in Problem.
 
-Round 5: pending, with two fresh auditors on the Round 4 decision.
+### Round 5
+
+One fresh auditor (K, Haiku) read the Round 4 decision only.
+
+- K-O1 (the plan contradicts itself on F230-1: Round 4 removed it, but the text still registered it). Accepted. F230-1 is removed, as Round 4 decided: the tree's scroll keeps every label reachable, so no reachable defect is left open. The Decision 1 sentence and the Checklist entry are removed.
+- K-O2 ("A `list` keeps its content width" is true only when the content is narrower than the section; a wider list shrinks and wraps). Accepted. The sentence in the declared UI spec states that a list shrinks to the line when its content is wider.
+- K-O3 (the Limits sentence "other text is drawn past the section edge" is not true for all text: list labels wrap at spaces, and status-line text is clipped at its box). Accepted. The Limits row names the exceptions.
+- K-F1 (implementation finding: the `[o]` mark and the superseding line for F230 are not in `docs/features.md` and `docs/features.ko.md`). Not a decision objection; it is carried to the features step of this item.
+- K-F2 (the Korean spec lines are not checked against the English). Carried to the review of the Korean translation before its commit.
+
+No decision-level objection remains after these edits. The edits are textual corrections to the spec and the plan; the code they describe is unchanged. Round 5 is closed on the decision; no further auditor is run for this item.
