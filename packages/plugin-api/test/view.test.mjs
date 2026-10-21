@@ -644,7 +644,12 @@ function validateBridgeCases(cases) {
   const ids = cases.map(({ id }) => id);
   assert.equal(new Set(ids).size, ids.length, "bridge case ids must be unique");
   assert.deepEqual([...ids].sort(), Object.keys(BRIDGE_ACTIONS).sort(), "all required bridge cases must be present");
-  for (const item of cases) assert.deepEqual(item.steps.map(({ action }) => action), BRIDGE_ACTIONS[item.id], `${item.id} ordered actions`);
+  for (const item of cases) {
+    assert.deepEqual(item.steps.map(({ action }) => action), BRIDGE_ACTIONS[item.id], `${item.id} ordered actions`);
+    for (const step of item.steps) {
+      if (step.action === "host-event") assert.equal(step.input?.sok, 1, `${item.id} host-event input must carry sok: 1`);
+    }
+  }
   const refusal = cases.find(({ id }) => id === "view.bridge.refuses-unsupported-page");
   assert.equal(refusal.steps[0].output.throws, "view channel requires a view page on sok://<plugin id>, got https://example.test/");
 }
@@ -654,6 +659,9 @@ test("view bridge contract validation rejects empty, missing, and shortened case
   const shortened = structuredClone(BRIDGE_CONTRACT.cases);
   shortened.find(({ id }) => id === "view.bridge.refuses-unsupported-page").steps[0].output.throws = "view channel requires a view page on sok://<plugin id>";
   assert.throws(() => validateBridgeCases(shortened), /strictly equal/);
+  const missingMarker = structuredClone(BRIDGE_CONTRACT.cases);
+  delete missingMarker.find(({ id }) => id === "view.bridge.events-delivered-in-order").steps[1].input.sok;
+  assert.throws(() => validateBridgeCases(missingMarker), /host-event input must carry sok: 1/);
 });
 test("published view bridge cases match calls, replies, events, and refusals", async (t) => {
   validateBridgeCases(BRIDGE_CONTRACT.cases);
@@ -743,7 +751,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             index += 1;
             if (mismatch) throw mismatch;
           } else if (step.action === "host-event") {
-            host({ sok: 1, ...step.input });
+            host(step.input);
             assert.deepEqual(received, step.output);
           }
         }
@@ -763,7 +771,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             assert.equal(bridge.calls.openCalls().count, step.input.id === 1 ? 1 : 0);
             assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), []);
           } else if (step.action === "host-event") {
-            host({ sok: 1, ...step.input });
+            host(step.input);
             assert.deepEqual({ debug: runtime.log.enabled("debug"), error: runtime.log.enabled("error") }, step.output);
           } else if (step.action === "log-disabled") {
             const before = posted.length;
@@ -777,7 +785,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.equal(item.steps[0].input, "theme");
         const subscription = bridge.runtime.theme((value) => received.push(value));
         for (const step of item.steps.slice(1)) {
-          host({ sok: 1, event: step.input.event, data: step.input.data });
+          host(step.input);
           assert.equal(received.at(-1), step.output);
         }
         assert.deepEqual(received, item.steps.slice(1).map((step) => step.output));
