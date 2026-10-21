@@ -10,7 +10,7 @@
 |---|---|
 | 작업 규칙, checklist 규칙, Red/Green, commit 형식, branch와 worktree | `AGENTS.md` (+ `.ko.md`) |
 | checklist | `docs/features.md` (+ `.ko.md`) |
-| F212의 확정 설계: 층, 규칙 1~10, 통과값 (i)~(viii), 검증 기록 | `docs/plans/plugin-processes.md` (+ `.ko.md`) |
+| F212의 계약: 층, 통과값 (i)~(viii), 규칙 1~10, 메시지와 event, plugin host | `docs/spec/plugin-processes.md` (+ `.ko.md`) |
 | 선언 UI 계약(list, tree, button, status-line, section, 주소, 거부) | `docs/spec/declared-ui.md` (+ `.ko.md`) |
 | exposure 계약(명령, status, dom, `address`, 오류) | `docs/spec/exposure.md` |
 | build, test parity, 창 검사, 진단 | `docs/operations/examples.md` |
@@ -132,11 +132,11 @@ main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존
 
 **F212.1-2-2** — fixture 답이 files sidecar의 첫 답을 12.4초 기다렸다. `host.trace.sidecar.ready`(F212.1-2-2-6)가 spawn에서 첫 답까지를 잰다. files sidecar의 S31은 커밋되었다. trace를 켜고 F212.1-2의 창 검사를 되풀이하고, `host.trace.sidecar.ready`와 sidecar의 첫 기록을 읽는다. 공백이 sidecar의 첫 기록 이전이면 원인은 프로세스 시작(binary 실행)이다. 잰 시간과 그 원인을 기록한다. 공백이 sidecar 안이면 거기서 고친다.
 
-**F212.1-3** — 통과값 (iii)의 녹화 기반 DOM mount 기준값. 설치된 surface plugin마다, surface 시작 요청부터 첫 내용 frame까지 main page를 녹화하고(`diagnostics.capture.start/stop`) 5회의 중앙값을 load average와 함께 잡는다. `e2e/` 아래 추적되는 창 검사로 만들고, 결과를 계획의 "F212.1-2" 표에 적는다.
+**F212.1-3** — 통과값 (iii)의 녹화 기반 DOM mount 기준값. 설치된 surface plugin마다, surface 시작 요청부터 첫 내용 frame까지 main page를 녹화하고(`diagnostics.capture.start/stop`) 5회의 중앙값을 load average와 함께 잡는다. `e2e/` 아래 추적되는 창 검사로 만들고, plugin마다 중앙값을 plugin 버전, load average와 함께 `docs/features.md`(+ `.ko.md`)의 F212.1-3 결과에 적는다. F212.1-2가 trace 중앙값을 적은 방식과 같다. 기준값의 정의는 `docs/spec/plugin-processes.md`의 통과값 (iii)이다.
 
 ### 2. Checklist 상태
 
-완료: F212.3, F212.4, F212.6은 `[o]`다. F212.7은 F212.7a, F212.7b-1, F212.7c, F212.7d-1, F212.7-9가 열려 있는 동안 `[ ]`로 둔다.
+완료: F212.3, F212.4, F212.6은 `[o]`다. F212.7은 F212.7a, F212.7b-1, F212.7c, F212.7d-1이 열려 있는 동안 `[ ]`로 둔다.
 
 ### 3. 선언 UI (F212.8)
 
@@ -146,28 +146,33 @@ main에서 완료: F218-2.1, F218-2.2, F218-2.3(F218-2.2를 막던 순서 의존
 
 F212.9-1(명세 `docs/spec/plugin-host.md`)과 F212.9-2(native 연산)는 `feat/plugin-host-F212.9`에 커밋되었고, F212.9-3과 F212.9-4가 그곳에서 진행 중이다.
 
-F212.9는 필요하다. view가 하나도 열려 있지 않을 때 sidebar section에 값을 보여 주는 plugin은 plugin host가 있어야 하기 때문이다(declared-ui.md, 출처 순서). 계획은 첫 사례로 files state를 든다.
-- 명세 먼저: 계획의 native 빈칸 3(surface host가 아니라 창에 붙는 plugin host web view를 만드는 platform 연산), 빈칸 7(owner key `plugin:<id>`), 규칙 5(한도 (vi) 안의 재시작, 마지막 저장값에서 state 복원).
+F212.9는 필요하다. view가 하나도 열려 있지 않을 때 sidebar section에 값을 보여 주는 plugin은 plugin host가 있어야 하기 때문이다(declared-ui.md, 출처 순서). 첫 사례는 files state다.
+- 명세 먼저: `docs/spec/plugin-processes.md`의 "plugin host" 절(surface host가 아니라 창에 붙는 plugin host web view를 만드는 platform 연산, owner key `plugin:<id>`)과 규칙 5(한도 (vi) 안의 재시작, 마지막 저장값에서 state 복원). `feat/plugin-host-F212.9`의 명세는 `../plans/plugin-processes.md`를 link하므로, main을 합칠 때 그 link를 `plugin-processes.md`로 바꾼다.
 - F212.9a: F212.10 전에 숨은 host web view의 footprint와 throttle을 잰다.
 - native/darwin과 두 host에 구현하고, 계약 case, Go와 Rust 시험, native 시험을 둔다. F212.7-2의 view 통로 코드가 host 통로의 본보기다.
 
 ### 5. 계획을 명세로 (F212.7-9)
 
-F212.15 전에 `docs/plans/plugin-processes.md`의 확정 계약을 새 `docs/spec/plugin-processes.md`(+ko)로 옮긴다. `packages/plugin-api/terms.json`과 `docs/spec/declared-ui.md` 11행을 포함한 모든 link를 바꾸고 계획을 지운다. 검증 기록을 어디에 둘지 정한다. 명세에는 이력이 없으므로 changelog 항목으로 옮기거나 버린다.
+완료: 계획의 확정 계약은 `docs/spec/plugin-processes.md`(+ko)이며 계획은 지웠다. 계획의 검토 기록은 옮기지 않는다. 받아들인 각 해결은 `docs/spec/plugin-processes.md`나 `docs/spec/declared-ui.md`의 규칙이나 근거이고, F212.2, F212.5-1, F212.8-0부터 F212.8-0-23까지의 changelog 항목이 각 검토와 그것이 바꾼 것을 적는다. 계약이 아니라 작업인 계획의 부분은 이 문서에 있다. 6절의 배치, 7절의 통과값 규칙, 8절의 명세 변경, 되돌림 순서, 위험이다. 다른 branch의 `docs/plans/plugin-processes.md` link는 그 branch가 main을 합칠 때 `docs/spec/plugin-processes.md`로 바꾼다.
 
 ### 6. Plugin 이전 (F212.10)
 
-각 이전은 그 plugin 저장소의 항목이며, main에 맞춰 한다. 계획의 "층과 배치" 표가 plugin마다 대상을 정한다.
+각 이전은 그 plugin 저장소의 항목이며, main에 맞춰 한다. 아래 표가 `docs/spec/plugin-processes.md`의 층 규칙에 따라 plugin마다 대상을 정한다.
 
-| Plugin | 표면 | Section | State | Sidecar |
-|---|---|---|---|---|
-| editor | view(글 입력, IME) | — | — | files |
-| flowmark | view | — | — | 자기 것 |
-| shell | 선언 어휘로 표현되면 선언 UI, 아니면 view | — | — | shell |
-| files | — | 선언 tree, 이름 바꾸기·끌기·context menu가 필요하면 view | files sidecar, 아니면 plugin host | files |
-| hwp | 문서 region이 있는 view | — | — | files |
-| browser | 문서 region이 있는 view | section 4개를 선언 UI 또는 card 표면으로 | — | — |
-| terminal | image region이 있는 view | — | — | vt |
+| Plugin | 표면 | Section | State와 로직 | 확장점 | Sidecar |
+|---|---|---|---|---|---|
+| editor | view(CodeMirror, 글 입력, IME) | — | — | 기여 plugin이 선언한 module을 core root에서 import | files |
+| flowmark | view(자유 DOM) | — | — | — | 자기 것 |
+| shell | 선언 어휘로 표현되면 선언 UI, 아니면 view. shell 이전 전에 항목 F212.10-shell-layer가 정한다 | — | — | — | shell |
+| files | — | 선언 tree, 이름 바꾸기·끌기·context menu가 필요하면 view | files sidecar로 옮긴다. 불가하면 plugin host | — | files |
+| hwp | 문서 region이 있는 view | — | — | — | files |
+| browser | 문서 region이 있는 view | section 4개는 각각 선언 UI 또는 card 표면이 되며, browser 이전 전에 항목 F212.10-browser-sections가 정한다 | — | — | — |
+| terminal | image region과 겹침 화면이 있는 view | — | — | — | vt |
+
+- 항목 F212.10-shell-layer와 F212.10-browser-sections는 shell과 browser plugin 저장소의 checklist에 올리며, 표의 어느 칸도 그런 항목 없이 비워 두지 않는다.
+- modal page는 범위에서 뺀다. 이를 쓰는 plugin이 없기 때문이다.
+- files state를 sidecar로 옮기는 일은 files plugin과 files sidecar 저장소의 항목이다. editor buffer를 옮길지는 통과값 (iv)로 editor 저장소에서 정한다.
+- `engines.soksak` 범위를 가진 plugin release는 F212.15의 core release 뒤에 발행한다. 각 release는 그 plugin 저장소의 항목이며, F212.15가 요구하는 core 버전을 발행할 때까지 미배포로 기록한다.
 
 - core는 코드와 시험에서 plugin 이름을 쓰지 않는다(`make boundaries`). 각 plugin 저장소가 자기 source를 검사한다.
 - 각 plugin 항목은 release 전에 자기 view를 잰다. (iii) 첫 표시, (v) 배치 변경 뒤 표시, (viii) 끌기다. plugin release는 core release 뒤다.
@@ -182,11 +187,13 @@ F212.15 전에 `docs/plans/plugin-processes.md`의 확정 계약을 새 `docs/sp
 - F212.13: view의 입력기 activation 검사를 승인을 받고 돌린다.
 - F212.14: 모든 plugin view를 (i), (ii), (iii), (iii-b), (v), (viii)에 비추어 마지막으로 잰다.
 
-통과값은 계획의 "통과값" 절에 있다. 기구 값 (v), (vi), (viii)이 실패하면 기구 항목을 멈춘다. plugin 값이 실패하면 그 plugin만 멈추고, 비용을 받아들일지 층을 바꿀지는 사람이 정한다.
+통과값은 `docs/spec/plugin-processes.md`의 "통과값" 절에 있다. 값을 만족하지 못하면 잰 값을 checklist에 적는다. 기구 값 (v), (vi), (viii)이 실패하면 기구 항목(F212.7b, F212.7c, F212.8a)과 그것에 기대는 항목을 멈춘다. plugin 값 (i), (ii), (iii), (iii-b)가 실패하면 그 plugin만 멈추고, 비용을 받아들일지 adversarial review에 올리는 명세 개정판에서 층을 바꿀지는 사람이 정한다. (iv)의 editor view footprint가 50 MB를 넘으면 F212.9 뒤에 editor buffer와 분석을 sidecar로 옮기는 항목을 더한다. F212의 완료에는 (i), (ii), (iii), (iii-b), (v), (vi), (viii)의 통과와 (iv)의 측정이 필요하다.
 
 ### 8. 제거와 release
 
-- F212.11: plugin surface의 page mount, parking, `dom` 구성, module section과 state module의 page mount를 지운다. 그 뒤 manifest는 새 형식만 받는다.
+- F212.11: plugin surface의 page mount, parking, `dom` 구성, module section과 state module의 page mount를 지운다. 그 뒤 manifest는 새 형식만 받는다. 같은 항목이 page mount를 적는 명세 문장을 바꾼다. plugin이 mount한 DOM을 소유하는 app DOM WebView 하나(`docs/spec/plugins.md`의 "표면 모듈 소유권" 절과 "DOM 탭" 문단), 단일 application DOM과 mount된 plugin 문서를 바꾸는 reload(`docs/spec/surface-composition.md`), 공유 application DOM 안의 plugin module 좌표(`docs/spec/exposure.md`)이며, 번역도 바꾼다.
+- 되돌림: core 단계는 그것을 요구하는 plugin release를 이전 `engines` 범위로 되돌려 release한 뒤에만 되돌린다. F212.10은 각 plugin을 이전 `engines` 범위로 release해 되돌린다. F212.11은 옛 경로를 지우므로 F212.10을 되돌린 뒤에만 그 commit을 되돌린다. 각 단계의 되돌림 순서는 그 checklist 항목에 적는다.
+- 위험: IME, 끌기와 배치, 프로세스 수와 첫 표시 시간, Wails 호출 통로.
 - F212.15: 열린 개발 항목이 없을 때만 core를 release한다. 먼저 열린 항목을 나열한다. 그다음 각 plugin과 files, shell sidecar를 release한다.
 
 ## 보류 항목

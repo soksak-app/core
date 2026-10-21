@@ -5,7 +5,7 @@ import (
 	"unsafe"
 )
 
-// presentationWait holds the views that wait for their presentation after a change of a card layout (docs/plans/plugin-processes.md,
+// presentationWait holds the views that wait for their presentation after a change of a card layout (docs/spec/plugin-processes.md,
 // rule 6). Each view joins once per change, at its first display after the change, and the wait ends at the first of the presentation of
 // the view, the end of its process, a change of which the view is not shown, and an unresponsive notice. It runs on the UI thread only.
 type presentationWait struct {

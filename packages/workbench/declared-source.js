@@ -1,5 +1,5 @@
 // The declared UI snapshot transport of the main page (docs/spec/declared-ui.md, status mapping;
-// docs/plans/plugin-processes.md, rule 2). The host relays each snapshot of a view as the event declared-ui.snapshot of the
+// docs/spec/plugin-processes.md, rule 2). The host relays each snapshot of a view as the event declared-ui.snapshot of the
 // window; the page acknowledges a snapshot as the view event declared-ui.snapshot.ack and pulls the current value of a status
 // through the command layer of the view. A source without a view (a plugin host) has no transport yet: its channel is null and
 // its pull finds no value, and its section stays cleared (docs/spec/declared-ui.md, status mapping).

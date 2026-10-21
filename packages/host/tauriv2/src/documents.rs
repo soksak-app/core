@@ -657,7 +657,7 @@ pub fn set_view_channel(text: &str) -> Result<(), String> {
 }
 
 /// The view channel of one view surface: the plugin of its view and its ready document. An empty document means that no ready
-/// document is recorded (docs/plans/plugin-processes.md, rule 4).
+/// document is recorded (docs/spec/plugin-processes.md, rule 4).
 #[derive(Default)]
 struct ViewChannel {
     plugin: String,
@@ -932,7 +932,7 @@ impl ViewChannels {
 
     /// Returns the declared-ui.snapshot payload of a snapshot of the view of surface, or None when the message is not one.
     /// A snapshot is {"event", "plugin", "status", "seq", "value", "skipped"} with an integer seq from 1 and a skipped
-    /// count of 0 or more; a snapshot with an invalid field is an error (docs/plans/plugin-processes.md, rule 2 and
+    /// count of 0 or more; a snapshot with an invalid field is an error (docs/spec/plugin-processes.md, rule 2 and
     /// messages and events). The host relays the snapshot and writes no event for it.
     pub fn snapshot(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
         let received: ViewReceived = serde_json::from_str(value)
@@ -1016,7 +1016,7 @@ impl ViewChannels {
 /// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
 /// region, and the view closes with the other documents of its surface.
 const VIEW_NAME: &str = "";
-/// The event name of a declared UI snapshot of a view (docs/plans/plugin-processes.md, messages and events).
+/// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
 const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
 
 /// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads sok://<plugin>/<page>
@@ -1067,7 +1067,7 @@ pub(crate) fn sync_view(
         visible,
         start.clone(),
     );
-    // A view that failed beyond the restart limit is not created again until its surface is removed (docs/plans/plugin-processes.md,
+    // A view that failed beyond the restart limit is not created again until its surface is removed (docs/spec/plugin-processes.md,
     // rule 5).
     if data.documents.lifecycle().is_stopped(surface) {
         return Ok(());
@@ -1305,7 +1305,7 @@ fn view_message(
 }
 
 /// Handles the failure of the view document of surface: its process ended, or its message queue overflowed. The view is closed, and it
-/// is created again unless the failure stops the restarts (docs/plans/plugin-processes.md, rule 5). A document that is not the current
+/// is created again unless the failure stops the restarts (docs/spec/plugin-processes.md, rule 5). A document that is not the current
 /// view of the surface was already replaced, so its failure is not counted again.
 fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, document: Handle) {
     let data = match window_data(window) {
@@ -2193,7 +2193,7 @@ mod binary_take_tests;
 
 /// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
 /// Joins each shown view that waits for no presentation yet to the open layout transaction of window with ticket
-/// (docs/plans/plugin-processes.md, rule 6). A surface without a view document has no presentation to wait for, so it is skipped.
+/// (docs/spec/plugin-processes.md, rule 6). A surface without a view document has no presentation to wait for, so it is skipped.
 pub(crate) fn join_shown_views(
     window: &Window,
     platform: &'static dyn Platform,

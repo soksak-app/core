@@ -384,7 +384,7 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                     |_| "the configuration directory of installed plugins is already set",
                 )?;
                 // The core root of a view serves the core files from the bundled frontend, which the page reads too
-                // (docs/plans/plugin-processes.md, rule 4).
+                // (docs/spec/plugin-processes.md, rule 4).
                 let core_root_frontend = std::sync::Arc::clone(&core_frontend);
                 // Each view configuration runs the view channel script of the bundled frontend before its page
                 // (docs/spec/native-surfaces.md#view-surfaces).

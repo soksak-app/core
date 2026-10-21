@@ -1,4 +1,4 @@
-// The call layer of a plugin process boundary (docs/plans/plugin-processes.md, rule 3). It runs over the send function and
+// The call layer of a plugin process boundary (docs/spec/plugin-processes.md, rule 3). It runs over the send function and
 // the onMessage subscription of a transport, so the same code serves a view, a plugin host and a sidecar.
 //
 // Messages of the call envelope: a request is {id, command, params}; a reply is {id, result} or {id, error: {code, message}};
@@ -128,7 +128,7 @@ export function createCalls({ plugin, send, onMessage, report }) {
       const call = { command, timeout, resolve, reject, sent: now, started: now, timer: null, detach: () => {} };
       open.set(id, call);
       // The timer is the only time limit in the layer. A live peer that does not reply sends no event, so the declared
-      // time limit is the only signal of that state (docs/plans/plugin-processes.md, rule 3).
+      // time limit is the only signal of that state (docs/spec/plugin-processes.md, rule 3).
       call.timer = setTimeout(() => expire(id), timeout);
       if (signal) {
         const onAbort = () => cancel(id);

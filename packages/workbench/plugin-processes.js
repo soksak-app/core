@@ -1,4 +1,4 @@
-// Core statuses of the plugin processes (docs/plans/plugin-processes.md, rules 2, 3 and 6). Each status holds a list of records
+// Core statuses of the plugin processes (docs/spec/plugin-processes.md, rules 2, 3 and 6). Each status holds a list of records
 // that carry the plugin id. The call layer of a plugin process reports its open calls and its losses through callReporter
 // (F212.3-1); the declared UI snapshots (F212.3-2) and the presentation and responsiveness of views (F212.7) fill the others.
 //

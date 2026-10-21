@@ -91,7 +91,7 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime })
       return runtime.sidecar.send(fields.id, fields.body, fields.cids);
     }
     case "runtime.clipboard.read":
-      // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/plans/plugin-processes.md, rule 3).
+      // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/spec/plugin-processes.md, rule 3).
       if (params !== "text" && params !== "fileURLs") throw new Error(`view call ${command} ${String(params)} is not served`);
       return runtime.clipboard.read(params);
     case "runtime.clipboard.writeText":

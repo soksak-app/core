@@ -247,7 +247,7 @@ type Capturer interface {
 	CaptureStill(windowNumber int, path string) error
 }
 
-// CoreRootResolver returns the file at urlPath of the core root of a view of plugin (docs/plans/plugin-processes.md, rule 4)
+// CoreRootResolver returns the file at urlPath of the core root of a view of plugin (docs/spec/plugin-processes.md, rule 4)
 // with its content type. found is false for a path that is not served.
 type CoreRootResolver func(plugin, urlPath string) (data []byte, contentType string, found bool)
 

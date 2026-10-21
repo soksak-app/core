@@ -8,7 +8,7 @@
 
 - 어휘는 네 요소 `list`, `tree`, `button`, `status-line`이다. core는 다른 요소를 선언하지 않는다. 텍스트 입력, 자유 DOM, canvas, 문서 영역, 이미지 영역이 있는 화면은 view다. 인라인 이름 바꾸기, 끌어 놓기, 포인터 위치에 놓는 문맥 메뉴가 필요한 tree도 같은 이유로 view다. core는 그런 상호작용의 요소를 선언하지 않는다.
 - workbench는 사이드바 section에서만 선언된 UI를 그린다. 카드와 다른 화면은 선언된 UI를 그리지 않는다.
-- snapshot의 전달은 [plugin 프로세스](../plans/plugin-processes.ko.md) 규칙 2에 있다. 이름, 명령, DOM 규칙은 [노출](exposure.ko.md)에 있다. 사이드바 배치는 [plugin](plugins.ko.md#섹션)에 있다.
+- snapshot의 전달은 [plugin 프로세스](plugin-processes.ko.md) 규칙 2에 있다. 이름, 명령, DOM 규칙은 [노출](exposure.ko.md)에 있다. 사이드바 배치는 [plugin](plugins.ko.md#섹션)에 있다.
 - 접근성: 선언된 UI에 대해 접근성 주장은 하지 않는다. 플랫폼 접근성 인터페이스가 검사로 기록될 때까지 그렇다. 이 문서는 ARIA 역할을 정의하지 않는다.
 - core는 값을 자르지 않는다. 요소가 한도보다 많은 plugin은 자기 값을 스스로 자르고 자른 사실을 `status-line`에 적는다. 한도를 넘는 값은 줄이지 않고 거부한다. 지연 적재는 없다.
 
