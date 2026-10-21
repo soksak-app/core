@@ -473,6 +473,7 @@ function settle(source, elements) {
         const previous = source.kept.get(element.key)?.get(key);
         let value;
         if (source.accepted === null) {
+          // default: without a baseline, a branch with no kept state is new and takes its plugin value (docs/spec/declared-ui.md, status mapping).
           value = previous ?? planned;
         } else {
           const before = source.accepted.get(element.key)?.get(key);
