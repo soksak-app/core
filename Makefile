@@ -184,17 +184,12 @@ language-test: native-darwin
 # Runs each test of a Rust package alone in a new process. Finds tests that depend on state another test created or on test order.
 # Reports the test name at the first failure. MANIFEST is the Cargo.toml of the workspace that holds the package and FEATURES is the --features value of cargo.
 MANIFEST ?= Cargo.toml
+# The limit in seconds of one Rust test in rust-tests-alone and rust-repeat; the runner kills a test at it (scripts/rust-tests.mjs).
+TEST_TIMEOUT ?= 120
 rust-tests-alone:
 	@case "$(PACKAGE)" in '') echo "rust-tests-alone requires PACKAGE=<cargo package> [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
-	@names=$$(cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --list 2>/dev/null | sed -n 's/: test$$//p'); \
-	  count=0; for name in $$names; do \
-	    count=$$((count + 1)); \
-	    cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --exact "$$name" > /dev/null 2>&1 \
-	      || { echo "FAIL: $(PACKAGE) $$name fails when it runs alone (test $$count)" >&2; exit 1; }; \
-	  done; \
-	  [ $$count -gt 0 ] || { echo "rust-tests-alone found no tests in $(PACKAGE)" >&2; exit 1; }; \
-	  echo "$(PACKAGE): $$count tests pass alone"
+	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --count 1 --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
@@ -209,15 +204,7 @@ rust-repeat:
 	@case "$(PACKAGE)" in '') echo "rust-repeat requires PACKAGE=<cargo package> COUNT=<n> [TEST=<name>] [FEATURES=<features>] [MANIFEST=<Cargo.toml>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "rust-repeat requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) --no-run
-	@output=$$(mktemp); trap 'rm -f "$$output"' EXIT; \
-	  run=1; while [ $$run -le $(COUNT) ]; do \
-	    if [ -n "$(TEST)" ]; then cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) -- --exact "$(TEST)" > "$$output" 2>&1; \
-	    else cargo test -q --manifest-path $(MANIFEST) -p $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) > "$$output" 2>&1; fi \
-	      || { cat "$$output"; echo "FAIL: $(PACKAGE) $(TEST) run $$run of $(COUNT); load $$(sysctl -n vm.loadavg)" >&2; exit 1; }; \
-	    if [ -n "$(TEST)" ] && ! grep -q "1 passed" "$$output"; then cat "$$output"; echo "FAIL: $(PACKAGE) has no test named $(TEST)" >&2; exit 1; fi; \
-	    run=$$((run + 1)); \
-	  done; \
-	  echo "$(PACKAGE) $(TEST): $(COUNT) of $(COUNT) runs pass"
+	@node scripts/rust-tests.mjs --manifest $(MANIFEST) --package $(PACKAGE) $(if $(FEATURES),--features $(FEATURES)) $(if $(TEST),--test $(TEST)) --count $(COUNT) --timeout $(TEST_TIMEOUT)
 
 # Runs the tests of a Go package COUNT times in sequence. TEST is the go test -run regular expression and TAGS is the go test -tags value.
 # A run with no built test file (build tag) or no test of a matching name fails.

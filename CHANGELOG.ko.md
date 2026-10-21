@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F239-3: `make rust-repeat`와 `make rust-tests-alone`은 Rust 패키지의 각 test를 test 실행 파일의 자기 프로세스(`<executable> --exact <name>`)로 `scripts/rust-tests.mjs`를 거쳐 돌린다. 각 test는 시작할 때 표시되고, 결과·경과 시간·자기 제한 `TEST_TIMEOUT`(기본 120초)을 보고한다. 제한을 넘은 test는 종료되고 `TIME`으로 보고된다. test runner는 `RUN` 줄에 제한을 표시한다. Red test(`scripts/test/rust-repeat.test.mjs`)는 변경 전 대상의 첫 `RUN` 줄에서 실패했고, 구현에서 통과한다.
 - F239-2: Tauri host의 detach test는 60초가 아니라 0.01초에 끝난다. fixture는 시작한 endpoint 프로세스를 test와 함께 종료하고, 테스트 출력을 그 프로세스에 넘겨주지 않아 runner가 프로세스의 종료를 기다리지 않는다.
 - F239-1: 플러그인 프로세스 handoff에 test 실행 규칙을 적는다. 각 항목은 소유 검사만 돌리고, 전체 모음·host contract 검사·창 검사는 활성 체크리스트가 완료될 때 한 번 돌린다. 각 test는 자기 제한을 갖고 전체 suite에는 일괄 제한이 없다(docs/plans/plugin-processes-handoff.ko.md, 항목마다).
 - F218-2.4-1: host 계약 검사가 sok source의 계약 선언도 읽으므로 sok crate 안의 test가 자기 case로 센다.
