@@ -2372,6 +2372,8 @@ macOS의 터미널 키보드 전달을 수정했다(2026-09-20). Tauri의 빈 �
 
 ### F238-c-27 producer bridge 후속
 
+- [o] F238-c-27-5 — P1: 소유자 core `main`, F238-c-27-4의 연결 후속 항목. `contract/view-bridge.json`에 `tab.state.read/write`, 선언된 Flowmark sidecar의 `send/on/onFailure` 경로와 필터된 message/failure 이벤트, level 변경과 건너뛴 builder를 포함한 `runtime.log.levels/log` 순서 vector를 추가한다. 소유 runner는 여덟 개의 정확한 case ID와 ordered action을 요구하고 모든 literal을 실제 `createViewBridge`로 실행한다. Red: vector를 추가하기 전 추적된 runner가 필수 case ID 네 개 누락으로 실패했다. sidecar 기대 command를 `runtime.sidecar.send`에서 `runtime.sidecar.sand`로 바꾸자 정확한 output 검사도 실패했다. Green: 집중 `node --test --test-name-pattern='published view bridge cases match calls|view bridge contract validation' packages/plugin-api/test/view.test.mjs`가 10/10 통과하고 `make docs-check` 통과. package pin은 바꾸지 않았으며 공개 API 비교는 release-gated 상태다.
+
 - [o] F238-c-27-4 — P1: 소유자 core `main`, F238-c-27-3의 연결 후속 항목. 소유 view 테스트의 `validateBridgeCases`가 빈 필수 사례 집합, 사례 누락, 예상하지 않은 action 순서, 축약된 지원하지 않는 페이지 거부 문구를 거부하며 bridge test는 거부 메시지를 정확히 비교한다. Red: no-op validator로 바꾸자 추적된 거부 검사가 `Missing expected exception`으로 실패했다. Green: 검증을 복원한 뒤 집중 `node --test packages/plugin-api/test/view.test.mjs`가 47/47 통과한다. `make docs-check` 통과. package suite는 반복하지 않았다.
 
 - [o] F238-c-27-3 — P1: 소유자 core `main`, F238-c-27-1의 연결 후속 항목. `packages/plugin-api/package.json` files에 `contract/view-bridge.json`을 추가하고 `packages/plugin-api/test/package-files.test.mjs`에서 포함 여부를 검사한다. Red: package 파일 항목을 지우자 `contract/view-bridge.json is missing`으로 실패했다. Green: 항목을 복원한 뒤 소유 테스트 1/1 통과, `npm pack --dry-run --json`에 `contract/view-bridge.json`이 표시된다(게시하지 않음).

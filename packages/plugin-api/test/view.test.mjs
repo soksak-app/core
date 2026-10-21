@@ -12,6 +12,7 @@ const QUEUE_LIMIT = 256;
 
 // The injected script runs in the realm of the window, so its objects carry other prototypes; the comparisons read plain copies.
 const plain = (value) => JSON.parse(JSON.stringify(value));
+const observeRejection = (promise) => { promise.catch(() => {}); return promise; };
 
 /**
  * Creates a page on url with the sok-view handler, loads the injected script when script is true, and makes the page window the
@@ -615,6 +616,10 @@ const BRIDGE_ACTIONS = {
   "view.bridge.events-delivered-in-order": ["subscribe", "host-event", "host-event"],
   "view.bridge.refuses-malformed-host-message": ["create", "host-malformed"],
   "view.bridge.refuses-unsupported-page": ["create"],
+  "view.bridge.tab-state-read-write": ["create", "request", "host-reply", "request", "host-reply"],
+  "view.bridge.sidecar-send": ["create", "sidecar-send", "host-reply"],
+  "view.bridge.sidecar-subscriptions": ["create", "sidecar-subscribe", "host-reply", "sidecar-subscribe", "host-reply", "host-event", "host-event", "host-event"],
+  "view.bridge.runtime-log-level-gate": ["create", "log", "host-reply", "host-reply", "host-event", "log-disabled", "log", "host-reply"],
 };
 function validateBridgeCases(cases) {
   assert.ok(Array.isArray(cases) && cases.length > 0, "view bridge contract must publish cases");
@@ -644,11 +649,24 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.equal(actual.message, item.steps[0].output.throws);
         return;
       }
-      const { posted, host } = setup(subtest);
-      const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report() {} });
+      const create = item.steps.find(({ action }) => action === "create");
+      const { posted, host } = setup(subtest, { url: create?.input?.url ?? "sok://probe/" });
+      const reports = [];
+      const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (event) => reports.push(event) });
+      subtest.after(async () => {
+        bridge.calls.peerLost("surface-closed");
+        await new Promise((resolve) => setImmediate(resolve));
+        if (bridge.calls.openCalls().count > 0) bridge.calls.peerLost("surface-closed");
+        bridge.calls.close();
+      });
+      const readyStep = item.steps.find(({ action }) => action === "create");
+      if (readyStep) {
+        assert.equal(posted[0]?.event === "view.ready", readyStep.output.ready);
+        if (readyStep.output.plugin !== undefined) assert.equal(posted[0]?.plugin, readyStep.output.plugin);
+      }
       if (item.id === "view.bridge.ready-and-request-reply") {
         assert.equal(posted[0]?.event === "view.ready", item.steps[0].output.ready);
-        const reply = bridge.calls.request(item.steps[1].input.command, item.steps[1].input.params);
+        const reply = observeRejection(bridge.calls.request(item.steps[1].input.command, item.steps[1].input.params));
         assert.deepEqual(posted.at(-1), item.steps[1].output);
         host(item.steps[2].input);
         assert.equal(await reply, item.steps[2].output);
@@ -657,6 +675,80 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         const before = posted.length;
         host(item.steps[1].input);
         assert.deepEqual(plain(posted.slice(before)), [item.steps[1].output]);
+      } else if (item.id === "view.bridge.tab-state-read-write") {
+        const pending = [];
+        for (const step of item.steps.slice(1)) {
+          if (step.action === "request") {
+            pending.push(observeRejection(bridge.calls.request(step.input.command, step.input.params)));
+            assert.deepEqual(plain(posted.at(-1)), step.output);
+          } else if (step.action === "host-reply") {
+            host(step.input);
+            assert.deepEqual(await pending.shift(), step.output);
+          }
+        }
+        assert.equal(pending.length, 0);
+      } else if (item.id === "view.bridge.sidecar-send") {
+        const steps = item.steps.slice(1);
+        for (let index = 0; index < steps.length; index += 1) {
+          const step = steps[index];
+          if (step.action !== "sidecar-send") continue;
+          const replyStep = steps[index + 1];
+          assert.equal(replyStep.action, "host-reply");
+          const pending = observeRejection(bridge.runtime.sidecar(step.input.sidecar).send(step.input.id, step.input.body, step.input.cids));
+          let mismatch;
+          try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
+          host(replyStep.input);
+          try { assert.deepEqual(await pending, replyStep.output); } catch (error) { mismatch ??= error; }
+          index += 1;
+          if (mismatch) throw mismatch;
+        }
+      } else if (item.id === "view.bridge.sidecar-subscriptions") {
+        const received = { messages: [], failures: [] };
+        const steps = item.steps.slice(1);
+        for (let index = 0; index < steps.length; index += 1) {
+          const step = steps[index];
+          if (step.action === "sidecar-subscribe") {
+            const replyStep = steps[index + 1];
+            assert.equal(replyStep.action, "host-reply");
+            const port = bridge.runtime.sidecar(step.input.sidecar);
+            const subscription = observeRejection(step.input.kind === "message"
+              ? port.on(step.input.id, (body) => received.messages.push(body))
+              : port.onFailure(step.input.id, (reason) => received.failures.push(reason)));
+            let mismatch;
+            try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
+            host(replyStep.input);
+            try { assert.equal(typeof await subscription, "function"); } catch (error) { mismatch ??= error; }
+            index += 1;
+            if (mismatch) throw mismatch;
+          } else if (step.action === "host-event") {
+            host({ sok: 1, ...step.input });
+            assert.deepEqual(received, step.output);
+          }
+        }
+      } else if (item.id === "view.bridge.runtime-log-level-gate") {
+        assert.equal(globalThis.window.location.host, "probe");
+        const { runtime } = bridge;
+        for (const step of item.steps.slice(1)) {
+          if (step.action === "log") {
+            const before = posted.length;
+            const fields = () => ({ ...step.input.fields });
+            runtime.log[step.input.level](step.input.event, fields, step.input.cids === undefined ? undefined : { cids: step.input.cids });
+            assert.deepEqual(plain(posted.slice(before)), step.output);
+          } else if (step.action === "host-reply") {
+            host(step.input);
+            await new Promise((resolve) => setImmediate(resolve));
+            if (step.input.id === 1) assert.equal(runtime.log.enabled("debug"), step.output.includes("debug"));
+            assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), []);
+          } else if (step.action === "host-event") {
+            host({ sok: 1, ...step.input });
+            assert.deepEqual({ debug: runtime.log.enabled("debug"), error: runtime.log.enabled("error") }, step.output);
+          } else if (step.action === "log-disabled") {
+            const before = posted.length;
+            let built = false;
+            runtime.log[step.input.level](step.input.event, () => { built = true; return step.input.fields; });
+            assert.deepEqual({ calls: posted.length - before, built }, step.output);
+          }
+        }
       } else {
         const received = [];
         assert.equal(item.steps[0].input, "theme");

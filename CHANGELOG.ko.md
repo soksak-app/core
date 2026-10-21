@@ -2138,3 +2138,4 @@
 - F238-c-27-2: `packages/plugin-api/contract/view-bridge.json`의 view bridge 사례에 주입된 script를 통한 순서 있는 theme 이벤트 전달과 잘못된 host message 거부를 추가하고, `packages/plugin-api/test/view.test.mjs`에서 실행한다.
 - F238-c-27-3: plugin-api package 파일 목록에 `contract/view-bridge.json`을 포함한다. 소유 회귀 검사는 1/1 통과하고 `npm pack --dry-run --json`이 계약의 포함을 확인했다. 게시하지 않았다.
 - F238-c-27-4: 소유 view 테스트가 빈 계약 사례 집합, 필수 사례 누락, 예상하지 않은 action 순서와 축약된 지원하지 않는 페이지 거부 문구를 거부하고 실행 메시지를 정확히 비교한다. 집중 view 테스트가 47/47 통과한다.
+- F238-c-27-5: Flowmark tab state, 이름이 지정된 sidecar send/subscription 및 이벤트, view log-level gate/log call의 ordered producer 사례를 추가한다. 집중 producer test가 실제 `createViewBridge`로 10/10 통과하며 dependency pin은 변경하지 않는다.
