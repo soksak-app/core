@@ -49,6 +49,7 @@ export function createDeclaredSource({ plugin, status }) {
           });
           return () => {
             closed = true;
+            // default: an unsubscribe before the registration completed ends nothing here; the registration ends itself.
             unsubscribe?.();
           };
         },

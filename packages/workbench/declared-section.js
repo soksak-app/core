@@ -106,6 +106,7 @@ export function createDeclaredSection({ statusId, body, options, orientation, ch
         onSnapshot: (received, seq, value, count) => {
           if (received !== statusId || current === null || current.id !== next.id) return;
           // The count of the overwritten values reaches the main page in each snapshot (docs/plans/plugin-processes.md, rule 2).
+          // default: a section without a skipped receiver writes no trace event of the overwritten values.
           if (count > 0) skipped?.(count);
           accept(seq, value);
         },

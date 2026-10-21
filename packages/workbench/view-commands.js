@@ -23,6 +23,7 @@ export function keepViewCommands(surfaceId, commands) {
 
 /** The command layer of the view of surfaceId, or null while its answers are not connected. */
 export function viewCommandsOf(surfaceId) {
+  // default: a view whose answers are not connected has no layer, and its reader treats null as no command path.
   return layers.get(surfaceId) ?? null;
 }
 

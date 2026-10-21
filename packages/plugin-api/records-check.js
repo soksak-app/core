@@ -124,6 +124,7 @@ export function commitMessageErrors(message) {
 /** The tracked files of the repository that its census declaration does not exclude; an excluded file, a vendored third-party bundle, is not a record of the repository. */
 function declaredFiles(repository, tracked) {
   const census = join(repository, "census.json");
+  // default: a census declaration without an exclude excludes nothing, so every tracked file is a record of the repository.
   const exclude = existsSync(census) ? new RegExp(JSON.parse(readFileSync(census, "utf8")).exclude ?? "") : null;
   return exclude ? tracked.filter((file) => !exclude.test(file)) : tracked;
 }
