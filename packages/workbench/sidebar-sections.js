@@ -127,6 +127,7 @@ function mountDeclared(entry, record) {
     statusId,
     body: entry.body,
     options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
+    expanded: (source, request) => transport.expanded(source, request),
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
     // (docs/spec/declared-ui.md#declared-status).

@@ -26,11 +26,12 @@ async function harness() {
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], pullReply: null, deferred: [], skipped: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], expanded: [], pullReply: null, deferred: [], skipped: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
     options: { declared: (command) => command === "demo.open", hasIcon: () => true, bind: (el) => el },
+    expanded: (source, request) => world.expanded.push({ source: source.id, request }),
     orientation: () => world.orientation,
     choose: () => module.chooseSource({ statusId, active: world.active, registrants: world.registrants }),
     channel: (source) => ({
@@ -87,15 +88,22 @@ test("the active view that registered the status is the source: it is pulled onc
   assert.deepEqual(h.world.acks.map((ack) => ack.message.seq), [2], "the snapshot was not acknowledged");
 });
 
-test("a change of source clears the section, keeps the kept state by path, and pulls once from the new source", async () => {
+test("tree expansion is sent to its source and displayed after the authoritative snapshot", async () => {
   const h = await harness();
   h.world.registrants = ["view-a"];
   h.world.active = "view-a";
   h.world.pullReply = { seq: 1, value: tree([branch("b", [leaf("c")])]) };
   h.section.reconcile();
   await settle();
+  assert.deepEqual(h.labels(), ["b"]);
   h.expand(["b"], true);
-  assert.deepEqual(h.labels(), ["b", "c"], "the user expansion was not drawn");
+  assert.deepEqual(h.world.expanded, [{
+    source: "view-a",
+    request: { status: h.statusId.slice("demo.".length), tree: "t1", path: ["b"], expanded: true },
+  }], "the expand command did not send the plugin update request");
+  assert.deepEqual(h.labels(), ["b"], "the workbench changed the tree before the plugin round trip");
+  h.push("view-a", 2, tree([branch("b", [leaf("c")], { expanded: true })]));
+  assert.deepEqual(h.labels(), ["b", "c"], "the returned plugin value did not change the tree");
   h.world.registrants = ["view-b"];
   h.world.active = "view-b";
   h.world.pullReply = { seq: 1, value: tree([branch("b", [leaf("c")])]) };
@@ -103,7 +111,7 @@ test("a change of source clears the section, keeps the kept state by path, and p
   assert.equal(h.body.textContent, "", "the section was not cleared at the change of source");
   await settle();
   assert.deepEqual(h.world.pulls, ["view-a", "view-b"], "the new source was not pulled once");
-  assert.deepEqual(h.labels(), ["b", "c"], "the kept state did not survive the change of source");
+  assert.deepEqual(h.labels(), ["b"], "the previous source's expansion overrode the new plugin value");
 });
 
 test("a snapshot that arrives from a source that is no longer chosen is discarded", async () => {

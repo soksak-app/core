@@ -29,13 +29,13 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  *     skipped(count) receives the count of the values that a snapshot of the source overwrote while it was in transit
  *     failed(error) receives the error of a pull that failed
  *
- * reconcile() applies the choice of the source: a change of source clears the section, removes the baseline and withdraws the error,
- * subscribes to the new channel, and pulls the value of the new source once. An orientation change does not reach the section: its
- * accepted value stays valid in every orientation. A snapshot or a pull reply of a source that is no longer chosen is discarded, and so is a
- * pull reply whose seq is lower than the seq of the last accepted value. state() reports the section state of core.sidebars:
+ * reconcile() applies the choice of the source: a change of source clears the section, withdraws the error, subscribes to the new
+ * channel, and pulls the value of the new source once. Expansion values belong to that source. An orientation change does not reach
+ * the section: its accepted value stays valid in every orientation. A snapshot or a pull reply of a source that is no longer chosen
+ * is discarded, as is a pull reply whose seq is lower than the last accepted value. state() reports the section state of core.sidebars:
  * mounted while the section draws an accepted value, and the text of the current rejection while the last value is rejected.
  */
-export function createDeclaredSection({ statusId, body, options, choose, channel, pull, skipped, failed }) {
+export function createDeclaredSection({ statusId, body, options, choose, channel, pull, expanded, skipped, failed }) {
   const owner = statusId.slice(0, statusId.indexOf("."));
   const status = statusId.slice(statusId.indexOf(".") + 1);
   const receiveOptions = { ...options, owner, status };
@@ -46,8 +46,14 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
   let accepted = null;
   let rejected = null;
 
-  function accept(seq, value) {
-    const ok = receive(body, value, receiveOptions);
+  function accept(seq, value, source = current) {
+    const ok = receive(body, value, {
+      ...receiveOptions,
+      expanded: (request) => {
+        if (typeof expanded !== "function") throw new Error(`${statusId}: the expansion source is not configured`);
+        return expanded(source, { ...request, status });
+      },
+    });
     if (ok) {
       lastSeq = seq;
       accepted = value;
@@ -68,13 +74,13 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
       // A reply with value null means that the source has no value yet (docs/spec/declared-ui.md): the section stays cleared.
       if (mine !== generation || reply.value === null) return;
       if (reply.seq < lastSeq) return;
-      accept(reply.seq, reply.value);
+      accept(reply.seq, reply.value, pulled);
     }, (error) => {
       if (mine === generation) failed(error);
     });
   }
 
-  /** Ends the chosen source: its channel is released, the section is cleared, and the error is withdrawn. The kept state stays. */
+  /** Ends the chosen source: its channel is released, the section is cleared, and the error is withdrawn. The next source supplies expansion values. */
   function leave() {
     if (current === null) return;
     if (stop !== null) stop();
@@ -108,7 +114,7 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
           // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
           // default: a section without a skipped receiver writes no trace event of the overwritten values.
           if (count > 0) skipped?.(count);
-          accept(seq, value);
+          accept(seq, value, next);
         },
       });
     }

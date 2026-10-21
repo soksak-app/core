@@ -495,10 +495,10 @@ function paintExpand(control, { statusId, tree, path, expanded, bind }) {
   connect(control, EXPAND, { status: statusId, tree, path, expanded: !expanded }, bind);
 }
 
-/** The kept expanded state of the branch at path, which every branch of a drawn tree has. */
-function keptOf(kept, tree, path) {
-  const expanded = kept.get(tree)?.get(JSON.stringify(path));
-  if (expanded === undefined) throw new Error(`tree ${tree} path ${JSON.stringify(path)} has no kept state`);
+/** The expanded value supplied by the plugin for the branch at path. */
+function expandedOf(expandedByTree, tree, path) {
+  const expanded = expandedByTree.get(tree)?.get(JSON.stringify(path));
+  if (expanded === undefined) throw new Error(`tree ${tree} path ${JSON.stringify(path)} has no accepted expanded value`);
   return expanded;
 }
 
@@ -508,7 +508,7 @@ function paintNode(wrap, node, path, ctx) {
   if (node.selected === true) row.dataset.selected = "true";
   else delete row.dataset.selected;
   const branch = isBranch(node);
-  const expanded = branch ? keptOf(ctx.kept, ctx.tree, path) : false;
+  const expanded = branch ? expandedOf(ctx.expandedByTree, ctx.tree, path) : false;
   let control = childOf(row, "declared-expand");
   if (branch) {
     if (!control) {
@@ -579,75 +579,56 @@ function paintRoot(box, element, ctx) {
 /**
  * Draws the root elements of an accepted value into body. A root element keeps its box while its kind and key stay, so a redraw
  * keeps every control whose address stays. Every control is connected through bind(element, name, params, options) of the binder,
- * and carries the dom name and the control attributes. kept holds the expanded state of each tree by its key and the path of each
- * branch (settle).
+ * and carries the dom name and the control attributes. expandedByTree holds the plugin's accepted expanded value for each branch.
  */
-export function drawValue(body, elements, { statusId, bind, kept }) {
+export function drawValue(body, elements, { statusId, bind, expandedByTree }) {
   for (const element of elements) {
     if (!["list", "tree", "button", "status-line"].includes(element.kind)) throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
   }
   drawList(body, elements, {
     key: (element) => `${element.kind} ${element.key}`,
     create: (element) => document.createElement(element.kind === "button" ? "button" : "div"),
-    update: (box, element) => paintRoot(box, element, { statusId, bind, kept }),
+    update: (box, element) => paintRoot(box, element, { statusId, bind, expandedByTree }),
   });
 }
 
 
 /**
- * The state of each declared UI status, keyed by its status name `<plugin>.<name>`. kept maps each tree key to the expanded state
- * of each branch by its path, and survives a rejection and a change of source. accepted maps each tree key to the plugin's expanded
- * value of each branch of the last accepted value, and is null when the last value was rejected or its source changed. view is the
- * section that draws the last accepted value, so the expand command draws it again.
+ * The latest accepted expanded values of each declared UI status, keyed by its status name `<plugin>.<name>`. A new accepted value
+ * replaces those values; the workbench does not override the plugin's expanded fields. accepted is null when the latest value was
+ * rejected or its source changed. view holds the section and the route to the source that supplied the accepted value.
  */
 const sources = new Map();
 
 function sourceOf(statusId) {
   let source = sources.get(statusId);
   if (source === undefined) {
-    source = { kept: new Map(), accepted: null, view: null };
+    source = { accepted: null, view: null };
     sources.set(statusId, source);
   }
   return source;
 }
 
-/**
- * Computes the kept state of an accepted value from the baseline rules of docs/spec/declared-ui.md (status mapping). A branch that
- * is new takes the plugin's value. A branch that is not new takes the plugin's value when that value changed, and keeps its kept
- * state otherwise. Without a baseline, a branch with a kept state keeps it. A kept state whose path is not a branch is dropped.
- */
-function settle(source, elements) {
-  const kept = new Map();
+/** Builds the branch state of an accepted value directly from the plugin's authoritative expanded fields. */
+function settle(elements) {
+  const expandedByTree = new Map();
   const accepted = new Map();
   for (const element of elements) {
     if (element.kind !== "tree") continue;
-    const keptBranches = new Map();
-    const pluginBranches = new Map();
+    const branches = new Map();
     const visit = (nodes, parent) => {
       for (const node of nodes) {
         if (!isBranch(node)) continue;
         const path = [...parent, node.key];
-        const key = JSON.stringify(path);
-        const planned = node.expanded === true;
-        const previous = source.kept.get(element.key)?.get(key);
-        let value;
-        if (source.accepted === null) {
-          // default: without a baseline, a branch with no kept state is new and takes its plugin value (docs/spec/declared-ui.md, status mapping).
-          value = previous ?? planned;
-        } else {
-          const before = source.accepted.get(element.key)?.get(key);
-          value = before === undefined || before !== planned ? planned : previous;
-        }
-        keptBranches.set(key, value);
-        pluginBranches.set(key, planned);
+        branches.set(JSON.stringify(path), node.expanded === true);
         if (Array.isArray(node.children)) visit(node.children, path);
       }
     };
     visit(element.nodes, []);
-    kept.set(element.key, keptBranches);
-    accepted.set(element.key, pluginBranches);
+    expandedByTree.set(element.key, branches);
+    accepted.set(element.key, new Map(branches));
   }
-  return { kept, accepted };
+  return { expandedByTree, accepted };
 }
 
 /**
@@ -669,31 +650,30 @@ export function receive(body, value, options) {
     showError(body, where, `${error.pointer}: ${error.reason}`);
     return false;
   }
-  const settled = settle(source, elements);
-  drawValue(body, elements, { statusId, bind: options.bind, kept: settled.kept });
-  source.kept = settled.kept;
+  const settled = settle(elements);
+  drawValue(body, elements, { statusId, bind: options.bind, expandedByTree: settled.expandedByTree });
   source.accepted = settled.accepted;
-  source.view = { body, elements, bind: options.bind };
+  source.view = { body, elements, bind: options.bind, expanded: options.expanded };
   hideError(body, where);
   return true;
 }
 
 /**
- * Runs core.declared-ui.tree.expand: sets the kept expanded state of the branch at path in the tree of the status, and draws the
- * tree again. The branch must be drawn; otherwise the command fails. Running it again with the same arguments sets the same state.
+ * Runs core.declared-ui.tree.expand: sends the requested expanded state to the source of the status. The branch must be in the
+ * accepted value; otherwise the command fails. Only a later accepted plugin value changes the drawing.
  */
 export function setTreeExpanded({ status, tree, path, expanded }) {
   const source = sources.get(status);
   const key = JSON.stringify(path);
   if (!source?.accepted?.get(tree)?.has(key)) throw new Error(`tree ${tree} path ${key} is not drawn`);
-  source.kept.get(tree).set(key, expanded);
-  const { body, elements, bind } = source.view;
-  drawValue(body, elements, { statusId: status, bind, kept: source.kept });
+  const send = source.view?.expanded;
+  if (typeof send !== "function") throw new Error(`tree ${tree} path ${key} has no expansion source`);
+  return send({ status, tree, path: [...path], expanded });
 }
 
 /**
- * Ends the accepted value of a status when its source changes: the drawn tree is no longer the baseline, and the kept state of each
- * path stays. The caller clears the section until the first value of the new source is accepted.
+ * Ends the accepted value of a status when its source changes. The caller clears the section until the first value of the new source
+ * is accepted; the new plugin value supplies each branch's expanded state.
  */
 export function changeSource(statusId) {
   const source = sources.get(statusId);

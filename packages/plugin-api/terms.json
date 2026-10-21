@@ -331,20 +331,8 @@
       "allowed": []
     },
     {
-      "term": "kept state",
-      "definition": "The expanded state that the workbench keeps for a tree branch, keyed by its status, tree and path of node keys. The expand command sets it, and a changed expanded value from the plugin replaces it (docs/spec/declared-ui.md).",
-      "rejected": [],
-      "allowed": []
-    },
-    {
       "term": "declared status source",
       "definition": "The pair of a process and its registration of a declared UI status (docs/spec/declared-ui.md).",
-      "rejected": [],
-      "allowed": []
-    },
-    {
-      "term": "baseline",
-      "definition": "The baseline is the last accepted value since the last rejection or change of source. It is the reference of the expanded comparison of a declared UI status's branches (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },

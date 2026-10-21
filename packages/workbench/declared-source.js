@@ -82,6 +82,13 @@ export function createDeclaredSource({ plugin, status }) {
         },
       };
     },
+    expanded(source, request) {
+      const data = { status, tree: request.tree, path: request.path, expanded: request.expanded };
+      if (source.surface === null) {
+        return bridge.call("pluginHostEvent", { plugin, event: "declared-ui.expanded", data });
+      }
+      return bridge.call("viewEvent", { surface: source.surface, event: "declared-ui.expanded", data });
+    },
     pull(source) {
       if (source.surface === null) {
         // The pull of a plugin host source runs through the request layer of its channel (plugin-host.js).

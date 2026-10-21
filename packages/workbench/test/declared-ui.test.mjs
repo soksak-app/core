@@ -275,7 +275,7 @@ test("an accepted value after a rejection withdraws the error and draws the list
   assert.ok(body.textContent.includes("a"), "the accepted list was not drawn");
 });
 
-// Tree elements (docs/spec/declared-ui.md): the drawing of nodes, the expand control, the kept state by path, and the tree rules.
+// Tree elements (docs/spec/declared-ui.md): node drawing, expand requests, plugin-authoritative expanded values, and tree rules.
 const EXPAND = "core.declared-ui.tree.expand";
 const branch = (key, children, extra = {}) => ({ key, label: key, children, ...extra });
 const leaf = (key, extra = {}) => ({ key, label: key, ...extra });
@@ -286,6 +286,7 @@ function section(module, orientation = "vertical") {
   const body = document.createElement("div");
   const calls = [];
   const runs = [];
+  const expansionRequests = [];
   const bind = (el, name, params, options) => {
     const entry = { el, name, params: () => (typeof params === "function" ? params() : params), options };
     el.dataset.command = name;
@@ -299,11 +300,12 @@ function section(module, orientation = "vertical") {
     });
     return el;
   };
-  const options = { ...OPTIONS, status: "s", orientation, bind };
+  const options = { ...OPTIONS, status: "s", orientation, bind, expanded: (request) => expansionRequests.push(request) };
   return {
     body,
     calls,
     runs,
+    expansionRequests,
     show(value) { assert.doesNotThrow(() => module.receive(body, value, options), "the tree value was not drawn"); },
     expand(path, expanded) { module.setTreeExpanded({ status: "demo.s", tree: "t1", path, expanded }); },
     labels() { return [...body.querySelectorAll(".declared-label")].map((label) => label.textContent); },
@@ -384,67 +386,89 @@ test("an empty tree draws its empty text and no node", async () => {
   assert.equal(s.body.querySelector(".declared-label"), null, "a node was drawn");
 });
 
-test("a branch that is drawn collapsed keeps its state until the plugin changes its value", async () => {
-  const module = await load("tree-kept");
+test("a tree expansion waits for the authoritative plugin value", async () => {
+  const module = await load("tree-expanded-authoritative");
   const s = section(module);
-  s.show(tree([branch("b", [leaf("c")])]));
-  assert.deepEqual(s.labels(), ["b"]);
+  const collapsed = tree([branch("b", [leaf("c")])]);
+  s.show(collapsed);
   s.expand(["b"], true);
-  assert.deepEqual(s.labels(), ["b", "c"], "the expand command did not draw the children");
-  assert.equal(s.requested(["b"]).params().expanded, false, "the redrawn control does not request collapse");
-  s.show(tree([branch("b", [leaf("c")])]));
-  assert.deepEqual(s.labels(), ["b", "c"], "an unchanged plugin value replaced the kept state");
-  s.expand(["b"], false);
-  assert.deepEqual(s.labels(), ["b"]);
+  assert.deepEqual(s.expansionRequests, [{ status: "demo.s", tree: "t1", path: ["b"], expanded: true }]);
+  assert.deepEqual(s.labels(), ["b"], "the tree changed before the plugin round trip");
   s.show(tree([branch("b", [leaf("c")], { expanded: true })]));
-  assert.deepEqual(s.labels(), ["b", "c"], "a changed plugin value did not replace the kept state");
+  assert.deepEqual(s.labels(), ["b", "c"], "the tree did not adopt the plugin's returned expanded value");
 });
 
-test("the kept state is kept by the full path of keys", async () => {
+test("the accepted plugin expanded value remains authoritative until its next snapshot", async () => {
+  const module = await load("tree-kept");
+  const s = section(module);
+  const collapsed = tree([branch("b", [leaf("c")])]);
+  s.show(collapsed);
+  assert.deepEqual(s.labels(), ["b"]);
+  s.expand(["b"], true);
+  assert.deepEqual(s.expansionRequests[0], { status: "demo.s", tree: "t1", path: ["b"], expanded: true });
+  assert.deepEqual(s.labels(), ["b"], "the workbench optimistically expanded before the plugin snapshot");
+  s.show(collapsed);
+  assert.deepEqual(s.labels(), ["b"], "an unchanged plugin value did not remain authoritative");
+  s.show(tree([branch("b", [leaf("c")], { expanded: true })]));
+  assert.deepEqual(s.labels(), ["b", "c"], "the accepted plugin value did not expand the branch");
+  assert.equal(s.requested(["b"]).params().expanded, false, "the expanded branch does not request collapse");
+  s.expand(["b"], false);
+  assert.deepEqual(s.labels(), ["b", "c"], "the workbench optimistically collapsed before the plugin snapshot");
+  s.show(collapsed);
+  assert.deepEqual(s.labels(), ["b"], "the accepted collapsed plugin value was ignored");
+});
+
+test("an expansion request names the full path and waits for the plugin value", async () => {
   const module = await load("tree-path");
   const s = section(module);
   s.show(tree([branch("b", [branch("c", [leaf("d")])], { expanded: true })]));
   assert.deepEqual(s.labels(), ["b", "c"]);
   s.expand(["b", "c"], true);
-  assert.deepEqual(s.labels(), ["b", "c", "d"], "the branch at the path did not expand");
-  assert.equal(s.requested(["b", "c"]).params().path.join("/"), "b/c");
+  assert.deepEqual(s.expansionRequests[0], { status: "demo.s", tree: "t1", path: ["b", "c"], expanded: true });
+  assert.deepEqual(s.labels(), ["b", "c"], "the expansion request changed the drawing before the source answered");
+  s.show(tree([branch("b", [branch("c", [leaf("d")], { expanded: true })], { expanded: true })]));
+  assert.deepEqual(s.labels(), ["b", "c", "d"], "the plugin's expanded path was not drawn");
 });
 
-test("a new branch takes its plugin value, and a path that becomes a leaf loses its kept state", async () => {
+test("the plugin value determines branch and leaf state across accepted values", async () => {
   const module = await load("tree-new-leaf");
   const s = section(module);
   s.show(tree([branch("b", [leaf("c")])]));
   s.expand(["b"], true);
+  assert.deepEqual(s.labels(), ["b"], "the request changed the drawing before the plugin reply");
   s.show(tree([leaf("b")]));
   assert.deepEqual(s.labels(), ["b"], "a leaf drew children");
   s.show(tree([branch("b", [leaf("c")])]));
-  assert.deepEqual(s.labels(), ["b"], "a branch that came back kept the state of the leaf that replaced it");
+  assert.deepEqual(s.labels(), ["b"], "a branch that came back was not collapsed by its plugin value");
   s.show(tree([leaf("x"), branch("d", [leaf("e")], { expanded: true })]));
-  assert.deepEqual(s.labels(), ["x", "d", "e"], "a new branch did not take its plugin value");
+  assert.deepEqual(s.labels(), ["x", "d", "e"], "a new expanded branch did not follow its plugin value");
 });
 
-test("with no baseline, the kept state of a branch wins over its plugin value", async () => {
+test("the plugin value remains authoritative after a rejected snapshot", async () => {
   const module = await load("tree-no-baseline");
   const s = section(module);
   s.show(tree([branch("b", [leaf("c")], { expanded: true })]));
   s.expand(["b"], false);
   s.expand(["b"], true);
+  assert.deepEqual(s.labels(), ["b", "c"], "an expansion request changed the drawn value");
+  assert.deepEqual(s.expansionRequests.map(({ expanded }) => expanded), [false, true]);
   s.show({ elements: [{ kind: "chart", key: "x" }] });
   assert.deepEqual(s.labels(), [], "the rejected value kept the tree");
   assert.throws(() => s.expand(["b"], false), { message: 'tree t1 path ["b"] is not drawn' });
   s.show(tree([branch("b", [leaf("c")])]));
-  assert.deepEqual(s.labels(), ["b", "c"], "the plugin value replaced the kept state after a rejection");
+  assert.deepEqual(s.labels(), ["b"], "the plugin's collapsed value was overridden by a stale workbench state");
 });
 
-test("a change of source keeps the kept state by path, and the tree is not drawn until a value is accepted", async () => {
+test("a source change clears expansion authority and uses the next plugin value", async () => {
   const module = await load("tree-source");
   const s = section(module);
   s.show(tree([branch("b", [leaf("c")])]));
   s.expand(["b"], true);
+  assert.deepEqual(s.labels(), ["b"], "the source request expanded optimistically");
   module.changeSource("demo.s");
   assert.throws(() => s.expand(["b"], false), { message: 'tree t1 path ["b"] is not drawn' });
   s.show(tree([branch("b", [leaf("c")])]));
-  assert.deepEqual(s.labels(), ["b", "c"], "the kept state did not survive the change of source");
+  assert.deepEqual(s.labels(), ["b"], "the new plugin source did not supply its collapsed value");
 });
 
 test("a path that is not a drawn branch, a tree that is not drawn, and a status that is not drawn fail the command", async () => {
@@ -466,13 +490,17 @@ test("a path that is not a drawn branch, a tree that is not drawn, and a status 
   );
 });
 
-test("the expand command set the same state when it runs again with the same arguments", async () => {
+test("the expand command forwards every request to the authoritative source", async () => {
   const module = await load("tree-repeat");
   const s = section(module);
   s.show(tree([branch("b", [leaf("c")])]));
   s.expand(["b"], true);
   s.expand(["b"], true);
-  assert.deepEqual(s.labels(), ["b", "c"]);
+  assert.deepEqual(s.expansionRequests, [
+    { status: "demo.s", tree: "t1", path: ["b"], expanded: true },
+    { status: "demo.s", tree: "t1", path: ["b"], expanded: true },
+  ]);
+  assert.deepEqual(s.labels(), ["b"], "the expansion command changed local drawing state");
 });
 
 test("a tree in a horizontal section is drawn with its outline, as in a vertical section", async () => {
@@ -700,7 +728,7 @@ test("an expanded unloaded branch keeps its state until children arrive", async 
   s.show(tree([leaf("folder", { branch: true })]));
   assert.ok(s.body.querySelector('[data-role="expand"]'), "the unloaded branch has no expand control");
   s.expand(["folder"], true);
-  s.show(tree([branch("folder", [leaf("child")], { branch: true })]));
+  s.show(tree([branch("folder", [leaf("child")], { branch: true, expanded: true })]));
   assert.deepEqual(s.labels(), ["folder", "child"], "children did not draw after they arrived for an expanded branch");
 });
 

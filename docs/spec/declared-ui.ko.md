@@ -120,9 +120,9 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 선언된 UI 값의 명령 이름은 `<plugin>.<name>`이며, `<plugin>`은 status의 plugin이다. core의 이름이나 다른 plugin의 이름은 거부한다. plugin 값은 자기 plugin의 명령만 이름으로 지정하기 때문이다. 선언되지 않은 이름은 사용자가 요소를 누를 때가 아니라 선언된 UI snapshot을 받을 때 거부한다. binder가 표시 시점에 선언되지 않은 이름을 거부하기 때문이다([노출](exposure.ko.md#사용자-인터페이스)).
 
-`core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 그 처리기와 함께 선언한다. 이 명령은 설정 연산이다. 같은 인수로 다시 실행해도 한 번 실행한 것과 같은 결과다. `expanded` 인수는 제어가 요청하는 상태이며, 그릴 때 가지가 보이던 상태의 반대다. 명령은 `status`의 트리 `tree`에서 `path`에 있는 가지의 유지 상태를 설정하며, plugin에는 전달하지 않는다. workbench는 그다음 유지된 상태로 tree를 다시 그린다. `path`는 tree의 루트 노드에서 가지까지의 노드 key 배열이다. `status`는 status 이름 `<plugin>.<name>`이고, `tree`는 tree 요소의 key다. 그려진 가지가 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다. 그 메시지의 `<path>`는 문자열의 JSON 배열이다.
+`core.declared-ui.tree.expand`는 `packages/workbench/exposure.json`에 처리기와 함께 선언한다. 명령은 요청한 `expanded` 상태를 status의 선택된 출처에 `declared-ui.expanded {status, tree, path, expanded}`로 보낸다. event의 `status`는 plugin 안의 이름이고 command의 `status`는 `<plugin>.<name>`이다. workbench는 그리기를 바꾸지 않는다. 출처가 값을 갱신하고 다음 snapshot을 받아들인 뒤에만 tree가 바뀐다. 같은 요청을 반복하면 같은 희망 값을 보낸다. `path`는 tree의 루트 노드에서 가지까지의 노드 key 배열이고 `tree`는 tree 요소의 key다. 받아들인 값에 없는 `path`, 또는 그려지지 않은 `status`나 `tree`는 `tree <tree> path <path> is not drawn`으로 명령을 실패시킨다. 그 메시지의 `<path>`는 문자열의 JSON 배열이다.
 
-요청은 제어가 요청하는 `expanded` 값을 담으며, 이는 workbench가 그릴 때의 유지 상태와 반대다. 같은 요청을 되풀이하면 같은 상태를 설정한다.
+요청의 `expanded`는 받아들인 plugin 값에 현재 있는 가지 상태의 반대다. 출처는 이 희망 값으로 plugin 값을 갱신한다.
 
 비활성 요소(`enabled: false`)는 `disabled` 속성으로 그려지므로 어떤 클릭도 그 묶기에 닿지 않는다.
 다시 그릴 때 남는 address의 각 루트 요소, list 행, tree 노드, 펼침 제어는 같은 요소를 유지한다. [exposure](exposure.ko.md#사용자-인터페이스)가 모든 다시 그리기에 요구하는 규칙이며, 명령 실행 뒤에도 키보드 초점이 제어에 남게 한다. 그런 각 제어는 명령에 한 번만 묶이며, 다시 그릴 때는 매개변수만 갱신한다. `command`가 바뀐 list 행이나 tree 노드는 새 요소다. key에 명령이 포함되기 때문이다.
@@ -139,24 +139,24 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 
 선언된 UI status는 선언된 UI snapshot을 거쳐 다음과 같이 그려진다.
 
-- 받아들인 선언된 UI snapshot마다 그 status의 트리를 대체한다. 요소는 key 경로로 맞춰서 workbench 상태를 유지한다.
-- workbench는 status, tree key, 루트부터의 노드 key 경로로 가지마다 펼침 상태를 보관한다. 사용자는 `core.declared-ui.tree.expand`로만 유지된 상태를 설정한다. 받아들인 값도 아래 규칙으로 유지된 상태를 설정한다.
-- 받아들인 값에서, 기준(baseline)의 `expanded`와 다른 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 기준이 있으면 기준의 그 경로에 가지가 없을 때 가지는 새 것이다. 기준이 없으면 유지된 상태가 없는 가지가 새 것이다. 새 가지는 plugin의 값을 받고, 새 것이 아닌 가지는 유지된 상태를 유지한다.
-- 거부된 값은 유지된 상태를 바꾸지 않는다. 기준은 마지막 거부나 출처 변경 이후에 받아들인 마지막 값이다. 거부와 출처 변경은 기준을 없앤다. 기준이 없으면 유지된 상태가, 받아들인 값에서 가지인 경로 가운데 유지된 상태를 가진 모든 경로에서 이긴다.
-- 잎 노드가 된 경로는 기준이 있든 없든 유지된 상태를 잃는다. 새 가지는 기준이 있든 없든 plugin의 `expanded` 값을 받는다.
+- 받아들인 선언된 UI snapshot마다 그 status의 트리를 대체한다. 각 가지의 `expanded` 값은 plugin이 소유한다. `true`이면 자식을 그리고, 없거나 `false`이면 접어 둔다. workbench는 expansion override를 유지하지 않는다.
+- 펼침 제어는 `declared-ui.expanded {status, tree, path, expanded}`를 status의 출처로 보낸다. 받아들인 plugin 값에서 현재 보이는 상태의 반대를 요청한다. 출처는 값을 갱신하고 snapshot을 보내며, 받아들인 뒤에만 tree가 갱신된다.
+- 가지의 받아들인 `expanded` 값은 이전 값이나 요청으로 덮어쓰지 않는다. 가지가 처음 나타나거나, 사라졌다가 돌아오거나, 잎에서 바뀌면 해당 snapshot에서 plugin이 보낸 값을 사용한다.
+- 거부된 값은 section을 비우며 plugin의 출처 상태를 바꾸지 않는다. 다음에 받아들인 값이 가지의 expansion을 다시 정한다. 출처가 바뀌어도 section을 비우며 새 출처의 값이 expansion을 정한다.
+- 받아들인 값에서 잎이 된 경로에는 펼침 제어가 없다. 이후 그 경로가 가지가 되면 새로 받아들인 `expanded` 값으로 그린다.
 - pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. 출처에서 마지막으로 받아들인 값의 `seq`보다 `seq`가 낮은 pull 응답은 검사 없이 버린다. 그 밖의 `null`이 아닌 pull 응답은 검사 규칙을 따른다.
-- `selected`에는 유지된 상태가 없다. 이를 바꾸는 core 명령이 없으므로, plugin의 값이 받아들인 모든 값에 적용된다.
-- 유지된 상태는 받아들인 값에 그 경로가 없을 때 지운다. plugin 프로세스의 재시작은 프로세스 종료인 전이 (d)와, 새 프로세스의 등록인 전이 (a)로 처리하며, 그 출처 변경은 전이 (b)와 (c)로 처리한다. 유지된 상태는 경로별로 살아남는다.
-- 유지된 상태는 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 값으로 되돌아간다.
+- `selected`를 바꾸는 core 명령이 없으므로, 받아들인 모든 값에서 plugin의 값이 적용된다.
+- plugin 프로세스가 재시작하면 이전 등록을 지우고 새 프로세스를 등록해 출처를 다시 고른다. 새 출처의 받아들인 값이 모든 가지 상태를 정한다.
+- workbench는 expansion 상태를 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 받아들인 `expanded` 값으로 그린다.
 - 선언된 status는 plugin 프로세스가 제공한다. workbench는 그 status를 등록한 첫 선언된 status 출처에서 값을 읽는다. 첫째, 사이드바를 가진 카드의 활성 탭의 view이며, 그 view의 페이지가 status를 등록했을 때다. 카드 사이드바에서는 그 사이드바를 가진 카드다. 고정 창 사이드바에서는 plugin override([외부 사이드바](external-sidebars.ko.md#오버라이드-컨텍스트와-레일-보더))가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이며, plugin override가 적용되지 않으면 이 단계를 건너뛴다. 둘째, plugin의 [plugin host](plugin-host.ko.md)이며 plugin이 host를 가질 때만 있다. 그 밖에는 누군가 등록할 때까지 section을 비운다. 상태 모듈의 등록은 선언된 UI status를 제공하지 않는다. 상태 모듈만 등록하는 선언된 UI status는 출처가 없으며, 그 section은 비워진다. 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다. 선언된 status 출처는 프로세스와 그 프로세스의 status 등록의 짝이다. 출처가 바뀌는 것은 다른 짝이 되는 것이다. 같은 프로세스가 같은 status를 다시 등록하는 것은 바뀜이 아니다.
 
 출처가 바뀌는 규칙은 다음과 같다.
 
 - (a) 사이드바 카드의 활성 탭, 고정 창 사이드바의 포커스된 카드, 또는 등록이 바뀌거나, 고정 창 사이드바의 plugin override가 적용되기 시작하거나 멈추면 출처를 다시 고른다.
-- (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 유지된 상태는 경로별로 살아남는다([status 대응](#status-대응)).
+- (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 이전 출처의 expansion 상태는 살아남지 않으며 새 출처의 값이 정한다.
 - (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
-- 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 선택된 출처가 아닌 짝에서 온 pull 응답, 또는 `seq`가 출처에서 마지막으로 받아들인 값의 `seq`보다 낮은 pull 응답은 검사 없이 버린다. 트리, 기준, 유지된 상태, 오류 표시 중 어느 것도 바꾸지 않는다.
+- 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 선택된 출처가 아닌 짝에서 온 pull 응답, 또는 `seq`가 출처에서 마지막으로 받아들인 값의 `seq`보다 낮은 pull 응답은 검사 없이 버린다. 트리나 오류 표시를 바꾸지 않는다.
 
 - 첫 받아들인 값 전에는 section이 트리를 보이지 않는다. 그 전에 보일 수 있는 내용은 거부 텍스트뿐이며, 거부된 값 뒤에만 보인다.
 - 선언된 UI 값은 변경 흐름이 아니다. plugin은 어떤 요소가 바뀌어도 값 전체를 다시 보낸다.

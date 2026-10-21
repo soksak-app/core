@@ -47,6 +47,42 @@ test("the channel of a view source acknowledges a snapshot through the view even
   }], "the acknowledgement was not the view event of the source");
 });
 
+test("an expansion update reaches the plugin view as declared-ui.expanded", async () => {
+  const { expanded } = createDeclaredSource({ plugin: "probe", status: "files.tree" });
+  await expanded({ id: "view-a", surface: "view-a" }, { status: "files.tree", tree: "files", path: ["folder"], expanded: true });
+  assert.deepEqual(calls.at(-1), {
+    name: "viewEvent",
+    arg: { surface: "view-a", event: "declared-ui.expanded", data: { status: "files.tree", tree: "files", path: ["folder"], expanded: true } },
+  });
+});
+
+test("an expansion update reaches a plugin host as declared-ui.expanded", async () => {
+  const { expanded } = createDeclaredSource({ plugin: "probe", status: "files.tree" });
+  await expanded({ id: "plugin:probe", surface: null }, { status: "files.tree", tree: "files", path: ["folder"], expanded: false });
+  assert.deepEqual(calls.at(-1), {
+    name: "pluginHostEvent",
+    arg: { plugin: "probe", event: "declared-ui.expanded", data: { status: "files.tree", tree: "files", path: ["folder"], expanded: false } },
+  });
+});
+
+test("a declared-ui.expanded request is sent to its view source", async () => {
+  const { expanded } = createDeclaredSource({ plugin: "probe", status: "lines" });
+  await expanded({ id: "view-a", surface: "view-a" }, { status: "lines", tree: "t1", path: ["root", "child"], expanded: true });
+  assert.deepEqual(calls.at(-1), {
+    name: "viewEvent",
+    arg: { surface: "view-a", event: "declared-ui.expanded", data: { status: "lines", tree: "t1", path: ["root", "child"], expanded: true } },
+  });
+});
+
+test("a declared-ui.expanded request is sent through the plugin host event call", async () => {
+  const { expanded } = createDeclaredSource({ plugin: "probe", status: "lines" });
+  await expanded({ id: "plugin:probe", surface: null }, { status: "lines", tree: "t1", path: ["root"], expanded: false });
+  assert.deepEqual(calls.at(-1), {
+    name: "pluginHostEvent",
+    arg: { plugin: "probe", event: "declared-ui.expanded", data: { status: "lines", tree: "t1", path: ["root"], expanded: false } },
+  });
+});
+
 test("the channel delivers each snapshot of its surface and plugin, and the unsubscribe ends the delivery", async () => {
   const { channel } = createDeclaredSource({ plugin: "probe", status: "lines" });
   const link = channel({ id: "view-a", surface: "view-a" });

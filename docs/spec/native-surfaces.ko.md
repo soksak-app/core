@@ -122,7 +122,13 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
   - `runtime.sidecar.onFailure`(`{id}`)는 세션 `id`의 실패를 `event: "sidecar.failure"`와 `data: {id, reason}`로 전달한다.
   - `runtime.textSize.on`은 surface의 text scale이 바뀔 때마다 `event: "textSize"`와 `data`로 scale을 전달하고, `runtime.settings.on`은 plugin 설정이 바뀔 때마다 `event: "settings"`와 `data`로 값을 전달한다. 값이 바뀌지 않은 변경은 surface context가 전달하지 않듯 view에 전달하지 않는다.
 
-  페이지는 구독을 한 번만 등록한다. 같은 name이나 id의 두 번째 call은 다시 등록하지 않고 `null`로 답한다. 페이지는 각 event를 `viewEvent {surface, event, data}`로 보내며, 호스트는 `{sok: 1, event, data}`를 view의 ready 문서에 post한다. ready 문서가 없는 view에 대한 event는 `<surface> has no ready document`로 실패하고, 페이지가 그 오류를 application log에 쓴다. 구독은 surface가 닫히면 끝난다. 재시작한 view는 다시 구독하며, 페이지는 그때까지 구독을 유지한다. view는 event 이름의 listener에 각 event를 전달하고, listener가 없는 event는 무시한다.
+  메인 page는 선택된 view 원천에 `viewEvent {surface, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
+
+메인 page는 선택된 view 원천에 `viewEvent {surface, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
+
+메인 page는 선택된 view 원천에 `viewEvent {surface, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
+
+페이지는 구독을 한 번만 등록한다. 같은 name이나 id의 두 번째 call은 다시 등록하지 않고 `null`로 답한다. 페이지는 각 event를 `viewEvent {surface, event, data}`로 보내며, 호스트는 `{sok: 1, event, data}`를 view의 ready 문서에 post한다. ready 문서가 없는 view에 대한 event는 `<surface> has no ready document`로 실패하고, 페이지가 그 오류를 application log에 쓴다. 구독은 surface가 닫히면 끝난다. 재시작한 view는 다시 구독하며, 페이지는 그때까지 구독을 유지한다. view는 event 이름의 listener에 각 event를 전달하고, listener가 없는 event는 무시한다.
 - **view command.** view는 시작할 때 자기가 제공하는 각 command를 `runtime.command.register`(`{name}`) call로 선언한다.
   1. 페이지는 등록을 exposure의 registry로 적용한다. plugin의 `exposes`가 선언하지 않은 name이나 다른 plugin의 name은 registry 오류로 거부되며, call은 그 오류로 답한다.
   2. core exposure의 command 요청이 페이지에 도착하면, 페이지는 `viewRequest {surface, id, command, params}`를 보낸다. `id`는 exposure 요청의 id이고 `params`는 그 params다. 호스트는 `{sok: 1, id, command, params}`를 view의 ready 문서에 post한다. ready 문서가 없는 view에 대한 요청은 `<surface> has no ready document`로 실패한다.

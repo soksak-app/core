@@ -3215,7 +3215,7 @@
       },
       {
         "name": "core.declared-ui.tree.expand",
-        "description": "Sets the expanded state that a declared UI tree branch keeps. The branch is named by the status, the tree key, and the path of node keys from the root node. The state stays until the branch leaves the tree or the source of the status changes.",
+        "description": "Requests an expanded value from the source of a declared UI tree status. The source is asked to update the branch named by the status, tree key, and path; the workbench changes the tree only after it accepts the source's next snapshot.",
         "params": {
           "type": "object",
           "properties": {
