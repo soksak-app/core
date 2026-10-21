@@ -1917,15 +1917,6 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
         answer,
         serde_json::json!({"surface": "s2", "body": {"image": {"error": "closed", "name": "view", "generation": 3, "raster": 4, "sequence": 5}}})
     );
-}
-
-// contract: sidecars.read.unfinished-line-ends-the-connection
-#[test]
-fn an_unfinished_line_at_the_end_of_the_output_is_not_a_message() {
-    let mut reader =
-        std::io::Cursor::new(b"{\"surface\":\"s1\"}\n{\"surface\":\"s2\",\"body\":\"cut".to_vec());
-    let mut line = Vec::new();
-    assert_eq!(
     // The sidecar ends when its input closes, so the stop does not wait for its deadline.
     let stopping = std::time::Instant::now();
     sidecars.stop();
@@ -1935,6 +1926,15 @@ fn an_unfinished_line_at_the_end_of_the_output_is_not_a_message() {
         "stop took {elapsed:?} after the answer; the sidecar ends with its input and must not wait the stop deadline of {:?}",
         sidecars.stop_timeout
     );
+}
+
+// contract: sidecars.read.unfinished-line-ends-the-connection
+#[test]
+fn an_unfinished_line_at_the_end_of_the_output_is_not_a_message() {
+    let mut reader =
+        std::io::Cursor::new(b"{\"surface\":\"s1\"}\n{\"surface\":\"s2\",\"body\":\"cut".to_vec());
+    let mut line = Vec::new();
+    assert_eq!(
         read_message_line(&mut reader, 1024, &mut line).unwrap(),
         MessageLine::Complete
     );
