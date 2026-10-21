@@ -13,12 +13,15 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
 
-use crate::application_log::log_error;
+use crate::application_log::{log_error, log_failure};
 use crate::documents::{ViewReplyError, theme_message};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform::{self, Handle};
-use crate::plugin_host::{HostState, PluginHostStates, PluginHosts, state_call};
+use crate::plugin_host::{
+    Failure, HostState, PluginHostRestarts, PluginHostStates, PluginHosts, state_call,
+};
+use crate::sidecars::{RESTART_LIMIT, RESTART_WINDOW};
 use crate::view_lifecycle::is_queue_full;
 use crate::windows::{emit_window, window_data};
 
@@ -504,7 +507,7 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
 }
 
 /// Handles the end of the page process of the host webview handle of plugin: the end is written to the application log
-/// and the host is closed. The restart of the host page follows the restart limit (F212.9-4).
+/// and handled as a failure of the host.
 pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
     let data = match window_data(window) {
         Ok(data) => data,
@@ -517,7 +520,69 @@ pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
         "plugin host",
         format!("plugin {plugin}: the host process ended"),
     );
+    failed(window, plugin, handle);
+}
+
+/// Handles a failure of the host webview handle of plugin in window: an end of its page process that the host did not
+/// cause, or the queue overflow of its channel. It closes the host and counts the failure in the record of the plugin
+/// over every window; below the limit it creates the host again in this window, and at the fourth failure within 300 s
+/// it stops the restarts and closes the host of the plugin in every window (docs/spec/plugin-host.md#restarts). It runs
+/// on the main thread.
+fn failed(window: &Window, plugin: &str, handle: Handle) {
     end(window, plugin, Some(handle));
+    match window.state::<PluginHostRestarts>().failed(plugin) {
+        Failure::Restart(attempt) => {
+            emit_host(
+                Level::Error,
+                "host.plugin-host.restart",
+                json!({"plugin": plugin, "attempt": attempt}),
+            );
+            crate::windows::load_plugin_hosts(window);
+        }
+        Failure::Stop => {
+            log_error(
+                &format!("plugin host {plugin}"),
+                format!(
+                    "restart limit: {RESTART_LIMIT} failures within {} s",
+                    RESTART_WINDOW.as_secs()
+                ),
+            );
+            emit_host(
+                Level::Error,
+                "host.plugin-host.restart-limit",
+                json!({"plugin": plugin}),
+            );
+            for other in window.app_handle().windows().into_values() {
+                end(&other, plugin, None);
+            }
+        }
+        // A failure that arrives after the stop restarts nothing; the stop closed the host in every window.
+        Failure::Stopped => {}
+    }
+}
+
+/// Handles the open of a surface of plugin by the person in window: when the limit stopped the restarts of its plugin
+/// host, it clears the record, writes host.trace.plugin-host.restart-reset, and creates the host again in every window
+/// (docs/spec/plugin-host.md#restarts).
+pub(crate) fn surface_opened(window: &Window, plugin: &str) {
+    if !window.state::<PluginHostRestarts>().reset(plugin) {
+        return;
+    }
+    emit_host(
+        Level::Debug,
+        "host.trace.plugin-host.restart-reset",
+        json!({"plugin": plugin}),
+    );
+    for other in window.app_handle().windows().into_values() {
+        let target = other.clone();
+        log_failure(
+            "plugin host",
+            crate::exposure::on_main(&other, move || {
+                crate::windows::load_plugin_hosts(&target);
+                Ok(())
+            }),
+        );
+    }
 }
 
 /// Records the navigation state of the host of plugin. A failure is written to the application log.
@@ -565,8 +630,9 @@ pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str
             let overflow = is_queue_full(&error);
             log_error("plugin host channel", error);
             if overflow {
-                // The page has lost messages, so its host webview is closed (docs/spec/plugin-host.md#channel).
-                end(window, plugin, Some(handle));
+                // The page has lost messages, so its host webview is closed and restarted within the restart limit
+                // (docs/spec/plugin-host.md#channel).
+                failed(window, plugin, handle);
             }
             return;
         }

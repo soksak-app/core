@@ -3,8 +3,8 @@ package host
 // The plugin host web views of a window (docs/spec/plugin-host.md). The host creates the plugin host web view of a
 // plugin when the main page of the window loads a plugin whose manifest declares host, and disposes it when the plugin
 // is removed or disabled, when the application applies a plugin change that reloads the window, and when the window
-// closes. The channel of the host page is in plugin_host_channel.go; the saved state of the host pages is here
-// (docs/spec/plugin-host.md#state).
+// closes. The channel of the host page is in plugin_host_channel.go; the restart limit and the saved state of the host
+// pages are here (docs/spec/plugin-host.md#restarts, docs/spec/plugin-host.md#state).
 
 import (
 	"bytes"
@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -122,7 +123,7 @@ func (s *Surfaces) loadPluginHosts() {
 }
 
 // createPluginHosts creates the plugin host web view of every plugin in plugins that the window has no host web view
-// of. It runs on the UI thread.
+// of and whose restarts the limit has not stopped (docs/spec/plugin-host.md#restarts). It runs on the UI thread.
 func (s *Surfaces) createPluginHosts(window unsafe.Pointer, plugins []hostPlugin) {
 	if s.host == nil {
 		return
@@ -131,7 +132,7 @@ func (s *Surfaces) createPluginHosts(window unsafe.Pointer, plugins []hostPlugin
 	s.mu.Lock()
 	var pending []hostPlugin
 	for _, plugin := range plugins {
-		if s.pluginHosts[plugin.id] == nil {
+		if s.pluginHosts[plugin.id] == nil && !s.pluginHostRestarts.stopped(plugin.id) {
 			pending = append(pending, plugin)
 		}
 	}
@@ -201,8 +202,8 @@ func (s *Surfaces) disposePluginHost(plugin string) {
 }
 
 // pluginHostEnded handles the end of the page process of the host web view handle of plugin: it writes the end to the
-// application log and disposes the host. The end of a web view that is no longer the host of plugin was already handled.
-// The restart of the host page follows the restart limit (F212.9-4). It runs on the UI thread.
+// application log and handles it as a failure of the host. The end of a web view that is no longer the host of plugin was
+// already handled. It runs on the UI thread.
 func (s *Surfaces) pluginHostEnded(plugin string, handle unsafe.Pointer) {
 	s.mu.Lock()
 	current := s.pluginHosts[plugin]
@@ -211,7 +212,78 @@ func (s *Surfaces) pluginHostEnded(plugin string, handle unsafe.Pointer) {
 		return
 	}
 	LogError("plugin host", fmt.Errorf("plugin %s: the host process ended", plugin))
+	s.pluginHostFailed(plugin)
+}
+
+// pluginHostFailed handles a failure of the plugin host of plugin in this window: an end of its page process that the host
+// did not cause, or the queue overflow of its channel. It disposes the host and counts the failure in the record of the
+// plugin over every window; below the limit it creates the host again in this window, and at the fourth failure within
+// 300 s it stops the restarts and disposes the host of the plugin in every window (docs/spec/plugin-host.md#restarts). It
+// runs on the UI thread.
+func (s *Surfaces) pluginHostFailed(plugin string) {
 	s.disposePluginHost(plugin)
+	attempt, stop := s.pluginHostRestarts.failed(plugin)
+	if stop {
+		LogError("plugin host "+plugin, fmt.Sprintf("restart limit: %d failures within %d s", restartLimit, int(restartWindow/time.Second)))
+		EmitHost(LevelError, "host.plugin-host.restart-limit", map[string]any{"plugin": plugin})
+		for _, window := range s.hostWindows() {
+			window.disposePluginHost(plugin)
+		}
+		return
+	}
+	if attempt == 0 {
+		// A failure that arrives after the stop restarts nothing; the stop disposed the host in every window.
+		return
+	}
+	EmitHost(LevelError, "host.plugin-host.restart", map[string]any{"plugin": plugin, "attempt": attempt})
+	s.recreatePluginHosts()
+}
+
+// pluginHostReset handles the open of a surface of plugin by the person: when the limit stopped the restarts of its plugin
+// host, it clears the record, writes host.trace.plugin-host.restart-reset, and creates the host again in every window
+// through invoke, which runs a function on the UI thread (docs/spec/plugin-host.md#restarts).
+func (s *Surfaces) pluginHostReset(plugin string, invoke func(func())) {
+	if !s.pluginHostRestarts.reset(plugin) {
+		return
+	}
+	EmitHost(LevelDebug, "host.trace.plugin-host.restart-reset", map[string]any{"plugin": plugin})
+	for _, window := range s.hostWindows() {
+		invoke(window.recreatePluginHosts)
+	}
+}
+
+// recreatePluginHosts creates the plugin host web view of every loaded plugin that the window has none of and whose
+// restarts are not stopped. It runs on the UI thread.
+func (s *Surfaces) recreatePluginHosts() {
+	if s.host == nil {
+		// A window of a test without a host holds no plugin host.
+		return
+	}
+	plugins, err := hostPlugins(s.host.configDir)
+	if err != nil {
+		LogError("plugin host", err)
+		return
+	}
+	// default: a window of a test has no native window, and its fake platform takes none.
+	var window unsafe.Pointer
+	if s.window != nil {
+		window = s.window.NativeWindow()
+	}
+	s.createPluginHosts(window, plugins)
+}
+
+// hostWindows returns the windows of the host of s, or none for a window of a test without a host.
+func (s *Surfaces) hostWindows() []*Surfaces {
+	if s.host == nil {
+		return nil
+	}
+	s.host.mu.Lock()
+	defer s.host.mu.Unlock()
+	windows := make([]*Surfaces, 0, len(s.host.windows))
+	for _, window := range s.host.windows {
+		windows = append(windows, window)
+	}
+	return windows
 }
 
 // disposePluginHosts closes every plugin host web view of the window. It runs on the UI thread.
@@ -233,8 +305,8 @@ func (s *Surfaces) disposePluginHosts() {
 }
 
 // pluginHostReceived handles one message of the sok-view handler of the host of plugin and writes its failure to the
-// application log. A message that reports the loss of the message queue closes the plugin host; the restart of the page
-// follows the restart limit (F212.9-4). It runs on the UI thread.
+// application log. A message that reports the loss of the message queue is a failure of the plugin host, which closes it
+// and restarts it within the restart limit. It runs on the UI thread.
 func (s *Surfaces) pluginHostReceived(plugin, value string) {
 	err := s.pluginHostMessage(plugin, value)
 	if err == nil {
@@ -244,7 +316,7 @@ func (s *Surfaces) pluginHostReceived(plugin, value string) {
 	var overflow pluginHostOverflow
 	if errors.As(err, &overflow) {
 		// The page has lost messages, so its host web view is closed (docs/spec/plugin-host.md#channel).
-		s.disposePluginHost(plugin)
+		s.pluginHostFailed(plugin)
 	}
 }
 
@@ -428,4 +500,69 @@ func (c *pluginHostStates) pluginChanged(action, plugin string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.saved, plugin)
+}
+
+// pluginHostRestart is the restart-limit record of the plugin host of one plugin over every window: the counted failures
+// of the sidecar failure contract (docs/spec/sidecars.md#failure) and the restarts since the last reset.
+type pluginHostRestart struct {
+	record   restartRecord
+	attempts int
+}
+
+// pluginHostRestarts are the restart-limit records of the plugin hosts of the application, by plugin
+// (docs/spec/plugin-host.md#restarts). Now is the clock of the limit; a test injects it, and nil uses time.Now.
+type pluginHostRestarts struct {
+	mu       sync.Mutex
+	byPlugin map[string]*pluginHostRestart
+	Now      func() time.Time
+}
+
+func newPluginHostRestarts() *pluginHostRestarts {
+	return &pluginHostRestarts{byPlugin: map[string]*pluginHostRestart{}}
+}
+
+// failed counts a failure of the plugin host of plugin at the current time. It returns the attempt of the restart that
+// follows, counted since the last reset, or 0 when the host restarts no more; stop is true for the failure that stops the
+// restarts. A failure after the stop is not counted.
+func (c *pluginHostRestarts) failed(plugin string) (attempt int, stop bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.byPlugin[plugin]
+	if entry == nil {
+		entry = &pluginHostRestart{}
+		c.byPlugin[plugin] = entry
+	}
+	if entry.record.stopped {
+		return 0, false
+	}
+	// default: nil Now is the wall clock; a test injects the clock it moves.
+	now := time.Now()
+	if c.Now != nil {
+		now = c.Now()
+	}
+	if entry.record.count(now) {
+		return 0, true
+	}
+	entry.attempts++
+	return entry.attempts, false
+}
+
+// stopped reports whether the limit stopped the restarts of the plugin host of plugin.
+func (c *pluginHostRestarts) stopped(plugin string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.byPlugin[plugin]
+	return entry != nil && entry.record.stopped
+}
+
+// reset clears the record of the plugin host of plugin when the limit stopped its restarts, and reports whether it did.
+func (c *pluginHostRestarts) reset(plugin string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry := c.byPlugin[plugin]
+	if entry == nil || !entry.record.stopped {
+		return false
+	}
+	delete(c.byPlugin, plugin)
+	return true
 }

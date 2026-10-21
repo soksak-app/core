@@ -995,7 +995,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
 /// Creates the plugin host webview of every loaded plugin whose manifest declares host and that the window has none of.
 /// A failure of one creation is written to the application log. It runs on the main thread
 /// (docs/spec/plugin-host.md#lifetime).
-fn load_plugin_hosts(window: &Window) {
+pub(crate) fn load_plugin_hosts(window: &Window) {
     let result = load_plugin_hosts_on_main(window);
     log_failure("plugin host", result);
 }
@@ -1004,7 +1004,10 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
     let plugins = crate::plugin_host::host_plugins(&config)?;
-    let wanted = data.plugin_hosts.missing(&plugins);
+    let wanted = data.plugin_hosts.missing(
+        &plugins,
+        &window.state::<crate::plugin_host::PluginHostRestarts>(),
+    );
     if wanted.is_empty() {
         return Ok(());
     }

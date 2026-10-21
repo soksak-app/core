@@ -1,10 +1,13 @@
 //! The plugin host web views of a window against fakes at the platform boundary (docs/spec/plugin-host.md).
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use crate::plugin_host::{self, HostPlugin, HostState, HostView, PluginHosts};
+use crate::plugin_host::{
+    self, Failure, HostPlugin, HostState, HostView, PluginHostRestarts, PluginHosts,
+};
 use crate::test_folder::Folder;
 
 /// The record of the platform fake: the created host webviews with their configuration, the addresses that they load,
@@ -137,13 +140,15 @@ fn the_host_creates_one_host_webview_per_plugin_per_window() {
         state: None,
     }];
     assert_eq!(
-        hosts.missing(&plugins),
+        hosts.missing(&plugins, &PluginHostRestarts::default()),
         plugins,
         "the first readiness wants the host of probe"
     );
     hosts.insert("probe", 1);
     assert!(
-        hosts.missing(&plugins).is_empty(),
+        hosts
+            .missing(&plugins, &PluginHostRestarts::default())
+            .is_empty(),
         "a second readiness creates no further host webview"
     );
 }
@@ -192,7 +197,7 @@ fn a_page_start_disposes_every_host_webview_and_the_next_readiness_creates_them_
         state: None,
     }];
     assert_eq!(
-        hosts.missing(&plugins),
+        hosts.missing(&plugins, &PluginHostRestarts::default()),
         plugins,
         "the next readiness creates the host webviews again"
     );
@@ -287,4 +292,111 @@ fn a_host_state_declaration_needs_format_and_max_bytes() {
             "the state {state} is accepted"
         );
     }
+}
+
+/// Returns restart-limit records whose clock is the start plus the offset that the check sets, and that offset.
+fn moved_restarts() -> (PluginHostRestarts, Arc<Mutex<Duration>>) {
+    let start = Instant::now();
+    let offset = Arc::new(Mutex::new(Duration::ZERO));
+    let clock = offset.clone();
+    let restarts = PluginHostRestarts::default().with_clock(move || start + *clock.lock().unwrap());
+    (restarts, offset)
+}
+
+/// Counts a failure of the host of probe at the offset of seconds.
+fn fail_at(restarts: &PluginHostRestarts, offset: &Mutex<Duration>, seconds: u64) -> Failure {
+    *offset.lock().unwrap() = Duration::from_secs(seconds);
+    restarts.failed("probe")
+}
+
+/// The host plugin probe of the checks.
+fn probe() -> Vec<HostPlugin> {
+    vec![HostPlugin {
+        id: "probe".into(),
+        page: "ui/host.html".into(),
+        state: None,
+    }]
+}
+
+// contract: plugin-host.restart.failure-restarts
+#[test]
+fn a_failure_of_a_plugin_host_creates_it_again_with_the_attempt_since_the_reset() {
+    let (restarts, offset) = moved_restarts();
+    assert_eq!(fail_at(&restarts, &offset, 0), Failure::Restart(1));
+    assert_eq!(fail_at(&restarts, &offset, 10), Failure::Restart(2));
+    // A failure more than 300 seconds before the new one is not counted.
+    assert_eq!(fail_at(&restarts, &offset, 400), Failure::Restart(3));
+    assert_eq!(fail_at(&restarts, &offset, 500), Failure::Restart(4));
+    assert!(!restarts.stopped("probe"), "the host of probe is stopped");
+    assert_eq!(
+        PluginHosts::default().missing(&probe(), &restarts),
+        probe(),
+        "a running host is not created again"
+    );
+}
+
+// contract: plugin-host.restart.fourth-failure-stops
+#[test]
+fn the_fourth_failure_within_300_seconds_stops_the_plugin_host() {
+    let (restarts, offset) = moved_restarts();
+    for seconds in [0, 10, 20] {
+        assert!(matches!(
+            fail_at(&restarts, &offset, seconds),
+            Failure::Restart(_)
+        ));
+    }
+    assert_eq!(fail_at(&restarts, &offset, 30), Failure::Stop);
+    assert!(
+        restarts.stopped("probe"),
+        "the restarts of probe are not stopped"
+    );
+    assert_eq!(
+        fail_at(&restarts, &offset, 40),
+        Failure::Stopped,
+        "a failure after the stop is counted"
+    );
+    assert!(
+        PluginHosts::default()
+            .missing(&probe(), &restarts)
+            .is_empty(),
+        "a page readiness creates the host of a stopped plugin"
+    );
+    assert!(
+        !restarts.stopped("plain"),
+        "the stop of probe stopped plain"
+    );
+}
+
+// contract: plugin-host.restart.surface-open-resets
+#[test]
+fn the_open_of_a_surface_of_the_plugin_clears_the_stop() {
+    let (restarts, offset) = moved_restarts();
+    assert_eq!(fail_at(&restarts, &offset, 0), Failure::Restart(1));
+    assert!(
+        !restarts.reset("probe"),
+        "the open of a surface of a running host cleared its record"
+    );
+    for seconds in [10, 20] {
+        fail_at(&restarts, &offset, seconds);
+    }
+    assert_eq!(fail_at(&restarts, &offset, 30), Failure::Stop);
+    assert!(
+        !restarts.reset("plain"),
+        "the open of a surface of another plugin cleared a record"
+    );
+    assert!(restarts.stopped("probe"));
+    assert!(
+        restarts.reset("probe"),
+        "the open of a surface of probe kept its stop"
+    );
+    assert_eq!(
+        PluginHosts::default().missing(&probe(), &restarts),
+        probe(),
+        "the reset does not create the host again"
+    );
+    assert_eq!(
+        fail_at(&restarts, &offset, 40),
+        Failure::Restart(1),
+        "the reset kept the failures or the attempts"
+    );
 }

@@ -216,18 +216,24 @@ func (c *Sidecars) countFailure(name string) bool {
 		record = &restartRecord{}
 		c.restarts[name] = record
 	}
-	now := c.now()
-	kept := record.failures[:0]
-	for _, at := range record.failures {
+	return record.count(c.now())
+}
+
+// count counts a failure at now among the failures within restartWindow, which the record keeps. It reports true when
+// this failure is the restartLimit-th counted one, which stops the restarts. The plugin hosts count their failures with
+// the same record (docs/spec/plugin-host.md#restarts).
+func (r *restartRecord) count(now time.Time) bool {
+	kept := r.failures[:0]
+	for _, at := range r.failures {
 		if now.Sub(at) <= restartWindow {
 			kept = append(kept, at)
 		}
 	}
-	record.failures = append(kept, now)
-	if len(record.failures) < restartLimit {
+	r.failures = append(kept, now)
+	if len(r.failures) < restartLimit {
 		return false
 	}
-	record.stopped = true
+	r.stopped = true
 	return true
 }
 

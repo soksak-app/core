@@ -1,16 +1,18 @@
 //! The plugin host web views of a window (docs/spec/plugin-host.md). The host creates the plugin host webview of a
 //! plugin when the main page of the window loads a plugin whose manifest declares host, and disposes it when the
 //! plugin is removed or disabled, when the application applies a plugin change that reloads the window, and when the
-//! window closes. The channel of the host page is in plugin_host_channel.rs; the saved state of the host pages is here
-//! (docs/spec/plugin-host.md#state).
+//! window closes. The channel of the host page is in plugin_host_channel.rs; the restart limit and the saved state of
+//! the host pages are here (docs/spec/plugin-host.md#restarts, docs/spec/plugin-host.md#state).
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Instant;
 
 use serde_json::{Value, json};
 
 use crate::platform::Handle;
+use crate::sidecars::RestartRecord;
 
 /// One enabled installed plugin whose manifest declares host, with its id, its page and its declared state, which is
 /// None when the declaration names no state.
@@ -198,13 +200,18 @@ impl PluginHostStates {
 pub struct PluginHosts(Mutex<HashMap<String, Handle>>);
 
 impl PluginHosts {
-    /// Returns the plugins of plugins that the window has no host webview of, in the order of plugins.
-    pub fn missing(&self, plugins: &[HostPlugin]) -> Vec<HostPlugin> {
+    /// Returns the plugins of plugins that the window has no host webview of and whose restarts restarts has not
+    /// stopped, in the order of plugins (docs/spec/plugin-host.md#restarts).
+    pub fn missing(
+        &self,
+        plugins: &[HostPlugin],
+        restarts: &PluginHostRestarts,
+    ) -> Vec<HostPlugin> {
         // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
         let hosts = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         plugins
             .iter()
-            .filter(|plugin| !hosts.contains_key(&plugin.id))
+            .filter(|plugin| !hosts.contains_key(&plugin.id) && !restarts.stopped(&plugin.id))
             .cloned()
             .collect()
     }
@@ -288,4 +295,87 @@ pub fn create_host(
     };
     close(handle).map_err(|closing| format!("{reason}; closing the plugin host: {closing}"))?;
     Err(reason)
+}
+
+/// The restart-limit record of the plugin host of one plugin over every window: the counted failures of the sidecar
+/// failure contract (docs/spec/sidecars.md#failure) and the restarts since the last reset.
+#[derive(Default)]
+struct HostRestart {
+    record: RestartRecord,
+    attempts: u64,
+}
+
+/// What follows a failure of a plugin host (docs/spec/plugin-host.md#restarts).
+#[derive(Debug, PartialEq, Eq)]
+pub enum Failure {
+    /// The host is created again; the attempt counts the restarts since the last reset.
+    Restart(u64),
+    /// The failure is the fourth within 300 seconds: the restarts stop and the host ends in every window.
+    Stop,
+    /// The restarts were already stopped, so the failure is not counted and nothing follows.
+    Stopped,
+}
+
+/// The restart-limit records of the plugin hosts of the application, by plugin (docs/spec/plugin-host.md#restarts).
+pub struct PluginHostRestarts {
+    records: Mutex<HashMap<String, HostRestart>>,
+    /// The clock of the limit. A check injects it; the default is the monotonic clock.
+    clock: Arc<dyn Fn() -> Instant + Send + Sync>,
+}
+
+impl Default for PluginHostRestarts {
+    fn default() -> Self {
+        Self {
+            records: Mutex::default(),
+            clock: Arc::new(Instant::now),
+        }
+    }
+}
+
+impl PluginHostRestarts {
+    /// Changes the clock of the limit. A check injects a clock that it moves.
+    pub fn with_clock(mut self, clock: impl Fn() -> Instant + Send + Sync + 'static) -> Self {
+        self.clock = Arc::new(clock);
+        self
+    }
+
+    /// Counts a failure of the plugin host of plugin at the time of the clock and returns what follows.
+    pub fn failed(&self, plugin: &str) -> Failure {
+        let now = (self.clock)();
+        let mut records = self.lock();
+        let entry = records.entry(plugin.to_string()).or_default();
+        if entry.record.stopped() {
+            return Failure::Stopped;
+        }
+        if entry.record.count(now) {
+            return Failure::Stop;
+        }
+        entry.attempts += 1;
+        Failure::Restart(entry.attempts)
+    }
+
+    /// Returns true when the limit stopped the restarts of the plugin host of plugin.
+    pub fn stopped(&self, plugin: &str) -> bool {
+        self.lock()
+            .get(plugin)
+            .is_some_and(|entry| entry.record.stopped())
+    }
+
+    /// Clears the record of the plugin host of plugin when the limit stopped its restarts, and returns true when it did.
+    pub fn reset(&self, plugin: &str) -> bool {
+        let mut records = self.lock();
+        if !records
+            .get(plugin)
+            .is_some_and(|entry| entry.record.stopped())
+        {
+            return false;
+        }
+        records.remove(plugin);
+        true
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, HostRestart>> {
+        // default: a lock that a panicking thread poisoned still holds the restart records; the panic hook records the panic.
+        self.records.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }

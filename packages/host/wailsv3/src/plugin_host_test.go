@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -91,7 +92,7 @@ func hostFixture(t *testing.T) string {
 }
 
 func hostTestSurfaces(config string) *Surfaces {
-	return &Surfaces{host: &Host{configDir: config}, pluginHosts: map[string]unsafe.Pointer{}, pluginHostChannels: newPluginHostChannels(), events: func(string, any) {}}
+	return &Surfaces{host: &Host{configDir: config}, pluginHosts: map[string]unsafe.Pointer{}, pluginHostChannels: newPluginHostChannels(), pluginHostRestarts: newPluginHostRestarts(), events: func(string, any) {}}
 }
 
 // contract: plugin-host.create-loads-page
@@ -256,6 +257,142 @@ func TestPluginHostStateDeclarationNeedsFormatAndMaxBytes(t *testing.T) {
 		manifest := `{"host":{"page":"ui/host.html","state":` + declared + `}}`
 		if _, _, err := hostDeclaration("probe", []byte(manifest)); err == nil || err.Error() != want {
 			t.Fatalf("state %s: err %v, want %s", declared, err, want)
+		}
+	}
+}
+
+// restartWindows returns two windows of one host over the configuration folder config, which share the restart-limit
+// records and the saved states of the plugin hosts, and the clock offset that the restart limit reads. Each window has
+// the host web view of probe created through fake.
+func restartWindows(t *testing.T, config string, fake *hostViewPlatform) ([2]*Surfaces, *time.Duration) {
+	t.Helper()
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	offset := new(time.Duration)
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	restarts := newPluginHostRestarts()
+	restarts.Now = func() time.Time { return start.Add(*offset) }
+	host := &Host{configDir: config, windows: map[uint]*Surfaces{}, pluginHostStates: newPluginHostStates(), pluginHostRestarts: restarts}
+	var windows [2]*Surfaces
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatalf("host plugins: %v", err)
+	}
+	for index := range windows {
+		window := &Surfaces{host: host, pluginHosts: map[string]unsafe.Pointer{}, pluginHostChannels: newPluginHostChannels(),
+			pluginHostStates: host.pluginHostStates, pluginHostRestarts: restarts, events: func(string, any) {}}
+		host.windows[uint(index+1)] = window
+		window.createPluginHosts(nil, plugins)
+		windows[index] = window
+	}
+	return windows, offset
+}
+
+// failHost ends the page process of the current host web view of probe in window at the clock offset at.
+func failHost(t *testing.T, window *Surfaces, offset *time.Duration, at time.Duration) {
+	t.Helper()
+	*offset = at
+	handle, ok := window.pluginHosts["probe"]
+	if !ok {
+		t.Fatalf("the window has no host web view of probe to end at %v", at)
+	}
+	window.pluginHostEnded("probe", handle)
+}
+
+// contract: plugin-host.restart.failure-restarts
+func TestPluginHostRestartCreatesTheHostAgainAfterAFailure(t *testing.T) {
+	fake := &hostViewPlatform{}
+	windows, offset := restartWindows(t, hostFixture(t), fake)
+	first := windows[0].pluginHosts["probe"]
+	failHost(t, windows[0], offset, 0)
+	if len(fake.closed) != 1 || len(fake.created) != 3 {
+		t.Fatalf("the process end closed %d and created %d host web views, want 1 closed and 3 created", len(fake.closed), len(fake.created))
+	}
+	if handle, ok := windows[0].pluginHosts["probe"]; !ok || handle == first {
+		t.Fatalf("the window holds no new host web view of probe after the failure")
+	}
+	// The queue overflow of the channel is a failure too.
+	windows[0].pluginHostReceived("probe", hostMessage(`{"event": "view.error", "reason": "queue full for probe"}`))
+	if len(fake.closed) != 2 || len(fake.created) != 4 {
+		t.Fatalf("the overflow closed %d and created %d host web views, want 2 closed and 4 created", len(fake.closed), len(fake.created))
+	}
+	if attempts := windows[0].pluginHostRestarts.byPlugin["probe"].attempts; attempts != 2 {
+		t.Fatalf("restart attempts %d, want 2", attempts)
+	}
+	// A failure 300 seconds or less before the new one is counted, and an older one is not.
+	failHost(t, windows[0], offset, 400*time.Second)
+	failHost(t, windows[0], offset, 500*time.Second)
+	if len(fake.created) != 6 || windows[0].pluginHostRestarts.stopped("probe") {
+		t.Fatalf("the fourth failure with the first two outside 300 s created %d host web views, stopped %v; want 6 and running",
+			len(fake.created), windows[0].pluginHostRestarts.stopped("probe"))
+	}
+}
+
+// contract: plugin-host.restart.fourth-failure-stops
+func TestPluginHostRestartStopsAtTheFourthFailureInEveryWindow(t *testing.T) {
+	fake := &hostViewPlatform{}
+	config := hostFixture(t)
+	windows, offset := restartWindows(t, config, fake)
+	failHost(t, windows[0], offset, 0)
+	failHost(t, windows[0], offset, 10*time.Second)
+	failHost(t, windows[1], offset, 20*time.Second)
+	created := len(fake.created)
+	// The fourth failure within 300 seconds, counted over both windows, stops the host of probe in every window.
+	failHost(t, windows[0], offset, 30*time.Second)
+	if len(fake.created) != created {
+		t.Fatalf("the fourth failure created %d host web views", len(fake.created)-created)
+	}
+	for index, window := range windows {
+		if _, ok := window.pluginHosts["probe"]; ok {
+			t.Fatalf("window %d holds the host web view of probe after the stop", index+1)
+		}
+	}
+	if !windows[1].pluginHostRestarts.stopped("probe") {
+		t.Fatalf("the restarts of probe are not stopped")
+	}
+	// A readiness of the page creates no host of the stopped plugin.
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatalf("host plugins: %v", err)
+	}
+	windows[1].createPluginHosts(nil, plugins)
+	if len(fake.created) != created {
+		t.Fatalf("a page readiness created the host of a stopped plugin")
+	}
+}
+
+// contract: plugin-host.restart.surface-open-resets
+func TestPluginHostRestartResetsOnTheOpenOfASurfaceOfThePlugin(t *testing.T) {
+	fake := &hostViewPlatform{}
+	windows, offset := restartWindows(t, hostFixture(t), fake)
+	run := func(f func()) { f() }
+	// The open of a surface while the host runs clears nothing and creates nothing.
+	failHost(t, windows[0], offset, 0)
+	created := len(fake.created)
+	windows[0].pluginHostReset("probe", run)
+	if len(fake.created) != created || windows[0].pluginHostRestarts.byPlugin["probe"] == nil {
+		t.Fatalf("the open of a surface of a running host created %d host web views or cleared its record", len(fake.created)-created)
+	}
+	for at := 10; at <= 30; at += 10 {
+		failHost(t, windows[0], offset, time.Duration(at)*time.Second)
+	}
+	created = len(fake.created)
+	// The open of a surface of another plugin clears nothing.
+	windows[1].pluginHostReset("plain", run)
+	if !windows[1].pluginHostRestarts.stopped("probe") || len(fake.created) != created {
+		t.Fatalf("the open of a surface of another plugin cleared the stop of probe")
+	}
+	windows[1].pluginHostReset("probe", run)
+	if windows[1].pluginHostRestarts.stopped("probe") || windows[1].pluginHostRestarts.byPlugin["probe"] != nil {
+		t.Fatalf("the open of a surface of probe kept its record")
+	}
+	if len(fake.created) != created+2 {
+		t.Fatalf("the reset created %d host web views, want one in each window", len(fake.created)-created)
+	}
+	for index, window := range windows {
+		if _, ok := window.pluginHosts["probe"]; !ok {
+			t.Fatalf("window %d holds no host web view of probe after the reset", index+1)
 		}
 	}
 }

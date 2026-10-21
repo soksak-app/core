@@ -32,6 +32,7 @@ func channelSurfaces(t *testing.T, fake platform.Platform, ready bool) (*Surface
 		pluginHosts:        map[string]unsafe.Pointer{"probe": unsafe.Pointer(new(int))},
 		pluginHostChannels: newPluginHostChannels(),
 		pluginHostStates:   newPluginHostStates(),
+		pluginHostRestarts: newPluginHostRestarts(),
 		theme:              Theme{Tokens: map[string]string{}},
 		events:             func(name string, data any) { *events = append(*events, hostEvent{name, data}) },
 	}

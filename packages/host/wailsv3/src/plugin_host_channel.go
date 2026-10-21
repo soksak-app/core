@@ -130,7 +130,7 @@ func (c *pluginHostChannels) openCalls(plugin string) []string {
 }
 
 // pluginHostOverflow is the error of a plugin host message that reports the loss of its message queue. The host closes the
-// plugin host on it; the restart of the page follows the restart limit (F212.9-4).
+// plugin host on it and restarts it within the restart limit (docs/spec/plugin-host.md#restarts).
 type pluginHostOverflow struct {
 	reason string
 }

@@ -56,6 +56,8 @@ type Host struct {
 	plugins    *Plugins
 	// pluginHostStates are the saved values of the plugin hosts, one per plugin over every window (plugin_host.go).
 	pluginHostStates *pluginHostStates
+	// pluginHostRestarts are the restart-limit records of the plugin hosts, one per plugin over every window (plugin_host.go).
+	pluginHostRestarts *pluginHostRestarts
 	// buttons is the value of host.buttons. It installs the watch after the application started and before endpoint.json is written.
 	buttons *Buttons
 	// logNotices publishes the value of host.log and the host event debug-log-changed. It starts with the event log.
@@ -111,7 +113,8 @@ func nativeError(code int, err error) error {
 
 func newHost(directory string) (*Host, error) {
 	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
-		relay: NewRelay[relayTarget](), pluginHostStates: newPluginHostStates()}
+		relay: NewRelay[relayTarget](), pluginHostStates: newPluginHostStates(),
+		pluginHostRestarts: newPluginHostRestarts()}
 	// apply applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page that
 	// reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
 	apply := func() error {
@@ -298,7 +301,7 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	})
 	s := NewSurfaces(win, h.sidecars)
 	s.host, s.name, s.title = h, name, windowTitle
-	s.pluginHostStates = h.pluginHostStates
+	s.pluginHostStates, s.pluginHostRestarts = h.pluginHostStates, h.pluginHostRestarts
 	h.mu.Lock()
 	h.windows[win.ID()] = s
 	h.mu.Unlock()

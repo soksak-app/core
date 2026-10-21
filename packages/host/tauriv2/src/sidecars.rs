@@ -3036,31 +3036,47 @@ fn exit_text(status: std::process::ExitStatus) -> String {
 /// process is ended.
 /// The sliding window and the number of counted failures of the restart limit of a standard input and output sidecar
 /// (docs/spec/sidecars.md#failure).
-const RESTART_WINDOW: Duration = Duration::from_secs(300);
-const RESTART_LIMIT: usize = 4;
+pub(crate) const RESTART_WINDOW: Duration = Duration::from_secs(300);
+pub(crate) const RESTART_LIMIT: usize = 4;
 
 /// The restart-limit record of one standard input and output sidecar. `failures` are the times of the counted failures,
-/// oldest first. When the limit stops the restarts, `stopped` is true.
+/// oldest first. When the limit stops the restarts, `stopped` is true. The plugin hosts count their failures with the
+/// same record (docs/spec/plugin-host.md#restarts).
 #[derive(Default)]
-struct RestartRecord {
+pub(crate) struct RestartRecord {
     failures: Vec<Instant>,
     stopped: bool,
+}
+
+impl RestartRecord {
+    /// Counts a failure at now among the failures within RESTART_WINDOW, which the record keeps. It returns true when
+    /// this failure is the RESTART_LIMIT-th counted one, which stops the restarts.
+    pub(crate) fn count(&mut self, now: Instant) -> bool {
+        self.failures
+            .retain(|at| now.duration_since(*at) <= RESTART_WINDOW);
+        self.failures.push(now);
+        if self.failures.len() < RESTART_LIMIT {
+            return false;
+        }
+        self.stopped = true;
+        true
+    }
+
+    /// Returns true when the limit stopped the restarts.
+    pub(crate) fn stopped(&self) -> bool {
+        self.stopped
+    }
 }
 
 /// Counts a failure of the sidecar at the time of the clock of the state, among the failures within RESTART_WINDOW. It
 /// returns true when this failure is the RESTART_LIMIT-th counted one, which stops the restarts.
 fn count_failure<O>(state: &mut State<O>, sidecar: &str) -> bool {
     let now = (state.clock)();
-    let record = state.restarts.entry(sidecar.to_string()).or_default();
-    record
-        .failures
-        .retain(|at| now.duration_since(*at) <= RESTART_WINDOW);
-    record.failures.push(now);
-    if record.failures.len() < RESTART_LIMIT {
-        return false;
-    }
-    record.stopped = true;
-    true
+    state
+        .restarts
+        .entry(sidecar.to_string())
+        .or_default()
+        .count(now)
 }
 
 /// Applies the restart limit to a request from surface to the sidecar, which has no running process, and returns true
