@@ -2,7 +2,7 @@
 //! registry of the host, and the Go host (packages/host/wailsv3/src/object_counts.go) uses the same names and definitions.
 //! It is included only in diagnostic builds.
 
-use std::sync::{Mutex, PoisonError};
+use std::sync::PoisonError;
 
 use serde_json::{Value, json};
 
