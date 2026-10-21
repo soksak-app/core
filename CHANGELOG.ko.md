@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F228-6 계약: host 계약 사례 `view.process-ended.forgets-regions`는 view process가 끝났을 때 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내는 것이다. Go와 Rust의 process 종료 시험이 이를 선언하고, 두 시험이 각각 1/1 통과한다.
 - F238-a-5: view overlay를 native mask까지 추적한다. `dom_overlays`는 선언 순서, 여백, 보임을 지키고 `overlay_values`는 overlay마다 값 5개를 보낸다. 두 단계의 단위 시험이 2/2 통과하고, native mask는 geometry 시험의 view surface 검사가 덮는다.
 - F238-a-4: 보이는 view 오버레이 아래의 native 히트 검사는 오버레이의 DOM 히트 또는 없음을 돌려주며, native view를 돌려주지 않는다. surface 히트 검사는 AppKit이 넘기는 대로 superview 좌표의 점을 받으므로 0이 아닌 원점의 surface도 올바르게 히트된다. 기하 시험의 새 히트 검사(5개 항목)는 바뀌지 않은 코드에서 실패했고 지금은 통과한다.
 - F238-a-14: plugin 쪽 native 핸들은 기본 거부다. `runtime.native.call`과 `call`은 `exposureReply`만 보내며, 허용 목록 밖의 host 명령은 거부되고 host에 닿지 않는다. 허용 목록은 host 명령 표와 대조한다. `linkOpen`을 host로 넘기던 시험은 바뀌지 않은 핸들에서 실패했고 지금은 통과한다.

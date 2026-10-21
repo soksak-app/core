@@ -331,6 +331,7 @@ func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
 
 // A process end sends the view-process-ended event to the surface, so the page forgets the regions that the host closed with
 // the view before the view is created again.
+// contract: view.process-ended.forgets-regions
 func TestViewProcessEndSendsTheProcessEndedEvent(t *testing.T) {
 	clock := &fakeClock{}
 	s, fake, _ := newLifecycleSurfaces(t, clock)

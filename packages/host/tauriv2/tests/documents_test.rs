@@ -1104,6 +1104,7 @@ fn view_call_invalid_requests_are_errors_not_forwarded() {
 }
 
 // contract: view.regions.close-with-process
+// contract: view.process-ended.forgets-regions
 #[test]
 fn a_view_process_end_sends_the_process_ended_event_of_its_surface() {
     // The page forgets the regions of the surface when this event arrives, so the payload names the surface.
