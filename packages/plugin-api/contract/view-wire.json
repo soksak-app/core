@@ -1,0 +1,207 @@
+{
+  "surface": "packages/plugin-api/view-start.js",
+  "description": "The view wire of the injected view script: the ready message, the host message queue, the refusals and the listener attach. Each case is one ordered list of steps. A step is a load of the script, a call of window.sokView.attach, or an inbound host message, and its output lists what that step produces: posted messages to the sok-view handler, delivered host messages to the listener (or the count of a long queue), and the thrown error text or null.",
+  "cases": [
+    {
+      "id": "view.load.posts-ready",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000001" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.host-message.delivered-after-attach",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000002" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 1, "kind": "call", "id": "c1" } },
+          "output": { "posted": [], "delivered": [{ "sok": 1, "kind": "call", "id": "c1" }], "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.host-message.queued-until-attach-in-order",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000003" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 1, "id": "a" } },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 1, "id": "b" } },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": {
+            "posted": [],
+            "delivered": [{ "sok": 1, "id": "a" }, { "sok": 1, "id": "b" }],
+            "throws": null
+          }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 1, "id": "c" } },
+          "output": { "posted": [], "delivered": [{ "sok": 1, "id": "c" }], "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.host-message.refused-from-another-source",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000004" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "message": { "source": "other", "data": { "sok": 1, "id": "x" } },
+          "output": {
+            "posted": [{ "event": "view.error", "plugin": "app.example", "reason": "message from another source for app.example" }],
+            "delivered": [],
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.host-message.refused-without-the-marker",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000005" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 2, "id": "wrong-marker" } },
+          "output": {
+            "posted": [{ "event": "view.error", "plugin": "app.example", "reason": "message without the sok marker for app.example" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "message": { "source": "window", "data": null },
+          "output": {
+            "posted": [{ "event": "view.error", "plugin": "app.example", "reason": "message without the sok marker for app.example" }],
+            "delivered": [],
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.queue.refuses-the-message-past-256",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000006" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 1, "id": "queued" } },
+          "repeat": 256,
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "message": { "source": "window", "data": { "sok": 1, "id": "over" } },
+          "output": {
+            "posted": [{ "event": "view.error", "plugin": "app.example", "reason": "queue full for app.example" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "deliveredCount": 256, "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.attach.refuses-a-value-that-is-not-a-function",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000007" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "not-a-function" },
+          "output": { "posted": [], "delivered": [], "throws": "attach requires a listener function" }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.attach.refuses-a-second-listener",
+      "steps": [
+        {
+          "load": { "host": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008" },
+          "output": {
+            "posted": [{ "event": "view.ready", "plugin": "app.example", "document": "6f1d2a3e-1111-4a2b-8c3d-000000000008" }],
+            "delivered": [],
+            "throws": null
+          }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": null }
+        },
+        {
+          "attach": { "listener": "record" },
+          "output": { "posted": [], "delivered": [], "throws": "view channel for app.example already has a message listener" }
+        }
+      ]
+    }
+  ]
+}

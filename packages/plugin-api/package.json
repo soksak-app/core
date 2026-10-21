@@ -40,7 +40,8 @@
     "events-check.js",
     "census-rules.json",
     "commits-check.js",
-    "terms.json"
+    "terms.json",
+    "contract/view-wire.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",
