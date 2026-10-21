@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F218-2.5: `make census-check`가 pending 항목 없이 census 규칙 `rs.lock-result`를 발견 0으로 강제한다. 규칙은 더 이상 `self`에 부른 `read`, `write`, `lock`(sok endpoint.rs의 socket `read()` 호출)을 보고하지 않고, 이제 변환되거나 unwrap되는 인자 있는 condition wait를 보고한다. F218-2가 완료되었다. Rust host와 sok crate의 모든 lock 결과가 poisoned lock을 복구한다.
 - F218-2.4: Rust host와 sok writer는 lock 결과에 `expect`나 `unwrap`을 부르던 87개 지점과 같은 lock의 condition wait 7개에서 poisoned lock을 `PoisonError::into_inner`로 복구한다. sidecars.rs 43, performance.rs 9, debug_follow.rs 8, diagnostics.rs 5, log_query.rs, deep_link.rs, host.rs 각 3, endpoint.rs, windows.rs, process_lock_hook.rs, log_policy_watch_hook.rs, sok event_log.rs 각 2, assets.rs, bindings.rs, exposure.rs 각 1. 각 지점은 `default:` 사유를 적는다. poisoned lock은 sidecar 조회, 선언, service owner close, log notice, log indexer, sampler, deep link queue, asset 보고, test hook, modal hold, subscriber와 relay 개수, 종료와 quit 경로, write observer를 실행하는 thread를 더 이상 panic시키지 않는다. census 규칙 `rs.lock-result`는 전의 87개 대신 2개를 보이며, 둘 다 규칙이 잘못 잡는 socket `read()` 호출이다(F218-2.5). 시험 14개가 lock을 poison시키며, 변경 전에 panic했고(예: `a_poisoned_state_lock_still_answers_the_sidecar_queries`가 `sidecar state: PoisonError`) 변경 뒤 통과한다.
 - F221: 확인: 전체 package 시험이 로컬에서 통과하고 수리 push의 CI 실행이 success로 끝났다.
 - F222: pre-push hook이 workflow 시험이 요구하는 형태인 `make -C "$(git rev-parse --show-toplevel)" push-check`를 다시 돌린다.
