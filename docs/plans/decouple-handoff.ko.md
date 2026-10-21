@@ -56,7 +56,7 @@
 | `{operation: "write", id, path, text, expect, bom}` | `{id, version}`: `bom`이 `true`면 UTF-8 byte order mark 뒤에 `text`를 `root/path`에 제자리로 쓰고, 쓴 byte의 SHA-256을 돌려준다. `expect`가 version이면 사이드카는 기존 일반 파일을 자르지 않고 쓰기로 열어 같은 descriptor로 읽고, 그 SHA-256이 `expect`와 다르면 쓰지 않고 `changed on disk: <path>`로 실패한다. 같으면 처음부터 전체 내용을 쓰고, 파일을 그 길이로 자르고, 디스크에 동기화한다. 제자리 쓰기는 파일의 inode, mode, 확장 속성, 접근 제어 목록, hard link, symbolic link의 대상을 유지한다. 첫 byte를 쓴 뒤의 실패는 `write incomplete: <path>: <error>`로 실패하며 그때 파일은 내용의 일부를 담을 수 있다. `expect`가 `null`이면 사이드카는 process umask로 가린 mode 0666의 새 파일을 만들고, 경로가 있으면 `exists: <path>`로 실패한다. 8388608 byte를 넘는 `text`는 큰 `read`와 같이 실패한다 |
 | `{operation: "readBytes", id, path}` | `{id, data, version}`: 정규 파일 `root/path`의 bytes를 padding이 있는 표준 base64로 `data`에, 그 SHA-256을 `version`에 담는다. 33554432 bytes를 넘는 파일은 내용을 읽기 전에 `file is <n> bytes, above the 33554432-byte limit: <path>`로 실패하고, 정규 파일이 아닌 경로는 `not a regular file: <path>`로 실패한다 |
 | `{operation: "writeBytes", id, path, data, expect}` | `{id, version}`: `data`가 padding이 있는 표준 base64로 담은 bytes를 `write`의 제자리, `expect`, 생성 규칙으로 `root/path`에 쓰고 그 SHA-256을 반환한다. 표준 base64가 아닌 `data`는 `writeBytes data is not base64`로 실패하고, 33554432 bytes를 넘는 decode한 bytes는 큰 `readBytes`처럼 실패한다 |
-| `closed` | 세션의 감시를 멈춘다. 답하지 않는다 |
+| `closed` | 세션의 감시를 멈춘다. [메시지](../spec/sidecars.ko.md#메시지)가 정하는 대로 `closed`에 답한다 |
 | 모든 실패 | `{id, error}`: `root`가 없거나, `path`가 절대 경로이거나 (심볼릭 링크를 따라간 뒤) `root`를 벗어나거나, 디렉터리를 읽을 수 없는 경우 |
 
 ### 터미널 사이드카 (vt-core)

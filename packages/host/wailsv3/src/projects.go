@@ -119,6 +119,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	owner := h.owners[req.ID]
 	if owner != nil {
 		local := owner == current
+		owner.projects[req.ID] = folder.Root
 		owner.mu.Lock()
 		owner.root = folder.Root
 		owner.mu.Unlock()
@@ -138,7 +139,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 		owner = h.newWindow("project-"+req.ID, "/?project="+req.ID)
 	}
 	h.mu.Lock()
-	owner.projects[req.ID] = true
+	owner.projects[req.ID] = folder.Root
 	owner.mu.Lock()
 	owner.root = folder.Root
 	owner.mu.Unlock()
@@ -182,6 +183,10 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	delete(h.owners, id)
 	empty := owner != nil && len(owner.projects) == 0
 	h.mu.Unlock()
+	// The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md rule 7).
+	if owner != nil {
+		owner.sidecars.closePluginSessions(owner, func(session pluginSession) bool { return session.project == id })
+	}
 	// A window that has no project left shows the library, so the project root and the title are cleared.
 	if empty {
 		owner.mu.Lock()

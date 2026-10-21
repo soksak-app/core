@@ -60,11 +60,32 @@ fn a_reply_of_the_page_goes_to_the_main_page_as_plugin_host_reply_without_a_surf
 
 // contract: plugin-host.channel.call-served-set
 #[test]
+fn the_host_forwards_the_sidecar_calls_to_the_main_page() {
+    let channels = host_channels(true);
+    let params =
+        json!({"id": "plugin:probe:project-a:fixture-sidecar", "sidecar": "fixture-sidecar"});
+    for (id, command) in [
+        (7, "runtime.sidecar.send"),
+        (8, "runtime.sidecar.on"),
+        (9, "runtime.sidecar.onFailure"),
+    ] {
+        let message = format!(r#"{{"id": {id}, "command": "{command}", "params": {params}}}"#);
+        assert_eq!(
+            channels.receive("probe", &host_message(&message)),
+            Ok(Received::Emit(
+                "plugin-host-call",
+                json!({"plugin": "probe", "id": id, "command": command, "params": params})
+            ))
+        );
+    }
+}
+
+// contract: plugin-host.channel.call-served-set
+#[test]
 fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() {
     let channels = host_channels(true);
     for command in [
         "runtime.native.call",
-        "runtime.sidecar.send",
         "tab.state.read",
         "runtime.clipboard.read",
         "runtime.links.open",

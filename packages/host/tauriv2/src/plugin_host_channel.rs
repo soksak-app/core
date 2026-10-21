@@ -81,7 +81,11 @@ struct NavigationState {
 pub fn forwarded_call(command: &str) -> bool {
     matches!(
         command,
-        "runtime.command.register" | "page.exposure.register"
+        "runtime.command.register"
+            | "page.exposure.register"
+            | "runtime.sidecar.send"
+            | "runtime.sidecar.on"
+            | "runtime.sidecar.onFailure"
     )
 }
 

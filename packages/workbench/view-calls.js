@@ -16,7 +16,7 @@
  *                 {read, write} only when the plugin declares surface.unload
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
- *                 sidecar.send(id, body, cids): the send to the declared sidecar, as runtime.sidecar().send
+ *                 sidecar.send(id, body, cids, name): the send to the declared sidecar name, as runtime.sidecar(name).send
  *                 clipboard: {read(type), writeText(text)}, the clipboard bridge without the PNG bytes
  *                 links.open(url): opens a link, as runtime.links.open
  *                 log: the log levels of the page, as runtime.log of the surface context has; the level gate of the page
@@ -155,7 +155,8 @@ async function run(command, params, { plugin, tab, runCore, runOwned, runtime, c
     }
     case "runtime.sidecar.send": {
       const fields = objectOf(command, params);
-      return runtime.sidecar.send(fields.id, fields.body, fields.cids);
+      if (typeof fields.sidecar !== "string" || fields.sidecar === "") throw new TypeError(`view call ${command} requires a non-empty sidecar`);
+      return runtime.sidecar.send(fields.id, fields.body, fields.cids, fields.sidecar);
     }
     case "runtime.clipboard.read":
       // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/spec/plugin-processes.md, rule 3).

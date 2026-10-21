@@ -486,11 +486,25 @@ func (c *Sidecars) Send(owner SidecarOwner, name, surface string, body json.RawM
 // SendWithCids sends a page request that continues the inputs named by cids; the request line carries them as the field
 // `cids`, and no field when cids is empty.
 func (c *Sidecars) SendWithCids(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, "", body, cids)
+}
+
+// SendPluginWithCids sends a request of a plugin host for the session surface, whose project root is root (docs/plans/plugin-host-routes.md
+// rule 3). The root applies to the first send of the session, as the window root does for a surface.
+func (c *Sidecars) SendPluginWithCids(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {
+	return c.send(owner, name, surface, root, body, cids)
+}
+
+// send is the send of SendWithCids. project is the root of a plugin session, or empty for the root of the window.
+func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body json.RawMessage, cids []string) error {
 	c.mu.Lock()
 	root, known := c.roots[surface]
 	c.mu.Unlock()
 	if !known {
 		root = owner.ProjectRoot()
+		if project != "" {
+			root = project
+		}
 	}
 	// The JSON serialization is done outside the mutex.
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Cids: cids, Body: body})
@@ -1012,13 +1026,11 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	if surfaces == nil {
 		return 0, errors.New("retain requires a surfaces list")
 	}
-	c.mu.Lock()
-	// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
-	keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
-	for surface, root := range c.roots {
-		keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+	for _, item := range surfaces {
+		if item.Surface == "" || item.Root == "" {
+			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
+		}
 	}
-	c.mu.Unlock()
 	c.declarations.RLock()
 	names := make([]string, 0, len(c.persistent))
 	for name, persistent := range c.persistent {
@@ -1027,19 +1039,9 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		}
 	}
 	c.declarations.RUnlock()
-	for _, item := range keep {
-		if item.Surface == "" || item.Root == "" {
-			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
-		}
-	}
 	total := 0
 	for _, name := range names {
 		request := fmt.Sprintf("%d", atomic.AddUint64(&c.nextRequest, 1))
-		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
-		if err != nil {
-			return total, err
-		}
-		line = append(line, '\n')
 		waiter := make(chan error, 1)
 		c.mu.Lock()
 		if c.stopped {
@@ -1081,6 +1083,24 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 			c.mu.Unlock()
 			return total, fmt.Errorf("sidecar %s is not running", name)
 		}
+		// The keep list is built here, after the service started, so a plugin session first sent during the start is kept (F229-7).
+		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
+		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
+		for surface, root := range c.roots {
+			keep = append(keep, RetainedSurface{Surface: surface, Root: root})
+		}
+		for _, item := range keep {
+			if item.Surface == "" || item.Root == "" {
+				c.mu.Unlock()
+				return total, fmt.Errorf("retain surface entry is invalid: %+v", item)
+			}
+		}
+		line, err := json.Marshal(map[string]any{"operation": "retain", "request": request, "surfaces": keep})
+		if err != nil {
+			c.mu.Unlock()
+			return total, err
+		}
+		line = append(line, '\n')
 		process.closeWaiters[request] = waiter
 		select {
 		case process.outbox <- queue(line):
@@ -2135,6 +2155,13 @@ func connectionNotice(failure error) (json.RawMessage, error) {
 
 // Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the
 // removal of its plugin.
+// dependsOn reports whether the plugin lists the sidecar name in dependencies.
+func (c *Sidecars) dependsOn(plugin, name string) bool {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	return slices.Contains(c.dependents[name], plugin)
+}
+
 func (c *Sidecars) Declared(name string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -51,6 +51,8 @@ A sidecar answers every `closed` it receives. A surface that sends again after i
 
 The operation selector in a sidecar request body is an existing transport detail. A plugin manifest does not copy that wire spelling: it declares the readable `background.operation` name, and the workbench sends the corresponding sidecar request at one transport boundary. Missing operations and sidecar errors are failures; they are not replaced or discarded.
 
+A sidecar declares its message form in `sidecar.json` as `message: {form, operationField}`: `form` is `json-object`, and `operationField` names the string field of a request body that selects the operation. A sidecar that lets a plugin host call operations lists them in `hostReadOperations`, the read-only operations that a plugin manifest may name in `hostOperations` ([plugins](plugins.md#pluginjson)). A sidecar with no list allows no operation to a plugin host. The main page checks each host request in the declared form and refuses every other operation before it reaches the sidecar ([plugin host](plugin-host.md#channel)). `@soksak/plugin-api` checks these declarations (`validateSidecar`, `checkHostOperations`).
+
 ## Failure
 
 A sidecar that uses standard input and output fails when:
@@ -71,6 +73,14 @@ The restart limit applies to a sidecar of either transport: the failures of a st
 Only the person's open of a surface clears the stop. When the host creates a surface of a plugin whose `plugin.json` lists the sidecar in `dependencies`, the host clears the failure record of that sidecar, writes the event `host.trace.sidecar.restart-reset` `{sidecar, surface}` at level `debug`, and the next request starts the process. A request from a surface that is already open does not clear the stop, and the creation of a surface of a plugin that does not list the sidecar does not clear it.
 
 While the host stops its sidecars, the end of output is not a failure. Any other failure during a stop is written to the host log as `sidecar <name>: failed: <reason>`, and the host sends no failure event, because a send after the stop fails and a page cannot open its session again; the stop rules in [declaration and startup](#declaration-and-startup) then end the process. When the host stops reading a sidecar's output after a failure, during a stop or not, it closes its end of the pipe, so the sidecar's later writes fail instead of blocking. These failure rules, except the restart limit, apply to the standard input and output transport; the persistent transport reports connection loss as [persistent services](persistent-services.md) defines.
+
+## Plugin host sessions
+
+A [plugin host](plugin-host.md#channel) sends to the sidecars that its plugin lists in `dependencies`. Its session id has the form `plugin:<plugin id>:<project id>:<sidecar name>`. No plugin id, project id or sidecar name contains `:`, so the form parses without ambiguity. A surface send to a `plugin:` session is refused with `sidecar session <id> is reserved for a plugin host`, and only the host of the plugin sends to it.
+
+The main page of the window sends a request of the host with the host call `pluginHostSidecarSend {plugin, sidecar, id, body, cids}`. The host call refuses a caller that is not the main window, a sidecar that the plugin does not list, and a session id that names another plugin or sidecar. The send uses the folder root that the window records for the project id of the session; a project that the window does not hold, or whose recorded root is empty, is refused before any start. The owner record of the sidecar applies to the session as to any surface: the first send records the window as its owner.
+
+A failure of a plugin session counts in the failure record of its sidecar, which every other session of the sidecar shares, and the restart limit applies to it as stated under [failure](#failure). The host closes its sessions: the main page calls `pluginHostSidecarClose {plugin}` when the host ends, which closes the sessions of the plugin that the calling window owns, and the host closes the sessions of a window when the window reloads or closes and when a project is released by its holding window. Each close sends `closed` for the session as [messages](#messages) states.
 
 ## Log
 

@@ -71,7 +71,7 @@ export function createViewChannel({ handler }) {
  *     handler   the sok-view message handler of the view, as for createViewChannel
  *     report    report(event) receives the counts and losses of the calls and the snapshots, as createCalls and createSnapshotSender
  *
- * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar().on and .onFailure,
+ * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar(name).on, .onFailure and .send,
  * theme, and textSize and settings with read and on each. composition.create({regions, overlays}) creates the composition of the
  * declared regions of the view (docs/spec/native-surfaces.md#view-surfaces, regions).
  */
@@ -108,10 +108,16 @@ export function createViewBridge({ handler, report }) {
         return listen(`native:${name}`, () => subscribe(name), listener);
       },
     },
-    sidecar: () => ({
-      on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id }), (data) => listener(data.body)),
-      onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id }), (data) => listener(data.reason)),
-    }),
+    // The sidecar is named by the view, and each request carries the name with the session id (docs/plans/plugin-host-routes.md rule 4).
+    sidecar: (name) => {
+      if (typeof name !== "string" || name === "") throw new TypeError("runtime.sidecar requires a sidecar name");
+      return {
+        on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id, sidecar: name }), (data) => listener(data.body)),
+        onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id, sidecar: name }), (data) => listener(data.reason)),
+        // default: cids is optional; without it the send carries no correlation identifiers.
+        send: (id, body, cids = []) => calls.request("runtime.sidecar.send", { id, sidecar: name, body, cids }),
+      };
+    },
     // The scale of the surface and the settings of the plugin: read reads the current value, and on registers one listener
     // under the one subscription of its key, which the page registers once (docs/spec/native-surfaces.md#view-surfaces).
     textSize: {

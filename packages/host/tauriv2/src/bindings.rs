@@ -342,6 +342,7 @@ fn sidecar_send(
     let Argument(surface) = surface;
     let Argument(body) = body;
     let Argument(cids) = cids;
+    crate::plugin_host_sidecar::refuse_surface_send(&surface)?;
     window
         .state::<WindowSidecars>()
         .send_with_cids(&window, &sidecar, &surface, &body, &cids)
@@ -548,6 +549,24 @@ fn plugin_host_event(
 ) -> Result<(), String> {
     let Argument(request) = request;
     crate::plugin_host_channel::plugin_host_event(&webview, request)
+}
+
+/// Sends a sidecar request of the host of a plugin from the main page (docs/plans/plugin-host-routes.md rule 2).
+#[tauri::command(async)]
+fn plugin_host_sidecar_send(
+    webview: Webview,
+    request: Argument<crate::plugin_host_sidecar::PluginHostSidecarSend>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    crate::plugin_host_sidecar::plugin_host_sidecar_send(&webview, request)
+}
+
+/// Closes the plugin sessions of a plugin host that the calling page owns, when the host ends (docs/plans/plugin-host-routes.md
+/// rule 7).
+#[tauri::command(async)]
+fn plugin_host_sidecar_close(webview: Webview, plugin: Argument<String>) -> Result<(), String> {
+    let Argument(plugin) = plugin;
+    crate::plugin_host_sidecar::plugin_host_sidecar_close(&webview, &plugin)
 }
 
 /// Sets the page zoom of a document region as the text scale.

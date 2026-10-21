@@ -51,6 +51,8 @@
 
 사이드카 요청 body의 동작 선택자는 기존 전송 세부사항이다. 플러그인 manifest는 그 wire 표기를 복사하지 않고 읽기 쉬운 `background.operation` 이름을 선언하며, 워크벤치가 하나의 전송 경계에서 해당 사이드카 요청으로 보낸다. 동작 누락과 사이드카 오류는 실패이며 대체하거나 버리지 않는다.
 
+사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. plugin host가 작업을 부를 수 있게 하는 사이드카는 `hostReadOperations`에 읽기 전용 작업을 나열하며, plugin 매니페스트는 그 가운데 것만 `hostOperations`에 쓸 수 있다([plugins](plugins.ko.md#pluginjson)). 나열이 없는 사이드카는 plugin host에 작업을 허용하지 않는다. 메인 페이지는 선언된 형식으로 각 host 요청을 검사하고, 그 밖의 작업을 사이드카에 닿기 전에 거절한다([plugin host](plugin-host.ko.md#channel)). `@soksak/plugin-api`는 이 선언을 `validateSidecar`와 `checkHostOperations`로 검사한다.
+
 ## 실패
 
 표준 입출력을 쓰는 사이드카는 다음 경우에 실패한다.
@@ -71,6 +73,14 @@
 멈춤을 푸는 것은 사람이 표면을 여는 행위뿐이다. 호스트가 `plugin.json`의 `dependencies`에 그 사이드카를 적은 plugin의 표면을 만들면, 호스트는 그 사이드카의 실패 기록을 지우고 `{sidecar, surface}`인 event `host.trace.sidecar.restart-reset`을 level `debug`로 쓰며, 다음 요청이 프로세스를 시작한다. 이미 열린 표면의 요청은 멈춤을 풀지 않으며, 그 사이드카를 적지 않은 plugin의 표면을 만드는 것도 풀지 않는다.
 
 호스트가 사이드카를 종료하는 동안 출력의 끝은 실패가 아니다. 멈추는 동안의 다른 실패는 호스트 로그에 `sidecar <name>: failed: <reason>`으로 쓰고, 중지 뒤의 전송은 실패해 페이지가 세션을 다시 열 수 없으므로 호스트는 실패 이벤트를 보내지 않는다. 그다음 [선언과 시작](#선언과-시작)의 종료 규칙이 프로세스를 끝낸다. 멈추는 동안이든 아니든 실패 뒤 호스트가 사이드카의 출력을 더 읽지 않으면 파이프의 자기 쪽 끝을 닫으므로, 사이드카의 이후 쓰기는 막히지 않고 실패한다. 재시작 한도를 뺀 이 실패 규칙은 표준 입출력 transport에 적용된다. 영속 transport는 [영속 서비스](persistent-services.ko.md)이 정의하는 대로 연결 끊김을 알린다.
+
+## Plugin host sessions
+
+[plugin host](plugin-host.ko.md#channel)는 자기 plugin의 `dependencies`에 든 sidecar로 보낸다. 세션 id의 형식은 `plugin:<plugin id>:<project id>:<sidecar name>`이다. plugin id, project id, sidecar 이름 어디에도 `:`이 없으므로 형식은 모호하지 않게 분해된다. `plugin:` 세션에 대한 표면의 send는 `sidecar session <id> is reserved for a plugin host`로 거부되며, 그 세션에는 plugin의 host만 보낸다.
+
+창의 메인 페이지는 host 호출 `pluginHostSidecarSend {plugin, sidecar, id, body, cids}`로 host의 요청을 보낸다. host 호출은 메인 창이 아닌 호출자, plugin이 목록에 두지 않은 sidecar, 다른 plugin이나 sidecar의 이름을 가진 세션 id를 거부한다. 전송은 창이 세션의 project id에 대해 기록한 폴더 root를 쓴다. 창이 보유하지 않은 project나 기록된 root가 빈 project는 시작 전에 거부된다. sidecar의 owner 기록은 다른 표면과 같이 세션에 적용된다. 첫 전송이 창을 owner로 기록한다.
+
+plugin 세션의 실패는 그 sidecar의 실패 기록에 더해지며, 그 기록은 같은 sidecar의 다른 모든 세션과 공유된다. restart limit은 [실패](#실패)가 정하는 대로 적용된다. host는 자기 세션을 닫는다. 메인 페이지는 host가 끝날 때 host 호출 `pluginHostSidecarClose {plugin}`을 부르고, 이는 호출한 창이 소유한 그 plugin의 세션을 닫는다. host는 창이 reload되거나 닫힐 때, 그리고 보유 창이 project를 해제할 때 창의 세션을 닫는다. 각 닫기는 [메시지](#메시지)가 정하는 대로 세션에 `closed`를 보낸다.
 
 ## 로그
 
