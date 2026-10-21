@@ -78,3 +78,25 @@ fn the_last_window_of_a_quitting_application_ends_it_when_the_records_are_poison
         "the last window of a quitting application did not end it while the window lock was poisoned"
     );
 }
+
+// contract: host.locks.poisoned-state-is-recovered
+#[test]
+fn a_poisoned_owner_lock_releases_the_project_of_a_poisoned_lock() {
+    let registry = Windows::default();
+    registry
+        .owners
+        .lock()
+        .unwrap()
+        .insert("library".into(), "main".into());
+    poison(&registry.owners);
+    let (released, empty) = release_owner(&registry.owners, "library");
+    assert_eq!(
+        released.as_deref(),
+        Some("main"),
+        "the owner of the project was lost while the owner lock was poisoned"
+    );
+    assert!(
+        empty,
+        "the release left the project window occupied while the owner lock was poisoned"
+    );
+}

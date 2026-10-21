@@ -278,23 +278,23 @@ impl Answer {
         // The event is stored before the reply is written, so a client that has its reply finds the event after a flush.
         self.call.record(&outcome);
         let Some(id) = self.id else { return };
-        let written = match self.writer.lock() {
-            Ok(mut writer) => match outcome {
-                Ok(result) => write_frame(
-                    &mut *writer,
-                    &Success {
-                        jsonrpc: "2.0",
-                        id: &id,
-                        result: &result,
-                    },
-                ),
-                Err(failure) => write_frame(
-                    &mut *writer,
-                    &json!({"jsonrpc": "2.0", "id": id,
-                        "error": {"code": failure.code, "message": failure.message}}),
-                ),
-            },
-            Err(error) => Err(error.to_string()),
+        // default: a lock that a panicking thread poisoned still holds the connection of the client, which the reply
+        // is written to; the panic hook records the panic.
+        let mut writer = self.writer.lock().unwrap_or_else(PoisonError::into_inner);
+        let written = match outcome {
+            Ok(result) => write_frame(
+                &mut *writer,
+                &Success {
+                    jsonrpc: "2.0",
+                    id: &id,
+                    result: &result,
+                },
+            ),
+            Err(failure) => write_frame(
+                &mut *writer,
+                &json!({"jsonrpc": "2.0", "id": id,
+                    "error": {"code": failure.code, "message": failure.message}}),
+            ),
         };
         if let Err(error) = written {
             log_error("endpoint reply", error);
@@ -366,18 +366,18 @@ impl Notifier {
     /// Sends `status.changed` for each window to the connections that watch the state name, which is not bound to a
     /// window, without a surface specification.
     pub fn notify_watchers(&self, name: &str, value: &RawValue) {
-        let mut windows: Vec<String> = match self.0.peers.lock() {
-            Ok(peers) => peers
-                .values()
-                .flat_map(|peer| peer.watches.iter())
-                .filter(|watch| watch.name == name && watch.surface.is_none())
-                .map(|watch| watch.window.clone())
-                .collect(),
-            Err(_) => {
-                log_error("endpoint notification", "the peer list is poisoned");
-                return;
-            }
-        };
+        let mut windows: Vec<String> = self
+            .0
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers and their watches, which are only
+            // read; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .flat_map(|peer| peer.watches.iter())
+            .filter(|watch| watch.name == name && watch.surface.is_none())
+            .map(|watch| watch.window.clone())
+            .collect();
         windows.sort();
         windows.dedup();
         for window in windows {

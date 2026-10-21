@@ -359,6 +359,7 @@ fn invalid_json_closes_connection() {
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | both |
 | `host.stall.passes-every-gate` | stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 lifecycle 기록을 끄는 policy에서도 저장된다. 로깅 명세의 이름 붙은 gate 예외로 모든 gate를 `warn`에서 지나가기 때문이다. | both |
 | `host.locks.poisoned-state-is-recovered` | poisoned lock은 가지고 있던 상태와 함께 복구되고 연산이 끝난다. host의 panic hook이 panic을 기록한다. 로깅 명세의 하나뿐인 방식이다. | tauriv2 only: Go mutex는 poison되지 않는다 |
+| `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | 두 host |
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
 | `log.binding-failure.returned-not-logged` | 실패한 binding 호출은 framework transport의 log 줄 없이 page로 돌아가므로 page가 그 실패를 한 번 기록한다. | wailsv3 only: Wails HTTP transport가 binding 호출을 나르고, Tauri invoke는 돌려준 오류에 log 줄을 쓰지 않는다 |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
@@ -512,8 +513,8 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | both |
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | 64 MiB 메시지 한도보다 긴 service 줄은 줄의 나머지를 읽지 않고 연결을 닫으며, 보낸 surface에 `message exceeds 67108864 bytes`와 함께 `sidecar-failure`를 보낸다. | both |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | both |
-| `recording.state.poisoned-lock-is-reported` | 상태를 쥔 다른 thread가 panic한 뒤 진행 중인 녹화의 폴더를 읽으면 장소 `recording`의 `error` 기록이고 폴더는 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
-| `modal.state.poisoned-lock-is-reported` | 모달 기록을 쥔 다른 thread가 panic한 뒤 열린 모달이나 그 mode를 읽으면 장소 `modal state`의 `error` 기록이고 모달은 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
+| `recording.state.poisoned-lock-is-recovered` | 상태를 쥔 다른 thread가 panic한 뒤 녹화를 끝내거나 그 폴더를 읽으면 상태를 복구한다. panic은 panic hook이 기록한다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
+| `modal.state.poisoned-lock-is-recovered` | 모달 기록을 쥔 다른 thread가 panic한 뒤 열린 모달이나 그 mode를 읽으면 저장된 모달을 돌려준다. panic은 panic hook이 기록한다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |
 | `surface-activation.owner.ignores-empty-owner` | 빈 표면 id로 등록된 뷰는 표면으로 해석되지 않는다. | both |

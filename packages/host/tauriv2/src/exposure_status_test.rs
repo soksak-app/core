@@ -90,3 +90,33 @@ fn forget_removes_the_request_of_a_poisoned_lock() {
     relay.forget(1);
     assert_eq!(waiting(&relay), 0, "forget kept the request that ended");
 }
+
+// contract: host.locks.poisoned-state-is-recovered
+#[test]
+fn a_poisoned_pending_lock_still_answers_a_request() {
+    let relay = Arc::new(Relay::default());
+    poison(&relay.pending);
+    let (started, started_rx) = mpsc::channel::<u64>();
+    let answering = Arc::clone(&relay);
+    let handle = std::thread::spawn(move || {
+        let id = started_rx.recv().unwrap();
+        let payload = serde_json::to_string(&json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": 7
+        }))
+        .unwrap();
+        answering
+            .reply("main", &RawValue::from_string(payload).unwrap())
+            .expect("the reply failed while the pending lock was poisoned");
+    });
+    let answer = relay.request_call("main", None, None, move |id| {
+        started.send(id).unwrap();
+        Ok(())
+    });
+    handle.join().unwrap();
+    assert!(
+        answer.is_ok(),
+        "the request failed while the pending lock was poisoned"
+    );
+}

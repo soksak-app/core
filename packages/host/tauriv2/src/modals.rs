@@ -2,8 +2,8 @@
 //!
 //! The [data-native-modal] element of the page is drawn by a child webview inside the main window.
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
 use tauri::webview::Color;
@@ -80,32 +80,33 @@ pub(crate) struct Overlay {
 impl Overlay {
     /// Returns the element id, the mode and the visibility of the open modal.
     pub fn open_state(&self) -> Option<(String, String, bool)> {
-        match self.open.lock() {
-            Ok(open) => open
-                .as_ref()
-                .map(|modal| (modal.id.clone(), modal.content.mode.clone(), modal.visible)),
-            Err(error) => {
-                log_error("modal state", error);
-                None
-            }
-        }
+        // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
+        // hook records the panic.
+        let open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        open.as_ref()
+            .map(|modal| (modal.id.clone(), modal.content.mode.clone(), modal.visible))
     }
 
     /// Returns whether the open modal is in dialog mode.
     pub fn dialog(&self) -> bool {
-        match self.open.lock() {
-            Ok(open) => open.as_ref().is_some_and(|m| m.content.mode == "dialog"),
-            Err(error) => {
-                log_error("modal state", error);
-                false
-            }
-        }
+        // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
+        // hook records the panic.
+        let open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+        open.as_ref().is_some_and(|m| m.content.mode == "dialog")
     }
 
     /// Removes the modal record and the modal webview.
     pub fn discard(&self) -> Result<(), String> {
-        *self.open.lock().map_err(|e| e.to_string())? = None;
-        let view = self.view.lock().map_err(|e| e.to_string())?.take();
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call removes; the
+        // panic hook records the panic.
+        *self.open.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        let view = self
+            .view
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the modal webview, which this call removes;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
         if let Some(view) = view {
             set_background(&view.window(), false)?;
             view.close().map_err(|e| e.to_string())?;
@@ -224,7 +225,9 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
         .query_pairs_mut()
         .append_pair("id", &request.id)
         .append_pair("instance", &instance.to_string());
-    *state.open.lock().map_err(|e| e.to_string())? = Some(Modal {
+    // default: a lock that a panicking thread poisoned still holds the modal record, which this call replaces; the
+    // panic hook records the panic.
+    *state.open.lock().unwrap_or_else(PoisonError::into_inner) = Some(Modal {
         id: request.id.clone(),
         instance,
         content: OverlayContent {
@@ -254,7 +257,9 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     let view = match built {
         Ok(view) => view,
         Err(error) => {
-            *state.open.lock().map_err(|e| e.to_string())? = None;
+            // default: a lock that a panicking thread poisoned still holds the modal record, which this removal
+            // clears; the panic hook records the panic.
+            *state.open.lock().unwrap_or_else(PoisonError::into_inner) = None;
             return Err(error.to_string());
         }
     };
@@ -263,11 +268,17 @@ pub(crate) fn show(window: &Window, request: OverlayRequest) -> Result<Rect, Str
     place_overlay(&view, at)?;
     view.set_auto_resize(request.mode == "dialog")
         .map_err(|e| e.to_string())?;
-    *state.view.lock().map_err(|e| e.to_string())? = Some(view.clone());
+    // default: a lock that a panicking thread poisoned still holds the modal webview, which this call stores; the
+    // panic hook records the panic.
+    *state.view.lock().unwrap_or_else(PoisonError::into_inner) = Some(view.clone());
     if let Err(error) = view.navigate(target) {
         let close_error = view.close().err();
-        *state.view.lock().map_err(|e| e.to_string())? = None;
-        *state.open.lock().map_err(|e| e.to_string())? = None;
+        // default: a lock that a panicking thread poisoned still holds the modal webview, which this removal clears;
+        // the panic hook records the panic.
+        *state.view.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this removal clears; the
+        // panic hook records the panic.
+        *state.open.lock().unwrap_or_else(PoisonError::into_inner) = None;
         return Err(match close_error {
             Some(close_error) => format!("{error}; modal close failed: {close_error}"),
             None => error.to_string(),
@@ -288,13 +299,17 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
     let current = state
         .open
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
+        // hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
         .is_some_and(|m| m.id == request.id);
     let Some(view) = state
         .view
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the modal webview, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .clone()
         .filter(|_| current)
     else {
@@ -312,7 +327,9 @@ pub(crate) fn place(window: &Window, request: PlaceRequest) -> Result<Rect, Stri
     if let Some(modal) = state
         .open
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .as_mut()
         .filter(|m| m.id == request.id)
     {
@@ -343,7 +360,9 @@ pub(crate) fn content(
     let content = state
         .open
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
         .filter(|modal| modal.id == id && modal.instance == instance)
         .map(|modal| RevisedContent {
@@ -372,7 +391,9 @@ enum ReadyStep {
 
 /// Decides what a ready request of the modal of id and instance does.
 fn ready_step(overlay: &Overlay, id: &str, instance: u64) -> Result<ReadyStep, String> {
-    let held = overlay.open.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
+    // hook records the panic.
+    let held = overlay.open.lock().unwrap_or_else(PoisonError::into_inner);
     let Some(modal) = held
         .as_ref()
         .filter(|m| m.id == id && m.instance == instance)
@@ -390,7 +411,9 @@ fn ready_step(overlay: &Overlay, id: &str, instance: u64) -> Result<ReadyStep, S
 
 /// Sets the visible flag of the open modal of id and instance. It is an error when that modal is no longer open.
 fn mark_visible(overlay: &Overlay, id: &str, instance: u64) -> Result<(), String> {
-    let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
+    // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the
+    // panic hook records the panic.
+    let mut held = overlay.open.lock().unwrap_or_else(PoisonError::into_inner);
     let modal = held
         .as_mut()
         .filter(|m| m.id == id && m.instance == instance)
@@ -428,7 +451,9 @@ pub(crate) fn ready(window: &Window, id: String, instance: u64) -> Result<(), St
     let view = state
         .view
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the modal webview, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .clone()
         .ok_or("modal webview is gone")?;
     let platform = platform::current()?;
@@ -455,7 +480,9 @@ pub(crate) fn hide(window: &Window, id: String) -> Result<(), String> {
     let state = &context.overlay;
 
     {
-        let mut held = state.open.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call removes; the
+        // panic hook records the panic.
+        let mut held = state.open.lock().unwrap_or_else(PoisonError::into_inner);
         if !matches!(held.as_ref(), Some(modal) if modal.id == id) {
             return Ok(());
         }
@@ -506,7 +533,9 @@ pub(crate) fn pick(
     let open = state
         .open
         .lock()
-        .map_err(|e| e.to_string())?
+        // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
         .map(|m| OpenModal {
             id: m.id.clone(),
@@ -567,7 +596,9 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
         border: request.border,
     };
     let (instance, revision) = {
-        let mut held = overlay.open.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the modal record, which this call amends; the
+        // panic hook records the panic.
+        let mut held = overlay.open.lock().unwrap_or_else(PoisonError::into_inner);
         let Some(modal) = held.as_mut().filter(|m| m.id == request.id) else {
             return Ok(());
         };
@@ -591,30 +622,51 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
 
 #[cfg(test)]
 mod tests {
-    use super::Overlay;
+    use super::{Modal, Overlay, OverlayContent};
     use crate::event_log;
     use crate::event_record::use_host_event_log;
     use std::sync::Arc;
+    use std::sync::PoisonError;
     use std::time::Duration;
 
-    // contract: modal.state.poisoned-lock-is-reported
+    // contract: modal.state.poisoned-lock-is-recovered, host.locks.poisoned-state-is-recovered
     #[test]
-    fn a_poisoned_modal_record_is_reported_when_it_is_read() {
+    fn a_poisoned_modal_record_is_recovered_when_it_is_read() {
         let config = crate::test_folder::Folder::new();
         let writer = Arc::new(event_log::start_host(config.path()).unwrap());
         use_host_event_log(Some(Arc::clone(&writer)));
         let overlay = Overlay::default();
+        // default: the test poisons the lock afterwards, so the read recovers the poisoned state; the panic hook
+        // records the panic.
+        *overlay.open.lock().unwrap_or_else(PoisonError::into_inner) = Some(Modal {
+            id: "ask".to_string(),
+            content: OverlayContent {
+                mode: "dialog".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
         std::thread::scope(|scope| {
             scope
                 .spawn(|| {
-                    let _held = overlay.open.lock().unwrap();
+                    // default: the test holds the lock while its thread panics, which poisons the lock for the
+                    // operation under test.
+                    let _held = overlay.open.lock().unwrap_or_else(PoisonError::into_inner);
                     panic!("modal record holder panicked");
                 })
                 .join()
                 .unwrap_err();
         });
-        assert_eq!(overlay.open_state(), None);
-        assert!(!overlay.dialog());
+        let state = overlay.open_state();
+        assert_eq!(
+            state.map(|(id, mode, _)| (id, mode)),
+            Some(("ask".to_string(), "dialog".to_string())),
+            "the open modal was lost while the modal record lock was poisoned"
+        );
+        assert!(
+            overlay.dialog(),
+            "the mode of the open modal was lost while the modal record lock was poisoned"
+        );
         writer.flush(Duration::from_secs(5)).unwrap();
         use_host_event_log(None);
         let text = std::fs::read_to_string(writer.path()).unwrap();
@@ -622,7 +674,7 @@ mod tests {
             .lines()
             .filter(|line| line.contains("host.record.error") && line.contains("modal state"))
             .count();
-        assert_eq!(errors, 2, "log {text}");
+        assert_eq!(errors, 0, "log {text}");
     }
 }
 

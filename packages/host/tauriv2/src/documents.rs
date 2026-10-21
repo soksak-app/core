@@ -9,7 +9,7 @@
 //! thread is not awaited.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
@@ -1545,7 +1545,9 @@ fn create(
         let plugin = window_data(&host)?
             .surface_plugins
             .lock()
-            .map_err(|e| e.to_string())?
+            // default: a lock that a panicking thread poisoned still holds the surface plugins, which are only read;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .get(&surface_id)
             .cloned()
             .ok_or_else(|| format!("surface {surface_id:?} has no composition declaration"))?;
