@@ -169,6 +169,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | none | A Go file belongs to one build by its build constraint, so the diagnostic build of `sok` tests its `capture` request and the release identifier in a `diagnostics && !dev` unit test, the build with `dev` tests the `.dev` identifier in a `dev` unit test, and the other build tests the usage error and the release identifier in a `!diagnostics` test; Rust tests the builds with `cfg(feature = "diagnostics")` and `cfg(feature = "dev")` in `tests/sok_test.rs` |
 | C3 | `src/dev.go` | none | Go selects the `.dev` identifier by an `init` in a file that only the `dev` build tag compiles; Rust selects it with `cfg!(feature = "dev")` inside `src/identity.rs`, so it has no file of its own |
 | C4 | none | `tests/support/folder.rs` | The same guard as H12 for the tests of `sok`; the Go tests of `sok` use `testing.T.TempDir`. The host and `sok` test crates each keep their own file, because a test does not read the paths of another package |
+| C5 | none | `src/event_log_lock_test.rs` | The Rust writer of `sok` recovers a lock that a panicking thread poisoned, and this in-crate test poisons the lock of the write observer; a Go mutex does not poison, so the Go writer has no such lock state to test |
 
 ## Memory pressure
 

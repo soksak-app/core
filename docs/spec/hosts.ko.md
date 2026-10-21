@@ -170,6 +170,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | C2 | `src/diagnostics_test.go`, `src/dev_test.go`, `tests/build_test.go` | 없음 | Go 파일은 build 제약으로 한 build에만 속하므로, `sok`의 진단 build는 `diagnostics && !dev` 단위 test에서 `capture` 요청과 release 식별자를, `dev` build는 `dev` 단위 test에서 `.dev` 식별자를, 다른 build는 `!diagnostics` test에서 사용법 오류와 release 식별자를 검사한다. Rust는 `tests/sok_test.rs`에서 `cfg(feature = "diagnostics")`와 `cfg(feature = "dev")`로 build를 검사한다 |
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
 | C4 | none | `tests/support/folder.rs` | `sok` 시험을 위한 H12와 같은 guard다. `sok`의 Go 시험은 `testing.T.TempDir`를 쓴다. 시험은 다른 패키지의 경로를 읽지 않으므로 호스트와 `sok` 시험 crate가 각자 파일을 둔다 |
+| C5 | none | `src/event_log_lock_test.rs` | `sok`의 Rust writer는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 write observer의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go writer에는 시험할 lock 상태가 없다 |
 
 ## Memory pressure
 
