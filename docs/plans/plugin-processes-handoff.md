@@ -6,62 +6,40 @@ This document lists the remaining work of F212 (plugin code outside the main pag
 
 ## Sources of truth
 
-| Topic | File | Where |
-|---|---|---|
-| Process rules, the checklist rules, Red/Green, commit form | `AGENTS.md` (+ `.ko.md`) | main |
-| Checklist of main | `docs/features.md` (+ `.ko.md`) | main |
-| Checklist of the F212 work | `docs/features.md` on branch `feat/view-kind-F212.7` | branch |
-| Decided design of F212: the layers, the rules 1 to 10, the pass values (i) to (viii), the review records | `docs/plans/plugin-processes.md` (+ `.ko.md`) | branch, older copy on main |
-| Declared UI contract (list, tree, button, status-line, sections, addresses, rejections) | `docs/spec/declared-ui.md` (+ `.ko.md`) | branch |
-| Exposure contract (commands, statuses, dom, `address`, errors) | `docs/spec/exposure.md` | branch is newer |
-| Build, test parity, window checks, diagnostics | `docs/operations/examples.md` | both |
-| Private WebKit APIs and their call conditions | `docs/operations/private-native-apis.md` | both |
+| Topic | File |
+|---|---|
+| Process rules, the checklist rules, Red/Green, commit form, branches and worktrees | `AGENTS.md` (+ `.ko.md`) |
+| Checklist | `docs/features.md` (+ `.ko.md`) |
+| Decided design of F212: the layers, the rules 1 to 10, the pass values (i) to (viii), the review records | `docs/plans/plugin-processes.md` (+ `.ko.md`) |
+| Declared UI contract (list, tree, button, status-line, sections, addresses, rejections) | `docs/spec/declared-ui.md` (+ `.ko.md`) |
+| Exposure contract (commands, statuses, dom, `address`, errors) | `docs/spec/exposure.md` |
+| Build, test parity, window checks, diagnostics | `docs/operations/examples.md` |
+| Private WebKit APIs and their call conditions | `docs/operations/private-native-apis.md` |
 
-Read the branch copy of a file whenever the branch has one. The branch holds most of the F212 work, and main does not show it until the branch merges.
+The view branch `feat/view-kind-F212.7` merged into main on 2026-10-21 and was removed, so main holds every source above.
 
 ## Repository state
 
 ### Branches and worktrees
 
+State on 2026-10-21. Only main is pushed; no other branch is published.
+
 | Branch | Worktree | State | Next step |
 |---|---|---|---|
-| `main` | `core` | pushed, clean | — |
-| `feat/view-kind-F212.7` | `../core-view-kind-F212.7` | published on origin; all F212 view and declared UI work | continue items below; merge into main only after the F212 core items and F212.7-9 |
-| `fix/lock-drops-F218-2-2` | `../core-lock-drops-F218-2-2` | F218-2.2 committed and rebased on main; `make push-check` passed | resolve the failing test below, then merge into main and remove the worktree and the branch |
+| `main` | `core` | pushed; holds the F212 view and declared UI work, F212.7-10 to F212.7-13, and F224 to F227 | — |
+| `fix/lock-unwraps-F218-2-4` | `../core-lock-unwraps-F218-2-4` | F218-2.4 in progress | finish F218-2.4 and F218-2.5, merge into main, then remove the worktree and the branch |
+| `feat/plugin-host-F212.9` | `../core-plugin-host-F212.9` | F212.9-1 and F212.9-2 committed, F212.9-3 in progress | finish F212.9-3 and F212.9-4, merge into main, then remove |
+| `fix/persistent-restart-F212-8a-4` | `../core-persistent-restart-F212-8a-4` | F212.8a-4 in progress | specify and implement, merge into main, then remove |
 | `feat/settings-G1.4-87-1` | `../core-settings-G1.4-87-1` | held item | do not touch |
 | `fix/background-launch-V5-117-1-3-4-7-1-8` | none | held item | do not touch |
 
 Two annotated tags keep the commits of two superseded branches; `git tag -l` lists them.
 
-### Uncommitted work in `../core-view-kind-F212.7`
-
-F212.8-6-3 (the source and transitions of a declared section) was in progress when work stopped:
-
-- new, untracked: `packages/workbench/declared-section.js` and `packages/workbench/test/declared-section.test.mjs` (10 tests, passing with `node --test`);
-- modified, not committed: `CHANGELOG.md`, `CHANGELOG.ko.md`, `docs/features.md`, `docs/features.ko.md`, `docs/operations/examples.md`, `docs/operations/examples.ko.md` (record lines and the recorded test counts).
-
-The work has no recorded Red and has not passed `make push-check`. Review it against declared-ui.md "Status mapping" and transitions (a) to (d). Record a Red by running the tests against the module with the behavior removed, then finish, commit and push. Otherwise delete both new files and restore the modified files with `git restore`.
-
-### The failing test that blocks F218-2.2
-
-A full run of `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1` on `fix/lock-drops-F218-2-2` failed once in `tests/sidecars_test.rs`, at a load average of 27 to 42:
-
-```
-surface_open_clears_the_restart_limit
-the opened surface recorded no host.trace.sidecar.restart-reset
-```
-
-The same test passes alone three of three times (`make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=3 TEST=surface_open_clears_the_restart_limit`). The test belongs to F212.8a. F218-2.2 changed `sidecars.rs` (the sidecar state lock recovery). Register an item, then:
-
-1. Run `make rust-tests-alone PACKAGE=soksak-host-tauriv2` and `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=3` on main and on the branch. This shows whether the failure depends on test order or on F218-2.2.
-2. The test reads trace records through a shared event log. Check whether another test in the same binary writes or drains the same log; `useEventLog` in the Go tests is the isolated pattern.
-3. Fix the cause, with a Red from the cheapest run that shows the failing assertion and a Green from the owning tests. The full-suite acceptance runs once after the checklist completes, not now. Then merge F218-2.2.
-
 ### Sidecar repositories
 
 | Repository | Open | Note |
 |---|---|---|
-| `../sidecars/files` (origin `soksak-app/sidecar-files`) | S31: write a log record as the first action of the process, before any setup | It measures the 12.4 s gap of F212.1-2-2 between the spawn and `log.open`. S26 to S30 are committed. |
+| `../sidecars/files` (origin `soksak-app/sidecar-files`) | none | S31 (a log record as the first action of the process) is committed and pushed. S26 to S30 are committed. |
 | `../sidecars/shell` (no remote) | none | S10 to S15 are committed. |
 
 Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays open until both are published.
@@ -80,13 +58,15 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 
 ### Branches and worktrees
 
-- Work on `main` directly by default. For isolation use the branch `{type}/{shortname}-{ID}` and the worktree `../core-{shortname}-{ID}`.
-- Remove the worktree and the branch right after a merge into main succeeds. Never remove an unmerged one.
+- Work on `main` directly by default. When an agent or the situation needs isolation, use the branch `{type}/{shortname}-{ID}` and the worktree `../core-{shortname}-{ID}`.
+- Never push a branch. Every branch merges into main, and only main is pushed.
+- Remove the worktree and the local branch right after the merge into main succeeds. Never remove one whose merge failed or has not happened: the condition of a removal is a successful merge.
+- Test or probe code that cannot merge into main is cherry-picked while it still has meaning, otherwise discarded, before the commit. When it cannot be removed at once, register a checklist sub-item that states the removal condition.
+- Before a merge into main, run `git fetch` and `git rev-list --count HEAD..origin/main` on main, and merge origin/main first when the count is not zero. After the merge run `make push-check` on main, then push main.
 - Run `make hooks`, `make native-darwin` and `make frontend-tauriv2` in a new worktree before tests.
-- `feat/view-kind-F212.7` is published. Sync it with `git merge origin/main` and never rebase or force-push it. Before each push run `git rev-list --count HEAD..origin/main`, and merge first when the count is not zero.
 - On a CHANGELOG conflict keep both entries. On a conflict of the recorded counts in `docs/operations/examples.md`, use the count that `make parity-check` prints for the merged tree.
 - After a worktree moves, the Tauri build cache keeps old paths and clippy fails. Run `cargo clean -p tauri -p soksak-tauriv2` in the worktree.
-- Gate commands with `&&`. A pipe or a grep does not stop a chain.
+- Gate commands with `&&`, and never pipe a gate command (`make x | tail && ...`): the pipe returns the status of its last command, so a failure does not stop the chain. Write the output to a log file and judge by the exit status, or set `pipefail`.
 - A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs `make host-contract-check`; no push gate runs it, and CI fails without it (F220).
 
 ### Adding a test file
@@ -143,46 +123,29 @@ The order below follows the dependencies. IDs are checklist IDs.
 
 ### 1. Main items beside F212
 
-**F218-2.2** — merge it after the failing test above is resolved.
+Done on main: F218-2.1, F218-2.2 and F218-2.3 (F219 made the order-dependent sidecar test that blocked F218-2.2 run alone), and F212.6a-1-3-2-2 (the stall is the page-close work of WebKit and the system on the main thread, so no host change follows).
 
-**F218-2.3** — 100 lock results that map a poisoned lock to an error (`map_err`, `ok()`, `?`) in the Rust host and in the sok crate.
-- Change: recover each with `PoisonError::into_inner` and a `// default:` reason on the line above the call: the panic hook installed first records the panic (`docs/spec/logging.md`). Group one module per commit.
-- Test: for each module with a seam, poison the lock in a spawned thread, then show that the operation returns its value. Red is the old error result.
-- Find the sites with `make census-check` (rule `rs.lock-result`).
-
-**F218-2.4** — 86 lock results that call `unwrap` or `expect`. Same change and test; Red is the panic of the calling thread.
+**F218-2.4** — in progress on `fix/lock-unwraps-F218-2-4`. 86 lock results that call `unwrap` or `expect`. Same change and test; Red is the panic of the calling thread.
 
 **F218-2.5** — enable `rs.lock-result` with zero findings, and remove its pending entry in `scripts/census.json`. Green is `make census-check` with zero findings. Then mark F218-2 `[o]`.
 
-**F212.1-2-2** — the fixture reply waited 12.4 s for the first answer of the files sidecar. `host.trace.sidecar.ready` (F212.1-2-2-6) measures spawn to first answer. Do S31 in the files sidecar first. Then repeat the window check of F212.1-2 with the trace on, and read `host.trace.sidecar.ready` and the sidecar's first record. If the gap is before the sidecar's first record, the cause is the start of the process (the binary launch); record the measured time and its cause. If the gap is inside the sidecar, fix it there.
+**F212.1-2-2** — the fixture reply waited 12.4 s for the first answer of the files sidecar. `host.trace.sidecar.ready` (F212.1-2-2-6) measures spawn to first answer. S31 is committed in the files sidecar. Repeat the window check of F212.1-2 with the trace on, and read `host.trace.sidecar.ready` and the sidecar's first record. If the gap is before the sidecar's first record, the cause is the start of the process (the binary launch); record the measured time and its cause. If the gap is inside the sidecar, fix it there.
 
 **F212.1-3** — the recorded DOM mount baseline of pass value (iii). For each installed surface plugin, record the main page from the surface start request to the first content frame (`diagnostics.capture.start/stop`), and take the median of 5 runs with the load average. Make it a tracked window check under `e2e/`, and write the result in the plan table "F212.1-2".
 
-**F212.6a-1-3-2-2** — the cause of the 2.4 s main-thread stall of the Tauri host. The findings are in the item. Stall dumps of 2 s or more are now stored by default (F212.6a-1-3-2-1). When the next one appears, symbolicate the WebKit frames with `atos -o /System/Library/Frameworks/WebKit.framework/Versions/A/WebKit -l <load address> <addresses>`; it resolves through the dyld shared cache when the OS build matches the dump. Then name the thread that holds `IPC::Connection` `m_incomingMessagesLock` and the run loop lock. Mark the parent F212.6a-1-3 when its children are complete.
+**F212.8a-4** — in progress on `fix/persistent-restart-F212-8a-4`; the decision record is `docs/plans/persistent-restart.md`. The restart limit of persistent services (`docs/spec/terminal-runtime.md`, one attempt per disconnect). This is a decision first: which event counts as a failure of a persistent service. A disconnect that the host re-attaches without a send is not a failure event today. Write the scope, run the review, then specify and implement it in both hosts with a contract case. Reuse the stdio limit of F212.8a (Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
 
-**F212.8a-4** — the restart limit of persistent services (`docs/spec/terminal-runtime.md`, one attempt per disconnect). This is a decision first: which event counts as a failure of a persistent service. A disconnect that the host re-attaches without a send is not a failure event today. Write the scope, run the review, then specify and implement it in both hosts with a contract case. Reuse the stdio limit of F212.8a (Go `Sidecars.Now`, Rust `Sidecars::with_clock`, `host.sidecar.restart-limit`, `host.trace.sidecar.restart-reset`).
+### 2. Checklist states
 
-### 2. Branch `feat/view-kind-F212.7`: checklist states
-
-Several parent items stay `[ ]` although all their children are `[o]`: F212.3, F212.4, F212.6 and F212.7 (whose open children are F212.7a, F212.7b-1, F212.7c, F212.7d-1 and F212.7-9). Read each parent's children and set the parent by the rule: `[o]` only when every child is complete and verified, `[~]` only while a child is `[~]`.
+Done: F212.3, F212.4 and F212.6 are `[o]`. F212.7 stays `[ ]` while F212.7a, F212.7b-1, F212.7c, F212.7d-1 and F212.7-9 are open.
 
 ### 3. Declared UI (F212.8)
 
-Done: F212.8-0 (the spec, closed after round 20), F212.8-1 (list), F212.8-1-1 (keyed redraw), F212.8-2 (tree), F212.8-4 (button), F212.8-5 (status-line), F212.8-6-1 (manifest `status` sections), and F212.8-6-2 (`address` in `dom.rect` and `dom.act`). The code is in `packages/workbench/declared-ui.js` with `test/declared-ui.test.mjs` (56 tests).
-
-**F212.8-6-3** — the source and transitions of a declared section; see "Uncommitted work" above.
-- The source is the active tab view of the card that registered the status, then the plugin host, otherwise cleared. A state-module registration does not serve.
-- Transitions (a) to (d), including the plugin override start and stop.
-- The pulls happen at main page load, at a change of source and at a change of orientation.
-- Discard a snapshot or a pull reply from a pair that is not the chosen source, and a pull reply with a lower seq.
-- Call hideError on a change of source, a process end and a surface close.
-- Test with fakes for the registrations. Where a production channel does not exist yet, list it in the item.
-
-**F212.8-6-4** — draw and report the section: the element and its header (`core.sidebar.section.header`), the rejection text from `showError`, the horizontal layout, the orientation re-check, and the `core.sidebars` fields `mounted`, `error`, `text` and `controls`. Then mark F212.8-6.
-
-**F212.8-7** — a tracked benchmark of the workbench draw time of 5000 tree nodes and 1000 list items. If the result requires another limit, change declared-ui.md in a new item.
+Done: F212.8 and all its children, including F212.8-6-3 (the source and transitions of a declared section), F212.8-6-4 (its drawing and reporting) and F212.8-7 (draw time in jsdom: tree median 501.2 ms, list median 116.4 ms; the limits of declared-ui.md stay).
 
 ### 4. Plugin host (F212.9)
+
+F212.9-1 (the specification `docs/spec/plugin-host.md`) and F212.9-2 (the native operation) are committed on `feat/plugin-host-F212.9`; F212.9-3 and F212.9-4 are in progress there.
 
 F212.9 is required, because a plugin whose sidebar section shows values while none of its views is open needs a plugin host (declared-ui.md, source order). The plan names the files state as the first case.
 - Spec first: plan native gap 3 (a platform operation that creates a plugin host web view attached to the window, not to a surface host), gap 7 (owner key `plugin:<id>`), and rule 5 (restart within limit (vi), state restored from the last saved value).
@@ -191,11 +154,11 @@ F212.9 is required, because a plugin whose sidebar section shows values while no
 
 ### 5. Plan into specifications (F212.7-9)
 
-Before the branch merges: move the accepted contract of `docs/plans/plugin-processes.md` into a new `docs/spec/plugin-processes.md` (+ko). Repoint every link, including `packages/plugin-api/terms.json` and `docs/spec/declared-ui.md` line 11, and remove the plan. Decide where the review records go: the specification has no history, so they go to the changelog entries or are dropped.
+Before F212.15: move the accepted contract of `docs/plans/plugin-processes.md` into a new `docs/spec/plugin-processes.md` (+ko). Repoint every link, including `packages/plugin-api/terms.json` and `docs/spec/declared-ui.md` line 11, and remove the plan. Decide where the review records go: the specification has no history, so they go to the changelog entries or are dropped.
 
 ### 6. Plugin moves (F212.10)
 
-Each move is an item of its own plugin repository, made against the branch. The plan table "Layers and placement" gives the target of each plugin:
+Each move is an item of its own plugin repository, made against main. The plan table "Layers and placement" gives the target of each plugin:
 
 | Plugin | Surface | Section | State | Sidecar |
 |---|---|---|---|---|
@@ -222,10 +185,9 @@ Each move is an item of its own plugin repository, made against the branch. The 
 
 The pass values are in the plan, section "Pass values". A failed mechanism value ((v), (vi) or (viii)) stops the mechanism items. A failed plugin value stops only that plugin, and the person decides between accepting the cost and changing its layer.
 
-### 8. Removal, merge and release
+### 8. Removal and release
 
 - F212.11: remove the page mount of plugin surfaces, parking, the `dom` composition, and the page mount of module sections and state modules. Manifests then accept only the new form.
-- Merge `feat/view-kind-F212.7` into main after every core item above is complete. Run `make push-check` on main after the merge, then remove the worktree and the branch.
 - F212.15: release core only when no development item is open; list the open items first. Then release each plugin and the files and shell sidecars.
 
 ## Held items
