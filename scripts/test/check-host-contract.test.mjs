@@ -14,6 +14,17 @@ const SPEC = `# Hosts
 ## Next
 `;
 
+const ONE_CASE = `# Hosts
+
+## Contract cases
+
+| Case | Behavior | Scope |
+| --- | --- | --- |
+| \`area.shared\` | Both hosts do this. | both |
+
+## Next
+`;
+
 const GO = `package tests
 
 // contract: area.shared
@@ -28,12 +39,17 @@ const RUST = `// contract: area.shared
 fn shared() {}
 `;
 
+const GO_OWNER = 'packages/host/wailsv3/tests';
+
+/** The run map of one run: owner to the result of each test name of that owner. */
+const owners = (owner, entries) => new Map([[owner, new Map(entries)]]);
+
 function hosts({ go = GO, rust = RUST, goRuns, rustRuns } = {}) {
-  const wails = parseDeclarations(go, 'go', 'wails_test.go');
+  const wails = parseDeclarations(go, 'go', `${GO_OWNER}/wails_test.go`);
   const tauri = parseDeclarations(rust, 'rust', 'tauri_test.rs');
   return [
-    { name: 'wailsv3', language: 'go', ...wails, runs: goRuns ?? [new Map([['TestShared', 'pass'], ['TestWailsOnly', 'pass']])] },
-    { name: 'tauriv2', language: 'rust', ...tauri, runs: rustRuns ?? [new Map([['shared', 'pass']])] },
+    { name: 'wailsv3', language: 'go', ...wails, items: [], runs: goRuns ?? [owners(GO_OWNER, [['TestShared', 'pass'], ['TestWailsOnly', 'pass']])] },
+    { name: 'tauriv2', language: 'rust', ...tauri, items: [], runs: rustRuns ?? [owners('.', [['shared', 'pass']])] },
   ];
 }
 
@@ -45,14 +61,14 @@ test('host contract passes when each host runs a passing test for every case in 
 });
 
 test('a host without a test for a shared case fails', () => {
-  const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust: '#[test]\nfn other() {}\n', rustRuns: [new Map([['other', 'pass']])] }));
+  const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust: '#[test]\nfn other() {}\n', rustRuns: [owners('.', [['other', 'pass']])] }));
   assert.ok(errors.includes('tauriv2 runs no passing test for contract case area.shared'), errors.join('\n'));
   assert.ok(errors.some((error) => error.includes('other declares no contract case')), errors.join('\n'));
 });
 
 test('a declared test that did not run, failed, or was skipped does not cover its case', () => {
   for (const [status, text] of [[undefined, 'did not run'], ['fail', 'reported fail'], ['skip', 'reported skip']]) {
-    const runs = [new Map(status ? [['shared', status]] : [['unrelated', 'pass']])];
+    const runs = [owners('.', status ? [['shared', status]] : [['unrelated', 'pass']])];
     const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rustRuns: runs }));
     assert.ok(errors.some((error) => error.includes(`shared (area.shared) ${text}`)), `${status}: ${errors.join('\n')}`);
     assert.ok(errors.includes('tauriv2 runs no passing test for contract case area.shared'), errors.join('\n'));
@@ -66,7 +82,7 @@ test('a host whose run reports zero tests fails', () => {
 
 test('a declaration of an undefined case or of a case outside the host scope fails', () => {
   const rust = '// contract: area.shared, area.missing\n#[test]\nfn shared() {}\n\n// contract: area.wails-only\n#[test]\nfn other() {}\n';
-  const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust, rustRuns: [new Map([['shared', 'pass'], ['other', 'pass']])] }));
+  const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust, rustRuns: [owners('.', [['shared', 'pass'], ['other', 'pass']])] }));
   assert.ok(errors.some((error) => error.includes('declares undefined contract case area.missing')), errors.join('\n'));
   assert.ok(errors.some((error) => error.includes('declares area.wails-only, which the specification limits to wailsv3')), errors.join('\n'));
 });
@@ -84,7 +100,7 @@ test('rust declarations bind through attributes and match module paths in result
   const parsed = parseDeclarations(rust, 'rust', 'src/a.rs');
   assert.deepEqual(parsed.errors, []);
   assert.deepEqual(parsed.tests.map((item) => [item.name, item.cases]), [['shared', ['area.shared']]]);
-  const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust, rustRuns: [new Map([['a::tests::shared', 'pass']])] }));
+  const { errors } = auditHostContract(parseContractCases(SPEC), hosts({ rust, rustRuns: [owners('.', [['a::tests::shared', 'pass']])] }));
   assert.deepEqual(errors, []);
 });
 
@@ -97,16 +113,66 @@ test('the case table rejects duplicate ids, invalid ids, and a limited scope wit
   assert.throws(() => parseContractCases('# none\n'), /no "Contract cases" section/);
 });
 
-test('results are grouped by run, and a name that several packages share keeps a failure, then a pass, then a skip', () => {
-  const item = (name, run, testName) => ({ name, run, testName });
-  const items = [item('r1 p1.A', 'r1', 'A'), item('r1 p2.A', 'r1', 'A'), item('r1 p1.B', 'r1', 'B'),
-    item('r1 p1.C', 'r1', 'C'), item('r1 p2.C', 'r1', 'C'), item('r2 p1.A', 'r2', 'A')];
+test('results are grouped by run and owner, and a name that one owner shares keeps a failure, then a pass, then a skip', () => {
+  const item = (name, run, owner, testName) => ({ name, run, owner, testName });
+  const items = [item('r1 p1.A', 'r1', 'p1', 'A'), item('r1 p2.A', 'r1', 'p2', 'A'), item('r1 p1.B', 'r1', 'p1', 'B'),
+    item('r1 p1.C', 'r1', 'p1', 'C'), item('r1 p2.C', 'r1', 'p2', 'C'), item('r2 p1.A', 'r2', 'p1', 'A')];
   const result = (status, output = '') => ({ status, output });
   const results = new Map([
     ['r1 p1.A', result('pass')], ['r1 p2.A', result('fail')], ['r1 p1.B', result('timeout')],
     ['r1 p1.C', result('pass', '--- SKIP: C (0.00s)')], ['r1 p2.C', result('pass')], ['r2 p1.A', result('pass')],
   ]);
   const runs = groupResults(items, results);
-  assert.deepEqual([...runs.get('r1')], [['A', 'fail'], ['B', 'fail'], ['C', 'pass']]);
-  assert.deepEqual([...runs.get('r2')], [['A', 'pass']]);
+  assert.deepEqual([...runs.get('r1').get('p1')], [['A', 'pass'], ['B', 'fail'], ['C', 'skip']]);
+  assert.deepEqual([...runs.get('r1').get('p2')], [['A', 'fail'], ['C', 'pass']]);
+  assert.deepEqual([...runs.get('r2').get('p1')], [['A', 'pass']]);
+  const shared = groupResults([item('r3 a.X', 'r3', 'p1', 'X'), item('r3 b.X', 'r3', 'p1', 'X')],
+    new Map([['r3 a.X', result('pass')], ['r3 b.X', result('fail')]]));
+  assert.deepEqual([...shared.get('r3').get('p1')], [['X', 'fail']]);
+});
+
+test('a declaration takes its result only from the items of its own owner', () => {
+  const host = 'packages/host/wailsv3/tests';
+  const sok = 'packages/sok/wailsv3/tests';
+  const body = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
+  const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
+  const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs: [owners(host, [['TestShared', 'pass']])] };
+  const [, tauri] = hosts({ go: body });
+  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri]);
+  assert.deepEqual(errors, [`wailsv3: ${sok}/a_test.go:4 TestShared (area.shared) did not run`]);
+});
+
+test('owners of one run do not merge: a failing owner reports its own declaration as fail', () => {
+  const host = 'packages/host/wailsv3/tests';
+  const sok = 'packages/sok/wailsv3/tests';
+  const body = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
+  const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
+  const runs = [new Map([[host, new Map([['TestShared', 'pass']])], [sok, new Map([['TestShared', 'fail']])]])];
+  const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs };
+  const [, tauri] = hosts({ go: body });
+  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri]);
+  assert.deepEqual(errors, [`wailsv3: ${sok}/a_test.go:4 TestShared (area.shared) reported fail`]);
+});
+
+test('two Rust tests with one leaf name in one crate and one run fail the audit', () => {
+  const [wails, tauri] = hosts();
+  const item = (owner, target, testName) => ({ name: `tauriv2-tests ${target}::${testName}`, run: 'tauriv2-tests', owner, target, testName });
+  const duplicated = { ...tauri, items: [item('packages/host/tauriv2', 'a', 'shared'), item('packages/host/tauriv2', 'b', 'tests::shared')] };
+  const { errors } = auditHostContract(parseContractCases(SPEC), [wails, duplicated]);
+  assert.ok(errors.some((error) => error.includes('duplicate leaf shared')), errors.join('\n'));
+  const apart = { ...tauri, items: [item('packages/host/tauriv2', 'a', 'shared'), item('packages/sok/tauriv2', 'b', 'shared')] };
+  const other = auditHostContract(parseContractCases(SPEC), [wails, apart]);
+  assert.deepEqual(other.errors.filter((error) => error.includes('duplicate leaf')), []);
+});
+
+test('a contract declaration accepts only test and feature attributes', () => {
+  const allowed = '// contract: area.shared\n#[cfg(feature = "diagnostics")]\n#[test]\nfn shared() {}\n\n// contract: area.shared\n#[cfg(not(feature = "diagnostics"))]\n#[test]\nfn other() {}\n';
+  const parsed = parseDeclarations(allowed, 'rust', 'a.rs');
+  assert.deepEqual(parsed.errors, []);
+  assert.deepEqual(parsed.tests.map((item) => item.name), ['shared', 'other']);
+  assert.deepEqual(parseDeclarations('#[should_panic]\n#[test]\nfn plain() {}\n', 'rust', 'a.rs').errors, []);
+  assert.deepEqual(parseDeclarations('// contract: area.shared\n#[should_panic]\n#[test]\nfn shared() {}\n', 'rust', 'a.rs').errors,
+    ['a.rs:2 attribute #[should_panic] is not allowed on a contract test']);
+  assert.deepEqual(parseDeclarations('#[ignore]\n// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'a.rs').errors,
+    ['a.rs:1 attribute #[ignore] is not allowed on a contract test']);
 });

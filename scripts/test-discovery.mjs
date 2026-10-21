@@ -3,8 +3,8 @@
 // time too; then the test binary lists its tests, and every test becomes one process with the working directory that
 // `go test` and `cargo test` give it.
 import { execFile } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdirSync, realpathSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 import { runTests } from './test-runner.mjs';
 
@@ -45,7 +45,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
     const binary = join(buildDir, `${id}-${index}.test`);
     const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, maxBuffer: 1 << 24 });
     for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
-      tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, command: binary,
+      tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
         args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir });
     }
   }
@@ -80,7 +80,7 @@ export async function discoverRust({ packageName, features, cwd, env, id, write 
     const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
     for (const line of listed.stdout.split('\n')) {
       const match = line.match(/^(.+): test$/);
-      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], command: executable, args: ['--exact', match[1]], cwd: dir, env });
+      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, command: executable, args: ['--exact', match[1]], cwd: dir, env });
     }
   }
   return { tests, failures: [] };

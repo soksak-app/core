@@ -4,9 +4,9 @@
 // `// contract: <id>[, <id>]` right above it. The check actually runs the tests of both hosts in the default configuration and the diagnostics
 // configuration and judges from the results whether the declared tests ran and passed. It does not use file names or counts.
 import { parseArgs } from 'node:util';
-import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join, posix, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cpus } from 'node:os';
 import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
@@ -46,14 +46,33 @@ const TEST_FUNCTION = {
   rust: /^\s*(?:pub\s+)?(?:async\s+)?fn (\w+)\s*\(/,
 };
 
-/** Reads the test functions from the test source and the contract cases that each function declares. */
-export function parseDeclarations(source, language, file) {
+/** The attribute lines that a contract test may carry: the test attribute and the feature selection of its configuration. */
+const ALLOWED_ATTRIBUTES = [
+  /^#\[test\]$/,
+  /^#\[tokio::test\]$/,
+  /^#\[cfg\(feature\s*=\s*"[^"]+"\)\]$/,
+  /^#\[cfg\(not\(feature\s*=\s*"[^"]+"\)\)\]$/,
+];
+const TEST_ATTRIBUTE = /^#\[(?:tokio::)?test\b/;
+
+/** The directory of a file of the repository, as the owner of its declarations (`.` for the root). */
+export function ownerOfFile(file) {
+  return posix.dirname(file);
+}
+
+/**
+ * Reads the test functions from the test source and the contract cases that each function declares. `owner` is the package
+ * directory (Go) or the crate directory (Rust) that the caller computes from the file; each test carries it, so a result is
+ * matched only with items of the same owner.
+ */
+export function parseDeclarations(source, language, file, owner = ownerOfFile(file)) {
   const pattern = TEST_FUNCTION[language];
   if (!pattern) throw new Error(`unsupported language ${language}`);
   const tests = [];
   const errors = [];
   let pending = null;
-  let testAttribute = false;
+  // Rust: the attribute lines since the last code line, with their line numbers; a comment or blank line keeps them.
+  let attributes = [];
   source.split('\n').forEach((line, index) => {
     const declaration = line.match(/^\s*\/\/\s*contract:\s*(.*)$/);
     if (declaration) {
@@ -63,48 +82,91 @@ export function parseDeclarations(source, language, file) {
       pending.ids.push(...ids);
       return;
     }
-    if (language === 'rust' && /^\s*#\[(?:tokio::)?test\b/.test(line)) {
-      testAttribute = true;
+    if (language === 'rust' && /^\s*#\[/.test(line)) {
+      attributes.push({ text: line.trim(), line: index + 1 });
       return;
     }
     const match = line.match(pattern);
-    const isTest = match && (language === 'go' || testAttribute);
-    if (isTest) {
-      tests.push({ name: match[1], file, line: index + 1, cases: pending?.ids ?? [] });
+    if (match && (language === 'go' || attributes.some((attribute) => TEST_ATTRIBUTE.test(attribute.text)))) {
+      if (pending) {
+        for (const attribute of attributes) {
+          if (!ALLOWED_ATTRIBUTES.some((allowed) => allowed.test(attribute.text))) {
+            errors.push(`${file}:${attribute.line} attribute ${attribute.text} is not allowed on a contract test`);
+          }
+        }
+      }
+      tests.push({ name: match[1], file, line: index + 1, cases: pending?.ids ?? [], owner });
       pending = null;
-      testAttribute = false;
+      attributes = [];
       return;
     }
-    if (/^\s*(\/\/|#\[|$)/.test(line)) return;
+    if (/^\s*(\/\/|$)/.test(line)) return;
     if (pending) errors.push(`${file}:${pending.line} contract declaration is not attached to a test function`);
     pending = null;
-    testAttribute = false;
+    attributes = [];
   });
   if (pending) errors.push(`${file}:${pending.line} contract declaration is not attached to a test function`);
   return { tests, errors };
 }
 
+/** The leaf name of a result name: the last path segment of a Rust module path, or the name itself. */
+export function leafOf(name) {
+  return name.split('::').pop();
+}
+
 /**
- * Per run id, the test name to its audit status (`pass`, `fail`, `skip`) from the finished tests. A name that several packages
- * of one run share keeps a failure, then a pass, then a skip.
+ * The Rust leaf names that several tests of one crate share in one run. A declaration matches one leaf, so such a name
+ * fails the audit whatever targets hold the tests. Returns one message per shared leaf.
+ */
+export function duplicateLeaves(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const key = [item.run, item.owner, leafOf(item.testName)].join('\n');
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  return [...groups.values()].filter((group) => group.length > 1).map((group) => {
+    const [first] = group;
+    const tests = group.map((item) => `${item.target}::${item.testName}`).join(', ');
+    return `duplicate leaf ${leafOf(first.testName)} in ${first.owner} of run ${first.run}: ${tests}`;
+  });
+}
+
+/** The crate directory of a Rust source: the nearest ancestor of the file (relative to `root`) that holds Cargo.toml. */
+export function crateOwnerOf(file, root = ROOT) {
+  let dir = posix.dirname(file);
+  for (;;) {
+    if (existsSync(join(root, dir, 'Cargo.toml'))) return dir;
+    if (dir === '.') throw new Error(`${file} has no Cargo.toml in any ancestor folder`);
+    dir = posix.dirname(dir);
+  }
+}
+
+/**
+ * Per run id, the owner, then the test name, to its audit status (`pass`, `fail`, `skip`) from the finished tests. A name that
+ * one owner shares in one run keeps a failure, then a pass, then a skip. Owners never merge.
  */
 export function groupResults(items, results) {
   const order = { fail: 3, pass: 2, skip: 1 };
   const runs = new Map();
   for (const item of items) {
     const status = auditStatus(results.get(item.name));
-    const named = runs.get(item.run) ?? new Map();
+    const owners = runs.get(item.run) ?? new Map();
+    const named = owners.get(item.owner) ?? new Map();
     if (!named.has(item.testName) || order[status] > order[named.get(item.testName)]) named.set(item.testName, status);
-    runs.set(item.run, named);
+    owners.set(item.owner, named);
+    runs.set(item.run, owners);
   }
   return runs;
 }
 
+/** The statuses of the results that a declaration matches: the same owner, and the same name or the Rust leaf name. */
 function statusOf(test, language, runs) {
   const statuses = [];
-  for (const results of runs) {
-    for (const [name, status] of results) {
-      if (name === test.name || (language === 'rust' && name.endsWith(`::${test.name}`))) statuses.push(status);
+  for (const owners of runs) {
+    const named = owners.get(test.owner);
+    if (!named) continue;
+    for (const [name, status] of named) {
+      if (name === test.name || (language === 'rust' && leafOf(name) === test.name)) statuses.push(status);
     }
   }
   if (statuses.length === 0) return 'not run';
@@ -122,7 +184,8 @@ export function auditHostContract(cases, hosts) {
   const covered = new Map(hosts.map((host) => [host.name, new Set()]));
   for (const host of hosts) {
     errors.push(...host.errors.map((error) => `${host.name}: ${error}`));
-    if (host.runs.every((results) => results.size === 0)) errors.push(`${host.name}: the test run reported zero tests`);
+    if (host.runs.every((owners) => [...owners.values()].every((named) => named.size === 0))) errors.push(`${host.name}: the test run reported zero tests`);
+    if (host.language === 'rust') errors.push(...duplicateLeaves(host.items ?? []).map((error) => `${host.name}: ${error}`));
     for (const test of host.tests) {
       const where = `${host.name}: ${test.file}:${test.line} ${test.name}`;
       if (test.cases.length === 0) {
@@ -229,7 +292,7 @@ async function main(argv) {
     const tests = [];
     const errors = found[name].flatMap((entry) => entry.failures);
     for (const file of files()) {
-      const parsed = parseDeclarations(readFileSync(join(ROOT, file), 'utf8'), language, relative(ROOT, join(ROOT, file)));
+      const parsed = parseDeclarations(readFileSync(join(ROOT, file), 'utf8'), language, file, language === 'rust' ? crateOwnerOf(file) : ownerOfFile(file));
       tests.push(...parsed.tests);
       errors.push(...parsed.errors);
     }
@@ -237,7 +300,7 @@ async function main(argv) {
     for (const item of own) {
       if (results.get(item.name).status === 'timeout') errors.push(`${item.name} exceeded its limit of ${TEST_TIMEOUT_MS / 1000}s`);
     }
-    hosts.push({ name, language, tests, errors, runs: [...groupResults(own, results).values()] });
+    hosts.push({ name, language, tests, errors, items: own, runs: [...groupResults(own, results).values()] });
   }
   const { errors, covered } = auditHostContract(cases, hosts);
   for (const host of hosts) {
