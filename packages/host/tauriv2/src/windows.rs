@@ -51,6 +51,8 @@ pub(crate) struct WindowData {
     pub images: crate::images::Images,
     /// The plugin host webviews of the window, by plugin id (docs/spec/plugin-host.md).
     pub plugin_hosts: crate::plugin_host::PluginHosts,
+    /// The channels of the plugin host pages of the window, by plugin id (docs/spec/plugin-host.md#channel).
+    pub plugin_host_channels: crate::plugin_host_channel::PluginHostChannels,
     /// The surface composition that the main page declared and that the host uses to check the authority of region
     /// calls.
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
@@ -1023,6 +1025,8 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             .to_string();
         let host_plugin = plugin.id.clone();
         let theme = theme.clone();
+        let host_window = window.clone();
+        data.plugin_host_channels.register(&plugin.id);
         let view = crate::plugin_host::HostView {
             directory: &directory,
             folder: &folder,
@@ -1033,35 +1037,35 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             channel,
             view,
             |channel, view| {
+                let (state_window, state_plugin) = (host_window.clone(), host_plugin.clone());
                 let handle = platform.create_plugin_host(
                     owner,
                     view.directory,
                     view.folder,
                     view.plugin,
                     channel,
-                    Box::new(move |_state: String| {
-                        // The host channel consumes the state of the webview (F212.9-3).
+                    Box::new(move |state: String| {
+                        // A navigation of the page clears its ready document (docs/spec/plugin-host.md#channel).
+                        crate::plugin_host_channel::state(&state_window, &state_plugin, &state);
                     }),
                 )?;
-                let message = host_plugin.clone();
+                let (message_window, message_plugin) = (host_window.clone(), host_plugin.clone());
                 platform.set_view_message(
                     handle,
-                    Box::new(move |_value: String| {
-                        log_error(
-                            "plugin host channel",
-                            format!("plugin {message}: a host message arrived before its channel is wired"),
+                    Box::new(move |value: String| {
+                        crate::plugin_host_channel::message(
+                            &message_window,
+                            &message_plugin,
+                            handle,
+                            &value,
                         );
                     }),
                 )?;
-                let ended = host_plugin.clone();
+                let (ended_window, ended_plugin) = (host_window.clone(), host_plugin.clone());
                 platform.set_view_ended(
                     handle,
                     Box::new(move || {
-                        // The restart of the host page follows the restart limit (F212.9-4); until then the end is an error line.
-                        log_error(
-                            "plugin host",
-                            format!("plugin {ended}: the host process ended"),
-                        );
+                        crate::plugin_host_channel::ended(&ended_window, &ended_plugin, handle);
                     }),
                 )?;
                 platform.add_document_script(handle, &theme)?;
@@ -1070,7 +1074,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             |handle, address| platform.load_document(handle, address),
             |handle| platform.close_document(handle),
         );
-        let handle = created?;
+        let handle = created.inspect_err(|_| data.plugin_host_channels.unregister(&plugin.id))?;
         data.plugin_hosts.insert(&plugin.id, handle);
         crate::event_record::emit_host(
             crate::event_log::Level::Debug,
@@ -1081,19 +1085,11 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
     Ok(())
 }
 
-/// Closes the plugin host webview of plugin. A failure is written to the application log. It runs on the main thread.
+/// Closes the plugin host webview of plugin and sends plugin-host-ended to the main page, which removes the
+/// registrations of the host (docs/spec/plugin-host.md#channel). A failure is written to the application log. It runs
+/// on the main thread.
 pub(crate) fn dispose_plugin_host(window: &Window, plugin: &str) {
-    let data = match window_data(window) {
-        Ok(data) => data,
-        Err(error) => return log_error("plugin host", error),
-    };
-    if let Some(handle) = data.plugin_hosts.take(plugin) {
-        let platform = match platform::current() {
-            Ok(platform) => platform,
-            Err(error) => return log_error("plugin host", error),
-        };
-        log_failure("plugin host", platform.close_document(handle));
-    }
+    crate::plugin_host_channel::end(window, plugin, None);
 }
 
 /// Closes every plugin host webview of the window. A failure is written to the application log. It runs on the main
@@ -1104,6 +1100,8 @@ pub(crate) fn dispose_plugin_hosts(window: &Window) {
         Err(error) => return log_error("plugin host", error),
     };
     let handles = data.plugin_hosts.take_all();
+    // The main page is replaced or ends with the window, so its registrations of the hosts end with it.
+    data.plugin_host_channels.unregister_all();
     if handles.is_empty() {
         return;
     }

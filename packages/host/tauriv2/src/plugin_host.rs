@@ -1,8 +1,8 @@
 //! The plugin host web views of a window (docs/spec/plugin-host.md). The host creates the plugin host webview of a
 //! plugin when the main page of the window loads a plugin whose manifest declares host, and disposes it when the
 //! plugin is removed or disabled, when the application applies a plugin change that reloads the window, and when the
-//! window closes. The channel, the exposure, the snapshots, the restart limit and the state of the host page are the
-//! work of F212.9-3 and F212.9-4.
+//! window closes. The channel of the host page is in plugin_host_channel.rs; the restart limit and the state of the
+//! host page are the work of F212.9-4.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -104,6 +104,16 @@ impl PluginHosts {
             .drain()
             .map(|(_, handle)| handle)
             .collect()
+    }
+
+    /// Returns the handle of the host webview of plugin, or None when the window has none.
+    pub fn get(&self, plugin: &str) -> Option<Handle> {
+        self.0
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the record of the plugin host; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(plugin)
+            .copied()
     }
 
     /// Returns true while a host webview of plugin is being created.

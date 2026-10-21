@@ -295,6 +295,8 @@ type Surfaces struct {
 	documents *Documents
 	// pluginHosts are the plugin host web views of the window, by plugin id (plugin_host.go).
 	pluginHosts map[string]unsafe.Pointer
+	// pluginHostChannels are the channels of the plugin host pages of the window, by plugin id (plugin_host_channel.go).
+	pluginHostChannels *pluginHostChannels
 	// streams are the stream subscriptions of the document regions.
 	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
@@ -318,6 +320,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		shapes:               map[string]*nativeShape{},
 		documents:            NewDocuments(),
 		pluginHosts:          map[string]unsafe.Pointer{},
+		pluginHostChannels:   newPluginHostChannels(),
 		streams:              NewDocumentStreams(),
 		images:               NewImages(),
 		// The value for the case in which no theme was received yet. If it is not an empty map, null is carried in the JSON,

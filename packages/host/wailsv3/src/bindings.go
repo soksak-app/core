@@ -265,6 +265,47 @@ func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) error {
 	}
 	return s.pushViewEvent(req)
 }
+
+// PluginHostReply receives the reply of the main page to a call request of a plugin host (docs/spec/plugin-host.md#channel).
+func (h *Host) PluginHostReply(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PluginHostReplyRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.answerPluginHostCall(req)
+}
+
+// PluginHostRequest receives a request of the main page to a plugin host, such as the pull of a declared status
+// (docs/spec/plugin-host.md#declared-ui-snapshots).
+func (h *Host) PluginHostRequest(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PluginHostRequestRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.pushPluginHostRequest(req)
+}
+
+// PluginHostEvent receives an event that the main page pushes to a plugin host, such as the acknowledgement of a declared
+// UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
+func (h *Host) PluginHostEvent(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PluginHostEventRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.pushPluginHostEvent(req)
+}
 func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)
 	if err != nil {

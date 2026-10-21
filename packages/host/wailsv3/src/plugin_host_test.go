@@ -91,7 +91,7 @@ func hostFixture(t *testing.T) string {
 }
 
 func hostTestSurfaces(config string) *Surfaces {
-	return &Surfaces{host: &Host{configDir: config}, pluginHosts: map[string]unsafe.Pointer{}}
+	return &Surfaces{host: &Host{configDir: config}, pluginHosts: map[string]unsafe.Pointer{}, pluginHostChannels: newPluginHostChannels(), events: func(string, any) {}}
 }
 
 // contract: plugin-host.create-loads-page

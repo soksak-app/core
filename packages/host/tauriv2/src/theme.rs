@@ -64,5 +64,6 @@ pub(crate) fn set(window: &Window, theme: Theme) -> Result<(), String> {
     }
     // A view receives the theme after its ready message, so the views with a ready document receive the change here.
     crate::documents::post_theme_to_views(window)?;
+    crate::plugin_host_channel::post_theme_to_plugin_hosts(window)?;
     emit_window(window, "theme", theme).map_err(|e| e.to_string())
 }

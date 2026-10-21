@@ -367,6 +367,16 @@
       },
       "description": "The host created the plugin host web view of the plugin in the window, so its WebContent process is requested (docs/spec/plugin-host.md)."
     },
+    "host.trace.plugin-host.process-ready": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "window": "string"
+      },
+      "description": "The first ready message of the plugin host page arrived after the host created its web view in the window, so its page runtime started (docs/spec/plugin-host.md#channel)."
+    },
     "host.trace.modal.stale-ready": {
       "layer": "host",
       "class": "call",
