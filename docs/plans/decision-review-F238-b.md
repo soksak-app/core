@@ -147,6 +147,17 @@ Two auditors on the D5 text (both fresh; each objection checked in the files).
 | B-O4: `log.enabled(level)` is public at `plugins.md:241` and is not in the removal list | Accepted, option (ii): the two-argument form replaces it; `plugins.md:241` and `plugins.ko.md:242` are in D5-e. |
 | B-O5: removal list misses comments at `view-calls.js:28,33`, `view-events.js:14,19,22`, `surface-modules.js:260` | Accepted; listed in step 6 and D5-e. |
 
+#### Round 6 (answers)
+
+Two auditors on the D5 text (both fresh; read-only; decision-level objections only).
+
+| Objection | Answer |
+|---|---|
+| D5 A1: an undeclared plugin event passes every gate, so a plugin whose classes are all `off` can emit without limit; the bound is deferred to S1 | Accepted as a decision-level objection. Open: round 7 must either give an undeclared plugin event a class so that `off` holds for it, or state the bound inside the decision. |
+| D5 B1: the same point, from the policy's goal (`logging.md` Gate paragraph, `log-gate.js:28`) | Accepted; the same open item as A1. |
+| D5 A2: step 3 says no count is dropped without a record, but S2 and S3 leave the flush and the kill loss open | Accepted. Open: round 7 must choose between a writer-only count (no pending state in the view, so S2 and S3 fall away) and a stated bound in the decision. The IPC cost of refused records is part of that choice. |
+| D5 A3: the view-side gate is an optimisation with three synchronisation paths (start values, posts, ready timing); the decision does not weigh it against the writer-only design | Accepted as part of the same open choice; round 7 states the cost of each design. |
+
 ## D6. View shortcut table (F234)
 
 ### Original decision
@@ -278,6 +289,17 @@ Two auditors on the D6 text (both fresh; each objection checked in the files).
 | B-6: `exposure.md:94-95` are table rows, not a paragraph | Accepted. Step 3 and D6-a rewrite the two rows; the `feat` paragraph at `:71` is deleted. |
 | B-7: Red list gaps: non-Escape key, failing command event, popover double close, `setTimeout` order, IME, modifiers; the native modal case is not a unit test | Accepted. D6-b tests (a) to (h); the native modal case moves to the D6-c probe. |
 | Non-blocking: a native picker open with view focus; the `runtime.command` wording | Accepted. Step 4 states the expected result (D6-c); the wording reads "calls `calls.request(name, params)` for any name". |
+
+#### Round 6 (answers)
+
+Two auditors on the D6 text (both fresh; read-only; decision-level objections only).
+
+| Objection | Answer |
+|---|---|
+| D6 A1 and B1: the Escape passthrough closes an open page picker whenever a view's own Escape does not call `preventDefault`; the shipped editor find bar (`editor.js:571`) is not confirmed to call it, and the vendor Escape handler (`libraries.js:2078`) can return without consuming the key | Accepted as a decision-level objection. Open: round 7 must choose between opt-in forwarding from the view's own handler (the bridge sends nothing by default) and a host-side close with a skip for editable targets. |
+| D6 A2: if `runtime.command` already reaches `core.picker.close`, the `runtime.shortcuts.run` route and its allow-list add surface and no protection | Accepted as a decision question. Open: round 7 checks whether the view bridge reaches `core.picker.close` through `runtime.command`; if it does, the route is dropped, and if it does not, the allow-list is described as a convenience and not a boundary. |
+| D6 A3: removing `shortcuts.register()` breaks external plugins that call it, and the sibling search covers only local checkouts | Accepted. Open: round 7 chooses between a deprecated no-op for one release with a changelog entry, and removal with a stated version. |
+| D6 B2: dropping workbench-key forwarding for `cmd+k` and `shift+cmd+n` is a removal with no stated rule | Accepted. Open: round 7 states the rule (no workbench key except Escape is forwarded from a view, with its reason in `native-surfaces.md`) or adds one named `core.focus.set` entry with its own test. |
 
 ## Sub-items
 
