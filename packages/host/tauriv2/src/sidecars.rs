@@ -1020,12 +1020,12 @@ impl<O: Owner> Sidecars<O> {
             // A sidecar that is starting registers when its start ends, so the start is awaited before the running
             // list is read.
             while changed.iter().any(|name| state.starting.contains(name)) {
-                // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the call
-                // amends; the panic hook records the panic.
                 state = self
                     .core
                     .started
                     .wait(state)
+                    // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the
+                    // call amends; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
             }
             let mut closing_changed = None;
@@ -1879,12 +1879,12 @@ impl<O: Owner> Sidecars<O> {
             // A sidecar that is starting is registered when it ends, so the list of running sidecars is emptied after
             // waiting for that start.
             while !state.starting.is_empty() {
-                // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the call
-                // amends; the panic hook records the panic.
                 state = self
                     .core
                     .started
                     .wait(state)
+                    // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the
+                    // call amends; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
             }
             // A standard-I/O sidecar ends, so it does not answer a close. A persistent service answers a close that was
@@ -2125,11 +2125,11 @@ impl<O: Owner> Core<O> {
             if !state.starting.contains(name) {
                 break;
             }
-            // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the start
-            // amends; the panic hook records the panic.
             state = core
                 .started
                 .wait(state)
+                // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the
+                // start amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
         }
         state.starting.insert(name.to_string());
