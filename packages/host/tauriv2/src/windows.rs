@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -152,6 +152,23 @@ pub(crate) struct Windows {
     opening: Mutex<()>,
     windows: Mutex<HashMap<String, Arc<WindowData>>>,
     owners: Mutex<HashMap<String, String>>,
+}
+
+/// Removes the window from the owner and window records, and returns whether no window is left while the application quits.
+fn remove_window_records(registry: &Windows, label: &str) -> bool {
+    // default: a lock that a panicking thread poisoned still holds the owner and window records, and the record of the destroyed
+    // window is removed from them; the panic hook records the panic.
+    registry
+        .owners
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .retain(|_, owner| owner != label);
+    let mut windows = registry
+        .windows
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    windows.remove(label);
+    windows.is_empty() && registry.quit.active()
 }
 
 /// Returns the state of the window.
@@ -638,31 +655,36 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                     );
                 })),
             );
-            if let Ok(mut monitor) = context.watching.0.lock()
-                && let Some(monitor) = monitor.take()
-            {
+            // default: a lock that a panicking thread poisoned still holds the input monitor, which is taken and removed; the panic
+            // hook records the panic.
+            let monitor = context
+                .watching
+                .0
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            if let Some(monitor) = monitor {
                 log_failure("surface input", platform.unwatch_input(monitor));
             }
-            if let Ok(mut shapes) = context.shapes.0.lock() {
-                for (_, shape) in shapes.drain() {
-                    log_failure("shape", platform.destroy_shape(shape));
-                }
+            // default: a lock that a panicking thread poisoned still holds the shapes of the window, which are all destroyed; the
+            // panic hook records the panic.
+            let mut shapes = context
+                .shapes
+                .0
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            for (_, shape) in shapes.drain() {
+                log_failure("shape", platform.destroy_shape(shape));
             }
             log_failure(
                 "sidecar retain",
                 host.state::<WindowSidecars>().retain(&host, &|_| false),
             );
             let registry = host.state::<Windows>();
-            if let Ok(mut owners) = registry.owners.lock() {
-                owners.retain(|_, label| label != host.label());
-            }
             crate::performance::window_remove(host.label());
-            if let Ok(mut windows) = registry.windows.lock() {
-                windows.remove(host.label());
-                if windows.is_empty() && registry.quit.active() {
-                    host.app_handle().exit(0);
-                }
-            };
+            if remove_window_records(&registry, host.label()) {
+                host.app_handle().exit(0);
+            }
             notify_workspace(host.app_handle());
             crate::exposure::windows_changed(host.app_handle());
         }
@@ -1113,3 +1135,7 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
     let (x, y, w, h) = platform::current()?.window_controls(handle)?;
     Ok(Rect { x, y, w, h })
 }
+
+#[cfg(test)]
+#[path = "windows_records_test.rs"]
+mod records_test;
