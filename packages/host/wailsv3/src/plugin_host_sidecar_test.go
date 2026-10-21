@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // sidecarSessionSurfaces returns a window that holds the project project-a with the root /fixture/root, and a Sidecars
@@ -32,7 +34,16 @@ func sidecarSessionSurfaces(t *testing.T) *Surfaces {
 		shown:    "project-a",
 		root:     "/fixture/root",
 		sidecars: c,
+		titles:   &titleRecord{},
 	}
+}
+
+// titleRecord is the native window of a test: it records the title that the window is given, and no window exists.
+type titleRecord struct{ title string }
+
+func (r *titleRecord) SetTitle(title string) application.Window {
+	r.title = title
+	return nil
 }
 
 // contract: plugin-host.sidecar.send-checks
@@ -204,7 +215,7 @@ func TestPluginHostSidecarCloseClosesOnlyTheCallersSessionsOfThePlugin(t *testin
 	s := sidecarSessionSurfaces(t)
 	c := s.sidecars
 	c.stopped = false
-	other := &Surfaces{projects: map[string]string{}, sidecars: c}
+	other := &Surfaces{projects: map[string]string{}, sidecars: c, titles: &titleRecord{}}
 	c.owners["plugin:probe:project-a:fixture-sidecar"] = s
 	c.owners["plugin:other:project-a:fixture-sidecar"] = s
 	c.owners["plugin:probe:project-a:fixture-sidecar-2"] = other
