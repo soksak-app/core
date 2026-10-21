@@ -2372,6 +2372,8 @@ Recording completeness (2026-09-17): the capture writes frames on a separate que
 
 ### F238-c-27 producer bridge follow-up
 
+- [o] F238-c-27-4 — P1: Owner core `main`, linked follow-up to F238-c-27-3. `validateBridgeCases` is callable in the owning view test and rejects empty or incomplete required case sets, unexpected action sequences, and a shortened unsupported-page refusal literal; the bridge test compares the refusal message exactly. Red: a no-op validator made the tracked rejection test fail with `Missing expected exception`. Green: restore validation; focused `node --test packages/plugin-api/test/view.test.mjs` passes 47/47. `make docs-check` passes. The package suite was not repeated.
+
 - [o] F238-c-27-3 — P1: Owner core `main`, linked follow-up to F238-c-27-1. Add `contract/view-bridge.json` to `packages/plugin-api/package.json` files and test package inclusion in `packages/plugin-api/test/package-files.test.mjs`. Red: removing the package file entry fails the test with `contract/view-bridge.json is missing`. Green: restored entry; owning test passes 1/1 and `npm pack --dry-run --json` lists `contract/view-bridge.json` (no package published).
 
 - [o] F238-c-27-2 — P1: Owner core `main`, linked follow-up to completed F238-c-27-1. Published cases now assert ordered theme event delivery and malformed host-message refusal through the injected script; the runner checks unique IDs and exact ordered action sequences. Red: changing the malformed-message refusal reason to `accept malformed message` failed the owning test on the reason mismatch. Green: restored expected reason; focused `view.test.mjs` passes 46/46. `make docs-check` passes.

@@ -610,24 +610,38 @@ test("composition.create of a view refuses elements that do not match its declar
 
 // Published producer-side bridge vectors run against createViewBridge, not the consumer fixture.
 const BRIDGE_CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-bridge.json", import.meta.url), "utf8"));
+const BRIDGE_ACTIONS = {
+  "view.bridge.ready-and-request-reply": ["create", "request", "host-reply"],
+  "view.bridge.events-delivered-in-order": ["subscribe", "host-event", "host-event"],
+  "view.bridge.refuses-malformed-host-message": ["create", "host-malformed"],
+  "view.bridge.refuses-unsupported-page": ["create"],
+};
+function validateBridgeCases(cases) {
+  assert.ok(Array.isArray(cases) && cases.length > 0, "view bridge contract must publish cases");
+  const ids = cases.map(({ id }) => id);
+  assert.equal(new Set(ids).size, ids.length, "bridge case ids must be unique");
+  assert.deepEqual([...ids].sort(), Object.keys(BRIDGE_ACTIONS).sort(), "all required bridge cases must be present");
+  for (const item of cases) assert.deepEqual(item.steps.map(({ action }) => action), BRIDGE_ACTIONS[item.id], `${item.id} ordered actions`);
+  const refusal = cases.find(({ id }) => id === "view.bridge.refuses-unsupported-page");
+  assert.equal(refusal.steps[0].output.throws, "view channel requires a view page on sok://<plugin id>, got https://example.test/");
+}
+test("view bridge contract validation rejects empty, missing, and shortened cases", () => {
+  assert.throws(() => validateBridgeCases([]), /must publish cases/);
+  assert.throws(() => validateBridgeCases(BRIDGE_CONTRACT.cases.slice(1)), /all required bridge cases/);
+  const shortened = structuredClone(BRIDGE_CONTRACT.cases);
+  shortened.find(({ id }) => id === "view.bridge.refuses-unsupported-page").steps[0].output.throws = "view channel requires a view page on sok://<plugin id>";
+  assert.throws(() => validateBridgeCases(shortened), /strictly equal/);
+});
 test("published view bridge cases match calls, replies, events, and refusals", async (t) => {
-  assert.equal(new Set(BRIDGE_CONTRACT.cases.map(({ id }) => id)).size, BRIDGE_CONTRACT.cases.length);
-  const actionSequences = {
-    "view.bridge.ready-and-request-reply": ["create", "request", "host-reply"],
-    "view.bridge.events-delivered-in-order": ["subscribe", "host-event", "host-event"],
-    "view.bridge.refuses-malformed-host-message": ["create", "host-malformed"],
-    "view.bridge.refuses-unsupported-page": ["create"],
-  };
+  validateBridgeCases(BRIDGE_CONTRACT.cases);
   for (const item of BRIDGE_CONTRACT.cases) {
-    assert.ok(actionSequences[item.id], `unsupported bridge case ${item.id}`);
-    assert.deepEqual(item.steps.map(({ action }) => action), actionSequences[item.id], `${item.id} ordered actions`);
     await t.test(item.id, async (subtest) => {
       if (item.id === "view.bridge.refuses-unsupported-page") {
         setup(subtest, { url: item.steps[0].input.url });
         let actual;
         try { createViewBridge({ handler: { postMessage() {} }, report() {} }); } catch (error) { actual = error; }
         assert.ok(actual, "unsupported page must be refused");
-        assert.ok(actual.message.startsWith(item.steps[0].output.throws), actual.message);
+        assert.equal(actual.message, item.steps[0].output.throws);
         return;
       }
       const { posted, host } = setup(subtest);

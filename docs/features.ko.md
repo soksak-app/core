@@ -2372,6 +2372,8 @@ macOS의 터미널 키보드 전달을 수정했다(2026-09-20). Tauri의 빈 �
 
 ### F238-c-27 producer bridge 후속
 
+- [o] F238-c-27-4 — P1: 소유자 core `main`, F238-c-27-3의 연결 후속 항목. 소유 view 테스트의 `validateBridgeCases`가 빈 필수 사례 집합, 사례 누락, 예상하지 않은 action 순서, 축약된 지원하지 않는 페이지 거부 문구를 거부하며 bridge test는 거부 메시지를 정확히 비교한다. Red: no-op validator로 바꾸자 추적된 거부 검사가 `Missing expected exception`으로 실패했다. Green: 검증을 복원한 뒤 집중 `node --test packages/plugin-api/test/view.test.mjs`가 47/47 통과한다. `make docs-check` 통과. package suite는 반복하지 않았다.
+
 - [o] F238-c-27-3 — P1: 소유자 core `main`, F238-c-27-1의 연결 후속 항목. `packages/plugin-api/package.json` files에 `contract/view-bridge.json`을 추가하고 `packages/plugin-api/test/package-files.test.mjs`에서 포함 여부를 검사한다. Red: package 파일 항목을 지우자 `contract/view-bridge.json is missing`으로 실패했다. Green: 항목을 복원한 뒤 소유 테스트 1/1 통과, `npm pack --dry-run --json`에 `contract/view-bridge.json`이 표시된다(게시하지 않음).
 
 - [o] F238-c-27-2 — P1: 소유자 core `main`, 완료된 F238-c-27-1의 연결 후속 항목. 공개 사례가 순서 있는 theme 이벤트 전달과 주입된 script를 통한 잘못된 host message 거부를 검증한다. 실행기는 고유 ID와 정확한 순서의 action 목록을 확인한다. Red: 잘못된 message 거부 이유를 `accept malformed message`로 바꾸자 소유 테스트가 이유 불일치로 실패했다. Green: 기대 이유를 복원한 뒤 집중 `view.test.mjs`가 46/46 통과한다. `make docs-check` 통과.
