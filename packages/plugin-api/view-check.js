@@ -43,6 +43,7 @@ export function checkViewLiteral(literal, {
   if (literal?.viewStartSha256 !== VIEW_START_SHA256) {
     errors.push(`viewStartSha256 is ${shown(literal?.viewStartSha256)}, want ${VIEW_START_SHA256}`);
   }
+  // default: an absent import map is empty so every required import is reported missing.
   const imports = literal?.viewImports ?? {};
   for (const [key, want] of Object.entries(VIEW_IMPORTS)) {
     if (imports[key] !== want) errors.push(`viewImports ${shown(key)} is ${shown(imports[key])}, want ${shown(want)}`);

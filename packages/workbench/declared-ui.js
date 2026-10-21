@@ -529,6 +529,7 @@ function paintNode(wrap, node, path, ctx) {
       children.className = "declared-children";
       wrap.append(children);
     }
+    // default: an expanded unloaded branch has no child nodes to draw yet.
     drawList(children, node.children ?? [], {
       key: entryKey,
       create: createNode,
