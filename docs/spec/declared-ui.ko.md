@@ -22,7 +22,7 @@ status는 사이드바 section이 그 section 선언의 `status` 형태로 이�
 {"type": "object", "properties": {"elements": {"type": "array"}}}
 ```
 
-이 부분 집합은 아래의 한도와 참조 규칙을 나타내지 못한다. 수신자는 그리기 전에 모든 선언된 UI snapshot에 이 규칙들을 적용한다.
+이 부분 집합은 아래의 한도와 참조 규칙을 나타내지 못한다. 수신자는 그리기 전에 모든 선언된 UI snapshot과 `null`이 아닌 모든 pull 응답에 이 규칙들을 적용한다.
 
 push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣는다. pull 응답도 status의 전체 값을 싣지만, 그것은 응답이지 선언된 UI snapshot이 아니다. 받아들인 값마다 그 status가 그린 트리 전체를 대체한다.
 
@@ -32,7 +32,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 ## 요소 종류
 
-필드 `kind`가 각 요소의 종류를 정한다. 종류는 `list`, `tree`, `button`, `status-line`이다. 각 객체는 그 종류가 나열한 필드만 받는다. 나열되지 않은 필드는 거부한다.
+필드 `kind`가 각 요소의 종류를 정한다. `kind`는 모든 요소에서 받아들이며, 나열된 필드 가운데 하나가 아니다. 종류는 `list`, `tree`, `button`, `status-line`이다. 각 객체는 그 종류가 나열한 필드만 받는다. 나열되지 않은 필드는 거부한다.
 
 | 종류 | 필드 | 형 | 필수 | 한도와 뜻 |
 | --- | --- | --- | --- | --- |
@@ -122,7 +122,7 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 네이티브 `button` 요소를 가지는 요소는 `button`, `command`가 있는 list 항목, `command`가 있는 tree 노드, tree 가지의 펼침 제어다. 정적 list 행과 status line은 button을 가지지 않는다.
 
 
-DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
+DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sidebar.section.control`과, 루트 요소의 `key`를 담은 속성 `data-key`를 가진다. list 항목과 tree 노드의 control은 `data-path`(루트 요소 아래의 key들의 JSON 배열)와 `data-role`(`label` 또는 `expand`)도 가진다. `command`가 없는 잎 노드는 두 속성 집합을 모두 갖지 않는다. `command`가 없는 가지는 펼침 제어의 속성만 가진다. 조작할 수 없는 요소, 예컨대 정적 list 행이나 status line은 둘 다 갖지 않는다. section 머리는 `core.sidebar.section.header`를 가진다([plugin](plugins.ko.md#섹션)). 사이드바가 이미 쓰는 이름이므로, 선언된 section과 모듈 section은 같은 방식으로 감사된다. 선언된 요소는 자기 종류의 DOM 이름을 따로 갖지 않는다. 종류는 값에 있다.
 
 선언된 section의 control에 대한 요청은 section id와 그 속성으로 지정한다. `data-key`는 루트 요소의 key다. `data-path`(list 항목과 tree 노드)는 루트 요소 아래의 key들의 JSON 배열이며, button의 control은 `data-path`를 갖지 않는다. `data-role`(list 항목과 tree 노드)은 `label` 또는 `expand`다. 키는 형제 사이에서 유일하고 역할은 tree 노드의 두 control을 구별하므로, section id와 이 속성들은 유일한 주소다.
 
@@ -137,7 +137,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 - 받아들인 값에서, 기준(baseline)의 `expanded`와 다른 가지는 plugin의 값을 받고, 유지된 상태를 그 값으로 바꾼다. `expanded`가 바뀌지 않은 가지는 유지된 상태를 그대로 둔다. 가지가 '새'것인 것은 기준이 있고 기준의 그 경로에 가지가 없을 때뿐이다. 기준이 없으면 유지된 상태가 있는 가지는 그 상태를 유지하고, 유지된 상태가 없는 가지는 plugin의 값을 받는다.
 - 거부된 값은 유지된 상태를 바꾸지 않는다. `expanded` 비교의 기준은 마지막으로 받아들인 값이다. 거부와 출처 변경은 기준을 없앤다. 기준이 없으면 유지된 상태가 그 상태를 가진 모든 경로에서 이긴다.
 - 잎 노드가 된 경로는 기준이 있든 없든 유지된 상태를 잃는다. 새 가지는 기준이 있든 없든 plugin의 `expanded` 값을 받는다. 기준이 없으면 유지된 상태가 없는 가지가 새 가지다.
-- pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. `null`이 아닌 pull 응답은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다. 출처에서 마지막으로 받아들인 값의 `seq`보다 `seq`가 낮은 pull 응답은 버린다.
+- pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. 출처에서 마지막으로 받아들인 값의 `seq`보다 `seq`가 낮은 pull 응답은 검사 없이 버린다. 그 밖의 `null`이 아닌 pull 응답은 검사 규칙을 따른다.
 - `selected`에는 유지된 상태가 없다. 이를 바꾸는 core 명령이 없으므로, plugin의 값이 받아들인 모든 값에 적용된다.
 - 유지된 상태는 받아들인 값에 그 경로가 없을 때 지운다. plugin 프로세스의 재시작은 프로세스 종료인 전이 (d)와, 새 프로세스의 등록인 전이 (a)로 처리하며, 그 출처 변경은 전이 (b)로 처리한다. 유지된 상태는 경로별로 살아남는다.
 - 유지된 상태는 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 값으로 되돌아간다.
@@ -158,7 +158,7 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 ## 사이드바 section 형태
 
 사이드바 section은 `plugin.json`에서 정확히 두 형태 가운데 하나로 선언한다([plugin](plugins.ko.md#섹션)). `module` 또는 `status`다. section은 `id`, `name`, 둘 중 하나, 선택 필드 `fill`을 선언한다. `fill: true`는 [plugin](plugins.ko.md#섹션)이 모듈 section에 주는 뜻과 같다. 펼친 section은 다른 section이 남긴 사이드바 높이를 나누어 갖고, 본문은 그 안에서 스크롤한다.
-`status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 section은 사이드바 section이 아니라 카드 표면이 되고, 사이드바는 카드 표면을 여는 명령이 그 plugin의 명령인 `button`을 가진다.
+`status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 plugin은 카드 표면을 선언하고, 사이드바는 그 plugin의 명령이면서 카드 표면을 여는 `button`을 가진다.
 
 - `module`을 가진 section은 그 모듈이 그린다. workbench는 모듈을 적재하고 section 요소에서 `mount(root, context)`를 부른다.
 - `status`를 가진 section은 그 status의 선언된 UI 값으로 그린다. status는 같은 plugin의 status이어야 하며, `exposes.status`가 선언해야 한다.
@@ -200,7 +200,9 @@ section의 방향이 바뀌면 방향 검사를 받아들인 값에 다시 한�
 | `elements`가 배열이 아님 | `elements must be an array` | `/elements` |
 | 직렬화한 값이 1048576바이트보다 큼 | `exceeds 1048576 bytes` | `/` |
 | 루트 요소가 64개를 넘음 | `exceeds 64 elements` | `/elements` |
-| 요소, list 항목, tree 노드가 객체가 아님 | `<kind> must be an object` | 그 값 |
+| 요소가 객체가 아님 | `element must be an object` | 그 요소 |
+| list 항목이 객체가 아님 | `list item must be an object` | 그 항목 |
+| tree 노드가 객체가 아님 | `tree node must be an object` | 그 노드 |
 | `kind`가 없는 요소 | `missing kind` | 그 요소 |
 | `kind`가 문자열이 아님 | `kind must be a string` | 그 요소 |
 | 표에 없는 `kind` 값 | `unknown kind <value>` | `kind` 값 |

@@ -610,3 +610,14 @@ The objections below are the answers of the thirteenth adversarial review of [de
 - R13-4: an element, a list item or a tree node that is not an object had no rejection row. Verdict: accepted. Resolution: the row `<kind> must be an object` points to that value and sits above the missing kind row.
 - R13-5: the field that names each element's kind was not listed. Verdict: accepted. Resolution: the field `kind` names each element's kind, stated in the element-kinds text.
 - R13-6: a plugin process restart had a rule of its own, which differed from the transitions. Verdict: accepted. Resolution: a restart is a process end, which is transition (d), followed by a registration from the new process, which is transition (a). It is therefore a change of source, handled by transition (b), and the kept state survives by path. The separate restart rule is removed. Consequence: because a change of source removes the baseline, the kept state wins over the plugin's values after a restart, as the rule without a baseline states.
+
+**Declared UI schema review round 14**
+
+The objections below are the answers of the fourteenth adversarial review of [declared UI](../spec/declared-ui.md). All six are accepted, and each resolution is applied as the reviewer wrote it.
+
+- R14-1: the sidebar sentence named the section as the thing that needs a view, although a plugin declares the card surface. Verdict: accepted. Resolution: a plugin that needs a view declares a card surface, and the sidebar holds a `button` whose command is a command of that plugin and opens it.
+- R14-2: the pull-reply rule said that every non-null pull reply follows the same rules as a pushed snapshot, which conflicted with the discard of an older reply. Verdict: accepted. Resolution: a pull reply whose `seq` is lower than the `seq` of the last accepted value from its source is discarded without validation; every other non-null pull reply follows the validation rules.
+- R14-3: the `kind` field was not stated to be accepted on every element and not to be one of the listed fields. Verdict: accepted. Resolution: `kind` is accepted on every element and is not one of the listed fields.
+- R14-4: one row covered an element, a list item and a tree node that are not objects, with a placeholder reason. Verdict: accepted. Resolution: three literal rows replace it: `element must be an object`, `list item must be an object`, and `tree node must be an object`.
+- R14-5: the attributes of a leaf and of a branch without `command` were not stated. Verdict: accepted. Resolution: a leaf without `command` carries neither attribute set, and a branch without `command` carries only the attributes of its expand control.
+- R14-6: the receiver rule named declared UI snapshots only, although it also applies to every non-null pull reply. Verdict: accepted. Resolution: the receiver applies the rules to every declared UI snapshot and every non-null pull reply.

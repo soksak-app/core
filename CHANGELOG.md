@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.8-0-15: The declared UI specification is revised after its fourteenth review. A plugin that needs a view declares the card surface, a pull reply with a lower `seq` is discarded without validation, `kind` is accepted on every element, the not-an-object rows are literal per element kind, and the attributes of leaves and branches without a command are stated.
 - F212.8-0-14: The declared UI specification is revised after its thirteenth review. The user sets a kept state only through the expand command, a pull reply whose `seq` is lower than the last accepted value is discarded, an element that is not an object is rejected, `kind` names each element's kind, and a process restart is handled as a change of source.
 - F212.8-0-13: The declared UI specification is revised after its twelfth review. The control attributes and their address are defined once there, lengths of keys, text fields and parameters count code points while the serialized value counts UTF-8 bytes, a snapshot from a pair that is not the chosen source is acknowledged and discarded, and the leaf and new-branch rules hold with or without a baseline.
 - F212.8-0-12: The declared UI specification states its own contracts for pulls, the source order, the sidebar section layer and accessibility. A source is a process and registration pair, lengths count Unicode code points, and the terms pull reply and kept state are added.

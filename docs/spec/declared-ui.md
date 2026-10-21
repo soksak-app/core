@@ -22,7 +22,7 @@ A declared UI status declares its `schema` in `exposes.status` ([exposure](expos
 {"type": "object", "properties": {"elements": {"type": "array"}}}
 ```
 
-The subset cannot express the limits and the reference rules below. The receiver applies them to every declared UI snapshot before drawing.
+The subset cannot express the limits and the reference rules below. The receiver applies them to every declared UI snapshot and every non-null pull reply before drawing.
 
 Each pushed declared UI snapshot carries the full value of the status, not a change. A pull reply carries the full value of the status too, but it is a reply, not a declared UI snapshot. Each accepted value replaces the whole drawn tree of the status.
 
@@ -32,7 +32,7 @@ A value is an object with the field `elements`, an array of 0 to 64 elements. Ea
 
 ## Element kinds
 
-The field `kind` names each element's kind. The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts only the fields that its kind lists. An unlisted field is rejected.
+The field `kind` names each element's kind. `kind` is accepted on every element and is not one of the listed fields. The kinds are `list`, `tree`, `button`, and `status-line`. Every object accepts only the fields that its kind lists. An unlisted field is rejected.
 
 | Kind | Field | Type | Required | Limit and meaning |
 | --- | --- | --- | --- | --- |
@@ -122,7 +122,7 @@ A disabled element (`enabled: false`) is rendered with the `disabled` attribute,
 The elements that carry the native `button` element are the `button`, a list item with `command`, a tree node with `command`, and the expand control of a tree branch. A static list row and a status line carry no button.
 
 
-Dom names. Every control that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
+Dom names. Every control that a declared UI value draws carries the dom name `core.sidebar.section.control` and the attribute `data-key` with the key of its root element. Controls of list items and tree nodes also carry `data-path`, a JSON array of the keys below the root element, and `data-role` (`label` or `expand`). A leaf without `command` carries neither attribute set. A branch without `command` carries only the attributes of its expand control. A non-interactive element, such as a static list row or a status line, carries neither. The section header carries `core.sidebar.section.header` ([plugins](plugins.md#sections)). These are the names that the sidebar already uses, so a declared section and a module section are audited the same way. A declared element does not carry a dom name of its own kind. Its kind is the kind of the value.
 
 A request addresses a control of a declared section by the section id and its attributes: `data-key` (the key of the root element), `data-path` (for list items and tree nodes, the keys below the root element; a button control carries no `data-path`), and `data-role` (`label` or `expand`, for list items and tree nodes). The address is unique, because keys are unique among siblings and the role tells the two controls of one tree node apart.
 
@@ -137,7 +137,7 @@ A declared UI status is drawn through its declared UI snapshots, as follows:
 - In an accepted value, a branch whose `expanded` differs from its `expanded` in the baseline takes the plugin's value, and the kept state is replaced with it. A branch whose `expanded` did not change keeps its kept state. A branch is new only when a baseline exists and the baseline has no branch at its path. With no baseline, a branch that has kept state keeps it, and a branch without kept state takes the plugin's value.
 - A rejected value does not change the kept state. The baseline of the `expanded` comparison is the last accepted value. A rejection and a change of source remove the baseline. With no baseline, the kept state wins for every path that it holds.
 - A path that is a leaf in an accepted value loses its kept state, with or without a baseline. A branch that is new takes the plugin's `expanded` value, with or without a baseline; without a baseline, a branch that has no kept state is new.
-- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A non-null pull reply follows the same validation and rejection rules as a pushed declared UI snapshot. A pull reply whose `seq` is lower than the `seq` of the last accepted value from its source is discarded.
+- A pull reply with `value: null` means that the source has no value yet. The section stays cleared until the first push from the source. The `seq` of a pull reply is the seq of the source's last declared UI snapshot, or 0 when `value` is `null`. A pull reply whose `seq` is lower than the `seq` of the last accepted value from its source is discarded without validation; every other non-null pull reply follows the validation rules.
 - `selected` has no kept state. No core command changes it, so the plugin's value applies in every accepted value.
 - A kept state is removed when its path is absent from an accepted value. A plugin process restart is a process end, which removes the registrations of the old process as transition (d), followed by a registration from the new process, which chooses the source again as transition (a). That change of source is handled by transition (b), so the kept state survives by path.
 - The kept state is not saved with the space or the project. A reload of the main page resets it to the plugin's values.
@@ -157,7 +157,7 @@ The source changes by these rules:
 ## Sidebar section form
 
 A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
-A sidebar section with the `status` form is declared UI. A section that needs a view becomes a card surface, and the sidebar holds a `button` whose command is a command of the plugin that opens the card surface.
+A sidebar section with the `status` form is declared UI. A plugin that needs a view declares a card surface, and the sidebar holds a `button` whose command is a command of that plugin and opens it.
 
 - A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element.
 - A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares.
@@ -199,7 +199,9 @@ Field rows of an element use the field list of its kind, which its `kind` value 
 | `elements` is not an array | `elements must be an array` | `/elements` |
 | The serialized value is larger than 1048576 bytes | `exceeds 1048576 bytes` | `/` |
 | More than 64 root elements | `exceeds 64 elements` | `/elements` |
-| An element, a list item, or a tree node that is not an object | `<kind> must be an object` | that value |
+| An element that is not an object | `element must be an object` | that element |
+| A list item that is not an object | `list item must be an object` | that list item |
+| A tree node that is not an object | `tree node must be an object` | that tree node |
 | An element with no `kind` field | `missing kind` | the element |
 | A `kind` that is not a string | `kind must be a string` | the element |
 | A `kind` value that is not in the table | `unknown kind <value>` | the `kind` value |
