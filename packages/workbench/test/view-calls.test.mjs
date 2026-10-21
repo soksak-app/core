@@ -391,7 +391,7 @@ test("a region call without a region name or with params that are not its fields
 
 test("runtime.native.call of a composition or region host call is refused and runs nothing", async () => {
   const { ran, options } = fakes();
-  for (const [index, name] of ["compositionDeclare", "compositionPlace", "documentAttach", "documentLoad", "imageAttach", "imagePlace"].entries()) {
+  for (const [index, name] of ["compositionDeclare", "compositionPlace", "documentAttach", "documentLoad", "imageAttach", "documentQuery"].entries()) {
     await assert.rejects(answerViewCall({ id: index + 1, command: "runtime.native.call", params: { name, payload: {} } }, options),
       { message: "view call runtime.native.call " + name + " is not served: a view operates its regions through its composition" });
   }
