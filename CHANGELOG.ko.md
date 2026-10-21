@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F229: host 계약은 sidecar의 retain-during-start, project-release, page-start 사례를 정의하고 Go와 Rust 테스트가 이를 선언한다. `make host-contract-check`는 두 host에서 이 생명주기 동작을 검증한다.
+- F229: host 계약은 sidecar의 retain-during-start, 선택적 닫기, project-release, page-start 사례를 정의하고 Go와 Rust 테스트가 이를 선언한다. `make host-contract-check`는 두 host에서 이 생명주기 동작을 검증한다.
 - F229-17: 두 host의 설치 문서는 사이드카 의존마다 `message`와 `hostReadOperations`를 사이드카 이름 아래 담고, `validateInstalledPlugins`가 이를 검사하며, staging이 이를 복사하고, environment는 이를 null 대신 plugin host에 선언한다. 그래서 선언된 사이드카 작업은 더 이상 `declares no message form`으로 거절되지 않는다. Red: 수정 전 코드에서 Go와 Rust의 installed 문서 테스트에는 `sidecars` 필드가 없고, workbench의 environment 테스트는 `unknown field sidecars`로 실패하며, staging 테스트는 facts에 undefined를 준다. Green: Go의 installed 테스트와 Rust의 installed 테스트(15개 중 15개)가 통과하고, plugin-api의 exposure 테스트는 16개 중 16개가 통과하며, workbench의 environment, stage, plugin host, environment 테스트가 통과한다.
 - F229: 표면은 선언하지 않은 사이드카 이름을 가리키는 view send를 `surface <id> cannot send to sidecar <name>`으로 거절하고 아무것도 보내지 않는다. Red: 거절을 뺀 `surface-modules.js` 사본에서 테스트는 `a send to an undeclared sidecar was not refused with its reason`으로 실패한다. Green: 표면 view 테스트가 통과하고(6개 중 6개), view 호출, 표면 module, 표면 view 테스트가 함께 통과한다(50개 중 50개).
 - F229: F229-17과 F229가 완료되었다. 페이지는 설치된 plugin마다 사이드카 facts를 받으며, 계약 사례 `installed.document.sidecar-facts`를 두 host의 테스트가 선언한다.

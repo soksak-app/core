@@ -431,6 +431,8 @@ fn invalid_json_closes_connection() {
 | `sidecars.retain.sends-layout-and-known-surfaces` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다, 주어진 레이아웃 표면과 이 프로세스가 보낸 모든 표면(없으면 빈 배열)을 담은 `retain` 요청 하나를 보내고 서비스가 닫은 수를 반환한다. | both |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | both |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | both |
+| `sidecars.retain.keeps-session-first-sent-during-start` | persistent service가 시작된 뒤 유지할 표면을 모으기 전에 처음 보낸 plugin session도 해당 retain에 포함된다. | both |
+| `sidecars.close-owned.selects-the-closed-surfaces` | project를 release하면 그 소유자가 가진 해당 project의 plugin session만 닫고, 같은 소유자가 계속 보유한 다른 project의 session은 유지한다. | both |
 | `sidecars.retain.rejects-after-stop` | 사이드카가 멈춘 뒤 시작한 retain이나 서비스를 준비한 뒤 멈춤이 끼어든 retain은 "sidecars are stopped"로 실패하고 서비스에 retain을 보내지 않는다. | both |
 | `menu.application.view-has-full-screen-and-text-size` | 애플리케이션 메뉴의 View 메뉴에는 전체 화면과 Command `=`, `-`, `0`의 [글자 크기](text-size.ko.md) 항목이 있고, 웹뷰 전체를 확대하거나 다시 읽는 메뉴 항목이 없다. | both |
 | `menu.application.help-has-debug` | 애플리케이션 메뉴의 도움말 메뉴에 단축키 없는 항목 디버그(Debug)가 있다. 이 항목은 main 창의 메인 page에서 `core.debug.open`을 실행한다([디버그 화면](debug.ko.md)). | both |
