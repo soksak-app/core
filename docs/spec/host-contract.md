@@ -428,6 +428,7 @@ Items:
 | `sidecars.retain.sends-layout-and-known-surfaces` | Retaining sends each running or published persistent service one `retain` request whose surfaces are the given layout surfaces and every surface this process has sent, an empty array when there are none, and returns the service's closed count. | both |
 | `sidecars.retain.reports-service-failure` | A `retained` reply with `ok: false` is returned as an error that carries the service's reason. | both |
 | `sidecars.retain.skips-service-without-endpoint` | Retaining without a running service or its endpoint file starts no service and closes nothing. | both |
+| `sidecars.retain.keeps-session-first-sent-during-start` | A session that is first sent while the service of a retain starts is in the keep list of that retain, because the list is read after the service started. | both |
 | `sidecars.retain.rejects-after-stop` | A retain that starts after the sidecars stop, or that a stop interrupts after the service is prepared, fails with "sidecars are stopped" and sends no retain to the service. | both |
 | `menu.application.view-has-full-screen-and-text-size` | The application menu's View menu has full screen and the [text size](text-size.md) items with Command `=`, `-`, and `0`; no menu item zooms or reloads the whole webview. | both |
 | `menu.application.help-has-debug` | The application menu's Help menu has the item 디버그 (Debug) without a key; it runs `core.debug.open` in the main page of the main window ([debug view](debug.md)). | both |
