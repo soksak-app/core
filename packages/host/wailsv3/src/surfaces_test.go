@@ -128,7 +128,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	}
 }
 
-// contract: view.composition.declares-page
+// contract: view.composition.page-and-regions
 func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 	if err := validateComposition("probe", SurfaceComposition{Kind: "view", Page: "ui/page.html"}); err != nil {
 		t.Fatalf("view without regions: %v", err)
@@ -300,6 +300,62 @@ func TestViewCallIsForwardedWithItsPluginAndSurface(t *testing.T) {
 	}
 	if _, ok, _ := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"event":"view.ready"}`)); ok {
 		t.Fatalf("a ready message is forwarded as a call")
+	}
+}
+
+// contract: view.declared-ui.snapshot
+func TestViewDeclaredSnapshotIsForwardedWithItsSurfaceAndPlugin(t *testing.T) {
+	payload, ok, err := DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":3,"value":{"elements":[]},"skipped":1}`))
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if !ok {
+		t.Fatalf("a declared UI snapshot is not forwarded")
+	}
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["status"] != "probe.lines" || payload["seq"] != uint64(3) || payload["skipped"] != uint64(1) {
+		t.Fatalf("forwarded payload %v, want surface probe-surface, plugin probe, status probe.lines, seq 3, skipped 1", payload)
+	}
+	value, ok := payload["value"].(json.RawMessage)
+	if !ok || string(value) != `{"elements":[]}` {
+		t.Fatalf("forwarded value %v, want the value of the snapshot", payload["value"])
+	}
+	// A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
+	payload, ok, err = DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
+	if err != nil || !ok {
+		t.Fatalf("snapshot with a null value: ok %v, err %v", ok, err)
+	}
+	if value, ok := payload["value"].(json.RawMessage); !ok || string(value) != "null" {
+		t.Fatalf("forwarded value %v, want null", payload["value"])
+	}
+	if _, ok, _ := DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(`{"event":"view.ready","plugin":"probe","document":"doc-1"}`)); ok {
+		t.Fatalf("a ready message is forwarded as a snapshot")
+	}
+}
+
+// contract: view.declared-ui.snapshot
+func TestViewDeclaredSnapshotInvalidFieldsAreErrorsNotForwarded(t *testing.T) {
+	for _, test := range []struct{ message, want string }{
+		{`{"event":"declared-ui.snapshot","status":"probe.lines","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot names no plugin`},
+		{`{"event":"declared-ui.snapshot","plugin":"other","status":"probe.lines","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot names plugin "other", want plugin "probe"`},
+		{`{"event":"declared-ui.snapshot","plugin":"probe","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot has no status`},
+		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"","seq":1,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot has no status`},
+		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","value":null,"skipped":0}`, `probe-surface: declared UI snapshot of status "probe.lines" has no seq from 1`},
+		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":0,"value":null,"skipped":0}`, `probe-surface: declared UI snapshot of status "probe.lines" has no seq from 1`},
+		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null}`, `probe-surface: declared UI snapshot of status "probe.lines" has no skipped count`},
+		{`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"skipped":0}`, `probe-surface: declared UI snapshot of status "probe.lines" has no value`},
+	} {
+		payload, _, err := DeclaredSnapshotEvent("probe-surface", "probe", json.RawMessage(test.message))
+		if err == nil || err.Error() != test.want {
+			t.Fatalf("message %s: %v, want %s", test.message, err, test.want)
+		}
+		if payload != nil {
+			t.Fatalf("message %s returns payload %v with its error", test.message, payload)
+		}
+	}
+	// A snapshot that names another plugin is an error, not a forwarding.
+	payload, ok, err := DeclaredSnapshotEvent("probe-surface", "other", json.RawMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
+	if err == nil || err.Error() != `probe-surface: declared UI snapshot names plugin "probe", want plugin "other"` || payload != nil || !ok {
+		t.Fatalf("foreign plugin: ok %v, payload %v, err %v", ok, payload, err)
 	}
 }
 
@@ -476,7 +532,7 @@ func TestViewCommandReplyIsForwardedAsAViewReplyEvent(t *testing.T) {
 }
 
 // The dom composition kind is removed: the reader refuses it with an error that names the plugin and the manifest field.
-// contract: surface.composition.dom-removed
+// contract: view.composition.dom-removed
 func TestDomCompositionIsRefusedWithThePluginAndTheField(t *testing.T) {
 	err := validateComposition("probe", SurfaceComposition{Kind: "dom"})
 	want := "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"

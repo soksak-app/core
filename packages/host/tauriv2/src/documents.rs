@@ -932,6 +932,68 @@ impl ViewChannels {
         })))
     }
 
+    /// Returns the declared-ui.snapshot payload of a snapshot of the view of surface, or None when the message is not one.
+    /// A snapshot is {"event", "plugin", "status", "seq", "value", "skipped"} with an integer seq from 1 and a skipped
+    /// count of 0 or more; a snapshot with an invalid field is an error (docs/plans/plugin-processes.md, rule 2 and
+    /// messages and events). The host relays the snapshot and writes no event for it.
+    pub fn snapshot(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
+        let received: ViewReceived = serde_json::from_str(value)
+            .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        let Some(message) = received.message else {
+            return Ok(None);
+        };
+        if message.get("event").and_then(Value::as_str) != Some(DECLARED_SNAPSHOT_EVENT) {
+            return Ok(None);
+        }
+        let plugin = self
+            .lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+            .ok_or_else(|| {
+                format!("{surface}: view channel message of a surface without a view")
+            })?;
+        let named = message
+            .get("plugin")
+            .and_then(Value::as_str)
+            .filter(|named| !named.is_empty())
+            .ok_or_else(|| format!("{surface}: declared UI snapshot names no plugin"))?;
+        if named != plugin {
+            return Err(format!(
+                "{surface}: declared UI snapshot names plugin {named:?}, want plugin {plugin:?}"
+            ));
+        }
+        let status = message
+            .get("status")
+            .and_then(Value::as_str)
+            .filter(|status| !status.is_empty())
+            .ok_or_else(|| format!("{surface}: declared UI snapshot has no status"))?;
+        let seq = message
+            .get("seq")
+            .and_then(Value::as_u64)
+            .filter(|seq| *seq >= 1)
+            .ok_or_else(|| {
+                format!("{surface}: declared UI snapshot of status {status:?} has no seq from 1")
+            })?;
+        let skipped = message
+            .get("skipped")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                format!("{surface}: declared UI snapshot of status {status:?} has no skipped count")
+            })?;
+        // A value of null stays present: the receiver validates it like any other value (docs/spec/declared-ui.md).
+        let value = message.get("value").ok_or_else(|| {
+            format!("{surface}: declared UI snapshot of status {status:?} has no value")
+        })?;
+        Ok(Some(json!({
+            "surface": surface,
+            "plugin": plugin,
+            "status": status,
+            "seq": seq,
+            "skipped": skipped,
+            "value": value,
+        })))
+    }
+
     /// Records the navigation state of the view of surface. A loading document clears the ready document of the view.
     pub fn state(&self, surface: &str, state: &str) -> Result<(), String> {
         let loaded: ViewState = serde_json::from_str(state)
@@ -956,6 +1018,8 @@ impl ViewChannels {
 /// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
 /// region, and the view closes with the other documents of its surface.
 const VIEW_NAME: &str = "";
+/// The event name of a declared UI snapshot of a view (docs/plans/plugin-processes.md, messages and events).
+const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
 
 /// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads sok://<plugin>/<page>
 /// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
@@ -1170,6 +1234,23 @@ fn view_message(
     match call {
         Ok(Some(payload)) => {
             if let Err(error) = emit_window(window, "view-call", payload) {
+                log_error("view channel", error);
+            }
+            return;
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log_error("view channel", error);
+            return;
+        }
+    }
+    // A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
+    // (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
+    let snapshot =
+        window_data(window).and_then(|data| data.documents.views().snapshot(surface, value));
+    match snapshot {
+        Ok(Some(payload)) => {
+            if let Err(error) = emit_window(window, DECLARED_SNAPSHOT_EVENT, payload) {
                 log_error("view channel", error);
             }
             return;

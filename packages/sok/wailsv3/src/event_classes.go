@@ -48,7 +48,6 @@ var eventClasses = map[string]Class{
 	"host.test.start":                         ClassLifecycle,
 	"host.trace.call.late-reply":              ClassCall,
 	"host.trace.modal.stale-ready":            ClassCall,
-	"host.trace.plugin-host.process-request":  ClassCall,
 	"host.trace.sidecar.ready":                ClassCall,
 	"host.trace.sidecar.restart-reset":        ClassCall,
 	"host.trace.status.notify":                ClassCall,

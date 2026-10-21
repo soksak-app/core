@@ -3,7 +3,7 @@ import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRunt
 import { registry } from "./exposure.js";
 import { answerViewCall, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
-import { createViewCommands } from "./view-commands.js";
+import { createViewCommands, keepViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
@@ -246,6 +246,8 @@ function answerViewCalls(surface, scoped, page, isDisposed, exposure) {
     timeoutOf: (name) => registry.commandTimeout(name),
     report: callReporter(surface.pluginId),
   });
+  // The declared UI pull of a declared section sends through this layer, so it is kept by surface until the answers end.
+  const forgetCommands = keepViewCommands(surface.surfaceId, viewCommands);
   const options = {
     plugin: surface.pluginId,
     pending,
@@ -296,6 +298,7 @@ function answerViewCalls(surface, scoped, page, isDisposed, exposure) {
   return Promise.all([answering, replies]).then(([offCall, offReply]) => () => {
     offCall();
     offReply();
+    forgetCommands();
     viewCommands.close();
     return subscriptions.close();
   });

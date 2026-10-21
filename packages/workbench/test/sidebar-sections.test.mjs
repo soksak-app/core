@@ -14,11 +14,14 @@ globalThis.ErrorEvent = dom.window.ErrorEvent;
 globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
 
 // The snapshot channel and the pull of a declared section source are fakes at the transport boundary of the main page
-// (declared-source.js), which holds no production connection yet.
+// (declared-source.js), which the tests replace with a fake host.
 const declaredWorld = { channel: () => null, pull: () => Promise.resolve({ seq: 0, value: null }) };
 mock.module("../declared-source.js", { namedExports: {
-  declaredChannel: (source) => declaredWorld.channel(source),
-  declaredPull: (source) => declaredWorld.pull(source),
+  createDeclaredSource: ({ plugin, status }) => ({
+    channel: (source) => declaredWorld.channel(source),
+    pull: (source) => declaredWorld.pull(source),
+    plugin, status,
+  }),
 } });
 // Records the lines that the one error display path writes (shown-errors.js reports through host.js).
 const logged = [];
