@@ -2646,6 +2646,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F236",
+    implementation: [{ file: "scripts/check-test-parity.mjs", symbol: "function packageOwner(name)" }],
+    tests: [{ file: "scripts/test/test-parity.test.mjs", id: "ownership audit classifies plugins and sidecars by their name prefix, without a list of real names" }],
+    expected: "The ownership audit names no real plugin or sidecar: it classifies a package by its name prefix. The decoupling items F236-1 to F236-12 keep their evidence in docs/features.md, and the moves they name are in docs/plans/decouple-handoff.md.",
+    levels: ["unit"],
+  },
+  {
     id: "F160.35",
     implementation: [
       { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage" },

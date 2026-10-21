@@ -98,7 +98,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 
 ## 재생 실행 파일
 
-화면을 만드는 sidecar는 `sidecar.json`에 `replay`를 선언한다([sidecars](sidecars.ko.md#선언과-시작)). 형식은 `{"role": <role>, "executable": <sidecar 안의 경로>}`다. `role`은 sidecar의 event 파일(`logs/<role>-<boot>.jsonl`)의 role이며, 그 파일의 `log.open`이 밝힌다. 실행 파일은 sidecar의 재생 엔진이다. 터미널 엔진은 거기에 있으므로 명령줄 도구는 어느 것도 이름으로 부르지 않는다.
+화면을 만드는 sidecar는 `sidecar.json`에 `replay`를 선언한다([sidecars](sidecars.ko.md#선언과-시작)). 형식은 `{"role": <role>, "executable": <sidecar 안의 경로>}`다. `role`은 sidecar의 event 파일(`logs/<role>-<boot>.jsonl`)의 role이며, 그 파일의 `log.open`이 밝힌다. 실행 파일은 sidecar의 재생 엔진이므로 명령줄 도구는 어느 것도 이름으로 부르지 않는다.
 
 도구는 sidecar 폴더에서 실행 파일을 [segment](#segment)마다 한 번 인자 없이 시작하고, 표준 입력에 role의 파일에 있는 그 segment의 층 `sidecar` event를 [질의](logging.ko.md#질의)의 순서(시각, process, `seq`)대로, 바꾸지 않고, 각각 줄바꿈으로 끝나게, `--until`이 준 `sequence`까지 쓴다. 실행 파일은 재생 입력을 `sequence` 순서로 빈 화면에 적용하고, 읽은 frame 기록마다 그 순번의 화면 hash를 담은 한 줄 `{"sequence": <n>, "hash": <hash>}`을 표준 출력에 쓴다. 입력이 끝나면 종료 상태 0으로 끝난다. 다른 종료 상태, 그 객체가 아닌 줄, 소문자 16진 64자가 아닌 hash, 줄을 받지 못한 frame 기록은 재생의 실패이며 실행 파일의 오류 글과 함께 보고한다.
 
