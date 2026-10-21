@@ -3,12 +3,14 @@
 // Window checks use only the declared entries of the local endpoint (status, command, dom) and native input.
 // There is no way to send code to a document and run it, and a check that writes such a call is rejected.
 // State is awaited through status.watch notifications. Waits of a fixed duration and repeated queries are
-// rejected. setTimeout may be used only as the upper bound of a wait (the wait is rejected when the time passes).
+// rejected. setTimeout may be used only as the upper bound of a wait (the wait is rejected when the time passes),
+// or to record an observation through report (the record never settles the wait). The timer rule does not apply to
+// the tests of the harness: they run on mocked time, and their timers simulate the input of a request.
 // Checks every .mjs file under e2e and the window check harness (packages/window-check) (node_modules excluded).
 //
 //   node scripts/check-e2e.mjs
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = new URL("../", import.meta.url).pathname;
@@ -60,11 +62,14 @@ export function auditE2ESource(text, file) {
       if (rule.pattern.test(line)) errors.push(`${file}:${index + 1}: uses ${rule.what}`);
     }
   });
+  const harnessTest = file.startsWith(join("packages", "window-check", "test") + sep);
   for (const match of text.matchAll(TIMEOUT)) {
-    if (!/\breject\s*\(/.test(text.slice(match.index, match.index + DEADLINE_WINDOW))) {
-      const line = text.slice(0, match.index).split("\n").length;
-      errors.push(`${file}:${line}: uses setTimeout as a wait; a timeout must reject`);
-    }
+    const deadband = text.slice(match.index, match.index + DEADLINE_WINDOW);
+    if (/\breject\s*\(/.test(deadband)) continue;
+    if (/\breport\s*\(/.test(deadband)) continue;
+    if (harnessTest) continue;
+    const line = text.slice(0, match.index).split("\n").length;
+    errors.push(`${file}:${line}: uses setTimeout as a wait; a timeout must reject`);
   }
   return errors;
 }
