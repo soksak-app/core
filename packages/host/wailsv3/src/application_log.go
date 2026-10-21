@@ -87,6 +87,11 @@ func LogInfo(where string, text any) {
 	Log(Entry{"info", "host", where, text})
 }
 
+// LogWarn writes one warning record of the host. A warning records a loss or a degradation that the host recovers from.
+func LogWarn(where string, text any) {
+	Log(Entry{"warn", "host", where, text})
+}
+
 // fatalError writes an error record and ends the process with status 1. A fatal failure after the log is open uses it.
 func fatalError(where string, text any) {
 	LogError(where, text)

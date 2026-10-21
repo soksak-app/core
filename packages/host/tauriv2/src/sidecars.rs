@@ -416,7 +416,7 @@ fn log_unfinished_line(sidecar: &str, bytes: usize) {
 /// image is answered `closed`, so the sidecar releases the frame and does not match a later answer of a reopened
 /// surface of the same id to it (docs/spec/native-surfaces.md#image-regions).
 fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body: &RawValue) {
-    crate::application_log::log_info(
+    crate::application_log::log_warn(
         &format!("sidecar {sidecar}"),
         format!(
             "message for surface {surface} dropped: no window owns the surface: {}",

@@ -2184,7 +2184,7 @@ func (e sidecarEnded) Is(target error) bool { return target == ErrSidecarEnded }
 // transfer image among them with the error closed, because the supplier keeps a transfer image until the host answers it
 // (docs/spec/native-surfaces.md#image-regions).
 func (c *Sidecars) dropMessage(sidecar string, event sidecarEvent) {
-	LogInfo("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
+	LogWarn("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
 	name, answer, ok := ClosedImageAnswer(event.Body)
 	if !ok {
 		return

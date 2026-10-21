@@ -874,7 +874,7 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 	}
 	requireEnded(t, processID(t, directory))
 	// The discarded message of s2 is recorded with its body.
-	if want := ` info host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: "late"`; !strings.Contains(written(), want) {
+	if want := ` warn host sidecar @fixture/sidecar-echo: message for surface s2 dropped: no window owns the surface: "late"`; !strings.Contains(written(), want) {
 		t.Fatalf("the log has no %q:\n%s", want, written())
 	}
 }

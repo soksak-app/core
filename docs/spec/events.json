@@ -110,6 +110,7 @@
       "class": "lifecycle",
       "level": [
         "error",
+        "warn",
         "info"
       ],
       "fields": {

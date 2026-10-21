@@ -104,10 +104,11 @@ pub fn use_host_event_log(log: Option<Arc<EventLog>>) {
 pub fn emit_record(level: &str, layer: &str, place: &str, text: String) {
     let parsed = match level {
         "error" => Level::Error,
+        "warn" => Level::Warn,
         "info" => Level::Info,
         other => {
             eprintln!(
-                "event writer: the record {place:?} of {layer} has the level {other:?}, which is not error or info"
+                "event writer: the record {place:?} of {layer} has the level {other:?}, which is not error, warn or info"
             );
             return;
         }

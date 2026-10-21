@@ -1517,7 +1517,7 @@ fn a_dropped_sidecar_message_is_recorded() {
         config.path(),
     )));
     let want = format!(
-        " info host sidecar {ECHO}: message for surface s2 dropped: no window owns the surface: \"late\""
+        " warn host sidecar {ECHO}: message for surface s2 dropped: no window owns the surface: \"late\""
     );
     assert!(log.contains(&want), "no {want:?} in {log}");
 }
