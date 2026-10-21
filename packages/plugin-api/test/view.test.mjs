@@ -502,3 +502,14 @@ test("a view record that the host refuses is reported, and so is its refused err
   assert.equal(refused[0].text, "log refused");
   assert.equal(refused[0].error?.message, "error refused");
 });
+
+test("runtime.command sends a command name through the view call route and resolves on the reply", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.command, "function", "the view bridge has no runtime.command");
+  const sent = runtime.command("core.picker.close", {});
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "core.picker.close", params: {} });
+  host({ sok: 1, id: 1, result: "closed" });
+  assert.equal(await sent, "closed");
+  assert.throws(() => runtime.command(""), /runtime\.command requires a non-empty name/);
+});

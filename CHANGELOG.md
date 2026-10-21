@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-b-4: A view runs a declared command with `runtime.command(name, params)`, which sends any name through the view call route; the call layer keeps the owner check of each name, and the view bridge installs no shortcut listener.
 - F238-b-11: A view bridge reports a view record that the host refuses, and a refused error line of the view: both go to the page report with their place and text, so a refusal of a view record is not dropped silently.
 - F238-a-15: A tab reports only a local absolute directory: a directory with a `//` or `/<letter>:` prefix or a NUL byte is refused when it is reported, with the same `TypeError` as a path that is not absolute, through the predicate that the page uses.
 - F238-a-8: A surface context requires its origin: `createSurfaceContext` refuses a missing origin and every value that is not `{directory}` with null or a local absolute path, with the text of the failed check, and it no longer fills in `{directory: null}`.

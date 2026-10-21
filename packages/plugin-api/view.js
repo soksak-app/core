@@ -198,6 +198,12 @@ export function createViewBridge({ handler, report }) {
     // The error line of an error that the view shows on its own page: the page writes `surface <surface> <where>: <text>` to the
     // application log at the moment the view shows it (docs/spec/native-surfaces.md#view-surfaces).
     error: (where, text) => calls.request("runtime.error", { where, text }).then(() => undefined),
+    // The one route of a view to run a command that core or the view declares (docs/spec/native-surfaces.md#view-surfaces, input).
+    // The call layer keeps the owner check of each name; the bridge adds no set of names.
+    command: (name, params = null) => {
+      if (typeof name !== "string" || name === "") throw new TypeError("runtime.command requires a non-empty name");
+      return calls.request(name, params);
+    },
     theme: (listener) => {
       if (typeof listener !== "function") throw new TypeError("runtime.theme requires a listener");
       if (!listeners.has("theme")) listeners.set("theme", new Set());
