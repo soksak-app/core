@@ -1925,6 +1925,7 @@
   - [ ] F218-2.3 — P2: Rust host가 poisoned lock 결과를 오류 문자열이나 오류 결과(`map_err`, `ok()`, `?`)로 바꾸는 100개 지점. 입력: 호출이 poisoned lock에 대해 오류를 돌려주고 호출자가 보고하거나 전파한다. 기대: 각 지점이 `PoisonError::into_inner`와 `default:` 사유로 복구하고, 소유 module의 test가 lock을 poison시켜 호출이 완료됨을 보인다. Red: 변경 전 반환값 assertion. Green: 변경 후. 닫는 조건: 모든 지점이 전환되고 test가 기록된다.
   - [ ] F218-2.4 — P2: Rust host가 poisoned lock 결과를 unwrap하거나 expect하는 86개 지점(`expect`, `unwrap`). 입력: lock이 poisoned이면 호출 thread가 panic한다. 기대: 각 지점이 `PoisonError::into_inner`와 `default:` 사유로 복구하고, 소유 module의 test가 lock을 poison시킨다. Red: 변경 전 반환값 assertion. Green: 변경 후. 닫는 조건: 모든 지점이 전환되고 test가 기록된다.
   - [ ] F218-2.5 — P2: Rust host와 sidecar crate에 census 규칙 `rs.lock-result`를 강제한다. 입력: 규칙이 `scripts/census.json`에서 pending이고 `make census-check`가 발견을 나열한다. 기대: 규칙이 발견 0이고 `make push-check`가 pending 없이 실행한다. 닫는 조건: F218-2.2, F218-2.3, F218-2.4가 완료되고 `make census-check`가 `rs.lock-result` 발견 0을 보고한다.
+- [ ] F219 — P1: F218-2.2 branch에서 `make rust-repeat PACKAGE=soksak-host-tauriv2 COUNT=1` 전체 실행이 load average 27~42에서 `tests/sidecars_test.rs`의 `surface_open_clears_the_restart_limit`를 한 번 실패했다(`the opened surface recorded no host.trace.sidecar.restart-reset`). 이 시험은 단독으로 세 번 모두 통과한다. 기대: `make rust-tests-alone`과 반복 실행으로 원인(시험 순서, 공유 event log, F218-2.2의 `sidecars.rs` 변경)을 찾고 Red와 Green으로 고친다. 이 항목이 F218-2.2의 합치기를 막는다.
 
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
