@@ -623,10 +623,10 @@ pub(crate) fn update(window: &Window, request: UpdateRequest) -> Result<(), Stri
 #[cfg(test)]
 mod tests {
     use super::{Modal, Overlay, OverlayContent};
-    use std::sync::PoisonError;
     use crate::event_log;
     use crate::event_record::use_host_event_log;
     use std::sync::Arc;
+    use std::sync::PoisonError;
     use std::time::Duration;
 
     // contract: modal.state.poisoned-lock-is-recovered
