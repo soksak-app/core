@@ -48,7 +48,7 @@ Every plugin view meets (i), (ii), (iii), (iii-b), (v) and (viii), and the resta
 ## Rules
 
 1. Plugin code does not run on the workbench page.
-2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests the current value of each declared status once, from the source chosen for it (pull). The workbench also pulls the current value of a declared status once when its source changes, and once when the section changes orientation. A running view has no other way to send its last value to a new reader, and a value discarded for the previous orientation may be valid for the new one, which only the source holds. No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
+2. **Declared UI snapshots.** A plugin view or plugin host pushes its declared UI snapshot to the workbench (push). When the main page loads, including a reload, the workbench requests the current value of each declared status once, from the source chosen for it (pull). The workbench also pulls the current value of a declared status once when its source changes. A running view has no other way to send its last value to a new reader. No other pull is made. Message names and fields are in [messages and events](#messages-and-events).
    - A status has at most one snapshot in transit.
    - A change made while a snapshot is in transit marks the status dirty. When the acknowledgement arrives, the next snapshot carries the latest value.
    - The number of skipped values is counted in `losses.skipped` of the core status `core.plugin.losses`. The count reaches the main page as the field `skipped` of each snapshot message: the number of values of the status that were overwritten while a snapshot was in transit, since the previous snapshot of the status was sent. While the performance trace is on, the main page writes `page.trace.declared-ui.snapshot.skipped {plugin, status, count}` for each overwritten value. The host relays no snapshot and writes no event for it, because `host.*` events are written only by host code.
@@ -121,7 +121,7 @@ Every plugin view meets (i), (ii), (iii), (iii-b), (v) and (viii), and the resta
 |---|---|---|---|
 | `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`; `skipped` is the count of values overwritten since the previous snapshot of the status | the push of rule 2 |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | confirms receipt; releases the in-transit slot |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}`, where `seq` is the seq of the source's last declared UI snapshot, or 0 when `value` is `null` | the pull of rule 2 (load, source change, orientation). `value` is `null` when the source has no value yet |
+| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`; the reply is `{seq, value}`, where `seq` is the seq of the source's last declared UI snapshot, or 0 when `value` is `null` | the pull of rule 2 (load, source change). `value` is `null` when the source has no value yet |
 
 The RPC protocol number is 1 in the 0.0 series.
 

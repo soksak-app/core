@@ -48,7 +48,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 ## 규칙
 
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
-2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 요청한다(pull). 상태의 출처가 바뀌거나 section의 방향이 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없고, 이전 방향에서 버린 값은 새 방향에서 유효할 수 있으며 그 값을 가진 것은 출처뿐이기 때문이다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
+2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 요청한다(pull). 상태의 출처가 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
    - status 하나에는 전송 중인 snapshot이 최대 1개다.
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
    - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
@@ -121,7 +121,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 |---|---|---|---|
 | `declared-ui.snapshot` | plugin → workbench (event) | `{plugin, status, seq, value, skipped}`. `skipped`는 status의 이전 snapshot이 보내진 뒤 덮어쓴 값의 수다 | 규칙 2의 push |
 | `declared-ui.snapshot.ack` | workbench → plugin (event) | `{plugin, status, seq}` | 수신을 확인하고 전송 슬롯을 비운다 |
-| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}`이며 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이고, `value`가 `null`이면 0이다 | 규칙 2의 pull(load, 출처 변경, 방향 변경). 출처에 아직 값이 없으면 `value`는 `null`이다 |
+| `declared-ui.snapshot.request` | workbench → plugin (call) | `{status}`, 응답은 `{seq, value}`이며 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이고, `value`가 `null`이면 0이다 | 규칙 2의 pull(load, 출처 변경). 출처에 아직 값이 없으면 `value`는 `null`이다 |
 
 RPC protocol 번호는 0.0 계열에서 1이다.
 
