@@ -229,3 +229,68 @@ test("a view registers its exposure through the page and its port consumes forwa
     dom.window.close();
   }
 });
+
+// A view names the sidecar of each send, and the surface sends only to a sidecar that it declares (docs/spec/native-surfaces.md#view-surfaces).
+// A send that names another sidecar is refused with its reason and reaches no sidecar.
+test("a view sends only to a sidecar its surface declares and a send to another sidecar is refused", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const replies = [];
+  const sent = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime,
+        native: { ...runtime.native, on: async (name, listener) => {
+          listeners.set(name, listener);
+          return () => {};
+        }, call: async (name, payload) => {
+          if (name === "viewReply") replies.push(payload);
+          return null;
+        } },
+        // The sidecar port of the surface records the sends that reach a sidecar.
+        sidecar: () => ({
+          send: async (id, body, cids) => {
+            sent.push({ id, body, cids });
+            return null;
+          },
+          on: async () => () => {},
+          onFailure: async () => () => {},
+        }),
+      };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-sidecar");
+  const pluginId = "fixture-view-sidecar";
+  const surfaceId = "fixture-view-sidecar-surface";
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: ["fixture-sidecar"], composition };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  const sendFrom = (id, sidecar) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id, command: "runtime.sidecar.send",
+    params: { id: "probe", sidecar, body: { n: id }, cids: [] } });
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    sendFrom(1, "other-sidecar");
+    await settle();
+    assert.deepEqual(replies.at(-1), { id: 1, error: { code: -32000, message: `surface ${surfaceId} cannot send to sidecar other-sidecar` } },
+      "a send to an undeclared sidecar was not refused with its reason");
+    assert.deepEqual(sent, [], "a send to an undeclared sidecar reached a sidecar");
+    sendFrom(2, "fixture-sidecar");
+    await settle();
+    assert.deepEqual(replies.at(-1), { id: 2, result: null }, "a send to the declared sidecar was refused");
+    assert.deepEqual(sent, [{ id: "probe", body: { n: 2 }, cids: [] }]);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
