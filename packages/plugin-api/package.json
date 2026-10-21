@@ -33,6 +33,7 @@
     "snapshots.js",
     "view.js",
     "view-start.js",
+    "view-check.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json",
@@ -48,7 +49,8 @@
     "soksak-engines": "./engines-check.js",
     "soksak-records": "./records-check.js",
     "soksak-events": "./events-check.js",
-    "soksak-commits": "./commits-check.js"
+    "soksak-commits": "./commits-check.js",
+    "soksak-view-check": "./view-check.js"
   },
   "scripts": {
     "test": "node --test test/"
