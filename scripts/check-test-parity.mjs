@@ -113,7 +113,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
   lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
@@ -2180,6 +2180,16 @@ const FEATURE_LINKS = [
       { file: "packages/host/wailsv3/tests/routine_test.go", id: "TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull" },
     ],
     expected: "A panic before the writer exists is stored when the writer opens, a panic that no writer stores is written to the standard error in full, and a poisoned button state is recovered by the next report.",
+    levels: ["unit"],
+  },
+  {
+    id: "F219",
+    implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "stops_at_the_fourth_failure_within_the_window" },
+      { file: "packages/host/tauriv2/tests/sidecars_test.rs", id: "surface_open_clears_the_restart_limit" },
+    ],
+    expected: "The tests of the sidecar suite that attach the process-wide writer of the records run one at a time, so the records of each test stay in its own event log whichever test attaches first.",
     levels: ["unit"],
   },
   {

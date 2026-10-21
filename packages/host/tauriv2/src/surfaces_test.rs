@@ -3,7 +3,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
-use super::{create_registered_surface, removed_surfaces};
+use super::{
+    Running, create_registered_surface, mark_first_commit, pressed_surface, removed_surfaces,
+};
 
 // contract: exposure.host-window.reads-during-surface-creation
 #[test]
@@ -97,5 +99,44 @@ fn a_dom_composition_is_refused_with_the_plugin_and_the_field() {
     assert_eq!(
         error,
         "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"
+    );
+}
+
+/// Poisons the lock by panicking while its guard is held.
+fn poison<T>(lock: &Mutex<T>) {
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = lock.lock().unwrap();
+            panic!("the test poisons the lock");
+        }))
+        .is_err(),
+        "the closure must panic"
+    );
+    assert!(lock.is_poisoned(), "the lock was not poisoned");
+}
+
+#[test]
+fn a_press_of_a_surface_view_is_found_when_the_surface_lock_is_poisoned() {
+    let named = Mutex::new(HashMap::from([(7usize, "surf".to_string())]));
+    poison(&named);
+    let found = pressed_surface(&named, &[7], |_| None);
+    assert_eq!(
+        found.as_deref(),
+        Some("surf"),
+        "a press of a surface view returned no surface while the surface lock was poisoned"
+    );
+}
+
+#[test]
+fn the_first_commit_of_a_page_is_marked_when_the_running_lock_is_poisoned() {
+    let running = Running::default();
+    poison(&running.first);
+    assert!(
+        mark_first_commit(&running),
+        "the first commit of a page was not marked while the running lock was poisoned"
+    );
+    assert!(
+        !mark_first_commit(&running),
+        "a second commit of a page was marked as the first"
     );
 }

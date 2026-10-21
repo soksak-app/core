@@ -26,3 +26,65 @@ fn a_new_watch_receives_the_next_window_value_after_a_stale_record() {
         "a new watch receives the value of the window after the earlier watch ended"
     );
 }
+
+/// Poisons the lock by panicking while its guard is held.
+fn poison<T>(lock: &Mutex<T>) {
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = lock.lock().unwrap();
+            panic!("the test poisons the lock");
+        }))
+        .is_err(),
+        "the closure must panic"
+    );
+    assert!(lock.is_poisoned(), "the lock was not poisoned");
+}
+
+/// Returns the waiting requests of a relay, whether or not its lock is poisoned.
+fn waiting(relay: &Relay) -> usize {
+    relay
+        .pending
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .len()
+}
+
+#[test]
+fn abandon_answers_the_waiting_request_of_a_poisoned_lock() {
+    let relay = Relay::default();
+    let (tx, rx) = mpsc::channel();
+    relay
+        .pending
+        .lock()
+        .unwrap()
+        .insert(1, ("main".to_string(), tx));
+    poison(&relay.pending);
+    relay.abandon("main");
+    let answered = matches!(
+        rx.try_recv(),
+        Ok(Err(failure)) if failure.code == MISSING_DOCUMENT
+    );
+    assert!(
+        answered,
+        "abandon did not answer the request of a poisoned lock"
+    );
+    assert_eq!(
+        waiting(&relay),
+        0,
+        "abandon kept the request of a poisoned lock"
+    );
+}
+
+#[test]
+fn forget_removes_the_request_of_a_poisoned_lock() {
+    let relay = Relay::default();
+    let (tx, _rx) = mpsc::channel();
+    relay
+        .pending
+        .lock()
+        .unwrap()
+        .insert(1, ("main".to_string(), tx));
+    poison(&relay.pending);
+    relay.forget(1);
+    assert_eq!(waiting(&relay), 0, "forget kept the request that ended");
+}

@@ -12,7 +12,7 @@ use std::fs::{File, TryLockError};
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -387,15 +387,18 @@ impl Notifier {
 
     /// Returns the watches of the window window.
     pub fn watches(&self, window: &str) -> Vec<Watch> {
-        let mut watches: Vec<Watch> = match self.0.peers.lock() {
-            Ok(peers) => peers
-                .values()
-                .flat_map(|peer| peer.watches.iter())
-                .filter(|watch| watch.window == window)
-                .cloned()
-                .collect(),
-            Err(_) => Vec::new(),
-        };
+        let mut watches: Vec<Watch> = self
+            .0
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers and their watches, which are only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .flat_map(|peer| peer.watches.iter())
+            .filter(|watch| watch.window == window)
+            .cloned()
+            .collect();
         watches.sort();
         watches.dedup();
         watches
@@ -451,18 +454,22 @@ impl Notifier {
     }
 
     fn send<T: Serialize + ?Sized>(&self, wanted: impl Fn(&Peer) -> bool, message: &T) {
-        let writers: Vec<_> = match self.0.peers.lock() {
-            Ok(peers) => peers
-                .values()
-                .filter(|peer| wanted(peer))
-                .map(|peer| peer.writer.clone())
-                .collect(),
-            Err(_) => return,
-        };
+        let writers: Vec<_> = self
+            .0
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers, which are only read to select the writers; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .filter(|peer| wanted(peer))
+            .map(|peer| peer.writer.clone())
+            .collect();
         for writer in writers {
-            if let Ok(mut writer) = writer.lock()
-                && let Err(error) = write_frame(&mut *writer, message)
-            {
+            // default: a lock that a panicking thread poisoned still holds the connection, which is written as before; the panic
+            // hook records the panic.
+            let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Err(error) = write_frame(&mut *writer, message) {
                 log_error("endpoint notification", error);
             }
         }
@@ -796,13 +803,19 @@ impl Endpoint {
             },
         }
         self.shared.stopping.store(true, Ordering::Relaxed);
-        if let Ok(peers) = self.shared.peers.lock() {
-            for peer in peers.values() {
-                if let Ok(writer) = peer.writer.lock()
-                    && let Err(error) = writer.close()
-                {
-                    log_error("endpoint connection close", error);
-                }
+        let peers = self
+            .shared
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the connections, and each one is closed; the panic hook
+            // records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        for peer in peers.values() {
+            // default: a lock that a panicking thread poisoned still holds the connection, which is closed as before; the panic
+            // hook records the panic.
+            let writer = peer.writer.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Err(error) = writer.close() {
+                log_error("endpoint connection close", error);
             }
         }
         // The lock is released last, after the endpoint file is removed (ProcessLock::drop).
@@ -1000,8 +1013,13 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         }
     };
     let peer = shared.next.fetch_add(1, Ordering::Relaxed);
-    if let Ok(mut peers) = shared.peers.lock() {
-        peers.insert(
+    shared
+        .peers
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered in them; the
+        // panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(
             peer,
             Peer {
                 writer: writer.clone(),
@@ -1011,7 +1029,6 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
                 changes: HashMap::new(),
             },
         );
-    }
     let mut reason = String::from("peer closed");
     loop {
         let body = match read_body(&mut connection) {
@@ -1142,12 +1159,12 @@ fn change(
     size: usize,
 ) {
     let (start, refused) = {
-        let Ok(mut peers) = shared.peers.lock() else {
-            return;
-        };
-        let Ok(mut lines) = shared.lines.lock() else {
-            return;
-        };
+        // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the change updates in
+        // order; the panic hook records the panic.
+        let mut peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
+        // default: a lock that a panicking thread poisoned still holds the lines, which the change orders with the peers; the
+        // panic hook records the panic.
+        let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
         let waiting = lines.get(&topic).map_or(0, |line| line.changes.len());
         if answer.is_some() && waiting >= ENDPOINT_TOPIC_CHANGES {
             (false, answer)
@@ -1194,9 +1211,9 @@ fn change(
 fn drain(shared: &Shared, topic: Topic) {
     loop {
         let (next, page) = {
-            let Ok(mut lines) = shared.lines.lock() else {
-                return;
-            };
+            // default: a lock that a panicking thread poisoned still holds the queued changes, which are taken in order; the
+            // panic hook records the panic.
+            let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
             let Some(line) = lines.get_mut(&topic) else {
                 return;
             };
@@ -1224,8 +1241,10 @@ fn drain(shared: &Shared, topic: Topic) {
                 Ok(result) => (Ok(result), true),
                 Err(failure) => {
                     // If this connection did not change this target again after that, the start is reverted.
-                    if let Ok(mut peers) = shared.peers.lock()
-                        && let Some(state) = peers.get_mut(&next.peer)
+                    // default: a lock that a panicking thread poisoned still holds the peers, which are updated to revert the start;
+                    // the panic hook records the panic.
+                    let mut peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
+                    if let Some(state) = peers.get_mut(&next.peer)
                         && state.changes.get(&topic) == Some(&next.order)
                     {
                         topic.set(state, false);
@@ -1239,9 +1258,10 @@ fn drain(shared: &Shared, topic: Topic) {
         } else {
             (raw(&Value::Null), page)
         };
-        if let Ok(mut lines) = shared.lines.lock()
-            && let Some(line) = lines.get_mut(&topic)
-        {
+        // default: a lock that a panicking thread poisoned still holds the lines, and the page state of the target is updated in
+        // them; the panic hook records the panic.
+        let mut lines = shared.lines.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(line) = lines.get_mut(&topic) {
             line.page = following;
         }
         if let Some(answer) = next.answer {
@@ -1318,22 +1338,31 @@ fn transcribed(shared: &Shared, window: &str) -> bool {
 /// Ends the subscriptions of a closed connection with the last change in the order received. A target that has no
 /// remaining subscriber is asked to stop in the page.
 fn forget(shared: &Arc<Shared>, peer: u64) {
-    let topics: Vec<Topic> = match shared.peers.lock() {
-        Ok(peers) => match peers.get(&peer) {
-            Some(state) => {
-                let topics = state.watches.iter().cloned().map(Topic::Status);
-                #[cfg(feature = "diagnostics")]
-                let topics = topics.chain(state.transcript.iter().cloned().map(Topic::Transcript));
-                topics.collect()
-            }
-            None => return,
-        },
-        Err(_) => return,
+    // default: a lock that a panicking thread poisoned still holds the peers, which are only read to end the subscriptions of the
+    // connection; the panic hook records the panic.
+    let peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
+    let topics: Vec<Topic> = match peers.get(&peer) {
+        Some(state) => {
+            let topics = state.watches.iter().cloned().map(Topic::Status);
+            #[cfg(feature = "diagnostics")]
+            let topics = topics.chain(state.transcript.iter().cloned().map(Topic::Transcript));
+            topics.collect()
+        }
+        None => return,
     };
+    drop(peers);
     for topic in topics {
         change(shared, peer, topic, false, None, 0);
     }
-    if let Ok(mut peers) = shared.peers.lock() {
-        peers.remove(&peer);
-    }
+    shared
+        .peers
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is removed from them;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(&peer);
 }
+
+#[cfg(test)]
+#[path = "endpoint_lock_test.rs"]
+mod lock_test;
