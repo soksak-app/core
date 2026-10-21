@@ -342,6 +342,23 @@ test("runtime.error sends the error line of the view as the call runtime.error a
   assert.equal(await sent, undefined);
 });
 
+test("contributions(point) returns the connected items of the point, and fail(reason) makes one invalid through the page", async (t) => {
+  const { posted, host } = setup(t);
+  const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof bridge.contributions, "function", "the view bridge has no contributions");
+  const read = bridge.contributions("language");
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.contributions", params: { point: "language" } });
+  host({ sok: 1, id: 1, result: [{ plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/one.js" }] });
+  const items = await read;
+  assert.deepEqual(items.map(({ plugin, index, item, module }) => ({ plugin, index, item, module })),
+    [{ plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/one.js" }]);
+  const failing = items[0].fail(new Error("extend is not a function"));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.contributions.fail",
+    params: { point: "language", plugin: "one", index: 0, reason: "extend is not a function" } });
+  host({ sok: 1, id: 2, result: null });
+  assert.equal(await failing, undefined);
+});
+
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
   const { host } = setup(t);
   const reports = [];

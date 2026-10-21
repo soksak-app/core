@@ -12,6 +12,7 @@
  *               pending: Map of the pending calls of the view, from id to AbortController; the caller keeps one Map for each view
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner): runs a command that the plugin registered, as the exposure owner check does
+ *               contributions(point): the connected items of the point, as contributions of the surface context returns them
  *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
  *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), and state with
  *                 {read, write} only when the plugin declares surface.unload
@@ -71,7 +72,10 @@ function untilCancelled(promise, signal) {
 // The place of an error line has no control character and no ": ", because the record splits the line at its first ": ".
 const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
 
-async function run(command, params, { plugin, surface, tab, runCore, runOwned, runtime }) {
+// The core root of a view, from which it imports the module of a contribution item (docs/plans/plugin-processes.md, rule 4).
+const CORE_ROOT = "sok://core";
+
+async function run(command, params, { plugin, surface, tab, contributions, runCore, runOwned, runtime }) {
   switch (command) {
     case "tab.state.read":
       if (!tab?.state) throw new Error(`view call ${command}: the tab state is not declared`);
@@ -173,6 +177,19 @@ async function run(command, params, { plugin, surface, tab, runCore, runOwned, r
       }
       if (typeof fields.text !== "string" || fields.text === "") throw new TypeError(`view call ${command} requires a non-empty text`);
       await runtime.report(`surface ${surface} ${fields.where}: ${fields.text}`);
+      return null;
+    }
+    case "runtime.contributions": {
+      // The module of an item is a path of the main page; a view imports it from the core root.
+      const fields = objectOf(command, params);
+      return contributions(fields.point).map(({ plugin: owner, index, item, module }) => ({ plugin: owner, index, item, module: `${CORE_ROOT}${module}` }));
+    }
+    case "runtime.contributions.fail": {
+      const fields = objectOf(command, params);
+      if (typeof fields.reason !== "string" || fields.reason === "") throw new TypeError(`view call ${command} requires a non-empty reason`);
+      const entry = contributions(fields.point).find((item) => item.plugin === fields.plugin && item.index === fields.index);
+      if (!entry) throw new Error(`view call ${command}: ${fields.point} has no connected item ${fields.index} of ${fields.plugin}`);
+      entry.fail(fields.reason);
       return null;
     }
     case "runtime.textSize.read":

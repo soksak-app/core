@@ -275,6 +275,7 @@ function answerViewCalls(surface, scoped, page, context) {
     surface: surface.surfaceId,
     pending,
     tab,
+    contributions: context.contributions,
     runCore: (name, params) => scoped.call(name, params),
     runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
     runtime: {

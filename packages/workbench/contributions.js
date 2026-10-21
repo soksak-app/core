@@ -26,14 +26,16 @@ export function onContributionsChange(fn) {
 }
 
 /**
- * The items connected to the extension point point of the plugin provider, each {plugin, item, module, fail(reason)}.
- * fail makes that item invalid and leaves the other items connected. A point that the provider does not declare is an error.
+ * The items connected to the extension point point of the plugin provider, each {plugin, index, item, module, fail(reason)};
+ * index is the position of the entry in the contributes of its plugin. fail makes that item invalid and leaves the other items
+ * connected. A point that the provider does not declare is an error.
  */
 export function contributionsOf(provider, point) {
   if (!declared.get(provider)?.has(point)) throw new Error(`extension point ${point} is not declared by ${provider}`);
   const name = `${provider}.${point}`;
   return resolved.filter((entry) => entry.point === name && entry.state === "connected").map((entry) => Object.freeze({
     plugin: entry.plugin,
+    index: entry.index,
     item: structuredClone(entry.item),
     module: entry.module,
     fail(reason) {

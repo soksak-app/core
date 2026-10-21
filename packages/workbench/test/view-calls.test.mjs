@@ -6,7 +6,9 @@ import { answerViewCall, viewStopState } from "../view-calls.js";
 
 function fakes() {
   const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [] };
+    reports: [], log: [], textSize: [], settings: [], registered: [], errors: [], failed: [] };
+  const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
+    fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
   const options = {
     plugin: "probe",
     surface: "probe-surface",
@@ -23,6 +25,10 @@ function fakes() {
       modified: (value) => { ran.reports.push({ modified: value }); },
       error: (text) => { ran.reports.push({ error: text }); },
       keep: (reason, on) => { ran.reports.push({ keep: reason, on }); },
+    },
+    contributions: (point) => {
+      if (point !== "language") throw new Error(`extension point ${point} is not declared by probe`);
+      return [item("one", 0), item("two", 1)];
     },
     runCore: async (name, params) => { ran.core.push({ name, params }); return { core: true }; },
     runOwned: async (name, params, owner) => { ran.owned.push({ name, params, owner }); return { owned: true }; },
@@ -209,6 +215,36 @@ test("runtime.error refuses a place or a text that the error line cannot carry a
     await assert.rejects(call(id, { where: "save", text }), /view call runtime\.error requires a non-empty text/);
   }
   assert.deepEqual(ran.errors, []);
+});
+
+test("runtime.contributions returns the connected items of the point with their modules on the core root", async () => {
+  const { options } = fakes();
+  const result = await answerViewCall({ id: 1, command: "runtime.contributions", params: { point: "language" } }, options)
+    .catch((error) => error);
+  assert.deepEqual(result, [
+    { plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/@scope/plugin-one/ui/one.js" },
+    { plugin: "two", index: 1, item: { name: "two" }, module: "sok://core/modules/@scope/plugin-two/ui/two.js" },
+  ]);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.contributions", params: { point: "format" } }, options),
+    /extension point format is not declared by probe/);
+});
+
+test("runtime.contributions.fail makes the named connected item invalid with its reason and replies null", async () => {
+  const { ran, options } = fakes();
+  const params = { point: "language", plugin: "two", index: 1, reason: "extend is not a function" };
+  const result = await answerViewCall({ id: 1, command: "runtime.contributions.fail", params }, options).catch((error) => error);
+  assert.equal(result, null);
+  assert.deepEqual(ran.failed, [{ plugin: "two", index: 1, reason: "extend is not a function" }]);
+});
+
+test("runtime.contributions.fail refuses an item that is not connected and a reason that is not text", async () => {
+  const { ran, options } = fakes();
+  const call = (id, params) => answerViewCall({ id, command: "runtime.contributions.fail", params }, options);
+  await assert.rejects(call(1, { point: "language", plugin: "two", index: 0, reason: "broken" }),
+    /view call runtime\.contributions\.fail: language has no connected item 0 of two/);
+  await assert.rejects(call(2, { point: "language", plugin: "two", index: 1, reason: "" }),
+    /view call runtime\.contributions\.fail requires a non-empty reason/);
+  assert.deepEqual(ran.failed, []);
 });
 
 test("runtime.textSize.read returns the scale of the surface and runtime.textSize.on subscribes once", async () => {

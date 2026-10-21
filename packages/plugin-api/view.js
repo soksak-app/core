@@ -239,5 +239,16 @@ export function createViewBridge({ handler, report }) {
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots, runtime, commands, exposure };
+  /**
+   * The connected items of the extension point point that the plugin declares (docs/spec/plugins.md#extension-points), each
+   * {plugin, index, item, module, fail(reason)}; module is the URL on the core root. fail makes that item invalid through the page
+   * and leaves the other items connected; an Error reason carries its message.
+   */
+  const contributions = (point) => calls.request("runtime.contributions", { point }).then((items) => items.map((entry) => Object.freeze({
+    ...entry,
+    fail: (reason) => calls.request("runtime.contributions.fail", {
+      point, plugin: entry.plugin, index: entry.index, reason: reason instanceof Error ? reason.message : String(reason),
+    }).then(() => undefined),
+  })));
+  return { calls, snapshots, runtime, commands, exposure, contributions };
 }
