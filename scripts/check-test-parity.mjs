@@ -2204,6 +2204,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F227",
+    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "answerViewCalls" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "a forwarded tab.state.read returns the tab state of its surface" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
+    ],
+    expected: "A view reads and writes the tab state of its surface through tab.state of the surface context.",
+    levels: ["unit"],
+  },
+  {
     id: "F219",
     implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
     tests: [
