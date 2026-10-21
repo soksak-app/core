@@ -184,12 +184,41 @@ test("createViewBridge sends a snapshot and takes its acknowledgement without a 
   assert.deepEqual(posted.at(-1), {
     event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 1, value: { count: 1 }, skipped: 0,
   });
-  host({ sok: 1, event: "declared-ui.snapshot.ack", plugin: "probe", status: "state", seq: 1 });
+  // The acknowledgement arrives as the view event declared-ui.snapshot.ack with {plugin, status, seq} as its data
+  // (docs/spec/native-surfaces.md#view-surfaces, view events).
+  host({ sok: 1, event: "declared-ui.snapshot.ack", data: { plugin: "probe", status: "state", seq: 1 } });
   snapshots.push("state", { count: 2 });
   assert.deepEqual(posted.at(-1), {
     event: "declared-ui.snapshot", plugin: "probe", status: "state", seq: 2, value: { count: 2 }, skipped: 0,
   });
   assert.deepEqual(reports, []);
+});
+
+test("createViewBridge answers the declared UI snapshot request with the value and its seq", (t) => {
+  const { posted, host } = setup(t);
+  const { snapshots } = createViewBridge({
+    handler: { postMessage: (message) => posted.push(message) },
+    report: () => {},
+  });
+  snapshots.push("state", { count: 1 });
+  host({ sok: 1, id: 5, command: "declared-ui.snapshot.request", params: { status: "state" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, reply: 5, result: { seq: 1, value: { count: 1 } } });
+});
+
+test("the declared UI snapshot request for a status without a value replies seq 0 and value null", (t) => {
+  const { posted, host } = setup(t);
+  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  host({ sok: 1, id: 6, command: "declared-ui.snapshot.request", params: { status: "other" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, reply: 6, result: { seq: 0, value: null } });
+});
+
+test("the declared UI snapshot request without a status name is refused", (t) => {
+  const { posted, host } = setup(t);
+  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  host({ sok: 1, id: 7, command: "declared-ui.snapshot.request", params: {} });
+  assert.deepEqual(posted.at(-1), {
+    sok: 1, reply: 7, error: { code: -32602, message: "declared-ui.snapshot.request requires a status name" },
+  });
 });
 
 test("runtime.native.on sends one subscription call per name and passes each host event of that name to its listener", async (t) => {

@@ -7,13 +7,15 @@
 // the view import map (rule 4). Its imports are the call layer and the snapshot channel, which import nothing else.
 
 import { createCalls } from "./calls.js";
-import { createSnapshotSender, SNAPSHOT_ACK_EVENT } from "./snapshots.js";
+import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
 /** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
 const UNREGISTERED_COMMAND = 1002;
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of index.js. */
 const FAILED_COMMAND = -32000;
+/** The code of a request whose parameters are invalid: EXPOSURE_ERRORS.invalidParams of index.js, which this module does not import. */
+const INVALID_PARAMS = -32602;
 
 /** Runs a command handler and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
 async function runCommand(run, params) {
@@ -139,10 +141,31 @@ export function createViewBridge({ handler, report }) {
       });
     },
   };
+  // The pull of the current value of a status (docs/plans/plugin-processes.md, rule 2 and messages and events): the reply is
+  // {seq, value}, with seq 0 and value null when the source has no value yet.
+  const answerSnapshotRequest = (request) => {
+    const status = request.params?.status;
+    if (typeof status !== "string" || status === "") {
+      channel.send({ sok: 1, reply: request.id, error: { code: INVALID_PARAMS, message: "declared-ui.snapshot.request requires a status name" } });
+      return;
+    }
+    // default: a status without a value is not an error of the pull; the reply says that the source has none yet.
+    let value;
+    try {
+      value = snapshots.pull(status);
+    } catch {
+      value = { seq: 0, value: null };
+    }
+    channel.send({ sok: 1, reply: request.id, result: value });
+  };
   // A request of the page for a command of the view is answered with {sok: 1, reply: id, result} or {sok: 1, reply: id, error}.
   // A command that the view did not register is refused with the unregistered code of the exposure errors (docs/plans/plugin-processes.md, rule 3).
   const answerRequest = (request) => {
     if (!Number.isInteger(request.id)) throw new TypeError("command request has no integer id");
+    if (request.command === SNAPSHOT_REQUEST_COMMAND) {
+      answerSnapshotRequest(request);
+      return;
+    }
     const run = handlers.get(request.command);
     const reply = run
       ? runCommand(run, request.params)
@@ -180,7 +203,9 @@ export function createViewBridge({ handler, report }) {
   channel.onMessage((message) => {
     if (message.event === SNAPSHOT_ACK_EVENT) {
       if (!onAcknowledgement) throw new Error(`view channel for ${plugin} has no snapshot layer`);
-      onAcknowledgement(message);
+      // The acknowledgement arrives as the view event declared-ui.snapshot.ack with {plugin, status, seq} as its data
+      // (docs/spec/native-surfaces.md#view-surfaces, view events).
+      onAcknowledgement({ event: SNAPSHOT_ACK_EVENT, ...message.data });
       return;
     }
     if (typeof message.event === "string") {
