@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-2: Parity ownership now uses exact declared component names and `kind` values from the workspace registry instead of package-name prefixes or hard-coded owner names. Undeclared names in plugin and sidecar code are findings. The regression test failed against the pre-fix implementation and passes with the declared-owner lookup; the ownership coverage tests pass 125/125. F238-c-3 is closed as duplicate. F238-c-12's existing coverage table was confirmed; no plugin assertions were removed.
+
 - F240-1: The plugin processes handoff refers to AGENTS.md for the test time limits and the progress output of long runs instead of restating them; AGENTS.md states each test's own limit, the running, finished, passed and failed lines with elapsed time, and the single full-suite run at checklist completion.
 - F239-19: The hello tests of the sidecar host take 0.11 s and 0.11 s instead of 5.0 s, and the delay test takes 0.51 s instead of 5.6 s. The hello tests set the hello bound to 100 ms; the production bound of 5 s is unchanged. The delay test's fake service answers shutdown, so Stop no longer waits the 5 s deadline. Before the change the hello tests failed on the 5 s bound and the delay test's stop took 5.002 s.
 - F239-21: The no-writer panic tests of the host take 0.45 s (Rust) and 0.12 s (Go) instead of 5.2 s and 5.0 s. Each test gives the panic hook a writer deadline of 100 ms, and the panic record still goes to the standard error in full. The production deadline of 5 s is unchanged. Before the change the child ended after 5.08 s (Rust) and 5.01 s (Go) by that deadline.
