@@ -147,7 +147,7 @@ The source changes by these rules:
 
 - (a) The source is chosen again when the active tab of the sidebar's card, the focused card of a fixed window sidebar, or a registration changes.
 - (b) On a change of source, the section is cleared until the first value from the new source is accepted. The kept state survives by path ([status mapping](#status-mapping)).
-- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull at the load of the main page and at load, from the source chosen at load, at a change of source, and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
+- (c) On a change of source, the workbench pulls the current value from the new source once. [Plugin processes](../plans/plugin-processes.md) rule 2 allows a pull from the chosen source at the load of the main page, at a change of source and at a change of orientation, and at no other time, because a running view has no other way to send its last value to a new reader. A pulled value follows the same validation and rejection rules as a pushed declared UI snapshot.
 - (d) A process end removes its registrations, and the source is chosen again as in (a).
 - Before the first accepted value, the section shows no tree. The rejection text is the only content it can show before that, and it shows it only after a rejected value.
 - The status of a declared UI value is not a change feed: the plugin sends the whole value again when any element changes.
