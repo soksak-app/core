@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F236-7: The surface composition specification declares probe names in its examples (`ui/view.html`, `ui/hybrid.html`, `@scope/sidecar-probe`) instead of the shell and terminal pages and the terminal sidecar, and states that an app DOM reload closes no sidecar session.
 - F236-5: `make object-counts` (`scripts/measure-object-counts.mjs`) opens the tabs of the surface plugins that the required `PLUGINS` (`--plugin ID`) names and splits a card with the first, instead of the fixed terminal and browser plugins, so the core script names no plugin; `make trace-share` passes `PLUGINS` on.
 - F236-4: The script tests of the workspace registry, the app usage measurement, the run and event audits, the event classes and the window-source audit use probe names in their fixtures instead of the browser, files, editor and terminal plugins and the vt sidecar; no behaviour change (70 of 70 pass).
 - F236-3: The ownership audit of `scripts/check-test-parity.mjs` treats every `@soksak/plugin-*` package except `@soksak/plugin-api` as a plugin and every `@soksak/sidecar-*` package as a sidecar instead of listing the real plugin and sidecar packages, so core holds none of their names and reports a core source that names any of them. docs/spec/plugins.md states the rule.

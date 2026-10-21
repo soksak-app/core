@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F236-7: surface composition specification의 예가 shell, terminal page와 terminal sidecar 대신 probe 이름(`ui/view.html`, `ui/hybrid.html`, `@scope/sidecar-probe`)을 선언하고, 앱 DOM reload가 sidecar 세션을 닫지 않는다고 말한다.
 - F236-5: `make object-counts`(`scripts/measure-object-counts.mjs`)가 고정된 terminal, browser plugin 대신 필수 `PLUGINS`(`--plugin ID`)가 부르는 surface plugin의 탭을 열고 첫 plugin으로 카드를 나눈다. 그래서 core script가 plugin을 부르지 않는다. `make trace-share`는 `PLUGINS`를 넘긴다.
 - F236-4: workspace registry, app usage 측정, run과 event 감사, event class, window-source 감사의 script 시험이 fixture에 browser, files, editor, terminal plugin과 vt sidecar 대신 probe 이름을 쓴다. 동작 변경은 없다(70개 중 70개 통과).
 - F236-3: `scripts/check-test-parity.mjs`의 소유 감사가 실제 plugin과 sidecar package를 나열하는 대신 `@soksak/plugin-api`를 뺀 모든 `@soksak/plugin-*` package를 plugin으로, 모든 `@soksak/sidecar-*` package를 sidecar로 다룬다. 그래서 core는 그 이름을 갖지 않고 그중 어느 것을 부르는 core source도 보고한다. docs/spec/plugins.md가 규칙을 말한다.
