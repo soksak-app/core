@@ -104,7 +104,7 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
   2. 메인 page는 요청에 DOM surface context가 쓰는 handler로 답한다.
      - `tab.state.read`는 surface의 tab state를 돌려주고, `tab.state.write`는 params를 tab state로 저장한다. 저장 값은 `surface.unload`의 크기 한도 안에 있어야 한다. 두 call은 plugin이 `surface.unload`를 선언하지 않았으면 실패한다.
      - `runtime.native.call`은 `{name, payload}`로 surface의 host call `name`을 `payload`와 함께 실행한다. `name`은 빈 문자열이 아닌 문자열이다.
-     - `runtime.sidecar.send`는 `{id, body, cids}`를 선언된 sidecar로 보낸다. `runtime.sidecar().send`와 같다.
+     - `runtime.sidecar.send`는 `{id, sidecar, body, cids}`를 `sidecar`가 이름 댄 선언된 sidecar로 보낸다. `runtime.sidecar(name).send`와 같다.
      - `runtime.clipboard.read`는 `"text"` 또는 `"fileURLs"`로 그 형식의 클립보드 값을 돌려준다. `"png"` 읽기는 PNG bytes가 binary payload이므로 `view call runtime.clipboard.read png is not served`로 거부한다. `runtime.clipboard.writeText`는 문자열을 쓴다.
      - `runtime.links.open`은 빈 문자열이 아닌 URL 문자열로 링크를 연다.
      - `tab.title`, `tab.footer`, `tab.directory`, `tab.modified`, `tab.error`는 값을 params로 받아 surface의 tab report를 surface context 항목과 같은 방식으로 실행하며, 올바르지 않은 값은 같은 방식으로 거부한다. `tab.notify`는 `{text, policy}`를, `tab.keep`은 `{reason, on}`을 받는다. 각각은 `null`로 답한다.
@@ -114,12 +114,12 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
      - 이미 대기 중인 `id`의 요청은 `view call <id> is already pending`으로 거부한다.
   3. 메인 page는 `viewReply {surface, id, result}` 또는 `viewReply {surface, id, error: {code, message}}`로 답한다. 값을 돌려주지 않는 handler는 `result: null`을 보낸다. 호스트는 `{sok: 1, id, result}` 또는 `{sok: 1, id, error}`를 view의 ready 문서에 보낸다. ready 문서가 없는 view에 대한 응답은 page에서 `<surface> has no ready document`로 실패한다. 취소 message는 자신의 응답이 없다. 취소가 이름 붙인 대기 중인 call은 `{code: -32000, message: "cancelled"}` 오류로 답하며, 그 call의 handler는 계속 실행하고 결과는 버린다. 대기 중인 call이 없는 취소는 아무것도 끝내지 않는다.
   4. view의 call layer가 call을 resolve 또는 reject한다. 제한 시간은 command의 `timeout`이다. 그 시간이 지난 뒤 도착한 응답은 늦은 응답이며 버린다(plugin process 규칙 3). 호스트는 전달한 요청의 기록을 남기지 않는다. 취소된 call의 응답은 call layer가 그 call을 이미 끝낸 뒤 도착하므로, layer는 이를 늦은 응답으로 센다.
-  - 페이지는 구독 call `runtime.native.on`(`{name}`), `runtime.sidecar.on`(`{id}`), `runtime.sidecar.onFailure`(`{id}`), `runtime.textSize.on`, `runtime.settings.on`에 아래 view event에서 정한 대로 답하고, 등록 call `runtime.command.register`(`{name}`)에 아래 view command에서 정한 대로 답한다. 각각은 적용되면 `null`로 답한다.
+  - 페이지는 구독 call `runtime.native.on`(`{name}`), `runtime.sidecar.on`(`{id, sidecar}`), `runtime.sidecar.onFailure`(`{id, sidecar}`), `runtime.textSize.on`, `runtime.settings.on`에 아래 view event에서 정한 대로 답하고, 등록 call `runtime.command.register`(`{name}`)에 아래 view command에서 정한 대로 답한다. 각각은 적용되면 `null`로 답한다.
   - `runtime.theme`은 call이 아니다. 테마는 테마 message로 view에 가므로(테마 참조), `runtime.theme` call은 `view call runtime.theme is not served`로 거부한다.
 - **view event.** view는 구독 call로 페이지의 event를 구독한다. 페이지는 구독의 각 event를 호스트 message `{sok: 1, event, data}`로 view에 보낸다.
   - `runtime.native.on`(`{name}`)은 surface의 호스트 event `name`을 전달한다. `data`는 DOM surface context가 받는 event 객체다.
-  - `runtime.sidecar.on`(`{id}`)은 세션 `id`의 sidecar message를 `event: "sidecar.message"`와 `data: {id, body}`로 전달한다.
-  - `runtime.sidecar.onFailure`(`{id}`)는 세션 `id`의 실패를 `event: "sidecar.failure"`와 `data: {id, reason}`로 전달한다.
+  - `runtime.sidecar.on`(`{id, sidecar}`)은 세션 `id`의 sidecar message를 `event: "sidecar.message"`와 `data: {id, body}`로 전달한다.
+  - `runtime.sidecar.onFailure`(`{id, sidecar}`)는 세션 `id`의 실패를 `event: "sidecar.failure"`와 `data: {id, reason}`로 전달한다.
   - `runtime.textSize.on`은 surface의 text scale이 바뀔 때마다 `event: "textSize"`와 `data`로 scale을 전달하고, `runtime.settings.on`은 plugin 설정이 바뀔 때마다 `event: "settings"`와 `data`로 값을 전달한다. 값이 바뀌지 않은 변경은 surface context가 전달하지 않듯 view에 전달하지 않는다.
 
   페이지는 구독을 한 번만 등록한다. 같은 name이나 id의 두 번째 call은 다시 등록하지 않고 `null`로 답한다. 페이지는 각 event를 `viewEvent {surface, event, data}`로 보내며, 호스트는 `{sok: 1, event, data}`를 view의 ready 문서에 post한다. ready 문서가 없는 view에 대한 event는 `<surface> has no ready document`로 실패하고, 페이지가 그 오류를 application log에 쓴다. 구독은 surface가 닫히면 끝난다. 재시작한 view는 다시 구독하며, 페이지는 그때까지 구독을 유지한다. view는 event 이름의 listener에 각 event를 전달하고, listener가 없는 event는 무시한다.
