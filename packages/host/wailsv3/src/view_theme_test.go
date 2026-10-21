@@ -40,6 +40,7 @@ func TestViewCreationAddsTheThemeScriptBeforeTheLoad(t *testing.T) {
 }
 
 // The theme script is the frozen value of the theme, as JSON.
+// contract: view.theme.first-script
 func TestThemeScriptFreezesTheThemeValue(t *testing.T) {
 	theme := Theme{Scheme: "dark", Tokens: map[string]string{"surface": "#101010"}}
 	want := `window.sokTheme = Object.freeze({"scheme":"dark","tokens":{"surface":"#101010"}});`

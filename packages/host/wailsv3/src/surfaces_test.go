@@ -128,6 +128,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	}
 }
 
+// contract: view.composition.page-and-regions
 func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 	if err := validateComposition("probe", SurfaceComposition{Kind: "view", Page: "ui/page.html"}); err != nil {
 		t.Fatalf("view without regions: %v", err)
@@ -531,6 +532,7 @@ func TestViewCommandReplyIsForwardedAsAViewReplyEvent(t *testing.T) {
 }
 
 // The dom composition kind is removed: the reader refuses it with an error that names the plugin and the manifest field.
+// contract: view.composition.dom-removed
 func TestDomCompositionIsRefusedWithThePluginAndTheField(t *testing.T) {
 	err := validateComposition("probe", SurfaceComposition{Kind: "dom"})
 	want := "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"
