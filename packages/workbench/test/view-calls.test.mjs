@@ -5,7 +5,7 @@ import test from "node:test";
 import { answerViewCall, viewStopState } from "../view-calls.js";
 
 function fakes() {
-  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [] };
+  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [], registered: [] };
   const options = {
     plugin: "probe",
     pending: new Map(),
@@ -30,6 +30,9 @@ function fakes() {
       },
       command: {
         register: async (name) => { ran.declared.push(name); return null; },
+      },
+      exposure: {
+        registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
       },
     },
   };
@@ -188,6 +191,22 @@ test("a registration call without a name is refused and declares nothing", async
   await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.register", params: { name: "" } }, options), /requires a non-empty name/);
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.command.register", params: "probe.run" }, options), /requires an object/);
   assert.deepEqual(ran.declared, []);
+});
+
+test("a registered call of the view records the status or dom of its surface", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: "probe.state" } } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "dom", name: "probe.view" } } }, options), null);
+  assert.deepEqual(ran.registered, [{ kind: "status", name: "probe.state" }, { kind: "dom", name: "probe.view" }]);
+  assert.deepEqual(ran.native.filter(({ name }) => name === "registered"), [], "the registration was forwarded to the host call route");
+});
+
+test("a registered call without its kind or name is refused and records nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: "probe.state" } }, options), /requires an object/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "", name: "probe.state" } } }, options), /requires a non-empty kind/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status" } } }, options), /requires a non-empty name/);
+  assert.deepEqual(ran.registered, []);
 });
 
 // contract: view.restart.limit-shows-error

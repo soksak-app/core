@@ -173,6 +173,28 @@ test("createViewBridge rejects a call with the error that the host forwards", as
   await assert.rejects(reply, { code: -32000, message: "tab.state is not declared" });
 });
 
+test("exposure.register sends the status or dom registration through the channel and resolves on the reply", async (t) => {
+  const { posted, host } = setup(t);
+  const { exposure } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const registered = exposure.register("status", "probe.state");
+  assert.deepEqual(posted.at(-1), {
+    sok: 1, id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: "probe.state" } },
+  });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await registered, null);
+});
+
+test("exposure.reply sends the reply of a forwarded exposure request with its id", async (t) => {
+  const { posted, host } = setup(t);
+  const { exposure } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const sent = exposure.reply(7, { result: { value: 1 } });
+  assert.deepEqual(posted.at(-1), {
+    sok: 1, id: 1, command: "runtime.native.call", params: { name: "exposureReply", payload: { id: 7, result: { value: 1 } } },
+  });
+  host({ sok: 1, id: 1, result: null });
+  assert.equal(await sent, null);
+});
+
 test("createViewBridge sends a snapshot and takes its acknowledgement without a call error", (t) => {
   const { posted, host } = setup(t);
   const reports = [];

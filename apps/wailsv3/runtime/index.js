@@ -66,6 +66,7 @@ const METHOD = {
   exposureReply: "ExposureReply",
   exposureChanged: "ExposureChanged",
   exposureForward: "ExposureForward",
+  exposureRegister: "ExposureRegister",
   compositionDeclare: "CompositionDeclare",
   performance: "Performance",
   log: "Log",

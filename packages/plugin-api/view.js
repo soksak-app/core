@@ -189,6 +189,12 @@ export function createViewBridge({ handler, report }) {
     },
     report,
   });
+  // The exposure of the page: status and dom registrations go through the channel, and the reply to a forwarded exposure
+  // request carries the id of that request (docs/spec/exposure.md#relay, docs/spec/native-surfaces.md#view-surfaces).
+  const exposure = {
+    register: (kind, name) => calls.request("runtime.native.call", { name: "registered", payload: { kind, name } }),
+    reply: (id, payload) => calls.request("runtime.native.call", { name: "exposureReply", payload: { id, ...payload } }),
+  };
   const snapshots = createSnapshotSender({
     plugin,
     send: channel.send,
@@ -219,5 +225,5 @@ export function createViewBridge({ handler, report }) {
     if (!onCall) throw new Error(`view channel for ${plugin} has no call layer`);
     onCall(message);
   });
-  return { calls, snapshots, runtime, commands };
+  return { calls, snapshots, runtime, commands, exposure };
 }
