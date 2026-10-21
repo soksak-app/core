@@ -1079,8 +1079,8 @@ export function takeSurfaceFocus() {
   return surfaceId;
 }
 
-// A persistent terminal actor is owned by the window sidecar and not by a native image surface.
-// So a hidden tab keeps its PTY without creating a WebView or an image region.
+// A persistent surface actor is owned by the window sidecar and not by a native image surface.
+// So a hidden tab keeps its session without creating a WebView or an image region.
 const backgroundSessions = new Map();
 
 // The last decision recorded for each tab with a background declaration, so a settle that changes nothing records nothing.
