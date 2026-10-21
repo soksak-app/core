@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F236-6: The log query fixtures name the sidecar role `probe` and the events `sidecar.probe.*` instead of the terminal sidecar role `vt` (file `logs/probe-v1.jsonl`, the digest of its index in `digests.json`, and the consuming audit, event-log, debug-timeline, Go and Rust tests). The event reader accepts a sidecar log file of any role and maps `sidecar.<name>.*` events to the layer `<name>-core`, so the reader names no sidecar; the terminal sidecar keeps its layer `vt-core`. Red: the event-log tests of a sidecar file returned no rows on the unchanged reader. Green: 64 of 64 Node tests of the change, and the Go and Rust sok fixture tests pass.
 - F236-7: The surface composition specification declares probe names in its examples (`ui/view.html`, `ui/hybrid.html`, `@scope/sidecar-probe`) instead of the shell and terminal pages and the terminal sidecar, and states that an app DOM reload closes no sidecar session.
 - F236-5: `make object-counts` (`scripts/measure-object-counts.mjs`) opens the tabs of the surface plugins that the required `PLUGINS` (`--plugin ID`) names and splits a card with the first, instead of the fixed terminal and browser plugins, so the core script names no plugin; `make trace-share` passes `PLUGINS` on.
 - F236-4: The script tests of the workspace registry, the app usage measurement, the run and event audits, the event classes and the window-source audit use probe names in their fixtures instead of the browser, files, editor and terminal plugins and the vt sidecar; no behaviour change (70 of 70 pass).

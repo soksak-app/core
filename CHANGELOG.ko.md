@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F236-6: log query fixture가 terminal sidecar role `vt` 대신 role `probe`와 event `sidecar.probe.*`를 쓴다(파일 `logs/probe-v1.jsonl`, `digests.json`의 그 색인 digest, 그리고 감사, event-log, debug-timeline, Go와 Rust 시험). event 읽기는 어떤 role의 sidecar 로그 파일도 받아들이고 `sidecar.<name>.*` event를 layer `<name>-core`로 옮기므로 읽기 코드가 sidecar 이름을 갖지 않는다. terminal sidecar의 layer `vt-core`는 그대로다. Red: 바꾸지 않은 읽기 코드에서 sidecar 파일의 event-log 시험이 행을 돌려주지 않았다. Green: 변경한 Node 시험 64개 중 64개와 Go, Rust sok fixture 시험이 통과한다.
 - F236-7: surface composition specification의 예가 shell, terminal page와 terminal sidecar 대신 probe 이름(`ui/view.html`, `ui/hybrid.html`, `@scope/sidecar-probe`)을 선언하고, 앱 DOM reload가 sidecar 세션을 닫지 않는다고 말한다.
 - F236-5: `make object-counts`(`scripts/measure-object-counts.mjs`)가 고정된 terminal, browser plugin 대신 필수 `PLUGINS`(`--plugin ID`)가 부르는 surface plugin의 탭을 열고 첫 plugin으로 카드를 나눈다. 그래서 core script가 plugin을 부르지 않는다. `make trace-share`는 `PLUGINS`를 넘긴다.
 - F236-4: workspace registry, app usage 측정, run과 event 감사, event class, window-source 감사의 script 시험이 fixture에 browser, files, editor, terminal plugin과 vt sidecar 대신 probe 이름을 쓴다. 동작 변경은 없다(70개 중 70개 통과).

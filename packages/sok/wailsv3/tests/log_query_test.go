@@ -283,7 +283,7 @@ func TestLogQueryFollowsTheTailWithSince(t *testing.T) {
 	if got := seqsOf(t, followed); !reflect.DeepEqual(got, []int64{23, 24}) {
 		t.Fatalf("the rows after the tail are %v, want [23 24]", got)
 	}
-	if followed.Tail["host-b1"] != 24 || followed.Tail["vt-v1"] != 4 {
+	if followed.Tail["host-b1"] != 24 || followed.Tail["probe-v1"] != 4 {
 		t.Errorf("the new tail is %v: host-b1 covers the file and the debug file", followed.Tail)
 	}
 	// The row with the earlier clock is not behind the cursor of the rows the first answer held, so only `since` finds it.
@@ -383,7 +383,7 @@ func TestLogQueryRefusesInvalidParameters(t *testing.T) {
 
 	// A file that breaks the event structure fails the query with the file and the line.
 	config := fixtureConfig(t)
-	file, err := os.OpenFile(filepath.Join(config, "logs", "vt-v1.jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+	file, err := os.OpenFile(filepath.Join(config, "logs", "probe-v1.jsonl"), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestLogQueryRefusesInvalidParameters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.QueryLogs(config, query, nil); err == nil || !strings.Contains(err.Error(), "logs/vt-v1.jsonl:5: not JSON: not json") {
+	if _, err := sok.QueryLogs(config, query, nil); err == nil || !strings.Contains(err.Error(), "logs/probe-v1.jsonl:5: not JSON: not json") {
 		t.Errorf("broken line: %v", err)
 	}
 	if _, err := sok.QueryLogs(t.TempDir(), query, nil); err == nil || !strings.Contains(err.Error(), "logs") {
