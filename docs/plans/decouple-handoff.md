@@ -10,6 +10,9 @@ The three sections below were in [sidecars](../spec/sidecars.md). Each one moves
 
 ### shell
 
+Held: `../sidecars/shell` S17 (`docs(spec): Hold the shell sidecar spec`).
+
+
 `@soksak/sidecar-shell` (repository `../sidecars/shell`) builds `build/soksak-shell` with `make build` and runs one shell session per surface. `open` may carry `directory`, an absolute path of an existing directory, in which the session starts; another value is an explicit error. Without it the session starts in the surface's project directory (`root`). The shell page sends its surface's `origin.directory` when it is not `null` and reports each directory event with `tab.directory` ([tab reports](../spec/plugins.md#tab-reports)), so a shell split from a shell starts where that shell was. It is a line console, not a terminal emulator. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/shell`, and the OS operations in `src/platform/{darwin,linux,windows}/`, which register through `src/platform/platform.go` ([platform selection](../spec/hosts.md#platform-selection)). Its tests are in `tests/`.
 
 The session shell is `$SHELL` when it is a POSIX shell (`sh`, `bash`, `zsh`, `ksh`, `dash`) and `/bin/sh` otherwise, because the session script uses POSIX syntax. It runs in its own process group without a terminal and executes a script that:
@@ -45,6 +48,9 @@ Public symbols in sidecars and their helpers that are diagnostic-only start with
 
 ### files
 
+Held: `../sidecars/files` S32 (`docs(spec): Hold the files sidecar spec`).
+
+
 `@soksak/sidecar-files` (repository `../sidecars/files`) builds `build/soksak-files` with `make build` and lists and watches directories inside the session's `root`. Its code is in `src/`: the entry point `src/main.go`, the protocol in the package `src/files`, and directory watching in `src/platform/{darwin,linux,windows}/`, registered through `src/platform/platform.go`. macOS watches a directory or a regular file with a kqueue `EVFILT_VNODE` filter on it; Linux watches a directory with inotify and fails a regular file with `watching files is not implemented on linux`; Windows fails with `watching directories is not implemented on windows`. A session keeps only its watched paths. The sidecar reads request lines of up to 67108864 bytes, the limit of a sidecar output line, and writes replies without HTML escaping; an 8 MiB text escaped by JSON at most six times and the base64 of 32 MiB of bytes stay within that limit.
 
 | Request body | Reply body |
@@ -60,6 +66,9 @@ Public symbols in sidecars and their helpers that are diagnostic-only start with
 | any failure | `{id, error}`: a missing `root`, a `path` that is absolute or leaves `root` (after resolving symbolic links), or a directory that cannot be read |
 
 ### Terminal sidecar (vt-core)
+
+Held: `../sidecars/vt` S70 (`docs(spec): Hold the vt-core sidecar spec`).
+
 
 The terminal sidecar (`@soksak/sidecar-vt-core`) is the client module for the persistent terminal service defined by [persistent services](../spec/persistent-services.md). The service is one process per application configuration directory and owns the independent PTYs, shell processes, VT state, scrollback, and IOSurface-backed rendering. The sidecar accepts requests to control a terminal session and supplies screen images to a region.
 
@@ -77,6 +86,8 @@ The sidecar sends `{event: "screen", ...}` whenever the terminal screen changes;
 
 ## Terminal plugin acceptance criteria (F236-12)
 
+Held: `../plugins/terminal` P50 (`docs(spec): Hold the terminal acceptance criteria`).
+
 The terminal plugin repository holds these two criteria of image regions in its own specification and checks them in its window checks. Core keeps the generic criteria of [surface composition](../spec/surface-composition.md#acceptance).
 
 - A terminal image preserves its logical text while resizing: narrowing reduces terminal columns and reflows long logical rows onto multiple screen rows; widening increases columns and reflows those rows back without truncation or permanent narrow wrapping.
@@ -85,6 +96,8 @@ The terminal plugin repository holds these two criteria of image regions in its 
 ## Persistent terminal service text (F236-10)
 
 The sections below were in the persistent service specification, which core keeps without its terminal parts as [persistent services](../spec/persistent-services.md). Each one moves to the terminal plugin repository (`../sidecars/vt`), which holds the terminal service contract. The links point at the core specifications until that repository replaces them with its own paths.
+
+Held: none yet. The sections of this part are delivered to `../sidecars/vt` as S71, which is not committed, and the screen-hash rows to `../contracts/screen-hash`, whose changes are not committed. This document stays until every section is held elsewhere.
 
 ### Terminal session start
 

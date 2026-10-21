@@ -10,6 +10,9 @@
 
 ### shell
 
+보관: `../sidecars/shell` S17(`docs(spec): Hold the shell sidecar spec`).
+
+
 `@soksak/sidecar-shell`(repository `../sidecars/shell`)은 `make build`로 `build/soksak-shell`을 빌드하고, 표면마다 셸 세션 하나를 실행한다. `open`은 세션이 시작할 디렉터리로, 있는 디렉터리의 절대 경로인 `directory`를 가질 수 있고, 다른 값은 명시적 오류다. 없으면 세션은 표면의 프로젝트 디렉터리(`root`)에서 시작한다. 셸 페이지는 표면의 `origin.directory`가 `null`이 아니면 그것을 보내고 디렉터리 이벤트마다 `tab.directory`로 알리므로([탭 알림](../spec/plugins.ko.md#탭-알림)), 셸에서 쪼갠 셸은 그 셸이 있던 곳에서 시작한다. 터미널 에뮬레이터가 아닌 줄 단위 콘솔이다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/shell`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 운영체제별 동작([플랫폼 선택](../spec/hosts.ko.md#플랫폼-선택)). 테스트는 `tests/`에 있다.
 
 세션 셸은 `$SHELL`이 POSIX 셸(`sh`, `bash`, `zsh`, `ksh`, `dash`)이면 그것이고 아니면 `/bin/sh`다. 세션 스크립트가 POSIX 문법을 쓰기 때문이다. 셸은 터미널 없이 자기 프로세스 그룹에서 실행되며 다음 스크립트를 실행한다.
@@ -45,6 +48,9 @@
 
 ### files
 
+보관: `../sidecars/files` S32(`docs(spec): Hold the files sidecar spec`).
+
+
 `@soksak/sidecar-files`(repository `../sidecars/files`)는 `make build`로 `build/soksak-files`를 빌드하고 세션의 `root` 안의 디렉터리를 나열하고 감시한다. 코드는 `src/`에 있다: 진입점 `src/main.go`, 패키지 `src/files`의 프로토콜, `src/platform/platform.go`를 통해 등록되는 `src/platform/{darwin,linux,windows}/`의 디렉터리 감시. macOS는 디렉터리나 일반 파일에 kqueue `EVFILT_VNODE` 필터를 걸어 감시하고, Linux는 디렉터리를 inotify로 감시하며 일반 파일은 `watching files is not implemented on linux`로 실패하고, Windows는 `watching directories is not implemented on windows`로 실패한다. 세션은 감시하는 경로만 상태로 갖는다. 사이드카는 사이드카 출력 줄 한도와 같은 67108864 byte까지의 요청 줄을 읽고, 답을 HTML escape 없이 쓴다. JSON이 최대 여섯 배로 escape한 8 MiB 텍스트와 32 MiB bytes의 base64는 그 한도 안에 있다.
 
 | 요청 본문 | 답 본문 |
@@ -60,6 +66,9 @@
 | 모든 실패 | `{id, error}`: `root`가 없거나, `path`가 절대 경로이거나 (심볼릭 링크를 따라간 뒤) `root`를 벗어나거나, 디렉터리를 읽을 수 없는 경우 |
 
 ### 터미널 사이드카 (vt-core)
+
+보관: `../sidecars/vt` S70(`docs(spec): Hold the vt-core sidecar spec`).
+
 
 터미널 사이드카(`@soksak/sidecar-vt-core`)는 [영속 서비스](../spec/persistent-services.ko.md)이 정의한 영속 서비스의 클라이언트 모듈이다. 서비스는 애플리케이션 설정 디렉터리마다 하나의 프로세스로 실행되며 독립 PTY·셸 프로세스·VT 상태·스크롤백·IOSurface 렌더링을 소유한다. 사이드카는 터미널 세션 제어 요청을 받고 영역에 화면 그림을 공급한다.
 
@@ -77,6 +86,8 @@
 
 ## 터미널 plugin 인수 기준(F236-12)
 
+보관: `../plugins/terminal` P50(`docs(spec): Hold the terminal acceptance criteria`).
+
 터미널 plugin repository가 그림 영역의 이 두 기준을 자기 명세에 담고 자기 창 검사로 확인한다. core는 [표면 합성](../spec/surface-composition.ko.md#인수-기준)의 일반 기준을 유지한다.
 
 - 터미널 그림은 리사이즈 중 논리 텍스트를 보존한다. 폭을 줄이면 열 수를 줄여 긴 논리 행을 여러 화면 행으로 재배치하고, 폭을 늘리면 열 수를 늘려 잘림이나 좁은 상태의 영구 고착 없이 다시 재배치한다.
@@ -85,6 +96,8 @@
 ## 영속 터미널 서비스 본문 (F236-10)
 
 아래 절은 영속 서비스 명세에 있던 터미널 전용 본문이다. 그 명세는 터미널 부분을 뺀 [영속 서비스](../spec/persistent-services.ko.md)로 core에 남는다. 각 절은 터미널 서비스 계약을 가진 터미널 plugin repository(`../sidecars/vt`)가 전달한다. 그 repository가 자기 경로로 바꾸기 전까지 링크는 core 명세를 가리킨다.
+
+보관: 아직 없음. 이 부분의 절은 `../sidecars/vt`의 S71로 전달하며 아직 commit되지 않았다. 화면 hash 행은 `../contracts/screen-hash`로 가며 그 변경도 commit되지 않았다. 모든 절이 다른 곳에 보관될 때까지 이 문서를 남긴다.
 
 ### 터미널 세션 시작
 
