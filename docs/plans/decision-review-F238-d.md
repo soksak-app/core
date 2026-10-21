@@ -187,7 +187,48 @@ Round 2 auditors (two fresh subagents, read-only): auditor C returned seven obje
 - D9.8 (shell placement, named): the shell sections are in the sidebar of the shell card. The source is the view of the card's active tab (`declared-ui.md:145`, first source). The decision sets no plugin override. A fixed window sidebar with no override has no source for them, so they are cleared (`declared-ui.md:145`). This is an accepted cost, stated in D9.9.
 - D9.9 (accepted costs, extended): the costs are the ones stated above (history and jobs cleared on unload; cwd restored from tab state; sections cleared while the card is closed or inactive), plus the loss of arrow-key navigation between tree rows (D9.1 and `declared-ui.md:130`). Arrow navigation is recorded as a follow-up item under F212.8 to decide whether it becomes a declared behavior; that decision goes to adversarial review. It is not a lowered standard: the current vocabulary has no key handler, and the change is recorded as the cost of the move.
 
-The round-3 auditors review these texts and the changed layer rule in D9.2.
+## Round 3 answers and revised texts
+
+Round 3 auditors (two fresh subagents, read-only): auditor E returned six objections (all D9.2 and D9.3); auditor F returned nine (D8: 2, D9: 7 under D9.1 and D9.2). Each was checked against the files. Where this section and earlier text differ, this section governs. D2 was not re-audited in round 3 by either auditor, so D2 is not closed by this round.
+
+### Answers
+
+- F-D8.1, declaration-side owner: accepted. `parseDeclarations` receives only the file (`check-host-contract.mjs:50`) and stores no owner (`:73`). See D8.1 below.
+- F-D8.2, leaf duplicates across executables: accepted. `discoverRust` lists each executable separately (`test-discovery.mjs:79-84`), and a crate has several. See D8.2 below.
+- F-D9.1e and E-D9.2 (route key): accepted. The window-scoped key `plugin-host:<plugin id>:<window id>` is required because `plugin-host.md:31` creates one host web view per plugin per window and `sidecars.md:46` rejects a second window on the same surface. See D9.2 below.
+- F-D9.2 root and E-D9.2 root: accepted. `sidecars.md:41` keeps the first root after a project change. See D9.2 below.
+- E-D9.2 delivery path into the host page: accepted. `sidecars.md:46` and `:65` deliver to the main page only, and `plugin-processes.md` rule 1 keeps plugin code off that page. See D9.3 below.
+- E-D9.4 and F-D9.4 (host logic): accepted with one option chosen. The sidecar builds the complete declared value; the host page relays it unchanged. See D9.2 below.
+- E-D9.5 and F-D9.6 (layer rule text): accepted. Replacement text is given below.
+- F-D9.7 and E-D9.6 (sidecar stop, operations, sidecar restart): accepted. See D9.2 and D9.9 below.
+- F-D9.8 (action addressing): accepted. `declared-ui.md:126` and `:128` allow only `label` and `expand` as roles. See D9.1e below.
+- F-D9.9 (branch with unsent children): accepted. See D9.1h below.
+- F-D9.10 (error call): accepted. There is no call that shows a plugin error in the declared tree, so the error goes through the main page's display path. See D9.1f below.
+- F-D9.11 (keyboard rule): accepted. `declared-ui.md:130` still says a declared element has no key handler. See D9.1b below.
+- F-D9.12 (expansion authority): accepted. Two stores cannot decide one state. See D9.3 below.
+
+### Revised texts
+
+- D8.1 (owner keying, revised): the owner of a declaration is computed from its file, and `parseDeclarations` returns it. For Go, the owner is the directory of the file, normalized to the absolute package directory. For Rust, the owner is the nearest ancestor of the file that contains `Cargo.toml`. `statusOf` compares normalized owners. A discovered item has the same owner form, so a declaration and a result match by owner and name.
+- D8.2 (leaf duplicates, revised): the check aggregates the `--list` output of every executable of one crate, for each configuration run (`tauriv2-tests`, `tauriv2-diagnostics-tests`, and the sok runs). A leaf name that appears twice in that aggregate fails the audit, whichever executables hold the two tests. D8.5 case 3 uses two leaves in different targets of one crate.
+- D9.1b (keyboard, revised): `declared-ui.md:130` changes from "A declared UI element has no key handler of its own" to "A tree node with `open` has a key handler: Enter keydown on the focused node runs `open` and prevents the native `click`; no other element has a key handler." A tree node with `open` must also carry `command`, so that the native button exists and Enter reaches a node that can be pressed. A double press is a `click` with `event.detail === 2`; that click runs `open` instead of `command`.
+- D9.1e (actions, revised): an action is addressed by the role `action` and a `key` that is unique among the actions of its node. `declared-ui.md:126` and `:128` gain `action` as a role and `key` as a field. The open control shares the node's `label` address, because a node with `open` has one press control.
+- D9.1f (errors, revised): an open failure is an error the user sees. The core `core.file.open` command already shows its own failure through the core display path. The listing error reaches the main page through the host's channel as `pluginHostEvent {kind: "error", text}`; the main page writes `error: plugin <id>: <text>` through the one display path. The declared tree draws no error (`declared-ui.md:70`). `plugin-host.md` Channel gains the `kind: "error"` event. The no-project text is a `status-line` in the value.
+- D9.1h (cut and branch, revised): a tree node may declare `branch: true` when children exist below it that the value does not send. `declared-ui.md:62` changes: a node with `branch: true` is a branch and draws its expand control, even when its `children` are absent. The sidecar sends the children only of expanded branches. The value holds at most 5000 nodes (`declared-ui.md:91`), and a value above the limit is rejected, so the sidecar cuts the rows before sending and adds a `status-line` that states the rows not shown.
+- D9.2 (host route and host role, revised):
+  - Route: the host's route key is `plugin-host:<plugin id>:<window id>`, used as the `surface` of `{surface, root}` (`sidecars.md:41`). Each window has one route, so two windows do not collide.
+  - Root: when the window's project changes, the host sends `closed` for its route and opens a new route with the new root. `plugin-host.md` gains that rule with a contract case `plugin-host.sidecar.project-switch`. Disposal of the host sends `closed` as well (`plugin-host.md:46`).
+  - Logic: the sidecar builds the complete declared value (rows, flattening, the cut, `detail`, `actions`, header buttons, the no-project status, and the bookmark list). The host page relays that value unchanged to the main page as a declared snapshot. The host page keeps no state except the last value of each status, which answers `status.get` (`plugin-host.md:68`). A last-value cache holds no logic.
+  - Bookmarks: the files sidecar holds the bookmark list per project root in its own state, not in the plugin `data` store. The existing `data.bookmarks` value moves with a migration definition (AGENTS, stored format rule), in the files repository.
+  - Commands: the host page forwards each declared command of the files plugin (`files.bookmarks.add`, `files.bookmarks.remove`, `files.tree.toggle`, `files.select`, `files.refresh`) to the sidecar as a request. The sidecar performs the logic and answers with the new value.
+  - Stop: the person's press of `files.refresh` clears the sidecar stop of each sidecar listed in the plugin's `dependencies`, because the files plugin has no surface whose open would clear it (`plugin-host.md:80`). The result of a stop is the cleared sections and one log line; `plugin-host.sidecar.failure` tests it.
+  - Layer rule text, `plugin-processes.md:28` (replaces the rule): "**Plugin host:** created only when a declared sidebar status that must show values while no view of the plugin is open cannot be served by a view. A host relays the messages of its plugin's sidecars and the commands of its declared statuses, serves its declared statuses, and keeps the last value of each; it holds no logic that a view or a sidecar can hold."
+  - Layer rule text, `plugin-host.md:5` (replaces the sentence): "A plugin host is a process of a plugin, with a platform web view attached to the window, that relays its plugin's sidecar messages and command requests and serves its declared statuses; it exists only when the contract requires it."
+  - Channel, `plugin-host.md` gains: the host sends each sidecar message to its page as `{sok: 1, sidecar, body}`, each sidecar failure as `{sok: 1, sidecar, failure}`, and each command request to the sidecar; the main page sends the declared values it receives. Contract cases in both hosts.
+- D9.3 (expansion, revised): for a declared tree whose source is a plugin host or a view, the plugin's `expanded` value is authoritative. `declared-ui.md:137-144` gains that case. The expand command posts `declared-ui.expanded` to the source; the sidecar updates its expanded set and sends the new value. The tree shows the new state after that round trip, not before. A kept state is used only for a tree whose source is not a plugin value. Contract case `declared-ui.expanded` in both hosts.
+- D9.9 (costs, revised): restarting the files sidecar resets its expanded sets and selection (`sidecars.md:67`). Bookmarks persist in the sidecar state, so they are not lost. The new sidecar operations `expand`, `collapse` and `select` (with replies) are added to the files sidecar's protocol in its repository. Arrow-key navigation between rows stays lost, as before.
+
+The round-4 auditors review these texts, the new layer rule, and the sidecar protocol change.
 
 ## To record elsewhere
 

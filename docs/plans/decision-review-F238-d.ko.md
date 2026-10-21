@@ -188,7 +188,48 @@
 - D9.8(shell 배치, 명시): shell 섹션은 shell 카드의 사이드바에 있다. 원천은 카드의 활성 탭 view다(`declared-ui.md:145`, 첫 원천). 이 결정은 플러그인 override를 정하지 않는다. override 없는 고정 창 사이드바는 그 섹션의 원천이 없으므로 지워진다(`declared-ui.md:145`). 받아들이는 비용이며 D9.9에 적었다.
 - D9.9(받아들이는 비용, 확장): 위의 비용(unload 시 history와 jobs 삭제, 탭 상태로 cwd 복원, 카드가 닫히거나 비활성인 동안 섹션 삭제)에 더해 tree 행 사이 화살표 키 탐색의 손실(D9.1과 `declared-ui.md:130`)이다. 화살표 탐색은 F212.8 아래 후속 항목으로 기록해 선언형 동작이 될지 정한다. 그 결정은 적대적 검토로 보낸다. 현재 어휘에 키 처리가 없고 이 변경은 이동의 비용으로 기록하므로 낮춘 기준이 아니다.
 
-라운드 3 감사자는 이 본문과 D9.2의 바뀐 층 규칙을 검토한다.
+## 라운드 3 답변과 수정된 본문
+
+라운드 3 감사자(새 하위 에이전트 두 명, 읽기 전용): 감사자 E는 여섯 개(D9.2와 D9.3), 감사자 F는 아홉 개(D8: 2, D9: 7 에 나눈 항목)를 냈다. 각 항목은 파일에서 확인했다. 이 절과 앞의 본문이 다르면 이 절이 우선한다. 라운드 3에서 D2는 감사자가 다시 검토하지 않았으므로 이 라운드로 D2는 닫히지 않는다.
+
+### 답변
+
+- F-D8.1, 선언 측 소유자: 수락. `parseDeclarations`는 파일만 받고(`check-host-contract.mjs:50`) 소유자를 저장하지 않는다(`:73`). D8.1 참고.
+- F-D8.2, 실행 파일 간 잠 이름 중복: 수락. `discoverRust`는 실행 파일마다 `--list`를 돌리고(`test-discovery.mjs:79-84`), 크레이트에는 여러 실행 파일이 있다. D8.2 참고.
+- F-D9.1e와 E-D9.2(라우트 키): 수락. 창마다 하나의 키 `plugin-host:<plugin id>:<window id>`가 필요하다. `plugin-host.md:31`이 창마다 플러그인 호스트 web view를 만들고, `sidecars.md:46`이 같은 표면에 두 번째 창을 거부하기 때문이다. D9.2 참고.
+- F-D9.2 root와 E-D9.2 root: 수락. `sidecars.md:41`이 프로젝트 변경 후에도 첫 root를 유지한다. D9.2 참고.
+- E-D9.2 호스트 페이지로의 전달 경로: 수락. `sidecars.md:46`과 `:65`는 메인 페이지로만 전달하고, `plugin-processes.md` 규칙 1은 플러그인 코드를 그 페이지에 두지 않는다. D9.3 참고.
+- E-D9.4와 F-D9.4(호스트 로직): 수락. 선택지 하나: 사이드카가 완전한 선언값을 만들고, 호스트 페이지는 그것을 바꾸지 않고 중계한다. D9.2 참고.
+- E-D9.5와 F-D9.6(층 규칙 문장): 수락. 대체 문장은 D9.2에 있다.
+- F-D9.7와 E-D9.6(사이드카 정지, 작업, 재시작): 수락. D9.2와 D9.9 참고.
+- F-D9.8(동작 주소): 수락. `declared-ui.md:126`과 `:128`은 역할로 `label`과 `expand`만 허용한다. D9.1e 참고.
+- F-D9.9(다른 자식이 있는 가지): 수락. D9.1h 참고.
+- F-D9.10(오류 호출): 수락. tree에는 플러그인 오류를 보이는 호출이 없으므로 오류는 메인 페이지의 표시 경로를 통한다. D9.1f 참고.
+- F-D9.11(키 규칙): 수락. `declared-ui.md:130`은 아직 선언형 요소에 키 처리가 없다고 한다. D9.1b 참고.
+- F-D9.12(펼침 권한): 수락. 두 저장소가 한 상태를 결정할 수 없다. D9.3 참고.
+
+### 수정된 본문
+
+- D8.1(소유자 대응, 수정): 선언의 소유자는 파일에서 계산하고 `parseDeclarations`가 반환한다. Go는 파일의 디렉터리(절대 패키지 디렉터리로 정규화), Rust는 파일에서 가장 가까운 `Cargo.toml`을 포함하는 조상 디렉터리. `statusOf`는 정규화된 소유자를 비교한다.
+- D8.2(잠 이름 중복, 수정): 검사는 크레이트의 모든 실행 파일의 `--list` 출력을 각 구성 실행마다 합친다(`tauriv2-tests`, `tauriv2-diagnostics-tests`, sok 실행). 잠 이름이 그 합에서 두 번 나오면 둘이 어느 실행 파일에 있든 실패한다. D8.5 3번 사례는 같은 크레이트의 다른 타겟에 두 잠을 둔다.
+- D9.1b(키, 수정): `declared-ui.md:130`은 "A tree node with `open` has a key handler: Enter keydown on the focused node runs `open` and prevents the native `click`; no other element has a key handler."로 바꾼다. `open`을 가진 트리 노드는 `command`도 가져야 하며, 그래야 네이티브 버튼이 있고 Enter가 누를 수 있는 노드에 닿는다. 두 번 누르기는 `event.detail === 2`인 `click`이며, 그 click은 `command` 대신 `open`을 실행한다.
+- D9.1e(동작, 수정): 동작은 역할 `action`과 그 노드의 동작 사이에서 유일한 `key`로 주소를 갖는다. `declared-ui.md:126`과 `:128`에 `action` 역할과 `key` 필드를 더한다. `open` 컨트롤은 노드의 `label` 주소를 공유한다(노드에 누르는 컨트롤이 하나를 넘지 않음).
+- D9.1f(오류, 수정): 열기 실패는 사용자가 보는 오류다. 코어 `core.file.open` 명령이 자체 실패를 코어 표시 경로로 이미 보여준다. 목록 오류는 호스트 채널을 통해 `pluginHostEvent {kind: "error", text}`로 메인 페이지에 가고, 메인 페이지는 `error: plugin <id>: <text>`를 한 표시 경로로 쓴다. `plugin-host.md` Channel에 `kind: "error"` 이벤트를 더한다. 프로젝트 없음 문구는 값 안의 `status-line`이다.
+- D9.1h(잘라내기와 분기, 수정): 트리 노드는 값에 보내지 않은 하위 노드가 있을 때 `branch: true`를 선언할 수 있다. `declared-ui.md:62`는 바뀌어, `branch: true` 노드는 `children`이 없더라도 분기이며 펼침 컨트롤을 그린다. 사이드카는 펼친 분기의 자식만 보낸다. 값은 최대 5000 노드(`declared-ui.md:91`)이고, 한도를 넘는 값은 거부되므로 사이드카가 보내기 전에 행을 자르고 잘린 행 수를 밝히는 `status-line`을 다는다.
+- D9.2(호스트 라우트와 호스트 역할, 수정):
+  - 라우트: 호스트 라우트 키는 `plugin-host:<plugin id>:<window id>`이며 `{surface, root}`의 `surface`로 쓴다(`sidecars.md:41`). 창마다 라우트가 하나라 두 창이 충돌하지 않는다.
+  - root: 창의 프로젝트가 바뀌면 호스트는 라우트에 `closed`를 보내고 새 root로 새 라우트를 연다. `plugin-host.md`에 그 규칙과 사례 `plugin-host.sidecar.project-switch`를 둔다. 호스트의 폐기도 `closed`를 보낸다(`plugin-host.md:46`).
+  - 로직: 사이드카가 완전한 선언값(행, 평탄화, 한도 처리, `detail`, `actions`, 헤더 버튼, 프로젝트 없음 status, 북마크 목록)를 만든다. 호스트 페이지는 그 값을 수정 없이 메인 페이지에 전달한다. 호스트는 각 status의 마지막 값만 유지한다(`status.get` 응답, `plugin-host.md:68`). 마지막 값 캐시는 로직이 아니다.
+  - 북마크: 북마크 목록은 files 사이드카가 프로젝트 루트별 상태로 보관한다. 기존 `data.bookmarks` 값은 저장형식 규칙에 따라 마이그레이션 정의와 함께 files 저장소로 옵니다.
+  - 명령: 호스트 페이지는 플러그인의 선언된 명령(`files.bookmarks.add`, `files.bookmarks.remove`, `files.tree.toggle`, `files.select`, `files.refresh`)을 사이드카에 요청으로 전달한다. 사이드카가 로직을 수행하고 새 값으로 답한다.
+  - 정지: 사용자가 `files.refresh`를 누르면 플러그인 `dependencies`에 있는 사이드카의 정지를 해제한다. files 플러그인에는 열 표면이 없기 때문이다(`plugin-host.md:80`). 정지의 결과는 섹션 비움과 로그 한 줄이며, `plugin-host.sidecar.failure`가 이를 시험한다.
+  - 층 규칙 문장, `plugin-processes.md:28`(규칙을 대체): "**Plugin host:** created only when a declared sidebar status that must show values while no view of the plugin is open cannot be served by a view. A host relays the messages of its plugin's sidecars and the commands of its declared statuses, serves its declared statuses, and keeps the last value of each; it holds no logic that a view or a sidecar can hold."
+  - 층 규칙 문장, `plugin-host.md:5`(문장을 대체): "A plugin host is a process of a plugin, with a platform web view attached to the window, that relays its plugin's sidecar messages and command requests and serves its declared statuses; it exists only when the contract requires it."
+  - Channel, `plugin-host.md`에 추가: 호스트는 각 사이드카 메시지를 `{sok: 1, sidecar, body}`로, 각 사이드카 실패를 `{sok: 1, sidecar, failure}`로 메인 페이지에 보내고, 명령 요청은 사이드카에 보낸다. 두 호스트에 사례를 둔다.
+- D9.3(펼침, 수정): 플러그인 값이 원천인 tree에서는 플러그인의 `expanded` 값이 권한을 가진다. `declared-ui.md:137-144`에 그 경우를 더한다. 펼침 명령은 `declared-ui.expanded`를 원천에 보내고, 사이드카는 펼친 집합을 갱신하고 새 값을 보낸다. tree는 그 왕복 후에 새 상태를 보인다. 유지된 상태는 플러그인 값이 아닌 tree에만 쓴다. 사례 `declared-ui.expanded`는 두 호스트에서 실행한다.
+- D9.9(비용, 수정): files 사이드카를 재시작하면 펼친 집합과 선택이 초기화된다(`sidecars.md:67`). 북마크는 사이드카 상태에 있어 잃지 않는다. 새 사이드카 작업 `expand`, `collapse`, `select`(답 포함)는 files 사이드카 프로토콜에 그 저장소에 추가한다. 화살표 키 탐색의 손실은 이전과 같다.
+
+라운드 4 감사자는 이 본문, 새 층 규칙, 사이드카 프로토콜 변경을 검토한다.
 
 ## 다른 곳에 기록할 것
 
