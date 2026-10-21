@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F218-2.4: Rust host와 sok writer는 lock 결과에 `expect`나 `unwrap`을 부르던 87개 지점과 같은 lock의 condition wait 7개에서 poisoned lock을 `PoisonError::into_inner`로 복구한다. sidecars.rs 43, performance.rs 9, debug_follow.rs 8, diagnostics.rs 5, log_query.rs, deep_link.rs, host.rs 각 3, endpoint.rs, windows.rs, process_lock_hook.rs, log_policy_watch_hook.rs, sok event_log.rs 각 2, assets.rs, bindings.rs, exposure.rs 각 1. 각 지점은 `default:` 사유를 적는다. poisoned lock은 sidecar 조회, 선언, service owner close, log notice, log indexer, sampler, deep link queue, asset 보고, test hook, modal hold, subscriber와 relay 개수, 종료와 quit 경로, write observer를 실행하는 thread를 더 이상 panic시키지 않는다. census 규칙 `rs.lock-result`는 전의 87개 대신 2개를 보이며, 둘 다 규칙이 잘못 잡는 socket `read()` 호출이다(F218-2.5). 시험 14개가 lock을 poison시키며, 변경 전에 panic했고(예: `a_poisoned_state_lock_still_answers_the_sidecar_queries`가 `sidecar state: PoisonError`) 변경 뒤 통과한다.
 - F221: 확인: 전체 package 시험이 로컬에서 통과하고 수리 push의 CI 실행이 success로 끝났다.
 - F222: pre-push hook이 workflow 시험이 요구하는 형태인 `make -C "$(git rev-parse --show-toplevel)" push-check`를 다시 돌린다.
 - F223: window-check source 감사가 `report`로 관찰을 기록하는 timer를 받고, mock 시간으로 도는 harness 시험에는 timer 규칙을 적용하지 않는다. 이유는 주석에 적는다.
