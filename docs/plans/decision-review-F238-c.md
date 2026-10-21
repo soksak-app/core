@@ -28,7 +28,7 @@ SDK behaviour is tested only in its owning package. A plugin test that asserts a
 
 Command split: `make test` runs the plugin test script only. `make check` runs the SDK-reading tools (`soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`), the SHA-256 comparison of the SDK `view-start.js` with a constant held in the check script, the literal-equality checks of values that a fixture holds (the `VIEW_IMPORTS` entries, the screen-message vector), and `build-vendor --check`. Every plugin repository has a `check` target in its Makefile; `pack` depends on `check`. Build and check scripts (not tests) may call SDK validators.
 
-Fakes stay faithful to the SDK through a conformance check. Core commits an export-surface snapshot (export names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Shape is not enough, so core also commits contract vectors: for each exported function that a fake covers, the input and the expected output, taken from core's own tests. Each plugin's `check` target compares the export names and arity of every fake its test tree uses with the snapshot, runs each fake against the vectors of the functions it covers, and fails on any drift. A check may read SDK files; a test may not.
+Fakes stay faithful to the SDK through a conformance check. Core commits an export-surface snapshot (export names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Shape is not enough, so core also commits contract vectors: for each exported function that a fake covers, the input and the expected output, taken from core's own tests. Each plugin's `check` target compares the export names and arity of every fake its test tree uses with the snapshot, runs each fake against the vectors of the functions it covers, and fails on any drift. A fake may appear in a plugin test tree only if every export it covers has at least one core-owned vector; a fake whose export has none fails the plugin `check`, and the plugin then drops that fake or asserts only a literal it holds. A check may read SDK files; a test may not.
 
 The decision takes effect for each plugin repository when that repository's sub-items land. Until then the current form is an open defect with an owner, not compliance.
 
@@ -94,7 +94,7 @@ Shipped files: `flowmark/package.json` `files` is `plugin.json`, `events.json`, 
 14. Spec: `docs/spec/plugins.md:40` changes from "`make test` runs the tests of a plugin repository" and "depends on `@soksak/plugin-api` for its tests" to: `make test` runs the plugin tests; `make check` runs the SDK tools; the plugin repository depends on `@soksak/plugin-api` as a build dependency. `docs/spec/plugins.md:171` ("a plugin repository test calls `checkViewPage`") changes to: the plugin build calls `checkViewPage`. Owner: core `main`, with `.ko.md` mirrors.
 
 
-15. Conformance: core commits a generated export-surface snapshot (names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Core also commits contract vectors (input and expected output per exported function, taken from core's tests). Each plugin's `check` target compares every fake of its test tree with that snapshot, runs each fake against the vectors of the functions it covers, and fails on drift. Owner: core `main` for the snapshot; each plugin repository for the comparison.
+15. Conformance: core commits a generated export-surface snapshot (names, arity and declared types) of `@soksak/plugin-api`, `@soksak/runtime` and `@soksak/workbench`. Core also commits contract vectors (input and expected output per exported function, taken from core's tests). Each plugin's `check` target compares every fake of its test tree with that snapshot, runs each fake against the vectors of the functions it covers, and fails on drift; a fake whose export has no vector fails the check. Owner: core `main` for the snapshot; each plugin repository for the comparison.
 
 ### Coverage
 
@@ -193,4 +193,11 @@ Two fresh Haiku auditors, asked only whether D1 or D3 itself is wrong, reported 
 - D1: a shape-only check (names, arity, declared types) cannot catch a behaviour change, so a fake can keep the signature and return different values. Accepted: core commits contract vectors (input and expected output per exported function, from core's tests), and each plugin's `check` runs its fakes against them (change 15).
 - D3: rule 1 failed only bases that were neither a core name nor declared, so a declared `@soksak/plugin-browser` in core passed, and rule 1 scanned only `packages/**`, so an undeclared `@soksak/hwp` in `apps/`, `e2e/` or `scripts/` passed. Accepted: rule 1 scans every tracked source file outside the declared plugin and sidecar folders and fails any `@soksak/` base that is not an exact core package name, declared or not. Declarations are used only by rule 2.
 
-Status: round 8 pending. Round 8 auditors receive this text.
+### Round 8
+
+Two fresh Haiku auditors, asked only whether D1 or D3 itself is wrong:
+
+- D1: a fake may cover an export that core has no contract vector for, and such a fake passes the comparison, so behaviour drift goes unseen. Accepted: a fake may appear only if every export it covers has at least one core-owned vector; otherwise the plugin `check` fails.
+- D3: both auditors report no decision-level objection. D3 is closed.
+
+Status: D1 open, round 9 pending (D1 only). Round 9 auditors receive this text.
