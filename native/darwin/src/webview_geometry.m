@@ -284,12 +284,15 @@ static void notifyScale(NSView *view) {
     if (self.hidden || self.alphaValue <= 0 || !NSPointInRect(point, self.bounds)) return nil;
     for (NSValue *rectValue in [[self visibleOverlayRects] reverseObjectEnumerator]) {
         NSRect rect = rectValue.rectValue;
-        if (NSPointInRect(point, rect) && self.mainWebview) return nil;
-        if (NSPointInRect(point, rect) && self.webview && !self.webview.hidden) {
+        if (!NSPointInRect(point, rect)) continue;
+        // The DOM of a view draws its own overlays, so the input under them goes to the view web view. The app DOM
+        // of a hybrid surface has no view web view and keeps the input under its overlays.
+        if (self.webview && !self.webview.hidden) {
             NSPoint domPoint = [self.webview convertPoint:point fromView:self];
             NSView *dom = [self.webview hitTest:domPoint];
             if (dom) return dom;
         }
+        if (self.mainWebview) return nil;
     }
     NSPoint nativePoint = [self.nativePlane convertPoint:point fromView:self];
     NSView *native = [self.nativePlane hitTest:nativePoint];
@@ -756,6 +759,25 @@ void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done 
         }
         done(context, [counts[0] longValue], [counts[1] longValue], document ? 0 : [counts[2] longValue], NULL);
     }];
+}
+
+bool sp_surface_place_view(void *surfaceHandle, void *viewHandle) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    SPSurfaceHost *host = surfaceHost((NSView *)surfaceHandle);
+    if (!host || !host.nativePlane) return false;
+    NSView *view = (NSView *)viewHandle;
+    view.frame = host.bounds;
+    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    host.webview = (WKWebView *)view;
+    [host addSubview:view positioned:NSWindowBelow relativeTo:host.nativePlane];
+    return true;
+}
+
+void sp_surface_unplace_view(void *viewHandle) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    SPSurfaceHost *host = surfaceHost((NSView *)viewHandle);
+    // Not a surface view: the view is not the web view of its surface host, so the host keeps its state.
+    if (host && host.webview == (WKWebView *)viewHandle) host.webview = nil;
 }
 
 void webviewSetSurfaceOverlays(void *handle, const double *values, size_t count) {

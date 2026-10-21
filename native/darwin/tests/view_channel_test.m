@@ -173,6 +173,25 @@ int main(void) { @autoreleasepool {
             [NSString stringWithFormat:@"the first page script reads the theme from window.sokTheme: %@", latest[@"title"]]);
         sp_document_close(themed);
     }
+    @autoreleasepool {
+        // A declared overlay of a view is drawn by the DOM of the view itself, so the overlay mask of the native plane must not
+        // cut the view: the view is not a native region of the plane, and the input under the overlay goes to the view.
+        void *overlayed = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe",
+            channelScript.UTF8String, changed, NULL);
+        check(overlayed != NULL, @"a view configuration is created for the overlay check");
+        sp_document_place(overlayed, 0, 0, 0, 0, true);
+        WKWebView *overlayedView = (WKWebView *)overlayed;
+        NSView *plane = (NSView *)sp_surface_native_plane(surface);
+        check(![overlayedView isDescendantOf:plane], @"the view web view is not inside the native plane of its surface");
+        double overlay[5] = {0, 0, 0, 0, 1};
+        webviewSetSurfaceOverlays(surface, overlay, 1);
+        NSPoint point = [overlayedView convertPoint:NSMakePoint(20, 20) toView:nil];
+        NSView *hit = [window.contentView hitTest:point];
+        check(hit == overlayedView || [hit isDescendantOf:overlayedView],
+            @"a visible overlay of a view leaves the input under it with the view");
+        webviewSetSurfaceOverlays(surface, NULL, 0);
+        sp_document_close(overlayed);
+    }
     sp_surface_close(surface);
     [window close];
     if (failures) fprintf(stderr, "%d failures\n", failures);
