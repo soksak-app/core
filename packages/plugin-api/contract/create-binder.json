@@ -1,0 +1,549 @@
+{
+  "surface": "packages/plugin-api/binder.js#createBinder",
+  "description": "Ordered calls and events exercise the binder contract used by plugin pages. Each step observes command calls, change notifications, failures, element markings, audit results, or errors.",
+  "cases": [
+    {
+      "id": "binder.bind.runs-declared-command",
+      "steps": [
+        {
+          "bind": {
+            "id": "direct",
+            "tag": "button",
+            "command": "fixture.save",
+            "params": {
+              "id": "a"
+            }
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"id\":\"a\"}"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "direct",
+            "type": "click"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "a"
+                },
+                "element": "direct"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"id\":\"a\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.bind.refuses-undeclared-command",
+      "steps": [
+        {
+          "bind": {
+            "id": "bad",
+            "tag": "button",
+            "command": "fixture.absent"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": "command fixture.absent is not declared",
+            "element": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.bind.reports-failed-run",
+      "steps": [
+        {
+          "bind": {
+            "id": "failing",
+            "tag": "button",
+            "command": "fixture.save",
+            "params": {
+              "fail": true
+            },
+            "failed": true
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"fail\":true}"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "failing",
+            "type": "click"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "fail": true
+                },
+                "element": "failing"
+              }
+            ],
+            "changed": 1,
+            "failed": [
+              "command failed"
+            ],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"fail\":true}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.delegate.dispatches-declared-controls",
+      "steps": [
+        {
+          "element": {
+            "id": "root",
+            "tag": "div"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {}
+          }
+        },
+        {
+          "mark": {
+            "id": "button",
+            "tag": "button",
+            "command": "fixture.save",
+            "params": {
+              "id": "b"
+            },
+            "parent": "root"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"id\":\"b\"}"
+            }
+          }
+        },
+        {
+          "mark": {
+            "id": "field",
+            "tag": "input",
+            "command": "fixture.set",
+            "params": {
+              "key": "k"
+            },
+            "valueName": "text",
+            "parent": "root"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set",
+              "params": "{\"key\":\"k\"}",
+              "value": "text"
+            }
+          }
+        },
+        {
+          "mark": {
+            "id": "live",
+            "tag": "input",
+            "command": "fixture.set",
+            "params": {
+              "key": "live"
+            },
+            "valueName": "text",
+            "live": true,
+            "parent": "root"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set",
+              "params": "{\"key\":\"live\"}",
+              "value": "text",
+              "live": ""
+            }
+          }
+        },
+        {
+          "delegate": {
+            "id": "root"
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": null
+          }
+        },
+        {
+          "event": {
+            "id": "button",
+            "type": "click"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "b"
+                },
+                "element": "button"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"id\":\"b\"}"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "field",
+            "type": "input",
+            "value": "typed"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "b"
+                },
+                "element": "button"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set",
+              "params": "{\"key\":\"k\"}",
+              "value": "text"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "field",
+            "type": "change",
+            "value": "typed"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "b"
+                },
+                "element": "button"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "k",
+                  "text": "typed"
+                },
+                "element": "field"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set",
+              "params": "{\"key\":\"k\"}",
+              "value": "text"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "live",
+            "type": "input",
+            "value": "now"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "b"
+                },
+                "element": "button"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "k",
+                  "text": "typed"
+                },
+                "element": "field"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "live",
+                  "text": "now"
+                },
+                "element": "live"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set",
+              "params": "{\"key\":\"live\"}",
+              "value": "text",
+              "live": ""
+            }
+          }
+        },
+        {
+          "dispose": true,
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "b"
+                },
+                "element": "button"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "k",
+                  "text": "typed"
+                },
+                "element": "field"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "live",
+                  "text": "now"
+                },
+                "element": "live"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": null
+          }
+        },
+        {
+          "event": {
+            "id": "button",
+            "type": "click"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "b"
+                },
+                "element": "button"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "k",
+                  "text": "typed"
+                },
+                "element": "field"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "key": "live",
+                  "text": "now"
+                },
+                "element": "live"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"id\":\"b\"}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.audit.reports-unbound-controls",
+      "steps": [
+        {
+          "element": {
+            "id": "root",
+            "tag": "div"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {}
+          }
+        },
+        {
+          "element": {
+            "id": "free",
+            "tag": "button",
+            "expose": "demo.free",
+            "text": "Free",
+            "parent": "root"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {}
+          }
+        },
+        {
+          "audit": {
+            "id": "root"
+          },
+          "output": {
+            "calls": [],
+            "changed": 0,
+            "failed": [],
+            "result": [
+              {
+                "tag": "button",
+                "expose": "demo.free",
+                "command": null,
+                "text": "Free"
+              }
+            ],
+            "error": null,
+            "element": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.run.runs-and-refuses",
+      "steps": [
+        {
+          "run": {
+            "command": "fixture.save",
+            "params": {
+              "id": "r"
+            }
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "r"
+                },
+                "element": null
+              }
+            ],
+            "changed": 0,
+            "failed": [],
+            "result": "accepted",
+            "error": null,
+            "element": null
+          }
+        },
+        {
+          "run": {
+            "command": "fixture.absent",
+            "params": {}
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "id": "r"
+                },
+                "element": null
+              }
+            ],
+            "changed": 0,
+            "failed": [],
+            "result": null,
+            "error": "command fixture.absent is not declared",
+            "element": null
+          }
+        }
+      ]
+    }
+  ]
+}

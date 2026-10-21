@@ -42,7 +42,8 @@
     "census-rules.json",
     "commits-check.js",
     "terms.json",
-    "contract/view-wire.json"
+    "contract/view-wire.json",
+    "contract/create-binder.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",
