@@ -24,8 +24,9 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 ## 층 규칙
 
 - **선언 UI:** 요소가 모두 목록, tree, 버튼, 상태줄 가운데 하나인 사이드바 section이 선언 UI다.
-- **view:** 그 밖의 화면은 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
-- **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다.
+- **view:** 그 밖의 화면은 view다. 인라인 이름 바꾸기가 필요한 tree, 끌어 놓기가 있는 tree, 포인터 위치에 놓는 문맥 메뉴가 있는 tree는 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
+- **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 plugin host가 필요하므로 F212.9를 요구한다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다.
+- **모듈 section(지금):** 모듈 section은 sidebar section의 지금의 형태다. workbench는 모듈을 section 요소에 올리며, 문맥으로 `card`, `surface`, `orientation`, core `icon` 함수, plugin의 status를 위한 `status(name, fn)`, 명령을 위한 `bind(el, name, params, options)`를 준다. 모듈은 자기 DOM을 그리므로 workbench는 그 요소와 이름을 검사하지 못한다. 규칙 1이 workbench 페이지에서 plugin 코드를 실행하지 않는다고 하므로, 이 형태는 페이지 마운트(F212.11)가 제거될 때까지만 지금의 형태다.
 - **plugin host:** view나 sidecar가 DOM 없는 로직을 맡을 수 없을 때만 만든다. 그 로직을 files sidecar나 files view로 옮기는 것을 먼저 검토하고, 옮길 수 없을 때만 host를 둔다.
 - 화면의 층은 측정으로 정하지 않는다.
 
@@ -491,3 +492,18 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 - R3-8: 모듈 section은 workbench 페이지에서 plugin 코드를 실행하며, 계획의 규칙 1이 이를 금지한다. 판정: 수용. 해결: 모듈 형태는 페이지 마운트와 함께 제거될 때(F212.11)까지 지금의 형태다. 선언된 UI 명세는 `status` 형태의 사이드바 section이 선언된 UI이며, 뷰가 필요한 section은 카드 표면이 된다고 적는다. plugin 명세는 모듈 형태를 지금의 형태로, 페이지 마운트와 함께 제거되는 것으로 적는다. "지금처럼"이라는 표현을 고친다.
 - R3-9: 거부된 값이 유지 상태를 바꿀 수 있었다. 판정: 수용. 해결: 거부는 유지 상태를 바꾸지 않으며, 비교는 마지막으로 받아들인 값을 쓴다.
 - R3-10: 선언된 section의 따라가기 규칙이 규칙이 아니라 참조였고, snapshot 용어에 `skipped`가 없었다. 판정: 수용. 해결: 따라가기 규칙을 순서와 함께 적는다. 상태 모듈, 활성 탭의 surface(이름을 등록했을 때), 기본 surface, 등록될 때까지 null, 등록이 바뀌면 다시 고르고, 실패는 페이지 오류다. 선언된 UI snapshot 용어는 `skipped`를 포함한다.
+
+**선언된 UI 스키마 검토 4차**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)의 네 번째 적대적 검토에 대한 답변이다. 열 건을 모두 수용한다.
+
+- R4-1: 선언된 status의 따라가기 규칙에 상태 모듈 단계가 있었고, plugin 명세를 가리키며 그 명세는 다시 이 규칙을 가리켰다. 판정: 수용. 해결: 상태 모듈 단계를 뺀다. 선언된 UI 명세가 순서를 직접 적는다. 사이드바를 가진 카드의 활성 탭의 view(그 view의 페이지가 status를 등록했을 때), 다음 plugin의 plugin host, 그 밖에는 누군가 등록할 때까지 section을 비운다.
+- R4-2: 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 plugin host가 필요하다. 판정: 수용. 해결: 이 결과를 sidebar section의 계층 규칙과 plugin host 항목의 참고에 적는다. 그래서 그런 plugin은 그 항목을 요구한다.
+- R4-3: 창 사이드바의 카드가 적히지 않았다. 판정: 수용. 해결: 고정 창 사이드바에서 카드는 재정의가 적용되는 동안 `core.sidebars`가 보고하는 포커스된 내용 카드와 그 활성 탭이다. 재정의가 적용되지 않으면 view 단계를 건너뛴다. plugin 명세를 맞춘다.
+- R4-4: "등록"이 정의되지 않았다. 판정: 수용. 해결: 프로세스는 자기 페이지가 `page.exposure.register("status", name)`을 부르면 status를 등록하며, 등록은 그 프로세스의 것이다.
+- R4-5: 선언된 UI 명세가 선언된 UI snapshot을 뜻하면서 "snapshot"이라고 적었다. 판정: 수용. 해결: 선언된 status의 snapshot을 설명하는 줄, 즉 스키마 부분 집합, 전체 값, 그리기에서 두 언어 모두 "선언된 UI snapshot"을 쓴다.
+- R4-6: 선언된 UI status, branch, 선언된 section 용어가 없었다. 판정: 수용. 해결: 세 용어를 용어 목록에 더한다. 용어 문서는 규칙만 적고 용어 목록이 없으므로 고칠 미러가 없다.
+- R4-7: 개수와 길이 이유가 초과한 값을 가리키지 않았다. 판정: 수용. 해결: 한도 이유는 초과한 배열, 객체, 문자열을 가리킨다. 템플릿 문단이 각 한도의 포인터를 적고, 직렬화한 값의 크기는 `/`다.
+- R4-8: `command`가 없는 `params`나 `enabled`에 대한 행이 없었다. 판정: 수용. 해결: `<field> requires command` 행을 더한다.
+- R4-9: 세 가지 view 사례(인라인 이름 바꾸기, 끌어 놓기, 포인터 위치 문맥 메뉴)가 계층 규칙에 없었다. 판정: 수용. 해결: 두 언어의 view 규칙에 더한다.
+- R4-10: 명세에 추적 식별자, plugin 명세 sections 문단의 보류 문장, "지금 section이 그리는 것" 절, "이 형태는 지금의 형태다" 문장, "이 버전에서"라는 말이 있었다. 판정: 수용. 해결: 식별자를 빼고 접근성 문장은 검사를 가리킨다. 보류 문장을 뺀다. 절을 빼고, 모듈 형태의 설명은 이 계획의 계층 규칙에 둔다. 모듈 bullet의 문장을 빼고, 모듈 형태는 이 계획에 적는다. 명세에서 "이 버전에서"를 뺀다.

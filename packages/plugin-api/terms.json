@@ -283,6 +283,24 @@
       "allowed": []
     },
     {
+      "term": "declared UI status",
+      "definition": "A status that a sidebar section names with the `status` form of its declaration, whose value is a declared UI value (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "branch",
+      "definition": "A tree node with a children array that is not empty, which the workbench draws with an expand control (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "declared section",
+      "definition": "A sidebar section declared with the `status` form, whose body the workbench draws from a declared UI status (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "dirty mark",
       "definition": "The mark of a status whose value changed while its snapshot was in transit; the acknowledgement of that snapshot sends the latest value of the status and clears the mark.",
       "rejected": [],

@@ -24,8 +24,9 @@ Values not yet measured are measured in F212.1 before a stage depends on them.
 ## Layer rules
 
 - **Declared UI:** a sidebar section whose every element is one of list, tree, button or status-line is declared UI.
-- **View:** any other screen is a view. A view holds free DOM, text input that needs an input method (IME), a canvas or an editor, or a screen that holds a document region or an image region.
-- **Sidebar section:** only declared UI can be a sidebar section. A section that needs a view becomes a card surface, and the sidebar holds only a declared item that opens it.
+- **View:** any other screen is a view. A tree that needs inline rename, a tree with drag and drop, and a tree with a context menu placed at a pointer are views.
+- **Sidebar section:** only declared UI can be a sidebar section. A plugin whose sidebar section must show values while none of its views is open needs its plugin host, so such a plugin requires F212.9.
+- **Module section (today):** a module section is the current form of a sidebar section. The workbench mounts the module in the section element with a context of `card`, `surface`, `orientation`, the core `icon` function, `status(name, fn)` for the statuses of the plugin, and `bind(el, name, params, options)` for its commands. The module draws its own DOM, so the workbench checks neither its elements nor its names. Rule 1 says that plugin code does not run on the workbench page, so this form is the current form until the page mount is removed (F212.11).
 - **Plugin host:** created only when DOM-free logic cannot be held by a view or a sidecar. Its move to the files sidecar or to a files view is examined first, and a host is created only when that move is impossible.
 - The layer of a screen is not chosen by measurement.
 
@@ -384,7 +385,6 @@ The objections below are the answers of the first, second, third, fourth, fifth 
 
 - Objection: the N7 answer made every event that records a loss or a failure warn or higher, while a 0.0.x release stores only error events. Verdict: accepted. Resolution: each occurrence is classified once. A failure or a rejected operation is an `error` event. A loss, a skip, a transient state or a presentation degradation is counted in the status `core.plugin.losses` or the state `core.plugin.views`, and a `debug` event is written with the count in diagnostic builds ([messages and events](#messages-and-events), event levels in a release). `lateReplies` is removed from `core.plugin.open-calls`, and its count is reported only in `core.plugin.losses`.
 
-
 **Fifth review**
 
 - F1: the N1 answer named F212.7a as the measurer of (viii), but F212.7a runs before F212.7c. Verdict: accepted. Resolution: F212.7a measures (i), (ii), (iii), (iii-b) and (v), and (viii) is measured by F212.7c (Steps, F212.7a and N1).
@@ -491,3 +491,18 @@ The objections below are the answers of the third adversarial review of [declare
 - R3-8: module sections run plugin code on the workbench page, which plan rule 1 forbids. Verdict: accepted. Resolution: the module form is the current form until it is removed with the page mount (F212.11). The declared UI specification states that a sidebar section with the `status` form is declared UI, and that a section that needs a view becomes a card surface. The plugin specification describes the module form as current and as removed with the page mount. The "as today" wording is corrected.
 - R3-9: a rejected value could change the kept state. Verdict: accepted. Resolution: a rejection does not change the kept state, and the comparison uses the last accepted value.
 - R3-10: the follow rule of a declared section was a reference and not a rule, and the snapshot term omitted `skipped`. Verdict: accepted. Resolution: the follow rule is stated with its order: the state module first, then the surface of the active tab when it registered the name, then the default surface, then null until a surface registers the name, chosen again when registrations change, with a page error on failure. The declared UI snapshot term includes `skipped`.
+
+**Declared UI schema review round 4**
+
+The objections below are the answers of the fourth adversarial review of [declared UI](../spec/declared-ui.md). All ten are accepted.
+
+- R4-1: the follow rule of a declared status had a state-module step, and it referred to the plugin specification, which referred back to it. Verdict: accepted. Resolution: the state-module step is removed. The source order is stated in the declared UI specification: the view of the active tab of the card that holds the sidebar, when that view's page registered the status; then the plugin host of the plugin; otherwise the section is cleared until one of them registers it.
+- R4-2: a plugin whose sidebar section must show values while none of its views is open needs its plugin host. Verdict: accepted. Resolution: the consequence is recorded in the layer rule of the sidebar section and as a note on the plugin host item, so such a plugin requires that item.
+- R4-3: the card of a window sidebar was not stated. Verdict: accepted. Resolution: for a fixed window sidebar, the card is the focused content card and its active tab while a plugin override applies, as `core.sidebars` reports them. When no override applies, the view step is skipped. The plugin specification is aligned.
+- R4-4: "registered" was not defined. Verdict: accepted. Resolution: a process registers a status when its page calls `page.exposure.register("status", name)`, and the registration belongs to that process.
+- R4-5: the declared UI specification used "snapshot" where it means a declared UI snapshot. Verdict: accepted. Resolution: "declared UI snapshot" is used at the lines that describe the snapshot of a declared status: the schema subset, the full value, and the drawing, in both languages.
+- R4-6: the terms declared UI status, branch and declared section had no entries. Verdict: accepted. Resolution: the three terms are added to the term list. The term documents give rules and no list of terms, so no mirror needs an update.
+- R4-7: the count and length reasons did not name the value that exceeds the limit. Verdict: accepted. Resolution: a limit reason points to the array, object or string that exceeds the limit. The template paragraph gives the pointer of each limit, and the serialized value is `/`.
+- R4-8: no row covered `params` or `enabled` without `command`. Verdict: accepted. Resolution: the row `<field> requires command` is added.
+- R4-9: the three view cases (inline rename, drag and drop, and a context menu placed at a pointer) were missing from the layer rule. Verdict: accepted. Resolution: they are added to the view rule in both languages.
+- R4-10: the specification carried a tracking identifier, a pending sentence in the sections paragraph of the plugin specification, the section "What sections draw today", the statement "This is the current form", and the words "in this version". Verdict: accepted. Resolution: the identifier is removed, and the accessibility sentence names the check instead. The pending sentence is removed. The section is removed, and its description of module sections is in the layer rules of this plan. The statement is removed from the module bullet, and the module form is described in this plan. The words "in this version" are removed from the specification.
