@@ -14,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{RecvError, SyncSender, TryRecvError, TrySendError, sync_channel};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, RwLock};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
 use wait_timeout::ChildExt;
@@ -2514,7 +2514,10 @@ impl<O: Owner> Core<O> {
             let mut stopping = false;
             let mut owned = Vec::new();
             let mut changed = None;
-            if let Ok(mut state) = state.lock() {
+            {
+                // default: a lock that a panicking thread poisoned still holds the state of the sidecars, which the disconnect updates in
+                // full; the panic hook records the panic.
+                let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
                 stopping = state.stopped;
                 if stopping {
                     state.requests.forget(&sidecar);
