@@ -94,13 +94,12 @@ Every plugin view meets (i), (ii), (iii), (iii-b), (v) and (viii), and the resta
 7. **Input.**
    - The keyboard shortcuts of the workbench are listed with their owner and command in [keyboard shortcuts](exposure.md#keyboard-shortcuts).
    - A shortcut whose owner is the native menu reaches a core command through the menu.
-   - A view registers the shortcut table with the host when it starts. The table holds each workbench shortcut and its owner. Until the table is registered, a key keeps its default action, and the view writes `page.view.shortcut-table-missing {plugin}`.
-   - The view decides synchronously inside itself, using that table.
-     - Only a key whose owner is the workbench has its default action prevented, and the key is passed on with the event information.
-     - A key whose owner is the view is handled by the view and is not passed on.
-     - A key whose owner is the native menu does not prevent the view's default action, because the menu receives it first.
-     - A key that is not in the table keeps its default action.
-   - When a passed command fails, the failure is written as `page.input.shortcut.failed {plugin, key, command}`, and the default action is not run again.
+   - A view has no shortcut table and no key listener. A key that the view owns keeps its default action and reaches the view's first responder, which handles it.
+   - A view runs a workbench command for a key that it forwards, with `runtime.command(name, params)`. The host never acts on a key from a view: the bridge sends no call on a key event, and the main page runs no command because of a key that the view did not forward.
+   - The view reads its rows with `runtime.shortcuts.read`: the rows whose owner is `workbench` or `view`, each as `{key, owner, command}`. Rows of the native menu are not returned, so a view that follows this rule does not forward them.
+   - Escape is an ordinary key. A view with its own Escape action decides it in its handler; a view with none runs `core.picker.close` for Escape while a page picker is open. The bridge enforces neither rule.
+   - A key that a view leaves to its default action, or a key that is not a workbench row, keeps its default action.
+   - When a forwarded workbench command fails, the failure is written as `page.input.shortcut.failed {plugin, command}`, and the call replies with its error.
    - IME input goes to the first responder of the view. The input method activation check verifies it.
    - The owner of Escape and of the text input keys is the view, because the first responder of the view receives them. The menu key equivalents of the View menu (Command `=`, `-`, `0`) are native menu shortcuts that run the text size commands ([text size](text-size.md)).
    - The complete shortcut table is [keyboard shortcuts](exposure.md#keyboard-shortcuts), with the machine-readable declaration `packages/workbench/shortcuts.json`. `scripts/test/shortcut-table.test.mjs` checks it against both hosts' menu table and the workbench key handlers.
@@ -138,8 +137,7 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`; counter `losses.abandoned`; written by the host, which owns the wait |
-| `page.view.shortcut-table-missing` | input | error | `{plugin}` |
-| `page.input.shortcut.failed` | input | error | `{plugin, key, command}` |
+| `page.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
 | `host.trace.plugin-host.restart-reset` | call | debug | `{plugin}` |
@@ -163,7 +161,7 @@ The identifiers in code use the names as written here.
 - Plugin repository requirement: the repository of each plugin that contributes a module or provides a shared module checks in its own tests that each such module is one self-contained ES module. A relative import inside one is a build error of that plugin.
 - Tests:
   - Core tests verify its boundary with fake plugin fixtures.
-  - Common contract cases (RPC, snapshot, restart, shortcut table) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths.
+  - Common contract cases (RPC, snapshot, restart) are run by the owning package, core, and by both hosts. Core publishes the fixtures that a consumer needs. Each plugin repository tests only its own modules with those fixtures; it does not run core's cases or read core's paths.
   - Measurements with real plugins and window checks are end-to-end checks of the installed environment, not package tests.
 ## Tabs and processes
 

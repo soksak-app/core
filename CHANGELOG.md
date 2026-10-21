@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-b-5: Breaking: the view shortcut table (F234) and `shortcuts.register()` are removed; a view runs a workbench command with `runtime.command(name, params)`. `runtime.shortcuts.missing` and `runtime.shortcuts.run` are not served. F231 was never released, so no deprecation is kept.
 - F238-b-4: A view runs a declared command with `runtime.command(name, params)`, which sends any name through the view call route; the call layer keeps the owner check of each name, and the view bridge installs no shortcut listener.
 - F238-b-11: A view bridge reports a view record that the host refuses, and a refused error line of the view: both go to the page report with their place and text, so a refusal of a view record is not dropped silently.
 - F238-a-15: A tab reports only a local absolute directory: a directory with a `//` or `/<letter>:` prefix or a NUL byte is refused when it is reported, with the same `TypeError` as a path that is not absolute, through the predicate that the page uses.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-b-5: 호환 깨짐: view 단축키 표(F234)와 `shortcuts.register()`를 제거한다. view는 `runtime.command(name, params)`로 workbench 명령을 실행한다. `runtime.shortcuts.missing`과 `runtime.shortcuts.run`은 제공하지 않는다. F231은 배포되지 않았으므로 deprecation을 두지 않는다.
 - F238-b-4: view는 선언된 명령을 `runtime.command(name, params)`로 실행한다. 이 경로는 어떤 이름이든 view call 경로로 보내며, 각 이름의 owner 검사는 call 계층이 맡고, view bridge는 단축키 listener를 설치하지 않는다.
 - F238-b-11: view bridge는 host가 거부한 view 기록과 view의 거부된 오류 줄을 모두 위치와 문장을 담아 페이지 보고로 보내므로, view 기록의 거부가 조용히 버려지지 않는다.
 - F238-a-15: tab은 로컬 절대 경로인 directory만 보고한다. `//` 또는 `/<letter>:` 접두사나 NUL 바이트를 담은 directory는 보고될 때 절대 경로가 아닌 경로와 같은 `TypeError`로 거부되며, 판정은 페이지가 쓰는 함수다.

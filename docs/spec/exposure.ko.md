@@ -64,11 +64,11 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 
 - `native menu`: 애플리케이션 메뉴 항목의 키 동등물. 메뉴가 view보다 먼저 키를 받으므로 view의 기본 동작을 막지 않는다. 코어 명령이 있는 행은 메뉴를 거쳐 그 명령에 닿고, `framework role`인 행은 항목의 role을 실행한다.
 - `workbench`: 워크벤치 page 또는 그 네이티브 modal이 처리하고 기본 동작을 막는 키. 행은 그 키가 실행하는 명령을 적는다.
-- `view`: 플러그인 view가 [plugin 프로세스](plugin-processes.ko.md) 규칙 7에 따라 자기 안에서 처리하는 키: Escape와 텍스트 입력의 키. view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
+- `view`: view가 자기 안에서 처리하는 키, 또는 view가 넘기는 키에 대해 `runtime.command`로 실행하는 workbench 명령([plugin 프로세스](plugin-processes.ko.md) 규칙 7). view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
 
 키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`와 `Escape`는 키 이름이다.
 
-view의 shortcut table은 view가 keyboard focus를 가진 동안 성립하는 행, 곧 문맥이 `Any focus`인 행과 `view` 행을 담는다. main page는 view call `runtime.shortcuts.read`로 그것을 view에 준다([native surfaces](native-surfaces.ko.md#view-표면), 입력).
+view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다. 주인이 `workbench` 또는 `view`인 행이다([native surface](native-surfaces.ko.md#view-표면), 입력). view는 표를 등록하지 않는다.
 
 | 키 | 소유자 | 명령 | 메뉴 항목 | 조건 |
 |---|---|---|---|---|
@@ -93,8 +93,8 @@ view의 shortcut table은 view가 keyboard focus를 가진 동안 성립하는 �
 | `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
-| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. plugin 프로세스 규칙 7에 따라 view가 정한다 |
-| `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view의 first responder가 받는다 |
+| `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
+| `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view가 키를 직접 처리하며 기본 동작을 유지한다 |
 
 ## 등록
 
