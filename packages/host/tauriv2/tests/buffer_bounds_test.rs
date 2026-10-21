@@ -102,6 +102,7 @@ impl Blocked {
             folder: directory.path().to_path_buf(),
             data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
             version: "0.0.1".to_string(),
+            dependents: Vec::new(),
         }];
         let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
         let owner = FakeOwner { root: root.into() };
@@ -450,6 +451,7 @@ fn a_line_that_is_written_at_once_stores_no_write_wait() {
         folder: directory.path().to_path_buf(),
         data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
         version: "0.0.1".to_string(),
+        dependents: Vec::new(),
     }];
     let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
     let owner = FakeOwner { root: "/p".into() };

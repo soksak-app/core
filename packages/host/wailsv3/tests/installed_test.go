@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -232,6 +233,9 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 		string(declarations[0].Data) != `{"executable": "build/worker", "protocol": 1}` {
 		t.Fatalf("declarations %+v", declarations)
 	}
+	if !reflect.DeepEqual(declarations[0].Dependents, []string{"term"}) {
+		t.Fatalf("dependents %v, want the plugin that lists the sidecar", declarations[0].Dependents)
+	}
 	if err := os.Remove(filepath.Join(folder, "sidecar.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -244,6 +248,17 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	}
 	if declarations, err := host.InstalledSidecars(t.TempDir()); err != nil || len(declarations) != 0 {
 		t.Fatalf("empty configuration %v %v", declarations, err)
+	}
+}
+
+// contract: installed.sidecars.dependents-of-a-shared-sidecar
+func TestInstalledSidecarsListEveryDependentPlugin(t *testing.T) {
+	config := installedFixture(t)
+	// A second enabled plugin that lists the same sidecar is one more dependent of the one declaration.
+	writeInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": `{"id": "alpha", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
+	declarations, err := host.InstalledSidecars(config)
+	if err != nil || len(declarations) != 1 || !reflect.DeepEqual(declarations[0].Dependents, []string{"alpha", "term"}) {
+		t.Fatalf("shared sidecar declarations %+v, %v", declarations, err)
 	}
 }
 

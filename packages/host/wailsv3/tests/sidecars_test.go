@@ -1523,3 +1523,238 @@ func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 		t.Fatalf("ms = %v, want a number of milliseconds from the spawn", fields["ms"])
 	}
 }
+
+// restartEpoch is the time at offset zero of the restart-limit checks.
+var restartEpoch = time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC)
+
+// restartClock is the clock that a restart-limit check injects into the channel. It moves only when the check sets it.
+type restartClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+// set moves the clock to offset after restartEpoch.
+func (c *restartClock) set(offset time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = restartEpoch.Add(offset)
+}
+
+// read returns the time of the clock.
+func (c *restartClock) read() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+// restartScript is a sidecar that fails on each request with an invalid message, unless the file ok exists in its folder; then it runs.
+const restartScript = "#!/bin/sh\nread request\nif [ -f DIR/ok ]; then exec sleep 600; fi\nprintf 'not json\\n'\nexec sleep 600\n"
+
+// restartSidecars declares the restartScript sidecar, which plugin-a lists in dependencies, with an injected clock.
+func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "fake"), []byte(strings.ReplaceAll(restartScript, "DIR", directory)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	declarations := []host.SidecarDeclaration{{Name: echoSidecar, Folder: directory, Data: []byte(`{"executable":"fake","protocol":1}`), Dependents: []string{"plugin-a"}}}
+	sidecars, err := host.NewSidecars(declarations, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	clock := &restartClock{}
+	sidecars.Now = clock.read
+	return sidecars, directory, clock
+}
+
+// sendAt moves the clock to offset and sends an open request of surface from owner.
+func sendAt(t *testing.T, clock *restartClock, sidecars *host.Sidecars, owner *fakeOwner, surface string, offset time.Duration) error {
+	t.Helper()
+	clock.set(offset)
+	return sidecars.Send(owner, echoSidecar, surface, json.RawMessage(`{"operation":"open"}`))
+}
+
+// touchFile creates the empty file name in directory.
+func touchFile(t *testing.T, directory, name string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(directory, name), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// requireInvalidFailure waits for the next failure of the owner and checks that the sidecar failed with an invalid message.
+func requireInvalidFailure(t *testing.T, owner *fakeOwner, offset time.Duration) {
+	t.Helper()
+	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "invalid message") {
+		t.Fatalf("failure at %v = %+v", offset, failure)
+	}
+}
+
+// requireRestartLimit checks that err is the refusal of a sidecar at its restart limit.
+func requireRestartLimit(t *testing.T, err error, offset time.Duration) {
+	t.Helper()
+	if err == nil || err.Error() != "sidecar "+echoSidecar+": restart limit" {
+		t.Fatalf("send at %v = %v, want the restart limit refusal", offset, err)
+	}
+}
+
+// contract: sidecars.restart.three-failures-restart
+func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
+	sidecars, directory, clock := restartSidecars(t)
+	owner := newFakeOwner("/projects/a")
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
+		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		requireInvalidFailure(t, owner, offset)
+	}
+	// After three failures within 300 seconds the next send starts a process, which runs without failing.
+	touchFile(t, directory, "ok")
+	if err := sendAt(t, clock, sidecars, owner, "s1", 30*time.Second); err != nil {
+		t.Fatalf("send after three failures: %v", err)
+	}
+	select {
+	case value := <-owner.failures:
+		t.Fatalf("the restarted sidecar failed: %+v", value)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// contract: sidecars.restart.fourth-failure-stops
+func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
+	sidecars, _, clock := restartSidecars(t)
+	log := useEventLog(t)
+	owner := newFakeOwner("/projects/a")
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
+		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		requireInvalidFailure(t, owner, offset)
+	}
+	// The fourth failure stops the restarts: the next send starts no process and fails with the reason restart limit.
+	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 40*time.Second), 40*time.Second)
+	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != "s1" || failure.Reason != "restart limit" {
+		t.Fatalf("refused send failure = %+v", failure)
+	}
+	sidecars.Stop()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	starts, stops := 0, 0
+	for _, event := range readEventLog(t, log.Path()) {
+		switch event["event"] {
+		case "host.sidecar.start":
+			starts++
+		case "host.sidecar.restart-limit":
+			stops++
+			if event["level"] != "error" || event["fields"].(map[string]any)["sidecar"] != echoSidecar {
+				t.Fatalf("restart-limit event = %v", event)
+			}
+		}
+	}
+	if starts != 4 || stops != 1 {
+		t.Fatalf("starts = %d, restart-limit events = %d; want 4 and 1", starts, stops)
+	}
+}
+
+// contract: sidecars.restart.old-failure-not-counted
+func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
+	sidecars, _, clock := restartSidecars(t)
+	owner := newFakeOwner("/projects/a")
+	// The failure at 0 seconds is more than 300 seconds before the failure at 305 seconds, so it is not counted there.
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 305 * time.Second} {
+		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		requireInvalidFailure(t, owner, offset)
+	}
+	// At 305 seconds three failures are counted, so the send at 306 seconds starts a process; its failure is the fourth counted.
+	if err := sendAt(t, clock, sidecars, owner, "s1", 306*time.Second); err != nil {
+		t.Fatalf("send at 306s: %v", err)
+	}
+	requireInvalidFailure(t, owner, 306*time.Second)
+	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 307*time.Second), 307*time.Second)
+	if failure := owner.failure(t); failure.Reason != "restart limit" {
+		t.Fatalf("refused send failure = %+v", failure)
+	}
+}
+
+// contract: sidecars.restart.surface-open-resets-the-record
+func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
+	sidecars, directory, clock := restartSidecars(t)
+	log := useEventLog(t)
+	owner := newFakeOwner("/projects/a")
+	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
+		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		requireInvalidFailure(t, owner, offset)
+	}
+	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s1", 40*time.Second), 40*time.Second)
+	owner.failure(t)
+	// The creation of a surface of a plugin that does not list the sidecar leaves the stop in place.
+	sidecars.SurfaceOpened("plugin-b", "s2")
+	requireRestartLimit(t, sendAt(t, clock, sidecars, owner, "s2", 41*time.Second), 41*time.Second)
+	owner.failure(t)
+	// The creation of a surface of plugin-a, which lists the sidecar, clears the record; the next send starts the process.
+	touchFile(t, directory, "ok")
+	sidecars.SurfaceOpened("plugin-a", "s2")
+	if err := sendAt(t, clock, sidecars, owner, "s2", 42*time.Second); err != nil {
+		t.Fatalf("send of the opened surface: %v", err)
+	}
+	if err := sendAt(t, clock, sidecars, owner, "s1", 43*time.Second); err != nil {
+		t.Fatalf("send of the refused surface after the reset: %v", err)
+	}
+	sidecars.Stop()
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] != "host.trace.sidecar.restart-reset" {
+			continue
+		}
+		fields := event["fields"].(map[string]any)
+		if fields["sidecar"] != echoSidecar || fields["surface"] != "s2" {
+			t.Fatalf("restart-reset fields = %v", fields)
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("the opened surface recorded no host.trace.sidecar.restart-reset")
+	}
+}
+
+// contract: sidecars.restart.refuses-already-open-surface
+func TestRestartRefusesAnAlreadyOpenSurface(t *testing.T) {
+	sidecars, _, clock := restartSidecars(t)
+	// s3 is open: its request failed the first process, which is not the process that stopped.
+	first, second := newFakeOwner("/projects/b"), newFakeOwner("/projects/a")
+	if err := sendAt(t, clock, sidecars, first, "s3", 0); err != nil {
+		t.Fatal(err)
+	}
+	requireInvalidFailure3(t, first, "s3", 0)
+	for _, offset := range []time.Duration{10 * time.Second, 20 * time.Second, 30 * time.Second} {
+		if err := sendAt(t, clock, sidecars, second, "s1", offset); err != nil {
+			t.Fatalf("send at %v: %v", offset, err)
+		}
+		requireInvalidFailure3(t, second, "s1", offset)
+	}
+	// The fourth failure stopped the sidecar. s3 is open, so its next request is refused too.
+	err := sendAt(t, clock, sidecars, first, "s3", 40*time.Second)
+	if err == nil || err.Error() != "sidecar "+echoSidecar+": restart limit" {
+		t.Fatalf("send of the open surface s3 after the stop = %v, want the restart limit refusal", err)
+	}
+	if failure := first.failure(t); failure.Surface != "s3" || failure.Reason != "restart limit" {
+		t.Fatalf("refused failure = %+v", failure)
+	}
+}
+
+// requireInvalidFailure3 waits for the next failure of owner and checks that the surface failed with an invalid message.
+func requireInvalidFailure3(t *testing.T, owner *fakeOwner, surface string, offset time.Duration) {
+	t.Helper()
+	if failure := owner.failure(t); failure.Sidecar != echoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "invalid message") {
+		t.Fatalf("failure of %s at %v = %+v", surface, offset, failure)
+	}
+}

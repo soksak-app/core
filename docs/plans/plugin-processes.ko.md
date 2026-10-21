@@ -438,3 +438,24 @@ F212.3은 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.vi
 
 - T1: navigation 중의 post가 URL 검사를 통과하고 사라졌다. 판정: 수용. 해결: 문서 식별자를 담은 ready message. 기록된 ready 문서에만 보낸다.
 - T2: queue에 상한이 없었다. 판정: 수용. 해결: 정한 상한 256개, 관찰한 길이는 F212.5-4와 F212.5-7이 기록한다. queue가 차면 error이고 view 프로세스를 끝낸다.
+
+**선언된 UI 스키마 검토**
+
+아래 이의는 [선언된 UI](../spec/declared-ui.ko.md)(F212.8-0)의 적대적 검토에 대한 답변이다. 각 항목은 이의, 판정, 해결을 적으며, 명세가 그 해결을 기록한다.
+
+- D1: 범위가 인라인 이름 바꾸기, 끌어 놓기, 포인터 위치의 문맥 메뉴가 필요한 tree를 어떻게 하는지 말하지 않았다. 판정: 수용. 해결: 그런 tree는 계층 규칙에 따라 view다. core는 그런 상호작용의 요소를 선언하지 않는다. plugin의 저장소가 각 surface를 선언된 UI 또는 view로 선언한다.
+- D2: 노드 한도를 넘는 tree의 동작이 정해지지 않았고, 지연 적재는 자른 사실을 workbench에서 숨긴다. 판정: 수용. 해결: core는 자르지 않으며 지연 적재가 없다. 더 큰 값을 가진 plugin은 view를 쓰거나, 자기 값을 스스로 자르고 자른 사실을 status-line에 적는다.
+- D3: 한도에 이유가 없었다. 판정: 수용. 해결: 각 한도를 선택값으로 표시하고, snapshot 하나에 대한 main page의 작업을 이유로 적는다. list 항목과 tree 노드의 한도는 tree 노드 5000개와 list 항목 1000개의 측정된 그리기 시간으로 고친다(F212.8-7).
+- D4: 노드 key로 키 잡은 유지 트리 상태는 key가 다른 부모 밑에서 반복되면 깨지고, 수명이 정해지지 않았다. 판정: 수용. 해결: 유지 상태는 루트부터의 노드 key 경로로 키 잡는다. plugin의 바뀐 `expanded` 값이 유지 상태보다 우선한다. plugin 프로세스가 다시 시작하면 유지 상태는 초기화되고, 공간에 저장하지 않으며, 받아들인 값에 그 경로가 없으면 지운다.
+- D5: `selected`에는 정해진 유지 상태가 없었다. 판정: 부분 수용. 해결: plugin의 바뀐 값이 유지 상태보다 우선한다는 규칙은 `expanded`에 적용한다. `selected`는 이를 바꾸는 core 명령이 없으므로 workbench 상태를 보관하지 않으며, plugin의 값이 받아들인 모든 값에 적용된다. 유지되는 `selected`는 쓰는 주체가 없기 때문이다.
+- D6: 전환 명령을 두 번 실행하면 변경이 반복된다. 판정: 수용. 해결: `core.declared-ui.tree.expand {status, tree, path, expanded}`는 유지 상태를 설정하므로, 같은 인수는 같은 결과를 낸다.
+- D7: section DOM 이름이 기존 `core.sidebar.section.*` 이름과 겹쳤고, `core.sidebars`는 어떤 요소를 세는지 말하지 않았다. 판정: 수용. 해결: `core.sidebar.section.header`와 `core.sidebar.section.control`을 재사용하고, `core.declared-ui.section-header`는 제거한다. `core.sidebars`는 본문의 제어 요소, 첫 받아들인 값부터의 mounted 상태, 현재 거부의 텍스트를 센다.
+- D8: `data-key`가 노출 명세에 없었다. 판정: 수용. 해결: 노출 명세는 선언된 UI 값이 그리는 요소에만 `data-key`를 적고, 다른 요소에는 적지 않는다.
+- D9: 역할 정의가 접근성 주장을 함의했다. 판정: 수용. 해결: F212.12가 플랫폼 인터페이스를 기록할 때까지 접근성 주장도 ARIA 역할도 정하지 않는다(규칙 8).
+- D10: 거부가 로그와 section에서 두 번 보일 수 있었고, 같은 거부가 반복되면 다시 쓰였다. 판정: 수용. 해결: section은 `showError`가 쓰는 텍스트를 보인다. 로그 줄은 같은 자리와 같은 텍스트에 대해 한 번 쓰는데, `showError`가 보이는 텍스트를 유지하기 때문이다. 다음 받아들인 값이 표시를 거둔다.
+- D11: plugin은 자기 값이 거부되었다는 것을 알 수 없다. 판정: 부분 수용. 해결: 응답은 수신 확인이지 유효성 확인이 아니므로 plugin은 거부 신호를 받지 않으며, 거부는 section에서만 보인다. 거부 메시지는 snapshot channel에 새 메시지를 요구하는데, 이를 요구하는 소비자가 없다.
+- D12: `fill`과 빈 list 규칙이 정해지지 않았다. 판정: 수용. 해결: `fill`은 plugins가 모듈 section에 주는 뜻을 가진다. 각 list는 필수 `empty` 텍스트를 가진다. 가로 section의 tree는 거부한다.
+- D13: menu 요소, busy tone, list label에는 소비자가 없다. 판정: 수용. 해결: 셋을 제거하며, menu의 명령, DOM 이름, 한도도 요소와 함께 제거한다. 제거한 menu 하위 항목의 checklist ID는 재사용하지 않는다.
+- D14: 진행 또는 배지 요소가 필요하다. 판정: 거부. 해결: 소비자가 없으므로 요소를 더하지 않는다.
+- D15: 거부된 값은 마지막으로 받아들인 트리를 계속 그려야 한다. 판정: 거부. 해결: 유지 트리는 대체 동작이다. plugin이 더 이상 현재 값으로 보내지 않는 값을 보이고 거부를 숨긴다. 값 전체 거부를 유지한다.
+- D16: tree label을 list label과 같은 규칙으로 제거했다. 판정: 검토의 요구가 아니라 개정의 판단으로 수용한다. 해결: 소비자가 tree 이름을 정하지 않으며, section 머리가 내용을 이름 짓는다.

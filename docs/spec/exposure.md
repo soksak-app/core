@@ -44,7 +44,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 
 A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`.
 
-The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name.
+The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name. An element that a [declared UI](declared-ui.md) value draws carries the attribute `data-key="<key>"` with the key of its element, so an external request addresses it by that key. No other element carries `data-key`.
 
 ## User interface
 

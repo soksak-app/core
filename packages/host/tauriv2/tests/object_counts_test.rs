@@ -93,6 +93,7 @@ fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
         folder: directory.path().to_path_buf(),
         data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
         version: "0.0.1".to_string(),
+        dependents: Vec::new(),
     }];
     let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
     let owner = FakeOwner {

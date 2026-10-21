@@ -381,7 +381,12 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
             serde_json::from_str(&text).map_err(|error| format!("{}: {error}", file.display()))?;
         for name in manifest.dependencies.into_keys() {
             // The package of an installed plugin is a plugin dependency, so it is not declared as a sidecar.
-            if declarations.iter().any(|item| item.name == name) || names.contains(&name) {
+            if names.contains(&name) {
+                continue;
+            }
+            // A sidecar that several plugins list is declared once, and each of them is one of its dependents.
+            if let Some(item) = declarations.iter_mut().find(|item| item.name == name) {
+                item.dependents.push(plugin.id.clone());
                 continue;
             }
             let sidecar = state.sidecars.get(&name).ok_or_else(|| {
@@ -399,6 +404,7 @@ pub fn installed_sidecars(config_dir: &Path) -> Result<Vec<SidecarDeclaration>, 
                 folder,
                 data,
                 version: sidecar.version.clone(),
+                dependents: vec![plugin.id.clone()],
             });
         }
     }

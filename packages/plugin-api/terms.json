@@ -266,7 +266,7 @@
     },
     {
       "term": "declared element",
-      "definition": "One node of a declared UI value: a list, tree, menu, command or status line, or an item, node or menu item of one of them (docs/spec/declared-ui.md).",
+      "definition": "One node of a declared UI value: a list, tree, command or status line, or an item or node of a list or tree (docs/spec/declared-ui.md).",
       "rejected": [],
       "allowed": []
     },
