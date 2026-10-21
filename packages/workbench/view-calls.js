@@ -86,6 +86,10 @@ export const REGION_HOST_CALLS = new Set([
 // plugin never reaches them.
 export const VIEW_BRIDGE_CALLS = new Set(["viewRequest", "viewEvent", "viewReply"]);
 
+// The native events of the region record that a view subscribes to (docs/spec/native-surfaces.md#view-surfaces, regions). The other
+// events are internal to the view bridge.
+export const REGION_EVENTS = new Set(["document-stream", "document-state", "document-message", "image-event"]);
+
 /**
  * The plugin-facing native handle of a surface: the host calls and the native events that plugin code reaches through runtime.native.
  * call refuses the region calls and the view bridge calls, so a plugin reaches a region only through its composition. The refusal
@@ -101,6 +105,7 @@ export function pluginNativeGate(native) {
       return native.call(name, payload);
     },
     on(name, listener) {
+      if (!REGION_EVENTS.has(name)) return Promise.reject(new Error(`native event ${name} is not served: the view bridge is internal`));
       return native.on(name, listener);
     },
   };
