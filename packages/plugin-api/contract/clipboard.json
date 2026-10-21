@@ -1,0 +1,58 @@
+{
+  "surface": "packages/plugin-api/clipboard.js#shellQuotePath",
+  "description": "Ordered literal path inputs and quoted shell-argument outputs for the plugin API helper.",
+  "cases": [
+    {
+      "id": "clipboard.shell-quote-path.with-spaces",
+      "steps": [
+        {
+          "quote": {
+            "path": "/tmp/a b.txt"
+          },
+          "output": {
+            "path": "'/tmp/a b.txt'"
+          }
+        }
+      ]
+    },
+    {
+      "id": "clipboard.shell-quote-path.embedded-single-quote",
+      "steps": [
+        {
+          "quote": {
+            "path": "/tmp/quote'name.txt"
+          },
+          "output": {
+            "path": "'/tmp/quote'\\''name.txt'"
+          }
+        }
+      ]
+    },
+    {
+      "id": "clipboard.shell-quote-path.dropped-file",
+      "steps": [
+        {
+          "quote": {
+            "path": "/tmp/dropped file.txt"
+          },
+          "output": {
+            "path": "'/tmp/dropped file.txt'"
+          }
+        }
+      ]
+    },
+    {
+      "id": "clipboard.shell-quote-path.refuses-empty",
+      "steps": [
+        {
+          "quote": {
+            "path": ""
+          },
+          "output": {
+            "error": "clipboard file path is invalid"
+          }
+        }
+      ]
+    }
+  ]
+}

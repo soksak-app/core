@@ -4,7 +4,9 @@
 
 ## Unreleased
 
-- F238-c-21: The terminal removes its SDK census subprocess tests; core owns scanner/reason and CLI coverage, while terminal `make check` scans its repository. Terminal tests pass 162/162, core census tests 27/27.
+- F238-c-27 (terminal consumer follow-up): Core publishes four `shellQuotePath` examples in `contract/clipboard.json` and 42 screen cases in `contract/screen-hash.json` for terminal's table fakes. Contract checks pass (clipboard 5/5, screen 44/44); the full `@soksak/plugin-api` suite passes 436/436. No release tag or dependency pin changed.
+
+- F238-c-21: The terminal removes its SDK census subprocess tests; core owns scanner/reason and CLI coverage, while terminal `make check` scans its repository. Terminal tests pass 163/163, core census tests 27/27.
 
 - F238-c-9: Reconciled the fixture scope with the D3 rule; the workbench tests already use `@scope/sidecar-probe`, not the real sidecar name. Owning tests pass 19/19; no code change was needed.
 

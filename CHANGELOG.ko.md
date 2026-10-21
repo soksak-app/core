@@ -4,7 +4,9 @@
 
 ## 미배포
 
-- F238-c-21: terminal의 SDK census subprocess 테스트를 제거했다. Scanner/reason 및 CLI coverage는 core가 소유하고 terminal `make check`는 저장소 census를 실행한다. Terminal test 162/162, core census test 27/27 통과.
+- F238-c-27 (terminal consumer 후속): core가 terminal 표 가짜용 `contract/clipboard.json`에 `shellQuotePath` 사례 4개를, `contract/screen-hash.json`에 screen 사례 42개를 공개한다. 계약 검사는 통과했다(clipboard 5/5, screen 44/44). 전체 `@soksak/plugin-api` 테스트는 436/436 통과한다. release tag와 dependency pin은 변경하지 않았다.
+
+- F238-c-21: terminal의 SDK census subprocess 테스트를 제거했다. Scanner/reason 및 CLI coverage는 core가 소유하고 terminal `make check`는 저장소 census를 실행한다. Terminal test 163/163, core census test 27/27 통과.
 
 - F238-c-9: D3 규칙에 맞춰 fixture scope를 대조했다. Workbench 테스트는 이미 실제 sidecar 이름 대신 `@scope/sidecar-probe`를 사용한다. 소유 테스트 19/19 통과, 코드 변경은 필요하지 않았다.
 

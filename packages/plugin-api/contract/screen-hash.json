@@ -224,6 +224,3165 @@
           }
         }
       ]
+    },
+    {
+      "id": "screen.message.empty-one-cell",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "0b1b5a155fc09ab5d44c3aab7da1069acfbd4bb865de6831a15f2cfb8f8161a0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.empty-one-cell-attributes-change",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "e82cbe0b5590136612f120955d1fb1cee078b8f8d5300cc832b3a0e0914d8344"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.empty-one-cell.projects",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.empty-one-cell-attributes-change.projects",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.empty-one-cell.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "0b1b5a155fc09ab5d44c3aab7da1069acfbd4bb865de6831a15f2cfb8f8161a0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.empty-one-cell-attributes-change.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "e82cbe0b5590136612f120955d1fb1cee078b8f8d5300cc832b3a0e0914d8344"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.blank-underlined-cursor",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 1,
+                "row": 0,
+                "visible": true,
+                "focused": true,
+                "shape": "Underline",
+                "blinking": true
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 2,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 2,
+              "cursor": {
+                "row": 0,
+                "col": 1,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.korean-preedit",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 2,
+                "row": 1,
+                "visible": true,
+                "focused": true,
+                "shape": "Block",
+                "blinking": false,
+                "preedit": {
+                  "text": "한",
+                  "selectedRange": {
+                    "location": 0,
+                    "length": 1
+                  },
+                  "replacementRange": null,
+                  "attributed": false
+                }
+              },
+              "frame": null,
+              "rows": 2,
+              "cols": 3,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 2,
+              "cols": 3,
+              "cursor": {
+                "row": 1,
+                "col": 2,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.linked-word",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": null,
+              "rows": 1,
+              "cols": 7,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "a",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": " ",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "L",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/doc"
+                },
+                {
+                  "grapheme": "I",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/doc"
+                },
+                {
+                  "grapheme": "N",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/doc"
+                },
+                {
+                  "grapheme": "K",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0,
+                  "link": "https://example.test/doc"
+                },
+                {
+                  "grapheme": " ",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 7,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "a",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": " ",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "L",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "I",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "N",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "K",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": " ",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.empty-one-cell.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.empty-one-cell-attributes-change.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 1
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.refuses-missing-sequence.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "error": "screen message: sequence must be an integer from 1, found undefined"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.refuses-zero-rows.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 0,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "error": "screen hash: rows must be a positive integer, found 0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.refuses-zero-cols.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 0,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "error": "screen hash: cols must be a positive integer, found 0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.refuses-cell-count.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [],
+              "frame": null
+            }
+          },
+          "output": {
+            "error": "screen hash: cells must hold 1 cells (rows 1 × cols 1), found 0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.refuses-cell-attributes.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": "bad"
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "error": "screen message: cells[0].attributes must be an integer from 0 to 255, found \"bad\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.refuses-empty-segment.frame-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 2,
+              "segment": "",
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "error": "screen message: segment must be a non-empty string, found \"\""
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.blank-cell-cursor-visible",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": true,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.letter-x-cursor-hidden",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "x",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "x",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.scrollback-offset-3",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": false,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 3,
+                "history": 40
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.scrollback-offset-25",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": false,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 25,
+                "history": 50
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.scrollback-background",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "background": "#102030",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": true,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 0,
+                "history": 50
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.background-color",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "background": "#102030",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": true,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.attribute-flags",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "event": "screen",
+              "sequence": 1,
+              "segment": "b1",
+              "rows": 1,
+              "cols": 3,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "Z",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 45
+                },
+                {
+                  "grapheme": "Y",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 210
+                },
+                {
+                  "grapheme": "N",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ],
+              "frame": null
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 3,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "Z",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 45
+                },
+                {
+                  "grapheme": "Y",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 210
+                },
+                {
+                  "grapheme": "N",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.wide-cell-continuation",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": null,
+              "rows": 1,
+              "cols": 6,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "B",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "한",
+                  "width": 2,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 0,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 6,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "B",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "한",
+                  "width": 2,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 0,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.multiline-rows",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": null,
+              "rows": 3,
+              "cols": 5,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "2",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "3",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 3,
+              "cols": 5,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "2",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "3",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.frame-screen-read",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": {
+                "generation": 3,
+                "raster": 7,
+                "sequence": 12
+              },
+              "rows": 1,
+              "cols": 5,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 5,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.null-frame-screen-read",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": null,
+              "rows": 1,
+              "cols": 5,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 5,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.frame-screen-good",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": {
+                "generation": 3,
+                "raster": 7,
+                "sequence": 12
+              },
+              "rows": 1,
+              "cols": 4,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "g",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 4,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "g",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.caret-8x4",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cols": 8,
+              "rows": 4,
+              "cursor": {
+                "col": 7,
+                "row": 3,
+                "shape": "Block",
+                "visible": true,
+                "blinking": false,
+                "blink_visible": true,
+                "focused": true,
+                "preedit": null
+              },
+              "frame": null,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 4,
+              "cols": 8,
+              "cursor": {
+                "row": 3,
+                "col": 7,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.hollow-block-cursor",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 1,
+                "row": 0,
+                "visible": true,
+                "focused": false,
+                "shape": "HollowBlock",
+                "blinking": false
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 2,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 2,
+              "cursor": {
+                "row": 0,
+                "col": 1,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.cursor-preedit-null",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 2,
+                "row": 1,
+                "visible": true,
+                "focused": true,
+                "shape": "Block",
+                "blinking": false,
+                "preedit": null
+              },
+              "frame": null,
+              "rows": 2,
+              "cols": 3,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 2,
+              "cols": 3,
+              "cursor": {
+                "row": 1,
+                "col": 2,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.blank-hidden-cursor",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.scrollback-background-offset-25",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "background": "#102030",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": false,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 25,
+                "history": 50
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.cursor-without-preedit",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 2,
+                "row": 1,
+                "visible": true,
+                "focused": true,
+                "shape": "Block",
+                "blinking": false
+              },
+              "frame": null,
+              "rows": 2,
+              "cols": 3,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 2,
+              "cols": 3,
+              "cursor": {
+                "row": 1,
+                "col": 2,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.scrollback-offset-0",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": true,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 0,
+                "history": 50
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.scrollback-offset-zero-hidden-cursor",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": false,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 0,
+                "history": 50
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.message.empty-scrollback",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "cursor": {
+                "col": 0,
+                "row": 0,
+                "visible": true,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false
+              },
+              "scrollback": {
+                "offset": 0,
+                "history": 0
+              },
+              "frame": null,
+              "rows": 1,
+              "cols": 1,
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   ]
 }
