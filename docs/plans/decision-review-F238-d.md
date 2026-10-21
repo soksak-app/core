@@ -80,40 +80,38 @@ Decision text:
 
 ## D9. Plugin placement of files and shell
 
-Status: placement under round 8 review. Round 7 objections are answered below and the placement is revised. Implementation findings are sub-items F238-d-9 to F238-d-23 (`docs/features.md`). The layer rule and the host channel stay with F229 (plan `../core-host-routes-F229/docs/plans/plugin-host-routes.md`).
+Status: placement under round 9 review. Round 8 objections are answered below; the placement is revised. Implementation findings are sub-items F238-d-9 to F238-d-24 (`docs/features.md`). The layer rule and the host channel stay with F229 (plan `../core-host-routes-F229/docs/plans/plugin-host-routes.md`), except the two spec questions listed in D9.A.
 
 Decision (placement only):
 
-- D9.A Files sidebar: no card view. The files sections are declared UI and are served by the files plugin host. The host is required by `docs/spec/plugin-processes.md:26`: a section that must show values while no view of its plugin is open needs its plugin host. The host-last test of `plugin-processes.md:28` does not apply to this reason. Its sources are restricted by `docs/spec/declared-ui.md:145`: a status is registered by a page, served by a card view or by the host, and a sidecar has no page. A card surface is rejected as a new feature for files (new work under `plugin-processes.md:7`), at the cost of a card surface the files plugin does not have today. The host is a status relay. It holds no logic that the files sidecar or project data can hold, and it is conditional on two spec decisions that are not made here: `docs/spec/plugin-host.md:59` forbids a sidecar send and the project data calls it would need (F238-d-18, F238-d-23).
-  - The files sidecar (`@soksak/sidecar-files`, `plugins/files/plugin.json:27-28`) holds the listing and git status and reports changes. The plugin's own `expanded` value and selection are the plugin's values; the kept expanded state stays in the workbench (`declared-ui.md:3-11`, changed only through `core.declared-ui.tree.expand`, reset on reload).
-  - Bookmarks are in project data (`docs/spec/plugins.md:126`), read and written by the host only after the amendment of F238-d-23.
-  - `plugins/files/ui/state.js` (imports only `./events.js`) moves to the sidecar or to the host presentation; which is F229's decision (F238-d-20).
-- D9.B Shell card: stays a view. Its three sections (`shell.history`, `shell.cwd`, `shell.jobs`) are plugin-declared sections. They are placed in the card-left sidebar by the Settings assignment (`docs/spec/example-model.md:20`), using the plugin default that `data.sidebars` derives (`:24`). The shell's default set is declared in its manifest and confirmed in the shell repository (F238-d-21). Their status source is the view of that card (`declared-ui.md:145`, first source). No plugin host for shell in this default placement.
-- D9.C Running jobs: `context.tab.keep("busy", on)` (`plugins/shell/ui/shell.js:56-60`) keeps the tab loaded during a run (`docs/spec/plugins.md:203`). It does not change the source. When the card is inactive, `declared-ui.md:145` takes the sections from the active tab's view, so a running job is not shown from an inactive card. This is an accepted cost (D9.D).
-- D9.D Costs of the default placement D9.B, stated in full: while the card is closed or inactive, the three sections are cleared (`declared-ui.md:145`), running jobs included. Unload clears `history`, `jobs` and the cwd view state (`shell.js:56`), except that an active run keeps the tab loaded (D9.C). cwd is restored from the tab state on the next load (`shell.js:119`, `:146-154`).
-  - Alternative (owner decision): if history and cwd must show while the card is closed, shell needs a plugin host under `plugin-processes.md:26`, and D9.B is replaced. No spec requirement says they must. The record keeps the default and does not treat it as settled until the shell owner confirms it (F238-d-21).
-- D9.E Interim exception: the horizontal `files.tree` stays a module section. Module form is the current form (`plugin-processes.md:27`, "Module section (today)"); it is an explicit exception with the removal gate F212.11, and no host source exists for it until F238-d-9 adds a horizontal tree rule (`declared-ui.md:56`, `:171` reject it today). Until then only `files.bookmarks` is a declared list served by the host.
+- D9.A Files sidebar: no card view, and the files sections are declared UI in the left or right sidebar (vertical; orientation follows the side, `docs/spec/plugins.md:97`). Their status source is the files plugin host. The sidecar cannot be the source: impossibility, not a preference. A status is registered by a process's page through `page.exposure.register` (`docs/spec/declared-ui.md:145`), and a sidecar has no page, so it cannot be the source (`plugin-processes.md:28` is applied to this impossibility). A card surface would be the alternative: rejected as new work for files, because the sections need no view if the views check below holds. The host is required by `docs/spec/plugin-processes.md:26`: a section that must show values while no view of its plugin is open needs its plugin host.
+  - Conditions that make the placement stand: (1) the views check (F238-d-24): `plugins/files` `ui/sections/tree.js` and `bookmarks.js` have no rename, drag and drop, pointer context menu or text input, which `plugin-processes.md:25` would force into a view; (2) owner sign-off that status serving is a host-only capability, so `plugin-host.md:5` and `plugin-processes.md:28` need no amendment; (3) `docs/spec/plugin-host.md:59` amended (F238-d-23) for the sidecar relay and bookmark project data calls.
+  - The files sidecar (`@soksak/sidecar-files`, `plugins/files/plugin.json:27-28`) holds the listing and git status. The expanded state stays in the workbench (`declared-ui.md:3-11`). The plugin's own values are plugin values.
+  - Bookmarks are in project data (`docs/spec/plugins.md:126`), read and written by the host after F238-d-23.
+  - `plugins/files/ui/state.js` (imports only `./events.js`) moves to the sidecar or to the host presentation; which is F229's (F238-d-20).
+- D9.B Shell card: stays a view. Its three sections (`shell.history`, `shell.cwd`, `shell.jobs`) are plugin-declared sections in the card-left sidebar. The Settings assignment (`docs/spec/example-model.md:20`) and the plugin default (`:24`) both place them there. Their status source is the view of the shell tab in that card (`declared-ui.md:145`, first source). No shell plugin host in the default.
+- D9.C Running jobs: `context.tab.keep("busy", on)` (`plugins/shell/ui/shell.js:56-60`) keeps the tab loaded during a run (`docs/spec/plugins.md:203`). It does not change the source. When the card's active tab is not the shell tab, `declared-ui.md:145` takes the sections from the active tab's view, so a running job in a non-active shell tab is not shown.
+- D9.D Costs of the default path, stated in full: the sections clear when the card's active tab is no longer the shell tab, or when the card closes (`declared-ui.md:145`, `:150` rule (a)). Under the plugin default path, the set follows the active tab (`example-model.md:24`), so switching the card to another plugin's tab removes them. Under an explicit Settings assignment, the set survives tab changes (`example-model.md:24`), but the source still clears when the active tab is not the shell tab, so the sections are empty in that case too. Either path blanks running jobs in a non-active tab (D9.C). Unload clears `history`, `jobs` and the cwd view state (`shell.js:56`), except that an active run keeps the tab loaded (D9.C). cwd is restored from the tab state on the next load (`shell.js:119`, `:146-154`).
+  - Alternative (owner decision): if history and cwd must show while the shell tab is not active, shell needs a plugin host under `plugin-processes.md:26`, and D9.B is replaced. No spec requirement says they must. The record keeps the default and does not treat it as settled until the shell owner confirms it (F238-d-21).
+- D9.E Orientation: the files sections are in the left or right sidebar, so the vertical module and the vertical declared tree apply and no horizontal tree is needed for this placement. The current horizontal `files.tree` module (`plugins/files/plugin.json:10`) is removed by F212.11 with the other module forms. If the owner requires files on the top or bottom sidebar, the horizontal tree rule (F238-d-9) is then needed, and that requirement is recorded as the reason.
 
 Evidence for the placement:
 
-- `plugins/files/plugin.json`: `files.tree` and `files.bookmarks` in module form (`files.tree` has a horizontal module, `:10`), no card surface (`:4`), `@soksak/sidecar-files` dependency (`:27-28`).
-- Files interactions needed: tree (expand, select, open) and list (bookmark add and remove): `ui/sections/tree.js`, `tree-horizontal.js`, `bookmarks.js`.
+- `plugins/files/plugin.json`: `files.tree` and `files.bookmarks` in module form, horizontal module on `files.tree` (`:10`), no card surface (`:4`), `@soksak/sidecar-files` dependency (`:27-28`).
+- Files interactions: tree (expand, select, open) and list (bookmark add and remove), `ui/sections/tree.js`, `tree-horizontal.js`, `bookmarks.js`. The round-1 search of `ui/sections/*.js` and `ui/state.js` found no `contextmenu`, `rename` or `drag` match; F238-d-24 repeats it in the plugin repository.
 - `plugins/shell/plugin.json` declares the card view `ui/index.html` and three sections in `status` form; the text input is a view need (`plugin-processes.md:24-25`).
 - `shell.js:56-60` keeps the tab loaded while a run is active; `shell.js:119`, `:146-154` restore cwd.
+- Limitation: `plugins/` is absent from this worktree and the listed branches; `plugin.json` and `shell.js` lines were checked in the main checkout only.
 
-Round 7 answers (auditors A and B, claude-haiku-5-5, read-only):
+Round 8 answers (auditors A and B, claude-haiku-5-5, read-only):
 
-- A1 (host channel forbidden by `plugin-host.md:59`): accepted. The amendment is its own item F238-d-23; D9.A is conditional on it.
-- A2 (host justified by the wrong rule): accepted. The host is justified by `plugin-processes.md:26`, and the host-last test does not apply.
-- A3 (interim module runs plugin code on the workbench page): accepted as an explicit exception with a removal gate (F212.11). Moving the tree to a card surface is not chosen here (it would be a new surface for files, D9.A).
-- A4 (card surface dismissed on a manifest fact): accepted. Rejection is stated as a new feature with its cost.
-- B1 (sidecar cannot hold bookmarks through forbidden calls): accepted; same as A1.
-- B2 (expanded set in sidecar conflicts with the workbench rule): accepted. Expansion stays in the workbench; the sidecar gives only the plugin's values.
-- B3 (shell blanking conditional): accepted. D9.D states the default and the alternative.
-- B4 (citation `example-model.md:20,24`): accepted. `:20` is the assignment, `:24` the plugin default.
-- Verification gap: `plugins/` is absent from this worktree and from the listed branches; `plugin.json` and `shell.js` lines were checked in the main checkout only and are recorded as a limitation.
+- A1 (horizontal exception unnecessary): accepted. Files moves to the left or right sidebar (D9.E); the horizontal exception drops out unless the owner requires top or bottom.
+- A2 (no-card-view premise unverified): accepted as a condition. F238-d-24 requires the views check in the plugin repository before D9.A stands.
+- A3 and B1 (host-last test misstated; host waiver): accepted. D9.A argues impossibility against `plugin-processes.md:28` and asks owner sign-off on `plugin-host.md:5`.
+- A4 (explicit assignment costs): accepted. D9.D states both paths.
+- A5 and B2 (trigger unit is the active tab, not card focus): accepted. "Card inactive" is replaced by "active tab is not the shell tab, or the card closes".
 
-Round 8 question: is the revised placement D9.A to D9.E wrong? Implementation findings are not part of the question.
+Round 9 question: is the revised placement D9.A to D9.E wrong? Implementation findings are not part of the question.
 
 ## Verification run (parent, in this worktree)
 
