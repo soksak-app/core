@@ -7,13 +7,17 @@
  *
  *     native      native(name, fn): the surface event of the name, as runtime.native.on; resolves with the off function
  *     sidecar     the sidecar of the surface with on(id, fn) and onFailure(id, fn), as runtime.sidecar() has; each resolves with the off function
+ *     textSize    textSize(fn): registers fn(factor) for the changes of the text scale of the surface, as runtime.textSize.on does;
+ *                 resolves with the off function
+ *     settings    settings(fn): registers fn(values) for the changes of the settings of the plugin, as runtime.settings.on does;
+ *                 resolves with the off function
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
  *     report      report(text): receives the text of a push that the host refused
  *
- * Returns {native(name), sidecarMessage(id), sidecarFailure(id), close()}. A subscription call resolves with null, and a second call
- * for the same name or id registers nothing.
+ * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), close()}. A subscription call resolves with
+ * null, and a second call for the same name or id registers nothing.
  */
-export function createViewSubscriptions({ native, sidecar, push, report }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, push, report }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
@@ -51,6 +55,12 @@ export function createViewSubscriptions({ native, sidecar, push, report }) {
     },
     sidecarFailure(id) {
       return subscribe(`sidecar.failure:${id}`, () => sidecar.onFailure(id, (reason) => forward("sidecar.failure", { id, reason })));
+    },
+    textSize() {
+      return subscribe("textSize", () => textSize((factor) => forward("textSize", factor)));
+    },
+    settings() {
+      return subscribe("settings", () => settings((values) => forward("settings", values)));
     },
     async close() {
       closed = true;

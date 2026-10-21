@@ -268,6 +268,48 @@ test("runtime.theme gives the listener the last theme that the host sent, then e
   assert.deepEqual(seen, [{ scheme: "dark", tokens: { bg: "#000" } }, { scheme: "light", tokens: { bg: "#fff" } }]);
 });
 
+test("runtime.textSize.read reads the scale of the surface and runtime.textSize.on subscribes once", async (t) => {
+  const { posted, host } = setup(t);
+  const seen = [];
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const read = runtime.textSize.read();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.textSize.read", params: null });
+  host({ sok: 1, id: 1, result: 1.5 });
+  assert.equal(await read, 1.5);
+  const off = runtime.textSize.on((factor) => seen.push(factor));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.textSize.on", params: null });
+  host({ sok: 1, id: 2, result: null });
+  await off;
+  await runtime.textSize.on(() => {});
+  assert.equal(posted.filter((message) => message.command === "runtime.textSize.on").length, 1);
+  host({ sok: 1, event: "textSize", data: 1.5 });
+  assert.deepEqual(seen, [1.5]);
+  (await off)();
+  host({ sok: 1, event: "textSize", data: 2 });
+  assert.deepEqual(seen, [1.5]);
+});
+
+test("runtime.settings.read reads the settings of the plugin and runtime.settings.on subscribes once", async (t) => {
+  const { posted, host } = setup(t);
+  const seen = [];
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const read = runtime.settings.read();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.settings.read", params: null });
+  host({ sok: 1, id: 1, result: { home: "sok://core/start" } });
+  assert.deepEqual(await read, { home: "sok://core/start" });
+  const off = runtime.settings.on((values) => seen.push(values));
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.settings.on", params: null });
+  host({ sok: 1, id: 2, result: null });
+  await off;
+  await runtime.settings.on(() => {});
+  assert.equal(posted.filter((message) => message.command === "runtime.settings.on").length, 1);
+  host({ sok: 1, event: "settings", data: { home: "sok://core/start" } });
+  assert.deepEqual(seen, [{ home: "sok://core/start" }]);
+  (await off)();
+  host({ sok: 1, event: "settings", data: { home: "" } });
+  assert.deepEqual(seen, [{ home: "sok://core/start" }]);
+});
+
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
   const { host } = setup(t);
   const reports = [];

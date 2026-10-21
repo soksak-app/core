@@ -69,7 +69,8 @@ export function createViewChannel({ handler }) {
  *     handler   the sok-view message handler of the view, as for createViewChannel
  *     report    report(event) receives the counts and losses of the calls and the snapshots, as createCalls and createSnapshotSender
  *
- * Returns {calls, snapshots}.
+ * Returns {calls, snapshots}. runtime serves the context entries of the view page: native.on, sidecar().on and .onFailure,
+ * theme, and textSize and settings with read and on each.
  */
 export function createViewBridge({ handler, report }) {
   if (typeof report !== "function") throw new TypeError("createViewBridge requires the report function");
@@ -108,6 +109,16 @@ export function createViewBridge({ handler, report }) {
       on: (id, listener) => listen(`sidecar.message:${id}`, () => calls.request("runtime.sidecar.on", { id }), (data) => listener(data.body)),
       onFailure: (id, listener) => listen(`sidecar.failure:${id}`, () => calls.request("runtime.sidecar.onFailure", { id }), (data) => listener(data.reason)),
     }),
+    // The scale of the surface and the settings of the plugin: read reads the current value, and on registers one listener
+    // under the one subscription of its key, which the page registers once (docs/spec/native-surfaces.md#view-surfaces).
+    textSize: {
+      read: () => calls.request("runtime.textSize.read", null),
+      on: (listener) => listen("textSize", () => calls.request("runtime.textSize.on", null), listener),
+    },
+    settings: {
+      read: () => calls.request("runtime.settings.read", null),
+      on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
+    },
     theme: (listener) => {
       if (typeof listener !== "function") throw new TypeError("runtime.theme requires a listener");
       if (!listeners.has("theme")) listeners.set("theme", new Set());
@@ -119,7 +130,7 @@ export function createViewBridge({ handler, report }) {
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (message.event === "theme") return "theme";
+    if (message.event === "theme" || message.event === "textSize" || message.event === "settings") return message.event;
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
     return `native:${message.event}`;
   };
