@@ -877,6 +877,8 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 let surface = s.id.clone();
                 let plugin = s.plugin.clone();
                 let page = s.composition.page.clone();
+                // default: a view surface synced without start values injects empty ones, as wailsv3 does; values
+                // that are present were checked by validate_view_start.
                 let start = s.start.clone().unwrap_or_default();
                 exposure::on_main(window, move || {
                     documents::sync_view(
