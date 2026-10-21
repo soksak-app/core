@@ -486,7 +486,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | both |
 | `sidecars-transport.persistent.oversize-line-fails-the-connection` | 64 MiB 메시지 한도보다 긴 service 줄은 줄의 나머지를 읽지 않고 연결을 닫으며, 보낸 surface에 `message exceeds 67108864 bytes`와 함께 `sidecar-failure`를 보낸다. | both |
 | `sidecars-transport.persistent.invalid-event-fails-the-connection` | JSON 객체가 아닌 service 줄이나 문자열 `surface`가 없는 surface event는 연결을 닫고 보낸 surface에 `invalid message: ...`와 함께 `sidecar-failure`를 보낸다. 다음 전송은 다시 연결한다. | both |
-| `recording.state.poisoned-lock-is-reported` | 상태를 쥔 다른 thread가 panic한 뒤 진행 중인 녹화의 폴더를 읽으면 장소 `recording`의 `error` 기록이고 폴더는 없다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
+| `recording.state.poisoned-lock-is-recovered` | 상태를 쥔 다른 thread가 panic한 뒤 녹화를 끝내거나 그 폴더를 읽으면 상태를 복구한다. panic은 panic hook이 기록한다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `modal.state.poisoned-lock-is-recovered` | 모달 기록을 쥔 다른 thread가 panic한 뒤 열린 모달이나 그 mode를 읽으면 저장된 모달을 돌려준다. panic은 panic hook이 기록한다. | tauriv2 only: Rust는 holder가 panic하면 mutex를 poisoned로 표시하지만 Go mutex에는 그런 상태가 없다 |
 | `surface-activation.owner.resolves-registered-view` | 등록된 네이티브 뷰는 그 표면 id로 해석된다. | both |
 | `surface-activation.owner.ignores-unknown-view` | 등록되지 않은 네이티브 뷰는 표면으로 해석되지 않는다. | both |

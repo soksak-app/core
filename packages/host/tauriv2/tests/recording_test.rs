@@ -273,9 +273,9 @@ impl Capture for Panicking {
     }
 }
 
-// contract: recording.state.poisoned-lock-is-reported
+// contract: recording.state.poisoned-lock-is-recovered
 #[test]
-fn a_poisoned_recording_state_is_reported_when_it_is_read() {
+fn a_poisoned_recording_state_is_recovered_when_it_ends() {
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
@@ -284,6 +284,9 @@ fn a_poisoned_recording_state_is_reported_when_it_is_read() {
         let _ = recording.start(&Panicking, WINDOW, &folder, &make);
     }));
     assert!(panicked.is_err());
+    recording
+        .abort(&Fake::default())
+        .expect("abort failed while the state lock was poisoned");
     assert_eq!(recording.running(), None);
     writer.flush(std::time::Duration::from_secs(5)).unwrap();
     use_host_event_log(None);
@@ -294,6 +297,5 @@ fn a_poisoned_recording_state_is_reported_when_it_is_read() {
         })
         .map(|event| event["fields"]["text"].as_str().unwrap().to_string())
         .collect();
-    assert_eq!(errors.len(), 1, "errors {errors:?}");
-    assert!(errors[0].contains("poisoned"), "error {:?}", errors[0]);
+    assert!(errors.is_empty(), "errors {errors:?}");
 }

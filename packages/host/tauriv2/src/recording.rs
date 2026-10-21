@@ -5,7 +5,7 @@
 //! the next recording, and a remaining folder cannot be deleted by the requester.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
@@ -98,7 +98,9 @@ impl Recording {
         directory: &Path,
         make: &dyn Fn(&Path) -> Result<(), String>,
     ) -> Result<(), String> {
-        let mut state = self.state.lock().map_err(|e| e.to_string())?;
+        // default: a lock that a panicking thread poisoned still holds the recording state, which the start reads and
+        // amends; the panic hook records the panic.
+        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         if let Some(running) = &state.directory {
             return Err(format!("a capture into {} is running", running.display()));
         }
@@ -138,10 +140,14 @@ impl Recording {
 
     /// Stops the recording in progress and deletes the folder. It does nothing when there is no recording.
     pub fn abort(&self, capture: &dyn Capture) -> Result<(), String> {
-        let directory = match self.state.lock() {
-            Ok(mut state) => state.directory.take(),
-            Err(error) => return Err(error.to_string()),
-        };
+        let directory = self
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .directory
+            .take();
         if let Some(directory) = directory {
             let stop_error = capture.stop().err();
             let cleanup_error = std::fs::remove_dir_all(directory)
@@ -166,7 +172,9 @@ impl Recording {
         let directory = self
             .state
             .lock()
-            .map_err(|e| e.to_string())?
+            // default: a lock that a panicking thread poisoned still holds the recording state, which the stop amends;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
             .directory
             .take()
             .ok_or_else(|| "no capture is running".to_string())?;
@@ -186,12 +194,9 @@ impl Recording {
 
     /// The folder of the recording in progress.
     pub fn running(&self) -> Option<PathBuf> {
-        match self.state.lock() {
-            Ok(state) => state.directory.clone(),
-            Err(error) => {
-                crate::application_log::log_error("recording", error);
-                None
-            }
-        }
+        // default: a lock that a panicking thread poisoned still holds the recording state, which is only read; the
+        // panic hook records the panic.
+        let state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        state.directory.clone()
     }
 }
