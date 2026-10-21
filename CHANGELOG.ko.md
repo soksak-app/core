@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F221: 확인: 전체 package 시험이 로컬에서 통과하고 수리 push의 CI 실행이 success로 끝났다.
 - F222: pre-push hook이 workflow 시험이 요구하는 형태인 `make -C "$(git rev-parse --show-toplevel)" push-check`를 다시 돌린다.
 - F223: window-check source 감사가 `report`로 관찰을 기록하는 timer를 받고, mock 시간으로 도는 harness 시험에는 timer 규칙을 적용하지 않는다. 이유는 주석에 적는다.
 - F221: 생성된 event class 표를 catalog에 맞게 다시 만들고, `make push-check`가 event-classes 시험을 돌려 못 미친 표가 관문에서 실패하게 한다.

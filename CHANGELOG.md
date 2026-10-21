@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F221: Verified: the full package tests pass locally and the CI run of the repair completed with success.
 - F222: The pre-push hook runs `make -C "$(git rev-parse --show-toplevel)" push-check` again, the form the workflow test requires.
 - F223: The window-check source audit accepts a timer that records an observation through `report` and does not apply its timer rule to the harness tests, which run on mocked time; the reason is stated in the comment.
 - F221: The generated event class tables are regenerated with the catalog, and `make push-check` runs the event-classes test so a stale table fails the gate.
