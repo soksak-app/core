@@ -87,6 +87,7 @@ Both sidecar releases follow the core release (F212.15). F212.1-2-2-3-1 stays op
 - On a CHANGELOG conflict keep both entries. On a conflict of the recorded counts in `docs/operations/examples.md`, use the count that `make parity-check` prints for the merged tree.
 - After a worktree moves, the Tauri build cache keeps old paths and clippy fails. Run `cargo clean -p tauri -p soksak-tauriv2` in the worktree.
 - Gate commands with `&&`. A pipe or a grep does not stop a chain.
+- A change that adds or touches a contract case or a test of `packages/host` or `packages/sok` runs `make host-contract-check`; no push gate runs it, and CI fails without it (F220).
 
 ### Adding a test file
 
