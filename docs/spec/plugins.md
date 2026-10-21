@@ -80,7 +80,7 @@ A plugin requires `surface`, `sections` or `contributes`. Only plugins with a su
 
 ## Default sidebar sets
 
-Optional plugin `sidebars` contains `sets` and optional `card` and `window` mappings. Each set is `{id, title, sections, layout}` with a local lowercase identifier; `layout` is `list` or `tabs`. Section IDs may refer to any installed plugin. A `card` mapping requires a surface and maps `top`, `bottom`, `left`, and `right` to local set IDs. Missing sides declare no default. Unknown fields, duplicate or reserved local IDs, missing sets, and uninstalled sections fail explicitly.
+Optional plugin `sidebars` contains `sets` and optional `card` and `window` mappings. Each set is `{id, title, sections, layout}` with a local lowercase identifier; `layout` is `list` or `tabs`. Section IDs may refer to any installed plugin. A `card` mapping requires a surface and maps `top`, `bottom`, `left`, and `right` to local set IDs. Missing sides declare no default. Unknown fields, duplicate or reserved local IDs, missing sets, and uninstalled sections fail explicitly. A set whose `sections` list names one section ID twice fails explicitly, with an error that names the set and the ID.
 
 A `window` mapping accepts `left` and `right` local set IDs and does not require a surface. It is independent of `card`; invalid mappings or missing local sets fail explicitly.
 

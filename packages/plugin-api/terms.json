@@ -253,6 +253,18 @@
       "allowed": []
     },
     {
+      "term": "control address",
+      "definition": "The object {sidebar, section, key, path?, role?} that a request uses to address one control of a declared section (docs/spec/declared-ui.md).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
+      "term": "sidebar instance",
+      "definition": "One sidebar as core.sidebars reports it, identified by left, right, or cardId:side.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "declared UI",
       "definition": "A sidebar section whose every element is one of list, tree, button or status-line, which the workbench draws from the declared UI snapshots and pull replies that a plugin sends (docs/spec/declared-ui.md).",
       "rejected": [],

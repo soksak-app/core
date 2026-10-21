@@ -80,7 +80,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 
 ## 기본 사이드바 세트
 
-플러그인의 선택 필드 `sidebars`는 `sets`와 선택 필드 `card`, `window` 매핑을 포함한다. 각 세트는 로컬 소문자 식별자를 가진 `{id, title, sections, layout}`이며 `layout`은 `list` 또는 `tabs`다. 섹션 ID는 설치된 어느 플러그인도 참조할 수 있다. `card` 매핑은 표면이 있어야 하며 `top`, `bottom`, `left`, `right`를 로컬 세트 ID에 연결한다. 없는 변은 기본 연결을 선언하지 않는다. 알 수 없는 필드, 중복·예약 로컬 ID, 없는 세트와 설치되지 않은 섹션은 명시적으로 실패한다.
+플러그인의 선택 필드 `sidebars`는 `sets`와 선택 필드 `card`, `window` 매핑을 포함한다. 각 세트는 로컬 소문자 식별자를 가진 `{id, title, sections, layout}`이며 `layout`은 `list` 또는 `tabs`다. 섹션 ID는 설치된 어느 플러그인도 참조할 수 있다. `card` 매핑은 표면이 있어야 하며 `top`, `bottom`, `left`, `right`를 로컬 세트 ID에 연결한다. 없는 변은 기본 연결을 선언하지 않는다. 알 수 없는 필드, 중복·예약 로컬 ID, 없는 세트와 설치되지 않은 섹션은 명시적으로 실패한다. `sections`에 같은 섹션 ID를 두 번 나열한 세트는 세트와 그 ID를 밝힌 오류로 명시적으로 실패한다.
 
 `window` 매핑은 `left`, `right` 로컬 세트 ID를 받고 표면을 요구하지 않는다. `card`와 독립적이며 잘못된 매핑과 없는 로컬 세트는 명시적으로 실패한다.
 

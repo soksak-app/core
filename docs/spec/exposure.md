@@ -202,7 +202,7 @@ Clients call these JSON-RPC 2.0 methods.
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
 
-A request gives either `index` or `address`, never both. An `address` object is `{sidebar, section, key, path?, role?}`, as [declared UI](declared-ui.md) defines it. The `core.sidebar.section.control` dom entry is declared `many`, so its requests give `index` or `address`. A request with both, a value of the wrong type, or a forbidden or missing `path` or `role` is refused with -32602, and an address that matches no control is refused with 1009.
+A request gives either `index` or `address`, never both. `index` is a non-negative integer. A control address is `{sidebar, section, key, path?, role?}`, as [declared UI](declared-ui.md) defines it, with `sidebar`, `section`, and `key` as strings and `path` as an array of strings. The `core.sidebar.section.control` dom entry is declared `many`, so its requests give `index` or `address`. A request with both, an `address` given for another dom entry, a value of the wrong type, or a forbidden or missing `path` or `role` is refused with -32602, and a control address that matches no control is refused with 1009.
 
 Native pointer injection retains the pressed view separately for each window and button. Drag and release go to that view even when the pointer crosses another view; release receipt waits for the pressed document. A drag or release without a matching press, a second press while that button is held, or a removed pressed view returns an explicit input rejection. Scroll and button-free movement continue to use the current pointer position.
 
@@ -258,7 +258,7 @@ The page interface for surface pages is `page.exposure`: `register(kind, name)`,
 | Code | Meaning |
 | --- | --- |
 | -32601 | Undeclared method |
-| -32602 | Invalid params, including a `core.sidebar.section.control` request with both `index` and `address`, a value of the wrong type, or a forbidden or missing `path` or `role` |
+| -32602 | Invalid params, including a `core.sidebar.section.control` request with both `index` and `address`, an `address` given for another dom entry, a value of the wrong type, or a forbidden or missing `path` or `role` |
 | 1001 | Unknown name |
 | 1002 | Name is declared but not registered |
 | 1003 | Owner document no longer exists |
