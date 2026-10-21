@@ -40,7 +40,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | command | `timeout` | Optional. How long a command may take to reply, in milliseconds from 1 to 600000; the default is 10 seconds. The host applies it to a command forwarded to a surface page, and the main page applies it to the handler of a command it runs itself, which then fails with -32000 and `command <name> did not reply within <ms>ms`. A handler that throws, synchronously or asynchronously, fails the command with its own error, and the timeout ends with it. A core command then waits for its layout to present; that wait is not part of the timeout, because each step of the presentation path fails with its own error within its own limit ([native host](native-host.md)) |
 | dom | `name` | Entry name |
 | dom | `description` | One-sentence description |
-| dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index` |
+| dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index`, or with `address` where [declared UI](declared-ui.md) defines one |
 
 A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`.
 
@@ -197,10 +197,12 @@ Clients call these JSON-RPC 2.0 methods.
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?}` | Command result |
-| `dom.rect` | `{window, name, index?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
-| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
+| `dom.rect` | `{window, name, index?, address?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
+| `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key` is a key name (`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) or one character. `modifiers` is an array of `shift`, `control`, `option`, `command`. `phase` is `down` or `up` |
+
+A request gives either `index` or `address`, never both. A request with both is rejected with an explicit error. An `address` object is `{section, key, path?, role?}` and names a control of a declared section that carries the dom name `core.sidebar.section.control`, as [declared UI](declared-ui.md) defines it.
 
 Native pointer injection retains the pressed view separately for each window and button. Drag and release go to that view even when the pointer crosses another view; release receipt waits for the pressed document. A drag or release without a matching press, a second press while that button is held, or a removed pressed view returns an explicit input rejection. Scroll and button-free movement continue to use the current pointer position.
 

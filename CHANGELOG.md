@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.8-0-19: The declared UI specification is revised after its eighteenth review. Dom requests may address a declared section control by an `address` object, the baseline is defined after a rejection or change of source, the first row that any part of a value breaks applies, and the Korean link resolves to the Korean heading.
 - F212.8-0-18: The declared UI specification is revised after its seventeenth review. The root-elements limit no longer carries a note about a future measurement, the source is chosen again when the plugin override of a fixed window sidebar starts or stops applying, and the term plugin override is added, linked to the override context of the external sidebars specification.
 - F212.8-0-17: The declared UI specification is revised after its sixteenth review. A branch is new by one rule with and without a baseline, the terms declared status source and baseline are added, the declared UI snapshot is the message that carries one value, and the root-elements limit is a chosen contract value.
 - F212.8-0-16: The declared UI specification is revised after its fifteenth review. With no baseline the kept state wins only for branches of the accepted value, a state module's registration serves no declared UI status, the card surface term names the button of the declaring plugin, and a restart is handled by transitions (b) and (c).

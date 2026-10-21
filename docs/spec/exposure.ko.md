@@ -40,7 +40,7 @@
 | command | `timeout` | 선택. 명령이 답하는 데 걸릴 수 있는 시간(ms, 1–600000). 없으면 10초다. 호스트는 표면 페이지로 전달한 명령에, 메인 페이지는 스스로 실행하는 명령의 handler에 이를 적용하며, 넘으면 -32000과 `command <name> did not reply within <ms>ms`로 실패한다. 동기든 비동기든 예외를 던진 handler는 자기 오류로 명령을 실패시키며, 시간 제한도 그때 끝난다. core 명령은 그 뒤 배치 표시를 기다린다. 이 기다림은 timeout에 포함하지 않는다. 표시 경로의 각 단계가 자기 한도 안에 자기 오류로 실패하기 때문이다([네이티브 호스트](native-host.ko.md)) |
 | dom | `name` | 항목 이름 |
 | dom | `description` | 한 문장 설명 |
-| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정한다 |
+| dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정하거나, [선언된 UI](declared-ui.ko.md)가 주소를 정하는 곳에서는 `address`로 지정한다 |
 
 스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다.
 
@@ -197,10 +197,12 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
 | `command.run` | `{window, name, params, surface?}` | 명령 결과 |
-| `dom.rect` | `{window, name, index?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
-| `dom.act` | `{window, name, index?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
+| `dom.rect` | `{window, name, index?, address?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
+| `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
 | `input.key` | `{window, key, text?, modifiers?, phase}` | `null`. `key`는 키 이름(`Enter`, `Tab`, `Escape`, `Backspace`, `Delete`, `Space`, `ArrowLeft`, `ArrowRight`, `ArrowUp`, `ArrowDown`, `Home`, `End`, `PageUp`, `PageDown`) 또는 문자 하나다. `modifiers`는 `shift`, `control`, `option`, `command`의 배열이다. `phase`는 `down` 또는 `up`이다 |
+
+요청은 `index`나 `address` 가운데 하나만 준다. 둘 다 주면 명시적 오류로 거부한다. `address` 객체는 `{section, key, path?, role?}`이며, [선언된 UI](declared-ui.ko.md)가 정하는 대로 `core.sidebar.section.control` DOM 이름을 가진 선언된 section의 control을 지정한다.
 
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
