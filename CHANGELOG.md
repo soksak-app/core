@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-a-14 audit: A read-only audit of the plugin repositories found two reporters that send `runtime.native.call {name: "report"}` (shell, flowmark), which the deny-by-default gate refuses; each moves to the served `runtime.log`. Two views (shell, editor) subscribe to `exposure-request` through `runtime.native.on`, which the event gate refuses; this is registered as a core decision (F238-a-14-5) and no allowlist is widened.
 - F238-a allowlist: The allowlist tests of the workbench no longer read the Tauri source. The new host contract case `plugin-host.call.refuses-unlisted-commands` is declared in the Go and Rust host tests: every command of the Wails and Tauri command tables outside the plugin allowlist is refused by the channel of a host page with `plugin host call <name> is not served`. Both host tests pass 1 of 1 and the workbench tests pass 2 of 2.
 - F228-6 contract: The host contract case `view.process-ended.forgets-regions` names the window event `view-process-ended {surface}` after the region close of a view process end. The Go and Rust process-end tests declare it, and both pass 1 of 1.
 - F238-a-5: A view overlay is traced to the native mask: `dom_overlays` keeps the declared order, insets and visibility, and `overlay_values` sends five values per overlay. The unit tests of both steps pass 2 of 2, and the native mask is covered by the view-surface check of the geometry test.

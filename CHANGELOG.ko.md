@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-a-14 감사: plugin 저장소를 읽기 전용으로 감사하여, `runtime.native.call {name: "report"}`를 보내는 reporter가 shell과 flowmark에 있음을 찾았다. 기본 거부 게이트는 이를 막고, 각 plugin은 제공되는 `runtime.log`로 옥긴다. view 두 개(shell, editor)가 `runtime.native.on`으로 `exposure-request`를 구독하는데 event 게이트가 이를 막는다. 이는 core 결정(F238-a-14-5)으로 등록했고 허용 목록은 넓히지 않았다.
 - F238-a 허용 목록: workbench의 허용 목록 시험은 더 이상 Tauri 소스를 읽지 않는다. 새 host 계약 사례 `plugin-host.call.refuses-unlisted-commands`를 Go와 Rust host 시험이 선언한다. Wails와 Tauri 명령 표의 명령 중 플러그인 허용 목록 밖의 것은 host 페이지의 channel이 `plugin host call <name> is not served`로 거부한다. host 시험은 각각 1/1, workbench 시험은 2/2 통과한다.
 - F228-6 계약: host 계약 사례 `view.process-ended.forgets-regions`는 view process가 끝났을 때 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내는 것이다. Go와 Rust의 process 종료 시험이 이를 선언하고, 두 시험이 각각 1/1 통과한다.
 - F238-a-5: view overlay를 native mask까지 추적한다. `dom_overlays`는 선언 순서, 여백, 보임을 지키고 `overlay_values`는 overlay마다 값 5개를 보낸다. 두 단계의 단위 시험이 2/2 통과하고, native mask는 geometry 시험의 view surface 검사가 덮는다.
