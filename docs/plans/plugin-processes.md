@@ -100,7 +100,7 @@ When a value is not met, the measured values are recorded in the checklist. A fa
 5. **Restarts.** Sidecars, plugin hosts and view processes restart within the limit of pass value (vi). When the limit is exceeded, the host reports `error:` and stops.
    - A view process that ends is created again by the host, and the new view restores its state from its saved tab state. The limit is counted per view surface. After the limit is exceeded, the card shows the error through the error display, and the view is created again only when the person reopens the tab.
    - After the limit is exceeded, the next request fails with `sidecar-failure` (reason `restart limit`) without starting the process. The failure record is kept. It is cleared only when the person opens a surface that needs the process; the process then starts, and the host writes `host.trace.sidecar.restart-reset {sidecar, surface}`. A plugin host writes `host.trace.plugin-host.restart-reset {plugin}`.
-   - This rule changes two specification locations. The `## Failure` section of [sidecars](../spec/sidecars.md) at line 67 states that the next request after a failure starts a new process without a limit. F212.8a replaces that sentence with the limit of rule 5. The restart rule that [terminal runtime](../spec/terminal-runtime.md) states at line 43 (one attempt per disconnect, with the next send retrying the same path) changes in F212.8a as well.
+   - This rule changes two specification locations. The `## Failure` section of [sidecars](../spec/sidecars.md) at line 67 states that the next request after a failure starts a new process without a limit. F212.8a replaces that sentence with the limit of rule 5. The restart rule that [persistent services](../spec/persistent-services.md) states at line 43 (one attempt per disconnect, with the next send retrying the same path) changes in F212.8a as well.
    - A restart restores the state from the last saved value. A state that was not saved is lost, and each plugin states which state that is.
    - Fault injection exists only in diagnostic builds.
 6. **Presentation.** A plugin view joins the presentation wait only at the first display after a card layout change (the first change of a gesture).
@@ -272,7 +272,7 @@ Step order: F212.7, F212.7b, F212.7d, F212.10-editor, F212.7a, F212.7c, F212.8, 
    - **F212.7a:** after F212.10-editor, the editor view measures (i), (ii), (iii), (iii-b), (v); (viii) is measured by F212.7c, which runs after F212.7a. It runs (iii-b) with the performance trace on.
    - **F212.7c:** drag recording and geometry error (viii). The first view (the editor view of F212.10-editor) is the measured view. Every plugin view is measured in its own F212.10 item and in F212.14. It follows F212.10-editor and F212.7a.
 8. **F212.8** Declared UI schema and drawing in the workbench, including sidebar sections.
-   - **F212.8a:** restart limit (vi) in the `## Failure` section of [sidecars](../spec/sidecars.md) and in [terminal runtime](../spec/terminal-runtime.md) line 43, and their translations. Red tests in the host packages that own sidecar failure (Go, Rust, and the contract cases). F212.8a precedes F212.9. It declares `host.trace.sidecar.restart-reset`.
+   - **F212.8a:** restart limit (vi) in the `## Failure` section of [sidecars](../spec/sidecars.md) and in [persistent services](../spec/persistent-services.md) line 43, and their translations. Red tests in the host packages that own sidecar failure (Go, Rust, and the contract cases). F212.8a precedes F212.9. It declares `host.trace.sidecar.restart-reset`.
 9. **F212.9** Plugin host mechanism (platform operation, owner key, restart). The files repository first completes its item that moves the state to a sidecar. A host is built only when a plugin still needs it.
    - **F212.9a:** when a plugin host is built, its footprint and throttle are measured before F212.10.
 10. **F212.10** Plugin migrations (one item per plugin repository, with `engines.soksak`). The named items F212.10-shell-layer and F212.10-browser-sections are completed before the shell and browser migrations. Each plugin item measures (iii), (v) and (viii) for its views before its release.
@@ -314,7 +314,7 @@ Each specification location that this design contradicts, with the stage that ch
 | [exposure](../spec/exposure.md) line 160 | coordinates of mounted plugin modules in the shared app DOM | F212.11 |
 | [endpoint](../spec/endpoint.md) line 99 | `diagnostics.surface.hold` of exposure replies, with late replies discarded (rule 3) | F212.6 |
 | [installation](../spec/installation.md) lines 129-130 | `/modules` and `/shared` paths, and the core root paths `sok://core/modules/<package>/<path>` and `sok://core/shared/<plugin id>.<point>/<specifier>.js` (rule 4) | F212.5 |
-| [terminal runtime](../spec/terminal-runtime.md) line 43 | the restart rule of a sidecar connection (rule 5) | F212.8a |
+| [persistent services](../spec/persistent-services.md) line 43 | the restart rule of a sidecar connection (rule 5) | F212.8a |
 | [sidecars](../spec/sidecars.md) `## Failure` | the restart limit (rule 5) | F212.8a |
 
 ## Risks
