@@ -333,17 +333,33 @@ function childOf(el, name) {
   return Array.from(el.children).find((child) => child.classList.contains(name));
 }
 
-/** Writes the content of a label: its icon and its text. A button also takes its command and its disabled state. */
-function paintLabel(label, entry, { key, path, bind }) {
-  label.className = "declared-label";
-  label.replaceChildren();
+/** Writes the icon and the text of an element. */
+function paintContent(el, entry) {
+  el.replaceChildren();
   if (Object.hasOwn(entry, "icon")) {
     const mark = document.createElement("span");
     mark.className = "declared-icon";
     mark.innerHTML = icon(entry.icon);
-    label.append(mark);
+    el.append(mark);
   }
-  label.append(document.createTextNode(entry.label));
+  el.append(document.createTextNode(entry.label));
+}
+
+/** Writes a button element: its content, its enabled state, its key, and its command. A button has no path or role. */
+function paintButton(control, element, bind) {
+  control.type = "button";
+  control.className = "declared-button";
+  paintContent(control, element);
+  control.disabled = element.enabled === false;
+  control.dataset.key = element.key;
+  control.dataset.expose = CONTROL_NAME;
+  connect(control, element.command, paramsOf(element), bind);
+}
+
+/** Writes the content of a label. A button label also takes its command and its disabled state. */
+function paintLabel(label, entry, { key, path, bind }) {
+  label.className = "declared-label";
+  paintContent(label, entry);
   if (label.tagName !== "BUTTON") return;
   label.type = "button";
   label.dataset.key = key;
@@ -462,6 +478,10 @@ function appendEmpty(box, text) {
 
 /** Writes one root element into its box. Rows and nodes keep their elements while their keys stay (drawList of plugin-api). */
 function paintRoot(box, element, ctx) {
+  if (element.kind === "button") {
+    paintButton(box, element, ctx.bind);
+    return;
+  }
   if (element.kind === "list") {
     box.className = "declared-list";
     drawList(box, element.items, {
@@ -489,11 +509,11 @@ function paintRoot(box, element, ctx) {
  */
 export function drawValue(body, elements, { statusId, bind, kept }) {
   for (const element of elements) {
-    if (element.kind !== "list" && element.kind !== "tree") throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
+    if (!["list", "tree", "button"].includes(element.kind)) throw new Error(`declared UI kind ${element.kind} is not drawn yet`);
   }
   drawList(body, elements, {
     key: (element) => `${element.kind} ${element.key}`,
-    create: () => document.createElement("div"),
+    create: (element) => document.createElement(element.kind === "button" ? "button" : "div"),
     update: (box, element) => paintRoot(box, element, { statusId, bind, kept }),
   });
 }

@@ -563,3 +563,52 @@ test("a changed parameter updates the kept button without binding it again", asy
   assert.equal(s.calls.length, 1, "the button was bound again");
   assert.deepEqual(s.calls[0].params(), { id: 2 }, "the bound parameters were not updated");
 });
+
+// The button element (docs/spec/declared-ui.md): one button bound to its command, with its icon, its enabled state, and the control attributes.
+const button = (key, extra = {}) => ({ kind: "button", key, label: key, command: "demo.open", ...extra });
+
+test("a button draws its label and icon, bound to its command with the control attributes", async () => {
+  const module = await load("button-draw");
+  const s = section(module);
+  s.show({ elements: [button("go", { params: { id: 1 }, icon: "star" })] });
+  const control = s.body.querySelector("button");
+  assert.ok(control, "no button was drawn");
+  assert.equal(control.textContent, "go");
+  assert.ok(control.querySelector(".declared-icon svg"), "the icon was not drawn");
+  assert.equal(control.dataset.key, "go");
+  assert.equal(control.dataset.expose, "core.sidebar.section.control");
+  assert.equal(control.hasAttribute("data-path"), false, "a button carries data-path");
+  assert.equal(control.hasAttribute("data-role"), false, "a button carries data-role");
+  const call = s.calls.find((entry) => entry.el === control);
+  assert.equal(call.name, "demo.open");
+  assert.deepEqual(call.params(), { id: 1 });
+  assert.deepEqual(call.options, { event: "click" });
+});
+
+test("a button with enabled false is disabled, and a button without enabled is not", async () => {
+  const module = await load("button-enabled");
+  const s = section(module);
+  s.show({ elements: [button("off", { enabled: false })] });
+  assert.equal(s.body.querySelector("button").disabled, true, "the button is not disabled");
+  s.show({ elements: [button("on")] });
+  assert.equal(s.body.querySelector("button").disabled, false, "the button without enabled is disabled");
+});
+
+test("a redraw keeps the element of a button and connects it once", async () => {
+  const module = await load("button-keep");
+  const s = section(module);
+  s.show({ elements: [button("go", { params: { id: 1 } })] });
+  const control = s.body.querySelector("button");
+  s.show({ elements: [button("go", { params: { id: 2 } })] });
+  assert.equal(s.body.querySelector("button"), control, "the button was replaced");
+  assert.equal(s.calls.length, 1, "the button was bound again");
+  assert.deepEqual(s.calls[0].params(), { id: 2 }, "the bound parameters were not updated");
+});
+
+test("a button without command is rejected at the button", async () => {
+  const module = await load("button-command");
+  const error = rejectionOf({ elements: [{ kind: "button", key: "go", label: "go" }] }, OPTIONS, module);
+  assert.ok(error, "no rejection");
+  assert.equal(error.pointer, "/elements/0");
+  assert.equal(error.reason, 'missing "command"');
+});
