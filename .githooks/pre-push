@@ -3,4 +3,4 @@
 # git passes the remote name as the first argument and one line per pushed ref on stdin; RANGE holds the commits of those refs.
 root=$(git rev-parse --show-toplevel) || exit 1
 ranges=$(node "$root/scripts/push-range.mjs" "$1") || exit 1
-exec make -C "$root" push-check RANGE="$ranges"
+exec make -C "$(git rev-parse --show-toplevel)" push-check RANGE="$ranges"

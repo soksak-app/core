@@ -2183,6 +2183,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F221",
+    implementation: [{ file: "scripts/generate-event-classes.mjs", symbol: "run" }],
+    tests: [{ file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" }],
+    expected: "The generated event class tables of sok and of the workbench equal the catalog, and the push gate runs the test.",
+    levels: ["unit"],
+  },
+  {
+    id: "F222",
+    implementation: [{ file: ".githooks/pre-push", symbol: "push-check" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs every check of the structure step and the format and clippy checks of ci" }],
+    expected: "The pre-push hook runs make -C with the form the workflow test requires, with the range of the pushed refs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F223",
+    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
+    tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
+    expected: "The window-check source audit accepts a timer that records an observation through report and does not apply its timer rule to the harness tests, which run on mocked time.",
+    levels: ["unit"],
+  },
+  {
     id: "F219",
     implementation: [{ file: "packages/host/tauriv2/tests/sidecars_test.rs", symbol: "static SERIAL: Mutex<()>" }],
     tests: [

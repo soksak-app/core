@@ -1167,6 +1167,7 @@ func TestAnEmptyLockFileIsTakenOverWithoutAReport(t *testing.T) {
 	}
 }
 
+// contract: endpoint.lock.unrecorded-end
 func TestStaleLockIsTakenOverAndNamesThePreviousRun(t *testing.T) {
 	config := t.TempDir()
 	dead := endedProcess(t)
