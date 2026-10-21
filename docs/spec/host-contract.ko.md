@@ -364,7 +364,6 @@ fn invalid_json_closes_connection() {
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | both |
 | `host.stall.passes-every-gate` | stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 lifecycle 기록을 끄는 policy에서도 저장된다. 로깅 명세의 이름 붙은 gate 예외로 모든 gate를 `warn`에서 지나가기 때문이다. | both |
 | `host.locks.poisoned-state-is-recovered` | poisoned lock은 가지고 있던 상태와 함께 복구되고 연산이 끝난다. host의 panic hook이 panic을 기록한다. 로깅 명세의 하나뿐인 방식이다. | tauriv2 only: Go mutex는 poison되지 않는다 |
-| `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. writer가 열리지 않았다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | 두 host |
 | `log.fatal-signal.writes-an-error-line` | 애플리케이션 로그를 연 뒤 host process가 fatal signal을 받으면 그 signal로 process가 끝나기 전에 `error: fatal: <signal name>`을 한 번 쓴다. | tauriv2 only: Go runtime은 fatal signal을 스스로 처리하고 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다 |
 | `log.binding-failure.returned-not-logged` | 실패한 binding 호출은 framework transport의 log 줄 없이 page로 돌아가므로 page가 그 실패를 한 번 기록한다. | wailsv3 only: Wails HTTP transport가 binding 호출을 나르고, Tauri invoke는 돌려준 오류에 log 줄을 쓰지 않는다 |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
