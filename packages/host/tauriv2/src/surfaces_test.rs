@@ -80,7 +80,7 @@ fn a_press_of_a_surface_view_is_found_when_the_surface_lock_is_poisoned() {
     assert_eq!(
         found.as_deref(),
         Some("surf"),
-        "a press of a surface view was not found while the surface lock was poisoned"
+        "a press of a surface view returned no surface while the surface lock was poisoned"
     );
 }
 
