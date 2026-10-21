@@ -22,7 +22,7 @@ const panicFlushDeadline = 2 * time.Second
 
 // PanicWriterDeadline is how long the entrance of the goroutines waits for the writer when the panic happened before the writer
 // was attached. The writer attaches during the start of the host; the bound ends a process whose start never attaches it.
-// Default: 5 seconds. A test injects a shorter value.
+// The value is 5 seconds; a test injects a shorter one.
 var PanicWriterDeadline = 5 * time.Second
 
 // writerAttached is closed when the writer of the host is attached for the first time.
