@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-a allowlist: The allowlist tests of the workbench no longer read the Tauri source. The new host contract case `plugin-host.call.refuses-unlisted-commands` is declared in the Go and Rust host tests: every command of the Wails and Tauri command tables outside the plugin allowlist is refused by the channel of a host page with `plugin host call <name> is not served`. Both host tests pass 1 of 1 and the workbench tests pass 2 of 2.
 - F228-6 contract: The host contract case `view.process-ended.forgets-regions` names the window event `view-process-ended {surface}` after the region close of a view process end. The Go and Rust process-end tests declare it, and both pass 1 of 1.
 - F238-a-5: A view overlay is traced to the native mask: `dom_overlays` keeps the declared order, insets and visibility, and `overlay_values` sends five values per overlay. The unit tests of both steps pass 2 of 2, and the native mask is covered by the view-surface check of the geometry test.
 - F238-a-4: A native hit test under a visible view overlay returns the DOM hit of the overlay or nothing, and never a native view. The surface hit test takes its point in the superview coordinates, as AppKit passes it, so a surface at a non-zero origin is hit correctly. The new hit-test checks of the geometry test failed on the unchanged code (5 cases) and pass now.

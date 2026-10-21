@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-a 허용 목록: workbench의 허용 목록 시험은 더 이상 Tauri 소스를 읽지 않는다. 새 host 계약 사례 `plugin-host.call.refuses-unlisted-commands`를 Go와 Rust host 시험이 선언한다. Wails와 Tauri 명령 표의 명령 중 플러그인 허용 목록 밖의 것은 host 페이지의 channel이 `plugin host call <name> is not served`로 거부한다. host 시험은 각각 1/1, workbench 시험은 2/2 통과한다.
 - F228-6 계약: host 계약 사례 `view.process-ended.forgets-regions`는 view process가 끝났을 때 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내는 것이다. Go와 Rust의 process 종료 시험이 이를 선언하고, 두 시험이 각각 1/1 통과한다.
 - F238-a-5: view overlay를 native mask까지 추적한다. `dom_overlays`는 선언 순서, 여백, 보임을 지키고 `overlay_values`는 overlay마다 값 5개를 보낸다. 두 단계의 단위 시험이 2/2 통과하고, native mask는 geometry 시험의 view surface 검사가 덮는다.
 - F238-a-4: 보이는 view 오버레이 아래의 native 히트 검사는 오버레이의 DOM 히트 또는 없음을 돌려주며, native view를 돌려주지 않는다. surface 히트 검사는 AppKit이 넘기는 대로 superview 좌표의 점을 받으므로 0이 아닌 원점의 surface도 올바르게 히트된다. 기하 시험의 새 히트 검사(5개 항목)는 바뀌지 않은 코드에서 실패했고 지금은 통과한다.
