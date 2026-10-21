@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F228-2: plugin-api의 view bridge가 `composition.create({regions, overlays})`를 내보낸다. 이것은 view document에서 composition controller를 실행하고 각 영역 동작을 view call로 보내므로, view page가 선언된 document·image 영역의 composition을 만든다. `view.test.mjs` 시험 둘이 바뀌지 않은 코드에서 실패하고 통과한다(34/34).
 - F228-1: native-surfaces.md와 plugins.md(+ko)가 view의 composition을 명세한다: view bridge의 `composition.create`, 메인 page가 표면의 page 동작으로 제공하는 composition·영역 view call, composition·영역 raw 호스트 호출의 거부, 호출 envelope의 view에 대한 확인, view process 종료 시 영역 닫기.
 - F227: view가 다시 surface context의 `tab.state`로 자기 surface의 tab state를 읽고 쓴다. F212.7-11 이후 두 호출은 `tab.read is not a function`으로 실패했다. `view-calls` 시험 다섯이 바뀌지 않은 코드에서 실패하고 수정에서 통과한다(32/32, `surface-modules` 10/10).
 - F212.7-11: view call route가 view page의 tab report와 runtime 호출을 서비스한다. 호출한 view의 surface의 tab handler로 `tab.title`, `tab.footer`, `tab.directory`, `tab.notify`, `tab.modified`, `tab.error`, `tab.keep`을, page의 event writer로 `runtime.log {level, event, fields}`를 전달 시점에 level gate를 적용해 서비스하고, view bridge가 호출 위에서 read와 변경 subscription을 갖는 `runtime.textSize`와 `runtime.settings`를 내보낸다. route는 순수하게 main-page라 host 사례는 추가하지 않았다. 단위 시험은 바뀌지 않은 코드에서 실패하고(workbench 7과 2, plugin-api 2) 구현에서 통과한다(workbench `view-calls` 32/32, `view-events` 6/6, plugin-api `view` 30/30과 suite 328/328, 영향 받는 workbench 시험 67/67).
