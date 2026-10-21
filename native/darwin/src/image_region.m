@@ -209,7 +209,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.richText = NO;
     self.allowsUndo = NO;
     // Only the string that the input method inserted is kept in the document. The automatic editing of AppKit changes
-    // terminal input, so it is turned off.
+    // input, so it is turned off.
     self.automaticQuoteSubstitutionEnabled = NO;
     self.automaticDashSubstitutionEnabled = NO;
     self.automaticTextReplacementEnabled = NO;
@@ -293,14 +293,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self paste:sender];
 }
 
-// The Copy of the Edit menu makes the page run its copy command. The command copies the terminal selection that the
+// The Copy of the Edit menu makes the page run its copy command. The command copies the selection that the
 // sidecar holds.
 // The copy of NSTextView uses the selection of the input document and clears the pasteboard for an empty selection.
 - (void)copy:(id)sender {
     [self report:"{\"type\":\"action\",\"name\":\"copy\"}"];
 }
 
-// The Edit actions that edit the input document are turned off because they are unrelated to the terminal content.
+// The Edit actions that edit the input document are turned off because they are unrelated to the image region content.
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item {
     SEL action = item.action;
     if (action == @selector(paste:) || action == @selector(pasteAsPlainText:) || action == @selector(copy:)) return YES;
@@ -313,7 +313,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 // Keeps the Services menu from reading or changing the input document. The input document is the workspace of the
-// input method, not the terminal content.
+// input method, not the image region content.
 - (id)validRequestorForSendType:(NSPasteboardType)sendType returnType:(NSPasteboardType)returnType {
     return nil;
 }
@@ -749,7 +749,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
     // The standard key bindings of AppKit send noop: for input that performs no action.
-    // Passing it to the sidecar would make a selector that is not a key input a terminal error.
+    // Passing it to the sidecar would make a selector that is not a key input a sidecar error.
     if (selector == @selector(noop:)) return;
     // NSTextInputClient commands are part of the input stream. Discarding them would lose IME actions
     // such as cancel, delete, and accept.
