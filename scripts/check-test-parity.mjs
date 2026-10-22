@@ -187,6 +187,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F252-2",
+    implementation: [{ file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (e *Endpoint) accept" }],
+    tests: [
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAnAcceptError" },
+      { file: "packages/host/wailsv3/tests/endpoint_test.go", id: "TestEndpointRecordsAReadErrorInsideAFrame" },
+      { file: "packages/host/tauriv2/tests/endpoint_test.rs", id: "the_endpoint_records_an_accept_error" },
+    ],
+    expected: "Both hosts record an endpoint accept error and the I/O reason of a read error instead of hiding them, each checked by a Go and a Rust test; the other host and native error paths of F252-2 are recorded in the item with their tests.",
+    levels: ["unit"],
+  },
+  {
     id: "F255",
     implementation: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", symbol: "fn a_replaced_service_starts_after_the_end_of_its_process" }],
     tests: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_replaced_service_starts_after_the_end_of_its_process" }],
