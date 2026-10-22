@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.12-1-19: surface.unload를 선언한 surface의 view call은 탭 상태 저장소를 시도할 때까지 기다린다. 그래서 페이지 시작 중의 view 첫 탭 상태 call은 `the tab state store is not open` 오류 대신 저장소가 답한다.
 - F212.12-1-18: view는 자기가 소유한 exposure 요청만 받으므로 core surface 항목은 surface 문서가 한 번 답한다. view 표지는 mount마다 가진다. plugin host의 call 기록은 오류 표시 대신 plugin 상태를 갱신한다. files sidecar의 body는 json-object 형식의 객체이며, plugin host의 sidecar event는 세션 data를 `sidecar.message` 또는 `sidecar.failure`로 싣는다.
 - F212.12-1-17: window check는 자기 boot의 host 이벤트 파일만 판정한다. 이전 실행이 offset 저장 뒤에 flush한 파일 기록은 이번 실행의 오류로 세지 않는다. plugin host 보고는 `[object Object]` 대신 거부의 message, code, data를 쓴다. plugin host의 sidecar 요청 body는 page가 보내는 JSON 객체다. host는 exposure 요청, 답, 짝이 없는 답을 id와 릴레이가 보관하는 위치와 함께 기록한다.
 - F212.12-1-15-1: Tauri host가 null result인 plugin host reply를 받는다. Wails host와 같다. plugin host의 reply, request params, event data가 null 값을 유지하므로, 값이 없는 명령이 `has both or neither of a result and an error`로 실패하지 않는다.

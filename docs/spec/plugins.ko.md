@@ -195,6 +195,8 @@ OS 창마다 앱 DOM WebView가 하나 있다. 워크벤치는 표면의 카드 
 
 **선언.** `background`가 없는 plugin의 표면은 `surface.unload`를 선언할 수 있고, 선언이 없는 표면은 unload하지 않으므로(`undeclared`) 선언은 요구가 아니라 plugin의 선택이다. `background`가 있는 plugin의 표면은 그것을 선언하지 않는다. background 세션은 background 경로로 세션을 유지하기 때문이다. `validateManifest`는 `background` 옆의 선언과 다른 형태의 선언을 거부한다. 선언이 없는 표면은 유효하고 영구적인 형태다. 그 탭은 unload되지 않고, 상태에 이유 `undeclared`로 나타나며, `core.tab.menu-keep` 항목을 받지 않고, `tab-state.json`에 label cache를 받지 않는다. `validateManifest`는 `false`를 포함한 다른 모든 형태를 plugin을 이름하는 오류로 거부한다. `background`가 있는 plugin의 탭은 이유 `background`로 나타난다. `{format, maxBytes}`는 plugin이 쓰는 상태의 형식 번호와 byte 단위 크기 한도를 선언한다.
 
+**저장소 준비.** 페이지는 시작 중에 탭 상태 저장소를 연다. 호스트는 그보다 먼저 view를 만들 수 있다. `surface.unload`를 선언한 view의 call은 저장소를 시도할 때까지 기다리므로, 탭 상태 call은 저장소가 열리지 않았다는 오류 없이 저장소가 답한다.
+
 **탭 상태.** 선언한 plugin은 필요한 상태를 JSON으로 바뀔 때마다 `context.tab.state.write(value)`로 쓴다. 쓰기는 메모리에 동기로 들어가므로 같은 task의 unload가 최신 값을 본다. 코어는 메모리의 값을 버리지 않고, 1초 안에 탭마다 `{format, value}`로 `tab-state.json`에 저장하며([프로젝트](projects.ko.md#저장)), 탭의 저장소 쓰기마다 이벤트 `page.tab.state.stored`가 된다. JSON이 아니거나 `maxBytes`를 넘는 값은 탭과 크기를 이름하는 오류로 거부한다. 표면이 dispose된 뒤 옛 컨텍스트의 `state.write`는 탭과 `disposed`를 이름하는 오류로 거부하고 컨텍스트마다 한 번 로그에 남긴다. 그래서 옛 인스턴스가 restore된 인스턴스의 상태를 덮어쓸 수 없다. plugin은 dispose에서 abort되는 `context.closing`에서 남은 작업을 멈춘다. restore된 표면은 `context.tab.state.read()`를 읽으며, 저장소에 그 탭의 상태가 없으면 `null`이다. 선언한 것과 다른 저장 형식은 탭과 찾은 형식을 이름하는 restore 오류로 거부한다. 이 API로 쓴 상태만 unload, crash, 재시작을 넘어 남는다.
 
 **진행 중인 작업.** `context.tab.keep("busy", on)`은 진행 중인 작업을 알린다(`on`은 boolean). 켜져 있는 동안 탭에는 보호 `keep:busy`가 있고, 이는 표면이 dispose되면 끝난다.
