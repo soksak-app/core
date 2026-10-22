@@ -13,6 +13,9 @@
 - F242: view call `runtime.log`의 계약은 `cids`를 surface context의 log가 검사한다고 적는다. 기존 view call 전달이 이미 이를 넘긴다. 소유 테스트 통과: view call 50/50, surface 17/17. 빠진 동작이 확인되지 않아 Red는 없다.
 - F220: `make push-check`가 `node scripts/check-host-contract.mjs --static`을 실행한다. 이 검사는 시험을 돌리지 않고 두 호스트의 계약 선언을 검사한다. 정의되지 않은 사례, 호스트 범위 밖의 사례, 사례가 없는 표시는 관문에서 실패하며, 호스트 범위의 사례를 선언한 시험이 없어도 실패한다. sok Go 시험의 중복된 stall 표시를 제거했다. Red: 정적 audit의 단위 시험이 `auditDeclarations`와 `uncoveredCases`를 가져오지 못해 실패했다. Green: 검사 단위 시험 15/15 통과, `make host-contract-check`가 사례 799개와 시험 3232/3232로 통과, 정적 검사는 정의되지 않은 표시를 주입하면 실패하고 복원하면 통과한다. F220에 적힌 네 원인은 이 항목 시작 시점의 트리에 없었고, 변경 전 트리에서도 `make host-contract-check`가 통과했다.
 
+- F244: main에서 `pnpm test`가 통과한다(353/353). workbench 시험 fixture와 hidden-tab benchmark는 tab 생성이 기록하는 tab origin을 같이 기록한다. 선언된 UI draw-time 시험은 경과 시간을 assert하지 않고 모든 node와 item이 그려졌는지만 assert하며 경과 시간을 출력한다. `@soksak/workbench`는 릴리스 검사가 읽는 `./package.json`을 export한다. native 시험 실행 줄은 runner가 출력하는 제한 표지와 맞춘다. surface-dispose-pending 시험은 polling 대신 module 시작을 기다리므로, mount가 던지면 파일이 끝난다.
+- F244-1: `make push-check`가 push 범위에서 바뀐 각 workspace package의 Node test 파일을 실행한다(`node scripts/node-tests.mjs --changed <range>`). 어떤 package 폴더에도 속하지 않는 변경 파일은 root package의 시험을 고른다. 관문이 package 시험을 병렬로 돌리므로 toolchain 검사 시험의 제한(hang만 막는다)은 30초다.
+
 - F243: `make push-check`가 package의 모든 `bin` 대상이 `#!` 줄을 가진 실행 파일로 기록되었는지 검사한다. `packages/plugin-api/view-check.js`를 100755로 기록해 pnpm install이 작업 트리를 바꾸지 않는다.
 - F238-c-27 (terminal consumer 후속): core가 terminal 표 가짜용 `contract/clipboard.json`에 `shellQuotePath` 사례 4개를, `contract/screen-hash.json`에 screen 사례 42개를 공개한다. 계약 검사는 통과했다(clipboard 5/5, screen 44/44). 전체 `@soksak/plugin-api` 테스트는 436/436 통과한다. release tag와 dependency pin은 변경하지 않았다.
 
