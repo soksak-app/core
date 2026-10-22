@@ -255,4 +255,3 @@ pub fn parse_frame(body: &[u8]) -> Result<Message, String> {
         error,
     })
 }
-
