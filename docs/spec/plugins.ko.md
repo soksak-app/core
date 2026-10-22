@@ -66,7 +66,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
-| `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈이 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state`가 필요하다 |
+| `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈 또는 plugin host가 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state` 또는 `host`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 | `host` | 아니오 | `{ "page": "<경로>", "state"?: { "format": <양의 정수>, "maxBytes": <양의 정수> } }`: [plugin host](plugin-host.ko.md). plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공하는 숨은 web view다. `page`는 `view` composition의 페이지 규칙을 따르고, `state`는 host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태를 선언한다 |
 
@@ -128,9 +128,9 @@ section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 set
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값을 변환한다. 저장 file 자체의 형태는 정의로 갱신된다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
 
-`data`는 상태 모듈이 프로젝트마다 저장하는 키를 선언한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
+`data`는 상태 모듈 또는 plugin host가 프로젝트마다 저장하는 키를 선언한다. plugin host는 [프로젝트 데이터 호출](plugin-host.ko.md#프로젝트-데이터-호출)로 이 키를 읽고 쓰며, 메인 페이지가 표시된 프로젝트에 대해 답한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 
-저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 프로젝트의 상태 모듈을 마운트하기 전에, 이전 형태나 format으로 저장된 선언 키를 한 번 변환한다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 선언보다 낮은 format의 값은 상태 모듈의 `convertData({ key, format, value })` export에 넘기고, 이 함수는 선언한 format의 값을 돌려준다. 워크벤치는 값을 스키마로 검사하고 선언한 format으로 저장한 뒤, 프로젝트, 플러그인, 키, 두 format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 높은 format으로 저장된 값, 없는 `convertData` export, 실패한 변환, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다.
+저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 프로젝트의 상태 모듈을 마운트하기 전에, 또는 상태 모듈이 없는 플러그인은 창이 프로젝트를 표시할 때, 이전 형태나 format으로 저장된 선언 키를 한 번 변환한다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 선언보다 낮은 format의 값은 상태 모듈의 `convertData({ key, format, value })` export에 넘기고, 이 함수는 선언한 format의 값을 돌려준다. 워크벤치는 값을 스키마로 검사하고 선언한 format으로 저장한 뒤, 프로젝트, 플러그인, 키, 두 format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 높은 format으로 저장된 값, 없는 `convertData` export, 실패한 변환, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다.
 
 ## 확장 지점
 
