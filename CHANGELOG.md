@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F262: The projects check reads the project settings file in its current numbered form, and a tab of a new space keeps its origin until a stored layout has held it and dropped it, so the first tab of an added space no longer fails to present with `has no origin`.
 - F212.12-1-19: A view call of a surface that declares surface.unload waits for the tab state store to be tried, so a view's first tab state call during the page start is answered by the store instead of failing with `the tab state store is not open`.
 - F212.12-1-18: A view receives only the exposure requests it owns, so a core surface entry is answered once, by the surface document; a view mark belongs to its mount. Plugin host call records update the plugin statuses instead of the error display. The files sidecar body is the object of the json-object form, and a plugin host sidecar event carries its session data as `sidecar.message` or `sidecar.failure`.
 - F212.12-1-17: The window check judges the host event files of its own boot: the files of an earlier run that were flushed after the stored offsets no longer count as errors. Plugin host reports carry the message, code and data of a rejection instead of `[object Object]`. A sidecar request body of a plugin host is the JSON object that the page sends. The host records each exposure request, reply and unmatched reply with the id and where the relay holds it.
