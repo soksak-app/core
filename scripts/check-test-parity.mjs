@@ -198,14 +198,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F260-1",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func ownConfiguration" },
+      { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "fn own_configuration" },
+      { file: "packages/sok/wailsv3/src/platform/darwin/process.go", symbol: "func (darwin) TryLockFile" },
+      { file: "packages/sok/wailsv3/src/platform/linux/process.go", symbol: "func (linux) TryLockFile" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
+      { file: "packages/sok/tauriv2/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
+      { file: "packages/host/wailsv3/tests/process_lock_cases_test.go", id: "TestTheHostRefusesAHeldLockOfEachCaseWithItsText" },
+      { file: "packages/host/tauriv2/tests/process_lock_cases_test.rs", id: "the_host_refuses_a_held_lock_of_each_case_with_its_text" },
+    ],
+    expected: "A writing command of sok holds the advisory lock on process.lock for the whole command, refuses a held lock with the host text of its case, and takes over a free lock file, in both sok implementations; the host refuses the same held cases with the same texts.",
+    levels: ["unit"],
+  },
+  {
     id: "F260",
     implementation: [
       { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func parseLockOwner" },
       { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "fn parse_lock_owner" },
     ],
     tests: [
-      { file: "packages/sok/wailsv3/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockFormOfTheCaseTable" },
-      { file: "packages/sok/tauriv2/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_form_of_the_case_table" },
+      { file: "packages/sok/wailsv3/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockCaseTable" },
+      { file: "packages/sok/tauriv2/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_case_table" },
     ],
     expected: "A writing command of sok reads process.lock in the form of the host: a live owner is refused with its pid, an ended owner is taken over, and a lock in another form is refused with its content named and kept, in both implementations.",
     levels: ["unit"],
