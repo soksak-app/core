@@ -1,0 +1,303 @@
+{
+  "surface": "packages/plugin-api/calls.js#createCalls",
+  "description": "Ordered steps of the time limit of a call: a request step sends a command call (timeout is the declared limit, default 10000 ms), an advance step moves the clock, and a reply step delivers a reply from the peer. Each step lists the messages sent, the reports of the call layer (timeout, late-reply, open-calls) and the settled outcome of the request that the step watches: {resolved} or {rejected, code}, or null while the call is open. A call that its limit ends is rejected with code -32000 and the message command <name> did not reply within <ms>ms; a reply that arrives after that is a late reply, reported with its delay and not passed to the call.",
+  "cases": [
+    {
+      "id": "calls.limit.default-limit-rejects-a-silent-call",
+      "steps": [
+        {
+          "request": {
+            "name": "a",
+            "command": "demo.open",
+            "params": {
+              "id": "x"
+            }
+          },
+          "watch": "a",
+          "output": {
+            "sent": [
+              {
+                "id": 1,
+                "command": "demo.open",
+                "params": {
+                  "id": "x"
+                }
+              }
+            ],
+            "reports": [
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 1,
+                "oldestStartedAt": 0
+              }
+            ],
+            "outcome": null
+          }
+        },
+        {
+          "advance": 9999,
+          "watch": "a",
+          "output": {
+            "sent": [],
+            "reports": [],
+            "outcome": null
+          }
+        },
+        {
+          "advance": 1,
+          "watch": "a",
+          "output": {
+            "sent": [],
+            "reports": [
+              {
+                "kind": "timeout",
+                "plugin": "probe",
+                "command": "demo.open",
+                "timeout": 10000
+              },
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 0,
+                "oldestStartedAt": null
+              }
+            ],
+            "outcome": {
+              "rejected": "command demo.open did not reply within 10000ms",
+              "code": -32000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "calls.limit.declared-timeout-replaces-the-default",
+      "steps": [
+        {
+          "request": {
+            "name": "b",
+            "command": "demo.save",
+            "params": {
+              "id": "y"
+            },
+            "timeout": 2500
+          },
+          "watch": "b",
+          "output": {
+            "sent": [
+              {
+                "id": 1,
+                "command": "demo.save",
+                "params": {
+                  "id": "y"
+                }
+              }
+            ],
+            "reports": [
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 1,
+                "oldestStartedAt": 0
+              }
+            ],
+            "outcome": null
+          }
+        },
+        {
+          "advance": 2499,
+          "watch": "b",
+          "output": {
+            "sent": [],
+            "reports": [],
+            "outcome": null
+          }
+        },
+        {
+          "advance": 1,
+          "watch": "b",
+          "output": {
+            "sent": [],
+            "reports": [
+              {
+                "kind": "timeout",
+                "plugin": "probe",
+                "command": "demo.save",
+                "timeout": 2500
+              },
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 0,
+                "oldestStartedAt": null
+              }
+            ],
+            "outcome": {
+              "rejected": "command demo.save did not reply within 2500ms",
+              "code": -32000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "calls.limit.reply-after-limit-is-a-late-reply",
+      "steps": [
+        {
+          "request": {
+            "name": "c",
+            "command": "demo.open",
+            "params": {},
+            "timeout": 1000
+          },
+          "watch": "c",
+          "output": {
+            "sent": [
+              {
+                "id": 1,
+                "command": "demo.open",
+                "params": {}
+              }
+            ],
+            "reports": [
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 1,
+                "oldestStartedAt": 0
+              }
+            ],
+            "outcome": null
+          }
+        },
+        {
+          "advance": 1000,
+          "watch": "c",
+          "output": {
+            "sent": [],
+            "reports": [
+              {
+                "kind": "timeout",
+                "plugin": "probe",
+                "command": "demo.open",
+                "timeout": 1000
+              },
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 0,
+                "oldestStartedAt": null
+              }
+            ],
+            "outcome": {
+              "rejected": "command demo.open did not reply within 1000ms",
+              "code": -32000
+            }
+          }
+        },
+        {
+          "reply": {
+            "id": 1,
+            "result": "late"
+          },
+          "watch": "c",
+          "output": {
+            "sent": [],
+            "reports": [
+              {
+                "kind": "late-reply",
+                "plugin": "probe",
+                "command": "demo.open",
+                "delay": 1000
+              }
+            ],
+            "outcome": {
+              "rejected": "command demo.open did not reply within 1000ms",
+              "code": -32000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "calls.limit.reply-in-time-resolves-and-clears-the-timer",
+      "steps": [
+        {
+          "request": {
+            "name": "d",
+            "command": "demo.open",
+            "params": {},
+            "timeout": 1000
+          },
+          "watch": "d",
+          "output": {
+            "sent": [
+              {
+                "id": 1,
+                "command": "demo.open",
+                "params": {}
+              }
+            ],
+            "reports": [
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 1,
+                "oldestStartedAt": 0
+              }
+            ],
+            "outcome": null
+          }
+        },
+        {
+          "advance": 500,
+          "watch": "d",
+          "output": {
+            "sent": [],
+            "reports": [],
+            "outcome": null
+          }
+        },
+        {
+          "reply": {
+            "id": 1,
+            "result": {
+              "count": 2
+            }
+          },
+          "watch": "d",
+          "output": {
+            "sent": [],
+            "reports": [
+              {
+                "kind": "open-calls",
+                "plugin": "probe",
+                "count": 0,
+                "oldestStartedAt": null
+              }
+            ],
+            "outcome": {
+              "resolved": {
+                "count": 2
+              }
+            }
+          }
+        },
+        {
+          "advance": 1000,
+          "watch": "d",
+          "output": {
+            "sent": [],
+            "reports": [],
+            "outcome": {
+              "resolved": {
+                "count": 2
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
