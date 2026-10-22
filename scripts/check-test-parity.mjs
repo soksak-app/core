@@ -187,6 +187,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F255",
+    implementation: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", symbol: "fn a_replaced_service_starts_after_the_end_of_its_process" }],
+    tests: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_replaced_service_starts_after_the_end_of_its_process" }],
+    expected: "The replace service fixture waits for the installed service process to end before its drop returns, so the test that reads the process state after drop passes in every repeat run.",
+    levels: ["unit"],
+  },
+  {
     id: "F252-1-1",
     implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function createExpose" }],
     tests: [
