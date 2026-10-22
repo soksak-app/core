@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1-9: theme 변경이 두 host에서 plugin host와 view document에 main thread에서 post된다. Wails theme binding과 Tauri async command가 자신의 thread에서 native document post를 호출했고, 그 main thread assertion이 application을 SIGABRT로 중단시켰다. Red: Go 테스트 `TestPluginHostPostsRunOnTheUIThread`와 `TestViewPostsRunOnTheUIThread`가 UI thread 작업 밖의 native post로 실패했고, Rust 테스트 `a_native_document_post_is_a_main_thread_task`가 SIGABRT로 중단되었다. Green: 같은 테스트가 통과하고, Wails host package와 Tauri host 단위 테스트가 통과한다.
+
 - F212.12-1-7: view surface는 view가 composition을 선언하면 phase `ready`를 보고한다. workbench는 module mount에서만 ready 상태를 풀었으므로 각 view가 `loading`에 머물고 카드에 불러오는 표시가 남았다. workbench는 view 호출마다 debug 기록 `page.view.call`과 `page.view.reply`도 쓰므로, 회신하지 않은 호출은 회신 없는 수신으로 보인다.
 - F258-3: log-contract fixture는 `docs/spec/cases/log-contract`로 옮기고, host event log 시험은 패키지의 audit 모듈을 경로로 읽는 대신 `scripts/audit-log.mjs`로 로그를 audit한다. 패키지는 더 이상 fixture를 export하지 않는다.
 - F258-2: manifest 사례표는 `docs/spec/cases/manifest-validation.json`으로 옮겼으며, reader와 두 sok 구현이 이를 읽는다. `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.

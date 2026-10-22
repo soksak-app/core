@@ -385,21 +385,27 @@ func (s *Surfaces) sendToPluginHost(plugin string, message map[string]any) (bool
 	if !ok || channel.document == "" {
 		return false, nil
 	}
-	s.mu.Lock()
-	handle, ok := s.pluginHosts[plugin]
-	s.mu.Unlock()
-	if !ok {
-		return false, fmt.Errorf("plugin %s has no host web view", plugin)
-	}
 	message["sok"] = viewChannelMarker
 	data, err := json.Marshal(message)
 	if err != nil {
 		return false, err
 	}
-	if !system.PostDocument(handle, string(data)) {
-		return false, fmt.Errorf("plugin %s: the host document refused the message", plugin)
-	}
-	return true, nil
+	// The lookup and the post run as one task of the UI thread: the native post needs the main thread, and the host web view is
+	// closed on the UI thread, so it is not closed between the lookup and the post.
+	var postErr error
+	s.invoke(func() {
+		s.mu.Lock()
+		handle, ok := s.pluginHosts[plugin]
+		s.mu.Unlock()
+		if !ok {
+			postErr = fmt.Errorf("plugin %s has no host web view", plugin)
+			return
+		}
+		if !system.PostDocument(handle, string(data)) {
+			postErr = fmt.Errorf("plugin %s: the host document refused the message", plugin)
+		}
+	})
+	return postErr == nil, postErr
 }
 
 // plugins returns the plugins that the window has a channel of, in no order.

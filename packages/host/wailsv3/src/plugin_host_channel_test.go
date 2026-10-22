@@ -9,8 +9,6 @@ import (
 	"strings"
 	"testing"
 	"unsafe"
-
-	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
 
 // hostEvent is one window event that the host sent to the main page in a test.
@@ -22,13 +20,14 @@ type hostEvent struct {
 // channelSurfaces returns a Surfaces whose window has the host of plugin probe with a created web view and, when ready
 // is set, the ready document "doc-1", and the record of the window events that the host sends. fake is the platform of the
 // test, such as the channelPlatform of surfaces_test.go.
-func channelSurfaces(t *testing.T, fake platform.Platform, ready bool) (*Surfaces, *[]hostEvent) {
+func channelSurfaces(t *testing.T, fake uiFake, ready bool) (*Surfaces, *[]hostEvent) {
 	t.Helper()
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
 	events := &[]hostEvent{}
 	s := &Surfaces{
+		invoke:             fake.runUITask,
 		pluginHosts:        map[string]unsafe.Pointer{"probe": unsafe.Pointer(new(int))},
 		pluginHostChannels: newPluginHostChannels(),
 		pluginHostStates:   newPluginHostStates(),
@@ -448,7 +447,7 @@ func TestPluginHostEventPostsDeclaredUIExpansion(t *testing.T) {
 
 // stateSurfaces returns the Surfaces of channelSurfaces whose host of plugin probe declares state, when declared is not
 // nil, and has the ready document "doc-1".
-func stateSurfaces(t *testing.T, fake platform.Platform, declared *hostState) *Surfaces {
+func stateSurfaces(t *testing.T, fake uiFake, declared *hostState) *Surfaces {
 	t.Helper()
 	s, _ := channelSurfaces(t, fake, false)
 	s.pluginHostChannels.register("probe", declared)
@@ -592,5 +591,44 @@ func TestPluginHostChannelRefusesEveryCommandOutsideTheAllowlist(t *testing.T) {
 	}
 	if len(*events) != 0 {
 		t.Fatalf("a refused command was forwarded: %v", *events)
+	}
+}
+
+// contract: plugin-host.channel.ui-thread
+func TestPluginHostPostsRunOnTheUIThread(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, false)
+	ready := hostMessage(`{"event": "view.ready", "plugin": "probe", "document": "doc-1"}`)
+	if err := s.pluginHostMessage("probe", ready); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+	// A theme change comes from the binding of the main page, which runs outside the UI thread.
+	s.postThemeToPluginHosts()
+	if len(fake.postedOnUI) != 2 {
+		t.Fatalf("posts %d, want the theme after ready and the theme change", len(fake.postedOnUI))
+	}
+	for i, onUI := range fake.postedOnUI {
+		if !onUI {
+			t.Fatalf("post %d reached the native document outside a UI-thread task", i)
+		}
+	}
+}
+
+// contract: view.channel.ui-thread
+func TestViewPostsRunOnTheUIThread(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	// A theme change comes from the binding of the main page, which runs outside the UI thread.
+	s.postThemeToViews()
+	if len(fake.postedOnUI) != 2 {
+		t.Fatalf("posts %d, want the theme after ready and the theme change", len(fake.postedOnUI))
+	}
+	for i, onUI := range fake.postedOnUI {
+		if !onUI {
+			t.Fatalf("post %d reached the native document outside a UI-thread task", i)
+		}
 	}
 }

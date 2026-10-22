@@ -155,8 +155,24 @@ func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 // records each message that the host posts to a document.
 type channelPlatform struct {
 	viewPlatform
-	receive func(string)
-	posted  []string
+	receive    func(string)
+	posted     []string
+	postedOnUI []bool
+	// tasks is the number of UI-thread tasks running now, which runUITask counts.
+	tasks int
+}
+
+// uiFake is a test platform whose native posts record whether they run within a UI-thread task.
+type uiFake interface {
+	platform.Platform
+	runUITask(task func())
+}
+
+// runUITask is the UI-thread runner of a test Surfaces. It runs the task on the calling goroutine and counts the task while it runs.
+func (p *channelPlatform) runUITask(task func()) {
+	p.tasks++
+	defer func() { p.tasks-- }()
+	task()
 }
 
 func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
@@ -166,6 +182,7 @@ func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(v
 
 func (p *channelPlatform) PostDocument(document unsafe.Pointer, value string) bool {
 	p.posted = append(p.posted, value)
+	p.postedOnUI = append(p.postedOnUI, p.tasks > 0)
 	return true
 }
 
@@ -177,7 +194,7 @@ func newViewChannelSurfaces(t *testing.T) (*Surfaces, *channelPlatform) {
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments()}
+	s := &Surfaces{documents: NewDocuments(), invoke: fake.runUITask}
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}

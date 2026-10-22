@@ -342,7 +342,10 @@ type Surfaces struct {
 	// streams are the stream subscriptions of the document regions.
 	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
-	images   *Images
+	images *Images
+	// invoke runs a task on the UI thread and waits for it. NewSurfaces sets application.InvokeSync, and a test sets a runner that
+	// records the tasks.
+	invoke   func(task func())
 	sidecars *Sidecars
 	watch    sync.Once
 
@@ -365,6 +368,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		pluginHostChannels:   newPluginHostChannels(),
 		streams:              NewDocumentStreams(),
 		images:               NewImages(),
+		invoke:               application.InvokeSync,
 		// The value for the case in which no theme was received yet. If it is not an empty map, null is carried in the JSON,
 		// and a page that receives it stops while iterating over the tokens.
 		theme: Theme{Tokens: map[string]string{}},

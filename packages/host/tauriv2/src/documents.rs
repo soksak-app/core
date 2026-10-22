@@ -1306,7 +1306,7 @@ fn view_message(
             if let Some(plugin) = first {
                 record_view_process_ready(surface, &plugin);
             }
-            if let Err(error) = post_theme(window, platform, surface) {
+            if let Err(error) = post_theme(window, surface) {
                 log_error("view channel", error);
             }
         }
@@ -1410,8 +1410,20 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
     }
 }
 
+/// Posts message to the native document of handle and returns whether the document accepted it. The native post touches a WebKit
+/// web view, which only the main thread may use, so the post runs as the task that dispatch runs on the main thread.
+pub(crate) fn post_document_via(
+    dispatch: impl FnOnce(Box<dyn FnOnce() -> Result<bool, String> + Send>) -> Result<bool, String>,
+    handle: Handle,
+    message: String,
+) -> Result<bool, String> {
+    dispatch(Box::new(move || {
+        platform::current()?.post_document(handle, &message)
+    }))
+}
+
 /// Posts the current theme to the ready document of the view of surface, with the field sok 1.
-fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result<(), String> {
+fn post_theme(window: &Window, surface: &str) -> Result<(), String> {
     let theme = crate::theme::get(window)?;
     let data = window_data(window)?;
     let handle = data
@@ -1419,7 +1431,7 @@ fn post_theme(window: &Window, platform: &dyn Platform, surface: &str) -> Result
         .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
     let message = theme_message(&serde_json::to_value(&theme).map_err(|error| error.to_string())?)
         .to_string();
-    if platform.post_document(handle, &message)? {
+    if post_document_via(|task| on_main(window, task), handle, message)? {
         Ok(())
     } else {
         Err(format!("{surface}: the view document refused the message"))
@@ -1466,8 +1478,7 @@ fn post_from_main(
     let handle = data
         .documents
         .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
-    let platform = platform::current()?;
-    if platform.post_document(handle, &message)? {
+    if post_document_via(|task| on_main(&window, task), handle, message)? {
         Ok(())
     } else {
         Err(format!("{surface}: the view document refused the message"))
@@ -1478,12 +1489,11 @@ fn post_from_main(
 /// reaches it with its ready message.
 pub(crate) fn post_theme_to_views(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
-    let platform = platform::current()?;
     for surface in data.documents.views().surfaces() {
         if data.documents.views().ready_document(&surface).is_none() {
             continue;
         }
-        if let Err(error) = post_theme(window, platform, &surface) {
+        if let Err(error) = post_theme(window, &surface) {
             log_error("view channel", error);
         }
     }

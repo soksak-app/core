@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-9: A theme change posts to the plugin host and view documents on the main thread in both hosts. The Wails theme binding and the Tauri async commands called the native document post from their own threads, and its main-thread assertion aborted the application with SIGABRT. Red: the Go tests `TestPluginHostPostsRunOnTheUIThread` and `TestViewPostsRunOnTheUIThread` failed with a native post outside a UI-thread task, and the Rust test `a_native_document_post_is_a_main_thread_task` aborted with SIGABRT. Green: the same tests pass, and the Wails host package and the Tauri host unit tests pass.
+
 - F212.12-1-7: A view surface reports phase `ready` once its view declares its composition: the workbench released the ready state only for a module mount, so each view stayed at `loading` and its card kept the loading label. The workbench also writes the debug records `page.view.call` and `page.view.reply` for each view call, so a call that never replies shows as a receipt without a reply.
 - F258-3: The log-contract fixtures move to `docs/spec/cases/log-contract`, and the host event log tests audit their logs through `scripts/audit-log.mjs` instead of reading the audit module of the package by path. The package no longer exports its fixtures.
 - F258-2: The manifest case table moves to `docs/spec/cases/manifest-validation.json`, which the reader and both sok implementations read. `make boundaries` refuses a test of a core package that reads a path of another core package.

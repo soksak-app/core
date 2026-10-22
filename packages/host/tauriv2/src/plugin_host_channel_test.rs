@@ -672,3 +672,45 @@ fn a_view_error_without_a_reason_is_refused() {
         .expect_err("a view.error is a failure");
     assert_eq!(error, "plugin probe: view.error has no reason");
 }
+
+// contract: plugin-host.channel.ui-thread
+#[test]
+fn a_native_document_post_is_a_main_thread_task() {
+    let dispatched = std::cell::Cell::new(0);
+    let result = crate::documents::post_document_via(
+        |task| {
+            dispatched.set(dispatched.get() + 1);
+            drop(task);
+            Ok(true)
+        },
+        0,
+        "{}".to_string(),
+    );
+    assert_eq!(result, Ok(true));
+    assert_eq!(
+        dispatched.get(),
+        1,
+        "the native post runs on the main thread through the dispatch"
+    );
+}
+
+// contract: view.channel.ui-thread
+#[test]
+fn a_native_view_post_is_a_main_thread_task() {
+    let dispatched = std::cell::Cell::new(0);
+    let result = crate::documents::post_document_via(
+        |task| {
+            dispatched.set(dispatched.get() + 1);
+            drop(task);
+            Ok(true)
+        },
+        0,
+        "{\"event\":\"theme\"}".to_string(),
+    );
+    assert_eq!(result, Ok(true));
+    assert_eq!(
+        dispatched.get(),
+        1,
+        "the native view post runs on the main thread through the dispatch"
+    );
+}

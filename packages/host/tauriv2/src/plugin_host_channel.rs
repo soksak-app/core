@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
-use crate::documents::{ViewReplyError, theme_message};
+use crate::documents::{ViewReplyError, post_document_via, theme_message};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform::{self, Handle};
@@ -711,8 +711,11 @@ fn post(window: &Window, plugin: &str, message: &Value) -> Result<(), String> {
         .plugin_hosts
         .get(plugin)
         .ok_or_else(|| format!("plugin {plugin} has no host webview"))?;
-    let platform = platform::current()?;
-    if platform.post_document(handle, &message.to_string())? {
+    if post_document_via(
+        |task| crate::exposure::on_main(window, task),
+        handle,
+        message.to_string(),
+    )? {
         Ok(())
     } else {
         Err(format!(

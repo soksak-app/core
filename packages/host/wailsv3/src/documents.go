@@ -1574,19 +1574,25 @@ func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, err
 	if !ok || channel.document == "" {
 		return false, nil
 	}
-	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
-	if err != nil {
-		return false, err
-	}
 	message["sok"] = viewChannelMarker
 	data, err := json.Marshal(message)
 	if err != nil {
 		return false, err
 	}
-	if !system.PostDocument(handle, string(data)) {
-		return false, fmt.Errorf("%s: the view document refused the message", surface)
-	}
-	return true, nil
+	// The lookup and the post run as one task of the UI thread, as withDocument does: the native post needs the main thread, and
+	// the view is closed on the UI thread, so it is not closed between the lookup and the post.
+	var postErr error
+	s.invoke(func() {
+		handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
+		if err != nil {
+			postErr = err
+			return
+		}
+		if !system.PostDocument(handle, string(data)) {
+			postErr = fmt.Errorf("%s: the view document refused the message", surface)
+		}
+	})
+	return postErr == nil, postErr
 }
 
 // postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.

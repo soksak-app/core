@@ -152,7 +152,7 @@ func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecycle
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(clock.now), host: &Host{configDir: "/config"}}
+	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(clock.now), host: &Host{configDir: "/config"}, invoke: func(task func()) { task() }}
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
