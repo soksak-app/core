@@ -12,6 +12,9 @@ import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check
 import { openStages, systemState } from "./open-report.mjs";
 
 const read = (path) => JSON.parse(readFileSync(path, "utf8"));
+// The current form of settings.json, which the stored data table of docs/spec/installation.md numbers by its format member, and which
+// packages/sok/migrations/settings.json ends at (from 0 to 1).
+const SETTINGS_FORMAT = 1;
 
 // The running application reads the same file, so the check writes to a temporary file like the host and then renames it. The application never reads a partial file.
 const write = (path, value) => {
@@ -169,13 +172,14 @@ for (const app of Object.values(APPS)) {
     assert.equal((await child.get("core.project")).id, second.id);
     assert.equal(await mode(child), "light");
     await settings(child, { mode: "dark" }, "project");
-    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), { mode: "dark" });
+    // The project file is numbered (docs/spec/installation.md, stored data): its current form is SETTINGS_FORMAT.
+    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), { format: SETTINGS_FORMAT, mode: "dark" });
     assert.equal(await mode(s), "light");
     await settings(s, { mode: "dark" }, "common");
     await settings(s, { mode: "light" }, "common");
     assert.equal(await mode(child), "dark");
     await child.run("core.settings.reset", { key: "mode" });
-    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), {});
+    assert.deepEqual(read(join(second.root, ".soksak/settings.json")), { format: SETTINGS_FORMAT });
     await child.until("core.settings", (value) => value.values.mode === "light", "reset did not restore common settings");
     assert.equal(await failure(settings(child, { projectOpening: "tabs" }, "project")), -32602,
       "a common-only setting must be rejected in the project scope as invalid params");
