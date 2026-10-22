@@ -220,6 +220,14 @@ func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, 
 	return document, nil
 }
 
+// failNextCreation makes the next creation of a document region or plugin host web view fail with cause in the native layer. The
+// owning unit tests call it.
+func failNextCreation(cause string) {
+	text := C.CString(cause)
+	defer C.free(unsafe.Pointer(text))
+	C.sp_document_fail_creation_for_test(text)
+}
+
 // creationError is the error of a native creation that returned no handle. It states the native cause when the native layer gives one.
 func creationError(message, cause string) error {
 	if cause == "" {

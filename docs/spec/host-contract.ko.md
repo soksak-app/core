@@ -496,6 +496,7 @@ fn invalid_json_closes_connection() {
 | `debug.rows.out-of-range-number-is-refused` | float64 범위 밖의 수를 가진 debug 로그 줄은 파일, 줄, 원문과 함께 `not JSON`으로 거부되며, 어떤 행도 그 수에 `undefined`를 보이지 않는다. | both |
 | `endpoint.accept.error-is-recorded` | endpoint가 서비스하는 동안 실패한 accept는 `error host endpoint accept: <reason>`을 쓰며, endpoint가 listener를 스스로 닫은 뒤 실패한 accept는 기록을 쓰지 않는다. | both |
 | `endpoint.close.reason-of-read-error` | 프레임 중간에 끝난 연결은 `connection closed inside a length prefix` 또는 `connection closed inside a frame body`로 닫히고, 그 밖의 읽기 오류는 I/O 글로 닫히며, 프레임 경계에서의 끝이나 reset은 `peer closed`로 닫힌다. | both |
+| `host.document.creation-error-states-the-cause` | native layer가 만들지 못한 document region이나 plugin host web view는 native 원인을 밝히면 생성 오류 뒤에 `: <native cause>`를 붙인 오류로 실패하며, 원인이 없으면 생성 오류만 쓴다. | both |
 | `sidecars.stop.forgets-running-sidecars` | 중지는 입력을 끝내기 전에 모든 사이드카를 실행 목록에서 빼고 답하지 않은 닫기를 지우므로, 그 뒤 표면이나 소유 창을 닫아도 아무것도 보내지 않고 닫는 중인 표면을 알리지 않는다. | both |
 | `sidecars.protocol.message-at-limit-is-delivered` | 줄바꿈 앞이 정확히 67108864 byte인 사이드카 메시지가 손상 없이 소유 창에 도착한다. | both |
 | `sidecars.failure.oversize-message-terminates-and-notifies` | 67108864 byte보다 긴 줄은 줄이 끝나기를 기다리지 않고 사이드카 프로세스를 끝내고 "exceeds"를 담은 `sidecar-failure`를 소유 창에 전달한다. | both |

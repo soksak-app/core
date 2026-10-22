@@ -509,3 +509,7 @@ pub fn set_view_message(
     VIEW_MESSAGES.with(|all| all.borrow_mut().insert(document, receiver));
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "document_test.rs"]
+mod tests;

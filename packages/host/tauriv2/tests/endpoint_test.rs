@@ -1208,3 +1208,57 @@ fn subscriber_count_follows_the_watches_of_a_window() {
     );
     assert_eq!(notifier.subscribers("w1"), 1);
 }
+
+const ACCEPT_CHILD: &str = "SOKSAK_ENDPOINT_ACCEPT_CHILD";
+
+// An accept that fails while the endpoint serves writes the reason to the application log. The accept error is injected through
+// fail_accept_for_test, because no ordinary input makes an accept fail.
+// contract: endpoint.accept.error-is-recorded
+#[test]
+fn the_endpoint_records_an_accept_error() {
+    if let Some(config) = std::env::var_os(ACCEPT_CHILD) {
+        let config = Path::new(&config);
+        soksak_host_tauriv2::application_log::start_standard_error(config, "com.soksak.test")
+            .unwrap();
+        let writer = records::start_writer(config);
+        let (fake, _) = Fake::new();
+        endpoint::fail_accept_for_test(&config.join("sockets"), "accept fault");
+        let endpoint = start(config, "test-accept-error", fake);
+        // The record is written by the accept loop after accept returns, and no event reports that write, so the event log is
+        // read until the record appears.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            writer.flush(Duration::from_secs(5)).unwrap();
+            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
+            if log.contains("error host endpoint accept: accept fault") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no accept record in {log:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        endpoint.stop();
+        writer.flush(Duration::from_secs(5)).unwrap();
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_endpoint_records_an_accept_error",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(ACCEPT_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

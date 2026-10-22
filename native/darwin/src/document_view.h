@@ -50,6 +50,11 @@ void *sp_document_create(void *surface, const char *directory, const char *folde
 // creation clears it.
 const char *sp_document_last_error(void);
 
+// Makes the next creation of a document region or a plugin host web view fail with cause, as a failed creation of the native
+// layer does, so that the host unit tests of the creation error text run without a failing data store. Only the owning tests
+// call it.
+void sp_document_fail_creation_for_test(const char *cause);
+
 // Creates the plugin host web view of plugin hidden in the window itself (docs/spec/plugin-host.md). directory is the
 // absolute path where the persistent data store keeps site data, and it is created if missing; documents with the same
 // directory use the same store. folder and plugin name the installed folder and the id of the plugin whose host the web

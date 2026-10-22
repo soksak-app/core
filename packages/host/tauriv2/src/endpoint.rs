@@ -479,6 +479,37 @@ impl Notifier {
 }
 
 /// An open local endpoint and its endpoint.json.
+/// Accept faults that a test injects. A fault names a sockets directory and the error text; the next accept of a listener whose
+/// address lies under that directory returns the error instead of a connection. No ordinary input makes an accept fail, so the
+/// owning test of the accept error record uses this seam.
+static ACCEPT_FAULTS: Mutex<Vec<(PathBuf, String)>> = Mutex::new(Vec::new());
+
+/// Accepts one connection of listener, or returns the injected fault of its address.
+fn accept_connection(
+    listener: &dyn Listener,
+) -> Result<Box<dyn crate::platform::Connection>, String> {
+    let address = PathBuf::from(listener.address());
+    let fault = {
+        let mut faults = ACCEPT_FAULTS.lock().unwrap_or_else(PoisonError::into_inner);
+        faults
+            .iter()
+            .position(|(directory, _)| address.starts_with(directory))
+            .map(|index| faults.remove(index).1)
+    };
+    match fault {
+        Some(error) => Err(error),
+        None => listener.accept(),
+    }
+}
+
+/// Makes the next accept of the endpoint whose sockets directory is directory fail with error.
+pub fn fail_accept_for_test(directory: &Path, error: &str) {
+    ACCEPT_FAULTS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push((directory.to_path_buf(), error.to_string()));
+}
+
 pub struct Endpoint {
     shared: Arc<Shared>,
     listener: Arc<dyn Listener>,
@@ -731,7 +762,7 @@ impl Endpoint {
         let stopped = endpoint.stopped.clone();
         crate::routine::spawn_named("endpoint-accept", move || {
             loop {
-                match listener.accept() {
+                match accept_connection(&*listener) {
                     Ok(connection) => {
                         let shared = shared.clone();
                         crate::routine::spawn_named("endpoint-serve", move || {

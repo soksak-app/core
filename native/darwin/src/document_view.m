@@ -965,8 +965,28 @@ static void setDocumentFailure(NSString *cause) {
     documentFailure = [cause copy];
 }
 
+// The cause that the next creation fails with, set by sp_document_fail_creation_for_test.
+static NSString *injectedCreationFailure;
+
+// Takes the injected failure of the next creation into documentFailure and reports that the creation fails. It runs before the
+// main thread assertion of the creations, so the owning unit tests of the host can run it on a test thread; no production caller
+// sets the failure.
+static bool takeInjectedCreationFailure(void) {
+    if (!injectedCreationFailure) return false;
+    setDocumentFailure(injectedCreationFailure);
+    [injectedCreationFailure release];
+    injectedCreationFailure = nil;
+    return true;
+}
+
+void sp_document_fail_creation_for_test(const char *cause) {
+    [injectedCreationFailure release];
+    injectedCreationFailure = [[NSString alloc] initWithUTF8String:cause];
+}
+
+// The getter reads the cause that the creation on the main thread stored; it asserts no thread, so a caller on another thread
+// after a failed creation reads the same cause.
 const char *sp_document_last_error(void) {
-    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     return documentFailure ? documentFailure.UTF8String : "";
 }
 
@@ -1087,9 +1107,10 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
 
 void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context) {
+    setDocumentFailure(nil);
+    if (takeInjectedCreationFailure()) return NULL;
     bool isView = channel != NULL;
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
-    setDocumentFailure(nil);
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !directory || !changed || !surface.window) return NULL;
     if (isView && !(folder && plugin)) return NULL;
@@ -1130,9 +1151,10 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
 
 void *sp_plugin_host_create(void *windowHandle, const char *directory, const char *folder, const char *plugin,
     const char *channel, sp_document_changed changed, void *context) {
+    setDocumentFailure(nil);
+    if (takeInjectedCreationFailure()) return NULL;
     NSCAssert(NSThread.isMainThread, @"the plugin host belongs to the main thread");
     NSWindow *window = (NSWindow *)windowHandle;
-    setDocumentFailure(nil);
     // The host web view is the view configuration of a view: it has the channel script and the plugin (docs/spec/plugin-host.md).
     if (!window || !window.contentView || !directory || !changed || !channel || !folder || !plugin) return NULL;
     NSString *channelSource = [NSString stringWithUTF8String:channel];
