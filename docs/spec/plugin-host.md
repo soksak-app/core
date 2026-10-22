@@ -34,6 +34,7 @@ The host creates one plugin host web view per plugin per window, with the config
 - the plugin id of the plugin, which sets the `sok://<plugin id>` origin of the page and the `Access-Control-Allow-Origin` of its core root responses;
 - the document-start user script with the text of `packages/plugin-api/view-start.js`, the [view channel](native-surfaces.md#view-surfaces) script;
 - the document-start user script with the theme tokens;
+- the document-start user script of the plugin start values, which sets `window.sokHost` to the frozen `{project, declarations}` of the plugin host: `project` is the frozen `{root}` of the project that the window shows, or `null` in a window without a project, and `declarations` are the `exposes` of the plugin. The host has no surface and no origin, so the members of [start values](native-surfaces.md#view-surfaces) that name a surface or a tab are absent. The main page sends the values with the preparation of the plugin host of the window (the same form as the preparation of a view surface), and the host checks them with the rest of the request: a value of the wrong form is refused with the reason of its check, and the plugin host is not created without them. The script is added before the page loads, and it is injected again when the host creates the plugin host again;
 - the script message handler `sok-view`;
 - the persistent website data store of the plugin, keyed by the plugin id.
 

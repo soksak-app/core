@@ -34,6 +34,7 @@ host는 plugin당 창당 하나의 plugin host web view를, [view](native-surfac
 - plugin의 plugin id. 페이지의 `sok://<plugin id>` origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다.
 - `packages/plugin-api/view-start.js`의 텍스트를 담은 document-start user script. [view channel](native-surfaces.ko.md#view-표면) 스크립트다.
 - theme 토큰을 담은 document-start user script.
+- plugin start 값의 document-start user script. `window.sokHost`를 plugin host의 동결된 `{project, declarations}`로 둔다. `project`는 window가 보여 주는 project의 동결된 `{root}`이고, project가 없는 window에서는 `null`이다. `declarations`는 plugin의 `exposes`다. host에는 surface도 origin도 없으므로, surface나 tab을 이름으로 하는 [시작 값](native-surfaces.ko.md#view-표면) 항목은 없다. main page가 window의 plugin host 준비(view surface 준비와 같은 형식)와 함께 값을 보내며, host는 나머지 요청과 함께 값을 검사한다. 형식이 틀린 값은 그 검사의 이유와 함께 거부하고, 값 없이는 plugin host를 만들지 않는다. script는 page를 불러오기 전에 추가하며, host가 plugin host를 다시 만들면 다시 주입한다.
 - script message handler `sok-view`.
 - plugin id로 key되는 plugin의 persistent website data store.
 
