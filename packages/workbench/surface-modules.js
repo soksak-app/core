@@ -1,6 +1,6 @@
 import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
-import { markViewSurface, registry } from "./exposure.js";
+import { markViewSurface, registry, viewOwns } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
@@ -236,7 +236,8 @@ function answerViewCalls(surface, scoped, page, context, closing) {
   const pending = new Map();
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
-    native: (name, listener) => gate.on(name, listener),
+    // A view is forwarded the exposure requests it owns; a core surface entry is answered by the surface document alone.
+    native: (name, listener) => gate.on(name, name === "exposure-request" ? (event) => { if (viewOwns(event)) listener(event); } : listener),
     // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
       on: (id, listener) => page.sidecar().on(id, listener),

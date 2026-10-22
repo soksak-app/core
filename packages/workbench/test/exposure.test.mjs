@@ -12,7 +12,7 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, installExposure, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { createRegistry, installExposure, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest, viewOwns } = await import("../exposure.js");
 const { keepHostCommands } = await import("../plugin-host.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
@@ -284,6 +284,26 @@ test("a dom request of a plugin host entry is refused as failed while the host p
   } finally {
     forget();
   }
+});
+
+// contract: exposure.relay.one-answerer-per-request
+test("a view is forwarded only the requests it owns: a core surface entry is answered by the surface document alone", () => {
+  assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "terminal.session" } }), true);
+  assert.equal(viewOwns({ surface: "tab-a", method: "status.watch", params: { name: "core.surface.document" } }), false);
+  assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "core.surface.input" } }), false);
+});
+
+
+// contract: exposure.relay.one-answerer-per-request
+test("a view mark is owned by its mount: the dispose of an earlier mount of the same surface keeps the view's mark", async () => {
+  const request = { id: 9, surface: "tab-mark", method: "status.get", params: { name: "probe.lines" } };
+  const earlier = markViewSurface("tab-mark");
+  const later = markViewSurface("tab-mark");
+  earlier();
+  // The later mount still runs the view, so the view answers the request and no surface port does.
+  assert.equal(await dispatchSurfaceRequest(request), true, "the view mark ended with the earlier mount");
+  later();
+  assert.equal(await dispatchSurfaceRequest(request), false, "a surface without a view mark and without a port took the request");
 });
 
 test("a plugin host answers only a request without surface for a name that no surface registered", async () => {

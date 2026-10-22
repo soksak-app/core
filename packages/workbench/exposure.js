@@ -46,7 +46,8 @@ const surfacePorts = new Map();
 // The surfaces whose page is a view. A view answers the forwarded requests of its own names through its exposure-request subscription
 // (docs/spec/native-surfaces.md#view-surfaces), so a request of a view surface reaches the port of the page only when it names a core
 // surface entry, which the page registers for every surface (docs/spec/exposure.md#surface-documents).
-const viewSurfaces = new Set();
+// Each mount of a view holds its own mark, so the dispose of an earlier mount of the same surface removes only its mark.
+const viewSurfaces = new Map();
 
 /**
  * Creates one registry.
@@ -675,15 +676,28 @@ export function whenRepliesSent() {
 
 /** Marks a surface as a view for the lifetime of its mount. The returned function ends the mark. */
 export function markViewSurface(surface) {
-  viewSurfaces.add(surface);
-  return () => { viewSurfaces.delete(surface); };
+  const mark = {};
+  if (!viewSurfaces.has(surface)) viewSurfaces.set(surface, new Set());
+  viewSurfaces.get(surface).add(mark);
+  return () => {
+    const marks = viewSurfaces.get(surface);
+    if (marks === undefined) return;
+    marks.delete(mark);
+    if (marks.size === 0) viewSurfaces.delete(surface);
+  };
 }
 
 const isCoreSurfaceRequest = ({ params }) => typeof params?.name === "string" && params.name.startsWith(SURFACE_CORE);
 
+/**
+ * Whether a view answers the request. A view answers the names it declares; a core surface entry (core.surface.*) is answered by the
+ * surface document alone, so the view is not forwarded it (docs/spec/exposure.md#surface-documents).
+ */
+export const viewOwns = (request) => !isCoreSurfaceRequest(request);
+
 export async function dispatchSurfaceRequest(request) {
   // A view answers its own request through its subscription, so the request is consumed here and is not forwarded to the view again.
-  if (viewSurfaces.has(request.surface) && !isCoreSurfaceRequest(request)) return true;
+  if (viewSurfaces.has(request.surface) && viewOwns(request)) return true;
   const port = surfacePorts.get(request.surface);
   if (!port) return false;
   await port(request);
