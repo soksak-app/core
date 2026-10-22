@@ -2363,6 +2363,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F245",
+    implementation: [{ file: "packages/plugin-api/surface-composition.js", symbol: "Object.defineProperty(exposed, \"history\"" }],
+    tests: [{ file: "packages/plugin-api/test/surface-composition.test.mjs", id: "a view composition region reports the history of its attach reply" }],
+    expected: "The region of a view composition reports the history of its attach reply, as the document handle of a page does.",
+    levels: ["unit"],
+  },
+  {
     id: "F198",
     implementation: [{ file: "packages/workbench/memory-saver.js", symbol: "export function createMemorySaver" }],
     tests: [{ file: "packages/workbench/test/memory-saver.test.mjs", id: "the delay unloads a hidden tab and a show restores it" }],

@@ -484,3 +484,33 @@ test("the controller starts observing at the next animation frame, before that f
   assert(f.observed.includes("page") && f.observed.includes("toolbar") && f.observed.includes("overlay-parent"),
     `the regions, overlays and their ancestors are observed after the frame: ${f.observed}`);
 });
+
+const viewDeclaration = {
+  kind: "view",
+  regions: [{ name: "page", kind: "document", input: "native" }],
+  overlays: [],
+};
+
+test("a view composition region reports the history of its attach reply", { timeout: 10_000 }, async () => {
+  for (const history of [true, false]) {
+    const f = fixture();
+    let release;
+    const attached = new Promise((resolve) => { release = resolve; });
+    const r = runtime({ documentAttach: () => attached });
+    // The controller returns the composition after every region attach replies, so the region is read after the creation.
+    const creating = createSurfaceCompositionController(r.page, viewDeclaration, { regions: { page: f.page }, overlays: {} }, f.window);
+    release({ history });
+    const composition = await creating;
+    assert.equal(composition.region("page").history, history);
+    await composition.dispose();
+  }
+});
+
+test("a view composition refuses an attach reply without a boolean history, naming the region", { timeout: 10_000 }, async () => {
+  const f = fixture();
+  const r = runtime({ documentAttach: () => Promise.resolve({}) });
+  await assert.rejects(
+    createSurfaceCompositionController(r.page, viewDeclaration, { regions: { page: f.page }, overlays: {} }, f.window),
+    /document page attach reply has no history: \{\}/,
+  );
+});

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F245: view 합성의 영역(`surface-composition.js`의 `region()`)은 page 문서 손잡이와 같이 `history`를 알린다. attach 답이 오기 전까지 null이고, 그 뒤에는 답의 boolean이다. view의 attach 답은 workbench가 이미 `history`를 담으므로 두 host는 바뀌지 않았다. Red: `composition.region("page").history`가 `true`여야 할 자리에 `undefined`였다(surface-composition 시험 "a view composition region reports the history of its attach reply"). Green: surface-composition 17/17, plugin-api 전체 449/449. boolean `history`가 없는 attach 답을 영역 이름과 함께 거부하는 동작은 이미 있었다.
 - F238-d-20: plugin host 기준은 배치 규칙이다. host는 plugin의 view가 하나도 열려 있지 않은 동안 제공해야 하는 sidebar section의 선언 status가 있을 때만 존재하고, sidecar가 데이터를 주는 동안 그 status들의 presentation을 갖는다. host page는 보내기 전에 개수와 크기 한도를 자른다.
 - F238-d-1, F238-d-2, F238-d-4: Repositories 단락은 `make boundaries`가 선언된 각 폴더에서 읽는 것과 `make registry`, `make install-plugins`가 읽는 것을 적는다. `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다. 저장소 표는 선언된 plugin `browser`, `editor`, `files`, `hwp`, `terminal`을 적고, 사이드카 행은 `vt-alacritty`를 적는다. Registry 테스트는 표가 선언된 plugin을 적는지 검사한다. 이전 표에서 Red(actual `[browser, files, shell, terminal]`), 현재 표에서 Green(6/6).
 - F241: view call route가 surface context의 PNG clipboard payload를 제공한다. `runtime.clipboard.read`는 `png`에 base64 data를 담은 `{present, type, data}` 또는 `null`을 돌려주고, `runtime.clipboard.persistPNG`는 `{data}`의 payload를 저장해 `{path, shellQuotedPath}`를 돌려준다. Red: `packages/workbench/test/view-calls.test.mjs`의 F241 사례 3개가 바뀌지 않은 구현에서 `view call ... is not served`로 실패했다. Green: 같은 파일이 50/50 통과한다.

@@ -336,6 +336,8 @@ export async function createSurfaceCompositionController(
           reload: handle.reload.bind(handle), stop: handle.stop.bind(handle),
         };
         Object.defineProperty(exposed, "state", { get: () => handle.state });
+        // The same history as the document handle of a page (docs/spec/native-surfaces.md#document-regions).
+        Object.defineProperty(exposed, "history", { get: () => handle.history });
         return Object.freeze(exposed);
       }
       return Object.freeze({
