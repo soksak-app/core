@@ -644,12 +644,26 @@ function validateBridgeCases(cases) {
   const ids = cases.map(({ id }) => id);
   assert.equal(new Set(ids).size, ids.length, "bridge case ids must be unique");
   assert.deepEqual([...ids].sort(), Object.keys(BRIDGE_ACTIONS).sort(), "all required bridge cases must be present");
+  const hostEvents = {
+    "view.bridge.events-delivered-in-order": ["theme"],
+    "view.bridge.sidecar-subscriptions": ["sidecar.message", "sidecar.failure"],
+    "view.bridge.runtime-log-level-gate": ["log.levels"],
+  };
   for (const item of cases) {
-    assert.deepEqual(item.steps.map(({ action }) => action), BRIDGE_ACTIONS[item.id], `${item.id} ordered actions`);
+    assert.deepEqual(item.steps.map(({ action }) => action), BRIDGE_ACTIONS[item.id], item.id + " ordered actions");
     for (const step of item.steps) {
-      if (step.action === "host-event") assert.equal(step.input?.sok, 1, `${item.id} host-event input must carry sok: 1`);
+      if (step.action === "host-event") {
+        assert.equal(step.input?.sok, 1, item.id + " host-event input must carry sok: 1");
+        assert.ok(hostEvents[item.id]?.includes(step.input.event), item.id + " has unsupported host-event " + step.input.event);
+      }
+      if (step.action === "sidecar-subscribe") {
+        assert.ok(["message", "failure"].includes(step.input?.kind), item.id + " has unsupported subscription kind: " + step.input?.kind);
+      }
     }
   }
+  const subscriptionKinds = cases.find(({ id }) => id === "view.bridge.sidecar-subscriptions").steps
+    .filter(({ action }) => action === "sidecar-subscribe").map(({ input }) => input.kind);
+  assert.deepEqual(subscriptionKinds, ["message", "failure"], "view.bridge.sidecar-subscriptions subscription kinds");
   const refusal = cases.find(({ id }) => id === "view.bridge.refuses-unsupported-page");
   assert.equal(refusal.steps[0].output.throws, "view channel requires a view page on sok://<plugin id>, got https://example.test/");
 }
@@ -662,6 +676,18 @@ test("view bridge contract validation rejects empty, missing, and shortened case
   const missingMarker = structuredClone(BRIDGE_CONTRACT.cases);
   delete missingMarker.find(({ id }) => id === "view.bridge.events-delivered-in-order").steps[1].input.sok;
   assert.throws(() => validateBridgeCases(missingMarker), /host-event input must carry sok: 1/);
+  const unexpectedAction = structuredClone(BRIDGE_CONTRACT.cases);
+  unexpectedAction.find(({ id }) => id === "view.bridge.sidecar-send").steps.splice(2, 0, { action: "ignored" });
+  assert.throws(() => validateBridgeCases(unexpectedAction), /ordered actions/);
+  const unknownSubscription = structuredClone(BRIDGE_CONTRACT.cases);
+  unknownSubscription.find(({ id }) => id === "view.bridge.sidecar-subscriptions").steps[1].input.kind = "unknown";
+  assert.throws(() => validateBridgeCases(unknownSubscription), /unsupported subscription kind/);
+  const missingFailureSubscription = structuredClone(BRIDGE_CONTRACT.cases);
+  missingFailureSubscription.find(({ id }) => id === "view.bridge.sidecar-subscriptions").steps[3].input.kind = "message";
+  assert.throws(() => validateBridgeCases(missingFailureSubscription), /subscription kinds/);
+  const unknownEvent = structuredClone(BRIDGE_CONTRACT.cases);
+  unknownEvent.find(({ id }) => id === "view.bridge.events-delivered-in-order").steps[1].input.event = "unlisted.event";
+  assert.throws(() => validateBridgeCases(unknownEvent), /unsupported host-event/);
 });
 test("published view bridge cases match calls, replies, events, and refusals", async (t) => {
   validateBridgeCases(BRIDGE_CONTRACT.cases);
@@ -719,7 +745,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         const steps = item.steps.slice(1);
         for (let index = 0; index < steps.length; index += 1) {
           const step = steps[index];
-          if (step.action !== "sidecar-send") continue;
+          if (step.action !== "sidecar-send") throw new Error("unsupported sidecar-send action " + step.action);
           const replyStep = steps[index + 1];
           assert.equal(replyStep.action, "host-reply");
           const pending = observeRejection(bridge.runtime.sidecar(step.input.sidecar).send(step.input.id, step.input.body, step.input.cids));
@@ -740,9 +766,11 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             const replyStep = steps[index + 1];
             assert.equal(replyStep.action, "host-reply");
             const port = bridge.runtime.sidecar(step.input.sidecar);
-            const subscription = observeRejection(step.input.kind === "message"
-              ? port.on(step.input.id, (body) => received.messages.push(body))
-              : port.onFailure(step.input.id, (reason) => received.failures.push(reason)));
+            let subscribe;
+            if (step.input.kind === "message") subscribe = () => port.on(step.input.id, (body) => received.messages.push(body));
+            else if (step.input.kind === "failure") subscribe = () => port.onFailure(step.input.id, (reason) => received.failures.push(reason));
+            else throw new Error("unsupported sidecar subscription kind " + step.input.kind);
+            const subscription = observeRejection(subscribe());
             let mismatch;
             try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
             host(replyStep.input);
@@ -753,6 +781,8 @@ test("published view bridge cases match calls, replies, events, and refusals", a
           } else if (step.action === "host-event") {
             host(step.input);
             assert.deepEqual(received, step.output);
+          } else {
+            throw new Error("unsupported sidecar-subscriptions action " + step.action);
           }
         }
       } else if (item.id === "view.bridge.runtime-log-level-gate") {
@@ -778,6 +808,8 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             let built = false;
             runtime.log[step.input.level](step.input.event, () => { built = true; return step.input.fields; });
             assert.deepEqual({ calls: posted.length - before, built }, step.output);
+          } else {
+            throw new Error("unsupported runtime-log case action " + step.action);
           }
         }
       } else {

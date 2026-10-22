@@ -2139,3 +2139,4 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - F238-c-27-5: Add ordered producer cases for Flowmark tab state, named sidecar send/subscriptions and events, and the view log-level gate/log calls. Focused producer cases pass 10/10 against `createViewBridge`; the dependency pin remains unchanged.
 - F238-c-27-6: Correct the sidecar-send producer command literal and assert exact open-call count transitions and zero pending calls across the ordered cases. The focused producer gate passes 10/10.
 - F238-c-27-7: Publish `sok: 1` in every host-event input and pass the wire envelope unchanged; reject contract copies that omit the marker. The focused producer gate passes 10/10.
+- F238-c-27-8: Reject unknown host-event names and sidecar subscription kinds, require both subscription kinds, and make route runners fail on unrecognized steps. The focused producer gate passes 10/10.
