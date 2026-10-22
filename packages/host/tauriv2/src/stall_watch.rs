@@ -47,10 +47,12 @@ pub struct StallWatchOptions {
 
 /// Starts the watch and returns the function that stops it.
 pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
+    // default: the host gives no clock, so the watch measures time with the monotonic clock from its start.
     let clock: Clock = options.clock.clone().unwrap_or_else(|| {
         let start = Instant::now();
         Arc::new(move || start.elapsed())
     });
+    // default: the host gives no wait, so the watch sleeps one beat on its thread.
     let wait: Wait = options
         .wait
         .clone()
