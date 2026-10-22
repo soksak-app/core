@@ -96,8 +96,12 @@ export function createViewBridge({ handler, report }) {
       // A refused subscription is forgotten, so that a later listener of the key subscribes again.
       pending.catch(() => subscriptions.delete(key));
     }
+    // A listener whose subscription is refused is removed with it, so the refused listener receives no event.
     return subscriptions.get(key).then(() => () => {
       listeners.get(key)?.delete(listener);
+    }, (error) => {
+      listeners.get(key)?.delete(listener);
+      throw error;
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });

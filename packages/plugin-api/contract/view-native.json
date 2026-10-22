@@ -1,0 +1,101 @@
+{
+  "surface": "packages/plugin-api/view.js#createViewBridge runtime.native",
+  "description": "Ordered steps of the native calls of a view page: on subscribes a listener to a native event name (the first listener of a name posts the subscription, and later listeners share it), off removes a listener, event delivers a host event {event, data} to the listeners of its name, and exposureRegister and exposureReply send the runtime.native.call messages of the exposure registry. An on or exposureRegister step may name an answer, which the host sends as the reply to the request that the step posted. Each step lists what it produces: posted is the messages the page sends in order, delivered is the listener calls in order as {listener, data}, result is the value of the step (function when on resolves with its remove function), and throws is the text of the error the step raises, or null. The page is sok://probe/.",
+  "cases": [
+    {
+      "id": "view.native.on-subscribes-once-per-name",
+      "steps": [
+        {
+          "on": { "name": "probe-event", "listener": "a" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 1, "command": "runtime.native.on", "params": { "name": "probe-event" } }],
+            "delivered": [], "result": "function", "throws": null
+          }
+        },
+        {
+          "on": { "name": "probe-event", "listener": "b" },
+          "output": { "posted": [], "delivered": [], "result": "function", "throws": null }
+        },
+        {
+          "event": { "event": "probe-event", "data": { "x": 1 } },
+          "output": {
+            "posted": [],
+            "delivered": [{ "listener": "a", "data": { "x": 1 } }, { "listener": "b", "data": { "x": 1 } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "off": "a",
+          "output": { "posted": [], "delivered": [], "result": null, "throws": null }
+        },
+        {
+          "event": { "event": "probe-event", "data": { "x": 2 } },
+          "output": { "posted": [], "delivered": [{ "listener": "b", "data": { "x": 2 } }], "result": null, "throws": null }
+        },
+        {
+          "event": { "event": "other-event", "data": { "x": 3 } },
+          "output": { "posted": [], "delivered": [], "result": null, "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.native.refused-subscription-is-requested-again",
+      "steps": [
+        {
+          "on": { "name": "probe-event", "listener": "a" },
+          "answer": { "error": { "code": -32000, "message": "subscription not allowed" } },
+          "output": {
+            "posted": [{ "sok": 1, "id": 1, "command": "runtime.native.on", "params": { "name": "probe-event" } }],
+            "delivered": [], "result": null, "throws": "subscription not allowed"
+          }
+        },
+        {
+          "on": { "name": "probe-event", "listener": "b" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 2, "command": "runtime.native.on", "params": { "name": "probe-event" } }],
+            "delivered": [], "result": "function", "throws": null
+          }
+        },
+        {
+          "event": { "event": "probe-event", "data": { "x": 4 } },
+          "output": { "posted": [], "delivered": [{ "listener": "b", "data": { "x": 4 } }], "result": null, "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "view.native.exposure-calls-and-refusals",
+      "steps": [
+        {
+          "on": { "name": "", "listener": "a" },
+          "output": { "posted": [], "delivered": [], "result": null, "throws": "runtime.native.on requires a non-empty name" }
+        },
+        {
+          "exposureRegister": { "kind": "status", "name": "demo.count" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 1, "command": "runtime.native.call", "params": { "name": "registered", "payload": { "kind": "status", "name": "demo.count" } } }],
+            "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "exposureRegister": { "kind": "dom", "name": "demo.button" },
+          "answer": { "error": { "code": -32000, "message": "dom name refused" } },
+          "output": {
+            "posted": [{ "sok": 1, "id": 2, "command": "runtime.native.call", "params": { "name": "registered", "payload": { "kind": "dom", "name": "demo.button" } } }],
+            "delivered": [], "result": null, "throws": "dom name refused"
+          }
+        },
+        {
+          "exposureReply": { "id": 7, "payload": { "result": 3 } },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 3, "command": "runtime.native.call", "params": { "name": "exposureReply", "payload": { "id": 7, "result": 3 } } }],
+            "delivered": [], "result": null, "throws": null
+          }
+        }
+      ]
+    }
+  ]
+}
