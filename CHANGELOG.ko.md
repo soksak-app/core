@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.12-1-7: view surface는 view가 composition을 선언하면 phase `ready`를 보고한다. workbench는 module mount에서만 ready 상태를 풀었으므로 각 view가 `loading`에 머물고 카드에 불러오는 표시가 남았다. workbench는 view 호출마다 debug 기록 `page.view.call`과 `page.view.reply`도 쓰므로, 회신하지 않은 호출은 회신 없는 수신으로 보인다.
 - F212.12-1-5: view surface는 한 번만 mount된다. 페이지가 view의 core surface 항목을 view가 전달받은 요청에 쓰는 것과 같은 surface port에 등록하여 mount가 `already has an exposure port`로 실패했다. 이제 페이지는 view의 core surface 항목에 답하고 나머지 전달된 요청은 소비하며, view는 port 대신 surface에 표시되고, 실패한 mount는 자기 노출 port와 entry를 해제하므로 다음 mount가 새로 시작한다. 거부된 composition 선언은 더 이상 처리되지 않은 거부를 남기지 않는다. Red: `surface-view.test.mjs`는 core surface 항목을 가진 mount가 `already has an exposure port`로, 실패한 mount의 해제가 `the failed mount left its exposure port registered`로 실패한다. `exposure.test.mjs`는 view 확인을 빼면 전달 규칙이 `[2]` 대신 `[1, 2, 3]`으로 실패한다. Green: surface-view 14/14, exposure 30/30, workbench 시험 디렉터리 851/851 통과. view mount, 그 core 등록, 그 command 등록이 port 하나를 공유하는 순서를 시험이 다룬다.
 - F258-1: `sok plugin pack`과 `sok plugin install`은 reader의 manifest 검사(`validateManifest`)의 모든 규칙을 reader의 순서와 reader의 오류 문구로 적용하며, reader와 두 구현 모두 manifest 사례표 `packages/plugin-api/contract/manifest-validation.json`을 재생한다. reader는 이제 각 객체의 member를 정렬된 키 순서로 읽고, type 이름이 아닌 schema type을 거부하며, data schema를 schema 규칙으로 검사하고, enum member를 순서와 무관하게 비교하며, exposes의 commands가 목록이 아닐 때 menu, save, drop 항목에서 TypeError를 내지 않는다. Red: reader 시험은 reader 수정 전 사례 210개 가운데 8개가 실패했고, Go와 Rust 재생은 이식 전 기준 상태에서 실패했다.
 

@@ -697,6 +697,30 @@
       },
       "description": "A pressure report found no candidate, or an unload attempt ended because a protection appeared or the tab was shown; seq is the number of the last pressure report, 0 before the first."
     },
+    "page.view.call": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "id": "number",
+        "command": "string"
+      },
+      "description": "The workbench received a call request of a view (docs/spec/native-surfaces.md#view-surfaces, view call). A call with this record and no page.view.reply of the same plugin, surface and id has not replied."
+    },
+    "page.view.reply": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "id": "number",
+        "outcome": "string"
+      },
+      "description": "The workbench sent the reply of a view call to the view; outcome is result or error, and the reply carries the same id as its page.view.call."
+    },
     "page.input.shortcut.failed": {
       "layer": "page",
       "class": "input",

@@ -50,6 +50,104 @@ test("mounting a view surface imports no module and declares its view compositio
   }
 });
 
+// A view surface is ready once its composition is declared: the card leaves the loading state, as a module surface does after its module mounts.
+test("a view surface reports phase ready after its view declares its composition", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
+        calls.push({ name, payload });
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-ready");
+  const pluginId = "fixture-ready-view";
+  const surfaceId = "fixture-ready-view-surface";
+  recordOrigin(surfaceId, null);
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  const states = [];
+  try {
+    authorizeSurface(surfaceId);
+    // The mount resolves after the composition is declared, so the last state is the state after the declaration.
+    await mountSurface(document.querySelector("#slot"), surface, { onState: (state) => states.push(state) });
+    assert.ok(calls.some(({ name }) => name === "compositionDeclare"), "the view did not declare its composition");
+    assert.equal(states.at(-1).phase, "ready", `the surface phase after its composition declaration is ${states.at(-1).phase}`);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
+// The receipt of a view call and its reply are written at the debug level, so a call that never replies shows as a receipt without a reply.
+test("a view call writes a debug receipt and a debug reply record with its id", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const replies = [];
+  let replied;
+  const replyArrived = new Promise((resolve) => { replied = resolve; });
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        if (name === "viewReply") {
+          replies.push(payload);
+          replied();
+        }
+        return null;
+      } } };
+    },
+  } });
+  const emitted = [];
+  const actualPageLog = await import("../page-log.js");
+  t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-records");
+  const pluginId = "fixture-records-view";
+  const surfaceId = "fixture-records-view-surface";
+  recordOrigin(surfaceId, null);
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
+    listeners.get("view-call")({ id: 7, command: "runtime.settings.read", params: null });
+    // The reply is sent after the call has settled, so the test waits for the viewReply call.
+    await replyArrived;
+    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.call"), [{ level: "debug", event: "page.view.call",
+      fields: { plugin: pluginId, surface: surfaceId, id: 7, command: "runtime.settings.read" } }]);
+    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
+      fields: { plugin: pluginId, surface: surfaceId, id: 7, outcome: "result" } }]);
+    assert.deepEqual(replies.map(({ id }) => id), [7]);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // contract: view.restart.limit-shows-error
 // The view-stopped event of the surface is shown as the error state of the surface, and mounting the surface again replaces that state.
 test("a view that stopped its restarts shows its reason as the error state of its surface until it is mounted again", { timeout: 5000 }, async (t) => {

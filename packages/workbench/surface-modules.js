@@ -1,4 +1,4 @@
-import { LOG_LEVELS, createSurfaceContext } from "@soksak/plugin-api";
+import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
@@ -345,12 +345,18 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       });
       return;
     }
+    // The receipt of a call and its reply are records of the page at the debug level, so a call that never replies is the last
+    // receipt without a reply (docs/spec/logging.md#policy).
+    emitEvent("debug", "page.view.call", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command) });
     answerViewCall(event, options).then(
       // default: a handler that returns no value replies with null, which is the result of a call without a value.
       (result) => ({ id: event.id, result: result ?? null }),
       // default: a rejection that is not an Error replies with its text.
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
-    ).then((reply) => scoped.native.call("viewReply", reply)).catch((error) => {
+    ).then((reply) => {
+      emitEvent("debug", "page.view.reply", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, outcome: "error" in reply ? "error" : "result" });
+      return scoped.native.call("viewReply", reply);
+    }).catch((error) => {
       // default: a refusal that is not an Error carries its value as the text.
       dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} reply: ${error?.message ?? error}` }));
     });
@@ -536,8 +542,11 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         // The tab state of a declaring surface is read after it opens, which the page does after the first plane.
         if (surface.unload) await tabStatesReady();
         if (entry.disposed) return null;
-        // The view declares its composition, which resolves the composition wait of the surface.
+        // The view declares its composition, which resolves the composition wait of the surface. The surface is ready from that
+        // declaration, as a module surface is ready after its module mounts: a view has no module whose mount releases it.
         await page.composition.declare(surface.composition);
+        context.status.report("ready");
+        releaseSurfaceReady(context);
         return null;
       });
     entry.ready = entry.mounted.catch(async (error) => {
