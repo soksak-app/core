@@ -490,6 +490,7 @@ fn accept_connection(
 ) -> Result<Box<dyn crate::platform::Connection>, String> {
     let address = PathBuf::from(listener.address());
     let fault = {
+        // default: a lock that a panicking thread poisoned still holds the accept faults, which only a test sets; the panic hook records the panic.
         let mut faults = ACCEPT_FAULTS.lock().unwrap_or_else(PoisonError::into_inner);
         faults
             .iter()
@@ -506,6 +507,7 @@ fn accept_connection(
 pub fn fail_accept_for_test(directory: &Path, error: &str) {
     ACCEPT_FAULTS
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the accept faults, which only a test sets; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .push((directory.to_path_buf(), error.to_string()));
 }

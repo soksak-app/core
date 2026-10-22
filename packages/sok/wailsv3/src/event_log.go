@@ -714,6 +714,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			// record of a loss is not reported again when its own line cannot be serialized.
 			fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
 			if e.event != "log.dropped" {
+				// default: json.Marshal of a string cannot fail, so its error result is not used.
 				reason, _ := json.Marshal("the line cannot be serialized: " + err.Error())
 				push(l.writerEvent(LevelWarn, "log.dropped", json.RawMessage(fmt.Sprintf(
 					`{"from_seq":%d,"to_seq":%d,"count":1,"bytes":%d,"reason":%s,"channel":%q}`,
@@ -737,6 +738,7 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 				}
 				fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
 				if e.event != "log.dropped" {
+					// default: json.Marshal of a string cannot fail, so its error result is not used.
 					reason, _ := json.Marshal(fmt.Sprintf("%s cannot be opened: %v", f.path, err))
 					push(l.writerEvent(LevelWarn, "log.dropped", json.RawMessage(fmt.Sprintf(
 						`{"from_seq":%d,"to_seq":%d,"count":1,"bytes":%d,"reason":%s,"channel":%q}`,

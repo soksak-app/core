@@ -947,6 +947,7 @@ fn read_head(source: &File, path: &Path, length: usize) -> std::io::Result<Vec<u
     let fault = {
         let mut faults = HEAD_READ_FAULTS
             .lock()
+            // default: a lock that a panicking thread poisoned still holds the head read faults, which only a test sets; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         faults
             .iter()
@@ -963,6 +964,7 @@ fn read_head(source: &File, path: &Path, length: usize) -> std::io::Result<Vec<u
 pub fn fail_head_read_for_test(path: &Path, error: &str) {
     HEAD_READ_FAULTS
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the head read faults, which only a test sets; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .push((path.to_path_buf(), error.to_string()));
 }
