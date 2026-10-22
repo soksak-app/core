@@ -150,6 +150,7 @@ export function runCommand(options) {
     let closeTimer;
     let finishing = false;
     let closeSeen = false;
+    let leaderEnding = false;
     let requestedStatus;
     let termSent = false;
     let cleanupPromise;
@@ -197,9 +198,14 @@ export function runCommand(options) {
       if (!signalFailureTimer) {
         signalFailureTimer = setTimeout(() => {
           if (!finishing) {
+            // A refused group signal leaves the group unended, but the leader is a child of this process. The runner ends the leader by its pid and
+            // finishes at its close, so the result does not return while the leader is still a child handle of this process. The group is not
+            // verified here, because a cleanup of a group whose signal was refused would repeat the refused signal.
+            leaderEnding = true;
             child.stdout.destroy();
             child.stderr.destroy();
-            finish(exitCode, exitSignal, error, true);
+            child.once('close', () => finish(exitCode, exitSignal, error, true));
+            if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
           }
         }, 150);
       }
@@ -273,7 +279,7 @@ export function runCommand(options) {
     });
     child.once('close', (closedExitCode, closedSignal) => {
       closeSeen = true;
-      finish(closedExitCode, closedSignal);
+      if (!leaderEnding) finish(closedExitCode, closedSignal);
     });
     timer = setTimeout(() => terminate('timeout'), timeoutMs);
     heartbeat = setInterval(() => { if (!finishing) send('progress'); }, heartbeatMs);

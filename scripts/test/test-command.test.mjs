@@ -217,14 +217,9 @@ test('reports a terminal observer exception instead of claiming success', { time
 });
 
 test('reports process-group signal failure without an unhandled timer error', { timeout: 2000 }, async (t) => {
-  const directory = await mkdtemp(join(tmpdir(), 'test-command-signal-'));
-  const pidFile = join(directory, 'pid');
+  // The runner ends its leader when the group signal is refused, so the test ends no process itself.
   const originalKill = process.kill;
-  t.after(async () => {
-    process.kill = originalKill;
-    try { originalKill(-Number(await readFile(pidFile, 'utf8')), 'SIGKILL'); } catch {}
-    await rm(directory, { recursive: true, force: true });
-  });
+  t.after(() => { process.kill = originalKill; });
   process.kill = (pid, signal) => {
     if (pid < 0 && signal !== 0) {
       const error = new Error('blocked process-group signal');
@@ -233,13 +228,49 @@ test('reports process-group signal failure without an unhandled timer error', { 
     }
     return originalKill(pid, signal);
   };
-  const source = `const {writeFileSync}=require('node:fs'); writeFileSync(${JSON.stringify(pidFile)},String(process.pid)); setInterval(()=>{},1000);`;
-  const [command, args] = task(source);
+  const [command, args] = task('setInterval(()=>{},1000);');
   const result = await runCommand({ id: 'signal-error', command, args, timeoutMs: 20, onEvent: () => {} });
   assert.equal(result.status, 'fail');
   assert.equal(result.error.code, 'EPERM');
   // Keeps the failed signal and the process group. The next occurrence shows which step's signal it was.
   assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal$/);
+});
+
+test('ends its own leader when every process-group signal is refused', { timeout: testHangMs }, async () => {
+  // Injects the refusal of every process-group signal, so the runner cannot end the group. The leader is the direct child of the runner, and the
+  // result must not return while the leader is still a child of this process. The leader ends itself after 3 s, which bounds the process only
+  // when the runner leaves it, so a failing run still exits.
+  const originalKill = process.kill;
+  process.kill = (pid, signal) => {
+    if (pid < 0 && signal !== 0) {
+      const error = new Error('blocked process-group signal');
+      error.code = 'EPERM';
+      throw error;
+    }
+    return originalKill(pid, signal);
+  };
+  // The children of this process by the process table. pgrep exits with 1 when no child matches, and it does not list itself.
+  const childrenOfThisProcess = () => {
+    try {
+      return execFileSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' }).trim().split('\n');
+    } catch (error) {
+      if (error.status === 1 && error.stdout === '') return [];
+      throw error;
+    }
+  };
+  let result;
+  let childrenBefore;
+  let childrenAfter;
+  try {
+    childrenBefore = childrenOfThisProcess();
+    const source = 'setTimeout(() => process.exit(0), 3000); setInterval(() => {}, 1000);';
+    result = await runCommand({ id: 'leader-kept', command: node, args: ['-e', source], timeoutMs: 20, onEvent: () => {} });
+    childrenAfter = childrenOfThisProcess();
+  } finally {
+    process.kill = originalKill;
+  }
+  assert.equal(result.status, 'fail', JSON.stringify(result));
+  assert.deepEqual(childrenAfter, childrenBefore, `the leader is still a child of this process: ${JSON.stringify(childrenAfter)}`);
 });
 
 test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: testHangMs }, async (t) => {

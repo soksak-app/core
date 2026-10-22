@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F257: The test runner ends its own leader when a process-group signal is refused, and finishes its result at the leader's close, so the process of a test file no longer stays alive after its tests pass. The signal-failure test no longer ends processes itself.
 - F256: The structure step of CI and the push check run the event catalog and census audits, so a removed emitter with a remaining catalog entry fails before a push.
 - F255: The replace service fixture of the tauriv2 sidecar transport tests waits for the exit of the installed service process in its Drop: the process is ended with SIGKILL and reaped with `waitpid`, so the check that follows reads a process that has ended. The test `a_replaced_service_starts_after_the_end_of_its_process` fails on the unchanged fixture when the process takes time to exit (`the installed service process <pid> outlived the test`), and passes with the change. No product code changed.
 - F252-1-1: `createExpose` requires the port report function, reports a reply that the host refuses, and gives a failing report with both texts to `reportError`, so no reply failure leaves the page error path. The application runtimes give their exposure port a report.
