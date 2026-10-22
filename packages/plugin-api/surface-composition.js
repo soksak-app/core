@@ -36,7 +36,9 @@ export async function createSurfaceCompositionController(
 ) {
   if (!declaration) throw new Error("this page has no surface composition declaration");
   // The regions and overlays of a view are declared in its composition; the composition of a view runs in the view document.
+  // default: regions and overlays are optional in a view; a view without them declares none (docs/spec/plugins.md#view-surfaces).
   const declaredRegions = declaration.regions ?? [];
+  // default: overlays are optional in a view, as regions are (docs/spec/plugins.md#view-surfaces).
   const declaredOverlays = declaration.overlays ?? [];
   sameNames(Object.keys(regions), declaredRegions.map((region) => region.name), "composition regions");
   sameNames(Object.keys(overlays), declaredOverlays, "composition overlays");
