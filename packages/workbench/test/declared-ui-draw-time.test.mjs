@@ -1,7 +1,8 @@
 // The draw time of declared UI values at the limits of docs/spec/declared-ui.md: a tree of 5000 nodes within 16 levels
 // and a list of 1000 items. Each measurement runs validateValue plus drawValue of declared-ui.js into a jsdom document
-// and reports the elapsed milliseconds in its output line. The bound covers the construction and binding work only:
-// jsdom builds DOM nodes without layout or paint, so the render cost of a real page is not part of the measurement.
+// and prints the elapsed milliseconds in its output line. The elapsed time is not judged here: it varies with the load of the
+// machine, and performance is measured by dedicated benchmarks (AGENTS.md, Verification). The tests assert that every node and
+// item of the value is drawn. jsdom builds DOM nodes without layout or paint, so the elapsed time covers construction and binding only.
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
@@ -20,12 +21,6 @@ const OPTIONS = {
 const TREE_NODES = 5000;
 const TREE_LEVELS = 16;
 const LIST_ITEMS = 1000;
-// Each bound covers the construction and binding work only: jsdom builds DOM nodes without layout or paint, so the
-// render cost of a real page is not part of the measurement. The margin is about four times the recorded median
-// (docs/features.md, F212.8-7: tree 501.2 ms, list 116.4 ms), so machine load does not fail the check while a
-// multi-fold regression of the draw path still fails it.
-const TREE_BOUND_MS = 2000;
-const LIST_BOUND_MS = 500;
 
 async function load(name) {
   return import(`../declared-ui.js?${name}`);
@@ -57,9 +52,9 @@ function listValue(items) {
   };
 }
 
-/** The kept expanded state of every branch of the value, as settle of declared-ui.js computes it for a first draw. */
-function keptOf(elements) {
-  const kept = new Map();
+/** The accepted expanded state of every branch of the value, as settle of declared-ui.js computes it for a first draw. */
+function expandedByTreeOf(elements) {
+  const expandedByTree = new Map();
   for (const element of elements) {
     if (element.kind !== "tree") continue;
     const branches = new Map();
@@ -72,31 +67,29 @@ function keptOf(elements) {
       }
     };
     visit(element.nodes, []);
-    kept.set(element.key, branches);
+    expandedByTree.set(element.key, branches);
   }
-  return kept;
+  return expandedByTree;
 }
 
 function measure(module, value) {
   const body = document.createElement("div");
   const started = performance.now();
   const { elements } = module.validateValue(value, OPTIONS);
-  module.drawValue(body, elements, { statusId: "demo.bench", bind: () => {}, kept: keptOf(elements) });
+  module.drawValue(body, elements, { statusId: "demo.bench", bind: () => {}, expandedByTree: expandedByTreeOf(elements) });
   return { elapsed: performance.now() - started, body };
 }
 
-test("a tree of 5000 nodes within 16 levels validates and draws within the bound", { timeout: 30000 }, async () => {
+test("a tree of 5000 nodes within 16 levels validates and draws every node", { timeout: 30000 }, async () => {
   const module = await load("bench-tree");
   const { elapsed, body } = measure(module, treeValue(TREE_NODES, TREE_LEVELS));
-  console.log(`declared UI draw time: tree of ${TREE_NODES} nodes within ${TREE_LEVELS} levels: ${elapsed.toFixed(1)} ms (bound ${TREE_BOUND_MS} ms)`);
+  console.log(`declared UI draw time: tree of ${TREE_NODES} nodes within ${TREE_LEVELS} levels: ${elapsed.toFixed(1)} ms`);
   assert.equal(body.querySelectorAll(".declared-node").length, TREE_NODES, "the tree did not draw every node");
-  assert.ok(elapsed < TREE_BOUND_MS, `the draw of ${TREE_NODES} tree nodes took ${elapsed.toFixed(1)} ms, above the bound of ${TREE_BOUND_MS} ms`);
 });
 
-test("a list of 1000 items validates and draws within the bound", { timeout: 10000 }, async () => {
+test("a list of 1000 items validates and draws every item", { timeout: 10000 }, async () => {
   const module = await load("bench-list");
   const { elapsed, body } = measure(module, listValue(LIST_ITEMS));
-  console.log(`declared UI draw time: list of ${LIST_ITEMS} items: ${elapsed.toFixed(1)} ms (bound ${LIST_BOUND_MS} ms)`);
+  console.log(`declared UI draw time: list of ${LIST_ITEMS} items: ${elapsed.toFixed(1)} ms`);
   assert.equal(body.querySelectorAll(".declared-row").length, LIST_ITEMS, "the list did not draw every item");
-  assert.ok(elapsed < LIST_BOUND_MS, `the draw of ${LIST_ITEMS} list items took ${elapsed.toFixed(1)} ms, above the bound of ${LIST_BOUND_MS} ms`);
 });
