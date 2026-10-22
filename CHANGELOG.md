@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F243: `make push-check` checks that every package `bin` target is tracked as executable with a `#!` line; `packages/plugin-api/view-check.js` is tracked as 100755, so a pnpm install no longer modifies the working tree.
 - F238-c-27 (terminal consumer follow-up): Core publishes four `shellQuotePath` examples in `contract/clipboard.json` and 42 screen cases in `contract/screen-hash.json` for terminal's table fakes. Contract checks pass (clipboard 5/5, screen 44/44); the full `@soksak/plugin-api` suite passes 436/436. No release tag or dependency pin changed.
 
 - F238-c-21: The terminal removes its SDK census subprocess tests; core owns scanner/reason and CLI coverage, while terminal `make check` scans its repository. Terminal tests pass 163/163, core census tests 27/27.

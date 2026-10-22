@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F243: `make push-check`가 package의 모든 `bin` 대상이 `#!` 줄을 가진 실행 파일로 기록되었는지 검사한다. `packages/plugin-api/view-check.js`를 100755로 기록해 pnpm install이 작업 트리를 바꾸지 않는다.
 - F238-c-27 (terminal consumer 후속): core가 terminal 표 가짜용 `contract/clipboard.json`에 `shellQuotePath` 사례 4개를, `contract/screen-hash.json`에 screen 사례 42개를 공개한다. 계약 검사는 통과했다(clipboard 5/5, screen 44/44). 전체 `@soksak/plugin-api` 테스트는 436/436 통과한다. release tag와 dependency pin은 변경하지 않았다.
 
 - F238-c-21: terminal의 SDK census subprocess 테스트를 제거했다. Scanner/reason 및 CLI coverage는 core가 소유하고 terminal `make check`는 저장소 census를 실행한다. Terminal test 163/163, core census test 27/27 통과.
