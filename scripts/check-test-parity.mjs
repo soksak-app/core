@@ -187,6 +187,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-6",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotSender" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-tab-calls-contract.test.mjs", id: "view tab call contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-snapshot-pull-contract.test.mjs", id: "view snapshot pull contract publishes the required cases in order" },
+    ],
+    expected: "The view bridge posts each tab call with its parameters and passes the host reply and refusal through, and it answers a declared UI snapshot pull with the pushed value or with seq 0 and value null, each replayed against the bridge with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-5",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
