@@ -188,6 +188,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F212.6a-1-3-2-3",
+    implementation: [
+      { file: "packages/host/tauriv2/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },
+      { file: "packages/host/wailsv3/src/stall_watch.go", symbol: "func StartStallWatch" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/stall_watch_test.rs", id: "a_stall_of_an_unscheduled_process_carries_its_lateness_in_the_watch" },
+      { file: "packages/host/tauriv2/tests/stall_watch_test.rs", id: "a_stall_of_a_blocked_main_thread_has_no_lateness_in_the_watch" },
+      { file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestAStallOfAnUnscheduledProcessCarriesItsLatenessInTheWatch" },
+      { file: "packages/host/wailsv3/tests/stall_watch_test.go", id: "TestAStallOfABlockedMainThreadHasNoLatenessInTheWatch" },
+    ],
+    expected: "Both hosts record host.stall with watch_late_ms, the lateness of the watch's own wake, so that a stall of an unscheduled process has a watch lateness of at least half its lateness and a blocked main thread has none.",
+    levels: ["unit"],
+  },
+  {
     id: "F258-2",
     implementation: [{ file: "scripts/check-boundaries.mjs", symbol: "export function checkTestPathReads" }],
     tests: [{ file: "scripts/test/check-boundaries.test.mjs", id: "checkTestPathReads refuses a test that reads a path of another core package" }],
