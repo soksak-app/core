@@ -74,6 +74,7 @@ pub(crate) fn own_configuration(config_dir: &Path) -> Result<Box<dyn FnOnce() + 
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .mode(0o600)
             .open(&path)
             .map_err(|error| format!("{}: {error}", path.display()))?;
