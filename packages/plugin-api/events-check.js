@@ -43,8 +43,6 @@ const ENTRANCES = {
     { re: /\bwriterEvent\s*\(/g, level: 0, event: 1, fields: 2 },
     // The events that the writer reports about itself from another goroutine (log.policy).
     { re: /\benqueueWriterEvent\s*\(/g, level: 0, event: 1, fields: 2 },
-    // The writer of the command line tool emits through its own EventLog (docs/spec/cli.md#event-log).
-    { re: /\bEmit\s*\(/g, level: 0, event: 1, fields: 2, only: /^packages\/sok\// },
   ],
   rs: [
     { re: /\bemit_host(?:_placed)?\s*\(/g, level: 0, event: 1, fields: 2 },
@@ -52,7 +50,6 @@ const ENTRANCES = {
     { re: /\bstore_event\s*\(/g, level: 0, event: 2, fields: 5 },
     { re: /\bPending::writer_event\s*\(/g, level: 0, event: 1, fields: 2 },
     { re: /\benqueue_writer_event\s*\(/g, level: 0, event: 1, fields: 2 },
-    { re: /\bemit\s*\(/g, level: 0, event: 1, fields: 2, only: /^packages\/sok\// },
   ],
   js: [
     { re: /(?:\bemitEvent|\bbatcher(?:\?)?\.emit|\bbatcher(?:\?)?\.emitAndWait|\.emitAndWait)\s*\(/g, level: 0, event: 1, fields: 2 },
@@ -60,8 +57,6 @@ const ENTRANCES = {
     // (`runtime.log[level](`), and the event name has no `plugin.<plugin>.` prefix, which the runtime adds.
     { re: /\bruntime\.log\.(error|warn|info|debug|trace)\s*\(/g, levelGroup: 1, relative: true, event: 0, fields: 1 },
     { re: /\bruntime\.log\[[^\]]+\]\s*\(/g, relative: true, event: 0, fields: 1 },
-    // The performance trace of the workbench (docs/spec/performance-trace.md): `trace(event, fields)` stores `page.trace.<event>` at the level debug.
-    { re: /(?<![.\w$])trace\s*\(/g, fixed: 'debug', prefix: 'page.trace.', event: 0, fields: 1, only: /^packages\/workbench\// },
   ],
   m: [
     { re: /\bsp_event\s*\(/g, class: 0, level: 1, event: 2, fields: 3 },
@@ -576,13 +571,14 @@ export function censusRules() {
   return JSON.parse(readFileSync(new URL('./census-rules.json', import.meta.url), 'utf8')).rules;
 }
 
-const EMITTER_KEYS = ['call', 'level', 'fixed', 'event', 'fields', 'name', 'only'];
+const EMITTER_KEYS = ['call', 'level', 'fixed', 'event', 'fields', 'name', 'only', 'prefix', 'bare'];
 
 /**
  * The emit sites that a repository declares for the writer methods of its own language (`emitters`: language to a list of
  * `{call, level | fixed, event, fields?, name?, only?}`), as the entrances of `ENTRANCES`. `call` is the name of the method or
  * function; `level`, `event` and `fields` are the positions of its arguments, `fixed` is the level of a call without a level
- * argument, `name` is the event that such a call stores, and `only` is a pattern of the paths the call is local to.
+ * argument, `name` is the event that such a call stores, `prefix` is the text that the event name of the call starts with, `bare`
+ * is true for a function that is not a method (a call after `.` does not count), and `only` is a pattern of the paths the call is local to.
  */
 function parseEmitters(file, emitters) {
   const fail = (message) => { throw new Error(`${file}: ${message}`); };
@@ -614,7 +610,11 @@ function parseEmitters(file, emitters) {
           fail(`${at}: only is not a pattern: ${JSON.stringify(emitter.only)}`);
         }
       }
-      return { re: new RegExp(`\\b${emitter.call}\\s*\\(`, 'g'), level: emitter.level, fixed: emitter.fixed, event: emitter.event, fields: emitter.fields, name: emitter.name, only };
+      if (emitter.prefix !== undefined && typeof emitter.prefix !== 'string') fail(`${at}: prefix is not a string`);
+      if (emitter.bare !== undefined && typeof emitter.bare !== 'boolean') fail(`${at}: bare is not a boolean`);
+      // A bare call is a function, not a method: a call of `x.call(` does not count (the lookbehind), as a method of the writer does.
+      const head = emitter.bare ? `(?<![.\\w$])${emitter.call}` : `\\b${emitter.call}`;
+      return { re: new RegExp(`${head}\\s*\\(`, 'g'), level: emitter.level, fixed: emitter.fixed, event: emitter.event, fields: emitter.fields, name: emitter.name, prefix: emitter.prefix, only };
     });
   }
   return parsed;

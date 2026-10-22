@@ -19,5 +19,36 @@
       "^packages/host/tauriv2/src/routine/routine\\.rs$",
       "^packages/sok/tauriv2/src/routine\\.rs$"
     ]
+  },
+  "emitters": {
+    "go": [
+      {
+        "call": "Emit",
+        "level": 0,
+        "event": 1,
+        "fields": 2,
+        "only": "^packages/sok/"
+      }
+    ],
+    "js": [
+      {
+        "call": "trace",
+        "fixed": "debug",
+        "prefix": "page.trace.",
+        "event": 0,
+        "fields": 1,
+        "bare": true,
+        "only": "^packages/workbench/"
+      }
+    ],
+    "rs": [
+      {
+        "call": "emit",
+        "level": 0,
+        "event": 1,
+        "fields": 2,
+        "only": "^packages/sok/"
+      }
+    ]
   }
 }

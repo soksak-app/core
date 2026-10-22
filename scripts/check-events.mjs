@@ -18,6 +18,8 @@ import { catalogReport, trackedSources } from '../packages/plugin-api/events-che
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const CATALOG = 'docs/spec/events.json';
+// The census declaration of this repository: its emitters, its excluded paths and its entrances (docs/spec/logging.md#census).
+const CENSUS = 'scripts/census.json';
 
 /** The text of the tracked sources of this repository that can emit events, by path. */
 export const repositorySources = () => trackedSources(ROOT);
@@ -90,7 +92,7 @@ function main(argv) {
     process.stdout.write(findings.length === 0 ? `Event log audit passed: ${directories.length} configuration folders\n` : `Event log audit failed: ${findings.length} findings\n`);
     return findings.length === 0 ? 0 : 1;
   }
-  const { findings, declared, sites } = catalogReport(ROOT, CATALOG);
+  const { findings, declared, sites } = catalogReport(ROOT, CATALOG, CENSUS);
   for (const finding of findings) process.stderr.write(`${finding}\n`);
   process.stdout.write(findings.length === 0 ? `Event catalog checks passed: ${declared} declared events, emit sites: ${sites}\n` : `Event catalog checks failed: ${findings.length} findings, emit sites: ${sites}\n`);
   return findings.length === 0 ? 0 : 1;
