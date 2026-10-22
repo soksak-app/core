@@ -187,6 +187,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F252-1-1",
+    implementation: [{ file: "packages/plugin-api/index.js", symbol: "export function createExpose" }],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a port without report is refused when the exposure is created, because a failed reply needs a place to be reported" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a report that fails is given with both errors to reportError, which dispatches the page error event" },
+    ],
+    expected: "createExpose refuses a port without report, reports a refused reply through it, and gives a failing report with both texts to reportError, each checked by a plugin-api test.",
+    levels: ["unit"],
+  },
+  {
     id: "F254",
     implementation: [{ file: "scripts/test-runner.mjs", symbol: "export async function runTests" }],
     tests: [

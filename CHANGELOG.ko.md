@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F252-1-1: `createExpose`는 port의 report 함수를 요구하고, host가 거부한 reply를 보고하며, 실패한 report는 두 문장을 담아 `reportError`로 넘기므로 어떤 reply 실패도 page 오류 경로를 벗어나지 않는다. 앱 runtime은 exposure port에 report를 준다.
 - F254: 시험 runner는 시험 파일의 프로세스가 끝나면 그 프로세스 그룹을 끝낸다. 그룹에 남은 프로세스는 `left running after exit: pid <n> <command>`로 파일을 실패시키고, 한도에서는 `TIME` 줄이 파일의 프로세스 밖의 프로세스를 `left running: pid <n> <command>`로 이름 붙인다. 시험이 끝난 뒤 timer를 열어 둔 시험 파일은 남은 프로세스와 함께 보고되며, 자기가 시작한 자식이 계속 도는 채 프로세스가 끝난 파일은 한도가 아니라 그 종료 시점에 실패한다.
 - F252-1: `undefined`인 status 값, command 결과, 요청 결과는 `undefined`가 JSON 값이 아니므로 status나 command의 이름을 밝힌 오류로 거부한다. result 형식이 null인 command는 여전히 null로 답한다. 파싱되지 않는 `endpoint.json`은 경로와 함께 실패하며, 없는 파일만 아직 쓰이지 않은 것이다. 값 결과를 선언하고 아무것도 반환하지 않던 fixture는 선언에 맞게 고쳤다. `createExpose`의 응답 체인은 F252-1-1로 열어 둔다.
 - F252-1: JavaScript 원본의 오류 경로가 실패를 숨기지 않고 보고한다. `dom.rect`와 `dom.act` 요청은 null `index`를 -32602로 거부한다(생략된 index는 여전히 첫 요소를 고른다). 실패한 view 응답은 page 오류 경로로 보고한다. 실패한 status watch는 보고하며, 닫힌 surface는 여전히 watch를 끝낸다. `{seq, value}`가 아닌 status 응답은 거부한다. 파싱되지 않는 plugin host 본문은 파서 메시지를 포함한다. layer가 사라진 뒤 도착한 host 응답은 보고한다. plugin 작업의 Error가 아닌 실패는 그 글을 보고한다. JSON이 직렬화할 수 없는 console 인자는 `{"unserializable": "<reason>"}`로 기록한다. 프로세스 실패와 정리 실패가 함께 일어나면 두 오류를 모두 보고한다. 중괄호로 시작하지만 JSON이 아닌 cargo 줄은 discovery를 실패시킨다. 모든 시험과 언어 사례는 자신의 `timeoutMs`를 선언하며, `runTests`는 없는 시험을 이름과 함께 거부한다.
