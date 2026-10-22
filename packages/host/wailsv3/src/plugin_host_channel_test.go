@@ -690,3 +690,19 @@ func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
 		t.Fatalf("posted %v, want one project event with null", fake.posted)
 	}
 }
+
+// contract: plugin-host.channel.reply-null-result
+func TestPluginHostReplyWithANullResultPostsTheNullResult(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, true)
+	req, err := argument[PluginHostReplyRequest]("request", json.RawMessage(`{"plugin":"probe","id":1,"result":null}`))
+	if err != nil {
+		t.Fatalf("reply with a null result: %v", err)
+	}
+	if err := s.answerPluginHostCall(req); err != nil {
+		t.Fatalf("reply with a null result is refused: %v", err)
+	}
+	if len(fake.posted) == 0 || !strings.Contains(fake.posted[len(fake.posted)-1], `"result":null`) {
+		t.Fatalf("posted %v, want the null result", fake.posted)
+	}
+}

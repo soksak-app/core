@@ -9,14 +9,15 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use serde::Deserialize;
+use serde::de::{self, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
 use crate::documents::{
     DECLARED_SNAPSHOT_MESSAGE, DECLARED_SNAPSHOT_WINDOW_EVENT, ViewReplyError, post_document_via,
-    theme_message,
+    theme_message, value_field,
 };
 use crate::event_log::Level;
 use crate::event_record::emit_host;
@@ -396,39 +397,141 @@ fn snapshot(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Val
     Ok(json!({"plugin": plugin, "status": status, "seq": seq, "skipped": skipped, "value": value}))
 }
 
-fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
-    Value::deserialize(deserializer).map(Some)
-}
-
-/// The reply of the main page to a call request of the host of plugin. It has a result or an error, not both.
-#[derive(Deserialize)]
+/// The reply of the main page to a call request of the host of plugin. It has a result or an error, not both. A null result is a
+/// value, so the reply is read through its map, which keeps it (docs/spec/native-host.md#host-calls).
 pub struct PluginHostReply {
     pub plugin: String,
     pub id: u64,
-    #[serde(default, deserialize_with = "present")]
     pub result: Option<Value>,
-    #[serde(default)]
     pub error: Option<ViewReplyError>,
 }
 
+impl<'de> Deserialize<'de> for PluginHostReply {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = PluginHostReply;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a plugin host reply")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut plugin = None;
+                let mut id = None;
+                let mut result = None;
+                let mut error = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "plugin" => plugin = map.next_value::<Option<String>>()?,
+                        "id" => id = map.next_value::<Option<u64>>()?,
+                        "result" => result = value_field(&mut map)?,
+                        "error" => error = map.next_value::<Option<ViewReplyError>>()?,
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(PluginHostReply {
+                    plugin: plugin.ok_or_else(|| de::Error::missing_field("plugin"))?,
+                    id: id.ok_or_else(|| de::Error::missing_field("id"))?,
+                    result,
+                    error,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
+}
+
 /// A request of the main page to the host of plugin, such as the pull of a declared status
-/// (docs/spec/plugin-host.md#declared-ui-snapshots).
-#[derive(Deserialize)]
+/// (docs/spec/plugin-host.md#declared-ui-snapshots). Its params are read through the map, so a null params is kept.
 pub struct PluginHostRequest {
     pub plugin: String,
     pub id: u64,
     pub command: String,
-    #[serde(default, deserialize_with = "present")]
     pub params: Option<Value>,
 }
 
-/// An event that the main page pushes to the host of plugin, such as the acknowledgement of a declared UI snapshot.
-#[derive(Deserialize)]
+impl<'de> Deserialize<'de> for PluginHostRequest {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = PluginHostRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a plugin host request")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut plugin = None;
+                let mut id = None;
+                let mut command = None;
+                let mut params = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "plugin" => plugin = map.next_value::<Option<String>>()?,
+                        "id" => id = map.next_value::<Option<u64>>()?,
+                        "command" => command = map.next_value::<Option<String>>()?,
+                        "params" => params = value_field(&mut map)?,
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(PluginHostRequest {
+                    plugin: plugin.ok_or_else(|| de::Error::missing_field("plugin"))?,
+                    id: id.ok_or_else(|| de::Error::missing_field("id"))?,
+                    command: command.ok_or_else(|| de::Error::missing_field("command"))?,
+                    params,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
+}
+
+/// An event that the main page pushes to the host of plugin, such as the acknowledgement of a declared UI snapshot. Its data is read
+/// through the map, so a null data is kept.
 pub struct PluginHostEvent {
     pub plugin: String,
     pub event: String,
-    #[serde(default, deserialize_with = "present")]
     pub data: Option<Value>,
+}
+
+impl<'de> Deserialize<'de> for PluginHostEvent {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = PluginHostEvent;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a plugin host event")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut plugin = None;
+                let mut event = None;
+                let mut data = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "plugin" => plugin = map.next_value::<Option<String>>()?,
+                        "event" => event = map.next_value::<Option<String>>()?,
+                        "data" => data = value_field(&mut map)?,
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(PluginHostEvent {
+                    plugin: plugin.ok_or_else(|| de::Error::missing_field("plugin"))?,
+                    event: event.ok_or_else(|| de::Error::missing_field("event"))?,
+                    data,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
 }
 
 /// Returns the host message of a reply of the main page: {"sok", "id", "result"} or {"sok", "id", "error"}.
@@ -544,9 +647,10 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
 /// Handles the end of the page process of the host webview handle of plugin: the end is written to the application log
 /// and handled as a failure of the host.
 pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
-    let data = match window_data(window) {
-        Ok(data) => data,
-        Err(error) => return log_error("plugin host", error),
+    // A host process that ends with its closed window is the close of the window, not a failure: the records of a closed window
+    // are gone, so there is nothing to report (docs/spec/plugin-host.md#channel).
+    let Ok(data) = window_data(window) else {
+        return;
     };
     if data.plugin_hosts.get(plugin) != Some(handle) {
         return;

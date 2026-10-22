@@ -2108,7 +2108,7 @@ pub(crate) fn unsubscribe(webview: &Webview, request: Request) -> Result<(), Str
 
 /// Reads a field whose value is a JSON value from the map of a view message. A null value is kept as Value::Null, because it is a value
 /// (docs/spec/native-surfaces.md#view-surfaces). An absent field is None, which the caller refuses or defaults.
-fn value_field<'de, A: MapAccess<'de>>(map: &mut A) -> Result<Option<Value>, A::Error> {
+pub(crate) fn value_field<'de, A: MapAccess<'de>>(map: &mut A) -> Result<Option<Value>, A::Error> {
     map.next_value::<Value>().map(Some)
 }
 

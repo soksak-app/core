@@ -115,3 +115,19 @@ fn a_view_event_keeps_a_null_data_as_its_value() {
         "a null data is a value and is posted as data null"
     );
 }
+
+// contract: plugin-host.channel.reply-null-result
+#[test]
+fn a_plugin_host_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value() {
+    let reply: soksak_host_tauriv2::plugin_host_channel::PluginHostReply =
+        soksak_host_tauriv2::arguments::decode(
+            "request",
+            &json!({"plugin": "probe", "id": 1, "result": null}),
+        )
+        .expect("a reply with a null result is accepted");
+    assert_eq!(
+        soksak_host_tauriv2::plugin_host_channel::reply_message(&reply),
+        Ok(json!({"sok": 1, "id": 1, "result": null})),
+        "a null result is a value and is posted as result null"
+    );
+}
