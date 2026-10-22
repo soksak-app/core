@@ -58,6 +58,7 @@ lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["sc
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
 lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
+lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("language test adapters", "js-ts", ["scripts/language-test-adapters.mjs"], ["scripts/test/test-language-test-adapters.test.mjs", "scripts/test/fixtures/node-color-count.mjs"]),
 lane("language test adapter manifest", "declaration", ["scripts/language-test-cases.json"], ["scripts/test/test-language-test-manifest.test.mjs"], { testLanguage: "js-ts" }),
