@@ -338,6 +338,7 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     };
     install::manifest_dependencies(&manifest)?;
     check_removed_fields(id, &manifest)?;
+    install::check_plugin_schemas(id, &manifest)?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
     let mut listed = listed_files(object)?;
     check_release_files(&listed)?;

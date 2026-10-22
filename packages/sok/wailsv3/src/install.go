@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -411,6 +412,231 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 		ranges[name] = rng.(string)
 	}
 	return ranges, nil
+}
+
+// schemaKeywords are the keywords that a schema may hold (checkSchema of packages/plugin-api).
+var schemaKeywords = []string{"type", "properties", "items", "enum"}
+
+// schemaTypes are the names that a schema type may use (SCHEMA_TYPES of packages/plugin-api).
+var schemaTypes = []string{"string", "number", "integer", "boolean", "object", "array", "null"}
+
+// exposeKinds are the kinds of an exposes declaration in the order that the reader checks them, with the fields that an
+// entry of each kind holds beyond name and description.
+var exposeKinds = []struct {
+	kind   string
+	fields []string
+}{{"status", []string{"schema"}}, {"commands", []string{"params", "result"}}, {"dom", nil}}
+
+// commandTimeoutMax is the largest timeout of a command declaration in milliseconds (COMMAND_TIMEOUT_MAX).
+const commandTimeoutMax = 600000
+
+// exposeName is the NAME rule of packages/plugin-api: lowercase letters and digits joined by single dots or hyphens.
+var exposeName = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`)
+
+// jsValueText writes a value the way the reader's template text shows it: null as null, arrays joined by commas with
+// null entries empty, and objects as [object Object].
+func jsValueText(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return "null"
+	case string:
+		return v
+	case bool:
+		return strconv.FormatBool(v)
+	case json.Number:
+		return v.String()
+	case []any:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			if item != nil {
+				parts[i] = jsValueText(item)
+			}
+		}
+		return strings.Join(parts, ",")
+	}
+	return "[object Object]"
+}
+
+// jsFieldText writes the field of an object the way the reader's template text shows it: undefined when it is absent.
+func jsFieldText(m map[string]any, key string) string {
+	value, ok := m[key]
+	if !ok {
+		return "undefined"
+	}
+	return jsValueText(value)
+}
+
+// checkSchema checks a schema the way the reader does (checkSchema of packages/plugin-api): only the keywords of
+// schemaKeywords, type names of schemaTypes (a JSON null names the type null), an object of properties, a schema of
+// items and a non-empty array of enum. where names the schema in the error.
+func checkSchema(where string, value any) error {
+	schema, ok := value.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: schema must be an object", where)
+	}
+	if err := only(where, schema, schemaKeywords...); err != nil {
+		return err
+	}
+	if raw, ok := schema["type"]; ok && !validSchemaType(raw) {
+		return fmt.Errorf("%s: unknown schema type %s", where, quote(raw))
+	}
+	if raw, ok := schema["properties"]; ok {
+		properties, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: properties must be an object", where)
+		}
+		for _, key := range sortedKeys(properties) {
+			if err := checkSchema(where+"."+key, properties[key]); err != nil {
+				return err
+			}
+		}
+	}
+	if raw, ok := schema["items"]; ok {
+		if err := checkSchema(where+"[]", raw); err != nil {
+			return err
+		}
+	}
+	if raw, ok := schema["enum"]; ok {
+		if list, ok := raw.([]any); !ok || len(list) == 0 {
+			return fmt.Errorf("%s: enum must be a non-empty array", where)
+		}
+	}
+	return nil
+}
+
+// validSchemaType reports whether a schema type is a name of schemaTypes or a list of such names. A JSON null is the
+// name null, as the reader reads it.
+func validSchemaType(raw any) bool {
+	names, ok := raw.([]any)
+	if !ok {
+		names = []any{raw}
+	}
+	if len(names) == 0 {
+		return false
+	}
+	for _, name := range names {
+		if name == nil {
+			continue
+		}
+		if s, ok := name.(string); !ok || !slices.Contains(schemaTypes, s) {
+			return false
+		}
+	}
+	return true
+}
+
+// validTimeout reports whether a timeout is an integer from 1 to commandTimeoutMax.
+func validTimeout(raw any) bool {
+	n, ok := raw.(json.Number)
+	if !ok {
+		return false
+	}
+	f, err := n.Float64()
+	return err == nil && f == math.Trunc(f) && f >= 1 && f <= commandTimeoutMax
+}
+
+// checkExposes checks the exposes declaration of the plugin owner the way the reader does (validateExposes of
+// packages/plugin-api): the kinds status, commands and dom, and for each entry a name `<owner>.<name>`, a description,
+// the schemas of its fields, an object params schema of a command, a boolean many of a dom entry and a timeout of a
+// command. A name is declared once per kind.
+func checkExposes(owner string, exposes any) error {
+	where := owner + " exposes"
+	declared, ok := exposes.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: expected an object", where)
+	}
+	if err := only(where, declared, "status", "commands", "dom"); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, kind := range exposeKinds {
+		raw, ok := declared[kind.kind]
+		if !ok {
+			continue
+		}
+		entries, ok := raw.([]any)
+		if !ok {
+			return fmt.Errorf("%s: %s must be an array", where, kind.kind)
+		}
+		for _, item := range entries {
+			entry, ok := item.(map[string]any)
+			if !ok {
+				return fmt.Errorf("%s: %s entry must be an object", where, kind.kind)
+			}
+			name, isName := entry["name"].(string)
+			if !isName || !strings.HasPrefix(name, owner+".") || !exposeName.MatchString(name) {
+				return fmt.Errorf("%s: name %s must be %s.<name> with lowercase letters, digits, dots, and hyphens", where, jsFieldText(entry, "name"), owner)
+			}
+			if seen[kind.kind+" "+name] {
+				return fmt.Errorf("%s: duplicate %s %s", where, kind.kind, name)
+			}
+			seen[kind.kind+" "+name] = true
+			at := where + " " + name
+			allowed := append([]string{"name", "description"}, kind.fields...)
+			if kind.kind == "dom" {
+				allowed = append(allowed, "many")
+			}
+			if kind.kind == "commands" {
+				allowed = append(allowed, "timeout")
+			}
+			if err := only(at, entry, allowed...); err != nil {
+				return err
+			}
+			if _, ok := text(entry["description"]); !ok {
+				return fmt.Errorf("%s: description is required", at)
+			}
+			for _, field := range kind.fields {
+				raw, ok := entry[field]
+				if !ok {
+					return fmt.Errorf("%s: %s is required", at, field)
+				}
+				if err := checkSchema(at+" "+field, raw); err != nil {
+					return err
+				}
+			}
+			if kind.kind == "commands" {
+				params, isObject := entry["params"].(map[string]any)
+				if !isObject || params["type"] != "object" {
+					return fmt.Errorf("%s: params must be an object schema", at)
+				}
+			}
+			if raw, ok := entry["many"]; ok {
+				if _, isBool := raw.(bool); !isBool {
+					return fmt.Errorf("%s: many must be a boolean", at)
+				}
+			}
+			if raw, ok := entry["timeout"]; ok && !validTimeout(raw) {
+				return fmt.Errorf("%s: timeout must be an integer from 1 to %d milliseconds", at, commandTimeoutMax)
+			}
+		}
+	}
+	return nil
+}
+
+// checkPluginSchemas checks the surface params schema and the exposes declaration of plugin.json in the order that the
+// reader checks them (validateManifest of packages/plugin-api). A surface that is not an object is not checked here.
+func checkPluginSchemas(id string, manifest map[string]any) error {
+	where := "plugin " + id
+	if surface, ok := manifest["surface"].(map[string]any); ok {
+		if raw, ok := surface["params"]; ok {
+			schema, isSchema := raw.(map[string]any)
+			if !isSchema || schema["type"] != "object" {
+				return fmt.Errorf("%s: surface params must be a schema of type object", where)
+			}
+			if err := checkSchema(where+" surface params", raw); err != nil {
+				return err
+			}
+		}
+	}
+	if raw, ok := manifest["exposes"]; ok {
+		_, hasSurface := manifest["surface"]
+		_, hasHost := manifest["host"]
+		if !hasSurface && !hasHost {
+			return fmt.Errorf("%s: exposes require a surface or a plugin host", where)
+		}
+		return checkExposes(id, raw)
+	}
+	return nil
 }
 
 // ReleaseName is the file name of a plugin release.

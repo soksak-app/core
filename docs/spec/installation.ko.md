@@ -34,6 +34,8 @@ Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<
 
 plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. 그 `engines.soksak`은 모든 core version이 만족하는 `*`, 그 release만 만족하는 그 `@soksak/plugin-api`의 `^<version>`, 또는 그 core release와 이후의 모든 release가 만족하는, 하한이 그 version을 넘지 않는 `>=<x.y.z>`이다. core가 어떤 release에서 더한 manifest 필드를 쓰는 plugin은 그 release로 `>=`를 선언한다. `@soksak/plugin-api`의 명령 `soksak-engines`가 plugin 저장소에서 이를 검사하고 `package.json: engines.soksak <range> must be *, ^<version> or >= a version up to <version>, the @soksak/plugin-api version`으로 실패한다. 각 plugin 저장소는 `make test`에서 이를 실행한다.
 
+`sok plugin pack`과 `sok plugin install`은 `plugin.json`의 `exposes` 선언과 surface의 `params` schema를 reader의 규칙(`@soksak/plugin-api`의 `validateManifest`)으로 검사하고, reader가 그 부분으로 거부하는 manifest를 거부한다. schema는 `type`, `properties`, `items`, `enum` 키워드만 받으며, 그 밖의 키워드는 `<where>: unknown field <keyword>`로 실패한다. `<where>`는 schema를 밝히며, 예를 들어 `plugin probe surface params` 또는 `probe exposes probe.run params`다. `exposes` 선언은 reader가 요구하는 대로 surface 또는 plugin host가 필요하다. pack은 reader의 문구 그대로 실패하고, install은 `plugin.json`의 위치와 reader의 문구로 실패하며 아무것도 쓰지 않는다. schema에 알 수 없는 키워드가 여럿이거나 거부되는 선언이 여럿이면, `sok`은 정렬된 키 순서의 첫 번째를, 선언은 `status`, `commands`, `dom` 순서의 첫 번째를 밝힌다. reader는 파일 순서의 첫 번째를 밝히므로 두 문구가 다를 수 있으며, 둘 다 manifest를 거부한다. pack이나 install은 reader의 다른 검사를 실행하지 않는다.
+
 ## Sidecar release
 
 Sidecar version은 플랫폼마다 release 하나 `<file name>-<version>-<platform>.tar.gz`로 release된다. Sidecar `@scope/name`의 file name은 `scope-name`이고, scope가 없는 이름은 그대로 쓴다. 플랫폼은 `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `windows-arm64`, `windows-x64` 중 하나다. Installer는 sidecar release를 풀고 실행하기 전에 registry 항목의 `sha256`으로만 검사한다. 제3자의 것을 포함해 sidecar는 애플리케이션이 서명이나 다른 방법으로 검토하지 않는다.

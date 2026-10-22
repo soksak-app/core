@@ -483,6 +483,54 @@ fn plugin_pack_refuses_removed_manifest_fields() {
     }
 }
 
+// contract: cli.pack.refuses-schema-outside-subset
+#[test]
+fn plugin_pack_refuses_a_schema_outside_the_subset() {
+    for (manifest, want) in [
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "required": ["path"]}}}"#,
+            "plugin probe surface params: unknown field required",
+        ),
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object", "required": ["x"]}, "result": {"type": "null"}}]}}"#,
+            "probe exposes probe.run params: unknown field required",
+        ),
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 0}}}}]}}"#,
+            "probe exposes probe.state schema.n: unknown field minimum",
+        ),
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}"#,
+            "plugin probe: exposes require a surface or a plugin host",
+        ),
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}"#,
+            "probe exposes probe.x: many must be a boolean",
+        ),
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 600001}]}}"#,
+            "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
+        ),
+    ] {
+        let dir = plugin_tree();
+        write_tree(dir.path(), &[("plugin.json", manifest)]);
+        let out = Folder::new("release");
+        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
+        assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
+    }
+    let dir = plugin_tree();
+    write_tree(
+        dir.path(),
+        &[(
+            "plugin.json",
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "properties": {"path": {"type": ["string", "null"]}}}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer"}}, "items": {"enum": [1, 2]}}}], "commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 1000}]}}"#,
+        )],
+    );
+    let out = Folder::new("release");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
+    assert_eq!((code, stderr), (0, String::new()), "subset schemas");
+}
+
 // contract: cli.pack.rejects-unlisted-modules
 #[test]
 fn plugin_pack_rejects_a_module_that_files_does_not_list() {

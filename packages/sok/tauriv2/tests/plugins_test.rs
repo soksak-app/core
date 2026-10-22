@@ -1049,3 +1049,46 @@ fn read_installed_refuses_a_plugin_whose_plugin_id_differs() {
         "{error}"
     );
 }
+
+/// An index.json written without `registry build` whose plugin probe has one release of version 0.2.0. The release
+/// is not read: the test extracts its folder first, so installation reads its plugin.json.
+fn schema_outside_subset_index() -> Registry {
+    let dir = Folder::new("plugins");
+    let plugin = json!({"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
+        "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
+        "versions": [{"version": "0.2.0",
+            "release": {"url": "file:///nonexistent/probe-0.2.0.tgz", "sha256": "0".repeat(64)},
+            "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
+    let index_json = json!({"format": 1, "plugins": [plugin], "sidecars": [], "packs": [],
+        "revoked": {"plugins": [], "sidecars": []}});
+    write_tree(dir.path(), &[("index.json", &index_json.to_string())]);
+    Registry { dir, _work: vec![] }
+}
+
+// contract: install.plugin-json.refuses-schema-outside-subset
+#[test]
+fn plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset() {
+    let registry = schema_outside_subset_index();
+    let config = Folder::new("plugins");
+    use_registry(&config, &registry);
+    write_tree(
+        config.path(),
+        &[
+            (
+                "plugins/probe/0.2.0/package.json",
+                r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
+            ),
+            (
+                "plugins/probe/0.2.0/plugin.json",
+                r#"{"id": "probe", "surface": {"params": {"type": "object", "required": ["path"]}}}"#,
+            ),
+        ],
+    );
+    let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
+    assert_ne!(code, 0, "install succeeded");
+    assert!(
+        stderr.contains("plugin probe surface params: unknown field required"),
+        "{stderr}"
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
+}

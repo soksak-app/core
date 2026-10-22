@@ -299,6 +299,30 @@ func TestPluginPackRefusesRemovedManifestFields(t *testing.T) {
 	}
 }
 
+// contract: cli.pack.refuses-schema-outside-subset
+func TestPluginPackRefusesASchemaOutsideTheSubset(t *testing.T) {
+	for _, c := range []struct{ manifest, want string }{
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "required": ["path"]}}}`, "plugin probe surface params: unknown field required"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object", "required": ["x"]}, "result": {"type": "null"}}]}}`, "probe exposes probe.run params: unknown field required"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 0}}}}]}}`, "probe exposes probe.state schema.n: unknown field minimum"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}`, "plugin probe: exposes require a surface or a plugin host"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}`, "probe exposes probe.x: many must be a boolean"},
+		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 600001}]}}`, "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds"},
+	} {
+		dir := pluginTree(t)
+		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
+		code, _, stderr := run("plugin", "pack", dir, t.TempDir())
+		if code != 1 || stderr != "sok: "+c.want+"\n" {
+			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
+		}
+	}
+	dir := pluginTree(t)
+	writeTree(t, dir, map[string]string{"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "properties": {"path": {"type": ["string", "null"]}}}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer"}}, "items": {"enum": [1, 2]}}}], "commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 1000}]}}`})
+	if code, _, stderr := run("plugin", "pack", dir, t.TempDir()); code != 0 {
+		t.Fatalf("subset schemas: code %d stderr %q", code, stderr)
+	}
+}
+
 // contract: cli.pack.rejects-unlisted-modules
 func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
 	for _, c := range []struct{ manifest, want string }{

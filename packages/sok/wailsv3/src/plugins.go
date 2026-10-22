@@ -705,6 +705,9 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 	if err := checkPluginID(id, file, manifest); err != nil {
 		return err
 	}
+	if err := checkPluginSchemas(id, manifest); err != nil {
+		return fmt.Errorf("%s: %w", file, err)
+	}
 	dependencies, err := manifestDependenciesOf(file, manifest)
 	if err != nil {
 		return err

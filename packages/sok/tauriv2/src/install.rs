@@ -349,6 +349,224 @@ pub fn check_plugin_id(id: &str, manifest: &Value) -> Result<(), String> {
     }
 }
 
+/// The keywords that a schema may hold (check_schema of packages/plugin-api).
+const SCHEMA_KEYWORDS: [&str; 4] = ["type", "properties", "items", "enum"];
+
+/// The names that a schema type may use (SCHEMA_TYPES of packages/plugin-api).
+const SCHEMA_TYPES: [&str; 7] = [
+    "string", "number", "integer", "boolean", "object", "array", "null",
+];
+
+/// The kinds of an exposes declaration in the order that the reader checks them.
+const EXPOSE_KINDS: [&str; 3] = ["status", "commands", "dom"];
+
+/// The largest timeout of a command declaration in milliseconds (COMMAND_TIMEOUT_MAX).
+const COMMAND_TIMEOUT_MAX: f64 = 600000.0;
+
+/// The fields that an entry of an exposes kind holds beyond name and description.
+fn expose_fields(kind: &str) -> &'static [&'static str] {
+    match kind {
+        "status" => &["schema"],
+        "commands" => &["params", "result"],
+        _ => &[],
+    }
+}
+
+/// Whether the name has the form of the NAME rule of packages/plugin-api: lowercase letters and digits joined by
+/// single dots or hyphens. The regex crate is not a dependency of this package, so the rule is written as a scan.
+fn is_expose_name(name: &str) -> bool {
+    let mut separator = true;
+    for c in name.chars() {
+        match c {
+            'a'..='z' | '0'..='9' => separator = false,
+            '.' | '-' if !separator => separator = true,
+            _ => return false,
+        }
+    }
+    !name.is_empty() && !separator
+}
+
+/// The text that the reader's template shows for a value: null as null, arrays joined by commas with null entries
+/// empty, and objects as [object Object].
+fn js_value_text(value: &Value) -> String {
+    match value {
+        Value::Null => "null".to_string(),
+        Value::String(text) => text.clone(),
+        Value::Bool(flag) => flag.to_string(),
+        Value::Number(number) => number.to_string(),
+        Value::Array(items) => items
+            .iter()
+            .map(|item| {
+                if item.is_null() {
+                    String::new()
+                } else {
+                    js_value_text(item)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(","),
+        Value::Object(_) => "[object Object]".to_string(),
+    }
+}
+
+/// The text that the reader's template shows for a field: undefined when it is absent.
+fn js_field_text(map: &Map<String, Value>, key: &str) -> String {
+    map.get(key)
+        .map_or_else(|| "undefined".to_string(), js_value_text)
+}
+
+/// Whether a schema type is a name of SCHEMA_TYPES or a list of such names. A JSON null is the name null, as the reader
+/// reads it.
+fn valid_schema_type(raw: &Value) -> bool {
+    let names = match raw.as_array() {
+        Some(list) => list.as_slice(),
+        None => std::slice::from_ref(raw),
+    };
+    !names.is_empty()
+        && names.iter().all(|name| match name {
+            Value::Null => true,
+            Value::String(text) => SCHEMA_TYPES.contains(&text.as_str()),
+            _ => false,
+        })
+}
+
+/// Whether a timeout is an integer from 1 to COMMAND_TIMEOUT_MAX.
+fn valid_timeout(raw: &Value) -> bool {
+    raw.as_f64()
+        .is_some_and(|f| f.fract() == 0.0 && (1.0..=COMMAND_TIMEOUT_MAX).contains(&f))
+}
+
+/// Checks a schema the way the reader does (checkSchema of packages/plugin-api): only the keywords of SCHEMA_KEYWORDS,
+/// type names of SCHEMA_TYPES, an object of properties, a schema of items and a non-empty array of enum. `at` names
+/// the schema in the error.
+pub fn check_schema(at: &str, value: &Value) -> Result<(), String> {
+    let schema = value
+        .as_object()
+        .ok_or_else(|| format!("{at}: schema must be an object"))?;
+    only(at, schema, &SCHEMA_KEYWORDS)?;
+    if let Some(raw) = schema.get("type")
+        && !valid_schema_type(raw)
+    {
+        return Err(format!("{at}: unknown schema type {}", quote(raw)));
+    }
+    if let Some(raw) = schema.get("properties") {
+        let properties = raw
+            .as_object()
+            .ok_or_else(|| format!("{at}: properties must be an object"))?;
+        for key in sorted_keys(properties) {
+            check_schema(&format!("{at}.{key}"), &properties[key.as_str()])?;
+        }
+    }
+    if let Some(raw) = schema.get("items") {
+        check_schema(&format!("{at}[]"), raw)?;
+    }
+    if let Some(raw) = schema.get("enum")
+        && !raw.as_array().is_some_and(|list| !list.is_empty())
+    {
+        return Err(format!("{at}: enum must be a non-empty array"));
+    }
+    Ok(())
+}
+
+/// Checks the exposes declaration of the plugin `owner` the way the reader does (validateExposes of
+/// packages/plugin-api): the kinds status, commands and dom, and for each entry a name `<owner>.<name>`, a description,
+/// the schemas of its fields, an object params schema of a command, a boolean many of a dom entry and a timeout of a
+/// command. A name is declared once per kind.
+pub fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
+    let at = format!("{owner} exposes");
+    let declared = exposes
+        .as_object()
+        .ok_or_else(|| format!("{at}: expected an object"))?;
+    only(&at, declared, &EXPOSE_KINDS)?;
+    let mut seen = BTreeSet::new();
+    let prefix = format!("{owner}.");
+    for kind in EXPOSE_KINDS {
+        let Some(raw) = declared.get(kind) else {
+            continue;
+        };
+        let entries = raw
+            .as_array()
+            .ok_or_else(|| format!("{at}: {kind} must be an array"))?;
+        for item in entries {
+            let entry = item
+                .as_object()
+                .ok_or_else(|| format!("{at}: {kind} entry must be an object"))?;
+            let name = match entry.get("name").and_then(Value::as_str) {
+                Some(name) if name.starts_with(&prefix) && is_expose_name(name) => name,
+                _ => {
+                    return Err(format!(
+                        "{at}: name {} must be {owner}.<name> with lowercase letters, digits, dots, and hyphens",
+                        js_field_text(entry, "name")
+                    ));
+                }
+            };
+            if !seen.insert(format!("{kind} {name}")) {
+                return Err(format!("{at}: duplicate {kind} {name}"));
+            }
+            let at = format!("{at} {name}");
+            let mut allowed = vec!["name", "description"];
+            allowed.extend_from_slice(expose_fields(kind));
+            if kind == "dom" {
+                allowed.push("many");
+            }
+            if kind == "commands" {
+                allowed.push("timeout");
+            }
+            only(&at, entry, &allowed)?;
+            if text(entry.get("description")).is_none() {
+                return Err(format!("{at}: description is required"));
+            }
+            for field in expose_fields(kind) {
+                let raw = entry
+                    .get(*field)
+                    .ok_or_else(|| format!("{at}: {field} is required"))?;
+                check_schema(&format!("{at} {field}"), raw)?;
+            }
+            if kind == "commands"
+                && entry
+                    .get("params")
+                    .and_then(|params| params.get("type"))
+                    .and_then(Value::as_str)
+                    != Some("object")
+            {
+                return Err(format!("{at}: params must be an object schema"));
+            }
+            if entry.get("many").is_some_and(|raw| !raw.is_boolean()) {
+                return Err(format!("{at}: many must be a boolean"));
+            }
+            if entry.get("timeout").is_some_and(|raw| !valid_timeout(raw)) {
+                return Err(format!(
+                    "{at}: timeout must be an integer from 1 to {COMMAND_TIMEOUT_MAX} milliseconds"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Checks the surface params schema and the exposes declaration of plugin.json in the order that the reader checks
+/// them (validateManifest of packages/plugin-api). A surface that is not an object is not checked here.
+pub fn check_plugin_schemas(id: &str, manifest: &Value) -> Result<(), String> {
+    let at = format!("plugin {id}");
+    if let Some(surface) = manifest.get("surface").and_then(Value::as_object)
+        && let Some(params) = surface.get("params")
+    {
+        if !params.is_object() || params.get("type").and_then(Value::as_str) != Some("object") {
+            return Err(format!(
+                "{at}: surface params must be a schema of type object"
+            ));
+        }
+        check_schema(&format!("{at} surface params"), params)?;
+    }
+    if let Some(exposes) = manifest.get("exposes") {
+        if manifest.get("surface").is_none() && manifest.get("host").is_none() {
+            return Err(format!("{at}: exposes require a surface or a plugin host"));
+        }
+        return check_exposes(id, exposes);
+    }
+    Ok(())
+}
+
 /// Checks the dependencies of plugin.json and returns the version range of each package. A plugin that needs no other
 /// package has no dependencies.
 pub fn manifest_dependencies(manifest: &Value) -> Result<BTreeMap<String, String>, String> {

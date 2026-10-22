@@ -778,3 +778,34 @@ func TestReadInstalledRefusesAPluginWhosePluginIDDiffers(t *testing.T) {
 	_, err := sok.ReadInstalled(config)
 	rejects(t, err, "plugin.json id other differs from the installed plugin probe")
 }
+
+// schemaOutsideSubsetIndex is an index.json written without `registry build` whose plugin probe has one release of
+// version 0.2.0. The release is not read: the test extracts its folder first, so installation reads its plugin.json.
+func schemaOutsideSubsetIndex(t *testing.T) string {
+	t.Helper()
+	index := t.TempDir()
+	writeTree(t, index, map[string]string{
+		"index.json": `{"format": 1, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
+			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
+			"release": {"url": "file:///nonexistent/probe-0.2.0.tgz", "sha256": "` + strings.Repeat("0", 64) + `"},
+			"engines": {"soksak": "^0.0.2"}, "sidecars": {}}]}], "sidecars": [], "packs": [],
+			"revoked": {"plugins": [], "sidecars": []}}`,
+	})
+	return filepath.Join(index, "index.json")
+}
+
+// contract: install.plugin-json.refuses-schema-outside-subset
+func TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset(t *testing.T) {
+	index := schemaOutsideSubsetIndex(t)
+	config := t.TempDir()
+	runJSON(t, "registry", "use", index, "--config-dir", config)
+	writeTree(t, filepath.Join(config, "plugins/probe/0.2.0"), map[string]string{
+		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
+		"plugin.json":  `{"id": "probe", "surface": {"params": {"type": "object", "required": ["path"]}}}`,
+	})
+	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
+	rejects(t, err, "plugin probe surface params: unknown field required")
+	if exists(filepath.Join(config, "plugins", "installed.json")) {
+		t.Fatal("a refused install wrote installed.json")
+	}
+}

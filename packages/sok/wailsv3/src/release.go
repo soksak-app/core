@@ -296,6 +296,9 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	if err := checkRemovedFields(id, manifest); err != nil {
 		return err
 	}
+	if err := checkPluginSchemas(id, manifest); err != nil {
+		return err
+	}
 	listed := listedFiles(pkg)
 	if err := checkReleaseFiles(listed); err != nil {
 		return err

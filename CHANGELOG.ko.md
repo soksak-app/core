@@ -5,6 +5,8 @@
 ## 미배포
 
 - F257: 시험 runner는 process group 신호가 거부되면 자기 leader를 끝내고 leader의 close에서 결과를 끝내므로, 시험이 모두 통과한 뒤 시험 파일의 프로세스가 남지 않는다. 신호 실패 시험은 더 이상 프로세스를 직접 끝내지 않는다.
+- F258: `sok plugin pack`과 `sok plugin install`은 reader가 거부하는 `plugin.json`의 `exposes` 선언이나 surface `params` schema를 거부한다. schema는 `type`, `properties`, `items`, `enum`만 받으며, 거부 문구는 reader의 오류 문구다. Red: 시험 네 개(`TestPluginPackRefusesASchemaOutsideTheSubset`, `TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset`, `plugin_pack_refuses_a_schema_outside_the_subset`, `plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset`)은 이전 코드에서 실패했다. reader의 나머지 검사는 F258-1에 미완료로 남아 있다.
+
 - F256: CI의 structure 단계와 push 검사는 event catalog와 census 감사를 돌리므로, 지운 emitter의 catalog 항목이 남으면 push 전에 실패한다.
 - F255: tauriv2 sidecar transport 시험의 교체 service fixture는 Drop에서 설치된 service 프로세스의 종료를 기다린다. 프로세스는 SIGKILL로 끝내고 `waitpid`로 회수하므로, 뒤따르는 확인은 끝난 프로세스를 읽는다. 시험 `a_replaced_service_starts_after_the_end_of_its_process`는 프로세스 종료에 시간이 걸릴 때 수정 전 fixture에서 `the installed service process <pid> outlived the test`로 실패했고, 수정 뒤에는 통과한다. 제품 코드는 바뀌지 않았다.
 - F252-1-1: `createExpose`는 port의 report 함수를 요구하고, host가 거부한 reply를 보고하며, 실패한 report는 두 문장을 담아 `reportError`로 넘기므로 어떤 reply 실패도 page 오류 경로를 벗어나지 않는다. 앱 runtime은 exposure port에 report를 준다.
