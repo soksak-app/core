@@ -3020,11 +3020,11 @@ impl<O: Owner> Core<O> {
             crate::event_record::emit_host(
                 crate::event_log::Level::Info,
                 "host.sidecar.disconnect",
-                // default: a disconnect without a violation records an empty violation text.
                 disconnect_fields(
                     &sidecar,
                     reader_service_pid,
                     stopping,
+                    // default: a disconnect without a violation records an empty violation text.
                     &violation.clone().unwrap_or_default(),
                     &end,
                     waiting,
