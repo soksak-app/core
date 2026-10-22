@@ -194,7 +194,10 @@ fn the_file_passes_the_audit_of_the_contract_package() {
         }
     }).to_string()).unwrap();
     // The audit command of the repository audits the log with the event contract and prints the findings as JSON.
-    let audit = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../scripts/audit-log.mjs");
+    let audit = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../scripts/audit-log.mjs"
+    );
     let output = Command::new("node")
         .args([audit, path.to_str().unwrap(), catalog.to_str().unwrap()])
         .output()
