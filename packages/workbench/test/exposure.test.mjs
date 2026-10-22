@@ -691,7 +691,7 @@ test("a status watch that fails for a reason other than the closed surface repor
   made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
   await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(reported, ["status probe.lines watch failed: reader crashed"], "the failed watch was not reported");
+  assert.deepEqual(reported, ["status probe.lines watch failed on surface tab-a: reader crashed (code -32000)"], "the failed watch was not reported with its surface and code");
 });
 
 test("a plugin host status reply without seq and value is refused instead of read as an empty value", async () => {

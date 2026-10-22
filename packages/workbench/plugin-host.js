@@ -36,19 +36,14 @@ export function pluginSessionOf(id) {
  * Checks a sidecar request of a plugin host on the main page (docs/plans/plugin-host-routes.md rule 8). declared lists the
  * operations that the plugin manifest declares for the sidecar (hostOperations); sidecarDeclaration is the validated
  * sidecar.json, whose message form the body takes and whose hostReadOperations allow the operation. Returns the body
- * re-serialized from the parsed object, so the check and the sidecar read the same value; throws a named error otherwise.
+ * re-serialized from the object, so the check and the sidecar read the same value; throws a named error otherwise.
  */
 export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sidecarDeclaration, body }) {
   const refuse = (reason) => new Error(`plugin host ${plugin}: ${reason}`);
   const form = sidecarDeclaration?.message;
   if (form === undefined) throw refuse(`sidecar ${sidecar} declares no message form`);
-  let object;
-  try {
-    object = typeof body === "string" ? JSON.parse(body) : undefined;
-  } catch (error) {
-    // The parser message names the position of the failure, so it is kept in the refusal.
-    throw refuse(`body is not a JSON object: ${error.message}`);
-  }
+  // The body is the JSON object that the page sends (the json-object form of docs/spec/sidecars.md); a text is not an object.
+  const object = body;
   if (typeof object !== "object" || object === null || Array.isArray(object)) throw refuse("body is not a JSON object");
   const operation = object[form.operationField];
   if (typeof operation !== "string") throw refuse("operation is missing or not a string");
@@ -56,6 +51,20 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
   const readable = sidecarDeclaration.hostReadOperations ?? [];
   if (!declared.includes(operation) || !readable.includes(operation)) throw refuse(`operation ${operation} is not served`);
   return JSON.stringify(object);
+}
+
+/**
+ * The text of a rejection: its message, with its code and data when it has them. An object without a message is written as its
+ * JSON, so a report never reads [object Object] (docs/spec/logging.md).
+ */
+export function errorText(error) {
+  if (typeof error === "string") return error;
+  if (typeof error !== "object" || error === null) return String(error);
+  if (typeof error.message !== "string") return JSON.stringify(error);
+  const extra = [];
+  if (error.code !== undefined) extra.push(`code ${error.code}`);
+  if (error.data !== undefined) extra.push(`data ${JSON.stringify(error.data)}`);
+  return extra.length === 0 ? error.message : `${error.message} (${extra.join(", ")})`;
 }
 
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */
@@ -106,7 +115,7 @@ export function forwardHostExposure(plugin, method, params) {
       clearTimeout(timer);
       exposureReplies.delete(id);
       // default: a rejection that is not an Error is reported by its text.
-      reject(new Error(String(error?.message ?? error)));
+      reject(new Error(errorText(error)));
     });
   });
 }
@@ -182,7 +191,7 @@ function routeSessionEvent(kind, event, sidecar, session, payload) {
   // default: a post that the host refuses is written at error with its reason.
   bridge.call("pluginHostEvent", { plugin, event: kind, sidecar, id: session, ...fields }).catch((error) => {
     // default: a rejection that is not an Error is reported by its text, so the record names the failure either way.
-    reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: ${error?.message ?? error}`);
+    reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: ${errorText(error)}`);
   });
 }
 
@@ -366,7 +375,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
       return { result: null };
     } catch (error) {
       // default: a rejection that is not an Error replies with its text.
-      return { error: { code: FAILED_COMMAND, message: String(error?.message ?? error) } };
+      return { error: { code: FAILED_COMMAND, message: errorText(error) } };
     }
   };
   let off = null;
@@ -382,9 +391,9 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
     answer(event).then(
       (reply) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, ...reply }),
       // default: a rejection that is not an Error replies, and a failed reply is reported, with its text.
-      (error) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, error: { code: FAILED_COMMAND, message: String(error?.message ?? error) } }),
+      (error) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, error: { code: FAILED_COMMAND, message: errorText(error) } }),
     // default: a failed reply that is not an Error is reported with its text.
-    ).catch((error) => report(new Error(`plugin host reply ${event.id}: ${error?.message ?? error}`)));
+    ).catch((error) => report(new Error(`plugin host reply ${event.id}: ${errorText(error)}`)));
   };
   replies = bridge.on("plugin-host-reply", (event) => {
     const commands = event?.plugin && hostCommandsOf(event.plugin);
@@ -412,7 +421,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
     if (closed) unsubscribe();
     else off = unsubscribe;
   // default: a subscription failure that is not an Error is reported with its text.
-  }, (error) => report(new Error(`plugin host calls: ${error?.message ?? error}`)));
+  }, (error) => report(new Error(`plugin host calls: ${errorText(error)}`)));
   return {
     receive,
     close() {

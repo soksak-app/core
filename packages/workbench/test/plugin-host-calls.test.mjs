@@ -56,7 +56,7 @@ mock.module("@soksak/plugin-api", { namedExports: {
 const emit = (name, event) => { for (const listener of [...(listeners.get(name) ?? [])]) listener(event); };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-const { listenPluginHostCalls, hostCommandsOf, keepHostCommands, forwardHostExposure } = await import("../plugin-host.js");
+const { listenPluginHostCalls, hostCommandsOf, keepHostCommands, forwardHostExposure, errorText } = await import("../plugin-host.js");
 const session = "plugin:probe:project-a:fixture-sidecar";
 
 const registered = [];
@@ -320,7 +320,7 @@ test("the served sidecar calls record a subscription and send the checked body t
   emit("plugin-host-call", { plugin: "probe", id: 8, command: "runtime.sidecar.onFailure", params: { id: session, sidecar: "fixture-sidecar" } });
   await tick();
   assert.deepEqual(calls.at(-1).arg, { plugin: "probe", id: 8, result: null });
-  emit("plugin-host-call", { plugin: "probe", id: 9, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: '{ "operation": "list", "path": "a" }', cids: ["c1"] } });
+  emit("plugin-host-call", { plugin: "probe", id: 9, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: { "operation": "list", "path": "a" }, cids: ["c1"] } });
   await tick();
   assert.deepEqual(calls.at(-2), { name: "pluginHostSidecarSend", arg: { plugin: "probe", sidecar: "fixture-sidecar", id: session, body: '{"operation":"list","path":"a"}', cids: ["c1"] } });
   assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 9, result: null } });
@@ -330,10 +330,10 @@ test("the served sidecar calls record a subscription and send the checked body t
 test("a sidecar call refuses a sidecar the plugin does not declare, a session of another name and an undeclared operation", async () => {
   const pluginHost = listen();
   const refusals = [
-    [{ id: session, sidecar: "other-sidecar", body: '{"operation":"list"}' }, "plugin host probe cannot use sidecar other-sidecar"],
-    [{ id: "plugin:other:project-a:fixture-sidecar", sidecar: "fixture-sidecar", body: '{"operation":"list"}' }, `plugin host probe cannot use sidecar session plugin:other:project-a:fixture-sidecar`],
-    [{ id: "plugin:probe:project-a:fixture-sidecar:extra", sidecar: "fixture-sidecar", body: '{"operation":"list"}' }, "plugin host probe cannot use sidecar session plugin:probe:project-a:fixture-sidecar:extra"],
-    [{ id: session, sidecar: "fixture-sidecar", body: '{"operation":"write"}' }, "plugin host probe: operation write is not served"],
+    [{ id: session, sidecar: "other-sidecar", body: {"operation":"list"} }, "plugin host probe cannot use sidecar other-sidecar"],
+    [{ id: "plugin:other:project-a:fixture-sidecar", sidecar: "fixture-sidecar", body: {"operation":"list"} }, `plugin host probe cannot use sidecar session plugin:other:project-a:fixture-sidecar`],
+    [{ id: "plugin:probe:project-a:fixture-sidecar:extra", sidecar: "fixture-sidecar", body: {"operation":"list"} }, "plugin host probe cannot use sidecar session plugin:probe:project-a:fixture-sidecar:extra"],
+    [{ id: session, sidecar: "fixture-sidecar", body: {"operation":"write"} }, "plugin host probe: operation write is not served"],
   ];
   for (const [params, message] of refusals) {
     const count = calls.length;
@@ -353,7 +353,7 @@ test("a declared sidecar whose sidecar.json the page does not hold refuses every
     runCore: () => {}, runOwned: () => {}, pluginLog: () => ({}),
   });
   const count = calls.length;
-  emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: '{"operation":"list"}' } });
+  emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: {"operation":"list"} } });
   await tick();
   assert.equal(calls.some((call, index) => index >= count && call.name === "pluginHostSidecarSend"), false);
   assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin host probe: sidecar fixture-sidecar declares no message form" });
@@ -421,6 +421,16 @@ test("a dom request of a host-registered entry reaches the host page as exposure
     calls.splice(start);
     pluginHost.close();
   }
+});
+
+// contract: plugin-host.channel.call-served-set
+test("a rejection that is an object of the host is reported with its message, code and data", () => {
+  assert.equal(errorText(new Error("refused")), "refused");
+  assert.equal(errorText("plain text"), "plain text");
+  assert.equal(errorText({ code: -32000, message: "refused", data: { path: "a" } }), 'refused (code -32000, data {"path":"a"})');
+  assert.equal(errorText({ code: -32000, message: "refused" }), "refused (code -32000)");
+  // An object without a message is reported as its JSON, so no report reads [object Object].
+  assert.equal(errorText({ code: 7 }), '{"code":7}');
 });
 
 test("a failure of a subscribed plugin session is posted to its host page as the failure event", async () => {

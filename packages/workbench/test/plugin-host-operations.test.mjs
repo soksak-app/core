@@ -9,19 +9,19 @@ const sidecar = { executable: "build/worker", protocol: 1, message, hostReadOper
 const declared = ["list"];
 
 test("a declared read operation is forwarded as the re-serialized object", () => {
-  const body = '{ "operation": "list", "path": "a" }';
+  const body = { "operation": "list", "path": "a" };
   assert.equal(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body }),
     '{"operation":"list","path":"a"}');
 });
 
 test("an operation that the manifest does not declare is refused by name", () => {
-  const body = '{"operation":"stat"}';
+  const body = {"operation":"stat"};
   assert.throws(() => checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body }),
     { message: "plugin host probe: operation stat is not served" });
 });
 
 test("an operation that the sidecar does not allow a host is refused even if declared", () => {
-  const body = '{"operation":"write"}';
+  const body = {"operation":"write"};
   const sidecarDeclaration = { ...sidecar, hostReadOperations: ["list"] };
   assert.throws(() => checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared: ["list", "write"], sidecarDeclaration, body }),
     { message: "plugin host probe: operation write is not served" });
@@ -29,24 +29,29 @@ test("an operation that the sidecar does not allow a host is refused even if dec
 
 test("a sidecar without a declared message form serves no operation", () => {
   const sidecarDeclaration = { executable: "build/worker", protocol: 1, hostReadOperations: ["list"] };
-  assert.throws(() => checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration, body: '{"operation":"list"}' }),
+  assert.throws(() => checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration, body: {"operation":"list"} }),
     { message: "plugin host probe: sidecar fixture-sidecar declares no message form" });
+});
+
+// contract: plugin-host.sidecar.send-checks
+test("a sidecar request body is the JSON object that the page sends, and the check returns its text", () => {
+  // The files host page sends the body as an object, which is the json-object form of the sidecar (docs/spec/sidecars.md).
+  const text = checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body: { operation: "list", path: "a" } });
+  assert.equal(text, '{"operation":"list","path":"a"}');
 });
 
 test("a body that is not an object or has no string operation field is refused", () => {
   const check = (body) => () => checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body });
-  assert.throws(check("[1]"), { message: "plugin host probe: body is not a JSON object" });
-  assert.throws(check("null"), { message: "plugin host probe: body is not a JSON object" });
-  // A body that does not parse is refused with the parser message, which names the position of the failure.
-  let parseMessage = null;
-  try { JSON.parse("not json"); } catch (error) { parseMessage = error.message; }
-  assert.throws(check("not json"), { message: `plugin host probe: body is not a JSON object: ${parseMessage}` });
-  assert.throws(check('{"path":"a"}'), { message: "plugin host probe: operation is missing or not a string" });
-  assert.throws(check('{"operation":3}'), { message: "plugin host probe: operation is missing or not a string" });
+  assert.throws(check([1]), { message: "plugin host probe: body is not a JSON object" });
+  assert.throws(check(null), { message: "plugin host probe: body is not a JSON object" });
+  // A text is not the object that the form names, so it is refused as the text it is.
+  assert.throws(check('{"operation":"list"}'), { message: "plugin host probe: body is not a JSON object" });
+  assert.throws(check({ path: "a" }), { message: "plugin host probe: operation is missing or not a string" });
+  assert.throws(check({ operation: 3 }), { message: "plugin host probe: operation is missing or not a string" });
 });
 
 test("the message form names the operation field, so a sidecar may use another name", () => {
   const sidecarDeclaration = { ...sidecar, message: { form: "json-object", operationField: "op" } };
-  assert.equal(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration, body: '{"op":"list"}' }),
+  assert.equal(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration, body: {"op":"list"} }),
     '{"op":"list"}');
 });

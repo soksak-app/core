@@ -8,7 +8,7 @@
 // In a browser runtime without a host, the registry also works inside this document. Then there is no path that
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
-import { forwardHostExposure, hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
+import { errorText, forwardHostExposure, hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
 import { SNAPSHOT_REQUEST_COMMAND, createPluginRuntime } from "@soksak/plugin-api";
 import { pluginRecords } from "./plugin-records.js";
 import { timed, trace } from "./performance.js";
@@ -108,7 +108,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (!call) return;
     call("exposureChanged", surface === undefined ? { name, value } : { name, surface, value }).then(undefined, (error) =>
       // default: a refusal value may not be an Error, so the value itself is written.
-      report(new Error(`status ${name} change was refused: ${error?.message ?? error}`, { cause: error })));
+      report(new Error(`status ${name} change was refused: ${errorText(error)}`, { cause: error })));
   };
 
   /**
@@ -139,7 +139,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     } catch (error) {
       if (error instanceof ExposureError) throw error;
       // default: a rejection that is not an Error carries its value as the reason.
-      throw new ExposureError(EXPOSURE_ERRORS.failed, String(error?.message ?? error));
+      throw new ExposureError(EXPOSURE_ERRORS.failed, errorText(error));
     }
     throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `plugin host ${plugin} does not serve ${method}`);
   }
@@ -194,7 +194,7 @@ export function createRegistry({ call = null, report = null } = {}) {
           trace("surface.watch", { phase: "ended", reason: "surface closed", name, surface: watch.surface });
         } else {
           // default: a failure that is not an Error carries its value as the text.
-          report(new Error(`status ${name} watch failed: ${error?.message ?? error}`, { cause: error }));
+          report(new Error(`status ${name} watch failed on surface ${watch.surface}: ${errorText(error)}`, { cause: error }));
         }
         break;
       }
@@ -240,7 +240,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       // The code is the one that the endpoint answers for the failure (replyPayload of the plugin API).
       emitEvent("warn", "page.command", { name, micros: micros(), ok: false,
         // default: a thrown value that is not an Error is recorded as its own text.
-        error: `${error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed}: ${String(error?.message ?? error)}` });
+        error: `${error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed}: ${errorText(error)}` });
       throw error;
     }
   }
@@ -718,7 +718,7 @@ export async function connectExposure({ report, projectData, ...values }) {
     failed: values.failed ?? ((error) => {
       if (!host) return false;
       // default: a rejection that is not an Error carries its value as the diagnostic reason.
-      report(`exposure settled failed: ${String(error?.message ?? error)}`);
+      report(`exposure settled failed: ${errorText(error)}`);
       return true;
     }),
   });
@@ -742,7 +742,7 @@ export async function connectExposure({ report, projectData, ...values }) {
     unregister: (plugin) => registry.hostUnregistered(plugin),
     timeoutOf: (name) => registry.commandTimeout(name),
     // default: a rejection that is not an Error is reported with its text.
-    report: (error) => report(`plugin host: ${String(error?.message ?? error)}`),
+    report: (error) => report(`plugin host: ${errorText(error)}`),
     // The listing error of a host page is written through the line reporter of the page (docs/spec/plugin-host.md#channel).
     displayError: (line) => report(line),
     // The sidecars that environment.js declared for each plugin (docs/plans/plugin-host-routes.md rule 8).
