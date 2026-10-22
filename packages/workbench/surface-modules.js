@@ -242,8 +242,9 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       on: (id, listener) => page.sidecar().on(id, listener),
       onFailure: (id, listener) => page.sidecar().onFailure(id, listener),
     },
-    textSize: (listener) => context.runtime.textSize.on(listener),
-    settings: (listener) => context.runtime.settings.on(listener),
+    // The surface runtime returns the off function at once; the view subscriptions take a promise of it (view-events.js).
+    textSize: (listener) => Promise.resolve(context.runtime.textSize.on(listener)),
+    settings: (listener) => Promise.resolve(context.runtime.settings.on(listener)),
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
     // exposure declares names no status of the view, so the declaration is checked before the observation (view-calls.js).
     status: (name, listener) => registry.observe(name, undefined, (value) => listener(value)),

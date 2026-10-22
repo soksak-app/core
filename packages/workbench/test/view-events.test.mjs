@@ -159,3 +159,36 @@ test("a status watch that the page refuses registers nothing and rejects with th
   });
   await assert.rejects(subs.statusWatch("probe.count"), /status probe\.count is not declared/);
 });
+
+test("a subscription whose registrar returns the off function itself is refused and registers nothing", async () => {
+  const listeners = new Map();
+  const off = [];
+  // A registrar returns a promise of its off function, the one form that the view subscriptions accept (docs/spec/native-surfaces.md).
+  const textSize = (fn) => {
+    listeners.set("textSize", fn);
+    return () => { off.push("textSize"); };
+  };
+  const subs = createViewSubscriptions({
+    native: null,
+    sidecar: null,
+    textSize,
+    push: async () => {},
+    report: () => {},
+  });
+  await assert.rejects(subs.textSize(), /view subscription textSize: the registrar returned function, want a promise of the off function/);
+  assert.equal(listeners.has("textSize"), true, "the registrar was called once");
+  assert.deepEqual(off, []);
+  await subs.close();
+});
+
+test("a subscription whose registrar throws is refused with its error and registers nothing", async () => {
+  const subs = createViewSubscriptions({
+    native: null,
+    sidecar: null,
+    textSize: () => { throw new Error("no surface"); },
+    push: async () => {},
+    report: () => {},
+  });
+  await assert.rejects(subs.textSize(), /no surface/);
+  await subs.close();
+});

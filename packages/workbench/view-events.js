@@ -38,10 +38,24 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
       report(`view event ${event}: ${error?.message ?? error}`);
     });
   };
+  // A registrar returns a promise of the off function, the one form that every registrar gives (docs/spec/native-surfaces.md#view-surfaces).
+  // Any other result, and a synchronous throw, refuse the key with an error that names the registrar.
+  const registration = (key, register) => {
+    let result;
+    try {
+      result = register();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    if (!(result instanceof Promise)) {
+      return Promise.reject(new TypeError(`view subscription ${key}: the registrar returned ${typeof result}, want a promise of the off function`));
+    }
+    return result;
+  };
   const subscribe = (key, register) => {
     if (closed) return Promise.reject(new Error("view subscriptions are closed"));
     if (registered.has(key)) return Promise.resolve(null);
-    const pending = register().then((off) => {
+    const pending = registration(key, register).then((off) => {
       registered.set(key, off);
       return null;
     });

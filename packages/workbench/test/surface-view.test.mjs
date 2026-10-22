@@ -148,6 +148,60 @@ test("a view call writes a debug receipt and a debug reply record with its id", 
   }
 });
 
+// The text size registration of a view resolves with a promise of its off function (docs/spec/native-surfaces.md, view subscriptions).
+test("a view subscription to the text size resolves with a result", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const replies = [];
+  let replied;
+  const replyArrived = new Promise((resolve) => { replied = resolve; });
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        if (name === "viewReply") {
+          replies.push(payload);
+          replied();
+        }
+        return null;
+      } } };
+    },
+  } });
+  const emitted = [];
+  const actualPageLog = await import("../page-log.js");
+  t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-text-size");
+  const pluginId = "fixture-text-size-view";
+  const surfaceId = "fixture-text-size-view-surface";
+  recordOrigin(surfaceId, null);
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
+    listeners.get("view-call")({ id: 8, command: "runtime.textSize.on", params: null });
+    await replyArrived;
+    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
+      fields: { plugin: pluginId, surface: surfaceId, id: 8, outcome: "result" } }]);
+    assert.deepEqual(replies.map(({ id, result }) => ({ id, result })), [{ id: 8, result: null }]);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // contract: view.restart.limit-shows-error
 // The view-stopped event of the surface is shown as the error state of the surface, and mounting the surface again replaces that state.
 test("a view that stopped its restarts shows its reason as the error state of its surface until it is mounted again", { timeout: 5000 }, async (t) => {
