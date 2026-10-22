@@ -17,7 +17,7 @@ import { pathToFileURL } from "node:url";
 import { VIEW_IMPORTS } from "./index.js";
 
 /** The SHA-256 of view-start.js as of this check. */
-export const VIEW_START_SHA256 = "92b104475842dfe7e7264114b4f779a6356a3cc436d83afc3dbae47152994f7c";
+export const VIEW_START_SHA256 = "d96923ada1f03a2af97f8e09ee32bc323ec72f235fffc1d4519f6f641db1dffc";
 
 const VIEW_START = new URL("./view-start.js", import.meta.url);
 

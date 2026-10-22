@@ -35,7 +35,7 @@ test("an unhandled rejection of the view page is reported as one view.error with
   const { window, posted } = startPage();
   posted.splice(0);
   const event = new window.Event("unhandledrejection");
-  event.reason = new Error("late");
+  event.reason = new window.Error("late");
   window.dispatchEvent(event);
   assert.deepEqual(posted, [{ event: "view.error", plugin: "fixture-plugin", reason: "unhandled rejection: late" }]);
 });

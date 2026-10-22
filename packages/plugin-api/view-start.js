@@ -55,10 +55,13 @@
       return;
     }
     const target = event.target;
-    reportFailure(`${target.localName} ${target.src ?? target.href ?? ""} failed to load`.replace(/ +/g, " ").trim());
+    // A style sheet link names its address in href, and the other resource elements in src.
+    const address = target instanceof window.HTMLLinkElement ? target.href : target.src;
+    reportFailure(typeof address === "string" && address !== "" ? `${target.localName} ${address} failed to load` : `${target.localName} failed to load`);
   }, true);
   window.addEventListener("unhandledrejection", (event) => {
-    reportFailure(`unhandled rejection: ${String(event.reason?.message ?? event.reason)}`);
+    const reason = event.reason;
+    reportFailure(`unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
   });
 
   handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID() });
