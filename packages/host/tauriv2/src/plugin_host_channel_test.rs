@@ -182,6 +182,37 @@ fn the_host_forwards_the_error_call_to_the_main_page() {
     );
 }
 
+// contract: plugin-host.command.run
+#[test]
+fn the_host_forwards_the_command_call_to_the_main_page() {
+    let channels = host_channels(true);
+    let params = json!({"name": "core.file.open", "params": {"path": "notes.md"}});
+    let message = format!(r#"{{"id": 16, "command": "runtime.command", "params": {params}}}"#);
+    assert_eq!(
+        channels.receive("probe", &host_message(&message)),
+        Ok(Received::Emit(
+            "plugin-host-call",
+            json!({"plugin": "probe", "id": 16, "command": "runtime.command", "params": params})
+        ))
+    );
+}
+
+// contract: plugin-host.log.write
+#[test]
+fn the_host_forwards_the_log_call_to_the_main_page() {
+    let channels = host_channels(true);
+    let params =
+        json!({"level": "info", "event": "input.key", "fields": {"key": "a"}, "cids": ["c.1"]});
+    let message = format!(r#"{{"id": 17, "command": "runtime.log", "params": {params}}}"#);
+    assert_eq!(
+        channels.receive("probe", &host_message(&message)),
+        Ok(Received::Emit(
+            "plugin-host-call",
+            json!({"plugin": "probe", "id": 17, "command": "runtime.log", "params": params})
+        ))
+    );
+}
+
 // contract: plugin-host.channel.snapshot
 #[test]
 fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {

@@ -203,6 +203,44 @@ func TestPluginHostChannelForwardsTheErrorCall(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.command.run
+func TestPluginHostChannelForwardsTheCommandCall(t *testing.T) {
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	message := `{"id": 16, "command": "runtime.command", "params": {"name": "core.file.open", "params": {"path": "notes.md"}}}`
+	if err := s.pluginHostMessage("probe", hostMessage(message)); err != nil {
+		t.Fatalf("served command call %s: %v", message, err)
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("a served command call was refused or answered by the host: %v", fake.posted)
+	}
+	want := []hostEvent{
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(16), "command": "runtime.command", "params": json.RawMessage(`{"name": "core.file.open", "params": {"path": "notes.md"}}`)}},
+	}
+	if !reflect.DeepEqual(*events, want) {
+		t.Fatalf("events %v, want %v", *events, want)
+	}
+}
+
+// contract: plugin-host.log.write
+func TestPluginHostChannelForwardsTheLogCall(t *testing.T) {
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	message := `{"id": 17, "command": "runtime.log", "params": {"level": "info", "event": "input.key", "fields": {"key": "a"}, "cids": ["c.1"]}}`
+	if err := s.pluginHostMessage("probe", hostMessage(message)); err != nil {
+		t.Fatalf("served log call %s: %v", message, err)
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("a served log call was refused or answered by the host: %v", fake.posted)
+	}
+	want := []hostEvent{
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(17), "command": "runtime.log", "params": json.RawMessage(`{"level": "info", "event": "input.key", "fields": {"key": "a"}, "cids": ["c.1"]}`)}},
+	}
+	if !reflect.DeepEqual(*events, want) {
+		t.Fatalf("events %v, want %v", *events, want)
+	}
+}
+
 // contract: plugin-host.channel.snapshot
 func TestPluginHostChannelRelaysADeclaredUISnapshot(t *testing.T) {
 	s, events := channelSurfaces(t, &channelPlatform{}, true)

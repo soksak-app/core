@@ -7,6 +7,7 @@
 import { host as bridge } from "@soksak/runtime";
 import { reportRecord } from "./page-log.js";
 import { createViewCommands } from "./view-commands.js";
+import { runCommandCall } from "./command-route.js";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;
@@ -59,7 +60,11 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */
 export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register"
   || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure"
-  || command === "runtime.data.get" || command === "runtime.data.set" || command === "runtime.error";
+  || command === "runtime.data.get" || command === "runtime.data.set" || command === "runtime.error"
+  || command === "runtime.command" || command === "runtime.log";
+
+// The levels of a record of a plugin, in the order the view call runtime.log names them (docs/spec/plugin-host.md#log-call).
+const PLUGIN_LOG_LEVELS = ["error", "warn", "info", "debug", "trace"];
 
 /*
  * The sidecars that each installed plugin declares as dependencies: plugin id -> [{name, declared, declaration}]. declared is the
@@ -185,9 +190,9 @@ export function createHostCommands({ plugin, timeoutOf, report }) {
  * Returns {receive(event), close()}. receive takes one plugin-host-call event; close() ends the subscription and every open
  * call of every host with surface-closed.
  */
-export function listenPluginHostCalls({ register, unregister, timeoutOf, report, displayError, sidecarsOf = () => [], projectData = null }) {
-  if ([register, unregister, timeoutOf, report, displayError, sidecarsOf].some((value) => typeof value !== "function")) {
-    throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf, report, displayError and sidecarsOf functions");
+export function listenPluginHostCalls({ register, unregister, timeoutOf, report, displayError, sidecarsOf = () => [], projectData = null, runCore, runOwned, pluginLog }) {
+  if ([register, unregister, timeoutOf, report, displayError, sidecarsOf, runCore, runOwned, pluginLog].some((value) => typeof value !== "function")) {
+    throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf, report, displayError, sidecarsOf, runCore, runOwned and pluginLog functions");
   }
   // The declared sidecar of the plugin named by a request, with the operations its host may call (rule 8). default: a plugin
   // with no sidecarsOf entries declares none, so every sidecar request of its host is refused by name.
@@ -250,6 +255,18 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
         }
         if (typeof params.text !== "string" || params.text === "") throw new TypeError(`plugin host call ${event.command} requires a non-empty text`);
         displayError(`plugin ${plugin} ${params.where}: ${params.text}`);
+        return { result: null };
+      }
+      if (event.command === "runtime.command") {
+        // The command call runs with the owner checks of the view call (docs/spec/plugin-host.md#command-call).
+        if (typeof params.name !== "string" || params.name === "") throw new TypeError(`plugin host call ${event.command} requires a non-empty name`);
+        // default: a command call without params runs the command with null, the value of no params.
+        return { result: await runCommandCall(params.name, params.params ?? null, { call: "plugin host call", plugin, runCore, runOwned }) };
+      }
+      if (event.command === "runtime.log") {
+        // The log call writes the record through the log of the plugin context, with the checks of that log (docs/spec/plugin-host.md#log-call).
+        if (!PLUGIN_LOG_LEVELS.includes(params.level)) throw new TypeError(`plugin host call ${event.command} log level must be one of ${PLUGIN_LOG_LEVELS.join(", ")}`);
+        pluginLog(plugin)[params.level](params.event, params.fields, params.cids === undefined ? undefined : { cids: params.cids });
         return { result: null };
       }
       if (event.command.startsWith("runtime.sidecar.")) return await answerSidecar(event, params);

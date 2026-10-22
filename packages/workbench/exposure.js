@@ -9,7 +9,8 @@
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
 import { hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
-import { SNAPSHOT_REQUEST_COMMAND } from "@soksak/plugin-api";
+import { SNAPSHOT_REQUEST_COMMAND, createPluginRuntime } from "@soksak/plugin-api";
+import { pluginRecords } from "./plugin-records.js";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
 import {
@@ -530,6 +531,17 @@ export function createRegistry({ call = null, report = null } = {}) {
       return plugin === undefined ? null : hostKeyOf(plugin);
     },
 
+    /**
+     * Runs a command that the plugin host of plugin registered, for a command call of that host (docs/spec/plugin-host.md#command-call).
+     * The registration must be under the owner key plugin:<plugin id>, and another owner is refused with the registry error.
+     */
+    runHosted(name, params, plugin) {
+      if (hosts.get(declarationKey("command", name)) !== plugin) {
+        return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${hostKeyOf(plugin)} has not registered command ${name}`));
+      }
+      return forwardHost(plugin, "command.run", { name, params });
+    },
+
     /** The declared time limit of the command name, or undefined when its declaration states none. */
     commandTimeout(name) {
       return declared.get(declarationKey("command", name))?.declaration.timeout;
@@ -694,5 +706,10 @@ export async function connectExposure({ report, projectData, ...values }) {
     sidecarsOf: pluginSidecarsOf,
     // The project data of the shown project, which answers the data calls of a plugin host.
     projectData,
+    // A core command runs as the main page runs it, and a command that the host registered runs under its owner check.
+    runCore: (name, params) => registry.run(name, params),
+    runOwned: (name, params, owner) => registry.runHosted(name, params, owner),
+    // The log of the plugin context of the plugin, which writes its records through the event writer of the page (docs/spec/logging.md).
+    pluginLog: (plugin) => createPluginRuntime({ pluginId: plugin, hooks: pluginRecords }).log,
   });
 }

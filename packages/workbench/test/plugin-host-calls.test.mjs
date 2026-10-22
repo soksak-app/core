@@ -79,6 +79,11 @@ const projectData = {
     if (projectRefusal !== null) throw new Error(projectRefusal);
   },
 };
+// The core and plugin commands that a command call runs: each run is recorded, and the command answers with its name.
+const coreRuns = [];
+const ownedRuns = [];
+// The log writes of the plugin host: each write of the plugin log is recorded with its level, event, fields and options.
+const logWrites = [];
 function listen() {
   return listenPluginHostCalls({
     register: (plugin, kind, name) => registered.push({ plugin, kind, name }),
@@ -88,8 +93,67 @@ function listen() {
     displayError: (line) => displays.push(line),
     sidecarsOf: (plugin) => (plugin === "probe" ? probeSidecars : []),
     projectData,
+    runCore: (name, params) => { coreRuns.push({ name, params }); return Promise.resolve({ ran: name }); },
+    runOwned: (name, params, owner) => { ownedRuns.push({ name, params, owner }); return Promise.resolve({ ran: name, owner }); },
+    pluginLog: (plugin) => Object.fromEntries(["error", "warn", "info", "debug", "trace"]
+      .map((level) => [level, (event, fields, options) => logWrites.push({ plugin, level, event, fields, options })])),
   });
 }
+
+// contract: plugin-host.command.run
+test("runtime.command runs a core command through runCore and a command of the plugin through runOwned, with the checks of the view call", async () => {
+  const pluginHost = listen();
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.command", params: { name: "core.file.open", params: { path: "notes.md" } } });
+    await tick();
+    assert.deepEqual(coreRuns.at(-1), { name: "core.file.open", params: { path: "notes.md" } });
+    assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 11, result: { ran: "core.file.open" } } });
+    emit("plugin-host-call", { plugin: "probe", id: 12, command: "runtime.command", params: { name: "probe.open" } });
+    await tick();
+    assert.deepEqual(ownedRuns.at(-1), { name: "probe.open", params: null, owner: "probe" });
+    assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 12, result: { ran: "probe.open", owner: "probe" } } });
+    // Each refused name runs nothing and answers the named error of the plugin host call.
+    const refusals = [
+      [{ name: "" }, "plugin host call runtime.command requires a non-empty name"],
+      [{ name: "other.open" }, "command other.open belongs to other, not probe"],
+      [{ name: "open" }, "plugin host call open names no owner"],
+      [{ name: "tab.state.read" }, "plugin host call tab.state.read is not served"],
+    ];
+    const runs = coreRuns.length + ownedRuns.length;
+    for (const [params, message] of refusals) {
+      emit("plugin-host-call", { plugin: "probe", id: 13, command: "runtime.command", params });
+      await tick();
+      assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message });
+    }
+    assert.equal(coreRuns.length + ownedRuns.length, runs, "a refused command call ran a command");
+  } finally {
+    pluginHost.close();
+  }
+});
+
+// contract: plugin-host.log.write
+test("runtime.log writes the record of the plugin through its log with the checks of the plugin context", async () => {
+  const pluginHost = listen();
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 14, command: "runtime.log", params: { level: "info", event: "input.key", fields: { key: "a" }, cids: ["c.1"] } });
+    await tick();
+    assert.deepEqual(logWrites.at(-1), { plugin: "probe", level: "info", event: "input.key", fields: { key: "a" }, options: { cids: ["c.1"] } });
+    assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 14, result: null } });
+    emit("plugin-host-call", { plugin: "probe", id: 15, command: "runtime.log", params: { level: "warn", event: "list.failed", fields: { reason: "x" } } });
+    await tick();
+    assert.deepEqual(logWrites.at(-1), { plugin: "probe", level: "warn", event: "list.failed", fields: { reason: "x" }, options: undefined });
+    // A level outside the five levels writes nothing and answers the named error.
+    const count = logWrites.length;
+    for (const level of ["enabled", "bogus", undefined]) {
+      emit("plugin-host-call", { plugin: "probe", id: 16, command: "runtime.log", params: { level, event: "x.y", fields: {} } });
+      await tick();
+      assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin host call runtime.log log level must be one of error, warn, info, debug, trace" });
+    }
+    assert.equal(logWrites.length, count, "a refused log call wrote a record");
+  } finally {
+    pluginHost.close();
+  }
+});
 
 // contract: plugin-host.error.display
 test("runtime.error writes the listing error of the plugin through the error display and answers null", async () => {
@@ -204,6 +268,9 @@ test("a registration that the registry refuses is answered as an error", async (
     timeoutOf: () => undefined,
     report: reports.push.bind(reports),
     displayError: displays.push.bind(displays),
+    runCore: () => {},
+    runOwned: () => {},
+    pluginLog: () => ({}),
   });
   emit("plugin-host-call", { plugin: "probe", id: 5, command: "page.exposure.register", params: { kind: "status", name: "other.lines" } });
   await tick();
@@ -279,6 +346,7 @@ test("a declared sidecar whose sidecar.json the page does not hold refuses every
   const pluginHost = listenPluginHostCalls({
     register: () => {}, unregister: () => {}, timeoutOf: () => undefined, report: () => {}, displayError: () => {},
     sidecarsOf: (plugin) => (plugin === "probe" ? [{ name: "fixture-sidecar", declared: ["list"], declaration: null }] : []),
+    runCore: () => {}, runOwned: () => {}, pluginLog: () => ({}),
   });
   const count = calls.length;
   emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: '{"operation":"list"}' } });

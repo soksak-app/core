@@ -27,6 +27,7 @@
     "declared-tree-keys.js",
     "section-address.js",
     "view-calls.js",
+    "command-route.js",
     "shortcuts.json",
     "view-events.js",
     "view-commands.js",

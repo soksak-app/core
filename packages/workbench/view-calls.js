@@ -1,6 +1,7 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
 import { base64Of, bytesFrom } from "@soksak/plugin-api";
+import { runCommandCall } from "./command-route.js";
 
 /**
  * Answers one event of a view and resolves with its result. A call request {id, command, params} resolves with the result of its
@@ -380,14 +381,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       throw error;
     }
   };
-  const dot = command.indexOf(".");
-  const owner = dot < 0 ? "" : command.slice(0, dot);
-  if (owner === "core") return runForwarded(command, params);
-  if (owner === plugin) return runOwned(command, params, plugin);
-  if (owner === "") throw new Error(`view call ${command} names no owner`);
-  // The tab and runtime names that the switch above does not serve are refused as not served, not as the names of another owner.
-  if (owner === "tab" || owner === "runtime") throw new Error(`view call ${command} is not served`);
-  throw new Error(`command ${command} belongs to ${owner}, not ${plugin}`);
+  return runCommandCall(command, params, { call: "view call", plugin, runCore: runForwarded, runOwned });
 }
 
 /** The params of a call that takes named fields. Any other value is refused. */
