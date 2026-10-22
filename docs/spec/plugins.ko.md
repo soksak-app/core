@@ -25,7 +25,7 @@ Plugin과 sidecar는 자기 repository에 있다([Repository](#repository)).
 
 ## Repository
 
-Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make boundaries`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` name과 dependency key, `plugin.json` id를 읽고, 선언한 폴더가 없으면 실패한다. `make registry`와 `make install-plugins`는 선언된 sibling repository를 읽어 pack하고 설치한다.
+Core, 각 plugin, 각 sidecar는 core checkout의 sibling 폴더에 있는 별도 git repository다. 각각 자기 test, 자기 `docs/features.md` checklist, 자기 build를 가지며, `make boundaries`는 `scripts/workspace-registry.json`이 선언한 각 폴더의 `package.json` name과 dependency key, `plugin.json` id를 읽고, 선언한 폴더가 없으면 실패한다. `make registry`는 선언된 sibling repository를 읽어 plugin을 pack하고 sidecar를 release하며, `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다.
 
 | 폴더 | Repository | GitHub |
 | --- | --- | --- |

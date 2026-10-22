@@ -25,7 +25,7 @@ Common functionality belongs to the workbench or the native host so plugins do n
 
 ## Repositories
 
-Core, each plugin and each sidecar are separate git repositories in sibling folders of the core checkout. Each keeps its own tests, its own `docs/features.md` checklist and its own build. `make boundaries` reads the `package.json` name and dependency keys and the `plugin.json` id of each folder that `scripts/workspace-registry.json` declares, and fails when a declared folder is missing. `make registry` and `make install-plugins` read the declared sibling repositories to pack and install them.
+Core, each plugin and each sidecar are separate git repositories in sibling folders of the core checkout. Each keeps its own tests, its own `docs/features.md` checklist and its own build. `make boundaries` reads the `package.json` name and dependency keys and the `plugin.json` id of each folder that `scripts/workspace-registry.json` declares, and fails when a declared folder is missing. `make registry` reads the declared sibling repositories to pack the plugins and release the sidecars, and `make install-plugins` runs `make registry` and then installs the plugins of its `index.json`.
 
 | Folder | Repository | GitHub |
 | --- | --- | --- |
