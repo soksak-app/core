@@ -580,6 +580,52 @@ test("a view reply the host refuses is reported through the page error path", { 
   }
 });
 
+// A view mount that fails releases the exposure port it registered, so the surface can be mounted again. The fault injection
+// refuses the first composition declaration of the view; the port of the failed mount must not remain after the failure.
+test("a failed view mount releases its exposure port, and a retry mounts the surface", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  let refuseNext = true;
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name) => {
+        if (name === "compositionDeclare" && refuseNext) {
+          refuseNext = false;
+          throw new Error("the host refused the composition declaration");
+        }
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-failed-mount");
+  const { dispatchSurfaceRequest } = await import("../exposure.js");
+  const pluginId = "fixture-failed-view";
+  const surfaceId = "fixture-failed-view-surface";
+  recordOrigin(surfaceId, null);
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await assert.rejects(mountSurface(document.querySelector("#slot"), surface), /composition declaration/);
+    assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.list", params: {} }), false,
+      "the failed mount left its exposure port registered");
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // A view surface mounts with the core surface entries that exposure.json declares. The view registers its own port for the forwarded
 // requests, and the page registers the core entries of the surface, so the surface mounts once and the entries are registered.
 test("a view surface mounts with the core surface entries that exposure.json declares", { timeout: 5000 }, async (t) => {

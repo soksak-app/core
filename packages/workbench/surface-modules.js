@@ -104,15 +104,11 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
       on: (listener) => scoped.native.on("image-event", (event) => listener(event.name, event.event)),
     },
     composition: {
+      // A refused declaration leaves the composition wait pending; the wait ends with the mount error (waitSurfaceCompositionDeclared).
       declare: async (declaration) => {
-        try {
-          const result = await invoke("compositionDeclare", { plugin: surface.pluginId, composition: declaration });
-          compositionReady.resolve();
-          return result;
-        } catch (error) {
-          compositionReady.reject(error);
-          throw error;
-        }
+        const result = await invoke("compositionDeclare", { plugin: surface.pluginId, composition: declaration });
+        compositionReady.resolve();
+        return result;
       },
       // The order inside a composition equals the call order, so the next number of the document is sent instead of the revision of the composition.
       place: (_revision, regions, overlays) => {
@@ -428,11 +424,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const shadow = host.attachShadow({ mode: "open" });
     const scoped = surfaceContextRuntime(surface, surface.declarations);
     let resolveComposition;
-    let rejectComposition;
     const compositionReady = {
-      promise: new Promise((resolve, reject) => { resolveComposition = resolve; rejectComposition = reject; }),
+      promise: new Promise((resolve) => { resolveComposition = resolve; }),
       resolve: resolveComposition,
-      reject: rejectComposition,
     };
     if (!native) compositionReady.resolve();
     // released becomes true when a place left the surface out; the host then owns the end of its regions.
@@ -546,10 +540,13 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         await page.composition.declare(surface.composition);
         return null;
       });
-    entry.ready = entry.mounted.catch((error) => {
+    entry.ready = entry.mounted.catch(async (error) => {
         if (entry.disposed) return null;
         context.status.report("error", error);
         for (const listener of mountListeners) listener(surface.surfaceId, error);
+        await releaseFailedMount(entry).catch((releaseError) => {
+          dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after a failed mount: ${releaseError.message}` }));
+        });
         throw error;
       });
   } else {
@@ -581,6 +578,21 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
 export function suspendSurface(surfaceId) {
   const entry = mounted.get(surfaceId);
   if (entry) entry.host.dataset.surfaceSuspended = "true";
+}
+
+/**
+ * Releases what a failed mount registered: the view mark and the exposure of the page end with the mount, and the entry leaves the
+ * mounted surfaces, so the next mount of the surface starts a new mount instead of returning this failed one. The approval of the
+ * surface stays, because the host still holds the surface, and the tab reports and the error stay for the display.
+ */
+async function releaseFailedMount(entry) {
+  entry.disposed = true;
+  entry.closing.abort();
+  if (entry.exposure) entry.exposure.dispose();
+  await entry.context.exposure.dispose();
+  entry.state();
+  entry.host.remove();
+  if (mounted.get(entry.surfaceId) === entry) mounted.delete(entry.surfaceId);
 }
 
 /**

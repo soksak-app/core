@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.12-1-5: view surface는 한 번만 mount된다. 페이지가 view의 core surface 항목을 view가 전달받은 요청에 쓰는 것과 같은 surface port에 등록하여 mount가 `already has an exposure port`로 실패했다. 이제 페이지는 view의 core surface 항목에 답하고 나머지 전달된 요청은 소비하며, view는 port 대신 surface에 표시되고, 실패한 mount는 자기 노출 port와 entry를 해제하므로 다음 mount가 새로 시작한다. 거부된 composition 선언은 더 이상 처리되지 않은 거부를 남기지 않는다. Red: `surface-view.test.mjs`는 core surface 항목을 가진 mount가 `already has an exposure port`로, 실패한 mount의 해제가 `the failed mount left its exposure port registered`로 실패한다. `exposure.test.mjs`는 view 확인을 빼면 전달 규칙이 `[2]` 대신 `[1, 2, 3]`으로 실패한다. Green: surface-view 14/14, exposure 30/30, workbench 시험 디렉터리 851/851 통과. view mount, 그 core 등록, 그 command 등록이 port 하나를 공유하는 순서를 시험이 다룬다.
 - F257: 시험 runner는 process group 신호가 거부되면 자기 leader를 끝내고 leader의 close에서 결과를 끝내므로, 시험이 모두 통과한 뒤 시험 파일의 프로세스가 남지 않는다. 신호 실패 시험은 더 이상 프로세스를 직접 끝내지 않는다.
 - F258: `sok plugin pack`과 `sok plugin install`은 reader가 거부하는 `plugin.json`의 `exposes` 선언이나 surface `params` schema를 거부한다. schema는 `type`, `properties`, `items`, `enum`만 받으며, 거부 문구는 reader의 오류 문구다. Red: 시험 네 개(`TestPluginPackRefusesASchemaOutsideTheSubset`, `TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset`, `plugin_pack_refuses_a_schema_outside_the_subset`, `plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset`)은 이전 코드에서 실패했다. reader의 나머지 검사는 F258-1에 미완료로 남아 있다.
 
