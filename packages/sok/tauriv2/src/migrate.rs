@@ -43,8 +43,7 @@ struct Definition {
 /// that names another file, a step that does not start where the earlier one ends, or an operation or scope the engine
 /// does not implement.
 fn definitions() -> Result<Vec<Definition>, String> {
-    let mut definitions = vec![];
-    for (name, text) in [
+    parse_definitions(&[
         (
             "migrations/installed.json",
             include_str!("migrations/installed.json"),
@@ -57,7 +56,13 @@ fn definitions() -> Result<Vec<Definition>, String> {
             "migrations/projects.json",
             include_str!("migrations/projects.json"),
         ),
-    ] {
+    ])
+}
+
+/// Parses the definition sources (name and text of each) and refuses a set that is not a chain.
+fn parse_definitions(sources: &[(&str, &str)]) -> Result<Vec<Definition>, String> {
+    let mut definitions = vec![];
+    for &(name, text) in sources {
         let mut parsed: Vec<Definition> = serde_json::from_str(text)
             .map_err(|error| format!("{name} is not valid JSON: {error}"))?;
         definitions.append(&mut parsed);
@@ -132,31 +137,29 @@ pub fn migration_chains_for_test()
 }
 
 /// The current format number of projects.json, the end of its definition chain.
-pub fn projects_format() -> u64 {
-    format_of(PROJECTS)
+pub fn projects_format() -> Result<u64, String> {
+    format_of(PROJECTS, &definitions()?)
 }
 
 /// The current format number of settings.json, the end of its definition chain.
-pub fn settings_format() -> u64 {
-    format_of(SETTINGS)
+pub fn settings_format() -> Result<u64, String> {
+    format_of(SETTINGS, &definitions()?)
 }
 
-/// The current format of one file of the definitions. A file without a chain has no current form; its writer refuses
-/// to stamp a number, so the failure of the definitions is reported and 0 names no form.
-fn format_of(file: &str) -> u64 {
-    match definitions() {
-        Ok(definitions) => match definitions.iter().rev().find(|step| step.file == file) {
-            Some(step) => step.to,
-            // default: no chain for the file names no form, and the writer refuses to stamp one.
-            None => 0,
-        },
-        Err(error) => {
-            // The definitions are embedded and load once; a failure here is a defect of the build, named on the spot.
-            eprintln!("event writer: the migration definitions of {file}: {error}");
-            0
-        }
-    }
+/// The current format of one file of the definitions. A file without a chain has no current form, so it is an error: the
+/// caller refuses to write a format number that the definitions do not state.
+fn format_of(file: &str, definitions: &[Definition]) -> Result<u64, String> {
+    definitions
+        .iter()
+        .rev()
+        .find(|step| step.file == file)
+        .map(|step| step.to)
+        .ok_or_else(|| format!("the migration definitions hold no chain for {file}"))
 }
+
+#[cfg(test)]
+#[path = "migrate_format_test.rs"]
+mod format_tests;
 
 /// Registers the event writer of this process for the records of the migration engine; `None` registers none.
 pub fn use_migration_log(log: Option<Arc<EventLog>>) {
@@ -209,8 +212,14 @@ fn migrate(config_dir: &Path, file: &str) -> Result<u64, String> {
         ));
     }
     let mut document = raw;
-    // default: a file with no format member is the form 0, the form before the number existed.
-    let format = document.get("format").and_then(Value::as_u64).unwrap_or(0);
+    // A file with no format member is the form 0, the form before the number existed. A member that is not a non-negative
+    // integer is refused with its JSON text, so no other form is read as form 0.
+    let format = match document.get("format") {
+        None => 0,
+        Some(value) => value
+            .as_u64()
+            .ok_or_else(|| format!("{}: format must be a number, found {value}", path.display()))?,
+    };
     let definitions = definitions()?;
     let chain: Vec<&Definition> = definitions
         .iter()

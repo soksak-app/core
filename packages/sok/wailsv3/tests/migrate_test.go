@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
@@ -250,5 +251,39 @@ func TestTheRecordOfAMigrationPassesTheDefaultPolicy(t *testing.T) {
 	}
 	if records[0]["fields"].(map[string]any)["from"] != float64(2) {
 		t.Fatalf("record %v", records[0])
+	}
+}
+
+// A file format cannot be read when the definitions cannot be read: the error reaches the caller, so no format number is written
+// for a file whose definitions are missing.
+func TestAFormatWithoutReadableDefinitionsIsAnError(t *testing.T) {
+	restore := sok.UseDefinitionsForTest(fstest.MapFS{})
+	t.Cleanup(restore)
+	if format, err := sok.ProjectsFormat(); err == nil {
+		t.Fatalf("ProjectsFormat returned %d without an error for missing definitions", format)
+	}
+	if format, err := sok.SettingsFormat(); err == nil {
+		t.Fatalf("SettingsFormat returned %d without an error for missing definitions", format)
+	}
+}
+
+// A format member that is not an integer is refused with its text. Only a missing member is the form 0.
+// contract: install.migration.refuses-forms-outside-the-chain
+func TestMigrateProjectsRefusesAFormMemberThatIsNotAnInteger(t *testing.T) {
+	for name, tc := range map[string]struct{ text, want string }{
+		"a string":   {`{"format": "1", "projects": []}`, `format must be a number, found "1"`},
+		"a fraction": {`{"format": 1.5, "projects": []}`, `format must be a number, found 1.5`},
+	} {
+		config := t.TempDir()
+		if err := os.WriteFile(filepath.Join(config, "projects.json"), []byte(tc.text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := sok.MigrateProjects(config)
+		if err == nil {
+			t.Fatalf("%s was accepted", name)
+		}
+		if !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: error %q does not contain %q", name, err, tc.want)
+		}
 	}
 }

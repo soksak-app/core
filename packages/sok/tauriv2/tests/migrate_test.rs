@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use soksak_sok::install::INSTALLED_FORMAT;
-use soksak_sok::migrate::migrate_installed;
+use soksak_sok::migrate::{migrate_installed, migrate_projects};
 use soksak_sok::plugins::read_installed;
 
 #[path = "support/folder.rs"]
@@ -248,4 +248,22 @@ fn the_record_of_a_migration_passes_the_default_policy() {
     );
     assert_eq!(records[0]["fields"]["from"], 2);
     log.close();
+}
+
+// A format member that is not an integer is refused with its text. Only a missing member is the form 0.
+// contract: install.migration.refuses-forms-outside-the-chain
+#[test]
+fn migrate_projects_refuses_a_format_member_that_is_not_an_integer() {
+    for (name, text) in [
+        ("a string", r#"{"format": "1", "projects": []}"#),
+        ("a fraction", r#"{"format": 1.5, "projects": []}"#),
+    ] {
+        let config = temp_config("format-member");
+        std::fs::write(config.path().join("projects.json"), text).unwrap();
+        let error = migrate_projects(config.path()).unwrap_err();
+        assert!(
+            error.contains("format must be a number"),
+            "{name}: {error} does not name the format member"
+        );
+    }
 }

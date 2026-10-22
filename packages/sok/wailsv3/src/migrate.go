@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -17,6 +18,9 @@ import (
 //
 //go:embed migrations/installed.json migrations/settings.json migrations/projects.json
 var migrationFS embed.FS
+
+// definitionSource is the source that the definitions are read from. UseDefinitionsForTest replaces it.
+var definitionSource fs.FS = migrationFS
 
 // migrationDefinition is one step of the chain of one stored file: the file it migrates, the format it comes from and
 // goes to, and the named operations the engine applies in order.
@@ -58,7 +62,7 @@ func migrationChains() (map[string]migrationChain, error) {
 
 // appendChain parses one definitions file of one stored file into the chains.
 func appendChain(chains map[string]migrationChain, name string) error {
-	data, err := migrationFS.ReadFile(name)
+	data, err := fs.ReadFile(definitionSource, name)
 	if err != nil {
 		return err
 	}
@@ -86,22 +90,34 @@ func appendChain(chains map[string]migrationChain, name string) error {
 }
 
 // ProjectsFormat is the current format number of projects.json, the end of its definition chain.
-func ProjectsFormat() int {
+func ProjectsFormat() (int, error) {
 	return formatOf("projects.json")
 }
 
 // SettingsFormat is the current format number of settings.json, the end of its definition chain.
-func SettingsFormat() int {
+func SettingsFormat() (int, error) {
 	return formatOf("settings.json")
 }
 
-// formatOf is the current format of one file of the definitions, or 0 without a chain.
-func formatOf(file string) int {
+// formatOf is the current format of one file of the definitions. A set of definitions that cannot be read, or a file without a
+// chain, has no current format, so the error is returned and the caller refuses to write a format number.
+func formatOf(file string) (int, error) {
 	chains, err := migrationChains()
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return chains[file].current()
+	chain, ok := chains[file]
+	if !ok {
+		return 0, fmt.Errorf("the migration definitions hold no chain for %s", file)
+	}
+	return chain.current(), nil
+}
+
+// UseDefinitionsForTest replaces the source of the definitions with fsys and returns the function that restores the embedded definitions.
+func UseDefinitionsForTest(fsys fs.FS) func() {
+	saved := definitionSource
+	definitionSource = fsys
+	return func() { definitionSource = saved }
 }
 
 // MigrationChainsForTest exposes the parsed chains for the owning tests: the chain of each file as the steps the engine
@@ -261,13 +277,18 @@ func installedFormatOf(document map[string]any) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("the file holds no format")
 	}
+	// The refusal states the member as JSON text, as the Rust host does: a string keeps its quotes.
+	text, err := json.Marshal(value)
+	if err != nil {
+		return 0, err
+	}
 	number, ok := value.(json.Number)
 	if !ok {
-		return 0, fmt.Errorf("format must be a number, found %v", value)
+		return 0, fmt.Errorf("format must be a number, found %s", text)
 	}
 	format, err := number.Int64()
 	if err != nil {
-		return 0, fmt.Errorf("format must be a number, found %v", value)
+		return 0, fmt.Errorf("format must be a number, found %s", text)
 	}
 	return int(format), nil
 }

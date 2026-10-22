@@ -71,8 +71,10 @@ fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
 
 /// Writes the projects under the `projects` member with the format member of the current form.
 fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
+    let format =
+        soksak_sok::migrate::projects_format().map_err(|e| format!("{}: {e}", path.display()))?;
     let document = serde_json::json!({
-        "format": soksak_sok::migrate::projects_format(),
+        "format": format,
         "projects": projects,
     });
     write(path, &document)

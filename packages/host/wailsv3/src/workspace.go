@@ -91,7 +91,11 @@ func readProjects(path string) ([]Record, error) {
 
 // writeProjects writes the projects under the `projects` member with the format member of the current form.
 func writeProjects(path string, projects []Record) error {
-	return writeJSON(path, Record{"format": sok.ProjectsFormat(), "projects": projects})
+	format, err := sok.ProjectsFormat()
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	return writeJSON(path, Record{"format": format, "projects": projects})
 }
 
 func readJSON(path string, into any) error {
