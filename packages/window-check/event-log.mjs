@@ -53,6 +53,19 @@ export function sessionEventStart(configDir, pid) {
   return start;
 }
 
+/** The boot of the host file of process pid, which is the start time that the file name carries; 0 when no file names pid. */
+export function sessionEventBoot(configDir, pid) {
+  const running = new RegExp(`-(\\d+)-${pid}(\\.debug)?\\.jsonl$`);
+  const name = readdirSync(join(configDir, "logs")).find((entry) => running.test(entry));
+  return name === undefined ? 0 : Number(name.match(running)[1]);
+}
+
+/** The boot that a host file name carries, or null for a name without one. */
+const bootOf = (name) => {
+  const match = name.match(/-(\d+)-\d+(\.debug)?\.jsonl$/);
+  return match === null ? null : Number(match[1]);
+};
+
 export function writeEventOffsets(configDir, offsets) {
   writeFileSync(eventOffsetFile(configDir), `${JSON.stringify(offsets)}\n`);
 }
@@ -79,9 +92,11 @@ export function eventLine(event) {
  * of seq across its main file and its debug file. A last fragment whose line is not finished is not read and is read next time.
  * When a line is not an event, a file is shorter than the read position, or no event log exists, the error contains the file name.
  */
-export function readEvents(configDir, offsets) {
+export function readEvents(configDir, offsets, since = 0) {
   const logs = join(configDir, "logs");
-  const names = readdirSync(logs).filter((name) => HOST_LOG.test(name)).sort();
+  // A file of an earlier boot than since belongs to a process that ended before this session's host started, so it is not read,
+  // whatever offset it has (its records can still be flushed after its session ended).
+  const names = readdirSync(logs).filter((name) => HOST_LOG.test(name) && bootOf(name) >= since).sort();
   if (names.length === 0) throw new Error(`${logs} holds no host event log; the application writes it there (docs/spec/logging.md#files)`);
   let events = [];
   const next = {};
@@ -139,8 +154,8 @@ export function readEvents(configDir, offsets) {
  * The lines of the error events written after offsets (`error <layer> <where or event>: <text or fields>`) and the new
  * positions.
  */
-export function readEventErrors(configDir, offsets) {
-  const { events, offsets: next } = readEvents(configDir, offsets);
+export function readEventErrors(configDir, offsets, since = 0) {
+  const { events, offsets: next } = readEvents(configDir, offsets, since);
   return { errors: events.filter((event) => event.level === "error").map(eventLine), offsets: next };
 }
 

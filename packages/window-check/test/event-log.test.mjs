@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { currentEventOffsets, eventLine, eventOffsetFile, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
+import { currentEventOffsets, eventLine, eventOffsetFile, sessionEventBoot, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, readEventOffsets, untilEventLine, untilEventLines, writeEventOffsets } from "../event-log.mjs";
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
@@ -278,6 +278,19 @@ test("with stored offsets, a file that the stored offsets do not name is judged 
   // The running process 30 writes its error after the session started.
   writeFileSync(join(dir, "logs", "host-3-30.jsonl"), line(1, "error", "host.test.current"));
   assert.deepEqual(readEventErrors(dir, start).errors, ["error host host.test.current: {}"]);
+});
+
+test("a file of an earlier boot is not judged by a session of a later boot, even when its stored offset is old", (t) => {
+  const dir = configDir(t);
+  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
+  writeEventOffsets(dir, readEventErrors(dir, {}).offsets);
+  // The earlier host writes an error after the offsets were stored, as its records flush after its session ended.
+  appendFileSync(join(dir, "logs", "host-1-10.jsonl"), line(2, "error", "host.test.late.earlier"));
+  writeFileSync(join(dir, "logs", "host-2-20.jsonl"), line(1, "info", "log.open"));
+  const start = sessionEventStart(dir, 20);
+  appendFileSync(join(dir, "logs", "host-2-20.jsonl"), line(2, "error", "host.test.current"));
+  assert.equal(sessionEventBoot(dir, 20), 2);
+  assert.deepEqual(readEventErrors(dir, start, sessionEventBoot(dir, 20)).errors, ["error host host.test.current: {}"]);
 });
 
 // F192.3-2: a wait on a record that the log policy of the folder does not store fails at once with an error that names the

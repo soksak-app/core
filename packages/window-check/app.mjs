@@ -11,7 +11,7 @@ import { connect, EndpointError } from "@soksak/client";
 import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
-import { readEventErrors, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
+import { readEventErrors, sessionEventBoot, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
 import { policyOfSetting, requireStored, untilPolicy } from "./log-policy.mjs";
 import { policyAllows } from "@soksak/log-contract";
 import { readPasteboard, restoreFailure, writePasteboard } from "./pasteboard.mjs";
@@ -234,6 +234,8 @@ export async function open(t, app) {
   // The cleanup reads the errors after this position and the recordings beside these, so both are taken before a check of
   // the endpoint can end the session.
   session.eventStart = sessionEventStart(app.configDir, client.endpoint.pid);
+  // The errors of this session are the errors of the host of this boot and of the processes it started (files of earlier boots are not judged).
+  session.eventBoot = sessionEventBoot(app.configDir, client.endpoint.pid);
   session.recordingsBefore = recordingFolders(app.configDir);
   const { endpoint } = client;
   if (endpoint.application !== app.name) {
@@ -272,7 +274,7 @@ export async function finishSession(t, session, close) {
     // check did not declare fails the check. A reload clears the error display of a document, so the log decides. The
     // log is read after the cleanups so that it includes the errors they cause.
     try {
-      const { errors, offsets } = readEventErrors(session.app.configDir, session.eventStart);
+      const { errors, offsets } = readEventErrors(session.app.configDir, session.eventStart, session.eventBoot);
       writeEventOffsets(session.app.configDir, offsets);
       for (const line of errors) t.diagnostic(`application error: ${line}`);
       const undeclared = errors.filter((line) => !session.expectedErrors.some((pattern) => pattern.test(line)));
