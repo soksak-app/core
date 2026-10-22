@@ -187,6 +187,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-5",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-settings-contract.test.mjs", id: "view settings contract publishes the required cases in order" },
+    ],
+    expected: "The view bridge reads the settings and the text scale, delivers each host change to the listeners of its name, refuses a listener-less subscription, and removes the listener of a refused subscription, each replayed against the bridge with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-4",
     implementation: [
       { file: "packages/plugin-api/calls.js", symbol: "export function createCalls" },
