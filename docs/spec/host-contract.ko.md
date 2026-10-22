@@ -1,4 +1,3 @@
-| `document.view-import-map.native` | host는 view import map을 platform에 설정하며, 그 값은 bundled frontend의 `view-imports.json`에서 읽고, 파일이 없으면 host는 시작하지 않는다. | both |
 # 호스트 계약 사례
 
 [English](host-contract.md)
@@ -193,6 +192,7 @@ fn invalid_json_closes_connection() {
 | `document.message.forward` | plugin 문서의 메시지 `{"message": value}`는 `document-message`의 payload `{surface, document, message}`가 되고, `{"error": reason}`은 host가 로그에 쓰는 이유가 되며, 둘 다 없는 값은 `document message <name> has neither message nor error`로 실패한다. | both |
 | `document.core-root.grant` | core root(`sok://core`)는 view import map의 core target을 bundled frontend에서 제공하고 그 목록은 bundled frontend의 `core-root.json`에서 읽으며(없거나 잘못된 파일은 error이다), `install.granted-items`가 요청 plugin에 허용한 설치 plugin 파일만 제공한다. 그 밖의 경로, enabled가 아닌 요청 plugin, grant가 이름 붙이지 않은 다른 plugin의 경로는 not found가 되며 `error: core root: <path> is not granted to <plugin>`을 기록한다. 허용되었으나 없는 파일은 거부가 아니라 error이다. | both |
 | `document.core-root.native` | host는 core root resolver를 platform에 등록하며, resolver는 view의 요청을 `CoreRoot`로 답한다. 허용된 module, shared target, core 파일은 확장자의 content type으로 내보내고, 거부된 path나 설치되지 않은 요청자는 not found가 되며 `error: core root: <path> is not granted to <plugin>`을 기록한다. `CoreRoot`의 error는 application log에 기록되고 요청은 not found가 된다. | both |
+| `document.view-import-map.native` | host는 view import map을 platform에 설정하며, 그 값은 bundled frontend의 `view-imports.json`에서 읽고, 파일이 없으면 host는 시작하지 않는다. | both |
 | `documents.binary.take-releases-id` | document 영역의 binary id를 take하면 저장된 byte를 돌려주고 id를 놓으므로, 같은 id의 두 번째 take는 native 오류 문구 `the binary id is not stored`로 실패한다. | both |
 | `documents.binary.take-errors` | 연결되지 않은 document의 take는 다른 document 작업의 문구인 `document "<name>" is not attached`로 실패한다. | both |
 | `view.presentation-wait.ends` | view는 변경마다 한 번 presentation wait에 참여한다. presentation 없는 끝(process-ended, hidden, unresponsive)은 wait를 한 번 끝내고 `host.trace.view.presentation-abandoned {surface, reason}`을 쓴다. presentation은 그 event 없이 wait를 끝낸다. end가 아닌 reason은 거부된다. | both |
