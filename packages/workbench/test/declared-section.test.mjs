@@ -26,7 +26,7 @@ async function harness() {
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], expanded: [], pullReply: null, deferred: [], skipped: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], skipped: [], failures: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
@@ -40,6 +40,7 @@ async function harness() {
     }),
     pull: (source) => {
       world.pulls.push(source.id);
+      if (world.pullError) return Promise.reject(world.pullError);
       if (world.deferPull) {
         let release;
         const pending = new Promise((resolve) => { release = resolve; });
@@ -49,7 +50,7 @@ async function harness() {
       return Promise.resolve(world.pullReply ?? { seq: 0, value: null });
     },
     skipped: (count) => { world.skipped.push(count); },
-    failed: (error) => { throw error; },
+    failed: (error) => { world.failures.push(error.message); },
   });
   return {
     statusId, body, world, section,
@@ -314,4 +315,36 @@ test("a change of source that removes the focused tree control moves focus to th
   } finally {
     h.body.remove();
   }
+});
+
+test("a failed pull leaves the section cleared, reports its error once, and is not retried", async () => {
+  const h = await harness();
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.world.pullReply = { seq: 1, value: list(["a"]) };
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.labels(), ["a"], "the first pull was not drawn");
+  h.world.registrants = ["view-b"];
+  h.world.active = "view-b";
+  h.world.pullReply = null;
+  h.world.pullError = new Error("snapshot store read failed");
+  h.section.reconcile();
+  await settle();
+  assert.equal(h.body.textContent, "", "the section drew the previous source's value after a failed pull");
+  assert.deepEqual(h.world.failures, ["snapshot store read failed"], "the failed pull was not reported once");
+  assert.deepEqual(h.world.pulls, ["view-a", "view-b"], "the failed pull was not made once");
+  mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  try {
+    mock.timers.tick(60000);
+    await settle();
+  } finally {
+    mock.timers.reset();
+  }
+  assert.deepEqual(h.world.pulls, ["view-a", "view-b"], "the failed pull was retried on a timer");
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.world.pulls, ["view-a", "view-b"], "a reconcile without a change of source pulled again");
+  assert.deepEqual(h.world.failures, ["snapshot store read failed"], "the failure was reported again");
+  assert.equal(h.body.textContent, "", "the section drew a value after the failed pull");
 });

@@ -375,3 +375,28 @@ test("a declared body stacks its elements in vertical orientation and wraps them
     styled.window.close();
   }
 });
+
+test("a declared section whose pull fails reports the error once through the page error event and draws nothing", async () => {
+  const plugin = "probe-d4";
+  declareDeclaredPlugin(plugin, "view-a", { fill: true });
+  declaredTransport();
+  declaredWorld.pull = () => Promise.reject(new Error("snapshot store read failed"));
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  const before = reported.length;
+  try {
+    drawSet(container, "rail-d4", { id: "set-d4", title: "세트", layout: "list", sections: [`${plugin}.view`] },
+      { card: "rail-d4", surface: "view-a", orientation: "vertical" });
+    await settle();
+    const section = container.querySelector(".set__section");
+    const report = sidebarsState().find((item) => item.sidebar === "rail-d4").sections[0];
+    assert.equal(section.querySelector(".set__body").textContent, "", "the section drew content after a failed pull");
+    assert.equal(report.mounted, false, "the section is mounted after a failed pull");
+    const errors = reported.slice(before).filter((message) => message.includes("snapshot store read failed"));
+    assert.deepEqual(errors, [`${plugin}.lines: snapshot store read failed`], "the failed pull was not reported once through the page error event");
+  } finally {
+    clearSet(container);
+    container.remove();
+  }
+});
