@@ -70,7 +70,7 @@ jobs:
         if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
         run: make -C core commits-check RANGE=${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || format('{0}..{1}', github.event.before, github.sha) }}
       - name: Structure checks
-        run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check
+        run: make -C core docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check events-check census-check
       - name: Host tests
         run: make -C core host-contract-check rust-format-check go-format-check rust-clippy-check
       - name: Package tests

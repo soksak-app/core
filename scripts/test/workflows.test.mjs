@@ -92,6 +92,9 @@ test('the push check runs every check of the structure step and the format and c
     return /run:\s*make -C core (.+)$/m.exec(step.text)[1].trim().split(/\s+/);
   };
   const wanted = [...targets('Structure checks'), ...targets('Host tests').filter((target) => target !== 'host-contract-check')];
+  // The event catalog and census audits are structure checks: a source change that removes an emitter must fail before it is pushed.
+  assert.deepEqual(['events-check', 'census-check'].filter((target) => !targets('Structure checks').includes(target)), [],
+    'the structure step of ci.yml does not run the event catalog and census audits');
   const recipe = /^push-check:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(read('Makefile'));
   assert.ok(recipe, 'the Makefile has no push-check target');
   const named = recipe[0];

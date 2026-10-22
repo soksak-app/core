@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F256: The structure step of CI and the push check run the event catalog and census audits, so a removed emitter with a remaining catalog entry fails before a push.
 - F255: The replace service fixture of the tauriv2 sidecar transport tests waits for the exit of the installed service process in its Drop: the process is ended with SIGKILL and reaped with `waitpid`, so the check that follows reads a process that has ended. The test `a_replaced_service_starts_after_the_end_of_its_process` fails on the unchanged fixture when the process takes time to exit (`the installed service process <pid> outlived the test`), and passes with the change. No product code changed.
 - F252-1-1: `createExpose` requires the port report function, reports a reply that the host refuses, and gives a failing report with both texts to `reportError`, so no reply failure leaves the page error path. The application runtimes give their exposure port a report.
 - F254: The test runner ends the process group of each test file when the file's process exits: a process that remains in the group fails the file with `left running after exit: pid <n> <command>`, and at its limit the `TIME` line names the processes other than the file's process as `left running: pid <n> <command>`. A test file that leaves a timer open after its tests pass is reported with its remaining process, and a file whose process exits while a child it started keeps running fails at that exit, not at its limit.
