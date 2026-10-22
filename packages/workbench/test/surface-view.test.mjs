@@ -523,3 +523,59 @@ test("a view surface mounted again after its dispose registers its port while th
     dom.window.close();
   }
 });
+
+test("a view reply the host refuses is reported through the page error path", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name) => {
+        // The host refuses every viewReply, so the reply of each view call is rejected.
+        if (name === "viewReply") throw new Error("host refused the reply");
+        return null;
+      } } };
+    },
+  } });
+  // The page error path is the global dispatchEvent of the surface module, so its errors are collected here.
+  const reported = [];
+  const previousError = globalThis.ErrorEvent;
+  const previousDispatch = globalThis.dispatchEvent;
+  globalThis.ErrorEvent = dom.window.ErrorEvent;
+  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+  const { registry } = await import("../exposure.js");
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-reply-report");
+  const pluginId = "fixture-reply";
+  const surfaceId = "fixture-reply-surface";
+  recordOrigin(surfaceId, null);
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, { status: [], commands: [], dom: [] });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.native.call",
+      params: { name: "registered", payload: { kind: "status", name: `${pluginId}.none` } } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.ok(reported.includes("view call 3 reply: host refused the reply"),
+      `the refused reply was not reported: ${JSON.stringify(reported)}`);
+  } finally {
+    globalThis.dispatchEvent = previousDispatch;
+    globalThis.ErrorEvent = previousError;
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});

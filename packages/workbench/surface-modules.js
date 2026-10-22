@@ -366,7 +366,10 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       (result) => ({ id: event.id, result: result ?? null }),
       // default: a rejection that is not an Error replies with its text.
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
-    ).then((reply) => scoped.native.call("viewReply", reply));
+    ).then((reply) => scoped.native.call("viewReply", reply)).catch((error) => {
+      // default: a refusal that is not an Error carries its value as the text.
+      dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} reply: ${error?.message ?? error}` }));
+    });
   });
   // The replies of the view to the commands of the page.
   const replies = scoped.native.on("view-reply", (event) => {
