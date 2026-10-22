@@ -110,3 +110,17 @@ test("checkTestPathReads refuses a test that reads a path of another core packag
     "packages/sok/wailsv3/tests/c_test.go",
   ]);
 });
+
+test("checkTestPathReads does not refuse a path that a test names as the key of a fake source", () => {
+  // The key of a map that a test passes to a checker names no file; only a line that reads a file is a read.
+  const components = [
+    { dir: "packages/plugin-api", kind: "core", name: scoped("plugin-api") },
+    { dir: "packages/workbench", kind: "core", name: scoped("workbench") },
+  ];
+  const sources = {
+    "packages/plugin-api/test/fake.test.mjs": "const source = new Map([['packages/workbench/surface-modules.js', 'text']]);\n",
+    "packages/plugin-api/test/read.test.mjs": "const text = readFileSync(new URL('../../workbench/surface-modules.js', import.meta.url));\n",
+  };
+  const errors = checkTestPathReads(components, testFiles(Object.keys(sources)), (file) => sources[file]);
+  assert.deepEqual(errors.map((error) => error.split(":")[0]), ["packages/plugin-api/test/read.test.mjs"]);
+});

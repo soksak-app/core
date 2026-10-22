@@ -117,6 +117,10 @@ export function corePackageFolders(root = ROOT) {
   return folders;
 }
 
+// A line that reads a file or names a path to open: a file-access call, a URL or module path, or a process. A string that a
+// test passes as data (the key of a fake source, a value) is not a read, so a literal that is not a relative path counts only on such a line.
+const FILE_ACCESS = /readFile|readdir|read_to_string|File::open|fs::|new URL\(|import\(|\bopen\(|[Jj]oin\(|Abs\(|Command::new|exec\.|spawn|require\(|\bfrom\s+['"]/;
+
 // The test files: a file under a test folder, or named as a Go, Rust or Node test.
 const TEST_FILE = /(^|\/)tests?\/|_test\.(go|rs)$|\.test\.mjs$/;
 
@@ -133,29 +137,35 @@ function owningComponent(cores, file) {
 /**
  * The core package that a string of a test reads a path of, or null. A relative path is resolved from the folder of the
  * test file and from the folder of its package (cargo runs a Rust test in its package folder); a path that starts with
- * `packages/` is resolved from the checkout. A Go or Rust join that names another package folder as its own segment is
- * recognized when its line also holds a `..` literal.
+ * `packages/` is resolved from the checkout.
  */
-function readsOtherPackage(text, file, owner, cores, lineHasParent) {
+function readsOtherPackage(text, file, owner, cores) {
   if (text.includes("@") || text.startsWith("/modules/")) return null;
   const path = text.replace(/^file:\/\//, "");
   const segments = path.split("/");
   const parent = segments.indexOf("..");
-  if (parent >= 0 || segments[0] === "packages") {
-    const bases = segments[0] === "packages" ? [""] : [posix.dirname(file), owner.dir];
-    const rest = segments[0] === "packages" ? path : segments.slice(parent).join("/");
-    for (const base of bases) {
-      const resolved = posix.normalize(posix.join(base, rest));
-      const target = owningComponent(cores, `${resolved}/`);
-      if (target && target !== owner) return target.name;
-    }
-    return null;
-  }
-  if (path.length >= 3 && !path.includes("/") && lineHasParent) {
-    const target = cores.find((item) => item !== owner && posix.basename(item.dir) === path);
-    if (target) return target.name;
+  if (parent < 0 && segments[0] !== "packages") return null;
+  const bases = segments[0] === "packages" ? [""] : [posix.dirname(file), owner.dir];
+  const rest = segments[0] === "packages" ? path : segments.slice(parent).join("/");
+  for (const base of bases) {
+    const target = owningComponent(cores, `${posix.normalize(posix.join(base, rest))}/`);
+    if (target && target !== owner) return target.name;
   }
   return null;
+}
+
+/**
+ * The core package that a Go or Rust join of the line reads, or null. The string literals of the line after its first `..`
+ * are the path segments of the join, resolved from the folder of the test file, which is the folder that `filepath.Dir` of
+ * the test names in the Go tests.
+ */
+function joinReadsOtherPackage(line, file, owner, cores) {
+  const literals = [...line.matchAll(LITERAL)].map((match) => match[1] ?? match[2] ?? match[3] ?? match[4] ?? "");
+  const parent = literals.indexOf("..");
+  if (parent < 0) return null;
+  const parts = literals.slice(parent).filter((text) => !text.includes("/"));
+  const target = owningComponent(cores, `${posix.normalize(posix.join(posix.dirname(file), ...parts))}/`);
+  return target && target !== owner ? target.name : null;
 }
 
 /**
@@ -175,13 +185,18 @@ export function checkTestPathReads(components, files, readSource = (file) => rea
       errors.push(`${file}: cannot be read: ${error?.message ?? error}`);
       continue;
     }
-    source.split("\n").forEach((line, index) => {
-      const lineHasParent = /"\.\."/.test(line);
+    const sourceLines = source.split("\n");
+    sourceLines.forEach((line, index) => {
+      const accessLine = FILE_ACCESS.test(line) || FILE_ACCESS.test(sourceLines[index - 1] ?? "");
       for (const match of line.matchAll(LITERAL)) {
         const text = match[1] ?? match[2] ?? match[3] ?? match[4] ?? "";
-        const target = readsOtherPackage(text, file, owner, cores, lineHasParent);
+        // A relative path (`../`) is a read wherever a test keeps it, such as a Rust constant; another literal is a read on a line that opens files.
+        if (!text.includes("../") && !accessLine) continue;
+        const target = readsOtherPackage(text, file, owner, cores);
         if (target) errors.push(`${file}:${index + 1}: test of ${owner.name} reads a path of ${target}: ${text}`);
       }
+      const joined = joinReadsOtherPackage(line, file, owner, cores);
+      if (joined) errors.push(`${file}:${index + 1}: test of ${owner.name} reads a path of ${joined}: ${line.trim()}`);
     });
   }
   return errors;
@@ -190,6 +205,7 @@ export function checkTestPathReads(components, files, readSource = (file) => rea
 function main() {
   const all = components(ROOT);
   const errors = checkNames(new Set(corePackageNames(ROOT)), trackedSources(ROOT), (file) => readFileSync(join(ROOT, file), "utf8"));
+  errors.push(...checkTestPathReads(corePackageFolders(ROOT), trackedSources(ROOT).filter((file) => TEST_FILE.test(file))));
   for (const component of all.filter((item) => item.kind === "core")) {
     // Finds the plugin ids written in quotes, attribute values and section prefixes in core sources.
     const rules = [];
