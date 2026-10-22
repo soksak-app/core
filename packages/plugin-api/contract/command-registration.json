@@ -1,0 +1,90 @@
+{
+  "surface": "packages/plugin-api/index.js#createExpose",
+  "description": "Ordered steps of command registration on a surface page: a command step registers a declared command with a run function (behavior echo returns its params, fail throws, none returns no value), and a request step forwards a command.run request {id, method: command.run, params: {name, params}} from the host. Each step lists what it produces: registered is the port registrations in order, replies is the replies sent in order, result is the value of the step's registration, and throws is the text of the error the step raises, or null. The declarations are the bundle that load returns. Each reply is {id, payload} with payload {result} or {error: {code, message}}.",
+  "cases": [
+    {
+      "id": "command.register.runs-declared-command-through-the-request",
+      "declarations": {
+        "commands": [
+          { "name": "demo.save", "description": "Saves the item.", "params": { "type": "object", "properties": { "id": { "type": "string" } } }, "result": { "type": "null" } },
+          { "name": "demo.open", "description": "Opens the item.", "params": { "type": "object" }, "result": { "type": "null" } }
+        ]
+      },
+      "steps": [
+        {
+          "command": { "name": "demo.save", "behavior": "echo" },
+          "output": { "registered": [{ "kind": "command", "name": "demo.save" }], "replies": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 1, "method": "command.run", "params": { "name": "demo.save", "params": { "id": "a" } } },
+          "output": { "registered": [], "replies": [{ "id": 1, "payload": { "result": { "id": "a" } } }], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 2, "method": "command.run", "params": { "name": "demo.save", "params": { "id": 7 } } },
+          "output": {
+            "registered": [], "result": null, "throws": null,
+            "replies": [{ "id": 2, "payload": { "error": { "code": -32602, "message": "invalid params for demo.save" } } }]
+          }
+        },
+        {
+          "request": { "id": 3, "method": "command.run", "params": { "name": "demo.save" } },
+          "output": {
+            "registered": [], "result": null, "throws": null,
+            "replies": [{ "id": 3, "payload": { "error": { "code": -32602, "message": "command.run for demo.save requires params" } } }]
+          }
+        },
+        {
+          "request": { "id": 4, "method": "command.run", "params": { "name": "demo.absent", "params": {} } },
+          "output": {
+            "registered": [], "result": null, "throws": null,
+            "replies": [{ "id": 4, "payload": { "error": { "code": 1001, "message": "unknown command demo.absent" } } }]
+          }
+        },
+        {
+          "command": { "name": "demo.save", "behavior": "echo" },
+          "output": { "registered": [], "replies": [], "result": null, "throws": "command demo.save is already registered" }
+        },
+        {
+          "command": { "name": "demo.absent", "behavior": "echo" },
+          "output": { "registered": [], "replies": [], "result": null, "throws": "command demo.absent is not declared" }
+        },
+        {
+          "request": { "id": 5, "method": "command.run", "params": { "name": "demo.open", "params": {} } },
+          "output": {
+            "registered": [], "result": null, "throws": null,
+            "replies": [{ "id": 5, "payload": { "error": { "code": 1002, "message": "command demo.open is not registered" } } }]
+          }
+        },
+        {
+          "command": { "name": "demo.open", "behavior": "fail" },
+          "output": { "registered": [{ "kind": "command", "name": "demo.open" }], "replies": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 6, "method": "command.run", "params": { "name": "demo.open", "params": {} } },
+          "output": {
+            "registered": [], "result": null, "throws": null,
+            "replies": [{ "id": 6, "payload": { "error": { "code": -32000, "message": "save failed" } } }]
+          }
+        }
+      ]
+    },
+    {
+      "id": "command.register.answers-a-command-without-a-result-as-null",
+      "declarations": {
+        "commands": [
+          { "name": "demo.close", "description": "Closes the item.", "params": { "type": "object" }, "result": { "type": "null" } }
+        ]
+      },
+      "steps": [
+        {
+          "command": { "name": "demo.close", "behavior": "none" },
+          "output": { "registered": [{ "kind": "command", "name": "demo.close" }], "replies": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 1, "method": "command.run", "params": { "name": "demo.close", "params": {} } },
+          "output": { "registered": [], "replies": [{ "id": 1, "payload": { "result": null } }], "result": null, "throws": null }
+        }
+      ]
+    }
+  ]
+}

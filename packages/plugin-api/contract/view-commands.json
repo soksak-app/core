@@ -1,0 +1,85 @@
+{
+  "surface": "packages/plugin-api/view.js#createViewBridge commands.register",
+  "description": "Ordered steps of command registration on a view page: a register step calls commands.register with a run function (run is echo, which returns its params, fail, which throws, none, which returns no value, or text, which is not a function) and then delivers the host answer (answer) to the declaration request that the step posted. A request step delivers a host request {id, command, params} for a command of the view. Each step lists what it produces: posted is the messages the page sends in order, result is the value of the register call, and throws is the text of the error the step raises, or null. The page is sok://probe/.",
+  "cases": [
+    {
+      "id": "view.commands.register-answers-and-refuses-unregistered",
+      "steps": [
+        {
+          "register": { "name": "demo.save", "run": "echo" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 1, "command": "runtime.command.register", "params": { "name": "demo.save" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "request": { "id": 10, "command": "demo.save", "params": { "id": "a" } },
+          "output": { "posted": [{ "sok": 1, "reply": 10, "result": { "id": "a" } }], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 11, "command": "demo.open", "params": null },
+          "output": {
+            "posted": [{ "sok": 1, "reply": 11, "error": { "code": 1002, "message": "view command demo.open is not registered" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "register": { "name": "demo.open", "run": "fail" },
+          "answer": { "error": { "code": -32000, "message": "declaration refused" } },
+          "output": {
+            "posted": [{ "sok": 1, "id": 2, "command": "runtime.command.register", "params": { "name": "demo.open" } }],
+            "result": null, "throws": "declaration refused"
+          }
+        },
+        {
+          "request": { "id": 12, "command": "demo.open", "params": {} },
+          "output": {
+            "posted": [{ "sok": 1, "reply": 12, "error": { "code": 1002, "message": "view command demo.open is not registered" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "register": { "name": "", "run": "echo" },
+          "output": { "posted": [], "result": null, "throws": "commands.register requires a non-empty name" }
+        },
+        {
+          "register": { "name": "demo.bad", "run": "text" },
+          "output": { "posted": [], "result": null, "throws": "commands.register requires a function for demo.bad" }
+        }
+      ]
+    },
+    {
+      "id": "view.commands.run-failure-and-empty-result",
+      "steps": [
+        {
+          "register": { "name": "demo.open", "run": "fail" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 1, "command": "runtime.command.register", "params": { "name": "demo.open" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "request": { "id": 1, "command": "demo.open", "params": {} },
+          "output": {
+            "posted": [{ "sok": 1, "reply": 1, "error": { "code": -32000, "message": "save failed" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "register": { "name": "demo.none", "run": "none" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 2, "command": "runtime.command.register", "params": { "name": "demo.none" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "request": { "id": 2, "command": "demo.none", "params": null },
+          "output": { "posted": [{ "sok": 1, "reply": 2, "result": null }], "result": null, "throws": null }
+        }
+      ]
+    }
+  ]
+}
