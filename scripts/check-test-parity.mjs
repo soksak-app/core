@@ -2270,6 +2270,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F244",
+    implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
+    tests: [
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project and declarations" },
+      { file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" },
+      { file: "packages/workbench/test/declared-ui-draw-time.test.mjs", id: "a list of 1000 items validates and draws every item" },
+      { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI inspects every executable in the bundle" },
+      { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
+      { file: "scripts/test/node-tests.test.mjs", id: "a change under a package selects the test files of that package only" },
+    ],
+    expected: "A tab carries the origin that tab creation records, the release check resolves the workbench manifest through its exports, the native test runner output matches its normalization, and each test that a failed mount could hang ends at its limit.",
+    levels: ["unit"],
+  },
+  {
     id: "F223",
     implementation: [{ file: "scripts/check-e2e.mjs", symbol: "auditE2ESource" }],
     tests: [{ file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit rejects forbidden control paths" }],
