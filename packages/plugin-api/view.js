@@ -286,9 +286,9 @@ export function createViewBridge({ handler, report }) {
   };
   const dispatch = (message) => {
     if (message.event === "theme") lastTheme = message.data;
-    // default: an event that no listener has has no listener to pass it to, so it is passed to none.
     // A status value reaches its listeners as the value, without the name that keys the event.
     const data = message.event === "status" ? message.data.value : message.data;
+    // default: an event that no listener has has no listener to pass it to, so it is passed to none.
     for (const listener of [...(listeners.get(keyOf(message)) ?? [])]) listener(data);
   };
   // A call message carries the sok marker, which the host reads as a call request of the view (docs/spec/native-surfaces.md#view-surfaces).
