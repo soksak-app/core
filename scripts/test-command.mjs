@@ -21,7 +21,16 @@ function validate(options) {
 }
 
 function errorData(error) {
-  return { name: error.name, message: error.message, ...(error.code ? { code: error.code } : {}), ...(error.path ? { path: error.path } : {}) };
+  return {
+    name: error.name, message: error.message, ...(error.code ? { code: error.code } : {}), ...(error.path ? { path: error.path } : {}),
+    ...(error instanceof AggregateError ? { errors: error.errors.map(errorData) } : {}),
+  };
+}
+
+// A command that fails and whose cleanup also fails reports both errors, so neither message is dropped.
+export function combineFailures(processError, cleanupError) {
+  if (processError && cleanupError) return new AggregateError([processError, cleanupError], 'the command failed and its cleanup failed');
+  return processError ?? cleanupError ?? null;
 }
 
 function groupExists(pid) {
@@ -162,17 +171,17 @@ export function runCommand(options) {
       clearTimeout(signalFailureTimer);
       clearTimeout(closeTimer);
       if (signal) signal.removeEventListener('abort', cancel);
-      let cleanupError = processError;
+      let cleanupError = null;
       let cleanupObservations = [];
       if (!skipCleanup) {
         try {
           cleanupObservations = await beginCleanup();
         } catch (error) {
-          cleanupError = cleanupError ?? error;
+          cleanupError = error;
           cleanupObservations = error.cleanupObservations ?? [];
         }
       }
-      const error = cleanupError ?? callbackError;
+      const error = combineFailures(processError, cleanupError) ?? callbackError;
       const status = error ? 'fail' : (requestedStatus ?? (finishedExitCode !== 0 ? 'fail' : 'pass'));
       const result = { id, status, exitCode: finishedExitCode ?? null, signal: finishedSignal ?? null, elapsedMs: elapsed(), stdout: Buffer.concat(stdoutChunks).toString('utf8'), stderr: Buffer.concat(stderrChunks).toString('utf8'), error: error ? errorData(error) : null, cleanupObservations };
       const observerError = send(status, { exitCode: result.exitCode, signal: result.signal, error: result.error, cleanupObservations }, true);

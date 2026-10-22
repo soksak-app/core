@@ -379,3 +379,15 @@ test('reads the members of a group from the real process table after a denied pr
   assert.ok(verify?.members.some((member) => member.pid === descendantPid && !member.state.startsWith('Z')), JSON.stringify(result.cleanupObservations));
   assertEnded(descendantPid);
 });
+
+test('keeps a process error and a cleanup error together when both occur', async () => {
+  const { combineFailures } = await import('../test-command.mjs');
+  const processError = new Error('spawn failed');
+  const cleanupError = Object.assign(new Error('process group survived cleanup'), { code: 'PROCESS_GROUP_CLEANUP_FAILED' });
+  const both = combineFailures(processError, cleanupError);
+  assert.ok(both instanceof AggregateError, 'the cleanup error replaced the process error');
+  assert.deepEqual(both.errors, [processError, cleanupError]);
+  assert.equal(combineFailures(processError, null), processError);
+  assert.equal(combineFailures(null, cleanupError), cleanupError);
+  assert.equal(combineFailures(null, null), null);
+});
