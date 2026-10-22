@@ -373,10 +373,16 @@ pub struct Relay {
     /// The recent requests that timed out. To state the delay of a late reply in its error, up to EXPIRED_LIMIT of them are
     /// kept and the oldest is discarded (docs/spec/exposure.md#errors).
     expired: Mutex<std::collections::VecDeque<Expired>>,
+    /// The recent requests that their document ended before a reply: the id and the document. A reply to one of them comes
+    /// from a document that has ended, so it is an observation; up to ENDED_LIMIT of them are kept (docs/spec/exposure.md#errors).
+    ended: Mutex<std::collections::VecDeque<(u64, String)>>,
 }
 
 /// The number of timed-out requests that are kept for late replies.
 const EXPIRED_LIMIT: usize = 256;
+
+/// The number of ended requests that are kept, so that a reply to one of them is an observation.
+const ENDED_LIMIT: usize = 256;
 
 /// The plugin command that a request carries. A request without one writes no call event.
 #[derive(Clone)]
@@ -547,6 +553,10 @@ impl Relay {
             }
         };
         let Some((_, tx)) = waiting else {
+            if let Some(text) = self.take_ended(id, from) {
+                crate::application_log::log_info("exposure", text);
+                return Ok(());
+            }
             return Err(self.unmatched(id, from)?);
         };
         let outcome = match error {
@@ -564,6 +574,21 @@ impl Relay {
         };
         tx.send(outcome)
             .map_err(|_| format!("exposure reply {id} has no matching request"))
+    }
+
+    /// Removes the ended request id of document from and returns the observation of its late reply, or None when the relay did
+    /// not end such a request.
+    fn take_ended(&self, id: u64, from: &str) -> Option<String> {
+        // default: a lock that a panicking thread poisoned still holds the ended requests, which this read removes an entry from; the
+        // panic hook records the panic.
+        let mut ended = self.ended.lock().unwrap_or_else(PoisonError::into_inner);
+        let index = ended
+            .iter()
+            .position(|(held, target)| *held == id && target == from)?;
+        ended.remove(index);
+        Some(format!(
+            "exposure reply {id} arrived after its request ended"
+        ))
     }
 
     /// The error of a reply id that no request waits for. For a request that timed out, it states the delay after
@@ -612,12 +637,28 @@ impl Relay {
             .filter(|(_, (target, _))| closed(target))
             .map(|(id, _)| *id)
             .collect();
-        let gone: Vec<Waiting> = ids
+        let gone: Vec<(u64, Waiting)> = ids
             .into_iter()
-            .filter_map(|id| pending.remove(&id))
+            .filter_map(|id| pending.remove(&id).map(|waiting| (id, waiting)))
             .collect();
         drop(pending);
-        for (target, tx) in gone {
+        {
+            // default: a lock that a panicking thread poisoned still holds the ended requests, which this record appends to; the
+            // panic hook records the panic.
+            let mut ended = self.ended.lock().unwrap_or_else(PoisonError::into_inner);
+            for (id, (target, _)) in &gone {
+                if ended.len() == ENDED_LIMIT {
+                    ended.pop_front();
+                    record_buffer_drop(
+                        "relay ended requests",
+                        0,
+                        &format!("{ENDED_LIMIT} requests"),
+                    );
+                }
+                ended.push_back((*id, target.clone()));
+            }
+        }
+        for (_, (target, tx)) in gone {
             if tx
                 .send(Err(Failure::new(
                     MISSING_DOCUMENT,

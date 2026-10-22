@@ -156,6 +156,32 @@ fn late_reply_states_its_delay() {
     );
 }
 
+// contract: exposure.relay.ended-reply-is-observed
+#[test]
+fn a_reply_to_a_request_that_its_document_closed_is_an_observation() {
+    let relay = Arc::new(Relay::default());
+    let closing = relay.clone();
+    let failure = relay
+        .request("surface-main-a", Some(WAIT), move |_| {
+            closing.abandon("surface-main-a");
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(failure.code, 1003);
+    // The reply to the ended request is accepted, because the document that sent it has ended.
+    assert_eq!(
+        relay.reply("surface-main-a", &text(json!({"id": 1, "result": 1}))),
+        Ok(())
+    );
+    // A reply to a request that the relay never sent is still refused.
+    assert_eq!(
+        relay
+            .reply("surface-main-a", &text(json!({"id": 101, "result": 1})))
+            .unwrap_err(),
+        "exposure reply 101 has no matching request"
+    );
+}
+
 // contract: exposure.relay.send-failure-1003
 #[test]
 fn send_failure_is_reported_without_waiting() {

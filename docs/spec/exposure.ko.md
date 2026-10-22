@@ -254,7 +254,7 @@ workbench 페이지와 카드 요소는 앱 DOM 문서를 공유하고, view 표
 
 메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다. `core.sidebar.section.control` 요청에서는 메인 페이지가 응답하기 전에 `index`나 `address`를 검증하며, 호스트는 그 요청을 읽지 않고 중계한다.
 
-표면 페이지는 표면이 제거된 뒤에 전달된 요청에 답할 수 있다. 예를 들어 표면이 닫히면서 답하는 `status.next`가 그렇다. 호스트는 표면을 제거할 때 그 표면에 보낸 모든 요청을 이미 1003으로 끝냈으므로 그 답에는 답할 요청이 없다. 호스트는 호출을 거부하지 않고 그 답을 버리며, 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`를 애플리케이션 로그에 쓴다.
+표면 페이지는 표면이 제거된 뒤에 전달된 요청에 답할 수 있다. 예를 들어 표면이 닫히면서 답하는 `status.next`가 그렇다. 호스트는 표면을 제거할 때 그 표면에 보낸 모든 요청을 이미 1003으로 끝냈으므로 그 답에는 답할 요청이 없다. 호스트는 호출을 거부하지 않고 그 답을 버리며, 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`를 애플리케이션 로그에 쓴다. 표면은 남은 채 문서가 닫히거나 다시 불러와져서 호스트가 1003으로 끝낸 요청도 같다. 그 요청에 대한 답은 버리고 관측 `exposure reply <id> arrived after its request ended`로 쓴다. 호스트는 끝난 요청을 최근 256개까지 기억하며, 그 밖의 id에 대한 답은 여전히 `exposure reply <id> has no matching request`로 실패한다.
 
 런타임 모듈은 이 호출을 프레임워크 바인딩에 대응시킨다.
 

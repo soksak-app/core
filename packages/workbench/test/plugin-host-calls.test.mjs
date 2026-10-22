@@ -361,6 +361,25 @@ test("a declared sidecar whose sidecar.json the page does not hold refuses every
 });
 
 // contract: plugin-host.channel.call-served-set
+test("the registration notice of a view call, runtime.native.call registered, registers the entry of the host like page.exposure.register", async () => {
+  const pluginHost = listen();
+  const count = registered.length;
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 40, command: "runtime.native.call", params: { name: "registered", payload: { kind: "dom", name: "probe.lines" } } });
+    await tick();
+    assert.deepEqual(registered.slice(count), [{ plugin: "probe", kind: "dom", name: "probe.lines" }]);
+    assert.deepEqual(calls.at(-1).arg, { plugin: "probe", id: 40, result: null });
+    emit("plugin-host-call", { plugin: "probe", id: 41, command: "runtime.native.call", params: { name: "registered", payload: { kind: "file", name: "probe.lines" } } });
+    await tick();
+    assert.equal(registered.length, count + 1, "a registration of an unknown kind registered an entry");
+    assert.equal(calls.at(-1).arg.error.message, "plugin host call runtime.native.call registered requires a status or dom kind");
+  } finally {
+    emit("plugin-host-ended", { plugin: "probe" });
+    pluginHost.close();
+  }
+});
+
+// contract: plugin-host.channel.call-served-set
 test("runtime.native.on subscribes the host to exposure-request, and another native event is refused", async () => {
   const pluginHost = listen();
   const count = calls.length;

@@ -343,6 +343,14 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
         return { result: null };
       }
       if (event.command === "runtime.native.call") {
+        // The registration notice of a view page: the same registration as page.exposure.register, from the view bridge.
+        if (params.name === "registered") {
+          const fields = params.payload;
+          if (typeof fields !== "object" || fields === null || Array.isArray(fields)) throw new TypeError(`plugin host call ${event.command} registered requires an object`);
+          if (fields.kind !== "status" && fields.kind !== "dom") throw new TypeError(`plugin host call ${event.command} registered requires a status or dom kind`);
+          register(plugin, fields.kind, fields.name);
+          return { result: null };
+        }
         if (params.name !== "exposureReply") throw new TypeError(`plugin host call ${event.command} ${params.name} is not served`);
         return { result: answerExposure(plugin, params.payload) };
       }

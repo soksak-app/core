@@ -266,6 +266,26 @@ func TestRelayClosedDocumentFailsItsPendingRequests(t *testing.T) {
 	}
 }
 
+// contract: exposure.relay.ended-reply-is-observed
+func TestRelayReplyToARequestTheDocumentClosedIsObserved(t *testing.T) {
+	relay := host.NewRelay[string]()
+	got := relay.Request("main", relayWait, func(uint64) error {
+		relay.Abandon(func(target string) bool { return target == "main" })
+		return nil
+	})
+	if got.Error == nil || got.Error.Code != 1003 {
+		t.Fatalf("reply %+v, want 1003", got)
+	}
+	// The reply to the ended request is accepted, because the document that sent it has ended.
+	if err := relay.Resolve(1, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err != nil {
+		t.Fatalf("reply to the ended request = %v, want it accepted as an observation", err)
+	}
+	// A reply to a request that the relay never sent is still refused.
+	if err := relay.Resolve(101, "main", host.ExposureResult{Result: json.RawMessage(`1`)}); err == nil || err.Error() != "exposure reply 101 has no matching request" {
+		t.Fatalf("reply to no request = %v", err)
+	}
+}
+
 // contract: exposure.relay.no-timeout-waits-until-close
 func TestRelayRequestWithoutTimeoutWaitsUntilTheDocumentCloses(t *testing.T) {
 	relay := host.NewRelay[string]()

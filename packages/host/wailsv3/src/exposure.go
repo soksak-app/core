@@ -222,10 +222,21 @@ type Relay[T comparable] struct {
 	// expired are the recent requests that timed out. To state the delay of a late reply in the error, it remembers up to relayExpiredLimit
 	// of them and discards the oldest (docs/spec/exposure.md#errors).
 	expired []relayExpired[T]
+	// ended are the recent requests whose document ended before its reply. A reply to one of them comes from a document that has
+	// ended, so it is an observation; it remembers up to relayEndedLimit of them and discards the oldest.
+	ended []relayEnded[T]
 }
 
 // relayExpiredLimit is the number of timed-out requests remembered for late replies.
 const relayExpiredLimit = 256
+
+// relayEndedLimit is the number of ended requests remembered, so that a reply to one of them is an observation.
+const relayEndedLimit = 256
+
+type relayEnded[T comparable] struct {
+	id     uint64
+	target T
+}
 
 type relayExpired[T comparable] struct {
 	id      uint64
@@ -323,6 +334,13 @@ func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 					id, delay, expired.timeout.Milliseconds())
 			}
 		}
+		for i, ended := range r.ended {
+			if ended.id == id && ended.target == from {
+				r.ended = append(r.ended[:i], r.ended[i+1:]...)
+				LogInfo("exposure", fmt.Sprintf("exposure reply %d arrived after its request ended", id))
+				return nil
+			}
+		}
 		return fmt.Errorf("exposure reply %d has no matching request", id)
 	}
 	delete(r.waiting, id)
@@ -340,6 +358,11 @@ func (r *Relay[T]) Abandon(match func(T) bool) {
 			continue
 		}
 		delete(r.waiting, id)
+		if len(r.ended) == relayEndedLimit {
+			r.ended = r.ended[1:]
+			recordBufferDrop("relay ended requests", 0, fmt.Sprintf("%d requests", relayEndedLimit))
+		}
+		r.ended = append(r.ended, relayEnded[T]{id: id, target: w.target})
 		w.reply <- ExposureResult{Error: rpcError(codeNoWindow, "the document closed before it replied")}
 	}
 }
