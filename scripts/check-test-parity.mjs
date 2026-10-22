@@ -56,6 +56,7 @@ lane("native tests", "js-ts", ["scripts/native-tests.mjs"], ["scripts/test/nativ
 lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/check-events.test.mjs"]),
 lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
+lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/temp-audit.mjs"], ["scripts/test/temp-audit.test.mjs"]),
 lane("census", "declaration", ["scripts/census.json"], ["scripts/test/census.test.mjs"], { testLanguage: "js-ts" }),
 lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
@@ -186,6 +187,23 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // the expected result, and the verification level of one feature.
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
+  {
+    id: "F258-2",
+    implementation: [{ file: "scripts/check-boundaries.mjs", symbol: "export function checkTestPathReads" }],
+    tests: [{ file: "scripts/test/check-boundaries.test.mjs", id: "checkTestPathReads refuses a test that reads a path of another core package" }],
+    expected: "make boundaries refuses a test of a core package whose string resolves into another core package, and the shared contract text of the manifest case table is read from docs/spec/cases, which no package owns.",
+    levels: ["unit"],
+  },
+  {
+    id: "F258-3",
+    implementation: [{ file: "scripts/audit-log.mjs", symbol: "auditLog" }],
+    tests: [
+      { file: "packages/host/wailsv3/tests/event_log_test.go", id: "TestTheEventLogPassesTheAuditOfTheContractPackage" },
+      { file: "packages/host/tauriv2/tests/event_log_test.rs", id: "the_file_passes_the_audit_of_the_contract_package" },
+    ],
+    expected: "The host tests audit their logs through the repository command, the log-contract fixtures are read from docs/spec/cases, and no test of a core package reads the fixtures or the audit module of another package by path.",
+    levels: ["unit"],
+  },
   {
     id: "F258-1",
     implementation: [
