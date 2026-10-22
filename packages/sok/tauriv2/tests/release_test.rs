@@ -486,16 +486,23 @@ fn plugin_pack_refuses_removed_manifest_fields() {
 // contract: cli.pack.rejects-unlisted-modules
 #[test]
 fn plugin_pack_rejects_a_module_that_files_does_not_list() {
-    for (manifest, want) in [(
-        r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "page/probe.js"}}"#,
-        "plugin.json: surface module page/probe.js must be listed in files",
-    )] {
-        let dir = plugin_tree();
-        write_tree(dir.path(), &[("plugin.json", manifest)]);
-        let out = Folder::new("release");
-        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
-        assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
-    }
+    let dir = plugin_tree();
+    write_tree(
+        dir.path(),
+        &[(
+            "plugin.json",
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "page/probe.js"}}"#,
+        )],
+    );
+    let out = Folder::new("release");
+    let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
+    assert_eq!(
+        (code, stderr),
+        (
+            1,
+            "sok: plugin.json: surface module page/probe.js must be listed in files\n".to_string()
+        )
+    );
     let dir = plugin_tree();
     write_tree(
         dir.path(),
