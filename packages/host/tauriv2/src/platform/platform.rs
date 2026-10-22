@@ -391,7 +391,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     /// Creates a hidden external document webview inside the surface webview surface. store is the absolute path in
     /// which the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading,
-    /// progress, canGoBack, canGoForward, error, scroll}) on the main thread. Call it on the main thread.
+    /// progress, canGoBack, canGoForward, error, scroll, navigations}) on the main thread. Call it on the main thread.
     /// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region
     /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the
     /// web view configuration of a view surface, which is the only configuration that serves the core root
@@ -483,7 +483,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn close_document(&self, document: Handle) -> Result<(), String>;
     /// Creates the plugin host webview of a plugin hidden in the window itself (docs/spec/plugin-host.md). store is the
     /// absolute path in which the persistent data store keeps the site data. changed receives the state JSON ({url,
-    /// title, loading, progress, canGoBack, canGoForward, error, scroll}) on the main thread. folder and plugin are the
+    /// title, loading, progress, canGoBack, canGoForward, error, scroll, navigations}) on the main thread. folder and plugin are the
     /// installed folder and the id of the plugin whose host the webview runs; channel is the text of the view channel
     /// script, and the configuration is the view configuration (docs/spec/native-surfaces.md#view-surfaces). The webview
     /// holds a zero frame, is hidden, draws nothing, takes no hit testing, and receives no input

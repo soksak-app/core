@@ -38,6 +38,8 @@ struct Channel {
     state: Option<HostState>,
     document: String,
     process_ready: bool,
+    /// The navigations that the last document state of the host page reported. A higher count starts a new document.
+    navigations: u64,
     calls: BTreeMap<u64, String>,
 }
 
@@ -70,10 +72,14 @@ struct HostReceived {
     error: Option<String>,
 }
 
+/// The document state of a host page (docs/spec/native-surfaces.md, document-state). The decoder checks that loading is a JSON
+/// boolean; the ready record follows navigations, because loading is also true for each progress change of a navigation.
 #[derive(Deserialize)]
 struct NavigationState {
     #[serde(default)]
+    #[allow(dead_code)]
     loading: bool,
+    navigations: Option<u64>,
 }
 
 /// Returns true when the channel forwards the call command to the main page: the registration calls of exposure, the
@@ -144,14 +150,26 @@ impl PluginHostChannels {
         }
     }
 
-    /// Records the navigation state of the host of plugin. A loading document clears its ready document, so the next ready
-    /// message of the new document is the first record of it.
+    /// Records the navigation state of the host of plugin. A navigation that starts after the last state clears the ready document;
+    /// the progress of a navigation keeps it, because the document that sent the ready message is still the one loading.
     pub fn state(&self, plugin: &str, state: &str) -> Result<(), String> {
         let loaded: NavigationState = serde_json::from_str(state)
             .map_err(|error| format!("plugin {plugin}: state is not JSON: {error}"))?;
-        if loaded.loading
-            && let Some(channel) = self.lock().get_mut(plugin)
-        {
+        let Some(navigations) = loaded.navigations else {
+            return Err(format!("plugin {plugin}: state has no navigations"));
+        };
+        let mut channels = self.lock();
+        let Some(channel) = channels.get_mut(plugin) else {
+            return Ok(());
+        };
+        if navigations < channel.navigations {
+            return Err(format!(
+                "plugin {plugin}: state counts {navigations} navigations, below the {} counted before",
+                channel.navigations
+            ));
+        }
+        if navigations > channel.navigations {
+            channel.navigations = navigations;
             channel.document.clear();
         }
         Ok(())

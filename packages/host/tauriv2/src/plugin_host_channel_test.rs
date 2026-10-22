@@ -245,11 +245,21 @@ fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
     }
 }
 
+/// The document state of a host page as the native host sends it: loading and the count of navigations that the page started.
+fn navigation_state(loading: bool, navigations: u64) -> String {
+    format!(r#"{{"loading": {loading}, "navigations": {navigations}}}"#)
+}
+
 // contract: plugin-host.channel.ready-theme
+// contract: plugin-host.channel.progress-keeps-ready
 #[test]
-fn a_ready_message_records_the_ready_document_once_per_process_and_a_navigation_clears_it() {
+fn a_ready_message_records_the_ready_document_once_per_process_and_a_new_navigation_clears_it() {
     let channels = host_channels(false);
     assert_eq!(channels.ready_document("probe"), None);
+    // The navigation starts before the page script runs, so its state arrives before the ready message.
+    channels
+        .state("probe", &navigation_state(true, 1))
+        .expect("the state is accepted");
     let ready = host_message(r#"{"event": "view.ready", "plugin": "probe", "document": "doc-1"}"#);
     assert_eq!(
         channels.receive("probe", &ready),
@@ -257,12 +267,20 @@ fn a_ready_message_records_the_ready_document_once_per_process_and_a_navigation_
     );
     assert_eq!(channels.ready_document("probe").as_deref(), Some("doc-1"));
     channels
-        .state("probe", r#"{"loading": true}"#)
-        .expect("the state is accepted");
+        .state("probe", &navigation_state(true, 1))
+        .expect("the progress state is accepted");
+    assert_eq!(
+        channels.ready_document("probe").as_deref(),
+        Some("doc-1"),
+        "the progress of the same navigation cleared the ready document"
+    );
+    channels
+        .state("probe", &navigation_state(true, 2))
+        .expect("the new navigation state is accepted");
     assert_eq!(
         channels.ready_document("probe"),
         None,
-        "a navigation kept the ready document"
+        "a new navigation kept the ready document"
     );
     assert_eq!(
         channels.receive("probe", &ready),
@@ -286,6 +304,23 @@ fn a_ready_message_records_the_ready_document_once_per_process_and_a_navigation_
             .as_ref()
             .is_err_and(|error| error.contains(r#""runtime.native.event" is unknown"#)),
         "unknown event: {unknown:?}"
+    );
+}
+
+// contract: plugin-host.channel.state-navigations-required
+#[test]
+fn a_host_state_without_navigations_or_with_a_lower_count_is_refused() {
+    let channels = host_channels(false);
+    assert_eq!(
+        channels.state("probe", r#"{"loading": true}"#),
+        Err("plugin probe: state has no navigations".to_string())
+    );
+    channels
+        .state("probe", &navigation_state(true, 2))
+        .expect("the state with two navigations is accepted");
+    assert_eq!(
+        channels.state("probe", &navigation_state(true, 1)),
+        Err("plugin probe: state counts 1 navigations, below the 2 counted before".to_string())
     );
 }
 

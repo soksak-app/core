@@ -339,18 +339,24 @@ func (s *Surfaces) pluginHostReceived(plugin, value string) {
 	}
 }
 
-// pluginHostState records the navigation state of the host of plugin. A loading document clears its ready record, so the
-// next ready message of the new document is the first record of it.
+// pluginHostState records the navigation state of the host of plugin. A navigation that starts after the last state clears its ready
+// record, so the next ready message of the new document is the first record of it. The progress of a navigation keeps the record.
 func (s *Surfaces) pluginHostState(plugin, state string) {
 	var loaded struct {
-		Loading bool `json:"loading"`
+		// Loading is decoded only to check that the state carries a JSON boolean.
+		Loading     bool    `json:"loading"`
+		Navigations *uint64 `json:"navigations"`
 	}
 	if err := json.Unmarshal([]byte(state), &loaded); err != nil {
 		LogError("plugin host channel", fmt.Errorf("plugin %s: state is not JSON: %w", plugin, err))
 		return
 	}
-	if loaded.Loading {
-		s.pluginHostChannels.setReadyDocument(plugin, "")
+	if loaded.Navigations == nil {
+		LogError("plugin host channel", fmt.Errorf("plugin %s: state has no navigations", plugin))
+		return
+	}
+	if err := s.pluginHostChannels.recordNavigations(plugin, *loaded.Navigations); err != nil {
+		LogError("plugin host channel", err)
 	}
 }
 

@@ -268,7 +268,29 @@ func TestPluginHostChannelRelaysADeclaredUISnapshot(t *testing.T) {
 	}
 }
 
+// pluginHostNavigationState is the document state of a host page as the native host sends it: loading and the count of navigations.
+func pluginHostNavigationState(loading bool, navigations uint64) string {
+	return fmt.Sprintf(`{"loading": %t, "navigations": %d}`, loading, navigations)
+}
+
+// contract: plugin-host.channel.state-navigations-required
+func TestPluginHostStateRequiresNavigationsAndRefusesALowerCount(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, false)
+	s.pluginHostState("probe", pluginHostNavigationState(true, 1))
+	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "view.ready", "plugin": "probe", "document": "doc-1"}`)); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+	// A state without navigations is refused and clears nothing; a lower count is refused and clears nothing.
+	s.pluginHostState("probe", `{"loading": true}`)
+	s.pluginHostState("probe", pluginHostNavigationState(true, 0))
+	if channel, _ := s.pluginHostChannels.channel("probe"); channel.document != "doc-1" {
+		t.Fatalf("ready document %q after the refused states, want doc-1", channel.document)
+	}
+}
+
 // contract: plugin-host.channel.ready-theme
+// contract: plugin-host.channel.progress-keeps-ready
 func TestPluginHostChannelReadyRecordsTheDocumentAndPostsTheTheme(t *testing.T) {
 	fake := &channelPlatform{}
 	s, _ := channelSurfaces(t, fake, false)
@@ -277,6 +299,8 @@ func TestPluginHostChannelReadyRecordsTheDocumentAndPostsTheTheme(t *testing.T) 
 	if len(fake.posted) != 0 {
 		t.Fatalf("a host without a ready document received %v", fake.posted)
 	}
+	// The navigation starts before the page script runs, so its state arrives before the ready message.
+	s.pluginHostState("probe", pluginHostNavigationState(true, 1))
 	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "view.ready", "plugin": "probe", "document": "doc-1"}`)); err != nil {
 		t.Fatalf("ready: %v", err)
 	}
@@ -290,10 +314,15 @@ func TestPluginHostChannelReadyRecordsTheDocumentAndPostsTheTheme(t *testing.T) 
 	if len(fake.posted) != 2 || !strings.Contains(fake.posted[1], `"event":"theme"`) {
 		t.Fatalf("posted %v, want the theme change", fake.posted)
 	}
-	// A navigation clears the ready document.
-	s.pluginHostState("probe", `{"loading": true}`)
+	// The progress of the same navigation keeps the ready document.
+	s.pluginHostState("probe", pluginHostNavigationState(true, 1))
+	if channel, _ := s.pluginHostChannels.channel("probe"); channel.document != "doc-1" {
+		t.Fatalf("ready document %q after the progress of the same navigation, want doc-1", channel.document)
+	}
+	// A new navigation clears the ready document.
+	s.pluginHostState("probe", pluginHostNavigationState(true, 2))
 	if channel, _ := s.pluginHostChannels.channel("probe"); channel.document != "" {
-		t.Fatalf("ready document %q after a navigation, want none", channel.document)
+		t.Fatalf("ready document %q after a new navigation, want none", channel.document)
 	}
 	// A ready message of another plugin, or without a document, is refused.
 	for _, message := range []string{`{"event": "view.ready", "plugin": "other", "document": "d"}`, `{"event": "view.ready", "plugin": "probe"}`} {

@@ -26,7 +26,9 @@ type pluginHostChannel struct {
 	// created, which writes host.trace.plugin-host.process-ready once.
 	document     string
 	processReady bool
-	calls        map[uint64]string
+	// navigations is the navigation count that the last document state of the host page reported. A higher count starts a new document.
+	navigations uint64
+	calls       map[uint64]string
 }
 
 // pluginHostChannels are the channels of the window, by plugin id.
@@ -75,6 +77,25 @@ func (c *pluginHostChannels) setReadyDocument(plugin, document string) bool {
 	}
 	channel.document = document
 	return true
+}
+
+// recordNavigations records the navigation count that the state of the host of plugin reports. A count above the last one clears the
+// ready document; a count below the last one is an error, because the native state counts navigations upward only.
+func (c *pluginHostChannels) recordNavigations(plugin string, navigations uint64) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	channel, ok := c.byID[plugin]
+	if !ok {
+		return nil
+	}
+	if navigations < channel.navigations {
+		return fmt.Errorf("plugin %s: state counts %d navigations, below the %d counted before", plugin, navigations, channel.navigations)
+	}
+	if navigations > channel.navigations {
+		channel.navigations = navigations
+		channel.document = ""
+	}
+	return nil
 }
 
 // firstReady reports whether the host of plugin has no ready message yet, and records that it has one now. A window without
