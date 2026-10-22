@@ -26,6 +26,7 @@ const LOCK_REPORT_BYTES: usize = 256;
 
 /// The owner of a lock content, or None when the content is not the form.
 fn parse_lock_owner(contents: &[u8]) -> Option<LockOwner> {
+    // default: contents that do not parse are not the current form, and the callers report them with the content.
     let owner: LockOwner = serde_json::from_slice(contents).ok()?;
     (owner.pid > 0 && !owner.boot.is_empty()).then_some(owner)
 }
