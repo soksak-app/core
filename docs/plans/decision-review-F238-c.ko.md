@@ -100,6 +100,19 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 제거되는 각 단언은 core 테스트, 플러그인 내 가짜 기반 단언, 또는 `make check`의 리터럴 검사에 대응한다. 대응표는 테스트를 삭제하기 전에 sub-item에 쓴다. 처음부터 필요한 행: `terminal/test/terminal.test.mjs:3874-3885`(해시 값 일치는 `screen-hash.test.mjs` 벡터에, 페이지 연결은 terminal에 남김), `:3880-3911`(가짜 기반으로 남김), `terminal/test/census.test.mjs:24,29`(`events-check.test.mjs`로), `browser/test/page.test.mjs:5`(`binder.test.mjs`로), binder 단언 `editor/test/editor.test.mjs:6`, `browser/test/address-input.test.mjs:5`, `browser/test/empty-state.test.mjs:5`, `hwp/test/hwp.test.mjs:6`, `terminal/test/terminal.test.mjs:4`(`binder.test.mjs`로), `VIEW_IMPORTS`/`checkViewPage` 단언 `editor/test/view.test.mjs:7`, `shell/test/view.test.mjs:7`, `flowmark/ui/view.test.mjs:7`(`view-imports.test.mjs`와 `view-page.test.mjs`로), 검증기 단언 `hwp/test/hwp.test.mjs:158`과 `terminal/test/manifest.test.mjs:4,22`(`packages/plugin-api/test/` 매니페스트와 진단 테스트로). 행이 없는 단언은 버리지 않는다.
 
+범위 표의 행(F238-c-12). 각 행은 제거될 plugin 단언, 그 의미를 지키는 core 대상, 대상이 확인하는 것을 적는다. 대상은 2026-10-21에 core(`packages/plugin-api/test/`, `packages/log-contract/test/`)에서 확인했다. 아직 plugin 단언이 제거된 것은 없다.
+
+| 제거될 plugin 단언 | core 대상 | 대상이 지키는 것 |
+| --- | --- | --- |
+| `terminal/test/terminal.test.mjs:3874-3885`(골든 벡터와의 해시 일치) | `packages/log-contract/test/screen-hash.test.mjs`, 이름으로 벡터를 도는 루프(`:13-21`) | 각 이름 벡터의 표준 바이트와 해시. plugin은 페이지 연결(`:3880-3911`)을 가짜에 대해 남긴다(F238-c-18) |
+| `terminal/test/census.test.mjs:24,29` | `packages/plugin-api/test/events-check.test.mjs`(`:26`, `:147`, `:161`) | 선언되지 않은 literal 이름의 emit는 파일과 줄의 발견, event도 이유 표식도 없는 source는 발견, 메시지는 파일, 줄, 규칙을 적는다 |
+| `browser/test/page.test.mjs:5`(`INTERACTIVE`) | `packages/plugin-api/test/binder.test.mjs`(`:135`) | command 바인딩이나 DOM 이름이 없는 상호작용 요소를 목록한다 |
+| `editor/test/editor.test.mjs:6`, `browser/test/address-input.test.mjs:5`, `browser/test/empty-state.test.mjs:5`, `hwp/test/hwp.test.mjs:6`, `terminal/test/terminal.test.mjs:4`의 binder import | `packages/plugin-api/test/binder.test.mjs`(`:30`, `:51`, `:59`, `:73`, `:97`) | bind는 명령을 표시하고 실행한다. 실패한 실행은 failed로 보고한다. run은 선언되지 않은 명령을 거부한다. delegate는 클릭, 변경, live input을 처리한다 |
+| `editor/test/view.test.mjs:7`, `shell/test/view.test.mjs:7`, `flowmark/ui/view.test.mjs:7`의 `VIEW_IMPORTS`와 `checkViewPage` | `packages/plugin-api/test/view-imports.test.mjs`(`:66`, `:76`)와 `view-page.test.mjs`(`:12`, `:34`, `:43`, `:51`, `:59`) | import map은 정확히 네 항목이고, 모든 import이 제공된다. `checkViewPage`는 차이마다 이름을 붙인다 |
+| `hwp/test/hwp.test.mjs:158`와 `terminal/test/manifest.test.mjs:4,22`의 검증기 단언 | 매니페스트는 `packages/plugin-api/test/validate.test.mjs`(`:33`, `:52`, `:106`), 진단은 `packages/plugin-api/test/exposure.test.mjs`(`:287`, `:290`, `:292`, `:293`) | 매니페스트는 필드별로 허용되고 거부된다. `validateDiagnostics`는 허용하고 거부한다 |
+| `packages/log-contract/test/screen-hash.test.mjs`의 벡터 루프(이름으로 매칭) | `packages/plugin-api/test/view-check.test.mjs`(F238-c-11). 이름이 같은 core 벡터와 plugin literal을 비교한다 | literal의 message와 hash가 core 벡터와 같으며, fixture가 갖지 않은 이름은 거부된다 |
+| `view-start.js`와 plugin literal의 `VIEW_IMPORTS` 네 항목 | `packages/plugin-api/test/view-check.test.mjs`와 `view-imports.test.mjs`(`:93`) | `view-start.js`의 hash와 항목이 SDK 상수와 같다 |
+
 ### 범위 밖
 
 픽스처 주석 문구와 정확한 픽스처 파일 이름(sub-item에서 정한다).
