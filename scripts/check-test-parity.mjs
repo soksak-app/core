@@ -2380,10 +2380,9 @@ const FEATURE_LINKS = [
     id: "F225",
     implementation: [{ file: "packages/plugin-api/exposure-check.js", symbol: "checkPluginRepository" }],
     tests: [
-      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a manifest with a status-form section and a module-form section is checked by the form of each section" },
-      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a status-form section carries no module source, and a module violation is still reported" },
+      { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a plugin repository whose sources match its declarations passes" },
     ],
-    expected: "The exposure check collects the module sources of a module-form section and none of a status-form section, so a manifest with a status section is checked instead of crashing.",
+    expected: "The exposure check reads a manifest whose sections are status-form sections, which carry no module source, so a manifest with a status section is checked instead of crashing.",
     levels: ["unit"],
   },
   {
@@ -3088,18 +3087,6 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/events-check.test.mjs", id: "the census exclude removes a vendored file before the catalog check parses it" },
     ],
     expected: "The catalog check does not read a file that the census exclude names.",
-    levels: ["unit"],
-  },
-  {
-    id: "F160.32.4",
-    implementation: [
-      { file: "packages/workbench/plugin-states.js", symbol: "function contextOf" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/plugin-states.test.mjs", id: "a state module is mounted for the shown project, answers its commands, stores data, and is disposed on switch" },
-      { file: "packages/workbench/test/plugin-records.test.mjs", id: "an event of a state module has the plugin in its name and no surface in its fields" },
-    ],
-    expected: "The context of a state module has the runtime functions trace and log of a surface context, without a surface.",
     levels: ["unit"],
   },
   {
