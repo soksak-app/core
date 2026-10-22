@@ -124,6 +124,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 		owner.shown, owner.root = req.ID, folder.Root
 		owner.mu.Unlock()
 		h.mu.Unlock()
+		owner.postProjectToPluginHosts()
 		owner.setTitle(req.Title + titleSuffix)
 		if !local {
 			owner.Emit("project-activate", req.ID)
@@ -145,6 +146,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	owner.mu.Unlock()
 	h.owners[req.ID] = owner
 	h.mu.Unlock()
+	owner.postProjectToPluginHosts()
 	owner.setTitle(req.Title + titleSuffix)
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
 		application.InvokeSync(func() {
@@ -197,6 +199,9 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 			owner.shown, owner.root = "", ""
 		}
 		owner.mu.Unlock()
+		if shownReleased {
+			owner.postProjectToPluginHosts()
+		}
 		if empty || shownReleased {
 			owner.setTitle(windowTitle)
 		}

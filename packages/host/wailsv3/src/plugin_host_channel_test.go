@@ -661,3 +661,26 @@ func TestViewPostsRunOnTheUIThread(t *testing.T) {
 		}
 	}
 }
+
+// contract: plugin-host.project.post
+// A change of the project that the window shows is sent to each plugin host with a ready document as the event project, with the
+// root of the project or null, as the theme is sent (docs/spec/plugin-host.md#configuration).
+func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, false)
+	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "view.ready", "plugin": "probe", "document": "doc-1"}`)); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+	fake.posted = nil
+	s.root = "/work/two"
+	s.postProjectToPluginHosts()
+	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"event":"project"`) || !strings.Contains(fake.posted[0], `"data":{"root":"/work/two"}`) {
+		t.Fatalf("posted %v, want one project event with the root /work/two", fake.posted)
+	}
+	fake.posted = nil
+	s.root = ""
+	s.postProjectToPluginHosts()
+	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"data":null`) || !strings.Contains(fake.posted[0], `"event":"project"`) {
+		t.Fatalf("posted %v, want one project event with null", fake.posted)
+	}
+}

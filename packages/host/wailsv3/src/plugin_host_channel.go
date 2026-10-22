@@ -440,6 +440,20 @@ func (c *pluginHostChannels) plugins() []string {
 	return plugins
 }
 
+// postProjectToPluginHosts posts the project that the window shows to each plugin host with a ready document, as the event project
+// with {root} or null (docs/spec/plugin-host.md#configuration). It runs after the project of the window changed.
+func (s *Surfaces) postProjectToPluginHosts() {
+	var data any
+	if root := s.ProjectRoot(); root != "" {
+		data = map[string]any{"root": root}
+	}
+	for _, plugin := range s.pluginHostChannels.plugins() {
+		if _, err := s.sendToPluginHost(plugin, map[string]any{"event": "project", "data": data}); err != nil {
+			LogError("plugin host channel", err)
+		}
+	}
+}
+
 // postThemeToPluginHosts posts the current theme to each plugin host that has a ready document. It runs after the theme
 // changed.
 func (s *Surfaces) postThemeToPluginHosts() {

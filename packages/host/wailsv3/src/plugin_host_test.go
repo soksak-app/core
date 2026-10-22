@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
+	"strings"
 )
 
 // hostViewPlatform is the platform of the plugin host tests. It records the host web views that are created with their
@@ -123,8 +124,8 @@ func TestPluginHostPageReadyCreatesHiddenHostAndLoadsPage(t *testing.T) {
 	if want := []string{"sok://probe/ui/host.html"}; len(fake.loaded) != 1 || fake.loaded[0] != want[0] {
 		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)
 	}
-	if len(fake.scripts) != 1 {
-		t.Fatalf("added scripts: %v, want the theme script of the configuration", fake.scripts)
+	if len(fake.scripts) != 2 {
+		t.Fatalf("added scripts: %v, want the theme script and the start values script of the configuration", fake.scripts)
 	}
 	if _, ok := s.pluginHosts["probe"]; !ok {
 		t.Fatalf("the host web view of probe is not recorded")
@@ -435,5 +436,38 @@ func TestViewErrorWithoutAReasonIsRefused(t *testing.T) {
 	err := windows[0].pluginHostMessage("probe", hostMessage(`{"event": "view.error"}`))
 	if err == nil || err.Error() != "plugin probe: view.error has no reason" {
 		t.Fatalf("view.error without a reason gave %v, want the refusal that names the plugin", err)
+	}
+}
+
+// contract: plugin-host.start-values.first-script
+// The plugin host configuration adds the start values script before the page loads: window.sokHost holds the frozen project of the
+// window and the exposes of the plugin, and no surface (docs/spec/plugin-host.md#configuration).
+func TestPluginHostConfigurationAddsTheStartValuesScript(t *testing.T) {
+	config := hostFixture(t)
+	fake := &hostViewPlatform{}
+	saved := system
+	system = fake
+	savedScript := viewChannelScript
+	viewChannelScript = "channel-script"
+	t.Cleanup(func() { system = saved; viewChannelScript = savedScript })
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatalf("host plugins: %v", err)
+	}
+	s := hostTestSurfaces(config)
+	s.root = "/work/one"
+	s.createPluginHosts(unsafe.Pointer(new(int)), plugins)
+	var start []string
+	for _, script := range fake.scripts {
+		if strings.Contains(script, "window.sokHost") {
+			start = append(start, script)
+		}
+	}
+	if len(start) != 1 {
+		t.Fatalf("added scripts: %v, want one start values script that sets window.sokHost", fake.scripts)
+	}
+	if !strings.Contains(start[0], `project: Object.freeze({"root":"/work/one"})`) || !strings.Contains(start[0], "declarations: {") ||
+		strings.Contains(start[0], "surface") {
+		t.Fatalf("start values script %q, want the project of the window and the exposes, and no surface", start[0])
 	}
 }

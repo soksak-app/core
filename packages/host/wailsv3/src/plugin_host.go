@@ -24,6 +24,8 @@ import (
 type hostPlugin struct {
 	id, page string
 	state    *hostState
+	// exposes is the exposes of the manifest of the plugin, as an object (docs/spec/plugin-host.md#configuration).
+	exposes json.RawMessage
 }
 
 // hostState is the state field of a host declaration: the format number of the saved value and its size limit in bytes
@@ -50,7 +52,11 @@ func hostPlugins(configDir string) ([]hostPlugin, error) {
 		if page == "" {
 			continue
 		}
-		hosts = append(hosts, hostPlugin{id: plugin.id, page: page, state: state})
+		exposes, err := hostExposes(plugin.id, plugin.manifest)
+		if err != nil {
+			return nil, err
+		}
+		hosts = append(hosts, hostPlugin{id: plugin.id, page: page, state: state, exposes: exposes})
 	}
 	return hosts, nil
 }
@@ -171,6 +177,9 @@ func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, 
 	}
 	if err == nil {
 		err = s.addThemeScript(handle)
+	}
+	if err == nil {
+		err = s.addHostStartScript(handle, declared.exposes)
 	}
 	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
 		err = fmt.Errorf("plugin host of %s cannot load sok://%s/%s", plugin, plugin, page)
@@ -590,4 +599,46 @@ func (c *pluginHostRestarts) reset(plugin string) bool {
 	}
 	delete(c.byPlugin, plugin)
 	return true
+}
+
+// hostExposes returns the exposes of the manifest of plugin as a JSON object, or {} when the manifest declares none
+// (docs/spec/plugin-host.md#configuration). An exposes that is not an object is refused.
+func hostExposes(plugin string, data []byte) (json.RawMessage, error) {
+	var manifest struct {
+		Exposes json.RawMessage `json:"exposes"`
+	}
+	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&manifest); err != nil {
+		return nil, fmt.Errorf("the manifest of plugin %s is not valid JSON", plugin)
+	}
+	if len(manifest.Exposes) == 0 || string(manifest.Exposes) == "null" {
+		return json.RawMessage("{}"), nil
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(manifest.Exposes, &object); err != nil || object == nil {
+		return nil, fmt.Errorf("the exposes of plugin %s are not an object", plugin)
+	}
+	return manifest.Exposes, nil
+}
+
+// hostStartScript returns the document-start script that sets window.sokHost to the frozen project of the window and the exposes of
+// the plugin. The host has no surface and no origin (docs/spec/plugin-host.md#configuration).
+func hostStartScript(root string, exposes json.RawMessage) (string, error) {
+	project := "null"
+	if root != "" {
+		text, err := json.Marshal(root)
+		if err != nil {
+			return "", fmt.Errorf("plugin host project cannot be serialized: %w", err)
+		}
+		project = `Object.freeze({"root":` + string(text) + `})`
+	}
+	return "window.sokHost = Object.freeze({project: " + project + ", declarations: " + string(exposes) + "});", nil
+}
+
+// addHostStartScript adds the start values script of a plugin host with the project that the window shows.
+func (s *Surfaces) addHostStartScript(document unsafe.Pointer, exposes json.RawMessage) error {
+	script, err := hostStartScript(s.ProjectRoot(), exposes)
+	if err != nil {
+		return err
+	}
+	return system.AddDocumentScript(document, script)
 }
