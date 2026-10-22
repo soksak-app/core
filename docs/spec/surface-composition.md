@@ -2,7 +2,7 @@
 
 [한국어](surface-composition.ko.md)
 
-This specification defines the ownership boundary between a surface page and native content. It is the canonical contract for DOM-only and hybrid surfaces. [Native surface layout](native-surfaces.md) defines placement of the outer surface.
+This specification defines the ownership boundary between a surface page and native content. It is the canonical contract for the native regions and overlays of a view surface. [Native surface layout](native-surfaces.md) defines placement of the outer surface.
 
 ## Model
 
@@ -21,13 +21,12 @@ Window compositor
    └─ declared DOM overlays, menus, and dialogs
 ```
 
-A DOM-only surface paints its content in the shared DOM plane and has no native regions. A hybrid surface leaves its native anchors transparent. The page controller forces each native anchor, including its descendants and pseudo-elements, transparent with zero opacity and forces every ancestor from the mounted surface root to that anchor to have no background image, background color, or box shadow. The workbench owns transparency outside that root. It forces pointer hit testing on native anchors and declared overlays, confines overlay painting to the declared overlay element's box, and continuously restores these properties if plugin code changes them. The anchor still participates in layout and DOM hit testing but provides geometry only. Declared plugin overlays and workbench menus/dialogs own input above native document regions. An overlay and a native anchor cannot contain each other.
 
 `SurfaceHost` is the sole compositor. No page, plugin, sidecar, host relay, or platform adapter may place, size, order, show, hide, hit-route, or present a native region except through the complete declared composition owned by that host.
 
 The DOM/native order above describes logical ownership and clipping, not an unqualified AppKit subview order. On macOS, a transparent `WKWebView` backing can still cover native sibling pixels when the native plane is below it in the AppKit hierarchy. The Darwin host therefore places the clipped native plane above the transparent app-DOM backing at the platform compositor level. DOM overlays and input routing still follow the logical order below; native content is never allowed to escape its `SurfaceHost` or to own an overlay's point, so the Darwin host cuts the native plane out under every visible declared overlay and the overlay's DOM pixels show there. A platform adapter must document and enforce the equivalent compositor rule rather than assuming that CSS transparency changes native sibling ordering.
 
-For a view surface the stacking order of input and visual ownership, from the top, is: the view's DOM overlays, then its view regions, then the view page DOM. A point inside a visible view overlay rect is delivered to the overlay's DOM view when that view's DOM has a hit at the point, and to nothing otherwise. It is never delivered to a region or to the native plane. A hybrid surface's `mainWebview` is hit-tested the same way as its `webview`.
+For a view surface the stacking order of input and visual ownership, from the top, is: the view's DOM overlays, then its view regions, then the view page DOM. A point inside a visible view overlay rect is delivered to the overlay's DOM view when that view's DOM has a hit at the point, and to nothing otherwise. It is never delivered to a region or to the native plane.
 
 ## Declaration
 
@@ -41,14 +40,14 @@ Every `plugin.json` surface declares one composition.
 }
 ```
 
-A `view` composition declares its page, and it declares its native regions and overlays in `plugin.json`, if it has any. Its page does not create a composition; the workbench declares the composition when the view mounts ([view surfaces](plugins.md#view-surfaces)). A hybrid composition declares every native region and every DOM overlay before the page loads. The kind `dom` does not exist: the reader refuses it.
+A `view` composition declares its page, and it declares its native regions and overlays in `plugin.json`, if it has any. Its page does not create a composition; the workbench declares the composition when the view mounts ([view surfaces](plugins.md#view-surfaces)). A view composition declares every native region and every DOM overlay before the page loads. The kind `dom` and the kind `hybrid` do not exist: the reader refuses both.
 
 ```json
 {
   "surface": {
-    "page": "ui/hybrid.html",
     "composition": {
-      "kind": "hybrid",
+      "kind": "view",
+      "page": "ui/view.html",
       "regions": [
         {
           "name": "view",
@@ -63,16 +62,16 @@ A `view` composition declares its page, and it declares its native regions and o
 }
 ```
 
-Region names are unique and match `^[a-z0-9][a-z0-9-]{0,63}$`. Region order in the array is back to front. A document region has `kind: "document"` and `input: "native"`. An image region has `kind: "image"`, names one sidecar already listed by the plugin, and has `input: "dom"`. `overlays` is an array of unique names that use the same name syntax. Unknown kinds, fields, input owners, undeclared sidecars, duplicate names, and overlays that duplicate region names are errors. A DOM composition cannot declare regions or overlays.
+Region names are unique and match `^[a-z0-9][a-z0-9-]{0,63}$`. Region order in the array is back to front. A document region has `kind: "document"` and `input: "native"`. An image region has `kind: "image"`, names one sidecar already listed by the plugin, and has `input: "dom"`. `overlays` is an array of unique names that use the same name syntax. Unknown kinds, fields, input owners, undeclared sidecars, duplicate names, and overlays that duplicate region names are errors.
 
 The workbench includes the validated declaration in every outer-surface synchronization. A host stores that declaration on the `SurfaceHost` before it accepts a page request. The host rejects a request whose caller, name, kind, supplier, generation, or operation is not declared. Calling a lower-level bridge directly does not bypass this check.
 
 ## Page API
 
-A page creates its composition once:
+A view creates its composition once through the composition of its view bridge (`bridge` is the view bridge of `@soksak/plugin-api/view`, [view surfaces](plugins.md#view-surfaces)):
 
 ```js
-const composition = await createSurfaceComposition({
+const composition = await bridge.composition.create({
   regions: { view: document.querySelector("[data-region=view]") },
   overlays: {},
 });
@@ -83,7 +82,7 @@ The keys must exactly equal the manifest declarations, and every value must be a
 
 `composition.update(change)` applies a code-driven DOM change, measures all declared anchors and overlays, and submits one complete snapshot. The controller observes every anchor, overlay, and ancestor for resize, viewport resize, scroll, and DOM mutation; every observed change submits the same complete snapshot. Every detected change submits the same complete snapshot. No observer or caller can submit one region independently. Individual public `attach`, `place`, and raw region ports do not exist.
 
-A viewport or observed-element size change always submits a composition snapshot, even when all measured insets are unchanged. A full-surface image region therefore receives a new raster configuration when its surface size changes. A visible hybrid surface has exactly one attached native region for each declared visible native region; an orphan region or a visible surface without its declared region is an error.
+A viewport or observed-element size change always submits a composition snapshot, even when all measured insets are unchanged. A full-surface image region therefore receives a new raster configuration when its surface size changes. A visible view surface has exactly one attached native region for each declared visible native region; an orphan region or a visible surface without its declared region is an error.
 
 Insets use the element's CSS rectangle and the current mounted viewport. Native surface and region frames use AppKit points, while backing scale applies only to raster dimensions. WebKit may expose a whole-CSS-pixel `visualViewport` for a fractional AppKit frame (for example, `200.5pt` at `2x` can report `200` CSS px); that platform quantization is measured explicitly and must not change the native frame or final backing-pixel row. Integer `innerWidth` and `innerHeight` do not define native raster geometry.
 
@@ -106,7 +105,7 @@ Reloading the app DOM replaces every mounted plugin document in that window. The
 
 Continuous layout commits only a complete native frame. The host keeps the previous complete frame visible while a newer composition or raster is pending; it never commits a new region geometry with an older raster, clips the old raster into the new geometry, or exposes a platform-default background. A visible image region's composition revision, raster revision, exact dimensions, and presented snapshot must all belong to the prepared layout before the host commits it. Before the first valid snapshot, the image layer stays transparent so the application's surface background remains visible. After input settles, `host.window.presented` also verifies that each image region whose own placement and `SurfaceHost` are visible has presented the exact current raster and that the resulting native transaction has reached the display. Hiding or showing the outer surface updates that requirement without changing the region raster revision. The command fails on timeout instead of accepting a missing or failed presentation. Empty native pixels, stale raster content, exposing a platform-default background, and allowing native content outside `SurfaceHost` are failures.
 
-A settled `SurfaceHost` commit has the same completion boundary: a settled surface placement is not complete until every visible image region in that composition has consumed and presented its exact current raster. Returning from a DOM-only page, such as the project library, to a hybrid surface must not expose the restored DOM page as complete while any visible native image region is still pending. Tests must verify this boundary by navigating away from a surface with multiple visible native regions and asserting every region's frame and presented raster immediately after return, without an additional presentation command.
+A settled `SurfaceHost` commit has the same completion boundary: a settled surface placement is not complete until every visible image region in that composition has consumed and presented its exact current raster. Returning from a page without native regions, such as the project library, to a view surface with native regions must not expose the restored DOM page as complete while any visible native image region is still pending. Tests must verify this boundary by navigating away from a surface with multiple visible native regions and asserting every region's frame and presented raster immediately after return, without an additional presentation command.
 
 ## Image transfer
 
@@ -137,6 +136,6 @@ A failed preparation or presentation rejects its requesting operation and appear
 - Native content remains clipped to its `SurfaceHost` on every recorded frame during split drag, window resize, hide/show, reorder, navigation, reload, replacement, and close.
 - A recording starts before native input, includes the complete gesture at the requested rate, and fails on missing frames or any platform-default pixels.
 - Tests delay and reorder composition snapshots, configure events, and image frames. Stale generations, revisions, and sequences never become visible.
-- A hybrid surface preserves native/DOM stacking and hit ownership at fractional coordinates and after backing-scale changes.
+- A view surface preserves native/DOM stacking and hit ownership at fractional coordinates and after backing-scale changes.
 - Every committed frame uses an exact current raster; a pending raster holds the previous complete frame until the new raster is consumed.
 - Both native hosts enforce the same declaration and revision rules. A platform that cannot implement them fails at startup.

@@ -2,7 +2,7 @@
 
 [English](native-surfaces.md)
 
-승인된 단일 DOM 모델은 [표면 합성](surface-composition.ko.md)과 [플러그인 모듈](plugins.ko.md#표면-모듈-소유권)이 정의한다. 논리 표면은 WebView가 아니다. 네이티브 창 상태는 그리기 순서가 아닌 등록한 네이티브 뷰로 앱 DOM을 식별하며 문서 WebView는 앱 DOM 아래에 있다. `appDomWebviews`와 `documentWebviews`는 네이티브 계층에서 측정한다. 상수를 개수로 보고하거나 첫 자식을 메인 뷰로 추정해서는 안 된다. [기능 상태](../features.ko.md)는 통합과 검증을 분리하여 기록한다.
+승인된 단일 DOM 모델은 [표면 합성](surface-composition.ko.md)과 [플러그인 모듈](plugins.ko.md#표면-소유권)이 정의한다. 논리 표면은 WebView가 아니다. 네이티브 창 상태는 그리기 순서가 아닌 등록한 네이티브 뷰로 앱 DOM을 식별하며 문서 WebView는 앱 DOM 아래에 있다. `appDomWebviews`와 `documentWebviews`는 네이티브 계층에서 측정한다. 상수를 개수로 보고하거나 첫 자식을 메인 뷰로 추정해서는 안 된다. [기능 상태](../features.ko.md)는 통합과 검증을 분리하여 기록한다.
 
 이 명세는 예제 애플리케이션의 표면 배치를 정의한다. 구현 및 검증 상태는 [기능 상태](../features.ko.md)에 기록한다.
 
@@ -52,7 +52,7 @@
 
 앱 DOM에는 모든 플러그인 DOM이 마운트된다. 앱 DOM의 표시 콜백은 해당 DOM 평면을 확인하며 다른 웹뷰의 콘텐츠를 확인하지 않는다. 문서 영역은 콘텐츠를 독립적으로 렌더링하며, 표면의 하위 뷰이므로 네이티브 프레임은 트랜잭션에서 카드 좌표를 따른다. URL 출처 비교로 표시 소유권을 정해서는 안 된다.
 
-네이티브 표면 모듈은 호스트가 해당 네이티브 표면 핸들을 준비한 뒤에만 승인한다. 승인 알림은 현재 표면 세대마다 정확히 한 번 전달되며, 그 전에는 모듈이 합성을 선언하거나 이미지 영역을 붙이거나 사이드카 세션을 열 수 없다. 승인이 없다고 무기한 불러오는 중 상태를 유지해서는 안 되며, 호스트는 작업 제한시간 안에 귀속 가능한 오류를 보고해야 한다.
+view 표면은 호스트가 해당 네이티브 표면 핸들을 준비한 뒤에만 승인한다. 승인 알림은 현재 표면 세대마다 정확히 한 번 전달되며, 그 전에는 view가 합성을 선언하거나 이미지 영역을 붙이거나 사이드카 세션을 열 수 없다. 승인이 없다고 무기한 불러오는 중 상태를 유지해서는 안 되며, 호스트는 작업 제한시간 안에 귀속 가능한 오류를 보고해야 한다.
 
 예제는 장치 픽셀 단위 배치를 유지하며, 배율이 2인 화면에서는 0.5 CSS 픽셀 크기를 포함한다. 카드, 구분선, 디바이더와 준비된 표면 사각형에 같은 격자를 적용한다. 렌더링된 콘텐츠는 푸터 앞에 빈 영역 없이 네이티브 표면을 채워야 한다. 배치 정밀도를 낮추거나 네이티브 배경색을 변경하는 것은 이 요구사항을 충족하지 않는다. 설정과 메뉴의 투명도는 별도로 설정한다.
 
@@ -91,8 +91,8 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
 
   두 document-start script는 모든 페이지 script보다 먼저 실행된다. 둘은 서로에 의존하지 않으므로 주입 순서는 이 계약의 일부가 아니다.
 - **load.** 구성을 만든 뒤 호스트는 `sok://<plugin id>/<page>`를 load한다. `<page>`는 합성의 `page`다. view의 파일은 문서 영역에 주는 plugin 파일과 같이 제공한다([문서 영역](#문서-영역)). 즉 `plugins/installed.json`이 기록한 폴더에서 가져오며, 같은 거부와 log 줄을 쓴다. view는 core root `sok://core/<path>`를 [문서 영역](#문서-영역)의 규칙과 [plugin process](plugin-processes.ko.md) 규칙 4의 grant 규칙에 따라 요청한다.
-- **배치.** view의 frame은 card 사각형과 요소의 DOM inset에서 합성기가 구한 표면 사각형이다. hybrid 합성의 outer surface와 같다([배치 순서](#배치-순서)). 호스트는 그 frame을 card의 transaction에 적용하므로, 매 frame마다 view와 card가 함께 움직인다. view의 웹뷰는 plane의 하위가 아니라 표면 host에서 native plane 아래에 있는 하위 view다. view의 선언된 overlay는 view 자신의 DOM이 그리므로, plane의 overlay mask는 view의 영역만 자르고 보이는 overlay 아래의 입력은 view 웹뷰로 간다. `hidden` 속성이 있는 요소 안이거나 너비나 높이가 0인 view는 보이지 않음으로 제출하며, 다른 표면과 같이 웹뷰와 process를 유지한다.
-- **영역.** view는 [view bridge](plugins.ko.md#view-표면)의 `composition.create({regions, overlays})`로 선언된 영역과 overlay의 composition을 만든다. key는 선언과 같고 값은 view document의 element다. controller는 각 element의 inset을 view frame인 view의 viewport에 대해 재고, hybrid composition의 controller처럼 완전한 snapshot을 제출한다([surface composition](surface-composition.ko.md#페이지-api)). 각 동작은 아래 view call 경로의 view call로 보내며, 메인 page는 hybrid composition이 쓰는 것과 같은 표면의 page 동작으로 그것을 실행한다:
+- **배치.** view의 frame은 card 사각형과 요소의 DOM inset에서 합성기가 구한 표면 사각형이다. 모든 표면의 outer surface와 같다([배치 순서](#배치-순서)). 호스트는 그 frame을 card의 transaction에 적용하므로, 매 frame마다 view와 card가 함께 움직인다. view의 웹뷰는 plane의 하위가 아니라 표면 host에서 native plane 아래에 있는 하위 view다. view의 선언된 overlay는 view 자신의 DOM이 그리므로, plane의 overlay mask는 view의 영역만 자르고 보이는 overlay 아래의 입력은 view 웹뷰로 간다. `hidden` 속성이 있는 요소 안이거나 너비나 높이가 0인 view는 보이지 않음으로 제출하며, 다른 표면과 같이 웹뷰와 process를 유지한다.
+- **영역.** view는 [view bridge](plugins.ko.md#view-표면)의 `composition.create({regions, overlays})`로 선언된 영역과 overlay의 composition을 만든다. key는 선언과 같고 값은 view document의 element다. controller는 각 element의 inset을 view frame인 view의 viewport에 대해 재고, 완전한 snapshot을 제출한다([surface composition](surface-composition.ko.md#페이지-api)). 각 동작은 아래 view call 경로의 view call로 보내며, 메인 page는 hybrid composition이 쓰는 것과 같은 표면의 page 동작으로 그것을 실행한다:
   - `composition.declaration`은 표면에 선언된 `{kind, regions, overlays}`를 돌려주며, 없는 `regions`와 `overlays`는 빈 배열이다.
   - `composition.place`는 `{regions, overlays}`로 완전한 snapshot 하나를 배치한다. 메인 page는 그것에 자기 document의 composition revision 번호를 매기고, 표면을 빼는 place가 실행되는 동안에는 배치를 보내지 않는다([영역 수명](#region-lifetime)).
   - `document.attach`는 `{name}`으로 memory saver의 영역 기록을 거쳐 붙으므로 영역은 저장된 interactionState를 한 번 복원하고, `{history}`로 답한다([memory saver](plugins.ko.md#메모리-절약)). `document.load` `{name, url}`, `document.zoom` `{name, zoom}`, `document.go` `{name, action, offset?}`, `document.post` `{name, message}`, `document.subscribe` `{name, stream}`, `document.unsubscribe` `{name, handle}`, `document.detach` `{name}`은 표면의 document 동작을 실행한다.
@@ -192,7 +192,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 표면 페이지는 문서 영역으로 자기 요소 하나에 웹 문서를 표시한다. 표면은 항상 플러그인의 페이지를 표시하며([플러그인](plugins.ko.md)), 웹 주소는 표면이 아니다.
 
 - manifest가 `^[a-z0-9][a-z0-9-]{0,63}$`와 일치하는 고유 이름을 선언한다. 페이지는 `createSurfaceComposition`에서 문서 손잡이를 얻는다. 개별 attach, place, detach 연산은 공개하지 않는다.
-- 호스트는 호출한 표면의 `SurfaceHost.NativePlane` 아래에 웹뷰를 만들고, 호출마다 호출한 웹뷰가 요청에 적힌 표면에 속하는지 확인한다. 그 웹뷰는 hybrid 표면의 앱 DOM 웹뷰이거나 [view 표면](#view-표면)의 view다. 표면은 다른 표면의 영역을 조작할 수 없다.
+- 호스트는 호출한 표면의 `SurfaceHost.NativePlane` 아래에 웹뷰를 만들고, 호출마다 호출한 웹뷰가 요청에 적힌 표면에 속하는지 확인한다. 그 웹뷰는 [view 표면](#view-표면)의 view다. 표면은 다른 표면의 영역을 조작할 수 없다.
 - 완전한 합성이 뷰포트 가장자리에서 요소까지의 여백을 CSS 픽셀로 보고하고 요소가 보이는지를 함께 보낸다. 호스트는 여백을 저장하고 바깥 표면이 바뀔 때 그림 영역(image region)에 한해 같은 네이티브 트랜잭션에서 다시 적용한다. 문서 영역은 배치할 때와 프레임이 바뀔 때 네이티브 트랜잭션 밖에서 여백을 다시 적용하며, 명세는 문서 영역에 트랜잭션을 주장하지 않는다.
 - 페이지는 요소를 숨겨 영역을 숨긴다. 그러면 합성이 영역을 보이지 않는 것으로 보고하고, 호스트는 네이티브 뷰를 숨겨 그 뷰는 그리지도 입력을 받지도 않는다. 브라우저 플러그인은 `browser.location`이 빈 `url`을 보고하는 동안, 즉 첫 주소를 열기 전에 문서 요소를 숨긴다. 저장된 주소가 없는 브라우저 표면은 마운트할 때 브라우저 설정 `browser.home`(라벨 `홈 주소`, 기본값이 빈 주소 설정)의 주소를 연다. 그 설정이 비어 있으면 표면은 빈 상태로 시작한다. 그 자리에는 `주소를 입력하세요` 문구의 빈 상태 `browser.empty`를 표시하고, 이를 누르면 `browser.address.select`가 실행되어 주소창에 초점을 주고 값을 선택한다. 상태가 비어 있지 않은 `url`을 보고하면 플러그인은 빈 상태를 없애고 문서 요소를 다시 표시한다.
 - 영역은 `http`, `https`, `file`, `sok` 주소를 연다([애플리케이션 주소](native-host.ko.md#애플리케이션-주소)). 앱 자체 스킴은 요청할 때와 문서가 이동할 때 모두 거부한다. `file` 주소는 loadFileURL:allowingReadAccessToURL: 로 열어 파일이 있는 디렉터리까지 읽기 권한을 준다. 영역 문서는 앱 문서와 분리된 영구 웹사이트 데이터 저장소 하나를 사용하며 앱 브리지를 받지 않는다. 저장소는 쿠키, 로컬 저장소, 캐시 같은 사이트 데이터를 앱 설정 디렉터리 안의 `document-data` 디렉터리에 둔다. 설정 디렉터리는 앱이 `--config-dir`로 시작하면 그 디렉터리이고, 아니면 기본 설정 디렉터리다. 따라서 두 설정 디렉터리는 사이트 데이터를 공유하지 않고, 설정 디렉터리를 지우면 그 사이트 데이터도 지워진다. 공개 `dataStoreForIdentifier:`는 모든 저장소를 앱의 WebKit 컨테이너에 두므로, 호스트는 `_WKWebsiteDataStoreConfiguration` `initWithDirectory:`로 저장소를 만든다([비공개 네이티브 API](../operations/private-native-apis.ko.md)).

@@ -133,7 +133,6 @@ fn invalid_json_closes_connection() {
 | `diagnostics.objects.runtime-memory` | `diagnostics.objects`는 Go runtime의 수치 여덟 개를 가진 `runtime`을 돌려준다: heap 객체, 쓰이지 않는 heap, free heap, released heap, stack, 그 밖의 metadata의 byte 수, heap goal, goroutine 수다. | wailsv3 only: Tauri host에는 garbage collection runtime이 없다 |
 | `diagnostics.heap-profile.writes-a-profile` | `diagnostics.heap.profile`은 Go runtime의 heap profile(gzip으로 압축한 protocol buffer)을 진단 폴더의 `heap-<pid>-<ms>.pprof`에 쓰고 그 경로로 답한다. | wailsv3 only: Tauri host에는 garbage collection heap이 없다 |
 | `diagnostics.objects.counts-documents` | `diagnostics.objects`는 main page와 창의 각 document region의 요소 수와 문서 수를 돌려준다. | both |
-| `diagnostics.objects.counts-parked-elements` | `diagnostics.objects`는 page content world가 park된 surface host에 대해 답한 `parkedElements`를 `page`에 돌려주고, 그 답이 없는 page는 count가 실패한다. | both |
 | `diagnostics.crash.report-is-announced-once` | crash report 폴더에 있는 애플리케이션의 crash report는 level `warn`의 event `host.crash.found`(`path`, `pid`, header의 `time`)이다. 두 번째 lookup은 아무것도 알리지 않고, 나중에 생긴 report는 다음 lookup만 알린다. | both |
 | `diagnostics.crash.report-belongs-to-the-application` | 파일 이름이 다른 이름으로 시작하거나, header가 다른 애플리케이션(애플리케이션 이름으로 시작하는 이름 포함)을 가리키거나, 확장자가 `.ips`가 아닌 report는 알리지 않는다. | both |
 | `diagnostics.crash.lookup-is-bounded` | lookup 한 번은 파일 이름 기준으로 애플리케이션의 최신 report 64개만 알리고 그보다 오래된 것은 알리지 않는다. | both |
@@ -223,8 +222,8 @@ fn invalid_json_closes_connection() {
 | `view.regions.close-with-process` | view의 process가 끝나면 호스트는 view를 다시 만들기 전에 그 표면의 document·image 영역을 닫으므로, 새 view는 선언된 영역 이름을 다시 붙인다. view 자체는 재시작 한도 안에서 다시 만들어진다. | both |
 | `view.process-ended.forgets-regions` | view의 process가 끝나면 호스트는 그 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내므로, 페이지는 새 view가 영역을 다시 붙일 때까지 그 표면의 영역을 잊는다. | both |
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `sok://<plugin>/<page>`를 load한다. | both |
-| `view.composition.page-and-regions` | 호스트는 surface의 합성 선언을 검증한다. `page`가 plugin의 하나의 `.html` 파일이고 `regions`와 `overlays`가 선택적인 `view` 합성은 받아들이고, `page`가 없는 `view`, plugin 밖의 `page`, 접미사가 `.html`이 아니거나 `.binary` 폴더 안의 `page`, `page`를 가진 `hybrid` 합성은 거절한다. | both |
-| `view.composition.dom-removed` | 제거된 `dom` 합성 kind는 `plugin <plugin> surface composition: kind dom is removed; the composition takes kind view or hybrid`으로 거절된다. | both |
+| `view.composition.page-and-regions` | 호스트는 surface의 합성 선언을 검증한다. `page`가 plugin의 하나의 `.html` 파일이고 `regions`와 `overlays`가 선택적인 `view` 합성은 받아들이고, `page`가 없는 `view`, plugin 밖의 `page`, 접미사가 `.html`이 아니거나 `.binary` 폴더 안의 `page`, `surface.module`과 `hybrid` 합성은 거절한다. | both |
+| `view.composition.dom-removed` | 제거된 `dom` 합성 kind는 `plugin <plugin> surface composition: kind dom is removed; the composition takes kind view`로, 제거된 `hybrid` kind는 `kind hybrid is removed; the composition takes kind view`로 거절된다. | both |
 | `view.overlays.reach-native-in-declared-order` | view surface의 DOM overlay는 배치가 어떤 순서로 도착하든 선언된 순서대로, 선언한 overlay마다 하나씩 자신의 insets와 표시 여부를 가지고 native surface에 전달된다. | both |
 | `view.overlays.native-mask-values` | view surface의 native overlay mask는 native 호출 순서대로 overlay마다 다섯 값을 받는다. left, top, right, bottom insets와, 보이는 overlay는 1, 숨긴 overlay는 0인 표시 flag다. | both |
 | `host.arguments.declared-only` | `--config-dir PATH`와 `--config-dir=PATH`는 설정 폴더를 정한다. 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag는 그 문장으로 실패한다. | both |
@@ -668,7 +667,7 @@ fn invalid_json_closes_connection() {
 | `cli.pack.writes-sorted-plugin-release` | `sok plugin pack`은 `package.json`과 나열한 파일을 경로 순서, mode 0644나 0755, 시각 0, 소유자 0으로 담은 `<id>-<version>.tgz`를 쓰고, `id`, `release`, `sha256`, `version`을 출력하며, 되풀이하면 같은 byte를 쓴다. | both |
 | `cli.pack.rejects-links-and-manifest-mismatch` | 나열한 폴더 안의 symbolic link, id 없는 `plugin.json`, `soksak`이 있는 `package.json`은 종료 상태 1로 실패하고 출력 폴더를 비워 둔다. | both |
 | `cli.pack.diagnostics-only-with-flag` | `sok plugin pack`은 `diagnostics.json`과 그 module을 빼고, `--diagnostics`는 둘을 더하며, `files`가 둘 중 하나를 나열하면 pack이 실패하고, `plugin pack` 밖의 `--diagnostics`는 종료 상태 2다. | both |
-| `cli.pack.rejects-unlisted-modules` | `plugin.json`의 surface module이나 view page가 `files`가 나열한 경로 밖에 있으면 `sok plugin pack`은 종료 상태 1로 실패하고 그 module을 밝힌다. | both |
+| `cli.pack.rejects-unlisted-modules` | `plugin.json`의 view page가 `files`가 나열한 경로 밖에 있으면 `sok plugin pack`은 종료 상태 1로 실패하고 그 module을 밝힌다. | both |
 | `cli.pack.refuses-removed-fields` | `plugin.json`이 `state` field나 `module`을 가진 section을 선언하면 `sok plugin pack`은 종료 상태 1로 실패하고 plugin과 field를 밝힌다. 오류는 `plugin <id>: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)` 또는 `plugin <id>: section <section> module is removed; a section takes status (docs/spec/declared-ui.md)`다. | both |
 | `cli.pack.binary-path-refused` | `files`가 `.binary` 부분을 가진 경로를 나열하면 `sok plugin pack`은 종료 상태 1로 실패하고 release를 쓰지 않으며, `plugin release lists <path>: the .binary path is reserved for the binary store`라는 text로 그 경로를 밝힌다. | both |
 | `cli.pack.view-page-listed` | `sok plugin pack`은 view composition의 `page`가 `files`가 나열한 경로 밖에 있으면 종료 상태 1로 실패하고 release를 쓰지 않으며, `plugin.json: view page <path> must be listed in files`라는 text로 그 page를 밝힌다. `files`의 폴더가 그 page를 덮으면 pack한다. | both |
