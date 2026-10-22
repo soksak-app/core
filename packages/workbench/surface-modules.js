@@ -350,7 +350,9 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     // The receipt of a call and its reply are records of the page at the debug level, so a call that never replies is the last
     // receipt without a reply (docs/spec/logging.md#policy).
     emitEvent("debug", "page.view.call", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command) });
-    answerViewCall(event, options).then(
+    // A surface that declares surface.unload reads its tab state from the store, which the page opens during its start (projects.js).
+    // Its call waits until the store has been tried, as the mount does, so a call during the start is not answered before the store.
+    (surface.unload ? tabStatesReady().then(() => answerViewCall(event, options)) : answerViewCall(event, options)).then(
       // default: a handler that returns no value replies with null, which is the result of a call without a value.
       (result) => ({ id: event.id, result: result ?? null }),
       // default: a rejection that is not an Error replies with its text.
