@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"encoding/json"
 	"math"
 	"reflect"
 	"testing"
@@ -8,6 +9,11 @@ import (
 	host "github.com/soksak-app/core/packages/host/wailsv3/src"
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
 )
+
+// viewStart is the start values of a view surface whose tab recorded no directory, the origin that every view surface carries.
+func viewStart() *host.ViewStart {
+	return &host.ViewStart{Origin: json.RawMessage(`{"directory":null}`)}
+}
 
 // contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite
 func TestValidateRectRejectsNegativeAndNonFiniteSizes(t *testing.T) {
@@ -24,17 +30,17 @@ func TestValidateRectRejectsNegativeAndNonFiniteSizes(t *testing.T) {
 
 // contract: surfaces-geometry.sync.rejects-surface-rect-before-layout
 func TestSyncRequestCheckRejectsAnInvalidSurfaceRectangle(t *testing.T) {
-	dom := host.SurfaceComposition{Kind: "hybrid", Regions: []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
-	valid := host.Surface{ID: "tab-1", Visible: true, Plugin: "page", Composition: dom, Rect: host.Rect{W: 10, H: 10}}
+	dom := host.SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
+	valid := host.Surface{ID: "tab-1", Visible: true, Plugin: "page", Composition: dom, Start: viewStart(), Rect: host.Rect{W: 10, H: 10}}
 	if _, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid}}, map[string]host.SurfaceComposition{}, map[string]string{}); err != nil {
 		t.Fatalf("a valid sync request was refused: %v", err)
 	}
-	negative := host.Surface{ID: "tab-2", Visible: true, Plugin: "page", Composition: dom, Rect: host.Rect{W: -1, H: 10}}
+	negative := host.Surface{ID: "tab-2", Visible: true, Plugin: "page", Composition: dom, Start: viewStart(), Rect: host.Rect{W: -1, H: 10}}
 	_, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid, negative}}, map[string]host.SurfaceComposition{}, map[string]string{})
 	if want := `surface "tab-2" geometry must not have a negative size`; err == nil || err.Error() != want {
 		t.Fatalf("the sync check returned %v before the layout began, want %q", err, want)
 	}
-	nonFinite := host.Surface{ID: "tab-3", Visible: true, Plugin: "page", Composition: dom, Rect: host.Rect{X: math.Inf(1), W: 10, H: 10}}
+	nonFinite := host.Surface{ID: "tab-3", Visible: true, Plugin: "page", Composition: dom, Start: viewStart(), Rect: host.Rect{X: math.Inf(1), W: 10, H: 10}}
 	_, err = host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{nonFinite}}, map[string]host.SurfaceComposition{}, map[string]string{})
 	if want := `surface "tab-3" geometry must contain finite numbers`; err == nil || err.Error() != want {
 		t.Fatalf("the sync check returned %v before the layout began, want %q", err, want)
@@ -61,8 +67,8 @@ func TestSyncRequestCheckRejectsAnInvalidWindowOverlayRectangle(t *testing.T) {
 
 // contract: surfaces-geometry.sync.plugin
 func TestSyncRequestCheckRequiresTheSamePluginOfEachSurface(t *testing.T) {
-	document := host.SurfaceComposition{Kind: "hybrid", Regions: []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
-	surface := host.Surface{ID: "tab-1", Visible: true, Plugin: "page", Composition: document, Rect: host.Rect{W: 10, H: 10}}
+	document := host.SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
+	surface := host.Surface{ID: "tab-1", Visible: true, Plugin: "page", Composition: document, Start: viewStart(), Rect: host.Rect{W: 10, H: 10}}
 	held := map[string]host.SurfaceComposition{"tab-1": document}
 	if _, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{surface}}, held, map[string]string{"tab-1": "page"}); err != nil {
 		t.Fatalf("a held surface with the same plugin was refused: %v", err)

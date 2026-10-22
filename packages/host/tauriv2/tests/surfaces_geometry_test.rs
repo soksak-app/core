@@ -26,7 +26,8 @@ fn sync_request(request: serde_json::Value) -> SyncRequest {
 fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
-        "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
+        "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
+        "start": {"origin": {"directory": null}},
     })
 }
 
@@ -90,7 +91,7 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
 // contract: surfaces-geometry.sync.plugin
 #[test]
 fn sync_request_check_requires_the_same_plugin_of_each_surface() {
-    let document = serde_json::json!({"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []});
+    let document = serde_json::json!({"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []});
     let mut value = surface("tab-1", 10.0);
     value["composition"] = document.clone();
     let held = HashMap::from([(
@@ -151,7 +152,7 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
         r#"surface "tab-1": view start declarations are not an object"#
     );
-    // A surface of another composition carries no start values.
+    // The removed hybrid composition is refused with the plugin and the field, whatever its start values.
     let hybrid = serde_json::json!({
         "id": "tab-1", "module": "surface.js", "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page",
@@ -163,7 +164,7 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
-        r#"surface "tab-1": only a view surface carries start values"#
+        r#"surface "tab-1": plugin page surface composition: kind hybrid is removed; the composition takes kind view"#
     );
 }
 

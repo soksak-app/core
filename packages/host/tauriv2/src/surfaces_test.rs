@@ -94,6 +94,26 @@ fn a_view_composition_declares_its_page_with_optional_regions() {
 
 // contract: view.composition.dom-removed
 #[test]
+fn a_hybrid_composition_is_refused_with_the_plugin_and_the_field() {
+    use super::{SurfaceComposition, validate_composition};
+    let region = serde_json::json!({"name": "page", "kind": "document", "input": "native"});
+    for value in [
+        serde_json::json!({"kind": "hybrid", "regions": [region], "overlays": []}),
+        serde_json::json!({"kind": "hybrid", "page": "ui/page.html", "regions": [region], "overlays": []}),
+    ] {
+        let composition: SurfaceComposition =
+            serde_json::from_value(value.clone()).expect("the fixture is valid");
+        let error = validate_composition("probe", &composition).expect_err("the hybrid kind is removed");
+        assert_eq!(
+            error,
+            "plugin probe surface composition: kind hybrid is removed; the composition takes kind view",
+            "composition {value}"
+        );
+    }
+}
+
+// contract: view.composition.dom-removed
+#[test]
 fn a_dom_composition_is_refused_with_the_plugin_and_the_field() {
     use super::{SurfaceComposition, validate_composition};
     let composition: SurfaceComposition =
@@ -101,7 +121,7 @@ fn a_dom_composition_is_refused_with_the_plugin_and_the_field() {
     let error = validate_composition("probe", &composition).expect_err("the dom kind is removed");
     assert_eq!(
         error,
-        "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"
+        "plugin probe surface composition: kind dom is removed; the composition takes kind view"
     );
 }
 

@@ -94,8 +94,8 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 		t.Fatalf("params that are not JSON: %v", err)
 	}
 	entries[0].Composition = SurfaceComposition{Kind: "hybrid", Regions: []SurfaceRegion{{Name: "main", Kind: "image", Input: "dom", Sidecar: "probe"}}, Overlays: []string{}}
-	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": only a view surface carries start values` {
-		t.Fatalf("start values beside another composition: %v", err)
+	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": plugin probe surface composition: kind hybrid is removed; the composition takes kind view` {
+		t.Fatalf("a hybrid composition with start values: %v", err)
 	}
 }
 

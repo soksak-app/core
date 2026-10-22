@@ -208,9 +208,8 @@ type WindowObjectCounter interface {
 type PageObjectCounter interface {
 	// CountPageObjects evaluates the element count of the main document of view and its document count (the main document and its frames) in the
 	// page content world, or in the content world of document regions when document is true, and gives done the counts with a nil error, or zero
-	// counts and the failure. In the page content world parked is the element count of the parked surface hosts of the workbench, which are
-	// outside the document; a document world gives zero. Call it on the UI thread, and done is also called on the UI thread.
-	CountPageObjects(view unsafe.Pointer, document bool, done func(elements, documents, parked int64, err error))
+	// counts and the failure. Call it on the UI thread, and done is also called on the UI thread.
+	CountPageObjects(view unsafe.Pointer, document bool, done func(elements, documents int64, err error))
 }
 
 // Capturer is the window recording operation. Only the platform implementation of a diagnostic build (tag diagnostics) provides it, and

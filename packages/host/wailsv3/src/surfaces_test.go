@@ -653,8 +653,24 @@ func TestViewCommandReplyIsForwardedAsAViewReplyEvent(t *testing.T) {
 // contract: view.composition.dom-removed
 func TestDomCompositionIsRefusedWithThePluginAndTheField(t *testing.T) {
 	err := validateComposition("probe", SurfaceComposition{Kind: "dom"})
-	want := "plugin probe surface composition: kind dom is removed; the composition takes kind view or hybrid"
+	want := "plugin probe surface composition: kind dom is removed; the composition takes kind view"
 	if err == nil || err.Error() != want {
 		t.Fatalf("dom composition error %v, want %q", err, want)
+	}
+}
+
+// The hybrid composition kind is removed: the reader refuses it, whether or not it is complete, with the same error as the dom kind.
+// contract: view.composition.dom-removed
+func TestHybridCompositionIsRefusedWithThePluginAndTheField(t *testing.T) {
+	document := SurfaceRegion{Name: "page", Kind: "document", Input: "native"}
+	for _, composition := range []SurfaceComposition{
+		{Kind: "hybrid", Regions: []SurfaceRegion{document}, Overlays: []string{}},
+		{Kind: "hybrid", Page: "ui/page.html", Regions: []SurfaceRegion{document}, Overlays: []string{}},
+	} {
+		err := validateComposition("probe", composition)
+		want := "plugin probe surface composition: kind hybrid is removed; the composition takes kind view"
+		if err == nil || err.Error() != want {
+			t.Fatalf("hybrid composition %+v error %v, want %q", composition, err, want)
+		}
 	}
 }

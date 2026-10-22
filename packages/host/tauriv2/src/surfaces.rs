@@ -193,33 +193,25 @@ fn valid_view_page(page: &str) -> bool {
 }
 
 fn validate_composition(plugin: &str, composition: &SurfaceComposition) -> Result<(), String> {
-    if composition.kind == "dom" {
+    if composition.kind == "dom" || composition.kind == "hybrid" {
         return Err(format!(
-            "plugin {plugin} surface composition: kind dom is removed; the composition takes kind view or hybrid"
+            "plugin {plugin} surface composition: kind {} is removed; the composition takes kind view",
+            composition.kind
         ));
     }
-    if composition.kind == "view" {
-        if !valid_view_page(&composition.page) {
-            return Err(format!(
-                "view composition page {:?} must be a path inside the plugin release that ends in .html",
-                composition.page
-            ));
-        }
-        return validate_regions(composition);
+    if composition.kind != "view" {
+        return Err("surface composition must be view".into());
     }
-    if composition.kind != "hybrid"
-        || composition.regions.is_empty()
-        || composition.overlays.is_none()
-    {
-        return Err("surface composition must be view or a complete hybrid composition".into());
-    }
-    if !composition.page.is_empty() {
-        return Err("hybrid composition cannot declare a page".into());
+    if !valid_view_page(&composition.page) {
+        return Err(format!(
+            "view composition page {:?} must be a path inside the plugin release that ends in .html",
+            composition.page
+        ));
     }
     validate_regions(composition)
 }
 
-/// Checks the names and kinds of the regions and overlays of a hybrid or view composition.
+/// Checks the names and kinds of the regions and overlays of a view composition.
 fn validate_regions(composition: &SurfaceComposition) -> Result<(), String> {
     let mut seen = HashSet::new();
     for region in &composition.regions {
@@ -689,17 +681,9 @@ pub fn check_sync_request(
                 surface.id
             ));
         }
-        if surface.start.is_some() && surface.composition.kind != "view" {
-            return Err(format!(
-                "surface {:?}: only a view surface carries start values",
-                surface.id
-            ));
-        }
-        if surface.composition.kind == "view" {
-            // default: a view without start values has no origin, which validate_view_start refuses.
-            let start = surface.start.clone().unwrap_or_default();
-            validate_view_start(&surface.id, &start)?;
-        }
+        // default: a view without start values has no origin, which validate_view_start refuses.
+        let start = surface.start.clone().unwrap_or_default();
+        validate_view_start(&surface.id, &start)?;
     }
     request
         .overlays
@@ -909,27 +893,25 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
                 Ok(())
             })?;
             // The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
-            if s.composition.kind == "view" {
-                let view_window = window.clone();
-                let surface = s.id.clone();
-                let plugin = s.plugin.clone();
-                let page = s.composition.page.clone();
-                // default: a view surface without start values has no origin; documents::sync_view refuses it when it
-                // builds the start values script, and CheckSyncRequest refuses it first.
-                let start = s.start.clone().unwrap_or_default();
-                exposure::on_main(window, move || {
-                    documents::sync_view(
-                        &view_window,
-                        platform,
-                        handle,
-                        &surface,
-                        &plugin,
-                        &page,
-                        visible,
-                        start,
-                    )
-                })?;
-            }
+            let view_window = window.clone();
+            let surface = s.id.clone();
+            let plugin = s.plugin.clone();
+            let page = s.composition.page.clone();
+            // default: a view surface without start values has no origin; documents::sync_view refuses it when it
+            // builds the start values script, and CheckSyncRequest refuses it first.
+            let start = s.start.clone().unwrap_or_default();
+            exposure::on_main(window, move || {
+                documents::sync_view(
+                    &view_window,
+                    platform,
+                    handle,
+                    &surface,
+                    &plugin,
+                    &page,
+                    visible,
+                    start,
+                )
+            })?;
         }
 
         // Only the page writes the surface list, so a surface that is not in the list is a removed surface.

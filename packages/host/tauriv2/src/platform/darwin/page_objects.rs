@@ -15,7 +15,6 @@ unsafe extern "C" {
             context: *mut c_void,
             elements: i64,
             documents: i64,
-            parked: i64,
             error: *const c_char,
         ),
         context: *mut c_void,
@@ -28,19 +27,15 @@ extern "C" fn counted(
     context: *mut c_void,
     elements: i64,
     documents: i64,
-    parked: i64,
     error: *const c_char,
 ) {
     // context is the value that Box::into_raw made from done, and the library calls done once.
     let done = unsafe { Box::from_raw(context.cast::<Done>()) };
     let result = if error.is_null() {
-        Ok((
-            PageObjects {
-                elements: elements as usize,
-                documents: documents as usize,
-            },
-            parked as usize,
-        ))
+        Ok(PageObjects {
+            elements: elements as usize,
+            documents: documents as usize,
+        })
     } else {
         Err(unsafe { CStr::from_ptr(error) }
             .to_string_lossy()
@@ -49,7 +44,7 @@ extern "C" fn counted(
     done(result);
 }
 
-/// Gives done the counts of the web view view and the element count of its parked surface hosts. Call it on the main thread.
+/// Gives done the element and document counts of the web view view. Call it on the main thread.
 pub fn count(view: Handle, document: bool, done: Done) {
     let context = Box::into_raw(Box::new(done)).cast();
     unsafe { sp_webview_count_objects(view as *mut c_void, document, counted, context) }

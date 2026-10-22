@@ -50,14 +50,12 @@ type DocumentObjects struct {
 	Counts PageObjects
 }
 
-// ObjectCounts are the object counts of one window that diagnostics.objects replies. ParkedElements are the elements of the parked surface
-// hosts of the main page, which are outside its document and so not in Page.
+// ObjectCounts are the object counts of one window that diagnostics.objects replies.
 type ObjectCounts struct {
-	Host           HostObjects
-	Page           PageObjects
-	ParkedElements int64
-	Documents      []DocumentObjects
-	Sessions       []SidecarSession
+	Host      HostObjects
+	Page      PageObjects
+	Documents []DocumentObjects
+	Sessions  []SidecarSession
 }
 
 // ObjectCounter is the diagnostic backend of diagnostics.objects: it counts the objects of an existing window. The application host
@@ -87,9 +85,7 @@ func (c ObjectCounts) Payload() map[string]any {
 	if sessions == nil {
 		sessions = []SidecarSession{}
 	}
-	page := c.Page.Payload()
-	page["parkedElements"] = c.ParkedElements
-	return map[string]any{"host": c.Host.Payload(), "page": page, "documents": list, "sessions": sessions}
+	return map[string]any{"host": c.Host.Payload(), "page": c.Page.Payload(), "documents": list, "sessions": sessions}
 }
 
 // surfaceCount returns the number of surfaces of the window, which is the number of their native views. It runs on the UI thread, which

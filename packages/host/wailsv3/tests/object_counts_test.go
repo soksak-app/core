@@ -258,9 +258,8 @@ func (b *objectsBackend) ObjectCounts(window string) (host.ObjectCounts, error) 
 	defer b.mu.Unlock()
 	b.windows = append(b.windows, window)
 	return host.ObjectCounts{
-		Host:           host.HostObjects{Surfaces: 2, Regions: 1, Documents: 2, SidecarSessions: 1, PendingReplies: 0, EventSubscribers: 3},
-		Page:           host.PageObjects{Elements: 40, Documents: 1},
-		ParkedElements: 12,
+		Host: host.HostObjects{Surfaces: 2, Regions: 1, Documents: 2, SidecarSessions: 1, PendingReplies: 0, EventSubscribers: 3},
+		Page: host.PageObjects{Elements: 40, Documents: 1},
 		Documents: []host.DocumentObjects{
 			{Key: host.DocumentKey{Surface: "tab-2", Name: "page"}, Counts: host.PageObjects{Elements: 5, Documents: 2}},
 			{Key: host.DocumentKey{Surface: "tab-1", Name: "page"}, Counts: host.PageObjects{Elements: 3, Documents: 1}},
@@ -272,7 +271,6 @@ func (b *objectsBackend) ObjectCounts(window string) (host.ObjectCounts, error) 
 // diagnostics.objects requires a window, answers an unknown window with the missing window error without asking the backend, and replies the
 // counts of the backend for the named window with the documents ordered by surface and document.
 // contract: diagnostics.objects.reply-and-params
-// contract: diagnostics.objects.counts-parked-elements
 func TestDiagnosticsObjectsReplyAndParams(t *testing.T) {
 	backend := &objectsBackend{fakeBackend: newFakeBackend()}
 	_, address, _ := serve(t, backend)
@@ -293,7 +291,7 @@ func TestDiagnosticsObjectsReplyAndParams(t *testing.T) {
 	}
 	want := map[string]string{
 		"host":      `{"documents":2,"eventSubscribers":3,"pendingReplies":0,"regions":1,"sidecarSessions":1,"surfaces":2}`,
-		"page":      `{"documents":1,"elements":40,"parkedElements":12}`,
+		"page":      `{"documents":1,"elements":40}`,
 		"documents": `[{"document":"page","documents":1,"elements":3,"surface":"tab-1"},{"document":"page","documents":2,"elements":5,"surface":"tab-2"}]`,
 		"sessions":  `[{"sidecar":"@scope/sidecar-a","surface":"tab-1"}]`,
 	}

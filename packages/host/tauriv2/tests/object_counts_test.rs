@@ -194,7 +194,6 @@ impl ObjectCounter for FixedCounts {
                 elements: 40,
                 documents: 1,
             },
-            parked_elements: 12,
             documents: vec![
                 DocumentObjects {
                     surface: "tab-2".into(),
@@ -263,7 +262,6 @@ fn request(connection: &mut Box<dyn Connection>, id: u64, params: Value) -> Valu
 // backend, and replies the counts of the backend for the named window with the documents ordered by surface and
 // document.
 // contract: diagnostics.objects.reply-and-params
-// contract: diagnostics.objects.counts-parked-elements
 #[test]
 fn diagnostics_objects_reply_and_params() {
     let config = folder::Folder::new();
@@ -289,7 +287,7 @@ fn diagnostics_objects_reply_and_params() {
         reply["result"],
         json!({
             "host": {"surfaces": 2, "regions": 1, "documents": 2, "sidecarSessions": 1, "pendingReplies": 0, "eventSubscribers": 3},
-            "page": {"elements": 40, "documents": 1, "parkedElements": 12},
+            "page": {"elements": 40, "documents": 1},
             "documents": [
                 {"surface": "tab-1", "document": "page", "elements": 3, "documents": 1},
                 {"surface": "tab-2", "document": "page", "elements": 5, "documents": 2},

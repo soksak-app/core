@@ -701,9 +701,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Evaluates the element and document counts of the web view with the native handle view, in the page content world
-    /// or, when document is true, in the content world of document regions. Gives done the counts with the element count
-    /// of the parked surface hosts of the workbench, which are outside the document (zero in a document world), or the
-    /// failure. Call it on the main thread, and done is called on the main thread too.
+    /// or, when document is true, in the content world of document regions. Gives done the counts, or the failure. Call
+    /// it on the main thread, and done is called on the main thread too.
     fn count_page_objects(
         &self,
         view: Handle,

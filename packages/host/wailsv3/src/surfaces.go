@@ -168,25 +168,19 @@ func validViewPage(page string) bool {
 }
 
 func validateComposition(plugin string, composition SurfaceComposition) error {
-	if composition.Kind == "dom" {
-		return fmt.Errorf("plugin %s surface composition: kind dom is removed; the composition takes kind view or hybrid", plugin)
+	if composition.Kind == "dom" || composition.Kind == "hybrid" {
+		return fmt.Errorf("plugin %s surface composition: kind %s is removed; the composition takes kind view", plugin, composition.Kind)
 	}
-	if composition.Kind == "view" {
-		if !validViewPage(composition.Page) {
-			return fmt.Errorf("view composition page %q must be a path inside the plugin release that ends in .html", composition.Page)
-		}
-		return validateRegions(composition)
+	if composition.Kind != "view" {
+		return fmt.Errorf("surface composition must be view")
 	}
-	if composition.Kind != "hybrid" || len(composition.Regions) == 0 || composition.Overlays == nil {
-		return fmt.Errorf("surface composition must be view or a complete hybrid composition")
-	}
-	if composition.Page != "" {
-		return fmt.Errorf("hybrid composition cannot declare a page")
+	if !validViewPage(composition.Page) {
+		return fmt.Errorf("view composition page %q must be a path inside the plugin release that ends in .html", composition.Page)
 	}
 	return validateRegions(composition)
 }
 
-// validateRegions checks the names and kinds of the regions and overlays of a hybrid or view composition.
+// validateRegions checks the names and kinds of the regions and overlays of a view composition.
 func validateRegions(composition SurfaceComposition) error {
 	seen := map[string]bool{}
 	for _, region := range composition.Regions {
@@ -640,18 +634,13 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if declared, exists := held[surface.ID]; exists && (!reflect.DeepEqual(declared, surface.Composition) || plugins[surface.ID] != surface.Plugin) {
 			return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
 		}
-		if surface.Start != nil && surface.Composition.Kind != "view" {
-			return nil, fmt.Errorf("surface %q: only a view surface carries start values", surface.ID)
+		// default: a view without start values has no origin, which validateViewStart refuses.
+		start := ViewStart{}
+		if surface.Start != nil {
+			start = *surface.Start
 		}
-		if surface.Composition.Kind == "view" {
-			// default: a view without start values has no origin, which validateViewStart refuses.
-			start := ViewStart{}
-			if surface.Start != nil {
-				start = *surface.Start
-			}
-			if err := validateViewStart(surface.ID, &start); err != nil {
-				return nil, err
-			}
+		if err := validateViewStart(surface.ID, &start); err != nil {
+			return nil, err
 		}
 	}
 	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))
@@ -1086,15 +1075,13 @@ func (s *Surfaces) apply(win *application.WebviewWindow, req SyncRequest) ([]str
 		s.mu.Unlock()
 		s.images.SetSurfaceVisible(item.id, item.visible)
 		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
-		if item.decl.Composition.Kind == "view" {
-			// default: a view without start values has no origin; the start values script refuses it (CheckSyncRequest refuses it first).
-			start := ViewStart{}
-			if item.decl.Start != nil {
-				start = *item.decl.Start
-			}
-			if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
-				return nil, nil, err
-			}
+		// default: a view without start values has no origin; the start values script refuses it (CheckSyncRequest refuses it first).
+		start := ViewStart{}
+		if item.decl.Start != nil {
+			start = *item.decl.Start
+		}
+		if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
+			return nil, nil, err
 		}
 		// The native view is kept hidden until PresentSurfaces confirms that the corresponding application DOM frame
 		// was displayed.
