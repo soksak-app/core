@@ -1,4 +1,4 @@
-//! Runs every golden case of the policy file (packages/log-contract/fixtures/policy/cases.json, docs/spec/logging.md#policy-file)
+//! Runs every golden case of the policy file (docs/spec/cases/log-contract/policy/cases.json, docs/spec/logging.md#policy-file)
 //! through the reader of the tool, so the reader of the tool gives the classes, the gate and the error texts that the readers of
 //! the hosts and of the sidecars give.
 
@@ -28,7 +28,7 @@ fn level_named(name: &str) -> Option<Level> {
 fn cases() -> Value {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../log-contract/fixtures/policy/cases.json"
+        "/../../../docs/spec/cases/log-contract/policy/cases.json"
     );
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }

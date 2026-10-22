@@ -51,11 +51,11 @@ Session은 식별자가 유지되는 동안 이어지고, 그 session을 담당�
 - *색*은 4바이트다. 기본색은 `00 00 00 00`, 색인 색은 `01 00 00 <index>`(index 0~255), 트루컬러는 `02 <red> <green> <blue>`다.
 - *속성*은 flag 1바이트다. bold `01`, dim `02`, italic `04`, underline `08`, blink `10`, inverse `20`, hidden `40`, strikethrough `80`.
 
-화면의 JSON 형식(`@soksak/plugin-api/screen-hash`, golden vector)에서 화면은 `{rows, cols, cursor: {row, col, visible}, cells}`, 칸은 `{grapheme, width, fg, bg, attributes}`, 색은 `null`(기본), 0~255 정수(색인), 소문자 `"#rrggbb"`(트루컬러), `attributes`는 0~255 정수다. hash 함수는 이 형식을 벗어난 값을 member 이름이 있는 오류로 거부한다. golden vector는 `packages/log-contract/fixtures/replay/screen-hash.json`이며, 화면마다 16진 정규 바이트열과 hash, 함수가 거부하는 화면과 그 오류 글을 담는다. 어느 언어의 hash 구현이든 이를 재현해야 한다.
+화면의 JSON 형식(`@soksak/plugin-api/screen-hash`, golden vector)에서 화면은 `{rows, cols, cursor: {row, col, visible}, cells}`, 칸은 `{grapheme, width, fg, bg, attributes}`, 색은 `null`(기본), 0~255 정수(색인), 소문자 `"#rrggbb"`(트루컬러), `attributes`는 0~255 정수다. hash 함수는 이 형식을 벗어난 값을 member 이름이 있는 오류로 거부한다. golden vector는 `docs/spec/cases/log-contract/replay/screen-hash.json`이며, 화면마다 16진 정규 바이트열과 hash, 함수가 거부하는 화면과 그 오류 글을 담는다. 어느 언어의 hash 구현이든 이를 재현해야 한다.
 
 ## 골든 벡터
 
-`packages/log-contract/fixtures/replay/screen-hash.json`이 화면 hash의 벡터를 가진다. 벡터마다 화면, 정규 바이트열의 16진 글, hash가 있다.
+`docs/spec/cases/log-contract/replay/screen-hash.json`이 화면 hash의 벡터를 가진다. 벡터마다 화면, 정규 바이트열의 16진 글, hash가 있다.
 
 | 벡터 | 고정하는 것 |
 | --- | --- |
@@ -69,7 +69,7 @@ Session은 식별자가 유지되는 동안 이어지고, 그 session을 담당�
 
 같은 파일이 hash 함수가 거부하는 화면을 오류 text와 함께 나열한다. `cell count differs from rows times cols`, `cursor row outside the grid`, `width outside 0, 1, 2`, `indexed color outside 0 to 255`, `true color in upper case`, `attributes outside one byte`, `grapheme with a lone surrogate`다.
 
-`packages/log-contract/fixtures/replay/inputs.json`이 재생 입력의 사례를 가진다. `replayInputProblem`이 받아들이는 입력, text와 함께 거부하는 입력, `replaySessionProblem`이 판정하는 session이다. session은 `a session with a scroll and a selection`, `a session that does not start with a theme`, `a session with a gap in the sequence`, `a selection update before a selection start`, `a selection start before any resize`, `a selection start below the grid`, `a selection update after the grid shrank`, `a selection update after the gesture ended`, `a theme change in the middle of a session`, `viewport moves stored as the effective change`다.
+`docs/spec/cases/log-contract/replay/inputs.json`이 재생 입력의 사례를 가진다. `replayInputProblem`이 받아들이는 입력, text와 함께 거부하는 입력, `replaySessionProblem`이 판정하는 session이다. session은 `a session with a scroll and a selection`, `a session that does not start with a theme`, `a session with a gap in the sequence`, `a selection update before a selection start`, `a selection start before any resize`, `a selection start below the grid`, `a selection update after the grid shrank`, `a selection update after the gesture ended`, `a theme change in the middle of a session`, `viewport moves stored as the effective change`다.
 
 ## 보기 상태
 
@@ -84,7 +84,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 - **엔진.** 스크롤백 한도와 첫 theme 입력 전의 기본 theme은 sidecar의 재생 실행 파일에 속하며, 그것은 session을 만든 엔진이기도 하다. 재생은 session을 저장한 sidecar 버전에 대해 정의된다. 다른 버전의 session은 어긋날 수 있고 그 어긋남은 그렇게 보고된다.
 - **class.** 이 입력들은 완전하게 저장하는 class `input`으로 저장한다. class `io`와 `input`을 저장하지 않는 정책은 순번에 빈틈을 남기고, 재생은 처음 빠진 `sequence`에서 session을 거부하며, session의 입력을 덮는 `log.dropped`도 버린 개수를 담은 오류로 거부한다. [logging](logging.ko.md#class와-정책)에서 class `frame`인 휠과 포인터 이동은 sidecar가 적용하기 전 page의 event이고, 적용된 변경에 대해 sidecar가 저장하는 입력은 class `input`이다. 재생 실행 파일은 모르는 종류의 `sequence`를 가진 session의 event를 거부하며 무시하지 않는다. 재생 명령은 실행 파일을 시작하기 전에 session의 입력에 `replaySessionProblem`을 실행한다.
 
-`@soksak/log-contract`의 `replayInputProblem(kind, fields)`와 `replaySessionProblem(inputs)`가 이 형식과 session의 규칙(theme이 처음, 빈틈 없는 순번, 시작 뒤에만 update나 end)을 검사하고, `packages/log-contract/fixtures/replay/inputs.json`이 sidecar를 위한 골든 사례를 가진다.
+`@soksak/log-contract`의 `replayInputProblem(kind, fields)`와 `replaySessionProblem(inputs)`가 이 형식과 session의 규칙(theme이 처음, 빈틈 없는 순번, 시작 뒤에만 update나 end)을 검사하고, `docs/spec/cases/log-contract/replay/inputs.json`이 sidecar를 위한 골든 사례를 가진다.
 
 ### 결정
 
@@ -106,7 +106,7 @@ sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport�
 
 `sok debug replay <session> [--until <sequence>] [--config-dir <directory>]`([명령줄](cli.ko.md#명령))는 설정 폴더의 event 파일에서 [질의](logging.ko.md#질의)로 session의 event를 읽고, session의 sidecar event의 role을 `replay.role`로 선언한 설치된 sidecar를 찾아 그 재생 실행 파일을 [segment](#segment)마다 실행한 뒤, segment 순서대로, segment 안에서는 `sequence` 순서로, 같은 순번에서는 sidecar 기록을 page 기록보다 먼저 비교한다.
 
-executable로 segment를 시작하기 전에, 도구는 sidecar의 `replay.inputs`가 적는 event인 그 segment의 재생 입력을 `replaySessionProblem`의 규칙(각 입력의 형식, 1부터 빈칸 없는 순번, 처음은 theme, 마지막 resize의 격자 안의 selection start나 update, start 뒤의 selection update나 end)으로 검사하고, 규칙을 어긴 segment를 불일치 없이 `replaySessionProblem`의 문구를 담은 `sok: replay session <session>: segment <boot>: <problem>`으로 거부한다. `--until`은 검사하는 입력을 제한한다. `packages/log-contract/fixtures/replay/inputs.json`의 case가 두 도구의 문구를 고정한다.
+executable로 segment를 시작하기 전에, 도구는 sidecar의 `replay.inputs`가 적는 event인 그 segment의 재생 입력을 `replaySessionProblem`의 규칙(각 입력의 형식, 1부터 빈칸 없는 순번, 처음은 theme, 마지막 resize의 격자 안의 selection start나 update, start 뒤의 selection update나 end)으로 검사하고, 규칙을 어긴 segment를 불일치 없이 `replaySessionProblem`의 문구를 담은 `sok: replay session <session>: segment <boot>: <problem>`으로 거부한다. `--until`은 검사하는 입력을 제한한다. `docs/spec/cases/log-contract/replay/inputs.json`의 case가 두 도구의 문구를 고정한다.
 
 1. sidecar의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르면 층 `sidecar`의 불일치다.
 2. page의 frame 기록마다 그 순번의 재생 hash와 비교한다. 다르거나 그 순번에 sidecar의 frame 기록이 없으면 층 `plugin`의 불일치다.

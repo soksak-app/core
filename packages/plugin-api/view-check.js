@@ -8,7 +8,7 @@
 //   soksak-view-check <literal.json> [screen-message vectors.json]
 //
 // The literal is JSON: {"viewStartSha256": "<64 hex>", "viewImports": {<four entries>}, "screenMessage": {"name", "message", "hash"}}.
-// The vectors default to packages/log-contract/fixtures/replay/screen-message.json of the core checkout.
+// The vectors default to docs/spec/cases/log-contract/replay/screen-message.json of the core checkout.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
@@ -19,7 +19,7 @@ import { VIEW_IMPORTS } from "./index.js";
 export const VIEW_START_SHA256 = "aa1abb18bed83828bf9a14e7ade439ef5ae19528321feca8b846193e833775d5";
 
 const VIEW_START = new URL("./view-start.js", import.meta.url);
-const DEFAULT_VECTORS = new URL("../log-contract/fixtures/replay/screen-message.json", import.meta.url);
+const DEFAULT_VECTORS = new URL("../../docs/spec/cases/log-contract/replay/screen-message.json", import.meta.url);
 
 const shown = (value) => (value === undefined ? "undefined" : JSON.stringify(value));
 

@@ -1,5 +1,5 @@
 //! Shared helpers of the tests of the log index and the log query (docs/spec/logging.md#index, docs/spec/logging.md#query): the golden
-//! fixtures of packages/log-contract/fixtures/query and the generated log that has more than one segment.
+//! fixtures of docs/spec/cases/log-contract/query and the generated log that has more than one segment.
 
 #![allow(dead_code)]
 
@@ -16,7 +16,7 @@ pub mod folder;
 
 pub use folder::Folder;
 
-pub const QUERY_FIXTURES: &str = "../../log-contract/fixtures/query";
+pub const QUERY_FIXTURES: &str = "../../../docs/spec/cases/log-contract/query";
 pub const BIG_BASE: i64 = 1_791_500_000_000_000;
 pub const BIG_COUNT: usize = 9000;
 pub const STATE_BLOCK_BYTES: usize = 20480;

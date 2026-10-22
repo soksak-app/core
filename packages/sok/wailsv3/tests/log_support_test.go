@@ -1,7 +1,7 @@
 package tests
 
 // Shared helpers of the tests of the log index and the log query (docs/spec/logging.md#index, docs/spec/logging.md#query):
-// the golden fixtures of packages/log-contract/fixtures/query and the generated log that has more than one segment.
+// the golden fixtures of docs/spec/cases/log-contract/query and the generated log that has more than one segment.
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const queryFixtures = "../../../log-contract/fixtures/query"
+const queryFixtures = "../../../../docs/spec/cases/log-contract/query"
 
 // fixedModified is the modification time that the golden digests of the index assume for the source (docs/spec/logging.md#index).
 var fixedModified = time.Unix(1_000_000_000, 0)
@@ -96,7 +96,7 @@ func readCases(t *testing.T) []queryCase {
 	return cases
 }
 
-// bigEvent is one line of the generated log (the generator of packages/log-contract/fixtures/query/cases.json is the same in the Rust tests).
+// bigEvent is one line of the generated log (the generator of docs/spec/cases/log-contract/query/cases.json is the same in the Rust tests).
 type bigEvent struct {
 	line                  string
 	tsUs, seq             int64

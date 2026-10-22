@@ -193,21 +193,10 @@ fn the_file_passes_the_audit_of_the_contract_package() {
             "host.app.event": {"layer": "host", "class": "lifecycle", "level": "info", "fields": {"kind": "string"}}
         }
     }).to_string()).unwrap();
-    // The checker is the package of the contract; the test reads its result as JSON.
-    let script = format!(
-        "import {{ readFileSync }} from 'node:fs'; import {{ auditLog }} from {:?};\
-         const catalog = JSON.parse(readFileSync({:?}, 'utf8'));\
-         console.log(JSON.stringify(auditLog({:?}, readFileSync({:?}, 'utf8'), catalog)));",
-        format!(
-            "file://{}/../../log-contract/index.js",
-            env!("CARGO_MANIFEST_DIR")
-        ),
-        catalog,
-        path,
-        path
-    );
+    // The audit command of the repository audits the log with the event contract and prints the findings as JSON.
+    let audit = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../scripts/audit-log.mjs");
     let output = Command::new("node")
-        .args(["--input-type=module", "-e", &script])
+        .args([audit, path.to_str().unwrap(), catalog.to_str().unwrap()])
         .output()
         .unwrap();
     assert!(

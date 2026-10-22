@@ -1,6 +1,6 @@
 //! The index beside an event file (docs/spec/logging.md#index). It is derived from the file: it says which segments of 4,096 lines can hold
 //! an event of a query. The Go implementation (packages/sok/wailsv3/src/log_index.go) writes the same bytes for the same file, and the
-//! golden digests of packages/log-contract/fixtures/query check it.
+//! golden digests of docs/spec/cases/log-contract/query check it.
 
 use std::borrow::Cow;
 use std::fmt;

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { VIEW_IMPORTS } from "../index.js";
 import { checkViewLiteral, VIEW_START_SHA256 } from "../view-check.js";
 
-const VECTORS = JSON.parse(readFileSync(fileURLToPath(new URL("../../log-contract/fixtures/replay/screen-message.json", import.meta.url)), "utf8"));
+const VECTORS = JSON.parse(readFileSync(fileURLToPath(new URL("../../../docs/spec/cases/log-contract/replay/screen-message.json", import.meta.url)), "utf8"));
 
 // The literal a plugin writes: the values copied from the SDK, as a plugin would hold them.
 function literal() {

@@ -289,7 +289,7 @@ test("an event that the catalog declares with cids required is a finding without
 
 test("the golden lines and the golden catalog pass the audit", async () => {
   const { readFileSync } = await import("node:fs");
-  const read = (name) => readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf8");
+  const read = (name) => readFileSync(new URL(`../../../docs/spec/cases/log-contract/${name}`, import.meta.url), "utf8");
   const golden = JSON.parse(read("catalog.json"));
   for (const name of ["key.jsonl", "dropped.jsonl"]) {
     assert.deepEqual(auditLog(name, read(name), golden), [], name);
@@ -465,7 +465,7 @@ test("the chain of an operation of the page is complete when its call and the ho
 // The chain extension of a sidecar catalog and the lifecycle events of the layer sidecar (docs/spec/logging.md#sidecar-catalogs).
 const extensionFixture = async (name) => {
   const { readFileSync } = await import("node:fs");
-  return readFileSync(new URL(`../fixtures/extension/${name}`, import.meta.url), "utf8");
+  return readFileSync(new URL(`../../../docs/spec/cases/log-contract/extension/${name}`, import.meta.url), "utf8");
 };
 const extensionCatalog = async () => composeCatalogs(JSON.parse(await extensionFixture("base.json")), JSON.parse(await extensionFixture("alpha.json")));
 const extensionLogs = async (...names) => Promise.all(names.map(async (file) => ({ file, text: await extensionFixture(file) })));

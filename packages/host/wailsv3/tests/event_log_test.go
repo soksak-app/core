@@ -311,25 +311,18 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 	if err := os.WriteFile(catalog, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	contract, err := filepath.Abs("../../../log-contract/index.js")
+	// The audit command of the repository audits the log with the event contract and prints the findings as JSON.
+	audit, err := filepath.Abs("../../../../scripts/audit-log.mjs")
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := `import { readFileSync } from 'node:fs'; import { auditLog } from 'file://` + contract + `';
-const catalog = JSON.parse(readFileSync(` + quote(catalog) + `, 'utf8'));
-console.log(JSON.stringify(auditLog(` + quote(log.Path()) + `, readFileSync(` + quote(log.Path()) + `, 'utf8'), catalog)));`
-	output, err := exec.Command("node", "--input-type=module", "-e", script).CombinedOutput()
+	output, err := exec.Command("node", audit, log.Path(), catalog).CombinedOutput()
 	if err != nil {
 		t.Fatalf("%v: %s", err, output)
 	}
 	if strings.TrimSpace(string(output)) != "[]" {
 		t.Fatalf("findings %s", output)
 	}
-}
-
-func quote(text string) string {
-	data, _ := json.Marshal(text)
-	return string(data)
 }
 
 // contract: log.writer.flush-at-exit

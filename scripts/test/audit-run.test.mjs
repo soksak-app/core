@@ -205,7 +205,7 @@ test('a run without marks.jsonl, a malformed mark, or a declaration without a st
 });
 
 test('the events of a sidecar installed in a configuration folder of the run are audited against its catalog', (t) => {
-  const alpha = JSON.parse(readFileSync(new URL('../../packages/log-contract/fixtures/extension/alpha.json', import.meta.url), 'utf8'));
+  const alpha = JSON.parse(readFileSync(new URL('../../docs/spec/cases/log-contract/extension/alpha.json', import.meta.url), 'utf8'));
   const { folder, config } = fixture(t, {
     files: {
       [`host-${BOOT}.jsonl`]: [open('host', BOOT), start(2, 't1'), end(3, 't1')],

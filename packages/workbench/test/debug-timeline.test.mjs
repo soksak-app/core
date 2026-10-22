@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { CLEAR_FILTER, HOLD_LIMIT, PAGE_ROWS, compareRows, eventLine, isEventFile, keyOf, mergeRows, queryOf, rowId } from "../debug-timeline.js";
 
-const FIXTURES = new URL("../../log-contract/fixtures/query/", import.meta.url);
+const FIXTURES = new URL("../../../docs/spec/cases/log-contract/query/", import.meta.url);
 
 /** The rows of the golden event files by the identity `<role>-<boot>:<seq>` that cases.json uses. */
 function goldenRows() {

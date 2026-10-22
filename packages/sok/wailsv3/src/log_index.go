@@ -2,7 +2,7 @@ package sok
 
 // The index beside an event file (docs/spec/logging.md#index). It is derived from the file: it says which segments of 4,096
 // lines can hold an event of a query. The Rust implementation (packages/sok/tauriv2/src/log_index.rs) writes the same bytes
-// for the same file, and the golden digests of packages/log-contract/fixtures/query check it.
+// for the same file, and the golden digests of docs/spec/cases/log-contract/query check it.
 
 import (
 	"bytes"

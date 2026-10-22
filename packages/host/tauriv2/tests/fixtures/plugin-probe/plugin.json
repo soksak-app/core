@@ -1,1 +1,1 @@
-{ "id": "probe" }
+{ "id": "probe", "name": "Probe", "description": "Sample.", "contributes": { "lib.point": [{ "range": "^1.0.0", "module": "ui/b.js" }] } }

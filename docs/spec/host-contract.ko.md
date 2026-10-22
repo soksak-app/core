@@ -19,7 +19,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로의 모든 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로의 모든 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 ## 검사
 
@@ -627,12 +627,12 @@ fn invalid_json_closes_connection() {
 | `files.place.answers-the-path-inside-the-project` | project root 안에서 고른 위치는 root나 위치가 symbolic link를 지나도 root 기준 상대 path를 부분 사이 `/`로 답한다. | both |
 | `files.place.refuses-a-place-outside-the-project` | project root 밖에서 고른 위치, root 자체, `..`나 symbolic link로 밖에 닿는 위치는 `file place: <path> is outside the project <root>`로 거부된다. | both |
 | `files.place.refuses-a-name-that-is-not-a-file-name` | 빈 글, `.`, `..`, `/`나 `\`를 담은 `name`은 panel이 보이기 전에 `file place: name <name> is not a file name`으로 거부된다. | both |
-| `log.query.answers-the-golden-pages` | `packages/log-contract/fixtures/query/cases.json`의 각 질의가 golden 행, `next`, `tail`, `scanned`를 돌려주고, 행의 글 줄이 golden 줄이다. | both |
+| `log.query.answers-the-golden-pages` | `docs/spec/cases/log-contract/query/cases.json`의 각 질의가 golden 행, `next`, `tail`, `scanned`를 돌려주고, 행의 글 줄이 golden 줄이다. | both |
 | `log.query.pages-through-the-cursor` | `next`를 `after`로 넘기며 page를 넘기면 질의의 모든 행을 key 순서로 `asc`와 `desc`에서 한 번씩 돌려주고 `next` `null`로 끝나며, page는 줄 글 8,388,608바이트를 넘기 전에 끝나고 항상 행 하나를 담는다. | both |
 | `log.query.follows-the-tail-with-since` | 앞선 답의 `tail`을 `since`로 준 질의는 그 뒤에 덧붙은 행을 돌려주며 앞선 답이 담은 행보다 `ts_us`가 이른 행도 돌려주고, 프로세스의 `seq` 이하의 행은 뺀다. | both |
 | `log.query.resolves-a-run-to-the-range-of-its-marks` | `run`은 질의를 channel의 모든 파일에서 그 run의 가장 이른 `host.test.start`부터 가장 늦은 `host.test.end`까지의 시간 범위로 한정하고, start가 없는 run은 오류 `log query run "<run>" has no host.test.start in the channel`이다. | both |
 | `log.query.refuses-invalid-parameters` | 선언하지 않은 항목과 매개변수의 잘못된 값은 명세의 오류 문구로 거절하고, event 구조를 어기는 줄이 있는 파일을 읽는 질의는 파일과 줄을 밝히며 실패한다. | both |
-| `log.query.answers-the-rows-around-a-row` | `around`가 있는 질의는 key 앞의 `earlier`개 행과 뒤의 `later`개 행을 key에 있는 행과 함께 channel의 파일에서 filter 없이 key 순서로 돌려주고, 각 행에 `context`(이웃은 true, key의 행은 false)를 표시하며 `next`는 null이다. 행이 없는 key는 이웃만 돌려준다. `packages/log-contract/fixtures/query/cases.json`의 golden `around` 사례와 그 글 줄(context 행은 공백 둘로 들여 쓴다)은 두 구현에서 같다. `channel`, `earlier`, `later` 외의 항목, `around` 없는 `earlier`나 `later`, 잘못된 cursor, 0에서 500을 벗어난 개수는 명세의 오류 문구로 거절하며, 답의 줄 글은 8,388,608바이트 이하다. | both |
+| `log.query.answers-the-rows-around-a-row` | `around`가 있는 질의는 key 앞의 `earlier`개 행과 뒤의 `later`개 행을 key에 있는 행과 함께 channel의 파일에서 filter 없이 key 순서로 돌려주고, 각 행에 `context`(이웃은 true, key의 행은 false)를 표시하며 `next`는 null이다. 행이 없는 key는 이웃만 돌려준다. `docs/spec/cases/log-contract/query/cases.json`의 golden `around` 사례와 그 글 줄(context 행은 공백 둘로 들여 쓴다)은 두 구현에서 같다. `channel`, `earlier`, `later` 외의 항목, `around` 없는 `earlier`나 `later`, 잘못된 cursor, 0에서 500을 벗어난 개수는 명세의 오류 문구로 거절하며, 답의 줄 글은 8,388,608바이트 이하다. | both |
 | `log.query.reads-only-the-segments-that-can-hold-a-row` | segment가 여럿인 로그에서 `cid`, `event`, `surface`, 시간 범위로 묻는 질의는 색인이 받아들이는 segment만 읽고(`scanned.read`), `text`가 있는 질의는 모든 segment를 읽는다. | both |
 | `log.query.answers-a-million-events-within-the-limit` | event 1,000,000개의 로그가 첫 page, `cid`, event 이름, surface, 시간 범위, level, `text`로 묻는 page를 test가 밝힌 한도 안에서 답하고 색인 생성도 한도 안에 끝나며, test는 시간을 출력한다. | both |
 | `log.query.reads-the-files-the-writer-wrote` | 질의는 writer가 만든 모든 세대에 걸쳐 main 파일을 channel `other`로, debug 파일을 channel `debug`로 읽는다. | both |
@@ -715,7 +715,7 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.state-reads-registry-and-installed` | Installer library는 `{registry, index, installed}`를 보고한다. `plugins/registry.json`이 없으면 registry와 index가 `null`이고, 있으면 index URL과 검사한 index이며, 읽지 못한 index는 그 읽기 오류를 `index`로, 잘못된 `installed.json`은 오류를 보고한다. | both |
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | both |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | both |
-| `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `packages/log-contract/fixtures/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | both |
+| `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | both |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | both |
 | `cli.debug.query-flag-values` | `sok debug query`는 잘못된 flag 값을 질의의 오류 문구를 가진 사용법 오류로 거부하고, 명령에 없는 flag를 거부한다. | both |
 | `cli.debug.replay-equal` | `sok debug replay <session>`은 session의 sidecar event가 가진 role을 선언한 설치된 sidecar의 replay 실행 파일을 segment마다 한 번 실행하고, 저장된 hash가 모두 재생한 hash이면 `replay session <session>: <n> sidecar frames and <m> page frames equal in <k> segments`를 출력한다. | both |
@@ -725,7 +725,7 @@ fn invalid_json_closes_connection() {
 | `cli.debug.replay-holds-one-segment` | 재생은 한 번에 한 segment의 event 줄을 보관하며, 결과는 segment 수와 한 번에 보관한 줄의 최댓값을 보고한다. 그 값은 session이 아니라 가장 큰 segment의 크기다. | both |
 | `cli.debug.replay-segment-errors` | `fields.segment`가 없는 page frame 기록, 문자열이 아니거나 session에 없는 `boot`를 가리키는 `fields.segment`, 시각상 번갈아 나오는 두 segment의 sidecar event는 불일치 없이 재생을 실패시킨다. | both |
 | `cli.debug.replay-session-rules` | `sok debug replay`는 sidecar의 `replay.inputs`가 적는 event인 각 segment의 재생 입력을 session 규칙으로 검사하고, 규칙을 어긴 segment를 `replay session <session>: segment <boot>: <problem>`으로 거부한다. 종류마다 `replay.inputs`가 없는 sidecar.json은 그 파일을 밝히는 오류다. | both |
-| `cli.debug.replay-input-cases` | 도구의 재생 입력 규칙은 `packages/log-contract/fixtures/replay/inputs.json`의 모든 case를 재현한다: valid 입력, 문구가 있는 invalid 입력, problem이 있는 session. | both |
+| `cli.debug.replay-input-cases` | 도구의 재생 입력 규칙은 `docs/spec/cases/log-contract/replay/inputs.json`의 모든 case를 재현한다: valid 입력, 문구가 있는 invalid 입력, problem이 있는 session. | both |
 | `cli.debug.replay-errors` | `sok debug replay`는 sidecar event가 없는 session, 두 role의 sidecar event가 있는 session, 그 role을 선언한 설치된 sidecar가 없는 경우, frame 기록이 없는 경우, 소문자 16진 64자가 아닌 저장된 hash, 실패하거나 `{"sequence", "hash"}`가 아닌 줄을 출력하거나 frame 기록의 hash를 출력하지 않는 재생 실행 파일에서 불일치가 아닌 오류로 실패한다. | both |
 | `cli.log.records-each-command-with-its-result` | `sok`을 실행할 때마다 대상 설정 디렉터리에 `logs/sok-<boot>.jsonl`을 쓴다. `seq` 1의 `log.open`, 이어서 명령 단어, 공백으로 이은 인자, 마이크로초, `ok`, `status`, 상태가 0이 아니면 표준 오류의 첫 줄인 `error`를 담은 `sok.command`가 level `debug` 또는 `warn`으로 저장되며, 모든 줄이 층 `sok`, `ts_us`, `mono_ns`를 가진다. | both |
 | `cli.log.records-a-panic-with-its-stack` | 명령의 panic은 `sok.panic`(thread `main`, 글, panic한 함수를 가리키는 stack)과 상태 4의 `sok.command`를 저장하고, `sok: panic: <text>`를 표준 오류의 맨 앞에 쓰며, 호출자에게 닿지 않고 상태 4를 돌려준다. | both |
@@ -739,13 +739,13 @@ fn invalid_json_closes_connection() {
 | `cli.log.writer-options.refuses-a-placed-event-by-its-cause` | 정책이 거부한 placed event는 `the policy does not store it` 원인으로 실패하며, gated event로 저장되고 손실이 아니다. | both |
 | `buffers.sidecar-replies.order-is-bounded` | sidecar reply를 기다리는 요청의 순서는 응답한 요청이 몇 개든 대기 요청 한도의 두 배를 넘지 않는다. | both |
 | `buffers.sidecar-replies.forgotten-request-is-counted` | 대기 요청의 한도에서 잊는 요청은 세며, 잊는 것은 가장 오래된 요청이다. | both |
-| `cli.log.lines-follow-the-golden-fixtures` | 도구의 `log.open` 줄은 `packages/log-contract/fixtures/key.jsonl`의 `log.open` 줄과 같은 key, key 순서, field 집합(schema 2, `role` `sok`)을 가지며, event 줄은 golden event 줄의 key 순서와 `ts_us`, `mono_ns`, `seq` 2를 가진다. | both |
+| `cli.log.lines-follow-the-golden-fixtures` | 도구의 `log.open` 줄은 `docs/spec/cases/log-contract/key.jsonl`의 `log.open` 줄과 같은 key, key 순서, field 집합(schema 2, `role` `sok`)을 가지며, event 줄은 golden event 줄의 key 순서와 `ts_us`, `mono_ns`, `seq` 2를 가진다. | both |
 | `cli.log.escapes-and-truncates-like-the-contract` | 따옴표, 역슬래시, 줄바꿈, tab, U+2028, ASCII가 아닌 글을 담은 field가 줄을 거쳐 그대로 돌아오고, fields 글이 1,048,576바이트를 넘는 event는 원래 크기를 담은 `truncated`와 4,096바이트의 `fields` `{"head": ...}`로 저장된다. | both |
 | `cli.log.records-a-refused-event-as-log-dropped` | writer가 거절한 event는 세어져 golden field(`from_seq`, `to_seq`, `count`)를 가진 level `warn`의 `log.dropped`로 저장되고, 저장된 `seq`와 그것이 가리키는 범위가 1부터 n까지를 한 번씩 덮으며 `log.dropped`는 그 범위 뒤에 온다. | both |
 | `cli.log.run-stores-only-the-declared-events` | 한 번의 실행은 `log.open`, `sok.command`, `sok.panic`, `log.dropped`만 저장한다. 이것이 rotation 없는 writer의 근거이며 main 파일과 debug 파일 모두 그렇다. | both |
 | `cli.log.stores-class` | 도구는 host writer처럼 `class`와 `undeclared`를 저장한다. | both |
-| `cli.log.policy-accepts-the-golden-cases` | 도구의 policy 파일 reader는 `packages/log-contract/fixtures/policy/cases.json`의 모든 valid case를 그 class와 gate대로 받는다. | both |
-| `cli.log.policy-refuses-the-golden-cases` | 도구의 policy 파일 reader는 `packages/log-contract/fixtures/policy/cases.json`의 모든 invalid case를 그 case의 오류 문구로 거부한다. | both |
+| `cli.log.policy-accepts-the-golden-cases` | 도구의 policy 파일 reader는 `docs/spec/cases/log-contract/policy/cases.json`의 모든 valid case를 그 class와 gate대로 받는다. | both |
+| `cli.log.policy-refuses-the-golden-cases` | 도구의 policy 파일 reader는 `docs/spec/cases/log-contract/policy/cases.json`의 모든 invalid case를 그 case의 오류 문구로 거부한다. | both |
 | `cli.log.applies-the-policy-file` | 도구는 시작할 때 configuration directory의 `log-policy.json`을 적용하므로, 모든 level을 저장하는 file이 있으면 default policy가 거부하는 `sok.command`를 저장합니다. | both |
 | `cli.log.records-a-refused-policy-file` | reader가 거부한 policy file은 place `log policy`의 error record로 저장됩니다. | both |
 | `cli.log.splits-files-by-level` | 도구는 `error`, `warn`, `info`를 `logs/sok-<boot>.jsonl`에, `debug`와 `trace`를 `logs/sok-<boot>.debug.jsonl`에 쓰며, 후자는 첫 해당 event와 함께 만들고 `log.open`으로 시작한다. | both |
@@ -829,7 +829,7 @@ fn invalid_json_closes_connection() {
 | `log.native.platform-takes-the-policy` | 플랫폼은 정책(class마다 level 하나 또는 -1)을 native 라이브러리에 주고, 열거 밖의 level은 거부한다. | both |
 | `log.policy.file-names-every-class-and-nothing-else` | 모든 class를 한 번씩 여섯 값 중 하나로 이름 붙인 정책 파일은 적용한다. JSON이 아닌 글, `schema`와 `classes` 외의 항목, 다른 schema, 빠졌거나 모르는 class, 여섯 밖의 값은 파일 이름과 발견한 것을 담은 오류로 거부한다. | both |
 | `log.policy.file-is-watched` | `log-policy.json`의 생성, 쓰기, 교체, 삭제는 타이머 없이 파일 시스템 event로 정책을 적용하고, 파일을 그대로 두는 알림은 아무것도 바꾸지 않으며, 규칙을 어긴 파일은 장소 `log policy`의 오류 기록이고 적용 중인 정책은 그대로 남는다. | both |
-| `log.policy.default-stores-errors` | 정책 파일이 없는 writer는 모든 class의 `error` event를 저장하고 모든 class의 `warn`, `info`, `debug`, `trace` event를 거부하며, 기본 정책은 `packages/log-contract/fixtures/policy/cases.json`의 `default`와 같다. | both |
+| `log.policy.default-stores-errors` | 정책 파일이 없는 writer는 모든 class의 `error` event를 저장하고 모든 class의 `warn`, `info`, `debug`, `trace` event를 거부하며, 기본 정책은 `docs/spec/cases/log-contract/policy/cases.json`의 `default`와 같다. | both |
 | `log.policy.change-is-an-event` | writer의 첫 정책과 이후의 각 변경은 `source`와 `classes`를 가진 `log.policy` event 하나이며, 같은 정책이 다시 오면 아무것도 저장하지 않는다. | both |
 | `log.policy.gate-counts-what-it-did-not-build` | 닫힌 gate는 아무것도 저장하지 않고, writer는 거부한 event의 정확한 수를 class와 level별로 `log.gated`로 보고한다. | both |
 | `log.policy.gate-passes-the-events-of-the-writer-itself` | `log.open`, `log.rotated`, `log.dropped`, `log.policy`, `log.gated`, `log.pruned`는 class `lifecycle`을 끈 정책을 지난다. | both |

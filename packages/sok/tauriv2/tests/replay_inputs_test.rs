@@ -1,4 +1,4 @@
-//! Runs the golden cases of the replay inputs (packages/log-contract/fixtures/replay/inputs.json, docs/spec/replay.md#records)
+//! Runs the golden cases of the replay inputs (docs/spec/cases/log-contract/replay/inputs.json, docs/spec/replay.md#records)
 //! through the rules of the tool, so the tool refuses an input and a session with the texts of `replayInputProblem` and
 //! `replaySessionProblem`.
 
@@ -8,7 +8,7 @@ use soksak_sok::replay_inputs::{ReplayInput, replay_input_problem, replay_sessio
 fn cases() -> Value {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../log-contract/fixtures/replay/inputs.json"
+        "/../../../docs/spec/cases/log-contract/replay/inputs.json"
     );
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }

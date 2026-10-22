@@ -1,6 +1,6 @@
 //! The rules of the replay inputs of a session (docs/spec/replay.md#records): the forms of each kind and the rules of a session,
 //! with the texts of `replayInputProblem` and `replaySessionProblem` of @soksak/log-contract, whose golden cases
-//! (packages/log-contract/fixtures/replay/inputs.json) both tools reproduce.
+//! (docs/spec/cases/log-contract/replay/inputs.json) both tools reproduce.
 
 use std::fmt;
 

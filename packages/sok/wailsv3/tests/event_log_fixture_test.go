@@ -1,7 +1,7 @@
 package tests
 
 // Checks that the writer of the tool follows the event contract that the writers of the hosts follow: the golden files of
-// packages/log-contract/fixtures fix the shape of a line, of log.open and of log.dropped (docs/spec/logging.md#writers).
+// docs/spec/cases/log-contract fix the shape of a line, of log.open and of log.dropped (docs/spec/logging.md#writers).
 
 import (
 	"encoding/json"
@@ -38,11 +38,11 @@ func keysOf(t *testing.T, text string) []string {
 	return keys
 }
 
-// fixtureLines reads a golden file of packages/log-contract/fixtures.
+// fixtureLines reads a golden file of docs/spec/cases/log-contract.
 func fixtureLines(t *testing.T, name string) []string {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	text, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "log-contract", "fixtures", name))
+	text, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "log-contract", name))
 	if err != nil {
 		t.Fatal(err)
 	}

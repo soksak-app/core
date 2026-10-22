@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { screenBytes, screenHash } from "@soksak/plugin-api/screen-hash";
 
-const fixture = JSON.parse(readFileSync(new URL("../fixtures/replay/screen-hash.json", import.meta.url), "utf8"));
+const fixture = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/log-contract/replay/screen-hash.json", import.meta.url), "utf8"));
 
 const hex = (bytes) => Buffer.from(bytes).toString("hex");
 

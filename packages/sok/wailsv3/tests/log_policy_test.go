@@ -1,6 +1,6 @@
 package tests
 
-// Runs every golden case of the policy file (packages/log-contract/fixtures/policy/cases.json, docs/spec/logging.md#policy-file)
+// Runs every golden case of the policy file (docs/spec/cases/log-contract/policy/cases.json, docs/spec/logging.md#policy-file)
 // through the reader of the tool, so the reader of the tool gives the classes, the gate and the error texts that the readers of the
 // hosts and of the sidecars give.
 
@@ -38,7 +38,7 @@ type policyCases struct {
 func readPolicyCases(t *testing.T) policyCases {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "log-contract", "fixtures", "policy", "cases.json"))
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "log-contract", "policy", "cases.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

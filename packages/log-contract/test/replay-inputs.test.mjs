@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { REPLAY_INPUT_KINDS, replayInputProblem, replaySessionProblem } from "../index.js";
 
-const cases = JSON.parse(readFileSync(new URL("../fixtures/replay/inputs.json", import.meta.url), "utf8"));
+const cases = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/log-contract/replay/inputs.json", import.meta.url), "utf8"));
 
 test("the kinds of replay input are output, write, resize, selection, viewport and theme", () => {
   assert.deepEqual(REPLAY_INPUT_KINDS, ["output", "write", "resize", "selection", "viewport", "theme"]);

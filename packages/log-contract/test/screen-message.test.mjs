@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { screenFromMessage, screenHash } from "@soksak/plugin-api/screen-hash";
 
-const read = (name) => JSON.parse(readFileSync(new URL(`../fixtures/replay/${name}`, import.meta.url), "utf8"));
+const read = (name) => JSON.parse(readFileSync(new URL(`../../../docs/spec/cases/log-contract/replay/${name}`, import.meta.url), "utf8"));
 const messages = read("screen-message.json");
 const screens = new Map(read("screen-hash.json").vectors.map((vector) => [vector.name, vector]));
 
@@ -28,7 +28,7 @@ for (const vector of messages.rejected) {
 for (const document of ["../../../docs/spec/persistent-services.md", "../../../docs/spec/persistent-services.ko.md"]) {
   test(`${document.split("/").pop()} names the fixture of the screen messages, its rejected messages and the members of the message`, () => {
     const text = readFileSync(new URL(document, import.meta.url), "utf8");
-    assert.ok(text.includes("`packages/log-contract/fixtures/replay/screen-message.json`"), "the fixture of the messages is not named");
+    assert.ok(text.includes("`docs/spec/cases/log-contract/replay/screen-message.json`"), "the fixture of the messages is not named");
     for (const { name } of messages.rejected) assert.ok(text.includes(`\`${name}\``), `the rejected message "${name}" is not named`);
     for (const member of ["sequence", "segment", "rows", "cols", "cursor", "cells", "grapheme", "width", "fg", "bg", "attributes", "screenFromMessage"]) {
       assert.ok(text.includes(`\`${member}\``), `the member "${member}" is not named`);

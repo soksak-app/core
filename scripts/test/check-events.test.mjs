@@ -70,7 +70,7 @@ test('the catalog declares the chain of each operation of the page and the first
   assert.deepEqual(real.events['page.update.operation'].fields, { action: 'string', version: 'string' });
 });
 
-const alphaCatalog = JSON.parse(readFileSync(new URL('../../packages/log-contract/fixtures/extension/alpha.json', import.meta.url), 'utf8'));
+const alphaCatalog = JSON.parse(readFileSync(new URL('../../docs/spec/cases/log-contract/extension/alpha.json', import.meta.url), 'utf8'));
 const SIDECAR_PATH = 'sidecars/alpha/1.0.0/platform';
 
 /** A configuration folder that has installed the sidecar `alpha`, whose `sidecar.json` names the catalog `events.json`. */

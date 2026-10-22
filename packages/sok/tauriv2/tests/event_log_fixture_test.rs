@@ -1,5 +1,5 @@
 //! Checks that the writer of the tool follows the event contract that the writers of the hosts follow: the golden files of
-//! packages/log-contract/fixtures fix the shape of a line, of log.open and of log.dropped (docs/spec/logging.md#writers).
+//! docs/spec/cases/log-contract fix the shape of a line, of log.open and of log.dropped (docs/spec/logging.md#writers).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -38,10 +38,10 @@ fn keys_of(line: &str) -> Vec<String> {
         .0
 }
 
-/// Reads a golden file of packages/log-contract/fixtures.
+/// Reads a golden file of docs/spec/cases/log-contract.
 fn fixture_lines(name: &str) -> Vec<String> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../log-contract/fixtures")
+        .join("../../../docs/spec/cases/log-contract")
         .join(name);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("{}: {error}", path.display()))

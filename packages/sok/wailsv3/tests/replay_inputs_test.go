@@ -1,6 +1,6 @@
 package tests
 
-// Runs the golden cases of the replay inputs (packages/log-contract/fixtures/replay/inputs.json, docs/spec/replay.md#records)
+// Runs the golden cases of the replay inputs (docs/spec/cases/log-contract/replay/inputs.json, docs/spec/replay.md#records)
 // through the rules of the tool, so the tool refuses an input and a session with the texts of replayInputProblem and
 // replaySessionProblem.
 
@@ -38,7 +38,7 @@ type replayInputCases struct {
 func readReplayInputCases(t *testing.T) replayInputCases {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "log-contract", "fixtures", "replay", "inputs.json"))
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "log-contract", "replay", "inputs.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

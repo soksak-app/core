@@ -1,7 +1,7 @@
 // The hash of a terminal screen (docs/spec/replay.md#screen-hash). A sidecar stores the hash of each screen it produces and a
 // page stores the hash of each screen it draws; a replay compares them. `screenBytes` builds the canonical bytes and
 // `screenHash` is their SHA-256 as 64 lowercase hexadecimal characters. The golden vectors in
-// packages/log-contract/fixtures/replay/screen-hash.json fix both for every language.
+// docs/spec/cases/log-contract/replay/screen-hash.json fix both for every language.
 //
 // A screen is {rows, cols, cursor: {row, col, visible}, cells}. `cells` holds rows × cols cells in row-major order, each
 // {grapheme, width, fg, bg, attributes}. A color is null (default), an integer from 0 to 255 (indexed) or "#rrggbb" in lowercase.

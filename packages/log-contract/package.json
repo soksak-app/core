@@ -6,12 +6,10 @@
   "type": "module",
   "exports": {
     ".": "./index.js",
-    "./fixtures/*": "./fixtures/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "index.js",
-    "fixtures"
+    "index.js"
   ],
   "devDependencies": {
     "@soksak/plugin-api": "workspace:*"
