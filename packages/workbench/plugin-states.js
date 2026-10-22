@@ -146,6 +146,7 @@ async function show(project) {
   mounts = [];
   // default: the project id of a window without a project is null.
   shown = project?.id ?? null;
+  // default: a window without a project has no shown project object (null).
   shownProject = project ?? null;
   dataAccess.clear();
   for (const { state, table, done } of previous) {
