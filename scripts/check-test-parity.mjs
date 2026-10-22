@@ -187,6 +187,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F254",
+    implementation: [{ file: "scripts/test-runner.mjs", symbol: "export async function runTests" }],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a test file that leaves a timer open after its tests pass is ended at its limit, and the timeout names the process that remains" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a process that outlives its test process is ended at that exit, and the failure names it" },
+    ],
+    expected: "The test runner ends a process group that a test file leaves running and fails that file with the names of the processes, at the exit of the file process or at its limit, checked by two runner tests.",
+    levels: ["unit"],
+  },
+  {
     id: "F249",
     implementation: [
       { file: "packages/workbench/command-route.js", symbol: "export function runCommandCall" },
