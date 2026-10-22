@@ -22,13 +22,12 @@ The view branch `feat/view-kind-F212.7` merged into main on 2026-10-21 and was r
 
 ### Branches and worktrees
 
-State on 2026-10-21. Only main is pushed; no other branch is published.
+State on 2026-10-22. Only main is pushed; no other branch is published.
 
 | Branch | Worktree | State | Next step |
 |---|---|---|---|
 | `main` | `core` | pushed; holds the F212 view and declared UI work, F212.7-10 to F212.7-13, and F224 to F227 | — |
-| `fix/lock-unwraps-F218-2-4` | `../core-lock-unwraps-F218-2-4` | F218-2.4 in progress | finish F218-2.4 and F218-2.5, merge into main, then remove the worktree and the branch |
-| `feat/plugin-host-F212.9` | `../core-plugin-host-F212.9` | F212.9-1 and F212.9-2 committed, F212.9-3 in progress | finish F212.9-3 and F212.9-4, merge into main, then remove |
+| `fix/host-contract-F220` | `../core-host-contract-F220` | F220 in progress | finish F220, merge into main, then remove the worktree and the branch |
 | `feat/settings-G1.4-87-1` | `../core-settings-G1.4-87-1` | held item | do not touch |
 | `fix/background-launch-V5-117-1-3-4-7-1-8` | none | held item | do not touch |
 

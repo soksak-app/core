@@ -22,13 +22,12 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 
 ### Branch와 worktree
 
-2026-10-21 기준이다. push하는 것은 main뿐이고, 다른 branch는 공개하지 않는다.
+2026-10-22 기준이다. push하는 것은 main뿐이고, 다른 branch는 공개하지 않는다.
 
 | Branch | Worktree | 상태 | 다음 단계 |
 |---|---|---|---|
 | `main` | `core` | push됨. F212 view와 선언 UI 작업, F212.7-10~F212.7-13, F224~F227을 담는다 | — |
-| `fix/lock-unwraps-F218-2-4` | `../core-lock-unwraps-F218-2-4` | F218-2.4 진행 중 | F218-2.4와 F218-2.5를 끝내고 main에 합친 뒤 worktree와 branch를 지운다 |
-| `feat/plugin-host-F212.9` | `../core-plugin-host-F212.9` | F212.9-1과 F212.9-2 커밋, F212.9-3 진행 중 | F212.9-3과 F212.9-4를 끝내고 main에 합친 뒤 지운다 |
+| `fix/host-contract-F220` | `../core-host-contract-F220` | F220 진행 중 | F220을 마치고 main에 합친 뒤 worktree와 branch를 지운다 |
 | `feat/settings-G1.4-87-1` | `../core-settings-G1.4-87-1` | 보류 항목 | 건드리지 않는다 |
 | `fix/background-launch-V5-117-1-3-4-7-1-8` | 없음 | 보류 항목 | 건드리지 않는다 |
 
