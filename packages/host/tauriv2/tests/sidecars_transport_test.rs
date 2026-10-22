@@ -1777,9 +1777,28 @@ impl ReplaceService {
 impl Drop for ReplaceService {
     fn drop(&mut self) {
         // The installed service is a process that the host started and that outlives the sessions, so the fixture ends it.
-        // The kill fails when the process has already ended, which the check of the installed service does not need to know.
+        // SIGKILL only queues the end of the process, and the kernel releases the memory of the process before it is no
+        // longer listed. waitpid returns when that exit is complete, so the process has ended when drop returns. The host
+        // starts the process from this test process, so the process is a child of this process. ESRCH and ECHILD mean
+        // that the process has already ended and been reaped.
         if let Some(installed) = self.installed_process_id() {
-            let _ = unsafe { libc::kill(installed as i32, libc::SIGKILL) };
+            if unsafe { libc::kill(installed as i32, libc::SIGKILL) } != 0 {
+                let error = std::io::Error::last_os_error();
+                assert_eq!(
+                    error.raw_os_error(),
+                    Some(libc::ESRCH),
+                    "ending the installed service process {installed}: {error}"
+                );
+            }
+            let mut status: libc::c_int = 0;
+            if unsafe { libc::waitpid(installed as i32, &mut status, 0) } < 0 {
+                let error = std::io::Error::last_os_error();
+                assert_eq!(
+                    error.raw_os_error(),
+                    Some(libc::ECHILD),
+                    "waiting for the installed service process {installed}: {error}"
+                );
+            }
         }
         let mut process = self.process.lock().unwrap();
         // The process may have ended after the shutdown answer already; then the kill fails and the wait returns its status.
@@ -1794,6 +1813,7 @@ fn serve_replace_service(
     old: &str,
     installed: &str,
     ends_after: Duration,
+    held_bytes: usize,
 ) -> ReplaceService {
     let service_directory = config_directory.join("services/echo");
     std::fs::create_dir_all(&service_directory).unwrap();
@@ -1813,8 +1833,15 @@ fn serve_replace_service(
     // The executable that the host starts for the installed service announces the endpoint of this fake service.
     // It records its process identifier, so the check can see whether the process ends with the test.
     let installed_pid_path = executable_directory.join("installed.pid");
+    // With held bytes, the installed process touches that much memory before it sleeps. Ending such a process takes the
+    // time that the kernel needs to release the memory, so the process is still listed for a while after SIGKILL.
+    let holder = if held_bytes == 0 {
+        "exec sleep 20".to_string()
+    } else {
+        format!("exec perl -e '$x = \"a\" x {held_bytes}; sleep 20'")
+    };
     let script = format!(
-        "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\nexec sleep 20\n",
+        "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%s,\"socket\":\"{}\",\"token\":\"replace-token\"}}\\n' \"$$\"\n{holder}\n",
         installed_pid_path.display(),
         socket_path.display()
     );
@@ -1931,6 +1958,7 @@ fn an_outdated_service_is_replaced() {
         "0.0.6",
         "0.0.7",
         Duration::ZERO,
+        0,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
@@ -1976,6 +2004,7 @@ fn a_service_that_is_not_outdated_is_not_replaced() {
         "0.0.7",
         "0.0.7",
         Duration::ZERO,
+        0,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let error = sidecars.replace(ECHO).unwrap_err();
@@ -2002,6 +2031,7 @@ fn an_outdated_service_is_replaced_when_its_sessions_end() {
         "0.0.6",
         "0.0.7",
         Duration::ZERO,
+        0,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
@@ -2030,6 +2060,7 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
         "0.0.6",
         "0.0.7",
         Duration::from_millis(300),
+        1 << 30,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
@@ -2232,6 +2263,7 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
         "0.0.7",
         "0.0.7",
         Duration::ZERO,
+        0,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("detach", "/projects/detach");

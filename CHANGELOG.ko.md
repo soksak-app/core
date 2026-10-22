@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F255: tauriv2 sidecar transport 시험의 교체 service fixture는 Drop에서 설치된 service 프로세스의 종료를 기다린다. 프로세스는 SIGKILL로 끝내고 `waitpid`로 회수하므로, 뒤따르는 확인은 끝난 프로세스를 읽는다. 시험 `a_replaced_service_starts_after_the_end_of_its_process`는 프로세스 종료에 시간이 걸릴 때 수정 전 fixture에서 `the installed service process <pid> outlived the test`로 실패했고, 수정 뒤에는 통과한다. 제품 코드는 바뀌지 않았다.
 - F252-1-1: `createExpose`는 port의 report 함수를 요구하고, host가 거부한 reply를 보고하며, 실패한 report는 두 문장을 담아 `reportError`로 넘기므로 어떤 reply 실패도 page 오류 경로를 벗어나지 않는다. 앱 runtime은 exposure port에 report를 준다.
 - F254: 시험 runner는 시험 파일의 프로세스가 끝나면 그 프로세스 그룹을 끝낸다. 그룹에 남은 프로세스는 `left running after exit: pid <n> <command>`로 파일을 실패시키고, 한도에서는 `TIME` 줄이 파일의 프로세스 밖의 프로세스를 `left running: pid <n> <command>`로 이름 붙인다. 시험이 끝난 뒤 timer를 열어 둔 시험 파일은 남은 프로세스와 함께 보고되며, 자기가 시작한 자식이 계속 도는 채 프로세스가 끝난 파일은 한도가 아니라 그 종료 시점에 실패한다.
 - F252-1: `undefined`인 status 값, command 결과, 요청 결과는 `undefined`가 JSON 값이 아니므로 status나 command의 이름을 밝힌 오류로 거부한다. result 형식이 null인 command는 여전히 null로 답한다. 파싱되지 않는 `endpoint.json`은 경로와 함께 실패하며, 없는 파일만 아직 쓰이지 않은 것이다. 값 결과를 선언하고 아무것도 반환하지 않던 fixture는 선언에 맞게 고쳤다. `createExpose`의 응답 체인은 F252-1-1로 열어 둔다.
