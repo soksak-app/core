@@ -6,7 +6,7 @@
 
 ## 결정
 
-Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `sok://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나다. 선언 UI는 plugin이 보내는 [declared UI snapshot](native-surfaces.ko.md#view-표면)으로 workbench가 그린다. plugin host는 view나 sidecar가 맡을 수 없는 DOM 없는 로직이 있을 때만 존재한다.
+Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `sok://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나다. 선언 UI는 plugin이 보내는 [declared UI snapshot](native-surfaces.ko.md#view-표면)으로 workbench가 그린다. plugin host는 plugin의 view가 하나도 열려 있지 않은 동안 제공해야 하는 sidebar section의 선언 status가 있을 때만 존재한다([declared status](declared-ui.ko.md#선언된-status)).
 
 측정은 이 결정을 뒤집지 않는다. 측정은 프로세스 수, plugin별 예산, 통과값을 정한다. 통과값을 만족하지 못하면 설계를 다시 연다. workbench 페이지에 plugin surface를 mount하는 방식으로 돌아가지 않는다.
 
@@ -25,7 +25,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 - **view:** 그 밖의 화면은 view다. 인라인 이름 바꾸기가 필요한 tree, 끌어 놓기가 있는 tree, 포인터 위치에 놓는 문맥 메뉴가 있는 tree는 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
 - **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 [plugin host](#plugin-host)가 필요하다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다. `core.declared-ui.tree.expand` 명령은 그 처리기와 함께 `packages/workbench/exposure.json`에 선언한다.
 - **모듈 section(지금):** 모듈 section은 sidebar section의 지금의 형태다. workbench는 모듈을 section 요소에 올리며, 문맥으로 `card`, `surface`, `orientation`, core `icon` 함수, plugin의 status를 위한 `status(name, fn)`, 명령을 위한 `bind(el, name, params, options)`를 준다. 모듈은 자기 DOM을 그리므로 workbench는 그 요소와 이름을 검사하지 못한다. 규칙 1이 workbench 페이지에서 plugin 코드를 실행하지 않는다고 하므로, 이 형태는 페이지 마운트가 제거될 때까지만 지금의 형태다.
-- **plugin host:** view나 sidecar가 DOM 없는 로직을 맡을 수 없을 때만 만든다. 그 로직을 files sidecar나 files view로 옮기는 것을 먼저 검토하고, 옮길 수 없을 때만 host를 둔다.
+- **plugin host:** plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공해야 할 때만 만든다. sidecar는 한 domain의 native 기능을 갖고 view는 그 탭이 열려 있는 동안만 있으므로, host는 plugin의 sidecar가 주는 데이터로 그 status들의 선언 값을 만들어 제공하고, plugin의 sidecar 메시지와 명령 요청을 중계한다. 선언 status의 presentation은 host 자신의 로직이다. host는 native 로직을 갖지 않으며, sidecar는 데이터만 준다.
 - 화면의 층은 측정으로 정하지 않는다.
 
 ## 통과값
@@ -156,7 +156,7 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 - core가 하는 일은 기구뿐이다. view 구성 종류, 선언 UI schema와 그리기, RPC와 binary 통로, core root, 재시작 한도, 계약 case가 여기에 든다.
 - 규칙 4의 view channel이 view의 유일한 전송 통로다.
 - 각 plugin의 층, plugin state를 sidecar로 옮기는 일, editor buffer를 옮기는 일은 plugin과 sidecar 저장소의 일이다. core 코드와 시험은 plugin과 sidecar의 이름, 경로, 구현을 모른다.
-- core의 [plugin host](#plugin-host)는 view나 sidecar가 맡을 수 없는 DOM 없는 로직을 가진 plugin을 위한 것이다. 계약이 그것을 요구할 때만 만든다.
+- core의 [plugin host](#plugin-host)는 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공해야 하는 plugin을 위한 것이다. 계약이 그것을 요구할 때만 만든다.
 - 관계는 manifest의 `dependencies`, `extends`, `contributes`로만 맺는다. core root가 plugin B의 파일을 plugin A에게 주는 것은 granted item이나 공용 대상일 때뿐이며, 그 판단도 이 선언과 설치 기록으로 한다(규칙 4).
 - 플러그인 저장소 요구: 기여 module이나 공용 module을 제공하는 plugin의 저장소는 자기 시험에서 그 module이 각각 자체완결 ES module 하나인지 확인한다. 그 안의 상대 import는 그 plugin의 빌드 오류다.
 - 시험:

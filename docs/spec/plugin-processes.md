@@ -6,7 +6,7 @@ This specification states where plugin code runs and how its processes communica
 
 ## Decision
 
-Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `sok://<plugin id>` origin, with one view per tab. Declared UI is drawn by the workbench from [declared UI snapshots](native-surfaces.md#view-surfaces) that the plugin sends. A plugin host exists only for DOM-free logic that neither a view nor a sidecar can hold.
+Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `sok://<plugin id>` origin, with one view per tab. Declared UI is drawn by the workbench from [declared UI snapshots](native-surfaces.md#view-surfaces) that the plugin sends. A plugin host exists only for a declared status of a sidebar section that must be served while no view of the plugin is open ([declared status](declared-ui.md#declared-status)).
 
 Measurements do not reverse this decision. They fix the process counts, the per-plugin budgets and the pass values. When a pass value is not met, the design reopens. It does not return to mounting plugin surfaces on the workbench page.
 
@@ -25,7 +25,7 @@ Measurements do not reverse this decision. They fix the process counts, the per-
 - **View:** any other screen is a view. A tree that needs inline rename, a tree with drag and drop, and a tree with a context menu placed at a pointer are views. A view holds free DOM, text input that needs IME, a canvas or an editor, and a screen with a document region or an image region.
 - **Sidebar section:** only declared UI can be a sidebar section. A plugin whose sidebar section must show values while none of its views is open needs its [plugin host](#plugin-host). A section that needs a view becomes a card surface, and the sidebar holds only the declared item that opens it. The `core.declared-ui.tree.expand` command is declared in `packages/workbench/exposure.json` together with its handler.
 - **Module section (today):** a module section is the current form of a sidebar section. The workbench mounts the module in the section element with a context of `card`, `surface`, `orientation`, the core `icon` function, `status(name, fn)` for the statuses of the plugin, and `bind(el, name, params, options)` for its commands. The module draws its own DOM, so the workbench checks neither its elements nor its names. Rule 1 says that plugin code does not run on the workbench page, so this form is the current form until the page mount is removed.
-- **Plugin host:** created only when DOM-free logic cannot be held by a view or a sidecar. Its move to the files sidecar or to a files view is examined first, and a host is created only when that move is impossible.
+- **Plugin host:** created only when a declared status of a sidebar section must be served while no view of the plugin is open. A sidecar holds the native functionality of one domain and a view exists only while its tab is open, so the host builds the declared values of those statuses from the data that the plugin's sidecar supplies, serves them, and relays its plugin's sidecar messages and command requests. The presentation of its declared statuses is its own logic; it holds no native logic, and the sidecar supplies only data.
 - The layer of a screen is not chosen by measurement.
 
 ## Pass values
@@ -156,7 +156,7 @@ The identifiers in code use the names as written here.
 - The core of this design provides only the mechanisms: view configuration kinds, the declared UI schema and its drawing, the RPC and binary channels, the core root, the restart limit, and the contract cases.
 - The view channel of rule 4 is the only transport of a view.
 - The layer of each plugin, the move of a plugin state to a sidecar, and the move of an editor buffer are work of the plugin and sidecar repositories. Core code and tests do not know plugin or sidecar names, paths or implementations.
-- The [plugin host](#plugin-host) of core serves a plugin whose DOM-free logic fits neither a view nor a sidecar. It is built only when the contract requires it.
+- The [plugin host](#plugin-host) of core serves a plugin whose declared status of a sidebar section must be served while no view of the plugin is open. It is built only when the contract requires it.
 - Relations are declared only by the `dependencies`, `extends` and `contributes` fields of a manifest. The core root serves a plugin's file to another plugin only for a granted item or a shared target (rule 4), which the granted item rule decides from these declarations and the installation record.
 - Plugin repository requirement: the repository of each plugin that contributes a module or provides a shared module checks in its own tests that each such module is one self-contained ES module. A relative import inside one is a build error of that plugin.
 - Tests:

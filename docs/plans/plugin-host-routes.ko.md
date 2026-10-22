@@ -231,3 +231,48 @@ F229는 플러그인 호스트가 매니페스트에 선언된 사이드카에 �
 - **F229-8** [o] 닫음. `state:<plugin>:<project>` 세션은 그 project를 소유한 창에서 project가 해제되면 plugin 세션과 같은 close로 끝난다(Go `closeProjectSessions`, Rust `is_project_session`). Go Red: state 분기를 끄면 `TestProjectReleaseClosesTheStateSessionOfThatProject`가 `the state session state:probe:project-a of the released project is still owned`로 실패했다. Rust: assertion 수준의 Red: `is_project_session`의 state 분기를 끄면 `a_release_ends_the_plugin_and_state_sessions_of_that_project`가 `is_project_session("state:files:project-a", "project-a")` assertion(134행)에서 실패했고, 되돌린 뒤 Green. 계약 `plugin-host.sidecar.release-state-session`을 두 호스트 테스트에 선언.
 - **F229-6** [o] 결정으로 닫음(joint 규칙). 멈춤 기록마다 해제 트리거는 하나이고 [sidecars](../spec/sidecars.ko.md#실패)에 한 번만 적는다. 사람이 `dependencies`에 사이드카를 적은 plugin의 표면을 여는 것은 그 사이드카 멈춤을 지우고, 같은 plugin의 표면을 여는 것은 그 plugin host 멈춤을 지운다([plugin host](../spec/plugin-host.ko.md#restarts)). 두 해제는 표면 열기 훅의 같은 단계에서 실행된다(열린 표면에 대한 `surfaces.go`, `plugin_host_channel::surface_opened`를 부르는 `surfaces.rs`). 해제된 plugin host가 다시 여는 세션은 그 plugin이 사이드카를 적었으므로 해제된 사이드카 멈춤을 만나고, 그 세션의 사이드카 멈춤은 host 멈춤과 함께 지워진다. 한도 안의 plugin host 자동 재시작은 사이드카 멈춤을 지우지 않으므로 사람의 열기 없이 프로세스가 다시 시작되지 않는다. 첫 결정의 한계는 enable 규칙으로 닫았다. host는 있고 표면이 없는 plugin에는 여는 행위가 없어서 그 멈춤은 애플리케이션이 시작될 때까지 남았다. 사람이 plugin을 사용(enable)하면 두 호스트 모두에서 같은 단계의 두 번째 해제 트리거가 된다. 설정의 `pluginsRun` 동작 `enable`에 대한 plugin 변경 훅이 plugin host 멈춤과 그 `dependencies`의 사이드카 멈춤을 한 단계에서 지운다(Go `notifyPlugins`가 `pluginEnabled`를, Rust `windows::notify_plugins`가 `plugin_enabled`를 부른다). 쓰는 trace event는 같고 `surface` 대신 `plugin`을 쓴다. 계약 `plugin-host.restart.enable-clears-stops`: Go `TestEnableOfAPluginClearsItsHostStopAndItsSidecarStops`(plugin_host_sidecar_test.go), Rust `enable_clears_the_restart_limit_of_its_sidecars`(tests/sidecars_test.rs). Red: 사이드카 해제를 빼면 Go 테스트가 `the enable of probe left the sidecar stop of its dependency in place`에서, plugin host 해제를 빼면 `the enable of probe left the plugin host stopped`에서 실패한다. Rust 쪽에서 사이드카 해제를 빼면 사용 뒤의 send가 `sidecar @fixture/sidecar-echo: restart limit`로 실패한다. Rust 쪽 plugin host 해제는 분리했다. `plugin_host_channel::plugin_enabled`가 창을 돌며 `clear_enabled_stop`을 부른다. 이 함수는 기록, plugin 이름, 창 label, reload callback을 받고, reset이 멈춤을 지웠을 때만 label마다 한 번 reload한다. 시험 `the_enable_of_the_plugin_clears_the_stop_and_reloads_every_window_once`(`plugin_host_test.rs`, 계약 `plugin-host.restart.enable-clears-stops`). Red: 도우미의 reset 호출을 `true ||`로 바꾸면 시험이 `the enable of a stopped plugin cleared no stop`에서 실패한다. 복원 뒤 Green(`cargo test -p soksak-host-tauriv2 --lib plugin_host`, 27 passed). 계약 `plugin-host.restart.stop-clear-joint`: Go `TestOneSurfaceOpenClearsTheHostStopAndTheSidecarStopOfItsPlugin`(`plugin_host_sidecar_test.go`), Rust `surface_open_clears_the_restart_limit`(`tests/sidecars_test.rs`, 계약 표기 추가). Go 테스트는 고정(pin)이다. Red는 `Sidecars.SurfaceOpened`가 의존 plugin을 건너뛰게 한 변이로 확인한다. 훅 자체의 Red는 창이 필요하므로 쓰지 않았다.
 - **F229 후속 상위 항목** [o]: F229-1, F229-6, F229-8은 여기서 닫는다. F229-2, F229-3, F229-4, F229-5, F229-7은 이 문서에서 먼저 닫았다.
+
+## F238-d-20: 계층 규칙, presentation 위치, 자르는 곳
+
+### 범위
+
+검증은 네 가지만 정한다.
+
+1. `docs/spec/plugin-processes.md`(계층 규칙)의 plugin host 규칙 문장과 `docs/spec/plugin-host.md` 첫 문단.
+2. host가 제공하는 선언 status의 presentation을 만드는 곳: plugin의 host page인가, plugin의 sidecar인가.
+3. 선언 tree 값을 `docs/spec/declared-ui.md`의 한도에 맞춰 자르는 곳.
+4. F238-d-17의 DOM 없음 시험이 읽는 module.
+
+핵심 반론은 결정이 명세나 AGENTS.md 규칙과 어긋나거나, 구현할 수 없거나, 두 구현이 다르게 처리할 경우를 남긴다는 것을 보여야 한다. 범위 밖: 문구, files sidecar protocol(F238-d-16), F229의 route 규칙, F238-d-23의 제공 호출, 화살표 키 이동(F238-d-22).
+
+### 결정
+
+1. plugin host의 기준은 능력 시험이 아니라 배치 규칙이다. 아래 문장들을 이 이유와 함께 같은 변경에서 영어와 한국어로 바꾼다.
+   - `docs/spec/plugin-processes.md` 계층 규칙의 plugin host 항목: "**Plugin host:** created only when a declared status of a sidebar section must be served while no view of the plugin is open. A sidecar holds the native functionality of one domain and a view exists only while its tab is open, so the host builds the declared values of those statuses from the data that the plugin's sidecar supplies, serves them, and relays its plugin's sidecar messages and command requests. The presentation of its declared statuses is its own logic; it holds no native logic, and the sidecar supplies only data."
+   - `docs/spec/plugin-processes.md` 9행 "A plugin host exists only for DOM-free logic that neither a view nor a sidecar can hold."를 "A plugin host exists only for a declared status of a sidebar section that must be served while no view of the plugin is open ([declared status](../spec/declared-ui.md#declared-status))."로 바꾼다.
+   - `docs/spec/plugin-processes.md` 159행 "The [plugin host](../spec/plugin-processes.md#plugin-host) of core serves a plugin whose DOM-free logic fits neither a view nor a sidecar."를 "The [plugin host](../spec/plugin-processes.md#plugin-host) of core serves a plugin whose declared status of a sidebar section must be served while no view of the plugin is open."로 바꾼다.
+   - `docs/spec/plugin-host.md` 59행 "The logic that needs the other calls belongs in a view or a sidecar, not in a plugin host."를 "The host serves only the calls listed in this clause, and holds no logic beyond the presentation of its declared statuses, the relay of the calls listed here, the [state](../spec/plugin-host.md#state) calls and its [restart](../spec/plugin-host.md#restarts) record ([plugin processes](../spec/plugin-processes.md#layer-rules))."로 바꾼다.
+   - `docs/spec/plugin-host.md` 5행의 처음 두 문장: "A plugin host is a process of a plugin, with a platform web view attached to the window, that serves the declared statuses of its plugin while no view of the plugin is open; it exists only when a declared status of a sidebar section must be served in that case ([declared status](../spec/declared-ui.md#declared-status)). It holds the DOM-free presentation of those statuses, because a sidecar holds the native functionality of one domain, and the sidecar supplies their data." 세 번째 문장 "A host is created only when moving its logic to a sidecar, into a view or into a state module is impossible."는 "A host is created only when a declared status of a sidebar section must be served while no view of the plugin is open; a sidecar or a state module is not a declared status source ([declared status](../spec/declared-ui.md#declared-status))."로 바꾼다.
+2. Presentation: sidecar는 데이터만 준다(files의 경우 목록, 경로별 git 상태, 펼친 집합, 선택, 디렉터리 `detail` 값). sidecar는 항목을 표시 순서로 돌려주고, host page는 그 순서를 지키며 정렬하지 않는다. host page가 그 데이터로 선언 값을 만들어 선언 UI snapshot으로 그대로 보낸다.
+3. 자르는 곳: host page가 보내기 전에 자른다.
+   - 개수와 크기 한도는, 자른 `status-line`을 포함한 값이 모든 한도 안에 드는 가장 긴 목록 순서의 앞부분을 남겨 자른다: list 항목 1000개, tree 노드 5000개, 16단계, 직렬화한 값 1048576바이트. 값의 루트 요소는 정해진 묶음(status-line, button, tree 또는 list 하나)이라 64개 한도보다 적고, 그 한도를 넘게 만드는 builder는 글 한도와 같이 받는 쪽의 거부로 보고된다. `status-line`은 보이지 않은 행 수를 적는다.
+   - 글, key, 매개변수 한도는 자르지 않는다. 짧아진 label이나 경로는 다른 파일을 가리키기 때문이다. 그 한도를 어긴 값은 그대로 보낸다. 받는 쪽이 거부 글(`declared-ui.md`, Rejection)로 거부하고, workbench가 그 글을 표시 경로로 보여 주고 log에 쓰며, section은 비워진다. 그 대신 빈 tree를 보내지 않는다. 그 `empty` 글은 성공하지 않은 목록을 성공한 것처럼 말하기 때문이다.
+   - core는 자르지 않는다.
+4. 시험 대상: F238-d-17의 DOM 없음 시험은 선언 값을 만들고 보내는 host page의 두 module인 `plugins/files/ui/declared-data.js`(`treeValue`, `bookmarkValue`)와 `plugins/files/ui/host-runtime.js`를 읽는다.
+
+### 이유
+
+- AGENTS.md(Structure)는 sidecar가 한 domain의 native 기능을 갖는다고 한다. files sidecar는 file system domain의 native binary다. label, project 없음 문구, action 배치, 자르기는 files plugin의 presentation이지 file system 기능이 아니므로, 규칙은 그것을 sidecar 밖에 둔다. sidecar가 그것을 만들면 plugin presentation이 바뀔 때마다 native binary의 release가 따라 묶인다.
+- view가 열려 있지 않으면 view는 status를 제공할 수 없고, 선언 status는 plugin 프로세스가 제공하는데(`declared-ui.md:151`) sidecar는 plugin 프로세스가 아니다. 그래서 view 없이 제공해야 하는 status에는 host가 필요하고, 그 status의 presentation이 host의 유일한 logic이다.
+- 기본 기준 "host는 sidecar가 가질 수 있는 logic을 갖지 않는다"는 배치 규칙으로 바꾼다. sidecar는 기술적으로 어떤 DOM 없는 코드도 돌릴 수 있기 때문이다. 정하는 기준은 sidecar의 domain이다.
+- 자르기는 presentation의 일부이므로 값을 만드는 곳에서 자른다.
+- files plugin은 host page module `ui/declared-data.js`와 `ui/host-runtime.js`에서 값을 만들고, files sidecar는 `snapshot`, `expand`, `collapse`, `select`에 데이터로 답한다(F238-d-16). 그 manifest는 아직 `host`를 선언하지 않았고(`plugin-host.md`, Declaration), 자르기는 노드 수와 깊이만 다루며, 500 code point를 넘는 글은 보고 없이 throw한다. 그 빈틈들은 files 저장소의 항목이다.
+
+### 검증 기록
+
+- 1차, 감사자 A: presentation 위치(host 또는 sidecar), plugin-host.md와 맞지 않는 규칙 문장, byte 한도와 자르기, 시험 대상. 위치: domain 규칙으로 반박했고, 기준을 같은 변경에서 이유와 함께 배치 규칙으로 바꾸고 결합 이유를 적는다는 조건으로 합의했다(위에 반영). 나머지 셋: 수용.
+- 1차, 감사자 B: 규칙 문장의 마지막 절, 빠진 plugin-host.md 문장, 이름 없는 시험 파일, 이름 없는 한도와 글 한도의 경우, 틀린 줄 참조(`declared-ui.md:145` → `:151`). 모두 수용했고 대체 문장을 위에 합쳤다.
+- 2차, 감사자 C: 바꾸지 않은 `plugin-host.md` 5행 세 번째 문장, `plugin-processes.md` 9행과 159행에 인용 문장이 없음, 성공하지 않은 목록을 말하는 비운 값, 항목 순서의 주인이 없음, files manifest가 host를 선언한다는 주장. 모두 수용해 위에 합쳤다.
+- 3차, 감사자 D: `plugin-processes.md` 28행의 원문 인용 없음, 규칙 문장에서 "domain"을 두 뜻으로 씀, 옛 시험을 그대로 적은 `plugin-host.md` 59행. 모두 수용해 위에 합쳤고, 명세 파일이 대체 문장을 담는다.
+- 4차, 감사자 E(적용한 명세 diff에 대해): 출처 순서와 맞지 않는 존재 조건, host의 재시작과 state 로직과 맞지 않는 "로직 없음" 절, 남은 `plugin-host.md` 5행의 옛 두 번째 문장, 세 번째 용어가 된 "declared status of a sidebar section". 존재 조건: 일부 수용. host는 view가 열려 있지 않은 동안 제공해야 할 status가 있을 때만 존재하고, 고른 출처가 host일 때마다(활성 탭 view가 첫째, host가 둘째) 제공한다. 둘 다 적었다. 나머지 셋: 수용. 용어는 "declared status of a sidebar section"이다.
+- 5차, 감사자 F: 결정 인용이 적용한 문장과 다름, `plugins.md` 71행의 옛 기준 문장, 자르기 규칙에 루트 요소 64개가 빠짐. 모두 수용해 반영했다. 남은 핵심 반론은 없고, 5차로 검증을 닫는다.

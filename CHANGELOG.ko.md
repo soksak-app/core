@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-d-20: plugin host 기준은 배치 규칙이다. host는 plugin의 view가 하나도 열려 있지 않은 동안 제공해야 하는 sidebar section의 선언 status가 있을 때만 존재하고, sidecar가 데이터를 주는 동안 그 status들의 presentation을 갖는다. host page는 보내기 전에 개수와 크기 한도를 자른다.
 - F238-d-1, F238-d-2, F238-d-4: Repositories 단락은 `make boundaries`가 선언된 각 폴더에서 읽는 것과 `make registry`, `make install-plugins`가 읽는 것을 적는다. `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다. 저장소 표는 선언된 plugin `browser`, `editor`, `files`, `hwp`, `terminal`을 적고, 사이드카 행은 `vt-alacritty`를 적는다. Registry 테스트는 표가 선언된 plugin을 적는지 검사한다. 이전 표에서 Red(actual `[browser, files, shell, terminal]`), 현재 표에서 Green(6/6).
 - F241: view call route가 surface context의 PNG clipboard payload를 제공한다. `runtime.clipboard.read`는 `png`에 base64 data를 담은 `{present, type, data}` 또는 `null`을 돌려주고, `runtime.clipboard.persistPNG`는 `{data}`의 payload를 저장해 `{path, shellQuotedPath}`를 돌려준다. Red: `packages/workbench/test/view-calls.test.mjs`의 F241 사례 3개가 바뀌지 않은 구현에서 `view call ... is not served`로 실패했다. Green: 같은 파일이 50/50 통과한다.
 - F242: view call `runtime.log`의 계약은 `cids`를 surface context의 log가 검사한다고 적는다. 기존 view call 전달이 이미 이를 넘긴다. 소유 테스트 통과: view call 50/50, surface 17/17. 빠진 동작이 확인되지 않아 Red는 없다.
