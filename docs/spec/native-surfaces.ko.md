@@ -139,10 +139,6 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
 
   메인 page는 선택된 view 원천에 `viewEvent {surface, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
 
-메인 page는 선택된 view 원천에 `viewEvent {surface, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
-
-메인 page는 선택된 view 원천에 `viewEvent {surface, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
-
 페이지는 구독을 한 번만 등록한다. 같은 name이나 id의 두 번째 call은 다시 등록하지 않고 `null`로 답한다. 페이지는 각 event를 `viewEvent {surface, event, data}`로 보내며, 호스트는 `{sok: 1, event, data}`를 view의 ready 문서에 post한다. ready 문서가 없는 view에 대한 event는 `<surface> has no ready document`로 실패하고, 페이지가 그 오류를 application log에 쓴다. 구독은 surface가 닫히면 끝난다. 재시작한 view는 다시 구독하며, 페이지는 그때까지 구독을 유지한다. view는 event 이름의 listener에 각 event를 전달하고, listener가 없는 event는 무시한다.
 - **view command.** view는 시작할 때 자기가 제공하는 각 command를 `runtime.command.register`(`{name}`) call로 선언한다.
   1. 페이지는 등록을 exposure의 registry로 적용한다. plugin의 `exposes`가 선언하지 않은 name이나 다른 plugin의 name은 registry 오류로 거부되며, call은 그 오류로 답한다.
