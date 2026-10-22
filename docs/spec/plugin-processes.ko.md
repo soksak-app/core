@@ -24,7 +24,6 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 - **선언 UI:** 요소가 모두 목록, tree, 버튼, 상태줄 가운데 하나인 사이드바 section이 선언 UI다.
 - **view:** 그 밖의 화면은 view다. 인라인 이름 바꾸기가 필요한 tree, 끌어 놓기가 있는 tree, 포인터 위치에 놓는 문맥 메뉴가 있는 tree는 view다. view는 자유 DOM, IME가 필요한 글 입력, canvas나 편집기, document region 또는 image region을 담은 화면을 맡는다.
 - **sidebar section:** 선언 UI만 sidebar section이 될 수 있다. 열린 view가 없는 동안에도 sidebar section이 값을 보여야 하는 plugin은 [plugin host](#plugin-host)가 필요하다. view가 필요한 section은 card 표면이 되고, sidebar에는 그것을 여는 선언 항목만 둔다. `core.declared-ui.tree.expand` 명령은 그 처리기와 함께 `packages/workbench/exposure.json`에 선언한다.
-- **모듈 section(지금):** 모듈 section은 sidebar section의 지금의 형태다. workbench는 모듈을 section 요소에 올리며, 문맥으로 `card`, `surface`, `orientation`, core `icon` 함수, plugin의 status를 위한 `status(name, fn)`, 명령을 위한 `bind(el, name, params, options)`를 준다. 모듈은 자기 DOM을 그리므로 workbench는 그 요소와 이름을 검사하지 못한다. 규칙 1이 workbench 페이지에서 plugin 코드를 실행하지 않는다고 하므로, 이 형태는 페이지 마운트가 제거될 때까지만 지금의 형태다.
 - **plugin host:** plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공해야 할 때만 만든다. sidecar는 한 domain의 native 기능을 갖고 view는 그 탭이 열려 있는 동안만 있으므로, host는 plugin의 sidecar가 주는 데이터로 그 status들의 선언 값을 만들어 제공하고, plugin의 sidecar 메시지와 명령 요청을 중계한다. 선언 status의 presentation은 host 자신의 로직이다. host는 native 로직을 갖지 않으며, sidecar는 데이터만 준다.
 - 화면의 층은 측정으로 정하지 않는다.
 

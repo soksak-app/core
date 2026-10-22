@@ -67,7 +67,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `surface.unload` | 아니오. `background`와 함께 쓰면 거부 | 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다. 선언이 없는 표면은 unload하지 않는다(`undeclared`) |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
-| `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "module" 또는 "status" }`. `module`은 섹션을 그리는 plugin 안의 JavaScript 경로이고, `status`는 workbench가 선언된 UI 값을 그리는 plugin의 status다([선언된 UI](declared-ui.ko.md#사이드바-section-형태)). 둘 중 정확히 하나를 주며, 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
+| `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "status" }`. `status`는 workbench가 선언된 UI 값을 그리는 plugin의 status다([선언된 UI](declared-ui.ko.md#사이드바-section-형태)). 선택 항목 `fill: true`는 섹션에 남은 사이드바 높이를 준다([섹션](#섹션)) |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 표면 페이지나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `state`나 `host`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. registry index나 `installed.json`의 plugin이 그 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
@@ -76,8 +76,7 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 | `migrations` | 아니요 | `{ "<저장 file>": "<경로>" }`: plugin이 소유하는 저장 file의 마이그레이션 정의. 각각은 package 안의 정의 file 경로이고 형식은 [저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)과 같다. 오늘 그런 file을 소유한 plugin은 없으므로 아무도 선언하지 않는다. 그것을 선언하는 release는 그 field를 아는 core release를 요구한다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
-| `state` | 아니오 | `{ "module": "ui/state.js" }`: 표면 밖의 상태를 갖는 [플러그인 상태](#플러그인-상태) 모듈. `sections`가 필요하다 |
-| `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: 상태 모듈 또는 plugin host가 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `state` 또는 `host`가 필요하다 |
+| `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin host가 프로젝트마다 저장하는 [프로젝트 데이터](#프로젝트-데이터). `host`가 필요하다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 | `host` | 아니오 | `{ "page": "<경로>", "state"?: { "format": <양의 정수>, "maxBytes": <양의 정수> } }`: [plugin host](plugin-host.ko.md). plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 선언 status를 제공하는 숨은 web view다. `page`는 `view` composition의 페이지 규칙을 따르고, `state`는 host 페이지가 저장하여 프로세스의 재시작에서 복구되는 상태를 선언한다 |
 
@@ -108,40 +107,28 @@ Core window check는 registry fixture에서 plugin을 설치한다. `scripts/wor
 ## 섹션
 section id와 plugin id는 한 번 공개되면 불변이다. tab·저장된 settings·저장된 project data가 그것들을 참조하고, 이름을 바꾸면 어떤 마이그레이션도 닿지 않는 저장 file이 깨진다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
 
-섹션은 `module`과 `status` 가운데 정확히 하나를 선언한다. `status`는 같은 plugin이 `exposes.status`에 선언한 status 이름이다. 둘 다 선언하거나 둘 다 선언하지 않은 섹션은 manifest를 읽을 때 거부하며, status 하나는 섹션 하나만 뒷받침한다. 형태와 값 규칙은 [선언된 UI](declared-ui.ko.md#사이드바-section-형태)에 있다.
+섹션은 `status`를 선언하며, `status`는 같은 plugin이 `exposes.status`에 선언한 status 이름이다. `module`을 가진 섹션은 manifest를 읽을 때 `plugin <id>: section <section id> module is removed; a section takes status`로 거부하고, `status`가 없는 섹션은 `plugin <id>: section <section id> requires a status`로 거부한다. status 하나는 섹션 하나만 뒷받침한다. 형태와 값 규칙은 [선언된 UI](declared-ui.ko.md#사이드바-section-형태)에 있다.
 
-섹션의 `module`은 두 방향에 공통인 JavaScript 경로 하나 또는 `{horizontal, vertical}` 경로 객체다. 객체는 두 키를 모두 요구하며 그 외 키를 허용하지 않는다. 각 값은 plugin 내부의 상대 `.js` 경로이고 두 파일 모두 배포 목록에 있어야 한다. 한 방향을 다른 방향으로 대체하지 않는다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택한다. 워크벤치는 선택한 구현의 `mount(root, context)`에 `context.orientation`을 전달하고 `core.sidebars`에 방향을 공개한다. 방향이 바뀌면 기존 구현을 해제하고 새 구현을 마운트하며 섹션 선택·접힘 상태는 유지한다. 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다.
+워크벤치는 섹션의 본문을 선언된 status로 그리고, 본문의 요소를 사이드바의 방향에 따라 배치한다. 카드 레이아웃은 상·하에 `horizontal`, 좌·우와 외부 창 사이드바에 `vertical`을 선택하며, `core.sidebars`는 방향을 공개한다. 방향이 바뀌어도 섹션의 확정된 값과 출처는 유지된다([선언된 UI](declared-ui.ko.md)). 가로 `list`는 섹션을 좌우로 배치하고 세로 `list`는 상하로 배치한다.
 
-섹션은 플러그인이 그리는 사이드바의 한 부분이다. 워크벤치는 섹션의 `module`을 불러 표면 페이지처럼 섹션 요소에서 `mount(root, context)`를 호출하고, 섹션이 사이드바를 떠나면 돌려받은 해제 함수를 호출한다. `context.card`는 사이드바가 속한 카드의 id이고 `context.surface`는 그 카드의 활성 탭이며, 좌측 사이드바에서는 둘 다 `null`이다. 섹션은 애플리케이션 문서 안에 그려지며 네이티브 표면을 갖지 않는다.
+섹션은 워크벤치가 애플리케이션 문서 안에 그리는 사이드바의 한 부분이며 네이티브 표면을 갖지 않는다. `context.card`는 사이드바가 속한 카드의 id이고 `context.surface`는 그 카드의 활성 탭이며, 좌측 사이드바에서는 둘 다 `null`이다.
 
-섹션은 플러그인이 선언한 status로 그 플러그인의 상태를 보이고, 플러그인이 선언한 명령으로 상태를 바꾼다. 섹션은 그 상태의 사본을 갖지 않는다. `context.status(name, fn)`은 섹션을 가진 플러그인의 status 하나를 따라가고, 따라가기를 멈추는 함수를 반환한다. `fn(value, source)`는 현재 값과 그 뒤의 모든 변경을 받는다. `source`는 그 status를 등록한 표면이고, 플러그인의 상태 모듈이 등록했으면 `"state"`다. 상태 모듈이 등록한 status는 어떤 표면보다 먼저 따라간다. 그렇지 않으면 섹션은 `context.surface`가 그 이름을 등록했으면 그 표면을, 아니면 `surface`가 없는 요청이 쓰는 표면([표면 선택](exposure.ko.md#표면-선택))을 따라가며, 그 이름을 등록한 표면이 없는 동안에는 `fn(null, null)`을 받는다. 등록이 바뀌면 표면을 다시 고른다. status 따라가기의 시작, 값 읽기, 멈춤이 실패하면 페이지 오류로 보고한다. `context.bind(element, name, params, options)`는 공통 binder로 요소를 섹션 플러그인의 명령에 연결하고 dom 이름 `core.sidebar.section.control`을 붙인다. 요소가 표면 페이지가 아니라 애플리케이션 문서에 속하기 때문이다. 명령은 상태 모듈이 등록했으면 상태 모듈에서, `context.surface`가 등록했으면 그 표면에서, 아니면 `surface`가 없는 요청이 쓰는 표면에서 실행된다. 섹션은 이름이 `core.`로 시작하는 코어 status를 따라가고 코어 명령을 연결할 수도 있다. 이때 `context.status`는 앱 문서의 등록을 따라가며 `source`는 `"core"`다. 앱 문서는 시작할 때 무엇을 기다리기 전에 코어 status와 명령을 등록하므로, 그것들은 첫 섹션이 마운트되기 전에 등록되어 있다. 라이브러리가 자기 shadow root 안에 그리는 조작(트리의 폴더 열기 등)은 라이브러리를 담은 요소를 거쳐 명령에 닿는다. 섹션은 그 요소를 사용자 정의 이벤트로 명령에 연결하고(`context.bind(holder, name, (event) => params, {event: "<type>"})`), 조작의 매개변수를 `detail`에 담아 이벤트를 보낸다. 섹션은 다른 플러그인의 이름을 쓰지 못한다. `core.sidebars`는 각 섹션이 그린 텍스트와 조작 요소의 수를 보고하므로, 검사는 섹션이 보이는 내용을 읽고 `core.sidebar.section.control` 요소 중 그 섹션의 조작 요소를 찾는다. `status` 형태 section의 status 출처는 [선언된 UI](declared-ui.ko.md#선언된-status)에 있다.
+섹션은 플러그인이 선언한 status로 그 플러그인의 상태를 보이고, 플러그인이 선언한 명령으로 상태를 바꾼다. 섹션은 그 상태의 사본을 갖지 않는다. status의 출처는 그 status를 등록한 표면이나 plugin host다([선언된 status](declared-ui.ko.md#선언된-status)). 섹션의 조작 요소는 dom 이름 `core.sidebar.section.control`을 갖고, 공통 binder로 섹션 plugin이나 코어의 선언된 명령에 연결된다. 섹션은 다른 플러그인의 이름을 쓰지 못한다. `core.sidebars`는 각 섹션이 그린 텍스트와 조작 요소의 수를 보고하므로, 검사는 섹션이 보이는 내용을 읽고 `core.sidebar.section.control` 요소 중 그 섹션의 조작 요소를 찾는다.
 
 세트는 어느 플러그인의 섹션이든 순서대로 묶고, 세트를 만들 때 고른 `layout`을 가진다. `list`에서 사이드바는 세트의 모든 섹션을 세로 방향에서는 위에서 아래로, 가로 방향에서는 왼쪽에서 오른쪽으로 보이며, 각 섹션은 이름 머리 아래에 있고 머리로 접고 편다. `tabs`에서 사이드바는 섹션 이름의 탭 줄과 고른 탭의 섹션 하나만 보인다. 고른 탭과 접은 섹션은 사이드바마다 유지되고 스페이스와 함께 저장되므로([프로젝트](projects.ko.md#저장)) 다시 불러오기와 다시 시작 뒤에도 그대로 보인다. 카드 레이아웃은 변에 따라 섹션의 방향과 배치를 선택한다.
 
 사이드바는 세트 제목이나 자리 이름을 보이지 않는다. 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하고 끝에 접기 컨트롤(`core.sidebar.fold`)을 둔 상태 줄로 끝난다. 접기 컨트롤은 `core.settings.set`(`left`나 `right`를 false로)으로 사이드바를 끄고, 창 머리의 컨트롤이 다시 켠다. 카드 안 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다([카드 배치](example-model.ko.md)). 접은 섹션은 머리만 남는다. 섹션은 내용의 높이를 가지며, `fill: true`로 선언한 펼친 섹션만 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖고 그 안에서 내용을 스크롤한다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는, 파일 트리 같은 가상 목록은 워크벤치가 자리가 필요함을 알 내용 높이가 없고, 짧은 목록을 늘리면 빈 공간이 보이기 때문이다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다. 섹션은 빈 목록을 기록 없음 같은 말로 알린다.
 
-사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다. 섹션 모듈은 `package.json`의 `files`에 나열한 파일이므로 plugin release가 담는다. 섹션 모듈이 나열되어 있지 않으면 `sok plugin pack`이 실패한다.
+사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 고른 탭, 각 섹션의 접힘과 마운트 상태를 알린다.
 
 세로 목록의 펼친 fill 섹션은 머리와 본문의 고유 최소 높이를 유지한다. 사이드바가 더 작으면 세트 전체를 스크롤하며 섹션을 높이 0으로 줄이지 않는다. 플러그인이 가상 목록을 사용하면 플러그인이 최소 가시 행 높이를 선언한다. 파일 트리는 28포인트 도구 줄과 최소 한 행 20포인트를 확보한다. 이 동작은 카드 콘텐츠의 잔여 높이를 늘리거나 저장한 사이드바 크기를 바꾸지 않는다.
-
-## 플러그인 상태
-
-표면이 없는 플러그인이나 한 탭이 소유하지 않는 상태를 가진 플러그인은 `state` 모듈을 선언한다. 창이 프로젝트를 보이는 동안 워크벤치는 모듈을 한 번 불러와 `mount(context)`를 호출하고, 창이 다른 프로젝트나 라이브러리를 보이면 먼저 돌려받은 `dispose`를 호출한다. 문맥은 다음을 갖는다.
-
-- `project`: `{id, root}`, 보이는 프로젝트와 그 정규 디렉터리([프로젝트](projects.ko.md)).
-- `exposure.status(name, read, subscribe)`와 `exposure.command(name, run)`: 플러그인이 선언한 status와 명령을 애플리케이션 문서의 등록소에 등록한다. `subscribe(fn)`은 여러 번 호출될 수 있고 그 구독을 멈추는 함수를 반환한다. 이 항목은 `surface`가 없는 요청에 같은 이름의 어떤 표면 등록보다 먼저 답하고([표면 선택](exposure.ko.md#표면-선택)), dispose가 제거한다.
-- `sidecar`: 플러그인이 선언한 유일한 사이드카의 `{send(body), on(fn), onFailure(fn)}`. `onFailure`는 세션의 각 [사이드카 실패](sidecars.ko.md#실패) 이유를 받는다. 세션 식별자는 `state:<플러그인 id>:<프로젝트 id>`이므로 호스트는 사이드카에 프로젝트 디렉터리를 `root`로 준다([사이드카](sidecars.ko.md#메시지)).
-- `data.get(key)`와 `data.set(key, value)`: 플러그인의 [프로젝트 데이터](#프로젝트-데이터).
-- `runtime`: `{trace, log}`이며 표면 컨텍스트의 `runtime`에 있는 같은 이름의 함수와 인자, 검사, gate가 같다([Tracing](#tracing), [Logging](#logging)). event에는 플러그인 id가 붙고 `surface` field는 없으며, host가 없는 문서는 아무것도 저장하지 않는다.
-
-상태 모듈은 `package.json`의 `files`에 나열한 파일이며, 나열하지 않으면 `sok plugin pack`이 실패한다. 마운트나 해제의 실패는 페이지 오류로 보고한다.
 
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값을 변환한다. 저장 file 자체의 형태는 정의로 갱신된다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)).
 
-`data`는 상태 모듈 또는 plugin host가 프로젝트마다 저장하는 키를 선언한다. plugin host는 [프로젝트 데이터 호출](plugin-host.ko.md#프로젝트-데이터-호출)로 이 키를 읽고 쓰며, 메인 페이지가 표시된 프로젝트에 대해 답한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
+`data`는 plugin host가 프로젝트마다 저장하는 키를 선언한다. plugin host는 [프로젝트 데이터 호출](plugin-host.ko.md#프로젝트-데이터-호출)로 이 키를 읽고 쓰며, 메인 페이지가 표시된 프로젝트에 대해 답한다. `schema`는 공개 선언의 스키마 부분 집합(`type`, `enum`, `properties`, `items`)을 쓰고 `default`는 그 스키마에 맞아야 한다. 선택 항목 `format`은 양의 정수이며 없으면 1이다. 플러그인은 키의 저장 형태를 바꿀 때 이 값을 올린다. 워크벤치는 각 값을 `projects.json`에서 그 프로젝트의 `plugins.<플러그인 id>.<키>` 항목에 `{ "format": <format>, "value": <value> }`로 저장한다([저장](projects.ko.md#저장)). `data.get`은 저장된 값이나 기본값을 반환하고, 저장된 값이 스키마에 맞지 않으면 실패한다. `data.set`은 값이 맞지 않거나 선언하지 않은 키이면 쓰지 않고 실패하며, 선언한 format으로 저장하고, 저장소가 쓰기를 받아들인 뒤 끝난다.
 
-저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 프로젝트의 상태 모듈을 마운트하기 전에, 또는 상태 모듈이 없는 플러그인은 창이 프로젝트를 표시할 때, 이전 형태나 format으로 저장된 선언 키를 한 번 변환한다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 선언보다 낮은 format의 값은 상태 모듈의 `convertData({ key, format, value })` export에 넘기고, 이 함수는 선언한 format의 값을 돌려준다. 워크벤치는 값을 스키마로 검사하고 선언한 format으로 저장한 뒤, 프로젝트, 플러그인, 키, 두 format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 높은 format으로 저장된 값, 없는 `convertData` export, 실패한 변환, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다.
+저장된 항목은 정확히 양의 정수 `format`과 `value`만 가진 객체일 때 현재 형태다. 워크벤치는 창이 프로젝트를 표시할 때 그 프로젝트에 저장된 선언 키를 확인한다. format 없이 저장된 값, 즉 format이 생기기 전의 형태는 format 1이다. 그 값은 스키마로 검사한 뒤 선언한 format의 현재 형태로 한 번 저장하고, 프로젝트, 플러그인, 키, format을 적은 줄을 애플리케이션 log에 쓴다. 선언보다 낮은 format으로 저장된 값, 선언보다 높은 format으로 저장된 값, 스키마에 맞지 않는 값은 바꾸지 않고 두며, 그 키의 `data.get`은 프로젝트, 플러그인, 키, format이나 스키마 불일치를 적은 message로 실패한다. 낮은 format의 값은 [저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)이 변환한 뒤에야 다시 읽는다. 워크벤치는 변환을 위해 plugin 코드를 실행하지 않기 때문이다.
 
 ## 확장 지점
 
@@ -157,7 +144,7 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 ## 외부 라이브러리
 
-스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지, 섹션, 상태 모듈은 자기 plugin 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
+스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지는 자기 plugin 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다. 플러그인은 React를 쓰지 않는다.
 
 ## 진단 선언
 
@@ -273,13 +260,13 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 | `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다. 선택 필드인 card `width`는 point 단위의 유한한 양수이며, 왼쪽·오른쪽 고정 sidebar card는 그 너비로 시작하고 생략하면 `sidebarWidth`를 쓴다 |
 | `workspace.focus` | 새 스페이스에서 포커스할 카드. 탭이 있어야 한다 |
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
-| `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 이런 환경에서 설치된 플러그인의 상태 모듈이 사이드카를 쓰면 로드가 실패한다. 기본값은 `true`다 |
+| `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 기본값은 `true`다 |
 | `starter` | 선택. [첫 실행](installation.ko.md#첫-실행)이 설치하는 registry pack |
 | `install` | 선택. host가 없는 빌드가 애플리케이션을 스테이징하기 전에 설정 폴더에 설치하는 registry pack. browser 예제(`make browser-frontend`)는 pack `browser-example`의 plugin을 설치한다 |
 | `registry` | 선택. registry가 정해지지 않았을 때 첫 실행이 정하는 기본 registry index의 `https:` 또는 절대 `file:` URL([첫 실행](installation.ko.md#첫-실행)) |
 | `sidebars.links` | 기본 사이드바 선택: 일반 left/right 연결, 카드 네 변 연결, window-left/window-right 연결. 플러그인 left/right 형식, null 세트, 레일 연결은 거부한다. |
 
-워크벤치는 설정을 적용하거나 스페이스를 만들기 전에 `environment.json`과 id 순서(추가 메뉴 순서)의 [설치된 플러그인](installation.ko.md#설치된-plugin-제공)을 그 manifest와 함께 등록한다. 표면이 없는 불러온 플러그인을 가리키는 탭이나 카드 변 연결, 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, `sidecars: false` 환경에서 상태 모듈이 사이드카를 쓰는 플러그인이 있으면 등록 전에 로드가 실패한다. 불러오지 않은 플러그인을 가리키는 것은 [불러오지 않은 플러그인](#불러오지-않은-플러그인)을 따른다. 사이드카를 선언한 플러그인 표면은 그런 환경에도 나열할 수 있다. 호스트가 없으면 워크벤치가 그런 표면을 마운트하지 않기 때문이다([런타임 모듈](#런타임-모듈)). 저장된 스페이스는 환경 파일이 아니며 열 때 잘못되거나 오래된 창 사이드바 상태를 거부한다([프로젝트](projects.ko.md#저장)). 저장된 사이드바 세트와 연결은 설정이며 `environment.json`과 같은 사이드바 검사를 거친다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 저장된 세트나 표면이 없는 불러온 플러그인을 가리키는 카드 변 연결은 설정 불러오기를 오류로 실패시킨다([설정 창](settings.ko.md#저장되는-세트와-연결)).
+워크벤치는 설정을 적용하거나 스페이스를 만들기 전에 `environment.json`과 id 순서(추가 메뉴 순서)의 [설치된 플러그인](installation.ko.md#설치된-plugin-제공)을 그 manifest와 함께 등록한다. 표면이 없는 불러온 플러그인을 가리키는 탭이나 카드 변 연결, 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 불러오지 않은 플러그인을 가리키는 것은 [불러오지 않은 플러그인](#불러오지-않은-플러그인)을 따른다. 사이드카를 선언한 플러그인 표면은 그런 환경에도 나열할 수 있다. 호스트가 없으면 워크벤치가 그런 표면을 마운트하지 않기 때문이다([런타임 모듈](#런타임-모듈)). 저장된 스페이스는 환경 파일이 아니며 열 때 잘못되거나 오래된 창 사이드바 상태를 거부한다([프로젝트](projects.ko.md#저장)). 저장된 사이드바 세트와 연결은 설정이며 `environment.json`과 같은 사이드바 검사를 거친다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 저장된 세트나 표면이 없는 불러온 플러그인을 가리키는 카드 변 연결은 설정 불러오기를 오류로 실패시킨다([설정 창](settings.ko.md#저장되는-세트와-연결)).
 
 ## 불러오지 않은 플러그인
 

@@ -181,12 +181,11 @@ tree 노드의 focus target은 그 label 컨트롤이 있고 활성이면 label 
 
 ## 사이드바 section 형태
 
-사이드바 section은 `plugin.json`에서 정확히 두 형태 가운데 하나로 선언한다([plugin](plugins.ko.md#섹션)). `module` 또는 `status`다. section은 `id`, `name`, 둘 중 하나, 선택 필드 `fill`을 선언한다. `fill: true`는 [plugin](plugins.ko.md#섹션)이 모듈 section에 주는 뜻과 같다. 펼친 section은 다른 section이 남긴 사이드바 높이를 나누어 갖고, 본문은 그 안에서 스크롤한다.
+사이드바 section은 `plugin.json`에서 `status` 형태로 선언한다([plugin](plugins.ko.md#섹션)). 이것이 유일한 형태다. section은 `id`, `name`, `status`, 선택 필드 `fill`을 선언한다. `fill: true`는 [plugin](plugins.ko.md#섹션)이 section에 주는 뜻과 같다. 펼친 section은 다른 section이 남긴 사이드바 높이를 나누어 갖고, 본문은 그 안에서 스크롤한다.
 `status` 형태의 사이드바 section은 선언된 UI다. 뷰가 필요한 plugin은 카드 표면을 선언하고, 사이드바는 그 plugin의 명령이면서 카드 표면을 여는 `button`을 가진다.
 
-- `module`을 가진 section은 그 모듈이 그린다. workbench는 모듈을 적재하고 section 요소에서 `mount(root, context)`를 부른다.
 - `status`를 가진 section은 그 status의 선언된 UI 값으로 그린다. status는 같은 plugin의 status이어야 하며, `exposes.status`가 선언해야 한다.
-- 두 필드가 모두 있거나 둘 다 없는 section은 `section <id> declares both module and status` 또는 `section <id> declares neither module nor status`로 거부한다. plugin의 status가 아닌 `status`는 `section <id> status <name> is not a status of plugin <plugin>`으로 거부한다. `exposes.status`는 `plugin.json`의 `exposes.status` 항목만 뜻한다.
+- `module`을 가진 section은 `plugin <plugin>: section <id> module is removed; a section takes status`로 거부하고, `status`가 없는 section은 `plugin <plugin>: section <id> requires a status`로 거부한다. plugin의 status가 아닌 `status`는 `section <id> status <name> is not a status of plugin <plugin>`으로 거부한다. `exposes.status`는 `plugin.json`의 `exposes.status` 항목만 뜻한다.
 - status 하나는 section 하나만 뒷받침한다. 같은 status를 이름 댄 두 번째 section은 manifest를 읽을 때 `status <plugin>.<name> backs section <first> and section <second>`로 거부한다. 이 검사는 manifest에서 하므로 값에 의존하지 않는다.
 
 선언된 section은 루트 요소를 본문 안에 순서대로 그린다.

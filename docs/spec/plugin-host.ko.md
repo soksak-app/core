@@ -94,10 +94,10 @@ plugin host state는 plugin의 host 페이지가 자기 channel을 통해 저장
 
 plugin host는 두 channel call로 플러그인의 [프로젝트 데이터](plugins.ko.md#프로젝트-데이터)를 읽고 쓴다. 두 call은 메인 페이지가 창이 표시한 프로젝트에 대해 답한다.
 
-- `runtime.data.get {key}`는 키의 값을 돌려준다. 저장된 값이나 기본값이며 상태 모듈 context의 `data.get(key)`와 같다.
-- `runtime.data.set {key, value}`는 키의 값을 저장하고, 저장소가 쓰기를 받은 뒤 `null`을 돌려준다. 상태 모듈 context의 `data.set(key, value)`와 같다.
+- `runtime.data.get {key}`는 키의 값을 돌려준다. 저장된 값이나 기본값이다.
+- `runtime.data.set {key, value}`는 키의 값을 저장하고, 저장소가 쓰기를 받은 뒤 `null`을 돌려준다.
 
-검사는 상태 모듈 context의 검사와 같다([plugins](plugins.ko.md#프로젝트-데이터)). 키는 매니페스트의 `data` 필드에 선언되어야 하고, 값은 키의 스키마와 맞아야 하며, 선언된 format으로 변환할 수 없는 저장 값은 읽기에서 거부된다. 매니페스트가 선언하지 않은 키는 플러그인과 키를 naming하는 오류로 거부된다. 창이 프로젝트를 표시하지 않는 동안 두 call은 `plugin host <plugin>: no project is shown`으로 거부되며, 이는 같은 상태의 사이드카 전송과 같은 문구다. 거부는 페이지에 그 call의 오류로 돌아간다. 창은 표시 프로젝트가 바뀌어도 event를 보내지 않는다. 호스트 페이지는 다음 call에서 프로젝트 데이터를 다시 읽는다.
+검사는 [프로젝트 데이터](plugins.ko.md#프로젝트-데이터)의 검사와 같다. 키는 매니페스트의 `data` 필드에 선언되어야 하고, 값은 키의 스키마와 맞아야 하며, 선언된 format이 아닌 저장 값은 읽기에서 거부된다. 매니페스트가 선언하지 않은 키는 플러그인과 키를 naming하는 오류로 거부된다. 창이 프로젝트를 표시하지 않는 동안 두 call은 `plugin host <plugin>: no project is shown`으로 거부되며, 이는 같은 상태의 사이드카 전송과 같은 문구다. 거부는 페이지에 그 call의 오류로 돌아간다. 창은 표시 프로젝트가 바뀌어도 event를 보내지 않는다. 호스트 페이지는 다음 call에서 프로젝트 데이터를 다시 읽는다.
 
 ## 오류 call
 

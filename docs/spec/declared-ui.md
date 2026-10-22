@@ -180,12 +180,11 @@ The source changes by these rules:
 
 ## Sidebar section form
 
-A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with exactly one of two forms: `module` or `status`. A section declares `id`, `name`, one of the two, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a module section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
+A sidebar section is declared in `plugin.json` ([plugins](plugins.md#sections)) with the `status` form, which is its only form. A section declares `id`, `name`, `status`, and optional `fill`. `fill: true` has the meaning that [plugins](plugins.md#sections) gives a section: an open section shares the sidebar height that the other sections leave, and its body scrolls inside it.
 A sidebar section with the `status` form is declared UI. A plugin that needs a view declares a card surface, and the sidebar holds a `button` whose command is a command of that plugin and opens it.
 
-- A section with `module` is drawn by its module. The workbench imports the module and calls `mount(root, context)` in the section element.
 - A section with `status` is drawn from the declared UI value of that status. The status must be a status of the same plugin that `exposes.status` declares.
-- A section with both fields, or with neither, is rejected with `section <id> declares both module and status` or `section <id> declares neither module nor status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`. `exposes.status` means the entries of `exposes.status` in `plugin.json` only.
+- A section with `module` is rejected with `plugin <plugin>: section <id> module is removed; a section takes status`, and a section without `status` is rejected with `plugin <plugin>: section <id> requires a status`. A `status` that is not a status of the plugin is rejected with `section <id> status <name> is not a status of plugin <plugin>`. `exposes.status` means the entries of `exposes.status` in `plugin.json` only.
 - One status backs at most one section. A second section that names the same status is rejected when the manifest is read, with `status <plugin>.<name> backs section <first> and section <second>`. The check runs on the manifest, so it does not depend on the value.
 
 A declared section draws its root elements in order inside its body.
