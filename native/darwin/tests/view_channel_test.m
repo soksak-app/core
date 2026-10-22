@@ -4,6 +4,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
+#import "support/view_import_map.h"
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
@@ -98,6 +99,7 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
     NSString *temporary = temporaryFolder(@"soksak-view-channel-");
+    sp_view_import_map_set(viewImportMapFixture().UTF8String);
     NSString *folder = [temporary stringByAppendingPathComponent:@"plugin"];
     writeFile(folder, @"ui/page.html", page);
 

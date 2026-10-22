@@ -4,6 +4,7 @@
 #import <WebKit/WebKit.h>
 #import "document_view.h"
 #import "support/temporary_folder.h"
+#import "support/view_import_map.h"
 
 static int failures = 0;
 
@@ -30,6 +31,7 @@ int main(int argc, char **argv) {
         window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
         [window orderBack:nil];
 
+        sp_view_import_map_set(viewImportMapFixture().UTF8String);
         NSString *stores = temporaryFolder(@"soksak-plugin-host-store-");
         NSString *store = [stores stringByAppendingPathComponent:@"host"];
 

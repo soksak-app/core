@@ -6,6 +6,7 @@
 // message
 // handler are not visible to the scripts of the document page.
 #import <Cocoa/Cocoa.h>
+#import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
 #import <WebKit/WebKit.h>
 #import "application_log.h"
@@ -373,6 +374,45 @@ static void *coreRootContext;
 // The host of the core root in a sok address of a view (docs/spec/native-surfaces.md#document-regions).
 static NSString *const kCoreHost = @"core";
 
+// The view import map of the application: the JSON text that sp_view_import_map_set sets. The main thread reads and writes it.
+static NSString *viewImportMap;
+
+// Inserts the import map text map directly after the doctype of the view page html, with the rule of the plugin-api function
+// insertViewImportMap (docs/spec/plugin-processes.md, rule 4). The checks run in the order of that function, and a refused page
+// returns nil with the reason in reason. The reasons are the texts of the shared cases of contract/view-page.json.
+static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason) {
+    static NSRegularExpression *doctype;
+    static NSRegularExpression *importMap;
+    static NSRegularExpression *scriptEnd;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        doctype = [[NSRegularExpression alloc] initWithPattern:@"^<!doctype[^>]*>" options:NSRegularExpressionCaseInsensitive error:nil];
+        importMap = [[NSRegularExpression alloc] initWithPattern:@"<script\\b[^>]*\\btype\\s*=\\s*[\"']?importmap\\b"
+            options:NSRegularExpressionCaseInsensitive error:nil];
+        scriptEnd = [[NSRegularExpression alloc] initWithPattern:@"</script" options:NSRegularExpressionCaseInsensitive error:nil];
+    });
+    NSTextCheckingResult *token = [doctype firstMatchInString:html options:NSMatchingAnchored range:NSMakeRange(0, html.length)];
+    if (!token) {
+        *reason = @"view page has no doctype at its start";
+        return nil;
+    }
+    if ([importMap firstMatchInString:html options:0 range:NSMakeRange(0, html.length)]) {
+        *reason = @"view page has an import map";
+        return nil;
+    }
+    if (map.length == 0) {
+        *reason = @"the view import map is empty";
+        return nil;
+    }
+    if ([scriptEnd firstMatchInString:map options:0 range:NSMakeRange(0, map.length)]) {
+        *reason = @"import map text ends a script element";
+        return nil;
+    }
+    NSString *declaration = [html substringWithRange:token.range];
+    NSString *rest = [html substringFromIndex:NSMaxRange(token.range)];
+    return [NSString stringWithFormat:@"%@<script type=\"importmap\">%@</script>%@", declaration, map, rest];
+}
+
 // Serves sok://<plugin>/<path> from the folder of the region's plugin.
 @interface SPPluginScheme : NSObject <WKURLSchemeHandler>
 @property(copy) NSString *root;
@@ -381,6 +421,8 @@ static NSString *const kCoreHost = @"core";
 @property(retain) SPBinaryStore *binaries;
 // Whether the region is a view, which may request the core root at sok://core/<path>.
 @property BOOL allowsCoreRoot;
+// The path of the page that the view loaded last. The served page at this path receives the view import map.
+@property(copy) NSString *viewPage;
 @end
 
 @implementation SPPluginScheme
@@ -411,11 +453,47 @@ static NSString *const kCoreHost = @"core";
             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
         return;
     }
+    if (self.allowsCoreRoot && [url.path isEqualToString:self.viewPage]) {
+        // The length of the response is taken after the insertion, so the page is sent with the length of the page that runs.
+        data = [self viewPageData:data url:url];
+        if (!data) {
+            [task didFailWithError:[NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorCannotDecodeContentData
+                userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is refused", url.absoluteString] }]];
+            return;
+        }
+    }
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1"
         headerFields:@{ @"Content-Type": pluginContentType(file), @"Content-Length": @(data.length).stringValue }] autorelease];
     [task didReceiveResponse:response];
     [task didReceiveData:data];
     [task didFinish];
+}
+
+// Returns the view page data with the view import map inserted (docs/spec/plugin-processes.md, rule 4). A refused page is logged
+// with its address and the reason, and it returns nil.
+- (NSData *)viewPageData:(NSData *)data url:(NSURL *)url {
+    NSString *reason = nil;
+    NSString *page = nil;
+    NSString *html = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (!html) {
+        reason = @"view page is not UTF-8";
+    } else if (!viewImportMap) {
+        reason = @"the view import map is not set";
+    } else {
+        page = insertViewPage(html, viewImportMap, &reason);
+    }
+    [html release];
+    if (!page) {
+        sp_log_error("document view", [NSString stringWithFormat:@"view page %@: %@", url.absoluteString, reason].UTF8String);
+        return nil;
+    }
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    NSData *mapBytes = [viewImportMap dataUsingEncoding:NSUTF8StringEncoding];
+    CC_SHA256(mapBytes.bytes, (CC_LONG)mapBytes.length, digest);
+    NSMutableString *hex = [NSMutableString string];
+    for (int index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [hex appendFormat:@"%02x", digest[index]];
+    sp_log_info("document view", [NSString stringWithFormat:@"view page %@ holds the import map sha256 %@", url.absoluteString, hex].UTF8String);
+    return [page dataUsingEncoding:NSUTF8StringEncoding];
 }
 
 - (void)webView:(WKWebView *)view stopURLSchemeTask:(id<WKURLSchemeTask>)task {
@@ -1059,15 +1137,27 @@ void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context) {
     coreRootContext = context;
 }
 
-// Red step: the setter and the insertion are not implemented yet, so the page is served unchanged.
 void sp_view_import_map_set(const char *map) {
-    (void)map;
+    NSCAssert(NSThread.isMainThread, @"the view import map belongs to the main thread");
+    [viewImportMap release];
+    viewImportMap = map ? [[NSString stringWithUTF8String:map] retain] : nil;
 }
 
 bool sp_view_page_insert(const char *html, const char *map, char **output, char **error) {
-    (void)map;
-    (void)error;
-    *output = strdup(html);
+    NSCAssert(output && error, @"the insertion reports its result through output and error");
+    *output = NULL;
+    *error = NULL;
+    if (!html || !map) {
+        *error = strdup(!html ? "view page is missing" : "the view import map is not set");
+        return false;
+    }
+    NSString *reason = nil;
+    NSString *page = insertViewPage([NSString stringWithUTF8String:html], [NSString stringWithUTF8String:map], &reason);
+    if (!page) {
+        *error = strdup(reason.UTF8String);
+        return false;
+    }
+    *output = strdup(page.UTF8String);
     return true;
 }
 
@@ -1368,6 +1458,9 @@ bool sp_document_load(void *handle, const char *address) {
         [view request:[view loadFileURL:url allowingReadAccessToURL:directory]];
         return true;
     }
+    // A view loads its page from its plugin: the path of the load is the page that receives the view import map.
+    SPPluginScheme *scheme = (SPPluginScheme *)[view.configuration urlSchemeHandlerForURLScheme:kApplicationScheme];
+    if ([scheme isKindOfClass:SPPluginScheme.class] && scheme.allowsCoreRoot) scheme.viewPage = url.path;
     [view request:[view loadRequest:[NSURLRequest requestWithURL:url]]];
     return true;
 }
