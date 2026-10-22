@@ -35,7 +35,7 @@ Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 
 |---|---|
 | (i) 합계 | 한 plugin의 view N개의 합계 footprint가 view 1개 footprint의 N배 + 10 MB 이하다. |
 | (ii) 회수 | 다른 view와 프로세스를 함께 쓰지 않는 view에 적용한다. 함께 쓰는 view는 그 view들과 한 단위로 잰다. 세션 기록이 초기 문서 하나뿐인 상태로 열고 닫은 view를 닫으면, 그 footprint의 90% 이상이 10초 안에 돌아온다(3회 반복). 엔진 cache가 붙잡은 프로세스는 돌아오지 않은 것으로 센다. |
-| (iii) 첫 표시 | 프로세스가 이미 실행 중인 view의 첫 표시: view 시작 요청부터 녹화에서 첫 내용 frame까지의 시간이, 같은 plugin의 DOM mount 기준값 + 300 ms 이하다. 여기서 DOM mount 기준값은 메인 페이지에서 같은 plugin의 표면 mount를 녹화한 것의 표면 시작 요청부터 첫 내용 frame까지의 중앙값이며, 같은 녹화 방법으로 잰다. `page.trace.surface.mount`의 중앙값은 mount의 trace 값이며 이 기준값이 아니다. |
+| (iii) 첫 표시 | 프로세스가 이미 실행 중인 view의 첫 표시: view 시작 요청부터 녹화에서 첫 내용 frame까지의 시간이, 같은 plugin과 host의 DOM mount 기준값 + 300 ms 이하다. DOM mount 기준값은 mount를 제거하기 전 표면 mount의 측정이 그 plugin과 host에 대해 기록한 중앙값이다(wailsv3와 tauriv2: browser 13과 22 ms, editor 13과 35 ms, hwp 701과 813 ms, terminal 17과 23 ms). 기준값이 잰 표면 mount는 제거되었으므로 그 기록이 고정 기준값이다. 기록된 값은 mount의 시작부터 끝까지의 시간이며 첫 내용 frame보다 늦지 않으므로, 녹화로 잰 기준값보다 기준이 엄격하거나 같다. 기록값이 없는 plugin(files, shell, flowmark)은 300 ms만으로 판정한다. |
 | (iii-b) 새 프로세스의 첫 표시 | 새 프로세스의 첫 표시: (view 시작 요청부터 녹화에서 첫 내용 frame까지의 시간) − (프로세스 시작 시간 5회 중앙값, 각각은 프로세스 요청(`host.trace.view.process-request`)부터 view가 page 런타임을 시작할 때 쓰는 첫 `host.trace.view.process-ready`까지의 시간)이 DOM mount 기준값 + 300 ms 이하다(3회 반복, 성능 trace를 켠 상태로 잰다). |
 | (v) 표시 판정값 | card 배치가 바뀐 녹화에서, view의 내용 frame이 그 변경의 첫 frame부터 100 ms 안에 새 크기로 나타난다. |
 | (vi) 재시작 한도 | 실패 event가 올 때 실패 시각을 기록하고 그 자리에서 센다(timer를 쓰지 않는다). 최근 300초 안의 실패가 4번째에 이르면 재시작을 멈춘다. 300초보다 오래된 실패는 세지 않는다(sliding window). 멈춘 뒤에도 실패 기록은 남긴다. 그 프로세스가 필요한 표면을 사용자가 열 때만 기록을 비우고 프로세스를 다시 띄운다. |
