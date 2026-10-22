@@ -13,11 +13,11 @@ import (
 
 // manifestCase is one case of the manifest case table that the plugin-api reader replays (docs/spec/installation.md#plugin-release).
 type manifestCase struct {
-	ID       string          `json:"id"`
-	Manifest json.RawMessage `json:"manifest"`
-	Accepted bool            `json:"accepted"`
-	Error    string          `json:"error"`
-	Files    []string        `json:"files"`
+	ID           string          `json:"id"`
+	Manifest     json.RawMessage `json:"manifest"`
+	Accepted     bool            `json:"accepted"`
+	Error        string          `json:"error"`
+	PackageFiles []string        `json:"packageFiles"`
 }
 
 // manifestCases reads the case table of packages/plugin-api/contract.
@@ -44,7 +44,7 @@ func manifestCases(t *testing.T) []manifestCase {
 func TestPluginPackReplaysTheManifestCases(t *testing.T) {
 	for _, c := range manifestCases(t) {
 		t.Run(c.ID, func(t *testing.T) {
-			files := c.Files
+			files := c.PackageFiles
 			if len(files) == 0 {
 				files = []string{"plugin.json"}
 			}

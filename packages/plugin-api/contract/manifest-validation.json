@@ -1,5 +1,5 @@
 {
-  "description": "Manifest cases of validateManifest (packages/plugin-api/index.js). The plugin-api runner, the pack and the install of sok replay every case: a case with `accepted` true is accepted, and a case with `error` is refused with exactly that text. `files` lists the package files of the case; pack writes the package from them, and each listed file exists and is empty.",
+  "description": "Manifest cases of validateManifest (packages/plugin-api/index.js). The plugin-api runner, the pack and the install of sok replay every case: a case with `accepted` true is accepted, and a case with `error` is refused with exactly that text. `packageFiles` lists the package files of the case; pack writes the package from them, and each listed file exists and is empty.",
   "cases": [
     {
       "id": "top.accepts-base",
@@ -17,7 +17,7 @@
         "icon": "<svg></svg>"
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -42,7 +42,7 @@
       },
       "accepted": false,
       "error": "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -65,7 +65,7 @@
       },
       "accepted": false,
       "error": "plugin.json: unknown field bogus",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -89,7 +89,7 @@
       },
       "accepted": false,
       "error": "plugin.json: unknown field alpha",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -112,7 +112,7 @@
       },
       "accepted": false,
       "error": "plugin.json: events must be a path inside the package",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -134,7 +134,7 @@
         "events": "events/catalog.json"
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -156,7 +156,7 @@
       },
       "accepted": false,
       "error": "plugin.json: invalid id Probe",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -178,7 +178,7 @@
       },
       "accepted": false,
       "error": "plugin.json: invalid id 5",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -200,7 +200,7 @@
       },
       "accepted": false,
       "error": "plugin.json: plugin id core is reserved for the core root",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -221,7 +221,7 @@
       },
       "accepted": false,
       "error": "plugin probe: name is required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -243,7 +243,7 @@
       },
       "accepted": false,
       "error": "plugin probe: name is required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -264,7 +264,7 @@
       },
       "accepted": false,
       "error": "plugin probe: description must be 1 to 200 characters",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -286,7 +286,7 @@
       },
       "accepted": false,
       "error": "plugin probe: description must be 1 to 200 characters",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -307,7 +307,7 @@
         "icon": "<svg></svg>"
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -324,7 +324,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -338,7 +338,7 @@
       },
       "accepted": false,
       "error": "plugin probe: a plugin requires a surface, sections or contributes",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -348,7 +348,7 @@
       "manifest": "x",
       "accepted": false,
       "error": "plugin.json: expected an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -378,7 +378,7 @@
       },
       "accepted": false,
       "error": "plugin probe: data requires a plugin host",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -404,7 +404,7 @@
       },
       "accepted": false,
       "error": "plugin probe: data must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -437,7 +437,7 @@
       },
       "accepted": false,
       "error": "plugin probe: invalid data key Bad",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -469,7 +469,7 @@
       },
       "accepted": false,
       "error": "plugin probe: data k requires schema and default",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -503,7 +503,7 @@
       },
       "accepted": false,
       "error": "plugin probe data k: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -536,7 +536,7 @@
       },
       "accepted": false,
       "error": "plugin probe: data k default does not match its schema",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -570,7 +570,7 @@
       },
       "accepted": false,
       "error": "plugin probe: data k format must be a positive integer",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -606,7 +606,7 @@
       },
       "accepted": false,
       "error": "plugin probe data k schema: unknown field required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -639,7 +639,7 @@
       },
       "accepted": false,
       "error": "plugin probe data k schema: unknown schema type \"foo\"",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -681,7 +681,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -698,7 +698,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies require a surface, a plugin host or contributes",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -721,7 +721,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies must map sidecars and plugins to version ranges",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -746,7 +746,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies: Bad Name is not a sidecar or plugin name",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -771,7 +771,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range latest",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -795,7 +795,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -819,7 +819,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -843,7 +843,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -867,7 +867,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -891,7 +891,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -915,7 +915,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -940,7 +940,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range 01.1.0",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -965,7 +965,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range >=0.2.0 <0.1.0",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -990,7 +990,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range ^0.1",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1015,7 +1015,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range >= 0.1.0",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1040,7 +1040,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range **",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1065,7 +1065,7 @@
       },
       "accepted": false,
       "error": "plugin probe: dependencies @scope/x: invalid range 1.0.0-beta",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1088,7 +1088,7 @@
       },
       "accepted": false,
       "error": "plugin probe: host must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1114,7 +1114,7 @@
       },
       "accepted": false,
       "error": "plugin probe host: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1139,7 +1139,7 @@
       },
       "accepted": false,
       "error": "plugin probe: host page must be a path inside the package",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1164,7 +1164,7 @@
       },
       "accepted": false,
       "error": "plugin probe: host page must be a path inside the package",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1190,7 +1190,7 @@
       },
       "accepted": false,
       "error": "plugin probe: host state must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1220,7 +1220,7 @@
       },
       "accepted": false,
       "error": "plugin probe host state: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1249,7 +1249,7 @@
       },
       "accepted": false,
       "error": "plugin probe: host state format must be a positive integer",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1278,7 +1278,7 @@
       },
       "accepted": false,
       "error": "plugin probe: host state maxBytes must be a positive integer",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1306,7 +1306,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1336,7 +1336,7 @@
       },
       "accepted": false,
       "error": "plugin probe: hostOperations requires host",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1365,7 +1365,7 @@
       },
       "accepted": false,
       "error": "plugin probe: hostOperations must map sidecars to operations",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1395,7 +1395,7 @@
       },
       "accepted": false,
       "error": "plugin probe: hostOperations @scope/x is not a dependency",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1429,7 +1429,7 @@
       },
       "accepted": false,
       "error": "plugin probe: hostOperations @scope/x must be a list of distinct operation names",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1460,7 +1460,7 @@
       },
       "accepted": false,
       "error": "plugin probe: hostOperations @scope/x must be a list of distinct operation names",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1492,7 +1492,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1522,7 +1522,7 @@
       },
       "accepted": false,
       "error": "plugin probe: extends requires a surface",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1545,7 +1545,7 @@
       },
       "accepted": false,
       "error": "plugin probe: extends must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1580,7 +1580,7 @@
       },
       "accepted": false,
       "error": "plugin probe: invalid extension point Bad",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1605,7 +1605,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p: must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1641,7 +1641,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1676,7 +1676,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p version must be x.y.z",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1703,7 +1703,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p schema: schema must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1739,7 +1739,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p: modules must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1777,7 +1777,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p module ./x is not a bare specifier",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1815,7 +1815,7 @@
       },
       "accepted": false,
       "error": "plugin probe extension point p module @scope/lib must be a JavaScript path inside the package",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1852,7 +1852,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html",
         "ext/lib.js"
@@ -1876,7 +1876,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1906,7 +1906,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes nodot must be <plugin id>.<point>",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1936,7 +1936,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes to its own extension point probe.p",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1961,7 +1961,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes other.p must be a non-empty array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -1988,7 +1988,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes other.p item 1 must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2018,7 +2018,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes other.p item 1 range bad is invalid",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2047,7 +2047,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes other.p item 1 range undefined is invalid",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2077,7 +2077,7 @@
       },
       "accepted": false,
       "error": "plugin probe: contributes other.p item 1 module must be a JavaScript path inside the package",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2106,7 +2106,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2135,7 +2135,7 @@
       },
       "accepted": false,
       "error": "plugin probe: background requires a surface",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2158,7 +2158,7 @@
       },
       "accepted": false,
       "error": "plugin probe: background must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2188,7 +2188,7 @@
       },
       "accepted": false,
       "error": "plugin probe background: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2218,7 +2218,7 @@
       },
       "accepted": false,
       "error": "plugin probe background: settings must map request fields to setting names",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2250,7 +2250,7 @@
       },
       "accepted": false,
       "error": "plugin probe background: a setting cannot replace operation",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2282,7 +2282,7 @@
       },
       "accepted": false,
       "error": "plugin probe background: setting s is not declared by the plugin",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2308,7 +2308,7 @@
       },
       "accepted": false,
       "error": "plugin probe background: sidecar must be declared by the plugin",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2337,7 +2337,7 @@
       },
       "accepted": false,
       "error": "plugin probe background: operation must be a non-empty string",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2377,7 +2377,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2400,7 +2400,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2423,7 +2423,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2446,7 +2446,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface menu must be an array of 1 to 16 items",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2469,7 +2469,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface menu must be an array of 1 to 16 items",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2494,7 +2494,7 @@
       },
       "accepted": false,
       "error": "plugin probe: a surface menu item must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2523,7 +2523,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface menu item: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2551,7 +2551,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface menu command probe.run must name a command declared in exposes",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2597,7 +2597,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface menu command probe.run is repeated",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2639,7 +2639,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface menu title of probe.run must be 1 to 40 characters",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2680,7 +2680,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2703,7 +2703,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface save must name a command declared in exposes",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2726,7 +2726,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface drop must name a command declared in exposes",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2751,7 +2751,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface params must be a schema of type object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2779,7 +2779,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface params: unknown field required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2802,7 +2802,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface opens must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2838,7 +2838,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface opens: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2865,7 +2865,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface opens requires surface params with a string property path",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2898,7 +2898,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface opens extensions must be a non-empty array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2933,7 +2933,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface opens extension MD must be * or lowercase letters and digits",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -2969,7 +2969,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface opens extension md is repeated",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3004,7 +3004,7 @@
         "icon": "<svg></svg>"
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3021,7 +3021,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface requires a composition",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3040,7 +3040,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface: composition must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3061,7 +3061,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: kind dom is removed; the composition takes kind view",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3082,7 +3082,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: kind hybrid is removed; the composition takes kind view",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3103,7 +3103,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: composition kind must be view",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3124,7 +3124,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: view composition requires page",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3146,7 +3146,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: page must be a path inside the plugin release that ends in .html",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3168,7 +3168,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: page must be a path inside the plugin release that ends in .html",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3190,7 +3190,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: page must be a path inside the plugin release that ends in .html",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3213,7 +3213,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3236,7 +3236,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: regions must be a non-empty array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3259,7 +3259,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: overlays must be an array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3284,7 +3284,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition region: expected an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3313,7 +3313,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: invalid region name Bad",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3347,7 +3347,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: duplicate name a",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3376,7 +3376,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition region a: document input must be native",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3409,7 +3409,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition region a: image input must be dom",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3439,7 +3439,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition region a: sidecar must be declared by the plugin",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3468,7 +3468,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition region a: kind must be document or image",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3493,7 +3493,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: invalid overlay name Bad",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3525,7 +3525,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface composition: duplicate name a",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3565,7 +3565,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3598,7 +3598,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface unload is forbidden beside background",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3624,7 +3624,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface unload must be {format, maxBytes} with positive integers",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3651,7 +3651,7 @@
       },
       "accepted": false,
       "error": "plugin probe surface unload: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3676,7 +3676,7 @@
         "icon": "<svg></svg>"
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3697,7 +3697,7 @@
       },
       "accepted": false,
       "error": "plugin probe: mark is required with a surface",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3718,7 +3718,7 @@
       },
       "accepted": false,
       "error": "plugin probe: icon is required with a surface",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3741,7 +3741,7 @@
       },
       "accepted": false,
       "error": "plugin probe: sections must be an array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3766,7 +3766,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3794,7 +3794,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section probe.a module is removed; a section takes status (docs/spec/declared-ui.md)",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3835,7 +3835,7 @@
       },
       "accepted": false,
       "error": "plugin probe section: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3875,7 +3875,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section id other.a must be probe.<name>",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3920,7 +3920,7 @@
       },
       "accepted": false,
       "error": "plugin probe: duplicate section probe.a",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3959,7 +3959,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section probe.a requires a name",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -3998,7 +3998,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section probe.a requires a status",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4038,7 +4038,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section probe.a status probe.x is not a status of plugin probe",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4083,7 +4083,7 @@
       },
       "accepted": false,
       "error": "plugin probe: status probe.s backs section probe.a and section probe.b",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4124,7 +4124,7 @@
       },
       "accepted": false,
       "error": "plugin probe: section probe.a fill must be a boolean",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4164,7 +4164,7 @@
         ]
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4189,7 +4189,7 @@
       },
       "accepted": false,
       "error": "plugin probe: preview requires a surface",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4212,7 +4212,7 @@
       },
       "accepted": false,
       "error": "plugin probe: preview must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4238,7 +4238,7 @@
       },
       "accepted": false,
       "error": "plugin probe preview: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4263,7 +4263,7 @@
       },
       "accepted": false,
       "error": "plugin probe: preview.ink must be a theme token name",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4287,7 +4287,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4320,7 +4320,7 @@
       },
       "accepted": false,
       "error": "plugin probe: exposes require a surface or a plugin host",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4343,7 +4343,7 @@
       },
       "accepted": false,
       "error": "probe exposes: expected an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4368,7 +4368,7 @@
       },
       "accepted": false,
       "error": "probe exposes: unknown field foo",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4393,7 +4393,7 @@
       },
       "accepted": false,
       "error": "probe exposes: status must be an array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4420,7 +4420,7 @@
       },
       "accepted": false,
       "error": "probe exposes: status entry must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4453,7 +4453,7 @@
       },
       "accepted": false,
       "error": "probe exposes: name probe.Run must be probe.<name> with lowercase letters, digits, dots, and hyphens",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4486,7 +4486,7 @@
       },
       "accepted": false,
       "error": "probe exposes: name probe..s must be probe.<name> with lowercase letters, digits, dots, and hyphens",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4519,7 +4519,7 @@
       },
       "accepted": false,
       "error": "probe exposes: name other.s must be probe.<name> with lowercase letters, digits, dots, and hyphens",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4559,7 +4559,7 @@
       },
       "accepted": false,
       "error": "probe exposes: duplicate status probe.s",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4593,7 +4593,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.s: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4625,7 +4625,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.s: description is required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4655,7 +4655,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.s: schema is required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4689,7 +4689,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.s schema: unknown field minimum",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4722,7 +4722,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.s schema: unknown schema type null",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4759,7 +4759,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.s schema: unknown schema type [[\"string\"]]",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4792,7 +4792,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: params is required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4828,7 +4828,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: params must be an object schema",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4861,7 +4861,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: result is required",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4898,7 +4898,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4935,7 +4935,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -4972,7 +4972,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5003,7 +5003,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.d: many must be a boolean",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5034,7 +5034,7 @@
       },
       "accepted": false,
       "error": "probe exposes probe.d: unknown field params",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5060,7 +5060,7 @@
       },
       "accepted": false,
       "error": "probe exposes: commands must be an array",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5111,7 +5111,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5142,7 +5142,7 @@
       },
       "accepted": false,
       "error": "plugin probe: surface menu command probe.run must name a command declared in exposes",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5165,7 +5165,7 @@
       },
       "accepted": false,
       "error": "plugin probe: settings must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5195,7 +5195,7 @@
       },
       "accepted": false,
       "error": "plugin probe: invalid setting name Bad",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5220,7 +5220,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: setting must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5249,7 +5249,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: label must be 1 to 40 characters",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5280,7 +5280,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: description must be 1 to 200 characters",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5313,7 +5313,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5346,7 +5346,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: enum values must be distinct non-empty strings",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5378,7 +5378,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: default must be one of values",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5409,7 +5409,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: integer default and bounds are invalid",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5439,7 +5439,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: string default and maxLength are invalid",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5468,7 +5468,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: address default must be empty or an http or https address",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5497,7 +5497,7 @@
       },
       "accepted": false,
       "error": "plugin probe.x: setting type must be enum, integer, string, or address",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5547,7 +5547,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5570,7 +5570,7 @@
       },
       "accepted": false,
       "error": "plugin probe: sidebars must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5596,7 +5596,7 @@
       },
       "accepted": false,
       "error": "plugin probe sidebars: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5619,7 +5619,7 @@
       },
       "accepted": false,
       "error": "plugin probe: sidebars requires sets and links",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5648,7 +5648,7 @@
       },
       "accepted": false,
       "error": "plugin probe: every set requires id, title, and sections",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5680,7 +5680,7 @@
       },
       "accepted": false,
       "error": "plugin probe: set s title must be 1 to 40 characters",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5714,7 +5714,7 @@
       },
       "accepted": false,
       "error": "plugin probe: set s sections must be section ids",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5749,7 +5749,7 @@
       },
       "accepted": false,
       "error": "plugin probe: set s lists section probe.a twice",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5781,7 +5781,7 @@
       },
       "accepted": false,
       "error": "plugin probe: set s layout must be list or tabs",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5813,7 +5813,7 @@
       },
       "accepted": false,
       "error": "plugin probe: set id off is reserved",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5851,7 +5851,7 @@
       },
       "accepted": false,
       "error": "plugin probe: duplicate set s",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5883,7 +5883,7 @@
       },
       "accepted": false,
       "error": "plugin probe: invalid local set id S1",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5916,7 +5916,7 @@
       },
       "accepted": false,
       "error": "plugin probe set s: unknown field x",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5951,7 +5951,7 @@
       },
       "accepted": false,
       "error": "plugin probe: card defaults require a surface",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -5986,7 +5986,7 @@
       },
       "accepted": false,
       "error": "plugin probe: sidebar card defaults must be an object",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -6023,7 +6023,7 @@
       },
       "accepted": false,
       "error": "plugin probe sidebar card: unknown field middle",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -6060,7 +6060,7 @@
       },
       "accepted": false,
       "error": "plugin probe: card top names unknown set nope",
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -6114,7 +6114,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
@@ -6155,7 +6155,7 @@
         }
       },
       "accepted": true,
-      "files": [
+      "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]

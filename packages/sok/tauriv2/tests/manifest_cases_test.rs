@@ -19,8 +19,8 @@ struct ManifestCase {
     accepted: bool,
     #[serde(default)]
     error: String,
-    #[serde(default)]
-    files: Vec<String>,
+    #[serde(default, rename = "packageFiles")]
+    package_files: Vec<String>,
 }
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -82,10 +82,10 @@ fn index_for_probe() -> Folder {
 fn plugin_pack_replays_the_manifest_cases() {
     let mut failures = Vec::new();
     for case in cases() {
-        let files = if case.files.is_empty() {
+        let files = if case.package_files.is_empty() {
             vec!["plugin.json".to_string()]
         } else {
-            case.files.clone()
+            case.package_files.clone()
         };
         let package = json!({"name": "@scope/plugin-probe", "version": "0.2.0",
             "engines": {"soksak": "^0.0.2"}, "files": files});
