@@ -1,0 +1,380 @@
+{
+  "surface": "packages/plugin-api/view.js#createViewBridge calls",
+  "description": "Ordered steps of the tab calls of a view page. Each case sends a tab call through the call layer of the bridge with the parameters that the call takes (docs/spec/native-surfaces.md, view calls: tab.title, tab.footer, tab.directory, tab.modified and tab.error take the value; tab.notify takes {text, policy}; tab.keep takes {reason, on}). The first step sends a valid value, and the host answers null. The second step sends an invalid value, and the host answers with the refusal of the workbench for that value (its text is the one the tab reports refuse with). The cases verify the request that the bridge posts and that the reply and the refusal of the host reach the view unchanged: the bridge validates no tab value itself. Each step lists the posted call, the result and the error text.",
+  "cases": [
+    {
+      "id": "view.tab.title-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.title",
+            "params": "Inbox"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.title",
+                "params": "Inbox"
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.title",
+            "params": ""
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a tab title must be 1 to 256 characters without control characters"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.title",
+                "params": ""
+              }
+            ],
+            "result": null,
+            "throws": "a tab title must be 1 to 256 characters without control characters"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.footer-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.footer",
+            "params": "3 items"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.footer",
+                "params": "3 items"
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.footer",
+            "params": ""
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a tab footer must be 1 to 1024 characters without control characters"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.footer",
+                "params": ""
+              }
+            ],
+            "result": null,
+            "throws": "a tab footer must be 1 to 1024 characters without control characters"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.directory-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.directory",
+            "params": "/work/inbox"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.directory",
+                "params": "/work/inbox"
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.directory",
+            "params": "relative"
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a tab directory must be an absolute path"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.directory",
+                "params": "relative"
+              }
+            ],
+            "result": null,
+            "throws": "a tab directory must be an absolute path"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.notify-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.notify",
+            "params": {
+              "text": "Saved",
+              "policy": "tab"
+            }
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.notify",
+                "params": {
+                  "text": "Saved",
+                  "policy": "tab"
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.notify",
+            "params": {
+              "text": "",
+              "policy": "tab"
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a tab notice must be 1 to 1024 characters without control characters"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.notify",
+                "params": {
+                  "text": "",
+                  "policy": "tab"
+                }
+              }
+            ],
+            "result": null,
+            "throws": "a tab notice must be 1 to 1024 characters without control characters"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.modified-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.modified",
+            "params": true
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.modified",
+                "params": true
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.modified",
+            "params": "yes"
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a modified state must be true or false"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.modified",
+                "params": "yes"
+              }
+            ],
+            "result": null,
+            "throws": "a modified state must be true or false"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.error-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.error",
+            "params": "Save failed"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.error",
+                "params": "Save failed"
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.error",
+            "params": ""
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a tab error must be 1 to 1024 characters without control characters, or null"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.error",
+                "params": ""
+              }
+            ],
+            "result": null,
+            "throws": "a tab error must be 1 to 1024 characters without control characters, or null"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.keep-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.keep",
+            "params": {
+              "reason": "busy",
+              "on": true
+            }
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.keep",
+                "params": {
+                  "reason": "busy",
+                  "on": true
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.keep",
+            "params": {
+              "reason": "idle",
+              "on": true
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "unknown keep reason: idle"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.keep",
+                "params": {
+                  "reason": "idle",
+                  "on": true
+                }
+              }
+            ],
+            "result": null,
+            "throws": "unknown keep reason: idle"
+          }
+        }
+      ]
+    }
+  ]
+}
