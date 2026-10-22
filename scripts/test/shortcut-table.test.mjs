@@ -30,9 +30,12 @@ function specRows(markdown, heading) {
     .map((line) => line.split("|").slice(1, -1).map((cell) => cell.trim().replace(/^`(.*)`$/, "$1")));
 }
 
-/** The key names that the key comparisons of one source text test: `e.key === "Enter"` and `event.key.toLowerCase() === "n"`, lower-cased. */
+/**
+ * The key names that the key comparisons of one source text test: `e.key === "Enter"` and `event.key.toLowerCase() === "n"`,
+ * lower-cased. A `typeof x.key` test compares a type name, not a key, so it is not a key comparison.
+ */
 function keyComparisons(source) {
-  const pattern = /\.key(?:\.toLowerCase\(\))?\s*[!=]==?\s*["']([^"']+)["']/g;
+  const pattern = /(?<!typeof\s+[\w$.]*)\.key(?:\.toLowerCase\(\))?\s*[!=]==?\s*["']([^"']+)["']/g;
   return new Set([...source.matchAll(pattern)].map((match) => match[1].toLowerCase()));
 }
 
@@ -109,6 +112,11 @@ test("an arrow-key comparison without a workbench row is reported, and the table
   const withoutRow = TABLE.filter((entry) => keyName(entry.key) !== "arrowleft");
   assert.deepEqual(undeclaredKeys(keyComparisons(source), withoutRow), ["arrowleft"], "the ArrowLeft comparison has no row");
   assert.deepEqual(undeclaredKeys(keyComparisons(source), TABLE), [], "the table row of ArrowLeft does not clear the comparison");
+});
+
+test("a typeof test of a key property is not a key comparison", () => {
+  const source = 'if (typeof params.key !== "string" || params.key === "") throw new TypeError("requires a key");\nif (event.key === "Enter") run();';
+  assert.deepEqual([...keyComparisons(source)], ["enter"]);
 });
 
 test("the exposure spec table lists every shortcut and nothing else", () => {
