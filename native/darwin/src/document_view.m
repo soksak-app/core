@@ -1059,6 +1059,18 @@ void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context) {
     coreRootContext = context;
 }
 
+// Red step: the setter and the insertion are not implemented yet, so the page is served unchanged.
+void sp_view_import_map_set(const char *map) {
+    (void)map;
+}
+
+bool sp_view_page_insert(const char *html, const char *map, char **output, char **error) {
+    (void)map;
+    (void)error;
+    *output = strdup(html);
+    return true;
+}
+
 // Builds the web view with the configuration of a document region, or with the view configuration (isView) that a view
 // surface and a plugin host use (docs/spec/native-surfaces.md#view-surfaces). The view is hidden with a zero frame and
 // is attached to no parent; the caller places it and owns the reference until sp_document_close.

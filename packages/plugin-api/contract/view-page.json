@@ -1,0 +1,44 @@
+{
+  "surface": "packages/plugin-api/view-page.js#insertViewImportMap and native/darwin/src/document_view.m#sp_view_page_insert",
+  "description": "Cases of the view import map insertion (docs/spec/plugin-processes.md, rule 4). A case gives the page text and the import map text (map, default the view import map). A case with output names the page after the insertion; a case with error names the reason the page is refused with. The insertion has the same result in the plugin-api function and in the native handler.",
+  "map": "{\"imports\":{\"soksak\":\"sok://core/modules/soksak/dist/index.js\",\"@soksak/plugin-api\":\"sok://core/modules/@soksak/plugin-api/index.js\",\"@soksak/plugin-api/view\":\"sok://core/modules/@soksak/plugin-api/view.js\",\"@soksak/plugin-api/screen-hash\":\"sok://core/modules/@soksak/plugin-api/screen-hash.js\",\"@soksak/shared/\":\"sok://core/shared/\"}}",
+  "cases": [
+    {
+      "name": "inserts the map directly after the doctype",
+      "input": "<!doctype html><meta charset=utf-8><title>view</title>",
+      "output": "<!doctype html><script type=\"importmap\">{\"imports\":{\"soksak\":\"sok://core/modules/soksak/dist/index.js\",\"@soksak/plugin-api\":\"sok://core/modules/@soksak/plugin-api/index.js\",\"@soksak/plugin-api/view\":\"sok://core/modules/@soksak/plugin-api/view.js\",\"@soksak/plugin-api/screen-hash\":\"sok://core/modules/@soksak/plugin-api/screen-hash.js\",\"@soksak/shared/\":\"sok://core/shared/\"}}</script><meta charset=utf-8><title>view</title>"
+    },
+    {
+      "name": "matches the doctype without regard to case",
+      "input": "<!DOCTYPE HTML>\n<title>view</title>",
+      "output": "<!DOCTYPE HTML><script type=\"importmap\">{\"imports\":{\"soksak\":\"sok://core/modules/soksak/dist/index.js\",\"@soksak/plugin-api\":\"sok://core/modules/@soksak/plugin-api/index.js\",\"@soksak/plugin-api/view\":\"sok://core/modules/@soksak/plugin-api/view.js\",\"@soksak/plugin-api/screen-hash\":\"sok://core/modules/@soksak/plugin-api/screen-hash.js\",\"@soksak/shared/\":\"sok://core/shared/\"}}</script>\n<title>view</title>"
+    },
+    {
+      "name": "refuses a page without a doctype at its start",
+      "input": "<title>view</title>",
+      "error": "view page has no doctype at its start"
+    },
+    {
+      "name": "refuses a page that holds an import map",
+      "input": "<!doctype html><script type=\"importmap\">{\"imports\":{}}</script><title>view</title>",
+      "error": "view page has an import map"
+    },
+    {
+      "name": "refuses a page whose import map has unquoted attributes",
+      "input": "<!doctype html><script src=x.js type=importmap></script><title>view</title>",
+      "error": "view page has an import map"
+    },
+    {
+      "name": "refuses a map text that would end its script element",
+      "input": "<!doctype html><title>view</title>",
+      "map": "{\"imports\":{\"x\":\"</script>\"}}",
+      "error": "import map text ends a script element"
+    },
+    {
+      "name": "refuses an empty map text",
+      "input": "<!doctype html><title>view</title>",
+      "map": "",
+      "error": "the view import map is empty"
+    }
+  ]
+}

@@ -111,7 +111,7 @@ $(BUILD):
 # Every check links tests/support/no_activation.m. A check that does not declare activation fails if the application
 # is active when it exits.
 $(BUILD)/%_test: tests/%_test.m tests/support/no_activation.m $(LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 # A measurement tool is not a test. It prints numbers, asserts nothing, and is not part of the test target.
 $(BUILD)/%_benchmark: tests/%_benchmark.m tests/support/temporary_folder.m tests/support/temporary_folder.h $(LIBRARY) $(wildcard src/*.h src/private/*.h)
@@ -216,6 +216,7 @@ NATIVE_TESTS = observe_test \
   document_plugin_test \
   core_root_cors_test \
   view_import_map_test \
+  document_view_import_map_test \
   document_core_root_test \
   document_view_load_test \
   view_channel_test \
@@ -251,6 +252,8 @@ NATIVE_TESTS = observe_test \
 comma := ,
 NATIVE_TEST_EXECUTABLES := $(foreach entry,$(NATIVE_TESTS),$(firstword $(subst $(comma), ,$(entry))))
 NATIVE_TEST_RUNNER := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../scripts/native-tests.mjs)
+# The shared cases of the view page insertion, which the plugin-api test and the native tests run (docs/spec/plugin-processes.md, rule 4).
+VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/plugin-api/contract/view-page.json)
 
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)

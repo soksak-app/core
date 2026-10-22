@@ -103,6 +103,15 @@ typedef bool (*sp_core_root_resolver)(void *context, const char *plugin, const c
 // runs. Called on the main thread.
 void sp_core_root_set_resolver(sp_core_root_resolver resolver, void *context);
 
+// Sets the view import map of the application to the JSON text map (docs/spec/plugin-processes.md, rule 4). The text is
+// copied. NULL clears it, and a view page is then refused. Called on the main thread.
+void sp_view_import_map_set(const char *map);
+
+// Inserts the import map text map directly after the doctype of the view page html (docs/spec/plugin-processes.md, rule 4).
+// It returns true and sets output to the page after the insertion, or it returns false and sets error to the reason of the
+// refusal. Each of output and error is a copy that the caller releases with free.
+bool sp_view_page_insert(const char *html, const char *map, char **output, char **error);
+
 // Sets the receiver of the messages of plugin documents. NULL reports none. The caller keeps context while the
 // document lives.
 void sp_document_set_message(void *document, sp_document_message message, void *context);
