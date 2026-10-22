@@ -187,6 +187,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-3",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" },
+    ],
+    expected: "After dispose, an exposure refuses a registration or a binding and adds no request listener, including when dispose runs while the declarations load, and the removal of bindings at dispose is published as a case that replays against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-2",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export function resolveContributions" },
