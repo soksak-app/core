@@ -1,9 +1,12 @@
 // Runs a list of tests as separate processes in a bounded pool and reports what runs, for how long and how it ended
 // (docs/operations/examples.md#test-runner). Every test has its own limit; no limit is above 10 minutes, and a test that
 // needs more is reported before it is allowed.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+// The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
+// also answers for a group that holds only zombies (test-command.mjs).
+import { groupMembers } from './test-command.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -33,7 +36,32 @@ function validate(options) {
   }
 }
 
-/** Runs one test process and resolves with its status, elapsed time and output. */
+/**
+ * The processes of the group of a test that still run, except `leader`, as `pid <n> <command>` names. A test process that ends while a
+ * process it started keeps running (an open timer, a listener, a child) leaves that process in the group, so the group names it.
+ */
+function leftoverNames(pgid, leader) {
+  const members = groupMembers(pgid).filter((member) => member.pid !== leader && !member.state.startsWith('Z'));
+  if (members.length === 0) return [];
+  const commands = new Map();
+  for (const line of execFileSync('ps', ['-A', '-o', 'pid=,command='], { encoding: 'utf8' }).split('\n')) {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (match) commands.set(Number(match[1]), match[2]);
+  }
+  return members.map((member) => `pid ${member.pid} ${commands.get(member.pid) ?? '(ended while it was named)'}`);
+}
+
+/** Ends every process of the group of a test. A group that no longer exists has nothing to end. */
+function killGroup(pgid) {
+  try { process.kill(-pgid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+}
+
+/**
+ * Runs one test process and resolves with its status, elapsed time and output. The test process runs in a group of its own, so the
+ * processes it starts belong to the group. When the test process exits, a process that remains in the group is a leftover: the group is
+ * ended and the test fails with the names of the leftovers. At its limit the group is ended, and the timeout names the leftovers
+ * other than the test process, which node --test keeps running until its files end.
+ */
 function runOne(item, limitMs, env, outputPath) {
   return new Promise((resolve) => {
     const started = performance.now();
@@ -43,10 +71,18 @@ function runOne(item, limitMs, env, outputPath) {
       detached: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let timedOut = false;
+    let timeoutLeftovers = [];
+    let exitLeftovers = [];
     const timer = setTimeout(() => {
       timedOut = true;
-      try { process.kill(-child.pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      timeoutLeftovers = leftoverNames(child.pid, child.pid);
+      killGroup(child.pid);
     }, limitMs);
+    child.once('exit', () => {
+      if (timedOut) return;
+      exitLeftovers = leftoverNames(child.pid, null);
+      if (exitLeftovers.length > 0) killGroup(child.pid);
+    });
     // A file of the run receives the output as it arrives, so a run that stops leaves the output of the test it stopped in.
     const keep = (chunk) => {
       chunks.push(chunk);
@@ -62,7 +98,10 @@ function runOne(item, limitMs, env, outputPath) {
       clearTimeout(timer);
       const elapsedMs = performance.now() - started;
       const output = Buffer.concat(chunks).toString('utf8');
-      if (timedOut) resolve({ status: 'timeout', elapsedMs, output, detail: `exceeded ${seconds(limitMs)}s and was killed` });
+      if (timedOut) {
+        const left = timeoutLeftovers.length > 0 ? `; left running: ${timeoutLeftovers.join('; ')}` : '';
+        resolve({ status: 'timeout', elapsedMs, output, detail: `exceeded ${seconds(limitMs)}s and was killed${left}` });
+      } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
       else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
       else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
     });

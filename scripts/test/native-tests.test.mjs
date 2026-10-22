@@ -45,5 +45,5 @@ test("a native test over its limit is killed and fails the run", async () => {
   const lines = [];
   const code = await runNativeTests({ dir, list: ["slow_test"], timeoutMs: 300, write: (line) => lines.push(line) });
   assert.equal(code, 1);
-  assert.ok(lines.some((line) => /^TIME slow_test [0-9.]+s exceeded 0\.300s and was killed$/.test(line)), JSON.stringify(lines));
+  assert.ok(lines.some((line) => /^TIME slow_test [0-9.]+s exceeded 0\.300s and was killed(?:; left running: .*)?$/.test(line)), JSON.stringify(lines));
 });

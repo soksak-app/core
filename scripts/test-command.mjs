@@ -37,7 +37,7 @@ function groupExists(pid) {
 // kill(-pgid, sig) of macOS returns EPERM when the group has no member that can receive the signal. A member that has ended but whose parent has not yet reaped it
 // (a zombie) stays in the group until it is reaped, and a group that holds only zombies also receives this answer. So a rejected check
 // reads the members of the group and their states from the process table and judges from them.
-function groupMembers(pgid) {
+export function groupMembers(pgid) {
   const table = childProcess.execFileSync('ps', ['-A', '-o', 'pid=,pgid=,stat='], { encoding: 'utf8' });
   const members = [];
   for (const line of table.split('\n')) {

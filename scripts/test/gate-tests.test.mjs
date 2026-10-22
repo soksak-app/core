@@ -28,7 +28,7 @@ test('the push gate names each test file when it starts, reports its result and 
   const result = spawnSync('node', ['scripts/gate-tests.mjs', '--timeout', '3', hang, pass], { cwd: root, encoding: 'utf8', timeout: 60000, env: environment });
   assert.match(result.stdout, new RegExp(`^RUN  ${pass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(1 running, limit 3\\.000s\\)$`, 'm'), result.stdout + result.stderr);
   assert.match(result.stdout, new RegExp(`^PASS ${pass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\d+\\.\\d{3}s$`, 'm'), result.stdout + result.stderr);
-  const killed = new RegExp(`^TIME ${hang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} (\\d+)\\.\\d{3}s exceeded 3\\.000s and was killed$`, 'm').exec(result.stdout);
+  const killed = new RegExp(`^TIME ${hang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} (\\d+)\\.\\d{3}s exceeded 3\\.000s and was killed(?:; left running: .*)?$`, 'm').exec(result.stdout);
   assert.ok(killed, `the hanging file was not reported as a timeout: ${result.stdout}${result.stderr}`);
   assert.ok(Number(killed[1]) < 10, `the file ran ${killed[1]} s instead of its limit`);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);

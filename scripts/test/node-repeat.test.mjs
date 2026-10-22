@@ -25,7 +25,7 @@ test('make node-repeat names each run, ends a run that hangs at its limit, and r
     cwd: root, encoding: 'utf8', timeout: 60000,
   });
   assert.match(result.stdout, /^RUN  .* \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
-  const killed = /^TIME .* (\d+)\.\d{3}s exceeded 2\.000s and was killed$/m.exec(result.stdout);
+  const killed = /^TIME .* (\d+)\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m.exec(result.stdout);
   assert.ok(killed, `the hanging run was not reported as a timeout: ${result.stdout}${result.stderr}`);
   assert.ok(Number(killed[1]) < 10, `the run ended after ${killed[1]} s instead of its limit`);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);

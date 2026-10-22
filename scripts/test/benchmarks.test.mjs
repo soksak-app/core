@@ -56,7 +56,7 @@ test('make benchmark-go names each benchmark when it starts, keeps its output, a
   assert.match(result.stdout, /^PASS BenchmarkEventLogEmit \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^BenchmarkEventLogEmit-10 {2}1 {2}120 ns\/op$/m, 'the measurement of the benchmark is not shown');
   assert.match(result.stdout, /^RUN  BenchmarkNativePull \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^TIME BenchmarkNativePull \d+\.\d{3}s exceeded 2\.000s and was killed$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^TIME BenchmarkNativePull \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
 });
 
@@ -67,6 +67,6 @@ test('make benchmark-rust names each bench target when it starts, and kills a ta
   assert.match(result.stdout, /^PASS event_log_benchmark \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^event log mean 120 ns$/m, 'the measurement of the bench target is not shown');
   assert.match(result.stdout, /^RUN  event_native_benchmark \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^TIME event_native_benchmark \d+\.\d{3}s exceeded 2\.000s and was killed$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^TIME event_native_benchmark \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
 });

@@ -142,3 +142,43 @@ test("a manifest names a test that is still running, so a run that stops leaves 
   assert.equal(during.finished_us, null);
   assert.equal(JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8")).tests[0].status, "timeout");
 });
+
+// A fixture test file of node --test in a temporary folder. The file runs under the environment of this test run without NODE_TEST_CONTEXT,
+// which would make node --test skip it (the same variable that node-tests.test.mjs removes).
+async function nodeTestFile(source) {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const folder = mkdtempSync(join(tmpdir(), "runner-handle-"));
+  const file = join(folder, "handle.test.mjs");
+  writeFileSync(file, source);
+  return { folder, file };
+}
+
+test("a test file that leaves a timer open after its tests pass is ended at its limit, and the timeout names the process that remains", async () => {
+  const { rmSync } = await import("node:fs");
+  const { file, folder } = await nodeTestFile('import test from "node:test";\ntest("passes", () => {});\nsetInterval(() => {}, 1000);\n');
+  try {
+    const { results } = await run([
+      { name: "handle", command: "/usr/bin/env", args: ["-u", "NODE_TEST_CONTEXT", process.execPath, "--test", file], timeoutMs: 4000 },
+    ], { concurrency: 1, defaultTimeoutMs: 4000 });
+    const result = results.get("handle");
+    assert.equal(result.status, "timeout", result.output);
+    assert.match(result.detail, /^exceeded 4\.000s and was killed; left running: pid \d+ .*handle\.test\.mjs$/, result.detail);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a process that outlives its test process is ended at that exit, and the failure names it", async () => {
+  // The child inherits the output pipes, so the output closes only when the child ends. The child is unreferenced, so the test process
+  // exits with 0 while the child runs.
+  const source = `const child = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit" }); child.unref(); console.log("left");`;
+  const { results } = await run([
+    { name: "outlives", command: process.execPath, args: ["-e", source], timeoutMs: 20000 },
+  ], { concurrency: 1, defaultTimeoutMs: 20000 });
+  const result = results.get("outlives");
+  assert.equal(result.status, "fail", result.detail);
+  assert.match(result.detail, /^left running after exit: pid \d+ /, result.detail);
+  assert.ok(result.elapsedMs < 15000, `the process ran ${result.elapsedMs} ms, to its limit instead of its exit`);
+});

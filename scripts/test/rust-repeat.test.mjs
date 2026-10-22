@@ -50,7 +50,7 @@ test('make rust-repeat names each test when it starts, reports its result and el
   assert.match(result.stdout, /^RUN  fixture::alpha \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS fixture::alpha \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^RUN  fixture::beta \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^TIME fixture::beta \d+\.\d{3}s exceeded 2\.000s and was killed$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^TIME fixture::beta \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   const killed = /^TIME fixture::beta (\d+)\.\d{3}s/m.exec(result.stdout);
   assert.ok(killed && Number(killed[1]) < 6, `beta ran to its own sleep instead of its limit: ${result.stdout}`);
   // make exits with status 2 when a recipe fails; the run fails with the FAIL line of the runner.

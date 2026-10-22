@@ -58,7 +58,7 @@ test('make go-repeat names each test when it starts, reports its result and elap
   assert.match(stdout, /^RUN  TestAlpha \(1 running, limit 2\.000s\)$/m, stdout + stderr);
   assert.match(stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, stdout + stderr);
   assert.match(stdout, /^RUN  TestBeta \(1 running, limit 2\.000s\)$/m, stdout + stderr);
-  assert.match(stdout, /^TIME TestBeta \d+\.\d{3}s exceeded 2\.000s and was killed$/m, stdout + stderr);
+  assert.match(stdout, /^TIME TestBeta \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, stdout + stderr);
   const killed = /^TIME TestBeta (\d+)\.\d{3}s/m.exec(stdout);
   assert.ok(killed && Number(killed[1]) < 6, `TestBeta ran to its own sleep instead of its limit: ${stdout}`);
   assert.doesNotMatch(stdout, /BenchmarkGamma/, 'a benchmark ran as a test');

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F254: 시험 runner는 시험 파일의 프로세스가 끝나면 그 프로세스 그룹을 끝낸다. 그룹에 남은 프로세스는 `left running after exit: pid <n> <command>`로 파일을 실패시키고, 한도에서는 `TIME` 줄이 파일의 프로세스 밖의 프로세스를 `left running: pid <n> <command>`로 이름 붙인다. 시험이 끝난 뒤 timer를 열어 둔 시험 파일은 남은 프로세스와 함께 보고되며, 자기가 시작한 자식이 계속 도는 채 프로세스가 끝난 파일은 한도가 아니라 그 종료 시점에 실패한다.
 - F253: 명령 실행기의 heartbeat 시험은 시작과 cancelled 결과 사이의 모든 progress event를 받아들인다. 프로세스 그룹이 끝나기 전의 heartbeat 수는 끝나는 데 걸린 시간에 달려 있기 때문이다.
 - F251: view는 `runtime.status.watch {name}`과 `runtime.status.unwatch {name}` view call로 core status 또는 자기 plugin의 status를 따라가며, 첫 값을 포함한 각 값을 view event `status {name, value}`로 받는다. SDK의 `runtime.status.watch(name, listener)`는 watch를 끝내는 함수를 돌려준다. 다른 owner의 이름, exposure가 선언하지 않은 plugin status, 빈 이름은 아무것도 실행하지 않고 view의 오류 줄을 쓴다. 두 host는 call과 event를 바꾸지 않고 전달한다(host contract의 `view.status.relay`). 명세는 `docs/spec/native-surfaces.md`, `docs/spec/exposure.md`, `docs/spec/host-contract.md`에 있다.
 - F249: plugin host 페이지는 `runtime.command {name, params}`로 command를 실행하고 `runtime.log {level, event, fields, cids?}`로 event를 쓴다. 두 host가 이 call을 전달하고 main page는 view call의 검사로 답하므로, declared tree 행이 `core.file.open`으로 파일을 열고 host command가 기록을 남긴다. view call과 plugin host는 `packages/workbench/command-route.js`의 주인 routing을 함께 쓰며, 거부 문장은 호출한 쪽을 적는다.
