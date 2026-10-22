@@ -5,6 +5,7 @@
 ## 미배포
 
 - F238-d-19: host 페이지는 listing 오류를 served call `runtime.error {where, text}`로 알리며 검사는 view call과 같다. main page는 `error plugin <id> <where>: <text>`를 오류 표시를 통해 쓴다. 두 host가 이 call을 전달한다(계약 `plugin-host.error.display`). Red: workbench 사례는 표시 줄 없이 실패했고, Go 사례는 전달 assertion에서 실패했으며, Rust 사례는 `plugin host call runtime.error is not served`로 실패했다. Green: workbench plugin host call 15/15, Go 사례 1/1, Rust 사례 1/1.
+- F238-d-18: 구독된 plugin 세션의 실패는 host 페이지에 failure event로 전달된다. workbench 사례가 이를 고정하며 수정 전 코드에서 통과한다. 이 항목의 나머지 pin은 F238-d-18-2에 있다.
 - F247: 생성 중 실패한 surface composition은 정리 실패를 하나씩 한 번만 보고하고, 묶음으로 다시 보고하지 않는다.
 - F212.12-1-3: view surface는 listener 등록이 끝날 때가 아니라 mount가 dispose될 때 노출 port를 제거한다. 그래서 Tauri에서 dispose 뒤 같은 surface의 mount가 port를 등록한다. Red: 수정 전 코드에서 `surface-view.test.mjs`의 재 mount가 `already has an exposure port`로 실패한다. Green: 같은 파일이 9/9 통과한다.
 - F212.12-1-1: view 상태가 `loading`을 JSON boolean으로 알린다. native view의 document 상태가 C 논리 연산자의 결과를 int로 박싱해, 두 host가 상태를 JSON이 아니라며 거부했다. 상태는 이제 boolean을 박싱한다. Red: 수정 전 코드에서 `view_channel_test`가 `every view state reports loading as a JSON boolean: 0`으로 실패했다. Green: 같은 시험이 통과한다. Go와 Rust payload 시험은 소비자가 이미 숫자를 거부하므로 수정 전후 모두 통과한다.

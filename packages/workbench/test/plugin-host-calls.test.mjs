@@ -288,6 +288,24 @@ test("a declared sidecar whose sidecar.json the page does not hold refuses every
   pluginHost.close();
 });
 
+test("a failure of a subscribed plugin session is posted to its host page as the failure event", async () => {
+  const pluginHost = listen();
+  const start = calls.length;
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 12, command: "runtime.sidecar.onFailure", params: { id: session, sidecar: "fixture-sidecar" } });
+    await tick();
+    const posted = calls.length;
+    emit("sidecar-failure", { surface: session, sidecar: "fixture-sidecar", reason: "exited" });
+    await tick();
+    assert.deepEqual(calls.slice(posted), [{ name: "pluginHostEvent", arg: { plugin: "probe", event: "failure", sidecar: "fixture-sidecar", id: session, reason: "exited" } }]);
+  } finally {
+    // The end of the host removes its session subscriptions, and the calls of this case leave the record, which the later cases of this file assume.
+    emit("plugin-host-ended", { plugin: "probe" });
+    calls.splice(start);
+    pluginHost.close();
+  }
+});
+
 test("a sidecar message of a plugin session reaches its host page only with a subscription, and the end of the host drops it", async () => {
   // An earlier test may have subscribed the same session; the host of this test starts with none.
   const pluginHost = listen();
