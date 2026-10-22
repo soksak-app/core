@@ -1238,7 +1238,9 @@ fn view_status_watch_is_forwarded_and_a_status_value_is_posted() {
     };
     assert_eq!(
         view_event_message(&value),
-        Ok(json!({"sok": 1, "event": "status", "data": {"name": "core.grid", "value": {"tabs": 2}}})),
+        Ok(
+            json!({"sok": 1, "event": "status", "data": {"name": "core.grid", "value": {"tabs": 2}}})
+        ),
         "a status value is posted as the status event with its name and value"
     );
 }
