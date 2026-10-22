@@ -259,6 +259,11 @@ export function createViewBridge({ handler, report }) {
   });
   // The exposure of the page: status and dom registrations go through the channel, and the reply to a forwarded exposure
   // request carries the id of that request (docs/spec/exposure.md#relay, docs/spec/native-surfaces.md#view-surfaces).
+  // The port has no unregister. The registrations of a view end with the view: the host removes them when the surface closes
+  // (exposure-registered with closed, docs/spec/exposure.md#relay) and when the view process ends (docs/spec/native-surfaces.md,
+  // process end). The spec defines no call that removes a registration while the view stays open, and the allowed calls of a view
+  // are registered (view exposure) and exposureReply (plugin host calls) in docs/spec/native-surfaces.md. So the dispose of a view exposure ends only
+  // the local request listener, bindings and declarations.
   const exposure = {
     register: (kind, name) => calls.request("runtime.native.call", { name: "registered", payload: { kind, name } }),
     reply: (id, payload) => calls.request("runtime.native.call", { name: "exposureReply", payload: { id, ...payload } }),
