@@ -61,7 +61,11 @@ test('emits heartbeat progress while the command runs', { timeout: testHangMs },
     if (event.type === 'progress') controller.abort();
   } });
   assert.equal(result.status, 'cancelled', JSON.stringify(result));
-  assert.deepEqual(events.map((event) => event.type), ['start', 'progress', 'cancelled']);
+  // The child runs until the group ends after the cancel, and each heartbeat of that time is a progress event, so the
+  // number of progress events depends on the time the end takes; the order start, progress, cancelled does not.
+  const types = events.map((event) => event.type);
+  assert.deepEqual([types[0], types[1], types.at(-1)], ['start', 'progress', 'cancelled'], JSON.stringify(types));
+  assert.ok(types.slice(1, -1).every((type) => type === 'progress'), JSON.stringify(types));
 });
 
 test('reports nonzero exit as fail', { timeout: testHangMs }, async () => {
