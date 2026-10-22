@@ -2202,6 +2202,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F220",
+    implementation: [{ file: "scripts/check-host-contract.mjs", symbol: "auditDeclarations" }],
+    tests: [{ file: "scripts/test/check-host-contract.test.mjs", id: "the static audit fails a marker that names an undefined case, a case outside its scope, or no case, without running tests" }],
+    expected: "The static host contract check fails a test marker that names an undefined case, a case outside its host scope, or no case, and a case in a host scope that no test declares; push-check runs it.",
+    levels: ["unit"],
+  },
+  {
     id: "F224",
     implementation: [{ file: "packages/plugin-api/records-check.js", symbol: "declaredFiles" }],
     tests: [{ file: "packages/plugin-api/test/records-check.test.mjs", id: "a file the census declaration excludes is not a record of the repository" }],
