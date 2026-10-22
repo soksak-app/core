@@ -96,6 +96,64 @@
           }
         }
       ]
+    },
+    {
+      "id": "view.native.event-before-subscription-is-dropped",
+      "steps": [
+        {
+          "event": {
+            "event": "ready",
+            "data": 1
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "on": {
+            "name": "ready",
+            "listener": "a"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "ready"
+                }
+              }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "event": {
+            "event": "ready",
+            "data": 2
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "a",
+                "data": 2
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
     }
   ]
 }

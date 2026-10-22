@@ -11,6 +11,7 @@ const EXPECTED_IDS = [
   "view.native.on-subscribes-once-per-name",
   "view.native.refused-subscription-is-requested-again",
   "view.native.exposure-calls-and-refusals",
+  "view.native.event-before-subscription-is-dropped",
 ];
 
 // Lets every pending promise of the call layer settle before a step reports its output.
