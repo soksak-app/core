@@ -18,6 +18,8 @@ function fakes() {
     reports: [], log: [], textSize: [], settings: [], registered: [], errors: [], failed: [], events: [], composition: [] };
   const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
     fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
+  // The PNG payload that the clipboard of the surface holds; a case sets bytes to null for an absent payload.
+  const png = { bytes: new Uint8Array([1, 2, 3]) };
   const options = {
     plugin: "probe",
     surface: "probe-surface",
@@ -47,8 +49,9 @@ function fakes() {
       native: { call: async (name, payload) => { ran.native.push({ name, payload }); return { native: true }; } },
       sidecar: { send: async (id, body, cids, sidecar) => { ran.sidecar.push({ id, body, cids, sidecar }); return { sidecar: true }; } },
       clipboard: {
-        read: async (type) => { ran.clipboard.push({ read: type }); return "text value"; },
+        read: async (type) => { ran.clipboard.push({ read: type }); return type === "png" ? png.bytes : type === "fileURLs" ? null : "text value"; },
         writeText: async (text) => { ran.clipboard.push({ write: text }); },
+        persistPNG: async (value) => { ran.clipboard.push({ persist: value }); return { path: "/tmp/clip.png", shellQuotedPath: "'/tmp/clip.png'" }; },
       },
       links: { open: async (url) => { ran.links.push(url); } },
       report: (line) => { ran.errors.push(line); },
@@ -93,7 +96,7 @@ function fakes() {
       };
     })(),
   };
-  return { ran, options };
+  return { ran, options, png };
 }
 
 test("a forwarded tab.state.read returns the tab state of its surface", async () => {
@@ -164,12 +167,39 @@ test("runtime.sidecar.send sends the body with its correlation identifiers throu
   assert.equal(ran.sidecar.length, 1, "a send without a sidecar name reached the runtime");
 });
 
-test("runtime.clipboard.read returns the text of the clipboard and refuses the png type", async () => {
+test("runtime.clipboard.read returns the text of the clipboard and refuses an unknown type", async () => {
   const { ran, options } = fakes();
   assert.equal(await answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "text" }, options), "text value");
   assert.deepEqual(ran.clipboard, [{ read: "text" }]);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.read", params: "png" }, options), /runtime.clipboard.read png is not served/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.read", params: "image" }, options),
+    /runtime.clipboard.read image is not served/);
   assert.deepEqual(ran.clipboard, [{ read: "text" }]);
+});
+
+test("runtime.clipboard.read returns the typed png payload with base64 data, or null when the clipboard holds none", async () => {
+  const { ran, options, png } = fakes();
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "png" }, options),
+    { present: true, type: "png", data: "AQID" });
+  png.bytes = null;
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.clipboard.read", params: "png" }, options), null);
+  assert.deepEqual(ran.clipboard, [{ read: "png" }, { read: "png" }]);
+});
+
+test("runtime.clipboard.persistPNG persists the base64 payload and returns the shell path", async () => {
+  const { ran, options } = fakes();
+  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: { data: "AQID" } }, options),
+    { path: "/tmp/clip.png", shellQuotedPath: "'/tmp/clip.png'" });
+  assert.equal(ran.clipboard.length, 1);
+  assert.ok(ran.clipboard[0].persist instanceof Uint8Array);
+  assert.deepEqual([...ran.clipboard[0].persist], [1, 2, 3]);
+});
+
+test("runtime.clipboard.persistPNG refuses params without base64 data and persists nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: "AQID" }, options), /requires an object/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.persistPNG", params: {} }, options), /requires data as base64/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.clipboard.persistPNG", params: { data: 5 } }, options), /requires data as base64/);
+  assert.deepEqual(ran.clipboard, []);
 });
 
 test("runtime.clipboard.writeText writes the text and replies null", async () => {

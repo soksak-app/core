@@ -1,5 +1,6 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
+import { base64Of, bytesFrom } from "@soksak/plugin-api";
 
 /**
  * Answers one event of a view and resolves with its result. A call request {id, command, params} resolves with the result of its
@@ -21,7 +22,9 @@
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
  *                 sidecar.send(id, body, cids, name): the send to the declared sidecar name, as runtime.sidecar(name).send
- *                 clipboard: {read(type), writeText(text)}, the clipboard bridge without the PNG bytes
+ *                 clipboard: the clipboard bridge of the surface context, {read(type), writeText(text), persistPNG(value)};
+ *                   a png read returns the typed payload {present, type, data} with the bytes as base64, or null when the
+ *                   clipboard holds none, and persistPNG takes bytes and returns {path, shellQuotedPath}
  *                 links.open(url): opens a link, as runtime.links.open
  *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
  *                   display of the page
@@ -184,9 +187,20 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       return runtime.sidecar.send(fields.id, fields.body, fields.cids, fields.sidecar);
     }
     case "runtime.clipboard.read":
-      // default: the PNG type is binary and has no JSON reply, so a PNG read is refused (docs/spec/plugin-processes.md, rule 3).
+      // contract: docs/spec/native-surfaces.md#view-surfaces, view calls. The reply of a view call is JSON, so a png read
+      // returns the typed payload of the host with the bytes as base64, and an absent payload replies null.
+      if (params === "png") {
+        const png = await runtime.clipboard.read("png");
+        return png === null ? null : { present: true, type: "png", data: base64Of(png) };
+      }
       if (params !== "text" && params !== "fileURLs") throw new Error(`view call ${command} ${String(params)} is not served`);
       return runtime.clipboard.read(params);
+    case "runtime.clipboard.persistPNG": {
+      // The payload arrives as base64, because the params of a view call are JSON.
+      const fields = objectOf(command, params);
+      if (typeof fields.data !== "string") throw new TypeError(`view call ${command} requires data as base64`);
+      return runtime.clipboard.persistPNG(bytesFrom(fields.data));
+    }
     case "runtime.clipboard.writeText":
       if (typeof params !== "string") throw new TypeError(`view call ${command} requires a string`);
       await runtime.clipboard.writeText(params);

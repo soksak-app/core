@@ -2236,6 +2236,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F241",
+    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "case \"runtime.clipboard.persistPNG\"" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.read returns the typed png payload with base64 data, or null when the clipboard holds none" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG persists the base64 payload and returns the shell path" },
+    ],
+    expected: "The view call runtime.clipboard.read with png returns the typed payload with base64 data or null, and runtime.clipboard.persistPNG persists the base64 payload through the clipboard bridge of the surface context.",
+    levels: ["unit"],
+  },
+  {
     id: "F239",
     implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
     tests: [{ file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],

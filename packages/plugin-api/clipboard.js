@@ -22,7 +22,8 @@ function bytesOf(value) {
   throw new TypeError("clipboard PNG data must be Uint8Array or ArrayBuffer");
 }
 
-function base64Of(bytes) {
+/** Encodes clipboard PNG bytes as the base64 that the typed clipboard payload carries. */
+export function base64Of(bytes) {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
@@ -30,7 +31,8 @@ function base64Of(bytes) {
   return btoa(binary);
 }
 
-function bytesFrom(value) {
+/** Decodes the base64 of a clipboard PNG payload into bytes. */
+export function bytesFrom(value) {
   if (typeof value !== "string") throw new ClipboardError("clipboard PNG response is not base64");
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);

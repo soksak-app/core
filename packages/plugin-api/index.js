@@ -18,7 +18,7 @@ export { createPluginRuntime, LOG_LEVELS } from "./plugin-runtime.js";
 export { createSurfaceContext, isLocalAbsolutePath, mountSurfaceModule, originFault, releaseSurfaceReady } from "./surface.js";
 export { createSurfaceCompositionController } from "./surface-composition.js";
 export { orderedSidecar } from "./sidecar-port.js";
-export { CLIPBOARD_TYPES, ClipboardError, createClipboardBridge, shellQuotePath } from "./clipboard.js";
+export { CLIPBOARD_TYPES, ClipboardError, base64Of, bytesFrom, createClipboardBridge, shellQuotePath } from "./clipboard.js";
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 export { createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
