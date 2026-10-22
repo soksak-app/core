@@ -63,6 +63,7 @@ fn an_open_request_at_a_host_stop_gets_an_error_record() {
 }
 
 // The error text of a failed request that is longer than the bound of the event is cut, and the record says so with truncated: true.
+// contract: sidecars.reply.error-text-cut-is-marked
 #[test]
 fn a_sidecar_error_text_cut_at_the_bound_is_marked() {
     let long = "x".repeat(2 * crate::bounds::CALL_TEXT_BYTES);

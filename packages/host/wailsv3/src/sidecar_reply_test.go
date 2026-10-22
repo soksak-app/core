@@ -61,6 +61,7 @@ func TestAnOpenRequestAtAHostStopGetsAnErrorRecord(t *testing.T) {
 }
 
 // The error text of a failed request that is longer than the bound of the event is cut, and the record says so with truncated: true.
+// contract: sidecars.reply.error-text-cut-is-marked
 func TestASidecarErrorTextCutAtTheBoundIsMarked(t *testing.T) {
 	isolateTraceRecords(t)
 	c := &Sidecars{}

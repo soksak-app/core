@@ -492,6 +492,10 @@ fn invalid_json_closes_connection() {
 | `sidecars.stop.reads-output-to-end` | 멈추는 동안 호스트는 표준 입출력 사이드카의 출력을 끝날 때까지 읽는다. 중지 전에 보낸 닫기에 입력이 끝난 뒤에야 답하고 그다음 파이프가 담는 것보다 많이 쓰는 사이드카는 모든 쓰기를 마치고 중지 제한 시간 전에 끝나며, 호스트는 오류 줄을 쓰지 않는다. | both |
 | `sidecars.stop.reports-exit-status` | 멈추는 동안 종료 상태 3이나 신호 15로 끝난 표준 입출력 사이드카는 오류 줄 "error host sidecar <name>: exited while stopping: exit status 3"이나 "error host sidecar <name>: exited while stopping: signal 15"를 쓴다. | both |
 | `sidecars.stop.records-open-requests` | host가 sidecar를 멈추거나 떼어낼 때 응답을 기다리는 식별자 있는 요청은 `host.sidecar.reply` 오류 기록을 얻는다. 기록은 그 surface, sidecar, 식별자를 밝히며, 이유는 `the host stopped before the sidecar replied`다. surface는 이 요청에 대해 `sidecar-failure` event를 받지 않는다. | both |
+| `sidecars.reply.error-text-cut-is-marked` | 1,024바이트 한도에서 잘린 오류 글을 가진 `host.sidecar.reply`는 `truncated: true`를 가지며, 잘리지 않은 오류 글은 `truncated` member가 없다. | both |
+| `debug.rows.out-of-range-number-is-refused` | float64 범위 밖의 수를 가진 debug 로그 줄은 파일, 줄, 원문과 함께 `not JSON`으로 거부되며, 어떤 행도 그 수에 `undefined`를 보이지 않는다. | both |
+| `endpoint.accept.error-is-recorded` | endpoint가 서비스하는 동안 실패한 accept는 `error host endpoint accept: <reason>`을 쓰며, endpoint가 listener를 스스로 닫은 뒤 실패한 accept는 기록을 쓰지 않는다. | both |
+| `endpoint.close.reason-of-read-error` | 프레임 중간에 끝난 연결은 `connection closed inside a length prefix` 또는 `connection closed inside a frame body`로 닫히고, 그 밖의 읽기 오류는 I/O 글로 닫히며, 프레임 경계에서의 끝이나 reset은 `peer closed`로 닫힌다. | both |
 | `sidecars.stop.forgets-running-sidecars` | 중지는 입력을 끝내기 전에 모든 사이드카를 실행 목록에서 빼고 답하지 않은 닫기를 지우므로, 그 뒤 표면이나 소유 창을 닫아도 아무것도 보내지 않고 닫는 중인 표면을 알리지 않는다. | both |
 | `sidecars.protocol.message-at-limit-is-delivered` | 줄바꿈 앞이 정확히 67108864 byte인 사이드카 메시지가 손상 없이 소유 창에 도착한다. | both |
 | `sidecars.failure.oversize-message-terminates-and-notifies` | 67108864 byte보다 긴 줄은 줄이 끝나기를 기다리지 않고 사이드카 프로세스를 끝내고 "exceeds"를 담은 `sidecar-failure`를 소유 창에 전달한다. | both |
@@ -759,6 +763,7 @@ fn invalid_json_closes_connection() {
 | `install.migration.record-passes-every-gate` | 적용한 단계의 기록 `log.migrated`는 오류만 저장하는 기본 정책과 다른 모든 정책을 지난다. | both |
 | `install.migration.is-idempotent` | 두 번 적용은 아무것도 쓰지 않고 byte가 바뀌지 않으며, 없는 file은 없는 채로 둔다. | both |
 | `install.migration.refuses-forms-outside-the-chain` | 바닥 아래 형식, 현재 번호보다 새 형식, 판독 불가 file은 파일과 숫자로 거부되고 file은 바뀌지 않는다. | both |
+| `install.migration.format-without-definitions-is-an-error` | `ProjectsFormat`와 `SettingsFormat`은 migration 정의를 읽거나 해석할 수 없거나 파일의 사슬이 없으면 오류를 반환하며, 그 파일의 형식 번호를 쓰지 않는다. | both |
 | `install.installed.rejects-another-format` | 바닥 위에서 `format`이 2가 아닌 `plugins/installed.json`은 `<file>: plugins/installed.json: format must be 3`로 실패하고 바뀌지 않는다. 바닥 아래 형식은 `<file>: the file holds format <n>; the definitions migrate formats 2 to 3`로 실패하고 바뀌지 않는다. 형식 2 file은 reader 입구에서 3으로 갱신된다([저장 데이터 마이그레이션](installation.ko.md#저장-데이터-마이그레이션)). | both |
 | `installed.document.lists-enabled-plugins` | `/installed-plugins.json`은 켜진 설치 plugin을 id 순서로 `id`, `package`, `version`, 그리고 `plugin.json`의 compact 내용인 `manifest`와 함께 나열하고, 진단 build에서만 `diagnostics.json`의 compact 내용을 더하며, `installed.json`이 없으면 `{"plugins":[]}`다. | both |
 | `installed.document.names-from-package-json` | `/installed-plugins.json` 항목의 `package`와 설치된 plugin의 `/modules/<package>`는 기록된 `path`의 `package.json`의 `name`이며, `package.json`이 없으면 `{"error":"<file>: no such file or directory"}`다. | both |

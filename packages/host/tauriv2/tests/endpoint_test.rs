@@ -1016,6 +1016,7 @@ fn closing_an_already_disconnected_connection_succeeds() {
 const CLOSE_CHILD: &str = "SOKSAK_ENDPOINT_CLOSE_CHILD";
 
 // contract: endpoint.transport.close-reason-is-recorded
+// contract: endpoint.close.reason-of-read-error
 #[test]
 fn the_endpoint_records_why_a_connection_closes() {
     if let Some(config) = std::env::var_os(CLOSE_CHILD) {

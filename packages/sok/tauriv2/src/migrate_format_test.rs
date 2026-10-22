@@ -2,6 +2,7 @@ use super::*;
 
 // A format number cannot be read when the definitions cannot be parsed: the parse error reaches the caller, so no format number
 // is written for a file whose definitions are broken.
+// contract: install.migration.format-without-definitions-is-an-error
 #[test]
 fn a_format_without_parsable_definitions_is_an_error() {
     let broken = [("migrations/projects.json", "not json")];
@@ -16,6 +17,7 @@ fn a_format_without_parsable_definitions_is_an_error() {
 }
 
 // A file without a chain has no current format, so its format is an error and no number is stamped.
+// contract: install.migration.format-without-definitions-is-an-error
 #[test]
 fn a_file_without_a_chain_has_no_format() {
     let definitions = parse_definitions(&[]).expect("an empty set parses");

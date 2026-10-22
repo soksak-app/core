@@ -7,6 +7,7 @@ import (
 
 // A format number cannot be read when the definitions cannot be read: the error reaches the caller, so no format number is written
 // for a file whose definitions are missing.
+// contract: install.migration.format-without-definitions-is-an-error
 func TestAFormatWithoutReadableDefinitionsIsAnError(t *testing.T) {
 	saved := definitionSource
 	definitionSource = fstest.MapFS{}
@@ -20,6 +21,7 @@ func TestAFormatWithoutReadableDefinitionsIsAnError(t *testing.T) {
 }
 
 // A file without a chain has no current format, so its format is an error and no number is stamped.
+// contract: install.migration.format-without-definitions-is-an-error
 func TestAFileWithoutAChainHasNoFormat(t *testing.T) {
 	if format, err := formatOf("no-such-file.json"); err == nil {
 		t.Fatalf("formatOf returned %d without an error for a file without a chain", format)
