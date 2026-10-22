@@ -56,7 +56,8 @@
     "contract/command-registration.json",
     "contract/view-commands.json",
     "contract/view-native.json",
-    "contract/view-composition.json"
+    "contract/view-composition.json",
+    "contract/contributions.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",

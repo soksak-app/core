@@ -1,0 +1,619 @@
+{
+  "surface": "packages/plugin-api/index.js#resolveContributions",
+  "description": "Resolved contributions of the installed and enabled plugins, one case per outcome of resolveContributions. A case gives installed, the plugins of {id, package, version, manifest}, and output, the items that the function returns in order. Each item is {plugin, point, index, state, reason}; a connected item also has provider, item (the fields without range and module) and module (a URL on the core root). The states are connected, provider-missing, invalid (an undeclared extension point, a provider without extends, or an item that does not match the schema) and version-mismatch (the range does not contain the declared version). Items are sorted by plugin id, point and index.",
+  "cases": [
+    {
+      "id": "contributions.resolve.connects-a-matching-item",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            },
+            "extends": {
+              "language": {
+                "version": "1.2.0",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "tidy",
+          "package": "@scope/plugin-tidy",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "tidy",
+            "name": "tidy",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.language": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "tidy",
+          "point": "probe.language",
+          "index": 0,
+          "state": "connected",
+          "reason": null,
+          "provider": "probe",
+          "item": {
+            "extensions": [
+              "tidy"
+            ]
+          },
+          "module": "/modules/@scope/plugin-tidy/ui/tidy.js"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.reports-a-missing-provider",
+      "installed": [
+        {
+          "id": "lost",
+          "package": "@scope/plugin-lost",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "lost",
+            "name": "lost",
+            "description": "검사용 기여.",
+            "contributes": {
+              "absent.language": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "lost",
+          "point": "absent.language",
+          "index": 0,
+          "state": "provider-missing",
+          "reason": "plugin absent is not installed or not enabled"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.reports-an-undeclared-point",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            },
+            "extends": {
+              "language": {
+                "version": "1.2.0",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "other",
+          "package": "@scope/plugin-other",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "other",
+            "name": "other",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.format": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "other",
+          "point": "probe.format",
+          "index": 0,
+          "state": "invalid",
+          "reason": "probe 0.1.0 declares no extension point format"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.reports-a-provider-without-extension-points",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            }
+          }
+        },
+        {
+          "id": "tidy",
+          "package": "@scope/plugin-tidy",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "tidy",
+            "name": "tidy",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.language": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "tidy",
+          "point": "probe.language",
+          "index": 0,
+          "state": "invalid",
+          "reason": "probe 0.1.0 declares no extension point language"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.reports-a-range-mismatch",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            },
+            "extends": {
+              "language": {
+                "version": "1.2.0",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "tidy",
+          "package": "@scope/plugin-tidy",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "tidy",
+            "name": "tidy",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.language": [
+                {
+                  "range": "^2.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "tidy",
+          "point": "probe.language",
+          "index": 0,
+          "state": "version-mismatch",
+          "reason": "range ^2.0.0 does not contain probe.language 1.2.0"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.reports-a-schema-mismatch",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            },
+            "extends": {
+              "language": {
+                "version": "1.2.0",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "tidy",
+          "package": "@scope/plugin-tidy",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "tidy",
+            "name": "tidy",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.language": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": "tidy"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "tidy",
+          "point": "probe.language",
+          "index": 0,
+          "state": "invalid",
+          "reason": "item does not match the schema of probe.language"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.orders-by-plugin-point-and-index",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            },
+            "extends": {
+              "language": {
+                "version": "1.2.0",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "zed",
+          "package": "@scope/plugin-zed",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "zed",
+            "name": "zed",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.language": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                },
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "amy",
+          "package": "@scope/plugin-amy",
+          "version": "0.0.1",
+          "manifest": {
+            "id": "amy",
+            "name": "amy",
+            "description": "검사용 기여.",
+            "contributes": {
+              "probe.language": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ],
+              "absent.zed": [
+                {
+                  "range": "^1.0.0",
+                  "module": "ui/tidy.js",
+                  "extensions": [
+                    "tidy"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "output": [
+        {
+          "plugin": "amy",
+          "point": "absent.zed",
+          "index": 0,
+          "state": "provider-missing",
+          "reason": "plugin absent is not installed or not enabled"
+        },
+        {
+          "plugin": "amy",
+          "point": "probe.language",
+          "index": 0,
+          "state": "connected",
+          "reason": null,
+          "provider": "probe",
+          "item": {
+            "extensions": [
+              "tidy"
+            ]
+          },
+          "module": "/modules/@scope/plugin-amy/ui/tidy.js"
+        },
+        {
+          "plugin": "zed",
+          "point": "probe.language",
+          "index": 0,
+          "state": "connected",
+          "reason": null,
+          "provider": "probe",
+          "item": {
+            "extensions": [
+              "tidy"
+            ]
+          },
+          "module": "/modules/@scope/plugin-zed/ui/tidy.js"
+        },
+        {
+          "plugin": "zed",
+          "point": "probe.language",
+          "index": 1,
+          "state": "connected",
+          "reason": null,
+          "provider": "probe",
+          "item": {
+            "extensions": [
+              "tidy"
+            ]
+          },
+          "module": "/modules/@scope/plugin-zed/ui/tidy.js"
+        }
+      ]
+    },
+    {
+      "id": "contributions.resolve.plugin-without-contributes-adds-nothing",
+      "installed": [
+        {
+          "id": "probe",
+          "package": "@scope/plugin-probe",
+          "version": "0.1.0",
+          "manifest": {
+            "id": "probe",
+            "name": "Probe",
+            "description": "검사용 표면.",
+            "mark": "p",
+            "icon": "<path/>",
+            "surface": {
+              "module": "ui/probe.js",
+              "composition": {
+                "kind": "hybrid",
+                "regions": [
+                  {
+                    "name": "page",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": []
+              }
+            },
+            "extends": {
+              "language": {
+                "version": "1.2.0",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "extensions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "output": []
+    }
+  ]
+}
