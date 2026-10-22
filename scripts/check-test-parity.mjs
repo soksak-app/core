@@ -187,6 +187,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-4",
+    implementation: [
+      { file: "packages/plugin-api/calls.js", symbol: "export function createCalls" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/calls-contract.test.mjs", id: "call limit contract publishes the required cases in order" },
+    ],
+    expected: "A call that receives no reply within its declared or default limit is rejected with -32000 and the limit message, and a reply after the limit is a late reply that is not passed to the call, each replayed against the call layer with mock timers and the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-3",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
