@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.12-1-14-4: The `host.sidecar.disconnect` record of a lost persistent sidecar connection names how it ended (`end`) and how many requests waited for it (`waiting`) in both hosts.
 - F257-3: The test runner ends a test's process group without error when macOS refuses the group signal with EPERM because only zombies remain, at the exit path and at the limit, and it fails with the running members named when a running member is refused. The stop, list and kill of a group share one signal helper and one predicate for running members with the command supervisor. Red: the runner tests `a refused group signal with no running member ends without error` and `a refused group signal with a running member names it` fail with `kill EPERM` on the unchanged logic. Green: the three runner test files pass 39 of 39 tests, and the native repeat test file passes 2 of 2.
 
 - F257-2: The benchmark runner test gives its fixtures a limit of 6 s and lets the fixture that runs over it sleep 30 s, so a fixture that ends at once is not stopped by a loaded machine. Red: the push check at load 105 failed with `TIME event_log_benchmark 2.012s exceeded 2.000s and was killed`. Green: the test passes.

@@ -90,6 +90,8 @@ type ClosingSurface struct {
 
 type sidecar struct {
 	name string
+	// endReason is how the persistent connection ended when no protocol violation ended it: eof, unfinished line or read error.
+	endReason string
 	// version is the version that a persistent service sent in its hello reply, or nil when the reply had none.
 	version    *string
 	cmd        *exec.Cmd
@@ -1821,6 +1823,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 }
 
 func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
+	process.endReason = "eof"
 	violation := c.readPersistentLines(process, reader)
 	process.conn.Close()
 	wasCurrent := false
@@ -1830,6 +1833,12 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	// A connection that ends for a protocol violation while the host is not stopping is a failure of the service, which the restart limit
 	// counts here; the service keeps running (docs/spec/persistent-services.md#service-transport).
 	stop := violation != "" && !stopping && c.countFailure(process.name)
+	// The requests that wait for this connection when it ends (docs/spec/events.json, host.sidecar.disconnect).
+	waiting := c.requests.waiting(process.name)
+	end := process.endReason
+	if violation != "" {
+		end = "violation"
+	}
 	waiters := make([]chan error, 0, len(process.closeWaiters))
 	for request, waiter := range process.closeWaiters {
 		delete(process.closeWaiters, request)
@@ -1860,8 +1869,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		waiter <- errors.New("persistent service disconnected before close-owner ack")
 	}
 	close(process.exited)
-	EmitHost(LevelInfo, "host.sidecar.disconnect", map[string]any{"name": process.name, "pid": process.servicePID,
-		"stopping": stopping, "violation": violation})
+	EmitHost(LevelInfo, "host.sidecar.disconnect", disconnectFields(process.name, process.servicePID, stopping, violation, end, waiting))
 	PerformanceProcessRemove(process.servicePID)
 	if stopping {
 		c.failStoppedRequests(process.name)
@@ -1885,6 +1893,11 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		c.failRequests(process.name, "connection lost")
 		c.revivePersistent(process.name)
 	}
+}
+
+// disconnectFields returns the fields of the host.sidecar.disconnect record of the end of a persistent service connection (docs/spec/events.json).
+func disconnectFields(name string, pid int, stopping bool, violation, end string, waiting int) map[string]any {
+	return map[string]any{"name": name, "pid": pid, "stopping": stopping, "violation": violation, "end": end, "waiting": waiting}
 }
 
 // recordReady writes the event host.trace.sidecar.ready for the first message line that a process spawned by the host sends. Its ms is the time from
@@ -2001,8 +2014,14 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	// net.ErrClosed means that this host closed the connection (cleanup after termination or failure). When the peer closes, it is EOF and there is no error.
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
 		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)
-	} else if err != nil && !errors.Is(err, net.ErrClosed) {
-		LogError("sidecar "+process.name, fmt.Sprintf("persistent read: %v", err))
+	} else if err != nil {
+		process.endReason = fmt.Sprintf("read error: %v", err)
+		if !errors.Is(err, net.ErrClosed) {
+			LogError("sidecar "+process.name, fmt.Sprintf("persistent read: %v", err))
+		}
+	}
+	if unfinished > 0 {
+		process.endReason = "unfinished line"
 	}
 	logUnfinishedLine(process.name, unfinished)
 	return ""

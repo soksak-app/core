@@ -463,6 +463,7 @@ Items:
 | `sidecars.send.rejects-undeclared-sidecar` | Sending to a sidecar that no plugin declares fails with "not declared". | both |
 | `sidecars.send.rejects-after-stop` | Sending after the sidecars stop fails with "stopped". | both |
 | `sidecars.send.rejects-when-no-plugin-declares-sidecars` | Without declared sidecars, construction succeeds and every send fails with "not declared by any plugin". | both |
+| `sidecars.disconnect.record-end` | The `host.sidecar.disconnect` record of a persistent service connection names how the connection ended (`end`: `eof`, `unfinished line`, `read error: <text>` or `violation`) and the number of requests that waited for it (`waiting`); the exit status of the service is not in the record, because the host does not own its process. | both |
 | `sidecars.start.fails-on-missing-executable` | A declared executable missing on disk makes the first send fail with the sidecar name. | both |
 | `sidecars.start.refuses-zero-hello-timeout` | Starting a persistent service from a zero-valued `Sidecars` object is refused before spawning a service, with an error that names `HelloTimeout`. | wailsv3 only: Go allows a zero-valued `Sidecars`; Tauri constructs its sidecar core through a builder rather than a zero-valued public struct |
 | `sidecars.start.passes-log-directory` | A sidecar of standard input and output starts with the arguments `--log-dir <config-dir>/logs` and no other argument. | both |

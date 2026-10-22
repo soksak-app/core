@@ -93,6 +93,14 @@ impl RequestLedger {
         elapsed
     }
 
+    /// Returns the number of the requests that wait for the sidecar.
+    pub fn waiting(&self, sidecar: &str) -> usize {
+        self.pending
+            .values()
+            .filter(|request| request.sidecar == sidecar)
+            .count()
+    }
+
     /// Removes the requests that wait for the sidecar and returns their identifiers by surface, the newest
     /// [`FAILED_REQUEST_CIDS`] of each surface, in the order of the requests, with the surfaces in the order of their oldest request.
     pub fn failed(&mut self, sidecar: &str) -> Vec<(String, Vec<String>)> {

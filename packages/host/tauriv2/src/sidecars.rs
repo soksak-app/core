@@ -28,6 +28,7 @@ use crate::sidecar_reply::{RequestLedger, error_of_body, record_stopped_requests
 use crate::windows::{emit_window, window_data};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use serde_json::{Value, json};
 use tauri::Window;
 
 /// The event value that passes a message sent by a sidecar to the page.
@@ -2807,6 +2808,8 @@ impl<O: Owner> Core<O> {
             let mut reader = BufReader::new(reader_stream);
             // None when the connection ends, and the reason when the service violates the protocol.
             // (docs/spec/persistent-services.md#service-transport).
+            // How the connection ended when no protocol violation ended it (docs/spec/events.json, host.sidecar.disconnect).
+            let mut end = String::from("eof");
             let violation = (|| -> Option<String> {
                 let mut line = Vec::new();
                 loop {
@@ -2817,6 +2820,7 @@ impl<O: Owner> Core<O> {
                         Ok(MessageLine::End) => return None,
                         Ok(MessageLine::Unfinished(bytes)) => {
                             log_unfinished_line(&sidecar, bytes);
+                            end = String::from("unfinished line");
                             return None;
                         }
                         Ok(MessageLine::TooLong) => {
@@ -2827,6 +2831,7 @@ impl<O: Owner> Core<O> {
                                 &format!("sidecar {sidecar}"),
                                 format!("persistent read: {error}"),
                             );
+                            end = format!("read error: {error}");
                             return None;
                         }
                     }
@@ -2950,8 +2955,15 @@ impl<O: Owner> Core<O> {
                     }
                 }
             })();
+            // A violation ends the connection as a violation, whatever the reader saw.
+            let end = if violation.is_some() {
+                String::from("violation")
+            } else {
+                end
+            };
             let mut was_current = false;
             let stopping;
+            let waiting;
             let stop;
             let mut owned = Vec::new();
             let mut changed = None;
@@ -2961,6 +2973,8 @@ impl<O: Owner> Core<O> {
                 // full; the panic hook records the panic.
                 let mut state = state.lock().unwrap_or_else(PoisonError::into_inner);
                 stopping = state.stopped;
+                // The requests that wait for this connection when it ends (docs/spec/diagnostics.md, host.sidecar.disconnect).
+                waiting = state.requests.waiting(&sidecar);
                 if stopping {
                     stopped_requests = state.requests.failed(&sidecar);
                 }
@@ -3006,9 +3020,15 @@ impl<O: Owner> Core<O> {
             crate::event_record::emit_host(
                 crate::event_log::Level::Info,
                 "host.sidecar.disconnect",
-                serde_json::json!({"name": sidecar, "pid": reader_service_pid, "stopping": stopping,
-                    // default: a disconnect without a violation records an empty violation text.
-                    "violation": violation.clone().unwrap_or_default()}),
+                // default: a disconnect without a violation records an empty violation text.
+                disconnect_fields(
+                    &sidecar,
+                    reader_service_pid,
+                    stopping,
+                    &violation.clone().unwrap_or_default(),
+                    &end,
+                    waiting,
+                ),
             );
             crate::performance::process_remove(reader_service_pid);
             let close_error =
@@ -3205,6 +3225,18 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
         }
     }
     notify_connection(core, name, outcome.map(|_| ()));
+}
+
+/// The fields of the host.sidecar.disconnect record of the end of a persistent service connection (docs/spec/events.json).
+pub fn disconnect_fields(
+    name: &str,
+    pid: u32,
+    stopping: bool,
+    violation: &str,
+    end: &str,
+    waiting: usize,
+) -> Value {
+    json!({"name": name, "pid": pid, "stopping": stopping, "violation": violation, "end": end, "waiting": waiting})
 }
 
 /// The error line of a lost connection to a persistent service: the place and the text, or `None` when another path

@@ -83,3 +83,14 @@ func TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts(t *testing.T) {
 		t.Fatalf("a persistent start with a zero HelloTimeout returned %v, want an error that names HelloTimeout is not set", err)
 	}
 }
+
+// contract: sidecars.disconnect.record-end
+func TestDisconnectRecordNamesHowTheConnectionEnded(t *testing.T) {
+	fields := disconnectFields("svc", 42, false, "", "eof", 2)
+	if fields["end"] != "eof" {
+		t.Fatalf("disconnect record end %v, want eof", fields["end"])
+	}
+	if fields["waiting"] != 2 {
+		t.Fatalf("disconnect record waiting %v, want 2", fields["waiting"])
+	}
+}

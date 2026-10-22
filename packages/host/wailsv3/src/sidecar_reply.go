@@ -36,6 +36,19 @@ type requestLedger struct {
 	order   []string
 }
 
+// waiting returns the number of the requests that wait for the sidecar.
+func (l *requestLedger) waiting(sidecar string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	count := 0
+	for _, request := range l.pending {
+		if request.sidecar == sidecar {
+			count++
+		}
+	}
+	return count
+}
+
 // add remembers the requests of cids, queued for the surface of the sidecar at the monotonic time mono, and returns how many
 // remembered requests it forgot to stay within the bound; the caller counts them (`host.buffer.dropped`).
 func (l *requestLedger) add(sidecar, surface string, cids []string, mono uint64) (forgotten int) {

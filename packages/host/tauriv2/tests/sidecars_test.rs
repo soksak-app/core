@@ -2446,3 +2446,17 @@ fn refuses_an_already_open_surface() {
         "refused send failure = {refused:?}"
     );
 }
+
+// contract: sidecars.disconnect.record-end
+#[test]
+fn a_disconnect_record_names_how_the_connection_ended() {
+    let fields = soksak_host_tauriv2::sidecars::disconnect_fields("svc", 42, false, "", "eof", 2);
+    assert_eq!(
+        fields["end"], "eof",
+        "the disconnect record names how the connection ended"
+    );
+    assert_eq!(
+        fields["waiting"], 2,
+        "the disconnect record counts the requests that waited"
+    );
+}
