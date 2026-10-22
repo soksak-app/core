@@ -53,7 +53,7 @@ dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 
 - 문서의 모든 사용자 조작은 선언된 명령을 실행한다. 컨트롤은 `data-command="<이름>"`으로 명령을 가리키고, 고정 매개변수는 `data-params`에 JSON 객체로 적는다. 값을 입력하는 컨트롤은 그 값을 `data-value`가 가리키는 매개변수 이름(기본 `value`)으로 더한다. 명령을 먼저 선언하고(`exposure.json`, `plugin.json`), 문서는 `@soksak/plugin-api`의 `createBinder(run)`으로 선언된 명령에만 요소를 연결한다. `bind(요소, 이름, 매개변수, {event, when, stop, failed})`는 이벤트에서 명령을 실행하고, `mark(요소, 이름, 매개변수, 값 이름)`은 속성을 붙이며, `delegate(루트)`는 `bind`가 연결하지 않은 표시된 하위 요소의 누름과 값 변경을 실행한다. `bind`로 연결한 요소는 자기 이벤트에서만 명령을 실행하므로, Enter에 연결한 텍스트 필드는 같은 Enter가 일으키는 `change`에서 명령을 다시 실행하지 않는다. 선언되지 않은 이름을 연결하거나 표시하면 예외를 던진다. 워크벤치는 `packages/workbench/commands.js`(등록소 위의 연결기)를, 플러그인 페이지는 페이지가 등록한 명령을 실행하는 `expose.bind`, `expose.mark`, `expose.delegate`를 쓴다. 처리기는 모듈 함수를 직접 부르지 않는다. 탭 드래그 같은 연속 조작은 결과를 만드는 명령(`core.tab.move`)을 가지며, 키보드 단축키도 명령을 실행한다.
 - 문서에 보이는 모든 상태는 status로 읽을 수 있다.
 - 모든 조작 요소(`button`, `input`, `select`, `textarea`, `role="button"`, `contenteditable`)는 명령에 연결되고(직접 연결되거나, 위임한 루트 안에서 `data-command`를 가짐) dom 이름을 가진다.
-- `open`이 있는 선언 tree 노드는 Enter keydown을 처리해 `open`을 실행하고 native click을 막는다. 두 번 누르기의 두 번째 클릭(`event.detail === 2`)은 일반 `command` 대신 `open`을 실행한다. 다른 선언 UI 요소에는 키 처리기가 없다([선언된 UI](declared-ui.ko.md#묶기)).
+- `open`이 있는 선언 tree 노드는 Enter keydown을 처리해 `open`을 실행하고 native click을 막는다. 두 번 누르기의 두 번째 클릭(`event.detail === 2`)은 일반 `command` 대신 `open`을 실행한다. 선언 UI tree 노드는 [선언된 UI](declared-ui.ko.md#트리-키) 절이 규정하는 키를 처리한다. 다른 선언 UI 요소에는 키 처리기가 없다([선언된 UI](declared-ui.ko.md#묶기)).
 - 다시 그리기는 문서에 남는 모든 컨트롤을 제자리에 두고, 순서가 틀린 컨트롤만 옮긴다. WebKit은 누름과 뗌 사이에 요소가 문서에서 빠진 누름에 `click`을 보내지 않고, `insertBefore`로 요소를 옮기면 요소가 먼저 문서에서 빠지므로, 컨트롤을 옮긴 다시 그리기는 그동안 누른 click을 잃었다. plugin page는 key마다 요소를 제자리에 두는 `@soksak/plugin-api`의 `drawList`로 컨트롤 목록을 그린다.
 - 네이티브 모달은 요소의 사본을 그리고 컨트롤의 key로 답한다. 메인 페이지는 자기 요소에서 그 컨트롤을 찾아 명령을 실행한다.
 
@@ -94,6 +94,14 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
+| `ArrowDown` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
+| `ArrowUp` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
+| `Home` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
+| `End` | workbench | core.declared-ui.tree.move | — | 선언 tree 노드의 label 또는 펼침 컨트롤에 키보드 포커스가 있음 |
+| `ArrowRight` | workbench | core.declared-ui.tree.expand | — | 접힌 가지에 키보드 포커스가 있음 |
+| `ArrowRight` | workbench | core.declared-ui.tree.move | — | 펼쳐진 가지에 키보드 포커스가 있음 |
+| `ArrowLeft` | workbench | core.declared-ui.tree.expand | — | 펼쳐진 가지에 키보드 포커스가 있음 |
+| `ArrowLeft` | workbench | core.declared-ui.tree.move | — | 접힌 가지나 잎에 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view가 키를 직접 처리하며 기본 동작을 유지한다 |
 

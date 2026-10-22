@@ -133,7 +133,23 @@ DOM 이름. 선언된 UI 값이 그리는 control은 모두 DOM 이름 `core.sid
 
 선언된 section의 control에 대한 요청은 control address `{sidebar, section, key, path?, role?, action?}`로 지정한다. `sidebar`는 `core.sidebars`가 보고하는 사이드바 인스턴스(`left`, `right`, `cardId:side`)이고, `section`은 section id이며, `key`는 그 control을 가진 루트 요소의 key다. `sidebar`, `section`, `key`는 문자열이다. `path`는 루트 요소 아래의 key들로 이루어진 문자열 배열이고, `role`은 `label`, `expand`, `action` 중 하나다. control이 list 항목이나 tree 노드에 속하면 `path`와 `role`이 필수이며, 루트 button에는 허용하지 않는다. `role`이 `action`일 때만 `action`이 필수이고 그 밖에는 금지한다. `action`은 노드 actions 안에서 유일한 key다. 이 필드들로 주소는 유일하다. 한 사이드바 인스턴스는 section을 한 번 그리고, 키는 형제 사이에서 유일하며, path, role, 선택적 action key가 control 하나를 정한다. `core.sidebar.section.control` DOM 항목은 여러 요소가 그 이름을 공유하므로 `many`로 선언되어 있다. 다른 타입의 값은 [노출](exposure.ko.md#오류)이 정하는 대로 -32602로 거부하며, `address`의 여섯 필드가 아닌 필드도 -32602로 거부한다. 어느 control과도 맞지 않는 주소는 [노출](exposure.ko.md#오류)의 오류 코드로 실패한다.
 
-네이티브 키보드 조작은 `button` 요소를 쓰므로 Enter와 Space가 같은 묶기를 거쳐 버튼 명령에 닿는다. `open`이 있는 tree 노드는 예외로 Enter keydown을 직접 처리한다. `open`을 실행하고 native click을 막는다. 다른 선언 UI 요소에는 키 처리기가 없다. `command`와 `open`이 모두 있는 노드에서 두 번 누르기의 첫 클릭은 `command`를 실행하고 두 번째 클릭(`event.detail === 2`)은 `command` 대신 `open`을 실행한다.
+네이티브 키보드 조작은 `button` 요소를 쓰므로 Enter와 Space가 같은 묶기를 거쳐 버튼 명령에 닿는다. `open`이 있는 tree 노드는 예외로 Enter keydown을 직접 처리한다. `open`을 실행하고 native click을 막는다. 선언 tree 노드는 수정자 없는 ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End 키도 처리한다. [트리 키](#트리-키) 절이 규정한다. 다른 선언 UI 요소에는 키 처리기가 없다. `command`와 `open`이 모두 있는 노드에서 두 번 누르기의 첫 클릭은 `command`를 실행하고 두 번째 클릭(`event.detail === 2`)은 `command` 대신 `open`을 실행한다.
+
+## 트리 키
+
+tree 노드의 focus target은 그 label 컨트롤이 있고 활성이면 label 컨트롤이다. 아니면 가지의 펼침 컨트롤이다. 둘 다 없는 노드에는 focus target이 없다. 모든 가지는 펼침 컨트롤을 가지므로 모든 가지는 focus target을 가진다. tree의 보이는 노드는 그리기가 보여 주는 노드이며 그리기 순서를 따른다. 가지의 자식 노드는 그 가지가 펼쳐져 있는 동안에만 보인다.
+
+키는 보이는 노드의 label 컨트롤이나 펼침 컨트롤에 키보드 포커스가 있는 동안 적용된다. 수정자(Shift, Control, Alt, Meta)가 있는 키는 처리하지 않는다. 처리한 키는 `preventDefault`를 호출하므로, 키 때문에 사이드바가 스크롤되지 않는다. 아래 어떤 행에도 해당하지 않는 키는 처리하지 않으며 기본 동작을 유지한다.
+
+- ArrowDown은 다음 보이는 노드 가운데 focus target이 있는 노드의 focus target으로 포커스를 옮긴다. 그런 마지막 노드에서는 포커스가 그대로 있다.
+- ArrowUp은 이전 보이는 노드 가운데 focus target이 있는 노드의 focus target으로 포커스를 옮긴다. 그런 첫 노드에서는 포커스가 그대로 있다.
+- Home과 End는 focus target이 있는 첫 보이는 노드와 마지막 보이는 노드의 focus target으로 포커스를 옮긴다.
+- ArrowRight는 접힌 가지에서 `expanded: true`로 `core.declared-ui.tree.expand`를 실행한다. 펼쳐진 가지에서는 첫 자식 노드 가운데 focus target이 있는 노드의 focus target으로 포커스를 옮긴다. 그런 자식 노드가 없으면 포커스가 그대로 있다. 잎에서는 처리하지 않는다.
+- ArrowLeft는 펼쳐진 가지에서 `expanded: false`로 `core.declared-ui.tree.expand`를 실행한다. 접힌 가지나 잎에서는 부모 노드의 focus target으로 포커스를 옮긴다. 부모가 없는 루트 노드에서는 포커스가 그대로 있다.
+
+포커스 이동은 `core.declared-ui.tree.move {status, tree, path, key}`를 실행한다. `key`는 누른 키다. 이 명령은 `packages/workbench/exposure.json`에 처리기와 함께 선언된다. 펼침 행은 묶기 절이 정하는 대로 `core.declared-ui.tree.expand`를 실행한다. 키 행은 [exposure](exposure.ko.md#키보드-단축키)의 키보드 단축키 표에 있다. 이동 명령은 그려진 tree 안의 포커스만 바꾸며 source에 요청을 보내지 않는다.
+
+다시 그릴 때 포커스는 남는 컨트롤에 머문다. 받아들인 값이 포커스가 있던 컨트롤을 없애면, 값을 받기 전 그리기에서 그 노드보다 앞에 있고 받아들인 값에서도 focus target을 가진 가장 가까운 노드의 focus target으로 포커스를 옮긴다. 그런 노드가 없으면 받아들인 값의 같은 tree에서 focus target을 가진 첫 노드의 focus target으로 옮긴다. 둘 다 없으면 포커스는 문서 body로 옮긴다. 거부된 값이나 source 변경이 포커스가 있던 컨트롤을 없애면 포커스는 문서 body로 옮긴다.
 
 ## status 대응
 

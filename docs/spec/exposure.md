@@ -53,7 +53,7 @@ People and external clients operate a document through the same entries.
 - Every user operation of a document runs a declared command. A control points to its command with `data-command="<name>"` and, for fixed parameters, `data-params` with a JSON object. A control that enters a value adds it as the parameter named by `data-value` (`value` by default). Commands are declared first (`exposure.json`, `plugin.json`); a document connects elements only to declared commands with `createBinder(run)` of `@soksak/plugin-api`: `bind(element, name, params, {event, when, stop, failed})` runs the command on an event, `mark(element, name, params, valueName)` sets the attributes, and `delegate(root)` runs clicks and value changes of marked descendants that `bind` has not connected; an element connected with `bind` runs its command only on its own event, so a text field bound to Enter does not run its command again on the `change` that the same Enter fires. Binding or marking an undeclared name throws. The workbench uses `packages/workbench/commands.js` (a binder over the registry), and a plugin page uses `expose.bind`, `expose.mark`, and `expose.delegate`, which run the commands the page registered. Handlers do not call module functions themselves. A continuous gesture, such as a tab drag, has a command that produces its result (`core.tab.move`), and keyboard shortcuts run commands.
 - Every visible state of a document can be read through a status.
 - Every interactive element (`button`, `input`, `select`, `textarea`, `role="button"`, and `contenteditable`) is connected to a command, either bound or carrying `data-command` under a delegated root, and has a dom name.
-- A declared UI tree node with `open` handles Enter keydown by running `open` and preventing the native click. Its click handler runs `open` on the second click of a double press (`event.detail === 2`), instead of its ordinary `command`. No other declared UI element has a key handler ([declared UI](declared-ui.md#binding)).
+- A declared UI tree node with `open` handles Enter keydown by running `open` and preventing the native click. Its click handler runs `open` on the second click of a double press (`event.detail === 2`), instead of its ordinary `command`. A declared UI tree node handles the keys that the [Tree keys](declared-ui.md#tree-keys) section of declared UI specifies. No other declared UI element has a key handler ([declared UI](declared-ui.md#binding)).
 - A redraw keeps every control that stays in the document in its place and moves a control only when its order is wrong. WebKit sends no `click` for a press whose element left the document between the press and the release, and moving an element with `insertBefore` takes it out of the document first, so a redraw that moved a control lost a click pressed during it. A plugin page draws a list of controls with `drawList` of `@soksak/plugin-api`, which keeps the element of each key in place.
 - A native modal renders a copy of its element and answers with the control's key; the main page runs the command of the matching control in its own element.
 
@@ -94,6 +94,14 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `Enter` | workbench | core.library.form.submit | — | A library form field has focus |
 | `Escape` | workbench | core.picker.close | — | A picker layer is open |
 | `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
+| `ArrowDown` | workbench | core.declared-ui.tree.move | — | A label or expand control of a declared tree node has focus |
+| `ArrowUp` | workbench | core.declared-ui.tree.move | — | A label or expand control of a declared tree node has focus |
+| `Home` | workbench | core.declared-ui.tree.move | — | A label or expand control of a declared tree node has focus |
+| `End` | workbench | core.declared-ui.tree.move | — | A label or expand control of a declared tree node has focus |
+| `ArrowRight` | workbench | core.declared-ui.tree.expand | — | A collapsed branch has focus |
+| `ArrowRight` | workbench | core.declared-ui.tree.move | — | An expanded branch has focus |
+| `ArrowLeft` | workbench | core.declared-ui.tree.expand | — | An expanded branch has focus |
+| `ArrowLeft` | workbench | core.declared-ui.tree.move | — | A collapsed branch or a leaf has focus |
 | `Escape` | view | none | — | A plugin view has keyboard focus; the view handles the key itself, and runs the Escape command of an open picker only when it forwards the key |
 | `text input keys` | view | none | — | A plugin view has a text input focused; the view handles the key itself and it keeps its default action |
 

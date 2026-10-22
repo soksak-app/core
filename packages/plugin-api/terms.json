@@ -496,6 +496,12 @@
       "definition": "The value that the host page of a plugin saves through its channel and that the host keeps for the next start of the page (docs/spec/plugin-host.md).",
       "rejected": [],
       "allowed": []
+    },
+    {
+      "term": "focus target",
+      "definition": "The control that keyboard focus moves to for a declared tree node: its label control when that control exists and is enabled, otherwise the expand control of a branch (docs/spec/declared-ui.md, Tree keys).",
+      "rejected": [],
+      "allowed": []
     }
   ]
 }
