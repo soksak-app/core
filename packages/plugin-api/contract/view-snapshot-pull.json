@@ -1,0 +1,177 @@
+{
+  "surface": "packages/plugin-api/view.js#createViewBridge snapshots",
+  "description": "Ordered steps of the declared UI snapshot channel of a view page. A push step pushes the value of a status through the snapshot sender of the bridge, and the posted message is the declared-ui.snapshot message with its seq (the count of the pushes of the status) and skipped count. A request step delivers the host call declared-ui.snapshot.request with {status} to the view, and the posted message is the reply: {sok, reply, result: {seq, value}} for a status, where value is null and seq is 0 when the status has no pushed value (docs/spec/declared-ui.md, pull; docs/spec/native-surfaces.md, declared UI snapshots), or {sok, reply, error} when the request has no status name (code -32602). A push while the previous snapshot is in transit is kept as the latest value and is posted with the next snapshot, so it posts nothing at its step.",
+  "cases": [
+    {
+      "id": "view.snapshot.pull-without-a-pushed-value-replies-null",
+      "steps": [
+        {
+          "request": {
+            "id": 1,
+            "params": {
+              "status": "demo.panel"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "reply": 1,
+                "result": {
+                  "seq": 0,
+                  "value": null
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.snapshot.pull-replies-the-pushed-value",
+      "steps": [
+        {
+          "push": {
+            "status": "demo.panel",
+            "value": {
+              "rows": [
+                1
+              ]
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "event": "declared-ui.snapshot",
+                "plugin": "probe",
+                "status": "demo.panel",
+                "seq": 1,
+                "value": {
+                  "rows": [
+                    1
+                  ]
+                },
+                "skipped": 0
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "id": 2,
+            "params": {
+              "status": "demo.panel"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "reply": 2,
+                "result": {
+                  "seq": 1,
+                  "value": {
+                    "rows": [
+                      1
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.snapshot.pull-replies-the-last-pushed-value",
+      "steps": [
+        {
+          "push": {
+            "status": "demo.panel",
+            "value": {
+              "rows": [
+                1
+              ]
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "event": "declared-ui.snapshot",
+                "plugin": "probe",
+                "status": "demo.panel",
+                "seq": 1,
+                "value": {
+                  "rows": [
+                    1
+                  ]
+                },
+                "skipped": 0
+              }
+            ]
+          }
+        },
+        {
+          "push": {
+            "status": "demo.panel",
+            "value": {
+              "rows": [
+                2
+              ]
+            }
+          },
+          "output": {
+            "posted": []
+          }
+        },
+        {
+          "request": {
+            "id": 3,
+            "params": {
+              "status": "demo.panel"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "reply": 3,
+                "result": {
+                  "seq": 2,
+                  "value": {
+                    "rows": [
+                      2
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.snapshot.pull-refuses-a-missing-status",
+      "steps": [
+        {
+          "request": {
+            "id": 1,
+            "params": {}
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "reply": 1,
+                "error": {
+                  "code": -32602,
+                  "message": "declared-ui.snapshot.request requires a status name"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
