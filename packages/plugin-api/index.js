@@ -1796,6 +1796,7 @@ export function createExpose(port, load) {
     }),
     dispose: async () => {
       binder.dispose();
+      // default: stopRequests is null when the page never became ready, so no request listener was added.
       stopRequests?.();
       stopRequests = null;
       loaded?.clear();
