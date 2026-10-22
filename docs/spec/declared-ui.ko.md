@@ -161,6 +161,7 @@ tree 노드의 focus target은 그 label 컨트롤이 있고 활성이면 label 
 - 거부된 값은 section을 비우며 plugin의 출처 상태를 바꾸지 않는다. 다음에 받아들인 값이 가지의 expansion을 다시 정한다. 출처가 바뀌어도 section을 비우며 새 출처의 값이 expansion을 정한다.
 - 받아들인 값에서 잎이 된 경로에는 펼침 제어가 없다. 이후 그 경로가 가지가 되면 새로 받아들인 `expanded` 값으로 그린다.
 - pull 응답의 `value`가 `null`이면 출처에 아직 값이 없다는 뜻이다. section은 출처의 첫 push까지 비워진 채로 남는다. pull 응답의 `seq`는 출처의 마지막 선언된 UI snapshot의 seq이며, `value`가 `null`이면 0이다. 출처에서 마지막으로 받아들인 값의 `seq`보다 `seq`가 낮은 pull 응답은 검사 없이 버린다. 그 밖의 `null`이 아닌 pull 응답은 검사 규칙을 따른다.
+- pull이 실패하면(출처가 오류로 답하거나 호출이 거부되면) section은 비워진 채로 남는다. 마지막으로 받아들인 값도, 빈 트리도 그리지 않는다. 그 오류는 오류 표시 경로를 거쳐 한 번 보고된다(응용 프로그램 로그의 `error: <where>: <text>`, [오류 표시](native-surfaces.ko.md#view-표면)와 같다). section은 이 오류를 거부 문구로 보여주지 않는다. workbench는 실패한 pull을 타이머나 다른 일정으로 다시 시도하지 않는다. 다음 pull은 (c)의 다음 출처 변경 때 하나뿐이다.
 - `selected`를 바꾸는 core 명령이 없으므로, 받아들인 모든 값에서 plugin의 값이 적용된다.
 - plugin 프로세스가 재시작하면 이전 등록을 지우고 새 프로세스를 등록해 출처를 다시 고른다. 새 출처의 받아들인 값이 모든 가지 상태를 정한다.
 - workbench는 expansion 상태를 공간이나 프로젝트에 저장하지 않는다. main page를 다시 불러오면 plugin의 받아들인 `expanded` 값으로 그린다.
