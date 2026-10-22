@@ -166,7 +166,7 @@ test("the page expose binds only commands declared for the page and runs registe
   const port = { onRequest: async (fn) => handlers.push(fn), reply() {}, register: async () => {} };
   const declared = declarationMap({
     status: [],
-    commands: [{ name: "fixture.press", description: "Press.", params: { type: "object", properties: { id: { type: "string" } } }, result: {} }],
+    commands: [{ name: "fixture.press", description: "Press.", params: { type: "object", properties: { id: { type: "string" } } }, result: { type: "null" } }],
     dom: [],
   });
   const expose = createExpose(port, async () => declared);

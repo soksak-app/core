@@ -14,7 +14,7 @@ const { onAnswer } = await import("../card.js");
 registry.declare("core", {
   status: [],
   commands: [
-    { name: "core.modal.dismiss", description: "Dismisses the open native menu.", params: { type: "object", properties: {} }, result: {} },
+    { name: "core.modal.dismiss", description: "Dismisses the open native menu.", params: { type: "object", properties: {} }, result: { type: "null" } },
   ],
   dom: [],
 });

@@ -14,7 +14,7 @@ registry.declare("core", {
   status: [],
   commands: [
     { name: "core.fixture.press", description: "Press.", params: { type: "object", properties: { id: { type: "string" } } }, result: {} },
-    { name: "core.fixture.put", description: "Put.", params: { type: "object", properties: { key: { type: "string" }, text: { type: "string" } } }, result: {} },
+    { name: "core.fixture.put", description: "Put.", params: { type: "object", properties: { key: { type: "string" }, text: { type: "string" } } }, result: { type: "null" } },
   ],
   dom: [],
 });

@@ -26,7 +26,7 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
   t.mock.module("../plane.js", { exports: { ...actualPlane,
     closeTabById: (tab) => {
       events.push(`close ${tab}`);
-      return new Promise((resolve) => { finishClose = () => { events.push(`closed ${tab}`); resolve(); }; });
+      return new Promise((resolve) => { finishClose = () => { events.push(`closed ${tab}`); resolve({ closed: true }); }; });
     },
   } });
   const { registry } = await import("../exposure.js");
