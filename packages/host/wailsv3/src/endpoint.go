@@ -52,6 +52,26 @@ type RPCError struct {
 	Message string `json:"message"`
 }
 
+// UnmarshalJSON reads an error member, which names its code and its message. A member without either is refused, so no code 0 or
+// empty message stands for it.
+func (e *RPCError) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Code    *int    `json:"code"`
+		Message *string `json:"message"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw.Code == nil {
+		return errors.New("error has no code")
+	}
+	if raw.Message == nil {
+		return errors.New("error has no message")
+	}
+	e.Code, e.Message = *raw.Code, *raw.Message
+	return nil
+}
+
 func (e *RPCError) Error() string { return fmt.Sprintf("%d: %s", e.Code, e.Message) }
 
 func rpcError(code int, format string, args ...any) *RPCError {

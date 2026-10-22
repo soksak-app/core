@@ -427,3 +427,13 @@ func TestPluginHostCreationKeepsTheSidecarStopOfItsPlugin(t *testing.T) {
 		t.Fatal("the creation of the plugin host cleared the sidecar stop of its plugin")
 	}
 }
+
+// A view.error without a reason is refused with an error that names the plugin. An empty reason would give an error with no text.
+// contract: plugin-host.channel.view-error-without-reason-is-refused
+func TestViewErrorWithoutAReasonIsRefused(t *testing.T) {
+	windows, _ := restartWindows(t, hostFixture(t), &hostViewPlatform{})
+	err := windows[0].pluginHostMessage("probe", hostMessage(`{"event": "view.error"}`))
+	if err == nil || err.Error() != "plugin probe: view.error has no reason" {
+		t.Fatalf("view.error without a reason gave %v, want the refusal that names the plugin", err)
+	}
+}

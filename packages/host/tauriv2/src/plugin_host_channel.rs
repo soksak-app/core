@@ -235,12 +235,14 @@ impl PluginHostChannels {
                 channel.process_ready = true;
                 Ok(Received::Ready { first })
             }
-            "view.error" => Err(fields
+            "view.error" => match fields
                 .get("reason")
                 .and_then(Value::as_str)
-                // default: a view.error without a reason is logged as the empty reason, which closes nothing.
-                .unwrap_or_default()
-                .to_string()),
+                .filter(|reason| !reason.is_empty())
+            {
+                Some(reason) => Err(reason.to_string()),
+                None => Err(format!("plugin {plugin}: view.error has no reason")),
+            },
             other => Err(format!("plugin {plugin}: event {other:?} is unknown")),
         }
     }

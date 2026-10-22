@@ -27,7 +27,7 @@ use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform;
 use crate::surfaces::label_for;
-use crate::windows::{self, NativeFailure, window_data, with_native_owner};
+use crate::windows::{self, NativeFailure, WindowData, window_data, with_native_owner};
 
 pub use crate::platform::{ButtonHeld, Delivery, FrontmostApplication, Key, Pointer};
 
@@ -527,6 +527,15 @@ impl Relay {
         let Answer { id, result, error } =
             serde_json::from_str::<Answer>(payload.get()).map_err(|error| error.to_string())?;
         let id = id.ok_or("exposure reply has no id")?;
+        // An error member names its code and its message; a reply without either is refused, as the Go host refuses it.
+        if let Some(error) = error.as_ref().filter(|error| !error.is_null()) {
+            if error.get("code").and_then(Value::as_i64).is_none() {
+                return Err("error has no code".into());
+            }
+            if error.get("message").and_then(Value::as_str).is_none() {
+                return Err("error has no message".into());
+            }
+        }
         let waiting = {
             // default: a lock that a panicking thread poisoned still holds the request, which the reply removes; the
             // panic hook records the panic.
@@ -992,14 +1001,7 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
         .state::<Exposure>()
         .relay
         .abandon(&label_for(window, surface));
-    if let Ok(data) = window_data(window) {
-        data.registrations
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the registrations, and the registrations of a closed
-            // surface are removed from them; the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .retain(|(owner, _, _)| owner != surface);
-    }
+    remove_surface_registrations(window_data(window), surface);
     if let Err(error) = emit_to(
         window.app_handle(),
         window.label(),
@@ -1010,7 +1012,44 @@ pub(crate) fn surface_closed(window: &Window, surface: &str) {
     }
 }
 
-/// Ends the requests sent to the main page when it reloads.
+/// Removes the registrations of a closed surface from the window that owned them. A window record that cannot be read leaves
+/// the registrations in place, and the error is recorded.
+fn remove_surface_registrations(data: Result<Arc<WindowData>, String>, surface: &str) {
+    match data {
+        Ok(data) => data
+            .registrations
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the registrations, and the registrations of a closed
+            // surface are removed from them; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|(owner, _, _)| owner != surface),
+        Err(error) => log_error("exposure surface closed", format!("{surface}: {error}")),
+    }
+}
+
+#[cfg(test)]
+mod surface_closed_tests {
+    use super::*;
+
+    // A window record that cannot be read leaves the registrations of the closed surface in place, and the error is recorded.
+    // contract: exposure.surface-closed.window-record-error-is-recorded
+    #[test]
+    fn a_window_record_that_cannot_be_read_is_recorded() {
+        remove_surface_registrations(Err("window is not registered".into()), "probe-surface");
+        let recorded = crate::event_record::buffered_fields("host.record.error");
+        assert!(
+            recorded
+                .iter()
+                .any(|fields| fields["where"] == "exposure surface closed"
+                    && fields["text"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("probe-surface")
+                            && text.contains("window is not registered"))),
+            "no record of the failed window record in {recorded:?}"
+        );
+    }
+}
+
 pub(crate) fn page_reloaded(window: &Window) {
     window.state::<Exposure>().relay.abandon(window.label());
     windows_changed(window.app_handle());
@@ -2292,5 +2331,30 @@ impl Host {
                 self.page_then(window, method, params, timeout, || {})
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod reply_tests {
+    use super::*;
+
+    // An error member of a document reply names its code and its message. A reply without either is refused, as the Go host refuses
+    // it, so no code 0 or empty message is delivered to the request that waits for it.
+    // contract: exposure.reply.error-member-names-code-and-message
+    #[test]
+    fn a_reply_error_without_a_code_or_a_message_is_refused() {
+        let relay = Relay::default();
+        let no_code =
+            RawValue::from_string(r#"{"id": 1, "error": {"message": "failed"}}"#.into()).unwrap();
+        assert_eq!(
+            relay.reply("probe", &no_code).expect_err("no code"),
+            "error has no code"
+        );
+        let no_message =
+            RawValue::from_string(r#"{"id": 1, "error": {"code": -32000}}"#.into()).unwrap();
+        assert_eq!(
+            relay.reply("probe", &no_message).expect_err("no message"),
+            "error has no message"
+        );
     }
 }

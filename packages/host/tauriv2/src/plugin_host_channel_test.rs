@@ -661,3 +661,14 @@ fn a_plugin_host_call_for_a_command_outside_the_allowlist_is_refused() {
         "the command table has no command outside the allowlist"
     );
 }
+
+// A view.error without a reason is refused with an error that names the plugin. An empty reason would give an error with no text.
+// contract: plugin-host.channel.view-error-without-reason-is-refused
+#[test]
+fn a_view_error_without_a_reason_is_refused() {
+    let channels = host_channels(true);
+    let error = channels
+        .receive("probe", &host_message(r#"{"event": "view.error"}"#))
+        .expect_err("a view.error is a failure");
+    assert_eq!(error, "plugin probe: view.error has no reason");
+}

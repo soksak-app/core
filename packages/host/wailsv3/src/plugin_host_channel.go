@@ -354,6 +354,9 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 		// The current theme is the first message to a ready document, as it is for a view (docs/spec/plugin-host.md#channel).
 		return s.postPluginHost(plugin, map[string]any{"event": "theme", "data": s.Theme()})
 	case "view.error":
+		if event.Reason == "" {
+			return fmt.Errorf("plugin %s: view.error has no reason", plugin)
+		}
 		if len(event.Reason) >= len(viewQueueFullPrefix) && event.Reason[:len(viewQueueFullPrefix)] == viewQueueFullPrefix {
 			return pluginHostOverflow{reason: event.Reason}
 		}

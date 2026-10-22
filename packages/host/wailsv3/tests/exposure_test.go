@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -360,5 +361,20 @@ func TestRegistrationCallerAcceptsTheSurfacePageAndTheMainPageOfAView(t *testing
 	}
 	if err := host.CheckRegistrationCaller("", "probe-surface", false, true); err == nil || err.Error() != `this document is not surface "probe-surface"` {
 		t.Fatalf("an unknown caller: %v, want a surface mismatch error", err)
+	}
+}
+
+// An error member of a document reply names its code and its message. A reply without either is refused, so no code 0 or empty
+// message is delivered to the request that waits for it.
+// contract: exposure.reply.error-member-names-code-and-message
+func TestExposureReplyErrorWithoutACodeOrAMessageIsRefused(t *testing.T) {
+	for name, text := range map[string]string{
+		"no code":    `{"id": 1, "error": {"message": "failed"}}`,
+		"no message": `{"id": 1, "error": {"code": -32000}}`,
+	} {
+		var reply host.ExposureReplyRequest
+		if err := json.Unmarshal([]byte(text), &reply); err == nil || !strings.Contains(err.Error(), "error has no") {
+			t.Fatalf("%s: the reply was accepted as %+v (%v)", name, reply, err)
+		}
 	}
 }
