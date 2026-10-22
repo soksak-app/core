@@ -293,7 +293,9 @@ test("exposure audit verifies every declared core entry", { timeout: 5000 }, asy
   assert.match(result.stdout, /Exposure checks passed: core/);
 });
 
-test("build environment audit reports the measured toolchain", { timeout: 5000 }, async () => {
+// The limit bounds a hang: the audit starts the node, pnpm and shasum commands, and `pnpm --version` takes about 2 s alone, more than
+// 5 s when the push gate runs the package tests in parallel (F244-1).
+test("build environment audit reports the measured toolchain", { timeout: 30000 }, async () => {
   const result = await run("sh", [join(root, "scripts/check-build-environment.sh")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /BUILD_ENVIRONMENT_READY node=v\S+ pnpm=\S+ runtime=\S+\/\S+ lockSHA256=[a-f0-9]{64}/);
