@@ -215,6 +215,7 @@ NATIVE_TESTS = observe_test \
   document_report_test \
   document_plugin_test \
   core_root_cors_test \
+  view_import_map_test \
   document_core_root_test \
   document_view_load_test \
   view_channel_test \
