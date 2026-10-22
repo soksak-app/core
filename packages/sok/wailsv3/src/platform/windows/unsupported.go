@@ -50,6 +50,10 @@ func (windows) LockFile(*os.File) error {
 	return errors.New("file locks are not implemented on windows")
 }
 
+func (windows) TryLockFile(*os.File) (bool, error) {
+	return false, errors.New("file locks are not implemented on windows")
+}
+
 func (windows) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on windows")
 }

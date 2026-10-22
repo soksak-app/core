@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	sok "github.com/soksak-app/core/packages/sok/wailsv3/src"
@@ -20,6 +21,14 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 	// the host: the owner's process identifier and boot identifier.
 	lock := filepath.Join(config, "process.lock")
 	if err := os.WriteFile(lock, []byte(fmt.Sprintf(`{"pid":%d,"boot":"1700000000-%d"}`, os.Getpid(), os.Getpid())), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := os.Open(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	if err := syscall.Flock(int(owner.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)

@@ -1,35 +1,73 @@
 {
-  "description": "Cases of the process.lock form (docs/spec/endpoint.md#discovery) that a writing command of sok replays in Go and Rust. A content is written to process.lock, then the command `plugin enable probe` runs. $LIVE is the pid of the test process, which is running; $DEAD is a pid that is not running. The outcome `refused-live` names the owner, `refused-invalid` names the file and its content, and `taken` runs the command beyond the lock.",
+  "description": "Cases of process.lock (docs/spec/endpoint.md#discovery), replayed by the writing commands of sok in Go and Rust and by the host endpoint in Go and Rust. `held` true means that the test holds the advisory lock (flock) on process.lock while the case runs, as a live owner does; `held` false means that no process holds it. The content is written to process.lock before the case runs; $LIVE is the pid of the test process and $DEAD is a pid that is not running. The outcome `refused-live` names the owner's pid read from the file, `refused-held-invalid` and `refused-held-empty` give the held refusal of the hosts, and `taken` means that the lock is free and the writer takes it over.",
   "cases": [
     {
-      "id": "live-current-form",
+      "id": "held-current-form",
+      "held": true,
       "content": "{\"pid\":$LIVE,\"boot\":\"1700000000-1\"}",
+      "pid": "$LIVE",
       "outcome": "refused-live"
     },
     {
-      "id": "dead-current-form",
+      "id": "held-dead-pid",
+      "held": true,
+      "content": "{\"pid\":$DEAD,\"boot\":\"1700000000-1\"}",
+      "pid": "$DEAD",
+      "outcome": "refused-live"
+    },
+    {
+      "id": "held-bare-pid",
+      "held": true,
+      "content": "$LIVE",
+      "outcome": "refused-held-invalid"
+    },
+    {
+      "id": "held-empty",
+      "held": true,
+      "content": "",
+      "outcome": "refused-held-empty"
+    },
+    {
+      "id": "held-unknown-member",
+      "held": true,
+      "content": "{\"pid\":$LIVE,\"boot\":\"1700000000-1\",\"extra\":1}",
+      "outcome": "refused-held-invalid"
+    },
+    {
+      "id": "held-zero-pid",
+      "held": true,
+      "content": "{\"pid\":0,\"boot\":\"1700000000-1\"}",
+      "outcome": "refused-held-invalid"
+    },
+    {
+      "id": "free-current-form-dead-pid",
+      "held": false,
       "content": "{\"pid\":$DEAD,\"boot\":\"1700000000-1\"}",
       "outcome": "taken"
     },
     {
-      "id": "bare-pid-is-not-the-form",
+      "id": "free-current-form-live-pid",
+      "held": false,
+      "content": "{\"pid\":$LIVE,\"boot\":\"1700000000-1\"}",
+      "outcome": "taken"
+    },
+    {
+      "id": "free-bare-pid",
+      "held": false,
       "content": "$LIVE",
-      "outcome": "refused-invalid"
+      "outcome": "taken"
     },
     {
-      "id": "empty-file-is-not-the-form",
+      "id": "free-empty",
+      "held": false,
       "content": "",
-      "outcome": "refused-invalid"
+      "outcome": "taken"
     },
     {
-      "id": "unknown-member-is-not-the-form",
+      "id": "free-unknown-member",
+      "held": false,
       "content": "{\"pid\":$LIVE,\"boot\":\"1700000000-1\",\"extra\":1}",
-      "outcome": "refused-invalid"
-    },
-    {
-      "id": "zero-pid-is-not-the-form",
-      "content": "{\"pid\":0,\"boot\":\"1700000000-1\"}",
-      "outcome": "refused-invalid"
+      "outcome": "taken"
     }
   ]
 }

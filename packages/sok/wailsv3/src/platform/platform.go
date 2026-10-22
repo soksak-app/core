@@ -36,6 +36,9 @@ type Platform interface {
 	// LockFile takes an exclusive advisory lock on the open file and waits until it holds it, so the processes that update one
 	// index exclude each other (docs/spec/logging.md#index). Closing the file releases the lock.
 	LockFile(file *os.File) error
+	// TryLockFile takes an exclusive advisory lock (flock LOCK_EX|LOCK_NB) on the open file without waiting. It reports false when
+	// another open file holds the lock, which is the ownership of the configuration directory (docs/spec/endpoint.md#discovery).
+	TryLockFile(file *os.File) (bool, error)
 }
 
 var current Platform

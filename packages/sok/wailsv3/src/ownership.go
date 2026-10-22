@@ -24,6 +24,9 @@ type lockOwner struct {
 // lockReportBytes is the number of bytes of a lock content that a refusal reports.
 const lockReportBytes = 256
 
+// lockAttempts is how many times the acquisition opens the lock file again after the file that it opened was replaced.
+const lockAttempts = 8
+
 // parseLockOwner reads the owner that the contents of a lock file name: one JSON object with a positive pid and a non-empty
 // boot, and no other member. Another form is not an owner.
 func parseLockOwner(contents []byte) (lockOwner, bool) {
@@ -39,62 +42,109 @@ func parseLockOwner(contents []byte) (lockOwner, bool) {
 	return owner, owner.PID > 0 && owner.Boot != ""
 }
 
-// ownConfiguration acquires the process lock of the configuration directory for the duration of a write: the file
-// process.lock is created exclusively with the owner of this process in the form of the host, a lock of a live process refuses
-// with the error the hosts use, a lock of an ended process is removed and retried once, and a lock in another form refuses with
-// its content (docs/spec/endpoint.md#discovery, docs/spec/installation.md). The returned release removes the lock and is nil on
-// failure.
+// lockReport is the first bytes of a lock content for a refusal, with an invalid sequence replaced.
+func lockReport(contents []byte) string {
+	return strings.ToValidUTF8(string(contents[:min(len(contents), lockReportBytes)]), "�")
+}
+
+// heldRefusal is the refusal of a command beside a live owner, which holds the advisory lock: the owner's pid when the content is
+// the current form, and the content otherwise, as the hosts report it (docs/spec/endpoint.md#discovery).
+func heldRefusal(configDir string, contents []byte) error {
+	if owner, ok := parseLockOwner(contents); ok {
+		return fmt.Errorf("configuration directory %s is already owned by process %d", configDir, owner.PID)
+	}
+	if len(bytes.TrimSpace(contents)) == 0 {
+		return fmt.Errorf("configuration directory %s is already owned by a live process", configDir)
+	}
+	return fmt.Errorf("configuration directory %s is already owned by a live process; process.lock is not the current form: %s", configDir, lockReport(contents))
+}
+
+// namedFile reports whether file is the file that path names now. A missing path names no file.
+func namedFile(file *os.File, path string) (bool, error) {
+	opened, err := file.Stat()
+	if err != nil {
+		return false, err
+	}
+	named, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(opened, named), nil
+}
+
+// ownConfiguration acquires the process lock of the configuration directory for the duration of a write. The lock is the advisory
+// lock (flock) on process.lock, the lock that the host takes, and it is held until the returned release runs: a held lock refuses
+// the command with the owner's pid, and a free lock file is taken over and rewritten with the owner of this command. The release
+// removes the file while it still holds the lock, then unlocks (docs/spec/endpoint.md#discovery). It is nil on failure.
 func ownConfiguration(configDir string) (func(), error) {
 	path := filepath.Join(configDir, "process.lock")
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		return nil, fmt.Errorf("configuration directory %s: %w", configDir, err)
 	}
-	for attempt := 0; attempt < 2; attempt++ {
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err == nil {
-			// The boot identifier of a sok run is the one of its event file: the start time in seconds and the process identifier.
-			contents, err := json.Marshal(lockOwner{PID: os.Getpid(), Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid())})
-			if err != nil {
-				return nil, errors.Join(err, file.Close(), os.Remove(path))
-			}
-			if _, err := file.Write(contents); err != nil {
-				return nil, errors.Join(err, file.Close(), os.Remove(path))
-			}
-			if err := file.Sync(); err != nil {
-				return nil, errors.Join(err, file.Close(), os.Remove(path))
-			}
-			if err := file.Close(); err != nil {
-				return nil, errors.Join(err, os.Remove(path))
-			}
-			return func() {
-				if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-					fmt.Fprintf(os.Stderr, "sok: configuration directory %s: release: %v\n", configDir, err)
-				}
-			}, nil
-		}
-		if !errors.Is(err, os.ErrExist) || attempt != 0 {
+	system, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	for attempt := 0; attempt < lockAttempts; attempt++ {
+		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+		if err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
-		contents, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return nil, fmt.Errorf("%s: %w", path, readErr)
-		}
-		owner, ok := parseLockOwner(contents)
-		if !ok {
-			// A lock of another form is refused and kept: its owner is unknown, so it is not removed.
-			report := string(contents[:min(len(contents), lockReportBytes)])
-			return nil, fmt.Errorf("%s: process.lock is not the current form: %s", path, strings.ToValidUTF8(report, "�"))
-		}
-		current, err := platform.Current()
+		locked, err := system.TryLockFile(file)
 		if err != nil {
-			return nil, err
+			return nil, errors.Join(err, file.Close())
 		}
-		if running := current.ProcessRunning(owner.PID); running == nil {
-			return nil, fmt.Errorf("configuration directory %s is already owned by process %d", configDir, owner.PID)
+		if !locked {
+			// The owner removes the file before it unlocks, so a file that is gone now was released.
+			contents, readErr := os.ReadFile(path)
+			if errors.Is(readErr, os.ErrNotExist) {
+				if err := file.Close(); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			if readErr != nil {
+				return nil, errors.Join(readErr, file.Close())
+			}
+			return nil, errors.Join(heldRefusal(configDir, contents), file.Close())
 		}
-		if err := os.Remove(path); err != nil {
-			return nil, err
+		// The file at path was replaced after this open, so the lock is on a file that no longer names the lock.
+		named, err := namedFile(file, path)
+		if err != nil {
+			return nil, errors.Join(err, file.Close())
 		}
+		if !named {
+			if err := file.Close(); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		// The owner of this command is written in the form of the host. The boot identifier is the one of the event file of a sok run:
+		// the start time in seconds and the process identifier.
+		contents, err := json.Marshal(lockOwner{PID: os.Getpid(), Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid())})
+		if err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		if err := file.Truncate(0); err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		if _, err := file.WriteAt(contents, 0); err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		if err := file.Sync(); err != nil {
+			return nil, errors.Join(err, file.Close())
+		}
+		return func() {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				fmt.Fprintf(os.Stderr, "sok: configuration directory %s: release: %v\n", configDir, err)
+			}
+			if err := file.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "sok: configuration directory %s: release: %v\n", configDir, err)
+			}
+		}, nil
 	}
 	return nil, fmt.Errorf("could not acquire process lock %s", path)
 }

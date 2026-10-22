@@ -1,10 +1,10 @@
-//! The ownership of the configuration directory for the duration of a write of a command: the file `process.lock` is
-//! created exclusively with the owner of this process in the form of the host, a lock of a live process refuses with the
-//! error the hosts use, a lock of an ended process is removed and retried once, and a lock in another form refuses with its
-//! content (docs/spec/endpoint.md#discovery, docs/spec/installation.md).
+//! The ownership of the configuration directory for the duration of a write of a command. The lock is the advisory lock (flock)
+//! on `process.lock`, the lock that the host takes; it is held until the release runs. A held lock refuses the command with the
+//! owner's pid, and a free lock file is taken over and rewritten with the owner of this command. The release removes the file
+//! while it still holds the lock, then unlocks (docs/spec/endpoint.md#discovery, docs/spec/installation.md).
 
-use std::fs;
-use std::io::Write;
+use std::fs::{self, File, TryLockError};
+use std::io::{Seek, SeekFrom, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
@@ -24,6 +24,9 @@ struct LockOwner {
 /// The number of bytes of a lock content that a refusal reports.
 const LOCK_REPORT_BYTES: usize = 256;
 
+/// How many times the acquisition opens the lock file again after the file that it opened was replaced.
+const LOCK_ATTEMPTS: usize = 8;
+
 /// The owner of a lock content, or None when the content is not the form.
 fn parse_lock_owner(contents: &[u8]) -> Option<LockOwner> {
     // default: contents that do not parse are not the current form, and the callers report them with the content.
@@ -36,84 +39,91 @@ fn reported_content(contents: &[u8]) -> String {
     String::from_utf8_lossy(&contents[..contents.len().min(LOCK_REPORT_BYTES)]).into_owned()
 }
 
-/// Acquires the process lock and returns the release that removes it. The caller owns the configuration directory for
-/// the duration of its write.
+/// The refusal of a command beside a live owner, which holds the advisory lock: the owner's pid when the content is the current
+/// form, and the content otherwise, as the hosts report it (docs/spec/endpoint.md#discovery).
+fn held_refusal(config_dir: &Path, contents: &[u8]) -> String {
+    if let Some(owner) = parse_lock_owner(contents) {
+        return format!(
+            "configuration directory {} is already owned by process {}",
+            config_dir.display(),
+            owner.pid
+        );
+    }
+    if contents.iter().all(u8::is_ascii_whitespace) {
+        return format!(
+            "configuration directory {} is already owned by a live process",
+            config_dir.display()
+        );
+    }
+    format!(
+        "configuration directory {} is already owned by a live process; process.lock is not the current form: {}",
+        config_dir.display(),
+        reported_content(contents)
+    )
+}
+
+/// Acquires the process lock and returns the release that removes the file and then unlocks. The caller owns the configuration
+/// directory for the duration of its write.
 pub(crate) fn own_configuration(config_dir: &Path) -> Result<Box<dyn FnOnce() + 'static>, String> {
     fs::create_dir_all(config_dir)
         .map_err(|error| format!("configuration directory {}: {error}", config_dir.display()))?;
     let path = config_dir.join("process.lock");
-    for attempt in 0..2 {
-        match fs::OpenOptions::new()
+    let system = platform::current()?;
+    for _ in 0..LOCK_ATTEMPTS {
+        let file: File = fs::OpenOptions::new()
+            .read(true)
             .write(true)
-            .create_new(true)
+            .create(true)
             .mode(0o600)
             .open(&path)
-        {
-            Ok(mut file) => {
-                // The boot identifier of a sok run is the one of its event file: the start time in seconds and the process identifier.
-                let pid = std::process::id();
-                let seconds = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |since| since.as_secs());
-                let owner = LockOwner {
-                    pid: pid as i32,
-                    boot: format!("{seconds}-{pid}"),
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(TryLockError::WouldBlock) => {
+                // The owner removes the file before it unlocks, so a file that is gone now was released.
+                let contents = match fs::read(&path) {
+                    Ok(contents) => contents,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(error) => return Err(format!("{}: {error}", path.display())),
                 };
-                let text = serde_json::to_string(&owner)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
-                if let Err(error) = file.write_all(text.as_bytes()) {
-                    // A lock whose pid cannot be written is removed, so no later command reads a partial owner.
-                    if let Err(remove_error) = fs::remove_file(&path) {
-                        eprintln!(
-                            "sok: {}: remove after a failed write: {remove_error}",
-                            path.display()
-                        );
-                    }
-                    return Err(format!("{}: {error}", path.display()));
-                }
-                if let Err(error) = file.sync_all() {
-                    if let Err(remove_error) = fs::remove_file(&path) {
-                        eprintln!(
-                            "sok: {}: remove after a failed sync: {remove_error}",
-                            path.display()
-                        );
-                    }
-                    return Err(format!("{}: {error}", path.display()));
-                }
-                let path = path.clone();
-                let dir = config_dir.display().to_string();
-                return Ok(Box::new(move || {
-                    if let Err(error) = fs::remove_file(&path) {
-                        // A lock that another command already removed is gone; every other failure is named.
-                        if error.kind() != std::io::ErrorKind::NotFound {
-                            eprintln!("sok: configuration directory {dir}: release: {error}");
-                        }
-                    }
-                }));
+                return Err(held_refusal(config_dir, &contents));
             }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && attempt == 0 => {
-                let contents =
-                    fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-                let Some(owner) = parse_lock_owner(&contents) else {
-                    // A lock of another form is refused and kept: its owner is unknown, so it is not removed.
-                    return Err(format!(
-                        "{}: process.lock is not the current form: {}",
-                        path.display(),
-                        reported_content(&contents)
-                    ));
-                };
-                let pid = owner.pid;
-                let running = platform::current()?.process_running(pid).is_ok();
-                if running {
-                    return Err(format!(
-                        "configuration directory {} is already owned by process {pid}",
-                        config_dir.display()
-                    ));
-                }
-                fs::remove_file(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-            }
-            Err(error) => return Err(format!("{}: {error}", path.display())),
+            Err(TryLockError::Error(error)) => return Err(format!("{}: {error}", path.display())),
         }
+        // The file at path was replaced after this open, so the lock is on a file that no longer names the lock.
+        if !system.same_file(&file, &path)? {
+            continue;
+        }
+        // The owner of this command is written in the form of the host. The boot identifier is the one of the event file of a sok
+        // run: the start time in seconds and the process identifier.
+        let pid = std::process::id();
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs());
+        let owner = LockOwner {
+            pid: pid as i32,
+            boot: format!("{seconds}-{pid}"),
+        };
+        let text = serde_json::to_string(&owner)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let mut writer = &file;
+        writer
+            .set_len(0)
+            .and_then(|()| writer.seek(SeekFrom::Start(0)).map(|_| ()))
+            .and_then(|()| writer.write_all(text.as_bytes()))
+            .and_then(|()| file.sync_all())
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let dir = config_dir.display().to_string();
+        return Ok(Box::new(move || {
+            if let Err(error) = fs::remove_file(&path) {
+                // A lock that another command already removed is gone; every other failure is named.
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    eprintln!("sok: configuration directory {dir}: release: {error}");
+                }
+            }
+            // Dropping the file closes it, which releases the advisory lock.
+            drop(file);
+        }));
     }
     Err(format!("could not acquire process lock {}", path.display()))
 }

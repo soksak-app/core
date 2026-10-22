@@ -119,6 +119,19 @@ func (darwin) MonotonicNanos() (uint64, error) {
 	return uint64(now.Sec)*1_000_000_000 + uint64(now.Nsec), nil
 }
 
+// TryLockFile takes flock(LOCK_EX|LOCK_NB) on the file, the lock that the host takes. A lock held by another open file is
+// reported as false, not as an error.
+func (darwin) TryLockFile(file *os.File) (bool, error) {
+	err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB)
+	if errors.Is(err, unix.EWOULDBLOCK) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("%s cannot be locked: %w", file.Name(), err)
+	}
+	return true, nil
+}
+
 // LockFile takes flock(LOCK_EX) on the file, which excludes the other open files of the same file in every process.
 func (darwin) LockFile(file *os.File) error {
 	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {

@@ -1,4 +1,4 @@
-//! Replays every case of the process.lock form table (docs/spec/cases/process-lock.json) through a writing command of sok
+//! Replays every case of the process.lock table (docs/spec/cases/process-lock.json) through a writing command of sok
 //! (docs/spec/endpoint.md#discovery, docs/spec/installation.md).
 
 use std::path::Path;
@@ -10,11 +10,14 @@ mod folder;
 
 use folder::Folder;
 
-/// One case of the table: the content of process.lock and the outcome of the writing command beside it.
+/// One case of the table: the content of process.lock, whether a live owner holds its lock, and the outcome of the command.
 #[derive(Deserialize)]
 struct LockCase {
     id: String,
+    held: bool,
     content: String,
+    #[serde(default)]
+    pid: String,
     outcome: String,
 }
 
@@ -54,41 +57,47 @@ fn cases() -> Vec<LockCase> {
 
 // contract: cli.plugin.lock-form-cases
 #[test]
-fn a_writing_command_reads_the_process_lock_form_of_the_case_table() {
+fn a_writing_command_reads_the_process_lock_case_table() {
     const DEAD_PID: &str = "2147483646";
     let live = std::process::id().to_string();
+    let substitute = |text: &str| text.replace("$LIVE", &live).replace("$DEAD", DEAD_PID);
     let mut failures = Vec::new();
     for case in cases() {
         let config = Folder::new("process-lock");
         let lock = config.path().join("process.lock");
-        let content = case
-            .content
-            .replace("$LIVE", &live)
-            .replace("$DEAD", DEAD_PID);
+        let content = substitute(&case.content);
         std::fs::write(&lock, &content).expect("write process.lock");
+        // A live owner holds the advisory lock for the case; the lock is released when the case ends.
+        let owner = if case.held {
+            let owner = std::fs::File::open(&lock).expect("open process.lock");
+            owner.try_lock().expect("hold process.lock as a live owner");
+            Some(owner)
+        } else {
+            None
+        };
         let (code, _, stderr) = run(&["plugin", "enable", "probe", "--config-dir", config.text()]);
+        let owned = format!("configuration directory {} is already owned", config.text());
         let problem = match case.outcome.as_str() {
             "refused-live" => {
+                let want = format!("sok: {owned} by process {}\n", substitute(&case.pid));
+                (code != 1 || stderr != want)
+                    .then(|| format!("code {code} stderr {stderr:?}, want {want:?}"))
+            }
+            "refused-held-invalid" => {
                 let want = format!(
-                    "sok: configuration directory {} is already owned by process {live}\n",
-                    config.text()
+                    "sok: {owned} by a live process; process.lock is not the current form: {content}\n"
                 );
                 (code != 1 || stderr != want)
                     .then(|| format!("code {code} stderr {stderr:?}, want {want:?}"))
             }
-            "refused-invalid" => {
-                let want = format!(
-                    "sok: {}: process.lock is not the current form: {content}\n",
-                    lock.display()
-                );
+            "refused-held-empty" => {
+                let want = format!("sok: {owned} by a live process\n");
                 (code != 1 || stderr != want)
                     .then(|| format!("code {code} stderr {stderr:?}, want {want:?}"))
             }
             "taken" => {
                 if stderr.contains("already owned") || stderr.contains("process.lock") {
-                    Some(format!(
-                        "the command refused a lock that it should take: {stderr:?}"
-                    ))
+                    Some(format!("the command refused a free lock: {stderr:?}"))
                 } else if lock.exists() {
                     Some("the command did not release the lock it took".to_string())
                 } else {
@@ -97,6 +106,7 @@ fn a_writing_command_reads_the_process_lock_form_of_the_case_table() {
             }
             other => Some(format!("unknown outcome {other:?}")),
         };
+        drop(owner);
         if let Some(problem) = problem {
             failures.push(format!("{}: {problem}", case.id));
         }
