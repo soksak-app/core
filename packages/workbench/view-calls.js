@@ -37,6 +37,8 @@ import { runCommandCall } from "./command-route.js";
  *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
  *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
  *                   registered
+ *                 subscribe.statusWatch(name), subscribe.statusUnwatch(name): follow the value of a status of the view and end it (view-events.js);
+ *                   the names are checked by statusNameOf, and the declaration is checked by the page subscription
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
  *                   another plugin or an undeclared name is refused (view-commands.js)
  *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
@@ -235,6 +237,12 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       await runtime.command.register(fields.name);
       return null;
     }
+    case "runtime.status.watch":
+      await runtime.subscribe.statusWatch(statusNameOf(command, params, plugin));
+      return null;
+    case "runtime.status.unwatch":
+      await runtime.subscribe.statusUnwatch(statusNameOf(command, params, plugin));
+      return null;
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);
@@ -386,6 +394,21 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     }
   };
   return runCommandCall(command, params, { call: "view call", plugin, runCore: runForwarded, runOwned });
+}
+
+/**
+ * The status name of a status watch (docs/spec/native-surfaces.md#view-surfaces, view calls): a core status, whose owner is core, or a
+ * status of the plugin of the view. A name without an owner or with another owner is refused, and runs nothing.
+ */
+function statusNameOf(command, params, plugin) {
+  const { name } = objectOf(command, params);
+  if (typeof name !== "string" || name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+  const dot = name.indexOf(".");
+  const owner = dot < 0 ? null : name.slice(0, dot);
+  if (owner !== "core" && owner !== plugin) {
+    throw new Error(`view call ${command} ${name} is neither a core status nor a status of ${plugin}`);
+  }
+  return name;
 }
 
 /** The params of a call that takes named fields. Any other value is refused. */

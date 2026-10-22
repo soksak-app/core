@@ -121,3 +121,41 @@ test("closing the surface ends every subscription, and an event after it is push
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(pushed, []);
 });
+
+test("a status watch pushes each value of its name as the status event and ends at unwatch", async () => {
+  const pushed = [];
+  const observed = new Map();
+  const off = [];
+  const observe = (name, fn) => {
+    observed.set(name, fn);
+    return () => { off.push(name); observed.delete(name); };
+  };
+  const subs = createViewSubscriptions({ native: null, sidecar: null, status: observe, push: async (event, data) => { pushed.push({ event, data }); }, report: () => {} });
+  assert.equal(await subs.statusWatch("core.grid"), null);
+  assert.equal(await subs.statusWatch("core.grid"), null, "a second watch of the same name registers nothing");
+  observed.get("core.grid")({ tabs: 2 }, "core");
+  observed.get("core.grid")({ tabs: 3 }, "core");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pushed, [
+    { event: "status", data: { name: "core.grid", value: { tabs: 2 } } },
+    { event: "status", data: { name: "core.grid", value: { tabs: 3 } } },
+  ]);
+  assert.equal(await subs.statusUnwatch("core.grid"), null);
+  assert.deepEqual(off, ["core.grid"]);
+  assert.equal(await subs.statusUnwatch("core.grid"), null, "an unwatch of a name that is not watched ends nothing");
+  assert.deepEqual(off, ["core.grid"]);
+  await subs.statusWatch("probe.count");
+  await subs.close();
+  assert.deepEqual(off, ["core.grid", "probe.count"], "the close ends the status watches that remain");
+});
+
+test("a status watch that the page refuses registers nothing and rejects with the refusal", async () => {
+  const subs = createViewSubscriptions({
+    native: null,
+    sidecar: null,
+    status: () => { throw new Error("status probe.count is not declared"); },
+    push: async () => {},
+    report: () => {},
+  });
+  await assert.rejects(subs.statusWatch("probe.count"), /status probe\.count is not declared/);
+});

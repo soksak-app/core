@@ -236,6 +236,57 @@ test("a view registers its exposure through the page and its port consumes forwa
   }
 });
 
+// A view watches a status only when the exposure declares it: a watch of an undeclared status is refused with its name and
+// replies with that refusal (docs/spec/native-surfaces.md#view-surfaces, view calls).
+test("a view watch of a status that the exposure does not declare is refused with its name", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        return null;
+      } } };
+    },
+  } });
+  const { registry } = await import("../exposure.js");
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-status");
+  const pluginId = "fixture-status";
+  const surfaceId = "fixture-status-surface";
+  recordOrigin(surfaceId, null);
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, { status: [{ name: `${pluginId}.lines`, description: "Lines.", schema: { type: "array" } }], commands: [], dom: [] });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.status.watch", params: { name: `${pluginId}.missing` } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(calls.filter(({ name }) => name === "viewReply"), [{
+      name: "viewReply",
+      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, surface: surfaceId },
+    }]);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // A view names the sidecar of each send, and the surface sends only to a sidecar that it declares (docs/spec/native-surfaces.md#view-surfaces).
 // A send that names another sidecar is refused with its reason and reaches no sidecar.
 test("a view sends only to a sidecar its surface declares and a send to another sidecar is refused", { timeout: 20000 }, async (t) => {

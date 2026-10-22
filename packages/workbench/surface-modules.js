@@ -261,6 +261,9 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     },
     textSize: (listener) => context.runtime.textSize.on(listener),
     settings: (listener) => context.runtime.settings.on(listener),
+    // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
+    // exposure declares names no status of the view, so the declaration is checked before the observation (view-calls.js).
+    status: (name, listener) => registry.observe(name, undefined, (value) => listener(value)),
     // The stored levels of a record of the plugin, read again at each change of the policy of the page gate.
     logLevels: {
       read: () => LOG_LEVELS.filter((level) => eventEnabled(level)),
@@ -319,6 +322,11 @@ function answerViewCalls(surface, scoped, page, context, closing) {
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
         logLevels: () => subscriptions.logLevels(),
+        statusWatch: (name) => {
+          if (!registry.declared("status", name)) throw new Error(`view call runtime.status.watch ${name} is not a declared status`);
+          return subscriptions.statusWatch(name);
+        },
+        statusUnwatch: (name) => subscriptions.statusUnwatch(name),
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.

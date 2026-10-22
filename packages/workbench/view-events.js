@@ -13,17 +13,21 @@
  *                 resolves with the off function
  *     logLevels   {read(), on(fn)}: read() returns the stored levels of a record of the plugin, and on(fn) registers fn for each
  *                 change of the policy in force; on resolves with the off function
+ *     status      status(name, fn): follows the value of the status name, as the registry observe does; fn(value) receives each value
+ *                 and the function returns the unsubscribe function, which it calls at the end of the watch
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
  *     report      report(text): receives the text of a push that the host refused
  *
- * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), logLevels(), close()}. A subscription call resolves with
- * null, and a second call for the same name or id registers nothing.
+ * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), logLevels(), statusWatch(name),
+ * statusUnwatch(name), close()}. A subscription call resolves with null, and a second call for the same name or id registers nothing.
+ * An unwatch of a name that is not watched ends nothing and resolves with null.
  */
-export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, push, report }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, status, push, report }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
-  // The registration of each key and its off function, by key. A key is native:<name>, sidecar.message:<id> or sidecar.failure:<id>.
+  // The registration of each key and its off function, by key. A key is native:<name>, sidecar.message:<id>, sidecar.failure:<id>,
+  // or status:<name>.
   const registered = new Map();
   // Set by close: an event that arrives after the surface closed is pushed to no view.
   let closed = false;
@@ -75,6 +79,20 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
           forward("log.levels", next);
         });
       });
+    },
+    // A status is watched once per name: the value of the status is pushed as the event status with {name, value}.
+    statusWatch(name) {
+      // A refusal of the page is a rejection, so the executor carries a synchronous throw of the observation into it.
+      return subscribe(`status:${name}`, () => new Promise((resolve) => {
+        resolve(status(name, (value) => forward("status", { name, value })));
+      }));
+    },
+    statusUnwatch(name) {
+      const key = `status:${name}`;
+      const off = registered.get(key);
+      if (off === undefined) return Promise.resolve(null);
+      registered.delete(key);
+      return Promise.resolve(off()).then(() => null);
     },
     async close() {
       closed = true;

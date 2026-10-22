@@ -62,6 +62,8 @@ function fakes() {
         textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
         settings: async () => { ran.subscribed.push({ settings: true }); return null; },
         logLevels: async () => { ran.subscribed.push({ logLevels: true }); return null; },
+        statusWatch: async (name) => { ran.subscribed.push({ statusWatch: name }); return null; },
+        statusUnwatch: async (name) => { ran.subscribed.push({ statusUnwatch: name }); return null; },
       },
       command: {
         register: async (name) => { ran.declared.push(name); return null; },
@@ -413,6 +415,27 @@ test("a subscription call of the view runs its page subscription and replies nul
   assert.equal(await answerViewCall({ id: 2, command: "runtime.sidecar.on", params: { id: "probe" } }, options), null);
   assert.equal(await answerViewCall({ id: 3, command: "runtime.sidecar.onFailure", params: { id: "probe" } }, options), null);
   assert.deepEqual(ran.subscribed, [{ native: "probe.changed" }, { sidecarMessage: "probe" }, { sidecarFailure: "probe" }]);
+});
+
+test("runtime.status.watch subscribes a core status or a status of the plugin and runtime.status.unwatch ends it", async () => {
+  const { ran, options } = fakes();
+  assert.equal(await answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "core.grid" } }, options), null);
+  assert.equal(await answerViewCall({ id: 2, command: "runtime.status.watch", params: { name: "probe.count" } }, options), null);
+  assert.equal(await answerViewCall({ id: 3, command: "runtime.status.unwatch", params: { name: "core.grid" } }, options), null);
+  assert.deepEqual(ran.subscribed, [{ statusWatch: "core.grid" }, { statusWatch: "probe.count" }, { statusUnwatch: "core.grid" }]);
+});
+
+test("runtime.status.watch and runtime.status.unwatch refuse a status of another plugin and a name that is not text, and subscribe to nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "other.count" } }, options),
+    /view call runtime\.status\.watch other\.count is neither a core status nor a status of probe/);
+  await assert.rejects(answerViewCall({ id: 2, command: "runtime.status.unwatch", params: { name: "other.count" } }, options),
+    /view call runtime\.status\.unwatch other\.count is neither a core status nor a status of probe/);
+  await assert.rejects(answerViewCall({ id: 3, command: "runtime.status.watch", params: { name: "" } }, options), /requires a non-empty name/);
+  await assert.rejects(answerViewCall({ id: 4, command: "runtime.status.watch", params: { name: "grid" } }, options),
+    /view call runtime\.status\.watch grid is neither a core status nor a status of probe/);
+  await assert.rejects(answerViewCall({ id: 5, command: "runtime.status.watch", params: "core.grid" }, options), /requires an object/);
+  assert.deepEqual(ran.subscribed, []);
 });
 
 test("a subscription call without its name or id is refused and subscribes to nothing", async () => {
