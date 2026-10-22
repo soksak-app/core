@@ -242,9 +242,9 @@ function tabState(surface, isDisposed) {
 /**
  * Answers the call requests and the cancels of the view of surface with the handlers of its context, and sends each reply to the view
  * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers. page is the runtime of the
- * surface, whose sidecar send ends with its place.
+ * surface, whose sidecar send ends with its place. closing is the signal of the mount, which removes the exposure port at its dispose.
  */
-function answerViewCalls(surface, scoped, page, context) {
+function answerViewCalls(surface, scoped, page, context, closing) {
   // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
   const { tab } = context;
   // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
@@ -282,6 +282,9 @@ function answerViewCalls(surface, scoped, page, context) {
   // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the port
   // only consumes the request: without it the page would forward the request to the view again (docs/spec/exposure.md#relay).
   const removeExposurePort = registerSurfacePort(surface.surfaceId, () => {});
+  // The port ends at the dispose of the mount, which is synchronous. The listener registrations below settle later, so their teardown
+  // is not the end of the port: a mount of the same surface that follows the dispose registers its own port.
+  closing.addEventListener("abort", removeExposurePort, { once: true });
   const options = {
     plugin: surface.pluginId,
     surface: surface.surfaceId,
@@ -523,7 +526,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
     if (viewSurface) {
-      const answering = answerViewCalls(surface, scoped, page, context);
+      const answering = answerViewCalls(surface, scoped, page, context, closing.signal);
       // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
       const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.

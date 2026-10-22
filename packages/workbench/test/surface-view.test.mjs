@@ -426,3 +426,49 @@ test("a view process end forgets the regions that its surface attached", { timeo
     dom.window.close();
   }
 });
+
+// The exposure port of a view is released when its surface is disposed, not when the view's listener registrations settle: a
+// registration that settles after the dispose (a slow native listener) must not keep the port, or mounting the same surface again
+// fails with "already has an exposure port".
+test("a view surface mounted again after its dispose registers its port while the earlier listener registrations are pending", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  // The registration of view-call settles only when the test releases it, as a native listener does under load.
+  const releases = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: (name) => {
+        if (name !== "view-call") return Promise.resolve(() => {});
+        return new Promise((resolve) => releases.push(() => resolve(() => {})));
+      }, call: async () => null } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-remount");
+  const pluginId = "fixture-view-remount";
+  const surfaceId = "fixture-view-remount-surface";
+  recordOrigin(surfaceId, null);
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+    await disposeSurface(surfaceId);
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+  } finally {
+    for (const release of releases) release();
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});

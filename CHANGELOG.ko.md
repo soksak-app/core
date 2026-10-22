@@ -5,6 +5,7 @@
 ## 미배포
 
 - F247: 생성 중 실패한 surface composition은 정리 실패를 하나씩 한 번만 보고하고, 묶음으로 다시 보고하지 않는다.
+- F212.12-1-3: view surface는 listener 등록이 끝날 때가 아니라 mount가 dispose될 때 노출 port를 제거한다. 그래서 Tauri에서 dispose 뒤 같은 surface의 mount가 port를 등록한다. Red: 수정 전 코드에서 `surface-view.test.mjs`의 재 mount가 `already has an exposure port`로 실패한다. Green: 같은 파일이 9/9 통과한다.
 - F212.12-1-1: view 상태가 `loading`을 JSON boolean으로 알린다. native view의 document 상태가 C 논리 연산자의 결과를 int로 박싱해, 두 host가 상태를 JSON이 아니라며 거부했다. 상태는 이제 boolean을 박싱한다. Red: 수정 전 코드에서 `view_channel_test`가 `every view state reports loading as a JSON boolean: 0`으로 실패했다. Green: 같은 시험이 통과한다. Go와 Rust payload 시험은 소비자가 이미 숫자를 거부하므로 수정 전후 모두 통과한다.
 - F244-3: 단축키 표 시험이 key 속성의 `typeof` 검사를 키보드 키 비교로 읽지 않는다.
 - F246: `packages/plugin-api/contract/`는 사례 파일을 게시한다. view 합성 영역(`view-composition.json`: `composition.create`, `document.*` call, 영역의 `state`, `onState`, `history` 값과 순서), `createExpose`의 status와 dom 메서드(`expose.json`), 표면 페이지의 명령 등록(`command-registration.json`)과 view의 명령 등록(`view-commands.json`), view의 `runtime.native` call(`view-native.json`), 선언된 UI snapshot push(`declared-ui-snapshot.json`), binder audit 행과 함께 `INTERACTIVE`(`interactive.json`)다. 각 파일은 패키지 `files`에 있고, `packages/plugin-api/test/`의 소유 시험이 모든 사례를 구현에 대해 실행한다. 거부된 `runtime.native.on` 구독은 이제 listener를 제거하므로, 거부된 listener는 host 이벤트를 받지 않는다. 소유 시험: plugin-api 483/483. `make parity-check`는 lane 97개, 구현 파일 641개, 테스트 파일 849개를 센다.
