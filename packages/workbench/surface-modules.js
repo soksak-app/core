@@ -410,6 +410,9 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     onState({ phase: "ready" });
     return null;
   }
+  // A view tab whose stored origin is refused does not start its view; the refusal is already shown on the tab by the layout read
+  // (docs/spec/projects.md#tab-origin), so mounting it is not an error.
+  if (viewRefusal(surface.surfaceId) !== null) return null;
   const view = slot.ownerDocument.defaultView;
   let entry = mounted.get(surface.surfaceId);
   if (entry && entry.slot === slot) {

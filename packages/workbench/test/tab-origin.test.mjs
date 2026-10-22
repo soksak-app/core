@@ -83,3 +83,19 @@ test("storing the displayed layout keeps the origin of a tab of a space that is 
   storedLayoutState({ cards: [{ id: "c", data: { tabs: [] } }] });
   assert.throws(() => tabOrigin("origin-space-old"), /has no origin/);
 });
+
+test("a view tab whose origin is refused and then restored with a valid origin is not refused any more", () => {
+  restoreOrigin({ id: "origin-healed", plugin: "view-plugin" }, true);
+  assert.notEqual(viewRefusal("origin-healed"), null);
+  restoreOrigin({ id: "origin-healed", plugin: "view-plugin", origin: { directory: "/b" } }, true);
+  assert.equal(viewRefusal("origin-healed"), null, "the earlier refusal is kept after a valid origin was restored");
+  assert.deepEqual(tabOrigin("origin-healed"), { directory: "/b" });
+});
+
+test("a view tab whose origin is recorded in this session is not refused when a layout without its member is applied", () => {
+  // The first tab of an added space records its origin, and the layout of that space has no origin member until it is stored.
+  recordOrigin("origin-in-session", null);
+  restoreOrigin({ id: "origin-in-session", plugin: "view-plugin" }, true);
+  assert.equal(viewRefusal("origin-in-session"), null, "a tab with a recorded origin was refused by a layout without its member");
+  assert.deepEqual(tabOrigin("origin-in-session"), { directory: null });
+});

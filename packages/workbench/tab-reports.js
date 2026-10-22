@@ -155,6 +155,8 @@ export const releasedNonViewOrigin = () => Object.freeze({ directory: null });
  * returned as its text; this function never throws (docs/spec/projects.md#tab-origin).
  */
 export function restoreOrigin(tab, viewTab) {
+  // A tab whose origin this session recorded keeps it: a layout that is applied before it is stored has no origin member for it.
+  if (origins.has(tab.id)) return null;
   const present = "origin" in tab;
   if (!viewTab) {
     loaded.set(tab.id, { origin: present ? tab.origin : releasedNonViewOrigin() });
@@ -162,7 +164,11 @@ export function restoreOrigin(tab, viewTab) {
   }
   loaded.set(tab.id, present ? { origin: tab.origin } : null);
   const fault = originFault(tab.id, present ? tab.origin : undefined);
-  if (fault === null) return null;
+  if (fault === null) {
+    // A valid origin replaces an earlier refusal of the same tab.
+    refusals.delete(tab.id);
+    return null;
+  }
   refusals.set(tab.id, fault);
   return fault;
 }
