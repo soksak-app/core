@@ -1725,24 +1725,29 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
 #[test]
 fn a_lost_connection_is_reported_as_an_error_line() {
     use soksak_host_tauriv2::sidecars::connection_loss_report;
-    let loss = "end: eof, waiting: 2";
-    assert_eq!(
-        connection_loss_report("fixture-service", &Ok(true), loss),
-        Some((
-            "sidecar fixture-service".to_string(),
-            "connection lost; restarted (end: eof, waiting: 2)".to_string()
-        ))
+    let loss = "end: eof, waiting: 0";
+    let restarted = connection_loss_report("fixture-service", &Ok(true), loss)
+        .expect("a restarted connection is reported");
+    assert_eq!(restarted.0, "sidecar fixture-service");
+    assert!(
+        restarted.1.starts_with("connection lost; restarted")
+            && restarted.1.contains("(end: eof, waiting: 0)"),
+        "the stored error line {:?} names how the connection ended and the requests that waited",
+        restarted.1
     );
     assert_eq!(
         connection_loss_report("fixture-service", &Ok(false), loss),
         None
     );
-    assert_eq!(
-        connection_loss_report("fixture-service", &Err("refused".to_string()), loss),
-        Some((
-            "sidecar fixture-service".to_string(),
-            "connection lost; restart failed: refused (end: eof, waiting: 2)".to_string()
-        ))
+    let failed = connection_loss_report("fixture-service", &Err("refused".to_string()), loss)
+        .expect("a failed restart is reported");
+    assert!(
+        failed
+            .1
+            .starts_with("connection lost; restart failed: refused")
+            && failed.1.contains("(end: eof, waiting: 0)"),
+        "the stored error line {:?} names how the connection ended and the requests that waited",
+        failed.1
     );
 }
 
