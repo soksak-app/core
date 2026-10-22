@@ -846,6 +846,36 @@ fn view_call_request_is_forwarded_with_its_plugin_and_surface() {
     );
 }
 
+// contract: view.call.forward
+#[test]
+fn view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.call(
+            "probe-surface",
+            r#"{"message":{"sok":1,"id":8,"command":"demo.run","params":{"x":1},"cids":["p1700000000000.3"]}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 8,
+            "command": "demo.run",
+            "params": {"x": 1},
+            "cids": ["p1700000000000.3"]
+        }))),
+        "a call request carries the cids of its cause"
+    );
+    assert_eq!(
+        channels.call(
+            "probe-surface",
+            r#"{"message":{"sok":1,"id":9,"command":"demo.run","params":null,"cids":["p1.7\"x"]}}"#
+        ),
+        Err("probe-surface: view call 9 cids must be non-empty strings without a quote, a backslash or a control character".to_string()),
+        "a cid that a line cannot hold is refused"
+    );
+}
+
 // contract: view.declared-ui.snapshot
 #[test]
 fn view_declared_snapshot_is_forwarded_with_its_surface_and_plugin() {

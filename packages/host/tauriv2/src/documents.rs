@@ -927,17 +927,24 @@ impl ViewChannels {
         };
         // default: a call without params sends null to its command, as the call envelope has no params for it.
         let params = message.get("params").cloned().unwrap_or(Value::Null);
+        // The cids of the cause of the call are forwarded only when the call has some.
+        let cids = cause_cids_of(message.get("cids"))
+            .map_err(|refusal| format!("{surface}: view call {id} {refusal}"))?;
         // The call is open until the main page answers it (docs/spec/native-surfaces.md#view-surfaces).
         if let Some(channel) = self.lock().get_mut(surface) {
             channel.calls.insert(id, command.to_string());
         }
-        Ok(Some(json!({
+        let mut payload = json!({
             "surface": surface,
             "plugin": plugin,
             "id": id,
             "command": command,
             "params": params,
-        })))
+        });
+        if !cids.is_empty() {
+            payload["cids"] = json!(cids);
+        }
+        Ok(Some(payload))
     }
 
     /// Returns the declared-ui.snapshot payload of a snapshot of the view of surface, or None when the message is not one.
@@ -2105,6 +2112,20 @@ pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
         message["cids"] = json!(request.cids);
     }
     Ok(message)
+}
+
+/// Returns the cids member of a view message: none for an absent or null member, otherwise the list, whose identifiers must all be
+/// non-empty strings without a quote, a backslash or a control character (docs/spec/logging.md#correlation).
+fn cause_cids_of(value: Option<&Value>) -> Result<Vec<String>, String> {
+    const REFUSAL: &str =
+        "cids must be non-empty strings without a quote, a backslash or a control character";
+    match value {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(value) => serde_json::from_value::<Vec<String>>(value.clone())
+            .ok()
+            .filter(|cids| valid_cause_cids(cids))
+            .ok_or_else(|| REFUSAL.to_string()),
+    }
 }
 
 /// Reports whether every identifier is a non-empty string without a quote, a backslash or a control character, which a log line holds.
