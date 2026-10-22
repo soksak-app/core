@@ -1711,6 +1711,8 @@ export async function replyPayload(work) {
  * newer than version exists.
  */
 export function createExpose(port, load) {
+  // A reply that the host refuses is reported through port.report, so a port without it would leave that failure nowhere.
+  if (typeof port?.report !== "function") throw new TypeError("createExpose requires the port report function");
   let entries = null;
   let loaded = null;
   // The remover of the request listener that the port returns. Dispose calls it, so no request is answered after dispose.
@@ -1734,12 +1736,18 @@ export function createExpose(port, load) {
           try {
             await port.reply(id, payload);
           } catch (error) {
-            // The host may have abandoned the request while the page was answering. This does not create an unhandled promise;
-            // it reports the rejected answer to the host diagnostics channel. The host still
-            // owns the request and response decision.
-            if (typeof port.report !== "function") throw error;
+            // The host may have abandoned the request while the page was answering. The rejected reply is reported through
+            // port.report; the host still owns the request and response decision.
             // default: a rejection that is not an Error carries its value as the diagnostic reason.
-            await port.report(`exposure reply ${id}: ${String(error?.message ?? error)}`);
+            const text = `exposure reply ${id}: ${String(error?.message ?? error)}`;
+            try {
+              await port.report(text);
+            } catch (failure) {
+              // A report that fails leaves no channel of the port, so the failure is given with both texts to reportError, which
+              // dispatches the error event of the page that the page error path records.
+              // default: a rejection that is not an Error carries its value as the failure text.
+              globalThis.reportError(new Error(`${text}; report failed: ${String(failure?.message ?? failure)}`));
+            }
           }
         });
       });

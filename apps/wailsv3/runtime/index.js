@@ -210,6 +210,8 @@ export const page = (() => {
         if (request.surface === undefined || request.surface === surface) fn(request);
       }),
       reply: (id, payload) => call("exposureReply", { id, ...payload }),
+      // A reply that the host refuses is stored as an error record of this document, as report stores one.
+      report: (text) => calls.record("error", "page.record.error", { where: "exposure", text }),
     },
     // The document region of this surface. The host verifies that the calling webview is the surface and sends the state only to this surface.
     document: {

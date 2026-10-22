@@ -236,6 +236,7 @@ test("a surface page registers declared names once through its port and answers 
     register: async (kind, name) => { registered.push([kind, name]); },
     onRequest: async (fn) => { request = fn; },
     reply: (id, payload) => { replies.push([id, payload]); },
+    report: async (message) => { throw new Error(`unexpected report: ${message}`); },
   };
   let loads = 0;
   const declared = exposes();
@@ -278,6 +279,32 @@ test("a rejected stale exposure reply is reported instead of becoming an unhandl
   request({ id: 11928, method: "command.run", params: { name: "probe.send", params: { data: "abc" } } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(reports, ["exposure reply 11928: exposure reply 11928 has no matching request"]);
+});
+
+test("a port without report is refused when the exposure is created, because a failed reply needs a place to be reported", () => {
+  const port = { register: async () => {}, onRequest: async () => {}, reply: async () => {} };
+  assert.throws(() => createExpose(port, async () => exposes()), /createExpose requires the port report function/);
+});
+
+test("a report that fails is given with both errors to reportError, which dispatches the page error event", async (t) => {
+  let request;
+  const port = {
+    register: async () => {},
+    onRequest: async (fn) => { request = fn; },
+    reply: async () => { throw new Error("the host refused the reply"); },
+    report: async () => { throw new Error("the report channel is closed"); },
+  };
+  const reported = [];
+  // Node has no reportError; the page has it, and the test stands in for it.
+  globalThis.reportError = (error) => { reported.push(error); };
+  t.after(() => { delete globalThis.reportError; });
+  const expose = createExpose(port, async () => exposes());
+  await expose.command("probe.send", ({ data }) => data.length);
+  request({ id: 31, method: "command.run", params: { name: "probe.send", params: { data: "abc" } } });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reported.length, 1, "the failed report reaches the page error path once");
+  assert.match(String(reported[0]?.message), /exposure reply 31: the host refused the reply; report failed: the report channel is closed/);
 });
 
 test("diagnostic declarations extend a surface plugin once and are rejected otherwise", () => {

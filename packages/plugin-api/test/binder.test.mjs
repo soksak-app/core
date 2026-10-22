@@ -163,7 +163,10 @@ test("audit lists interactive elements without a command binding or a dom name",
 
 test("the page expose binds only commands declared for the page and runs registered ones", async () => {
   const handlers = [];
-  const port = { onRequest: async (fn) => handlers.push(fn), reply() {}, register: async () => {} };
+  const port = {
+    onRequest: async (fn) => handlers.push(fn), reply() {}, register: async () => {},
+    report: async (message) => { throw new Error(`unexpected report: ${message}`); },
+  };
   const declared = declarationMap({
     status: [],
     commands: [{ name: "fixture.press", description: "Press.", params: { type: "object", properties: { id: { type: "string" } } }, result: { type: "null" } }],
