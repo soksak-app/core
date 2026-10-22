@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.12-1-17: The window check judges the host event files of its own boot: the files of an earlier run that were flushed after the stored offsets no longer count as errors. Plugin host reports carry the message, code and data of a rejection instead of `[object Object]`. A sidecar request body of a plugin host is the JSON object that the page sends. The host records each exposure request, reply and unmatched reply with the id and where the relay holds it.
 - F212.12-1-15-1: The Tauri host accepts a plugin host reply with a null result, as the Wails host does: the reply, request params and event data of a plugin host keep their null values, so a command without a value no longer fails with `has both or neither of a result and an error`.
 - F212.12-1-15-4: The lost persistent sidecar connection error record names how the connection ended (`end`) and how many requests waited (`waiting`), in both hosts.
 - F212.12-1-16: The plugin host serves the registration notice `runtime.native.call registered`, which the view bridge sends for an exposure registration, as `page.exposure.register` does. A reply to an exposure request that its document ended is accepted and written as the observation `exposure reply <id> arrived after its request ended`, in both hosts; a reply to a request the relay never sent is still refused.

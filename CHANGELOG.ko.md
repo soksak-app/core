@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.12-1-17: window check는 자기 boot의 host 이벤트 파일만 판정한다. 이전 실행이 offset 저장 뒤에 flush한 파일 기록은 이번 실행의 오류로 세지 않는다. plugin host 보고는 `[object Object]` 대신 거부의 message, code, data를 쓴다. plugin host의 sidecar 요청 body는 page가 보내는 JSON 객체다. host는 exposure 요청, 답, 짝이 없는 답을 id와 릴레이가 보관하는 위치와 함께 기록한다.
 - F212.12-1-15-1: Tauri host가 null result인 plugin host reply를 받는다. Wails host와 같다. plugin host의 reply, request params, event data가 null 값을 유지하므로, 값이 없는 명령이 `has both or neither of a result and an error`로 실패하지 않는다.
 - F212.12-1-15-4: 끊긴 영속 sidecar 연결의 error 기록이 연결이 어떻게 끝났는지(`end`)와 기다리던 요청 수(`waiting`)를 두 host에서 담는다.
 - F212.12-1-16: plugin host는 view bridge가 exposure 등록에 보내는 등록 통지 `runtime.native.call registered`를 `page.exposure.register`와 같이 served한다. 문서가 끝낸 exposure 요청에 대한 답은 받아들여 관측 `exposure reply <id> arrived after its request ended`로 두 host에 쓴다. 릴레이가 보낸 적 없는 요청에 대한 답은 여전히 거부한다.
