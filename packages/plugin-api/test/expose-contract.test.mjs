@@ -15,6 +15,7 @@ const EXPECTED_IDS = [
   "expose.dispose.ends-registrations-and-requests",
   "expose.dispose.refuses-a-registration-after-dispose",
   "expose.dispose.removes-bindings",
+  "expose.dispose.races-a-registration-loading-declarations",
 ];
 
 // Lets every pending promise of the registration and reply chain settle before a step reports its output.
@@ -84,6 +85,13 @@ async function runCase(testCase) {
           });
         } else if ("bind" in step) {
           await expose.bind(document.querySelector(step.bind.selector), step.bind.command, step.bind.params);
+        } else if ("race" in step) {
+          // Starts a status registration and disposes the exposure in the same turn, before its declarations are loaded.
+          const pending = expose.status(step.race.name, () => value, () => () => {});
+          await expose.dispose();
+          await pending.catch((error) => {
+            throws = error.message;
+          });
         } else if ("click" in step) {
           document.querySelector(step.click.selector).click();
         } else if ("dispose" in step) {

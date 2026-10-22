@@ -388,6 +388,55 @@
           }
         }
       ]
+    },
+    {
+      "id": "expose.dispose.races-a-registration-loading-declarations",
+      "initial": 3,
+      "declarations": {
+        "status": [
+          {
+            "name": "demo.count",
+            "description": "The count of the demo.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "race": {
+            "name": "demo.count"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "unregister"
+              }
+            ],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": "exposure is disposed"
+          }
+        },
+        {
+          "request": {
+            "id": 1,
+            "method": "status.get",
+            "params": {
+              "name": "demo.count"
+            }
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
     }
   ]
 }
