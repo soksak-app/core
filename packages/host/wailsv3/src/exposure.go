@@ -341,12 +341,32 @@ func (r *Relay[T]) Resolve(id uint64, from T, reply ExposureResult) error {
 				return nil
 			}
 		}
+		EmitHost(LevelDebug, "host.trace.exposure.unmatched", map[string]any{"id": id, "held": r.heldState(id, from)})
 		return fmt.Errorf("exposure reply %d has no matching request", id)
 	}
 	delete(r.waiting, id)
 	r.mu.Unlock()
 	w.reply <- reply
 	return nil
+}
+
+// heldState says where the relay keeps the id of a reply from document from that matches no waiting request: under another
+// document, as an expired or an ended request, or nowhere (host.trace.exposure.unmatched). The caller holds r.mu.
+func (r *Relay[T]) heldState(id uint64, from T) string {
+	if w := r.waiting[id]; w != nil && w.target != from {
+		return "other-target"
+	}
+	for _, expired := range r.expired {
+		if expired.id == id && expired.target == from {
+			return "expired"
+		}
+	}
+	for _, ended := range r.ended {
+		if ended.id == id && ended.target == from {
+			return "ended"
+		}
+	}
+	return "none"
 }
 
 // Abandon answers the requests sent to the documents for which match is true with a 1003 error. A document that disappeared does not reply.
@@ -431,6 +451,11 @@ func (h *Host) ExposureReply(ctx context.Context, reqJSON json.RawMessage) error
 	if err != nil {
 		return err
 	}
+	from := surface
+	if from == "" {
+		from = "main"
+	}
+	EmitHost(LevelDebug, "host.trace.exposure.reply", map[string]any{"id": req.ID, "from": from})
 	if surface == "" {
 		return h.relay.Resolve(req.ID, relayTarget{owner: s}, ExposureResult{Result: req.Result, Error: req.Error})
 	}
@@ -550,6 +575,7 @@ func (h *Host) ExposureForward(ctx context.Context, reqJSON json.RawMessage) (Ex
 		var sent bool
 		application.InvokeSync(func() {
 			if s.views[req.Surface] != nil {
+				EmitHost(LevelDebug, "host.trace.exposure.request", map[string]any{"id": id, "surface": req.Surface, "method": req.Method})
 				s.window.EmitEvent("exposure-request", map[string]any{
 					"id": id, "surface": req.Surface, "method": req.Method, "params": req.Params,
 				})

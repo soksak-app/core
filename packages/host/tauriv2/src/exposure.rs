@@ -533,6 +533,11 @@ impl Relay {
         let Answer { id, result, error } =
             serde_json::from_str::<Answer>(payload.get()).map_err(|error| error.to_string())?;
         let id = id.ok_or("exposure reply has no id")?;
+        emit_host(
+            Level::Debug,
+            "host.trace.exposure.reply",
+            json!({"id": id, "from": from}),
+        );
         // An error member names its code and its message; a reply without either is refused, as the Go host refuses it.
         if let Some(error) = error.as_ref().filter(|error| !error.is_null()) {
             if error.get("code").and_then(Value::as_i64).is_none() {
@@ -557,6 +562,11 @@ impl Relay {
                 crate::application_log::log_info("exposure", text);
                 return Ok(());
             }
+            emit_host(
+                Level::Debug,
+                "host.trace.exposure.unmatched",
+                json!({"id": id, "held": self.held_state(id, from)}),
+            );
             return Err(self.unmatched(id, from)?);
         };
         let outcome = match error {
@@ -574,6 +584,45 @@ impl Relay {
         };
         tx.send(outcome)
             .map_err(|_| format!("exposure reply {id} has no matching request"))
+    }
+
+    /// Says where the relay keeps the id of a reply from document from that matches no waiting request: under another document,
+    /// as an expired or an ended request, or nowhere (host.trace.exposure.unmatched).
+    fn held_state(&self, id: u64, from: &str) -> &'static str {
+        let other = self
+            .pending
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the waiting requests, which this read only inspects; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&id)
+            .is_some_and(|(target, _)| target != from);
+        if other {
+            return "other-target";
+        }
+        let expired = self
+            .expired
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the expired requests, which this read only inspects; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .any(|held| held.id == id && held.target == from);
+        if expired {
+            return "expired";
+        }
+        let ended = self
+            .ended
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the ended requests, which this read only inspects; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .any(|(held, target)| *held == id && target == from);
+        if ended {
+            return "ended";
+        }
+        "none"
     }
 
     /// Removes the ended request id of document from and returns the observation of its late reply, or None when the relay did
@@ -917,7 +966,12 @@ pub(crate) fn forward(webview: &Webview, request: Forward) -> Result<Box<RawValu
             .state::<Exposure>()
 			.relay
 			.request_call(&label, call, timeout, |id| {
-				emit_to(
+				emit_host(
+                    Level::Debug,
+                    "host.trace.exposure.request",
+                    json!({"id": id, "surface": request.surface, "method": request.method}),
+                );
+                emit_to(
 					&app,
 					window.label(),
 					"exposure-request",

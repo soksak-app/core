@@ -286,6 +286,37 @@
       },
       "description": "A reply to a forwarded command arrived after its time limit, and the relay refused it: delay is the time in milliseconds from the send of the command to the reply (docs/spec/exposure.md#errors)."
     },
+    "host.trace.exposure.request": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "surface": "string",
+        "method": "string",
+        "id": "number"
+      },
+      "description": "The host sent an exposure request to a surface page: id is the relay identifier that the reply names, and surface and method name the request (docs/spec/exposure.md#relay)."
+    },
+    "host.trace.exposure.reply": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "id": "number",
+        "from": "string"
+      },
+      "description": "The host received an exposure reply: id is the relay identifier that the reply names, and from is the surface that sent it, or main for the main page."
+    },
+    "host.trace.exposure.unmatched": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "id": "number",
+        "held": "string"
+      },
+      "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), expired, ended, or none (the relay holds no request under it)."
+    },
     "host.call.peer-lost": {
       "layer": "host",
       "class": "call",
