@@ -1,30 +1,32 @@
-// Checks the state module and the project data declaration of a plugin without a surface.
+// Checks the project data declaration of a plugin host, and the refusal of the removed state module.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { checkProjectData, validateManifest } from "../index.js";
 
 const base = () => ({
   id: "probe", name: "Probe", description: "검사용 플러그인.",
-  sections: [{ id: "probe.list", name: "목록", module: "ui/list.js" }],
-  state: { module: "ui/state.js" },
+  host: { page: "ui/host.html" },
+  sections: [{ id: "probe.marks", name: "Marks", status: "probe.marks" }],
   dependencies: { "@scope/sidecar-probe": "~0.4.1" },
   data: { marks: { schema: { type: "array", items: { type: "string" } }, default: [] } },
   exposes: { status: [{ name: "probe.marks", description: "Marks.", schema: { type: "array" } }], commands: [], dom: [] },
 });
 
-test("a sections-only plugin may declare a state module, sidecars, project data, and exposes", () => {
+test("a plugin host may declare project data, sidecars, and exposes", () => {
   const manifest = base();
   assert.equal(validateManifest(manifest), manifest);
 });
 
-test("state, data, and sidecars are rejected when their requirements are missing", () => {
+test("the state module is refused with the plugin and the field", () => {
+  assert.throws(() => validateManifest({ ...base(), state: { module: "ui/state.js" } }),
+    { message: "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)" });
+});
+
+test("data and sidecars are rejected when their requirements are missing", () => {
   const without = (key) => { const m = base(); delete m[key]; return m; };
   const cases = [
-    [{ ...base(), state: { module: "/abs.js" } }, /state module must be a JavaScript path/],
-    [{ ...base(), state: { module: "ui/state.js", extra: 1 } }, /unknown field extra/],
-    [without("sections"), /state requires sections/],
-    [{ ...without("state"), data: base().data }, /data requires a state module or a plugin host/],
-    [{ ...without("state"), data: undefined }, /dependencies require a surface, a state module, a plugin host or contributes/],
+    [{ ...without("host"), sections: undefined, exposes: undefined }, /data requires a plugin host/],
+    [{ ...without("host"), data: undefined, sections: undefined, exposes: undefined }, /dependencies require a surface, a plugin host or contributes/],
     [{ ...base(), data: { marks: { schema: { type: "array" }, default: "x" } } }, /data marks default does not match its schema/],
     [{ ...base(), data: { marks: { schema: { type: "array" } } } }, /data marks requires schema and default/],
   ];
@@ -34,14 +36,10 @@ test("state, data, and sidecars are rejected when their requirements are missing
   }
 });
 
-test("project data is accepted for a plugin host without a state module and refused without a state or a host", () => {
-  const host = () => { const m = base(); delete m.state; m.host = { page: "ui/host.html" }; return m; };
-  const manifest = host();
+test("project data is accepted for a plugin host and refused without a host", () => {
+  const manifest = base();
   assert.equal(validateManifest(manifest), manifest);
   assert.equal(validateManifest(manifest).data.marks.default.length, 0);
-  const bare = base();
-  delete bare.state;
-  assert.throws(() => validateManifest(bare), /data requires a state module or a plugin host/);
 });
 
 test("checkProjectData accepts declared values and rejects undeclared keys and mismatches", () => {

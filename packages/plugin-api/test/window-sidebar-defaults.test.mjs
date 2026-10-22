@@ -5,11 +5,13 @@ import { checkSidebarReferences, normalizeSidebarDefaults, validateManifest, val
 const manifests = () => [
   { id: "pane", name: "Pane", description: "Content fixture.", mark: "p", icon: "<path/>",
     surface: { module: "ui/pane.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
-    sections: [{ id: "pane.info", name: "Info", module: "ui/info.js" }],
+    exposes: { status: [{ name: "pane.info", description: "Fixture status.", schema: { type: "object" } }] },
+    sections: [{ id: "pane.info", name: "Info", status: "pane.info" }],
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["pane.info", "tree.list"], layout: "list" }],
       card: { top: "info", bottom: "info", left: "info", right: "info" }, window: { left: "info", right: "info" } } },
-  { id: "tree", name: "Tree", description: "Section-only fixture.",
-    sections: [{ id: "tree.list", name: "Tree", module: "ui/tree.js" }],
+  { id: "tree", name: "Tree", description: "Section-only fixture.", host: { page: "ui/host.html" },
+    exposes: { status: [{ name: "tree.list", description: "Fixture status.", schema: { type: "object" } }] },
+    sections: [{ id: "tree.list", name: "Tree", status: "tree.list" }],
     sidebars: { sets: [{ id: "tree", title: "Tree", sections: ["tree.list"], layout: "tabs" }], window: { left: "tree" } } },
 ];
 

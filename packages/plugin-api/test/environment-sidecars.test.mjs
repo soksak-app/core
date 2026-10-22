@@ -1,4 +1,4 @@
-// In an environment with sidecars: false, the load fails when the state module of an installed plugin uses a sidecar.
+// In an environment with sidecars: false, a plugin that declares sidecars is still a valid reference: its sidecar runs only where the host runs.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { checkReferences, validateEnvironment } from "../index.js";
@@ -11,8 +11,9 @@ const environment = (extra = {}) => ({
 });
 const card = { id: "card", name: "Card", mark: "c", icon: "<path/>", surface: { module: "ui/page.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
   dependencies: { "@scope/sidecar-card": "0.1.0" } };
-const stateful = { id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "목록", module: "ui/list.js" }],
-  state: { module: "ui/state.js" }, dependencies: { "@scope/sidecar-probe": ">=0.1.0 <0.3.0" } };
+const stateful = { id: "probe", name: "Probe", sections: [{ id: "probe.list", name: "목록", status: "probe.list" }],
+  exposes: { status: [{ name: "probe.list", description: "검사용 상태.", schema: { type: "object" } }] }, host: { page: "ui/host.html" },
+  dependencies: { "@scope/sidecar-probe": ">=0.1.0 <0.3.0" } };
 const plain = { ...stateful };
 delete plain.dependencies;
 
@@ -28,9 +29,8 @@ test("install names the registry pack that a build without a host installs, and 
   assert.equal(validateEnvironment(environment({ install: "browser-example" })).install, "browser-example");
 });
 
-test("an environment without sidecars rejects a state module that uses sidecars and accepts surfaces with sidecars", () => {
-  assert.throws(() => checkReferences(environment({ sidecars: false }), [card, stateful]),
-    /plugin probe has a state module that uses sidecars, which this environment cannot run/);
+test("an environment without sidecars accepts plugins that declare sidecars", () => {
+  checkReferences(environment({ sidecars: false }), [card, stateful]);
   checkReferences(environment({ sidecars: false }), [card, plain]);
   checkReferences(environment(), [card, stateful]);
 });

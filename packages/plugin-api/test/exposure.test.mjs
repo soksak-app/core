@@ -66,7 +66,9 @@ test("exposes are rejected for each invalid field", () => {
   }
   assert.throws(() => validateExposes("Probe", {}), /invalid owner/);
   assert.throws(() => validateManifest({ id: "probe", name: "Probe", description: "검사용 플러그인.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }], exposes: exposes() }),
-    /exposes require a surface/);
+    /section probe.list module is removed/);
+  assert.throws(() => validateManifest({ id: "probe", name: "Probe", description: "검사용 플러그인.", exposes: exposes() }),
+    /exposes require a surface or a plugin host/);
   assert.throws(() => validateExposureFile({ exposes: exposes() }), /must be core.<name>/);
   assert.throws(() => validateExposureFile({ exposes: {}, extra: 1 }), /unknown field extra/);
 });
@@ -299,8 +301,8 @@ test("diagnostic declarations extend a surface plugin once and are rejected othe
 
 test("the installed plugin document lists plugins with their manifests and diagnostics and reports the host's error", () => {
   const plugins = [
-    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", sections: [{ id: "alpha.list", name: "List", module: "ui/list.js" }] } },
-    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: { id: "probe", name: "Probe", description: "검사용.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }] },
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", host: { page: "ui/host.html" }, exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", status: "alpha.list" }] } },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: { id: "probe", name: "Probe", description: "검사용.", host: { page: "ui/host.html" }, exposes: { status: [{ name: "probe.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "probe.list", name: "List", status: "probe.list" }] },
       diagnostics: { module: "ui/d.js", exposes: {} } },
   ];
   assert.equal(validateInstalledPlugins({ plugins }), plugins);

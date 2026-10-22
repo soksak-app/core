@@ -608,7 +608,7 @@ function checkContributes(where, id, contributes) {
  *     surface   card surface. `{ page, composition }` declares the document inside the plugin and the composition permissions
  *     sections  sections that the sidebar can show. The id has the form `<plugin id>.<name>`
  *     preview   colors of the library preview. `ink` is a theme token name (`--rail` and others). surface must exist
- *   dependencies  the version range of each sidecar that the page surface or the state module uses and of each plugin that it contributes to
+ *   dependencies  the version range of each sidecar that the page surface or the plugin host uses and of each plugin that it contributes to
  *     exposes   status, command and dom entries that the surface page registers. A page surface must exist
  */
 // The path segment that the binary store of a document region answers before it looks up a file
@@ -628,8 +628,12 @@ export function validateReleaseFiles(pkg) {
 
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
+  // The state module is removed: its project data moves to the plugin host (docs/spec/plugins.md#project-data).
+  if (isObject(manifest) && manifest.state !== undefined) {
+    throw new Error(`plugin ${manifest.id}: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)`);
+  }
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "state", "data", "sidebars", "extends", "contributes", "events", "host", "hostOperations"]);
+    "data", "sidebars", "extends", "contributes", "events", "host", "hostOperations"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -642,18 +646,9 @@ export function validateManifest(manifest) {
       manifest.description.length > PLUGIN_DESCRIPTION_MAX) {
     throw new Error(`${where}: description must be 1 to ${PLUGIN_DESCRIPTION_MAX} characters`);
   }
-  if (manifest.state !== undefined) {
-    if (!isObject(manifest.state)) throw new Error(`${where}: state must be an object`);
-    only(`${where} state`, manifest.state, ["module"]);
-    const { module } = manifest.state;
-    if (!isText(module) || module.startsWith("/") || module.split("/").includes("..") || !module.endsWith(".js")) {
-      throw new Error(`${where}: state module must be a JavaScript path inside the package`);
-    }
-    if (manifest.sections === undefined) throw new Error(`${where}: state requires sections`);
-  }
   if (manifest.data !== undefined) {
-    // The state module and the plugin host both serve project data (docs/spec/plugins.md#project-data).
-    if (manifest.state === undefined && manifest.host === undefined) throw new Error(`${where}: data requires a state module or a plugin host`);
+    // The plugin host serves project data (docs/spec/plugins.md#project-data).
+    if (manifest.host === undefined) throw new Error(`${where}: data requires a plugin host`);
     if (!isObject(manifest.data)) throw new Error(`${where}: data must be an object`);
     for (const [key, entry] of Object.entries(manifest.data)) {
       if (!ID.test(key)) throw new Error(`${where}: invalid data key ${key}`);
@@ -668,10 +663,10 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.dependencies !== undefined) {
-    // A sidecar dependency serves the surface or the state module, and a plugin dependency serves the contributions
+    // A sidecar dependency serves the surface or the plugin host, and a plugin dependency serves the contributions
     // (docs/spec/plugins.md#pluginjson).
-    if (manifest.surface === undefined && manifest.state === undefined && manifest.host === undefined && manifest.contributes === undefined) {
-      throw new Error(`${where}: dependencies require a surface, a state module, a plugin host or contributes`);
+    if (manifest.surface === undefined && manifest.host === undefined && manifest.contributes === undefined) {
+      throw new Error(`${where}: dependencies require a surface, a plugin host or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
   }
@@ -784,40 +779,24 @@ export function validateManifest(manifest) {
     const backing = new Map();
     for (const section of manifest.sections) {
       if (!isObject(section)) throw new Error(`${where}: section must be an object`);
-      only(`${where} section`, section, ["id", "name", "module", "fill", "status"]);
+      // The module section is removed: a section draws its declared status (docs/spec/declared-ui.md, sidebar section form).
+      if (section.module !== undefined) {
+        throw new Error(`${where}: section ${section.id} module is removed; a section takes status (docs/spec/declared-ui.md)`);
+      }
+      only(`${where} section`, section, ["id", "name", "fill", "status"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
       if (seen.has(section.id)) throw new Error(`${where}: duplicate section ${section.id}`);
       seen.add(section.id);
       if (!isText(section.name)) throw new Error(`${where}: section ${section.id} requires a name`);
-      if (section.module !== undefined && section.status !== undefined) {
-        throw new Error(`${where}: section ${section.id} declares both module and status`);
+      if (section.status === undefined) throw new Error(`${where}: section ${section.id} requires a status`);
+      const declared = Array.isArray(manifest.exposes?.status) && manifest.exposes.status.some((entry) => entry?.name === section.status);
+      if (!declared) throw new Error(`${where}: section ${section.id} status ${section.status} is not a status of plugin ${id}`);
+      if (backing.has(section.status)) {
+        throw new Error(`${where}: status ${section.status} backs section ${backing.get(section.status)} and section ${section.id}`);
       }
-      if (section.module === undefined && section.status === undefined) {
-        throw new Error(`${where}: section ${section.id} declares neither module nor status`);
-      }
-      if (section.status !== undefined) {
-        const declared = Array.isArray(manifest.exposes?.status) && manifest.exposes.status.some((entry) => entry?.name === section.status);
-        if (!declared) throw new Error(`${where}: section ${section.id} status ${section.status} is not a status of plugin ${id}`);
-        if (backing.has(section.status)) {
-          throw new Error(`${where}: status ${section.status} backs section ${backing.get(section.status)} and section ${section.id}`);
-        }
-        backing.set(section.status, section.id);
-      }
-      const module = section.module;
-      if (module !== undefined) {
-        if (!isObject(module) && !isText(module)) throw new Error(`${where}: section ${section.id} requires a module`);
-        if (isObject(module)) {
-          only(`${where} section ${section.id} module`, module, ["horizontal", "vertical"]);
-        }
-        const paths = isObject(module) ? [module.horizontal, module.vertical] : [module];
-        for (const path of paths) {
-          if (!isText(path) || path.startsWith("/") || path.split("/").includes("..") || !path.endsWith(".js")) {
-            throw new Error(`${where}: section ${section.id} module must be a JavaScript path inside the package`);
-          }
-        }
-      }
+      backing.set(section.status, section.id);
       // fill is the section that receives the remaining height in the list layout (docs/spec/plugins.md#sections).
       if (section.fill !== undefined && typeof section.fill !== "boolean") {
         throw new Error(`${where}: section ${section.id} fill must be a boolean`);
@@ -834,8 +813,8 @@ export function validateManifest(manifest) {
   }
   if (manifest.exposes !== undefined) {
     // A plugin host registers the declared statuses and commands of its plugin (docs/spec/plugin-host.md#exposure).
-    if (manifest.surface === undefined && manifest.state === undefined && manifest.host === undefined) {
-      throw new Error(`${where}: exposes require a surface, a state module or a plugin host`);
+    if (manifest.surface === undefined && manifest.host === undefined) {
+      throw new Error(`${where}: exposes require a surface or a plugin host`);
     }
     validateExposes(id, manifest.exposes);
   }
@@ -1032,14 +1011,6 @@ export function checkReferences(environment, manifests) {
     }
   }
   normalizeSidebarDefaults(environment, manifests);
-  // A runtime that cannot run sidecars does not open the surface but mounts the state module (docs/spec/plugins.md#environmentjson).
-  if (environment.sidecars === false) {
-    for (const manifest of manifests) {
-      if (manifest.state && manifestSidecars(manifest).length > 0) {
-        throw new Error(`environment.json: plugin ${manifest.id} has a state module that uses sidecars, which this environment cannot run`);
-      }
-    }
-  }
 }
 
 /** Values that cannot be used as a set id. */

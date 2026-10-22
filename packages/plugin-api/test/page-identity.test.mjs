@@ -8,7 +8,8 @@ import { JSDOM } from "jsdom";
 import { pageIdentity, pagePlugin } from "../index.js";
 
 const locationOf = (url) => new JSDOM("", { url }).window.location;
-const manifest = (id) => ({ id, name: "Probe", description: "검사용.", sections: [{ id: `${id}.list`, name: "List", module: "ui/list.js" }] });
+const manifest = (id) => ({ id, name: "Probe", description: "검사용.", host: { page: "ui/host.html" },
+  exposes: { status: [{ name: `${id}.list`, description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: `${id}.list`, name: "List", status: `${id}.list` }] });
 // The host reads a path of the page origin; a path without a file fails the way the fetch of the page does.
 const reader = (files) => async (path) => {
   if (!(path in files)) throw new Error(`failed to load ${path}: 404`);

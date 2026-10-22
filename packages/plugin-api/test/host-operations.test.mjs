@@ -8,7 +8,8 @@ const host = { page: "ui/host.js" };
 const plugin = {
   id: "probe", name: "Probe", description: "A probe fixture plugin.", mark: "p", icon: "<path/>",
   host,
-  sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }],
+  exposes: { status: [{ name: "probe.list", description: "A probe status.", schema: { type: "object" } }] },
+  sections: [{ id: "probe.list", name: "List", status: "probe.list" }],
   dependencies: { "fixture-sidecar": ">=0.1.0 <0.3.0" },
   hostOperations: { "fixture-sidecar": ["list", "stat"] },
 };
@@ -23,9 +24,11 @@ test("a plugin host declares the operations it may call per sidecar dependency",
 });
 
 test("hostOperations needs a plugin host and a declared dependency", () => {
-  // A state module is a user of a sidecar too, so the manifest passes the dependency rule and reaches the host rule.
   const { host: _unused, ...withoutHost } = plugin;
-  assert.throws(() => validateManifest({ ...withoutHost, state: { module: "ui/state.js" } }), /hostOperations requires host/);
+  // A contributor without a host is valid through its contributions, so the manifest passes the dependency rule.
+  const contributor = { id: "probe", name: "Probe", description: "A probe fixture plugin.", dependencies: withoutHost.dependencies, hostOperations: withoutHost.hostOperations,
+    contributes: { "fixture.point": [{ range: "^1.0.0", module: "ui/tidy.js" }] } };
+  assert.throws(() => validateManifest(contributor), /hostOperations requires host/);
   assert.throws(() => validateManifest({ ...plugin, hostOperations: { "fixture-other": ["list"] } }),
     /hostOperations fixture-other is not a dependency/);
 });

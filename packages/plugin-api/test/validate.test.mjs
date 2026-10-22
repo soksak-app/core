@@ -10,7 +10,10 @@ const card = {
   surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
-const side = { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] };
+const side = {
+  id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", status: "side.list" }],
+  exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] }, host: { page: "ui/host.html" },
+};
 const environment = () => ({
   runtime: "runtime",
   workspace: {
@@ -69,12 +72,11 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
     [{ ...side, sections: [side.sections[0], side.sections[0]] }, /duplicate section/],
-    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list declares neither module nor status/],
+    [{ ...side, sections: [{ id: "side.list", name: "List" }] }, /section side.list requires a status/],
     [{ ...side, sections: [{ ...side.sections[0], fill: "yes" }] }, /section side.list fill must be a boolean/],
-    [{ ...side, sections: [{ id: "side.list", name: "List", module: "../list.js" }] }, /section side.list module must be a JavaScript path inside the package/],
-    [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.css" }] }, /section side.list module must be a JavaScript path inside the package/],
+    [{ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] }, /section side.list module is removed/],
     [{ id: "empty", name: "Empty", description: "빈 플러그인." }, /surface, sections or contributes/],
-    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module, a plugin host or contributes/],
+    [{ id: "side", name: "Side", description: "검사용 섹션.", dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a plugin host or contributes/],
     [{ ...card, dependencies: { Worker: "^1.2.0" } }, /dependencies: Worker is not a sidecar or plugin name/],
     [{ ...card, dependencies: ["@scope/sidecar-worker"] }, /dependencies must map sidecars and plugins to version ranges/],
     [{ ...card, dependencies: { "@scope/sidecar-worker": "**" } }, /dependencies @scope\/sidecar-worker: invalid range \*\*/],
@@ -421,7 +423,7 @@ test("extension points and contributions are rejected for each invalid field", (
     [{ ...contributor, contributes: { "probe.language": [{ ...item, range: "latest" }] } }, /contributes probe.language item 1 range latest is invalid/],
     [{ ...contributor, contributes: { "probe.language": [{ ...item, module: "/tidy.js" }] } }, /contributes probe.language item 1 module must be a JavaScript path inside the package/],
     [{ id: "none", name: "None", description: "아무것도 없다." }, /a plugin requires a surface, sections or contributes/],
-    [{ ...side, dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a state module, a plugin host or contributes/],
+    [{ id: "side", name: "Side", description: "검사용 섹션.", dependencies: { "@scope/sidecar-worker": "^1.2.0" } }, /dependencies require a surface, a plugin host or contributes/],
   ]) assert.throws(() => validateManifest(manifest), error, JSON.stringify(manifest).slice(0, 120));
 });
 
@@ -540,7 +542,7 @@ test("a dom composition is refused with the plugin and the manifest field", () =
 
 // A section with status is declared UI (docs/spec/declared-ui.md, sidebar section form).
 const statusSide = {
-  id: "side", name: "Side", description: "검사용 섹션.", state: { module: "state/side.js" },
+  id: "side", name: "Side", description: "검사용 섹션.", host: { page: "ui/host.html" },
   exposes: { status: [{ name: "side.count", description: "검사용 상태.", schema: { type: "object" } }] },
   sections: [{ id: "side.count", name: "Count", status: "side.count" }],
 };
@@ -551,12 +553,24 @@ test("a section names exactly one of module and status, and its status is declar
   assert.equal(accepted.sections[0].status, "side.count");
   const rejects = [
     [{ ...statusSide, sections: [{ id: "side.count", name: "Count", module: "ui/count.js", status: "side.count" }] },
-      /section side.count declares both module and status/],
-    [{ ...statusSide, sections: [{ id: "side.count", name: "Count" }] }, /section side.count declares neither module nor status/],
+      /section side.count module is removed/],
+    [{ ...statusSide, sections: [{ id: "side.count", name: "Count" }] }, /section side.count requires a status/],
     [{ ...statusSide, sections: [{ id: "side.count", name: "Count", status: "side.other" }] },
       /section side.count status side.other is not a status of plugin side/],
     [{ ...statusSide, sections: [{ id: "side.a", name: "A", status: "side.count" }, { id: "side.b", name: "B", status: "side.count" }] },
       /status side.count backs section side.a and section side.b/],
   ];
   for (const [manifest, message] of rejects) assert.throws(() => validateManifest(manifest), message);
+});
+
+// The module section and the state module are removed: the reader refuses each with an error that names the plugin and the field.
+test("a module section and a state module are refused with the plugin and the field", () => {
+  assert.throws(
+    () => validateManifest({ ...side, sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] }),
+    { message: "plugin side: section side.list module is removed; a section takes status (docs/spec/declared-ui.md)" },
+  );
+  assert.throws(
+    () => validateManifest({ ...statusSide, state: { module: "state/side.js" } }),
+    { message: "plugin side: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)" },
+  );
 });

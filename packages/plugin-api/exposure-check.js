@@ -37,18 +37,17 @@ export function* sourceFiles(dir, test) {
 
 /**
  * The error list of one component (the core or one plugin). sources is { path, text }, registrations is the statements of the registration code,
- * sections is the set of section module paths, and core is the name lists { status, commands } with which the core names
- * that a section module writes are checked. where is the place of the component used in registration errors.
+ * and core is the name lists { status, commands } of the core, which a runtime.command call names. where is the place of the component
+ * used in registration errors.
  */
-export function auditExposure({ owner, where, exposes, sources, registrations = [], sections = new Set(), core = null }) {
+export function auditExposure({ owner, where, exposes, sources, registrations = [], core = null }) {
   const errors = [];
   const report = (path, index, text) => errors.push(`${path}:${index + 1}: ${text}`);
   // default: status, commands and dom of exposes are optional fields; when missing, there is no declaration of that kind.
   const entries = (list) => new Set((list ?? []).map((e) => e.name));
   const declared = { status: entries(exposes.status), command: entries(exposes.commands), dom: entries(exposes.dom) };
-  // default: without core (the check of the core itself) there are no section modules, so the core name list is empty.
+  // default: without core (the check of the core itself) the core name list is empty.
   const coreNames = (list) => new Set(list ?? []);
-  const coreStatus = coreNames(core?.status);
   const coreCommand = coreNames(core?.commands);
   // A name is declared when it is declared as one of the three kinds.
   const any = (name) => Object.values(declared).some((set) => set.has(name));
@@ -58,11 +57,6 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
   for (const { path, text } of sources) {
     text.split("\n").forEach((line, index) => {
       // 1. Names
-      if (sections.has(path)) {
-        for (const [, name] of line.matchAll(/["'`](core\.[a-z0-9-]+(?:\.[a-z0-9-]+)*)["'`]/g)) {
-          if (!coreStatus.has(name) && !coreCommand.has(name)) report(path, index, `${name} is not a declared core status or command`);
-        }
-      }
       for (const [, name] of line.matchAll(quoted)) {
         if (!FILE.test(name) && !any(name)) report(path, index, `${name} is not declared`);
       }
@@ -70,9 +64,7 @@ export function auditExposure({ owner, where, exposes, sources, registrations = 
         if (!declared.command.has(name)) report(path, index, `data-command ${name} is not a declared command`);
       }
       for (const [, name] of line.matchAll(/\b(?:mark|bind)\(\s*\w+(?:\.\w+|\([^)]*\))*\s*,\s*["']([^"']+)["']/g)) {
-        // A section module can also connect core commands (docs/spec/plugins.md#sections).
-        const boundCore = sections.has(path) && coreCommand.has(name);
-        if (!declared.command.has(name) && !boundCore) report(path, index, `${name} is bound to an element but is not a declared command`);
+        if (!declared.command.has(name)) report(path, index, `${name} is bound to an element but is not a declared command`);
       }
       // A surface module runs a command of core through runtime.command (docs/spec/plugins.md#surface-module-ownership).
       for (const [, name] of line.matchAll(/\bruntime\.command\(\s*["']([^"']+)["']/g)) {
@@ -128,17 +120,10 @@ export function checkPluginRepository(root, core = coreExposure()) {
   const exposes = Object.fromEntries(["status", "commands", "dom"].map((key) =>
     // default: exposes and its entries are optional fields of plugin.json; when missing, there is no declaration.
     [key, [...(manifest.exposes?.[key] ?? []), ...(diagnostics[key] ?? [])]]));
-  // default: sections is an optional field of plugin.json; when missing, there are no section modules.
-  // A section declares exactly one of module and status (docs/spec/plugins.md#sections), and each form carries its
-  // orientation with the module: one shared path, or the path of each orientation. A status section is drawn by the
-  // workbench from the declared UI value of its status, so it contributes no module source.
-  const sections = new Set((manifest.sections ?? []).flatMap((section) =>
-    section.status !== undefined ? []
-      : typeof section.module === "string" ? [section.module] : [section.module.horizontal, section.module.vertical]));
   return auditExposure({
     owner: manifest.id, where: `plugin ${manifest.id}`, exposes,
     sources: paths.map((path) => ({ path: relative(root, path), text: readFileSync(path, "utf8") })),
-    sections, core,
+    core,
   });
 }
 
