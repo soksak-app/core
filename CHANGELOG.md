@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F238-d-19: The host page reports a listing error through the served call `runtime.error {where, text}`, with the checks of the view call, and the main page writes `error plugin <id> <where>: <text>` through its error display. Both hosts forward the call (contract `plugin-host.error.display`). Red: the workbench case failed with no display line, the Go case failed at its forwarding assertion, and the Rust case failed with `plugin host call runtime.error is not served`. Green: workbench plugin host calls 15 of 15, the Go case 1 of 1, and the Rust case 1 of 1.
 - F247: a surface composition that fails during creation reports each cleanup failure once, not again as an aggregate.
 - F212.12-1-3: The view surface removes its exposure port when its mount is disposed, not when its listener registrations settle, so a mount of the same surface after a dispose registers its port on Tauri. Red: `surface-view.test.mjs` fails the remount with `already has an exposure port` on the unchanged code; Green: the file passes 9 of 9.
 - F212.12-1-1: The view state reports `loading` as a JSON boolean. The document state of the native view boxed the result of a C logical operator as an int, so both hosts refused each state as not JSON. The state now boxes a boolean. Red: `view_channel_test` on the unchanged code fails `every view state reports loading as a JSON boolean: 0`; Green: the same test passes. The Go and Rust payload tests pass before and after, because the consumers already refuse a number.

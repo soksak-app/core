@@ -143,7 +143,7 @@ func (e pluginHostOverflow) Error() string { return e.reason }
 func servedPluginHostCall(command string) bool {
 	switch command {
 	case "runtime.command.register", "page.exposure.register", "runtime.sidecar.send", "runtime.sidecar.on", "runtime.sidecar.onFailure",
-		"runtime.data.get", "runtime.data.set":
+		"runtime.data.get", "runtime.data.set", "runtime.error":
 		return true
 	}
 	return false

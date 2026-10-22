@@ -88,6 +88,7 @@ pub fn forwarded_call(command: &str) -> bool {
             | "runtime.sidecar.onFailure"
             | "runtime.data.get"
             | "runtime.data.set"
+            | "runtime.error"
     )
 }
 

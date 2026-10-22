@@ -11,6 +11,9 @@ import { createViewCommands } from "./view-commands.js";
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;
 
+/** The place of a listing error: a non-empty string without a control character and without ": " (the check of the view call runtime.error). */
+const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
+
 /** The key that a plugin host registers under, from its plugin id (docs/spec/plugin-host.md#exposure). */
 export const hostKeyOf = (plugin) => `plugin:${plugin}`;
 
@@ -56,7 +59,7 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */
 export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register"
   || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure"
-  || command === "runtime.data.get" || command === "runtime.data.set";
+  || command === "runtime.data.get" || command === "runtime.data.set" || command === "runtime.error";
 
 /*
  * The sidecars that each installed plugin declares as dependencies: plugin id -> [{name, declared, declaration}]. declared is the
@@ -182,9 +185,9 @@ export function createHostCommands({ plugin, timeoutOf, report }) {
  * Returns {receive(event), close()}. receive takes one plugin-host-call event; close() ends the subscription and every open
  * call of every host with surface-closed.
  */
-export function listenPluginHostCalls({ register, unregister, timeoutOf, report, sidecarsOf = () => [], projectData = null }) {
-  if ([register, unregister, timeoutOf, report, sidecarsOf].some((value) => typeof value !== "function")) {
-    throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf, report and sidecarsOf functions");
+export function listenPluginHostCalls({ register, unregister, timeoutOf, report, displayError, sidecarsOf = () => [], projectData = null }) {
+  if ([register, unregister, timeoutOf, report, displayError, sidecarsOf].some((value) => typeof value !== "function")) {
+    throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf, report, displayError and sidecarsOf functions");
   }
   // The declared sidecar of the plugin named by a request, with the operations its host may call (rule 8). default: a plugin
   // with no sidecarsOf entries declares none, so every sidecar request of its host is refused by name.
@@ -239,6 +242,15 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
       if (commands === null) {
         commands = createHostCommands({ plugin, timeoutOf, report });
         keepHostCommands(plugin, commands);
+      }
+      if (event.command === "runtime.error") {
+        // The listing error of the host page is written through the error display of the main page; the declared tree draws no error (docs/spec/plugin-host.md#channel).
+        if (typeof params.where !== "string" || !ERROR_PLACE.test(params.where)) {
+          throw new TypeError(`plugin host call ${event.command} requires a non-empty where without a control character or ": "`);
+        }
+        if (typeof params.text !== "string" || params.text === "") throw new TypeError(`plugin host call ${event.command} requires a non-empty text`);
+        displayError(`plugin ${plugin} ${params.where}: ${params.text}`);
+        return { result: null };
       }
       if (event.command.startsWith("runtime.sidecar.")) return await answerSidecar(event, params);
       if (event.command.startsWith("runtime.data.")) return await answerData(event, params);

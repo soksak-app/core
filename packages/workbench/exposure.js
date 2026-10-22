@@ -688,6 +688,8 @@ export async function connectExposure({ report, projectData, ...values }) {
     timeoutOf: (name) => registry.commandTimeout(name),
     // default: a rejection that is not an Error is reported with its text.
     report: (error) => report(`plugin host: ${String(error?.message ?? error)}`),
+    // The listing error of a host page is written through the line reporter of the page (docs/spec/plugin-host.md#channel).
+    displayError: (line) => report(line),
     // The sidecars that environment.js declared for each plugin (docs/plans/plugin-host-routes.md rule 8).
     sidecarsOf: pluginSidecarsOf,
     // The project data of the shown project, which answers the data calls of a plugin host.

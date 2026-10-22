@@ -58,6 +58,7 @@ const session = "plugin:probe:project-a:fixture-sidecar";
 const registered = [];
 const unregistered = [];
 const reports = [];
+const displays = [];
 // The sidecars of the probe plugin: fixture-sidecar declares one read operation, list (docs/plans/plugin-host-routes.md rule 8).
 const probeSidecars = [{
   name: "fixture-sidecar",
@@ -84,10 +85,36 @@ function listen() {
     unregister: (plugin) => unregistered.push(plugin),
     timeoutOf: () => undefined,
     report: (error) => reports.push(String(error?.message ?? error)),
+    displayError: (line) => displays.push(line),
     sidecarsOf: (plugin) => (plugin === "probe" ? probeSidecars : []),
     projectData,
   });
 }
+
+// contract: plugin-host.error.display
+test("runtime.error writes the listing error of the plugin through the error display and answers null", async () => {
+  const pluginHost = listen();
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 9, command: "runtime.error", params: { where: "listing", text: "cannot read folder" } });
+    await tick();
+    assert.deepEqual(displays, ["plugin probe listing: cannot read folder"]);
+    assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 9, result: null } });
+    // Each refused value writes nothing and answers the named error.
+    const refusals = [
+      [{ where: "", text: "x" }, 'plugin host call runtime.error requires a non-empty where without a control character or ": "'],
+      [{ where: "a: b", text: "x" }, 'plugin host call runtime.error requires a non-empty where without a control character or ": "'],
+      [{ where: "listing", text: "" }, "plugin host call runtime.error requires a non-empty text"],
+    ];
+    for (const [params, message] of refusals) {
+      emit("plugin-host-call", { plugin: "probe", id: 10, command: "runtime.error", params });
+      await tick();
+      assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message });
+    }
+    assert.equal(displays.length, 1, "a refused error call wrote a display line");
+  } finally {
+    pluginHost.close();
+  }
+});
 
 test("a served registration call registers the entry under the key of its plugin", async () => {
   const pluginHost = listen();
@@ -176,6 +203,7 @@ test("a registration that the registry refuses is answered as an error", async (
     unregister: () => {},
     timeoutOf: () => undefined,
     report: reports.push.bind(reports),
+    displayError: displays.push.bind(displays),
   });
   emit("plugin-host-call", { plugin: "probe", id: 5, command: "page.exposure.register", params: { kind: "status", name: "other.lines" } });
   await tick();
@@ -249,7 +277,7 @@ test("a sidecar call refuses a sidecar the plugin does not declare, a session of
 test("a declared sidecar whose sidecar.json the page does not hold refuses every operation with the named error", async () => {
   // The installed document carries no sidecar declarations, so the declaration of a declared sidecar is null (docs/plans/plugin-host-routes.md rule 8).
   const pluginHost = listenPluginHostCalls({
-    register: () => {}, unregister: () => {}, timeoutOf: () => undefined, report: () => {},
+    register: () => {}, unregister: () => {}, timeoutOf: () => undefined, report: () => {}, displayError: () => {},
     sidecarsOf: (plugin) => (plugin === "probe" ? [{ name: "fixture-sidecar", declared: ["list"], declaration: null }] : []),
   });
   const count = calls.length;

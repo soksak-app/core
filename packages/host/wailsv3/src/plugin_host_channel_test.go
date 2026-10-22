@@ -184,6 +184,25 @@ func TestPluginHostChannelForwardsTheProjectDataCalls(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.error.display
+func TestPluginHostChannelForwardsTheErrorCall(t *testing.T) {
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	message := `{"id": 15, "command": "runtime.error", "params": {"where": "listing", "text": "cannot read folder"}}`
+	if err := s.pluginHostMessage("probe", hostMessage(message)); err != nil {
+		t.Fatalf("served error call %s: %v", message, err)
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("a served error call was refused or answered by the host: %v", fake.posted)
+	}
+	want := []hostEvent{
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(15), "command": "runtime.error", "params": json.RawMessage(`{"where": "listing", "text": "cannot read folder"}`)}},
+	}
+	if !reflect.DeepEqual(*events, want) {
+		t.Fatalf("events %v, want %v", *events, want)
+	}
+}
+
 // contract: plugin-host.channel.snapshot
 func TestPluginHostChannelRelaysADeclaredUISnapshot(t *testing.T) {
 	s, events := channelSurfaces(t, &channelPlatform{}, true)

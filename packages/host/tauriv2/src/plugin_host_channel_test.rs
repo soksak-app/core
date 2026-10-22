@@ -167,6 +167,21 @@ fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() 
     }
 }
 
+// contract: plugin-host.error.display
+#[test]
+fn the_host_forwards_the_error_call_to_the_main_page() {
+    let channels = host_channels(true);
+    let params = json!({"where": "listing", "text": "cannot read folder"});
+    let message = format!(r#"{{"id": 15, "command": "runtime.error", "params": {params}}}"#);
+    assert_eq!(
+        channels.receive("probe", &host_message(&message)),
+        Ok(Received::Emit(
+            "plugin-host-call",
+            json!({"plugin": "probe", "id": 15, "command": "runtime.error", "params": params})
+        ))
+    );
+}
+
 // contract: plugin-host.channel.snapshot
 #[test]
 fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
