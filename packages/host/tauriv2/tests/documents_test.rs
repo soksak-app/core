@@ -570,30 +570,77 @@ fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
 
 const READY: &str = r#"{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}"#;
 
-// contract: view.channel.ready
+// The document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state): loading is a JSON
+// boolean, and navigations counts the navigations that the view has started.
+const NATIVE_VIEW_STATE: &str = r#"{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":"","navigations":1}"#;
+
+// contract: view.channel.progress-keeps-ready
+// The view reports the progress of its load after its ready message: the navigation is the same, so the ready record stays.
 #[test]
-fn view_channel_records_the_ready_document_and_clears_it_on_navigation() {
+fn view_channel_keeps_the_ready_document_through_the_progress_of_its_load() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
     channels.register("probe-surface", "probe");
+    // The navigation starts before the page script runs, so its state arrives before the ready message.
+    let start = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":true"#);
+    assert_eq!(channels.state("probe-surface", &start), Ok(()));
+    assert_eq!(
+        channels.message("probe-surface", READY),
+        Ok(true),
+        "a ready message makes the view ready"
+    );
+    let loading = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":true"#);
+    assert_eq!(channels.state("probe-surface", &loading), Ok(()));
+    assert_eq!(
+        channels.check_post("probe-surface"),
+        Ok(()),
+        "the progress of the same navigation keeps the ready record"
+    );
+}
+
+// contract: view.channel.state-navigations-required
+#[test]
+fn view_channel_refuses_a_state_without_navigations_and_a_lower_count() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    let without = NATIVE_VIEW_STATE.replace(r#","navigations":1"#, "");
+    assert_eq!(
+        channels.state("probe-surface", &without),
+        Err("probe-surface: view state has no navigations".to_string())
+    );
+    let two = NATIVE_VIEW_STATE.replace(r#""navigations":1"#, r#""navigations":2"#);
+    assert_eq!(channels.state("probe-surface", &two), Ok(()));
+    assert_eq!(
+        channels.state("probe-surface", NATIVE_VIEW_STATE),
+        Err(
+            "probe-surface: view state counts 1 navigations, below the 2 counted before"
+                .to_string()
+        )
+    );
+}
+
+// contract: view.channel.ready
+#[test]
+fn view_channel_clears_the_ready_document_when_a_new_navigation_starts() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    let start = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":true"#);
+    assert_eq!(channels.state("probe-surface", &start), Ok(()));
     assert_eq!(
         channels.message("probe-surface", READY),
         Ok(true),
         "a ready message makes the view ready"
     );
     assert_eq!(channels.check_post("probe-surface"), Ok(()));
-    assert_eq!(
-        channels.state("probe-surface", r#"{"loading":true}"#),
-        Ok(())
-    );
+    let next = NATIVE_VIEW_STATE
+        .replace(r#""loading":false"#, r#""loading":true"#)
+        .replace(r#""navigations":1"#, r#""navigations":2"#);
+    assert_eq!(channels.state("probe-surface", &next), Ok(()));
     assert_eq!(
         channels.check_post("probe-surface"),
         Err("probe-surface has no ready document".to_string()),
-        "a navigation clears the ready record"
+        "a new navigation clears the ready record"
     );
 }
-
-// The document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state): loading is a JSON boolean.
-const NATIVE_VIEW_STATE: &str = r#"{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":""}"#;
 
 // contract: view.channel.state-boolean
 #[test]

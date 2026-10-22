@@ -8,7 +8,7 @@
 // the bridge, injected scripts, or data store of the application. Every function is called on the main thread.
 
 // Called when the document state changes. state is the JSON object
-//   {url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}, history, link}
+//   {url, title, loading, progress, canGoBack, canGoForward, error, scroll: {x, y}, history, link, navigations}
 // and is released when the call returns. Called on the main thread.
 typedef void (*sp_document_changed)(void *context, const char *state);
 

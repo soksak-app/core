@@ -1283,6 +1283,8 @@ type viewChannel struct {
 	document string
 	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
 	processReady bool
+	// navigations is the navigation count that the last document state of the view reported. A higher count starts a new document.
+	navigations uint64
 	// calls holds the command of each call request of the view that the main page has not answered, by id.
 	calls map[uint64]string
 }
@@ -1562,17 +1564,38 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 	return fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
 }
 
-// viewState records the navigation state of the view of surface. A loading document clears the ready record of the view, so the
-// next ready message of the new document is the first record of it.
+// viewState records the navigation state of the view of surface. A navigation that starts after the last state clears the ready record
+// of the view, so the next ready message of the new document is the first record of it. The progress of a navigation keeps the record.
 func (s *Surfaces) viewState(surface, state string) error {
 	var loaded struct {
-		Loading bool `json:"loading"`
+		// Loading is decoded only to check that the state carries a JSON boolean.
+		Loading     bool    `json:"loading"`
+		Navigations *uint64 `json:"navigations"`
 	}
 	if err := json.Unmarshal([]byte(state), &loaded); err != nil {
 		return fmt.Errorf("%s: view state is not JSON: %w", surface, err)
 	}
-	if loaded.Loading {
-		s.documents.setReadyDocument(surface, "")
+	if loaded.Navigations == nil {
+		return fmt.Errorf("%s: view state has no navigations", surface)
+	}
+	return s.documents.recordViewNavigations(surface, *loaded.Navigations)
+}
+
+// recordViewNavigations records the navigation count that the state of the view of surface reports. A count above the last one clears
+// the ready document; a count below the last one is an error, because the native state counts navigations upward only.
+func (d *Documents) recordViewNavigations(surface string, navigations uint64) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	if !ok {
+		return nil
+	}
+	if navigations < channel.navigations {
+		return fmt.Errorf("%s: view state counts %d navigations, below the %d counted before", surface, navigations, channel.navigations)
+	}
+	if navigations > channel.navigations {
+		channel.navigations = navigations
+		channel.document = ""
 	}
 	return nil
 }

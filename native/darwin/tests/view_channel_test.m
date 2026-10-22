@@ -132,6 +132,13 @@ int main(void) { @autoreleasepool {
         }
         check(everyLoadingIsBoolean,
             [NSString stringWithFormat:@"every view state reports loading as a JSON boolean: %@", viewStates.lastObject[@"loading"]]);
+        // The progress of one load is reported as loading, but the load starts one navigation, so every state counts one navigation.
+        BOOL everyCountIsOne = YES;
+        for (NSDictionary *state in viewStates) {
+            if (![state[@"navigations"] isEqual:@1]) everyCountIsOne = NO;
+        }
+        check(everyCountIsOne,
+            [NSString stringWithFormat:@"every view state of one load counts one navigation: %@", viewStates.lastObject[@"navigations"]]);
         check([latest[@"title"] isEqual:@"handler object"],
             [NSString stringWithFormat:@"the view page has the sok-view handler: %@", latest[@"title"]]);
         until(@"the ready message reaches the view receiver", ^BOOL{ return viewMessages.count > 0; });

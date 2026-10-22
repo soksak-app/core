@@ -297,6 +297,11 @@ static BOOL isBinaryIdentifier(NSString *text) {
 // because when the replaced earlier navigation is cancelled, WKWebView.loading becomes NO before the new navigation
 // starts.
 @property(retain) WKNavigation *navigation;
+// The navigation that was last counted in navigations, so a navigation is counted once, when it starts.
+@property(retain) WKNavigation *countedNavigation;
+// The number of navigations that the document has started. A progress change of a navigation does not change it, so the host
+// clears the ready document of a view only when a new navigation starts (docs/spec/native-surfaces.md, document-state).
+@property unsigned long long navigations;
 @property(assign) NSView *webSurface;
 @property NSPoint offset;
 // The document streams (docs/spec/native-surfaces.md#document-streams). The host turns a stream on while it has a
@@ -332,6 +337,7 @@ static BOOL isBinaryIdentifier(NSString *text) {
 - (void)stopHiddenTimer;
 - (void)report;
 - (void)request:(WKNavigation *)navigation;
+- (void)countNavigation:(WKNavigation *)navigation;
 - (BOOL)requestIfStarted:(WKNavigation *)navigation;
 - (void)applyInsets;
 - (void)surfaceScaleChanged;
@@ -579,6 +585,7 @@ static NSString *const kCoreHost = @"core";
     [_plugin release];
     [_binaries release];
     [_navigation release];
+    [_countedNavigation release];
     [_eventMonitor release];
     [self stopHiddenTimer];
     [super dealloc];
@@ -713,6 +720,7 @@ static NSString *const kCoreHost = @"core";
         @"scroll": @{ @"x": @(self.offset.x), @"y": @(self.offset.y) },
         @"history": [self history],
         @"link": self.link ?: @"",
+        @"navigations": @(self.navigations),
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:state options:0 error:nil];
     if (!data) return;
@@ -735,8 +743,16 @@ static NSString *const kCoreHost = @"core";
 }
 
 - (void)request:(WKNavigation *)navigation {
+    [self countNavigation:navigation];
     self.navigation = navigation;
     [self report];
+}
+
+// Counts a navigation once, when it starts. A nil navigation starts none.
+- (void)countNavigation:(WKNavigation *)navigation {
+    if (!navigation || navigation == self.countedNavigation) return;
+    self.countedNavigation = navigation;
+    self.navigations += 1;
 }
 
 - (BOOL)requestIfStarted:(WKNavigation *)navigation {
@@ -751,6 +767,7 @@ static NSString *const kCoreHost = @"core";
 }
 
 - (void)webView:(WKWebView *)view didStartProvisionalNavigation:(WKNavigation *)navigation {
+    [self countNavigation:navigation];
     self.navigation = navigation;
     self.failure = nil;
     [self report];

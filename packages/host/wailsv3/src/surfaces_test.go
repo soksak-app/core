@@ -225,15 +225,56 @@ func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testi
 	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err != nil {
 		t.Fatalf("post to a ready view: %v", err)
 	}
-	s.viewState("probe-surface", `{"loading":true}`)
+	next := strings.Replace(strings.Replace(nativeViewState, `"loading":false`, `"loading":true`, 1), `"navigations":1`, `"navigations":2`, 1)
+	if err := s.viewState("probe-surface", next); err != nil {
+		t.Fatalf("new navigation state: %v", err)
+	}
 	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err == nil {
 		t.Fatalf("post after navigation is accepted, want the ready record cleared")
 	}
 }
 
+// contract: view.channel.progress-keeps-ready
+// The view reports the progress of its load after its ready message: the navigation is the same, so the ready record stays.
+func TestViewStateKeepsTheReadyDocumentThroughProgressOfTheSameNavigation(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	// The navigation starts before the page script runs, so its state arrives before the ready message.
+	start := strings.Replace(nativeViewState, `"loading":false`, `"loading":true`, 1)
+	if err := s.viewState("probe-surface", start); err != nil {
+		t.Fatalf("start state: %v", err)
+	}
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	loading := strings.Replace(nativeViewState, `"loading":false`, `"loading":true`, 1)
+	if err := s.viewState("probe-surface", loading); err != nil {
+		t.Fatalf("progress state: %v", err)
+	}
+	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err != nil {
+		t.Fatalf("post after the progress of the same navigation: %v, want the ready record kept", err)
+	}
+}
+
+// contract: view.channel.state-navigations-required
+func TestViewStateRefusesAStateWithoutNavigationsAndALowerCount(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	without := strings.Replace(nativeViewState, `,"navigations":1`, ``, 1)
+	if err := s.viewState("probe-surface", without); err == nil || err.Error() != "probe-surface: view state has no navigations" {
+		t.Fatalf("state without navigations: %v, want the refusal with its text", err)
+	}
+	two := strings.Replace(nativeViewState, `"navigations":1`, `"navigations":2`, 1)
+	if err := s.viewState("probe-surface", two); err != nil {
+		t.Fatalf("state with two navigations: %v", err)
+	}
+	if err := s.viewState("probe-surface", nativeViewState); err == nil || err.Error() != "probe-surface: view state counts 1 navigations, below the 2 counted before" {
+		t.Fatalf("state with a lower count: %v, want the refusal with its text", err)
+	}
+}
+
 // nativeViewState is the document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state):
-// loading is a JSON boolean.
-const nativeViewState = `{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":""}`
+// loading is a JSON boolean, and navigations counts the navigations that the view has started.
+const nativeViewState = `{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":"","navigations":1}`
 
 // contract: view.channel.state-boolean
 func TestViewStateAcceptsTheNativePayloadWithABooleanLoading(t *testing.T) {

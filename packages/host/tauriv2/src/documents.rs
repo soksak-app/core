@@ -674,6 +674,8 @@ struct ViewChannel {
     document: String,
     /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
     process_ready: bool,
+    /// The navigations that the last document state of the view reported. A higher count starts a new document.
+    navigations: u64,
     /// The calls that the view has open, by id, with the plugin and the command of each.
     calls: BTreeMap<u64, String>,
 }
@@ -700,9 +702,13 @@ struct ViewEvent {
     reason: String,
 }
 
+/// The document state of a view (docs/spec/native-surfaces.md, document-state). The decoder checks that loading is a JSON boolean; the
+/// ready record follows navigations, because loading is also true for each progress change of a navigation.
 #[derive(Deserialize)]
 struct ViewState {
+    #[allow(dead_code)]
     loading: bool,
+    navigations: Option<u64>,
 }
 
 impl ViewChannels {
@@ -722,6 +728,7 @@ impl ViewChannels {
                 plugin: plugin.to_string(),
                 document: String::new(),
                 process_ready: false,
+                navigations: 0,
                 calls: BTreeMap::new(),
             },
         );
@@ -1040,13 +1047,26 @@ impl ViewChannels {
         })))
     }
 
-    /// Records the navigation state of the view of surface. A loading document clears the ready document of the view.
+    /// Records the navigation state of the view of surface. A navigation that starts after the last state clears the ready document
+    /// of the view; the progress of a navigation keeps it, because the document that sent the ready message is still the one loading.
     pub fn state(&self, surface: &str, state: &str) -> Result<(), String> {
         let loaded: ViewState = serde_json::from_str(state)
             .map_err(|error| format!("{surface}: view state is not JSON: {error}"))?;
-        if loaded.loading
-            && let Some(channel) = self.lock().get_mut(surface)
-        {
+        let Some(navigations) = loaded.navigations else {
+            return Err(format!("{surface}: view state has no navigations"));
+        };
+        let mut channels = self.lock();
+        let Some(channel) = channels.get_mut(surface) else {
+            return Ok(());
+        };
+        if navigations < channel.navigations {
+            return Err(format!(
+                "{surface}: view state counts {navigations} navigations, below the {} counted before",
+                channel.navigations
+            ));
+        }
+        if navigations > channel.navigations {
+            channel.navigations = navigations;
             channel.document.clear();
         }
         Ok(())
