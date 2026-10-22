@@ -265,9 +265,12 @@ fn check_removed_fields(id: &str, manifest: &Value) -> Result<(), String> {
     }
     for section in manifest["sections"].as_array().into_iter().flatten() {
         if section.get("module").is_some() {
-            let section_id = section["id"].as_str().unwrap_or_default();
+            let what = match section["id"].as_str() {
+                Some(section_id) => format!("section {section_id} module"),
+                None => "section module".to_string(),
+            };
             return Err(format!(
-                "plugin {id}: section {section_id} module is removed; a section takes status (docs/spec/declared-ui.md)"
+                "plugin {id}: {what} is removed; a section takes status (docs/spec/declared-ui.md)"
             ));
         }
     }

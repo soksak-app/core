@@ -212,8 +212,11 @@ func checkRemovedFields(id string, manifest map[string]any) error {
 				continue
 			}
 			if _, ok := section["module"]; ok {
-				sectionID, _ := text(section["id"])
-				return fmt.Errorf("plugin %s: section %s module is removed; a section takes status (docs/spec/declared-ui.md)", id, sectionID)
+				what := "section module"
+				if sectionID, ok := text(section["id"]); ok {
+					what = "section " + sectionID + " module"
+				}
+				return fmt.Errorf("plugin %s: %s is removed; a section takes status (docs/spec/declared-ui.md)", id, what)
 			}
 		}
 	}
