@@ -82,7 +82,7 @@ func pluginTree(t *testing.T) string {
 	writeTree(t, dir, map[string]string{
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
 			"files": ["plugin.json", "ui"]}`,
-		"plugin.json":   `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
+		"plugin.json":   `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 		"ui/b.js":       "b",
 		"ui/a/run.sh*":  "run",
 		"test/skip.mjs": "not listed",
@@ -142,14 +142,14 @@ func TestPluginPackRejectsLinksAndAManifestMismatchWithoutWriting(t *testing.T) 
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	other = pluginTree(t)
-	writeTree(t, other, map[string]string{"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "latest"}}`})
+	writeTree(t, other, map[string]string{"plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "latest"}}`})
 	code, _, stderr = run("plugin", "pack", other, out)
-	if code != 1 || !strings.HasPrefix(stderr, "sok: plugin.json dependencies @scope/sidecar-worker: invalid version range") {
+	if code != 1 || stderr != "sok: plugin probe: dependencies @scope/sidecar-worker: invalid range latest\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	writeTree(t, other, map[string]string{"plugin.json": `{"dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`})
 	code, _, stderr = run("plugin", "pack", other, out)
-	if code != 1 || stderr != "sok: plugin.json: id must be a lowercase identifier\n" {
+	if code != 1 || stderr != "sok: plugin.json: invalid id undefined\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 }
@@ -287,8 +287,8 @@ func TestPluginPackAddsDiagnosticDeclarationsOnlyWithTheFlag(t *testing.T) {
 // contract: cli.pack.refuses-removed-fields
 func TestPluginPackRefusesRemovedManifestFields(t *testing.T) {
 	for _, c := range []struct{ manifest, want string }{
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin probe: section probe.list module is removed; a section takes status (docs/spec/declared-ui.md)"},
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}`, "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}`, "plugin probe: section probe.list module is removed; a section takes status (docs/spec/declared-ui.md)"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}`, "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)"},
 	} {
 		dir := pluginTree(t)
 		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
@@ -302,12 +302,12 @@ func TestPluginPackRefusesRemovedManifestFields(t *testing.T) {
 // contract: cli.pack.refuses-schema-outside-subset
 func TestPluginPackRefusesASchemaOutsideTheSubset(t *testing.T) {
 	for _, c := range []struct{ manifest, want string }{
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "required": ["path"]}}}`, "plugin probe surface params: unknown field required"},
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object", "required": ["x"]}, "result": {"type": "null"}}]}}`, "probe exposes probe.run params: unknown field required"},
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 0}}}}]}}`, "probe exposes probe.state schema.n: unknown field minimum"},
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}`, "plugin probe: exposes require a surface or a plugin host"},
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}`, "probe exposes probe.x: many must be a boolean"},
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 600001}]}}`, "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "required": ["path"]}}}`, "plugin probe surface params: unknown field required"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object", "required": ["x"]}, "result": {"type": "null"}}]}}`, "probe exposes probe.run params: unknown field required"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer", "minimum": 0}}}}]}}`, "probe exposes probe.state schema.n: unknown field minimum"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "string"}}]}}`, "plugin probe: exposes require a surface or a plugin host"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"dom": [{"name": "probe.x", "description": "X.", "many": "yes"}]}}`, "probe exposes probe.x: many must be a boolean"},
+		{`{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}, "exposes": {"commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 600001}]}}`, "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds"},
 	} {
 		dir := pluginTree(t)
 		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
@@ -317,7 +317,7 @@ func TestPluginPackRefusesASchemaOutsideTheSubset(t *testing.T) {
 		}
 	}
 	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"params": {"type": "object", "properties": {"path": {"type": ["string", "null"]}}}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer"}}, "items": {"enum": [1, 2]}}}], "commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 1000}]}}`})
+	writeTree(t, dir, map[string]string{"ui/page.html": "<!doctype html>", "plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}, "params": {"type": "object", "properties": {"path": {"type": ["string", "null"]}}}}, "exposes": {"status": [{"name": "probe.state", "description": "State.", "schema": {"type": "object", "properties": {"n": {"type": "integer"}}, "items": {"enum": [1, 2]}}}], "commands": [{"name": "probe.run", "description": "Runs.", "params": {"type": "object"}, "result": {"type": "null"}, "timeout": 1000}]}}`})
 	if code, _, stderr := run("plugin", "pack", dir, t.TempDir()); code != 0 {
 		t.Fatalf("subset schemas: code %d stderr %q", code, stderr)
 	}
@@ -325,8 +325,10 @@ func TestPluginPackRefusesASchemaOutsideTheSubset(t *testing.T) {
 
 // contract: cli.pack.rejects-unlisted-modules
 func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
+	const head = `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}`
 	for _, c := range []struct{ manifest, want string }{
-		{`{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "page/probe.js"}}`, "plugin.json: surface module page/probe.js must be listed in files"},
+		{head + `, "surface": {"module": "ui/b.js"}}`, "plugin probe: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)"},
+		{head + `, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "page/probe.html"}}}`, "plugin.json: view page page/probe.html must be listed in files"},
 	} {
 		dir := pluginTree(t)
 		writeTree(t, dir, map[string]string{"plugin.json": c.manifest})
@@ -334,11 +336,6 @@ func TestPluginPackRejectsAModuleThatFilesDoesNotList(t *testing.T) {
 		if code != 1 || stderr != "sok: "+c.want+"\n" {
 			t.Fatalf("code %d stderr %q, want %q", code, stderr, c.want)
 		}
-	}
-	dir := pluginTree(t)
-	writeTree(t, dir, map[string]string{"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "ui/b.js"}}`})
-	if code, _, stderr := run("plugin", "pack", dir, t.TempDir()); code != 0 {
-		t.Fatalf("listed modules: code %d stderr %q", code, stderr)
 	}
 }
 
@@ -367,7 +364,7 @@ func TestPluginPackRefusesAViewPageNotListedInFiles(t *testing.T) {
 	writeTree(t, dir, map[string]string{
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"},
 			"files": ["plugin.json", "ui/b.js"]}`,
-		"plugin.json":  `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}`,
+		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "mark": "P", "icon": "<svg></svg>", "surface": {"composition": {"kind": "view", "page": "ui/page.html"}}}`,
 		"ui/page.html": "<!doctype html>",
 	})
 	out := filepath.Join(t.TempDir(), "out")

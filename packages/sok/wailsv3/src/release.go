@@ -199,30 +199,6 @@ func checkReleaseFiles(listed []string) error {
 	return nil
 }
 
-// checkRemovedFields refuses the manifest fields that the reader removed: the state module and the module of a section. The error
-// names the plugin and the field, as plugin-api validateManifest does (docs/spec/plugins.md, docs/spec/declared-ui.md).
-func checkRemovedFields(id string, manifest map[string]any) error {
-	if _, ok := manifest["state"]; ok {
-		return fmt.Errorf("plugin %s: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)", id)
-	}
-	if sections, ok := manifest["sections"].([]any); ok {
-		for _, raw := range sections {
-			section, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			if _, ok := section["module"]; ok {
-				what := "section module"
-				if sectionID, ok := text(section["id"]); ok {
-					what = "section " + sectionID + " module"
-				}
-				return fmt.Errorf("plugin %s: %s is removed; a section takes status (docs/spec/declared-ui.md)", id, what)
-			}
-		}
-	}
-	return nil
-}
-
 // manifestModules are the modules that plugin.json loads and their names: the surface module, the page of a view
 // composition, the module of each section, and the state.
 func manifestModules(manifest map[string]any) [][2]string {
@@ -286,19 +262,11 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	id, ok := text(manifest["id"])
-	if !ok || !isIdentifier(id) {
-		return fmt.Errorf("plugin.json: id must be a lowercase identifier")
-	}
-	if _, err := ManifestDependencies(manifest); err != nil {
+	if err := ValidateManifest(manifest); err != nil {
 		return err
 	}
-	if err := checkRemovedFields(id, manifest); err != nil {
-		return err
-	}
-	if err := checkPluginSchemas(id, manifest); err != nil {
-		return err
-	}
+	// default: ValidateManifest accepted the id, so it is text.
+	id, _ := text(manifest["id"])
 	listed := listedFiles(pkg)
 	if err := checkReleaseFiles(listed); err != nil {
 		return err

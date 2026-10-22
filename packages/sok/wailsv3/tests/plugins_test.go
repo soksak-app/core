@@ -42,7 +42,7 @@ func pluginVersionsFor(t *testing.T, core string, versions ...string) string {
 		writeTree(t, dir, map[string]string{
 			"package.json": `{"name": "@scope/plugin-probe", "version": "` + version + `", "engines": {"soksak": "^` + core + `"},
 				"files": ["plugin.json", "ui"]}`,
-			"plugin.json": `{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
+			"plugin.json": `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}`,
 			"ui/b.js":     "b " + version,
 		})
 		result := runJSON(t, "plugin", "pack", dir, releases)
@@ -156,7 +156,7 @@ func unsafeRelease(t *testing.T, path string) string {
 	release := tar.NewWriter(zipped)
 	for _, entry := range [][2]string{
 		{"package.json", `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`},
-		{"plugin.json", `{"id": "probe"}`},
+		{"plugin.json", `{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`},
 		{"../escape.txt", "outside"},
 	} {
 		if err := release.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: entry[0], Mode: 0o644, Size: int64(len(entry[1]))}); err != nil {
@@ -455,7 +455,7 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 		writeTree(t, dir, map[string]string{
 			"package.json": `{"name": "@scope/plugin-` + item.id + `", "version": "` + item.version + `", "engines": {"soksak": "^0.0.2"},
 				"files": ["plugin.json"]}`,
-			"plugin.json": jsonText(t, entry{"id": item.id, "dependencies": item.dependencies}),
+			"plugin.json": jsonText(t, entry{"id": item.id, "name": "Probe", "description": "Sample.", "contributes": entry{"lib.point": []any{entry{"range": "^1.0.0", "module": "ui/b.js"}}}, "dependencies": item.dependencies}),
 		})
 		result := runJSON(t, "plugin", "pack", dir, releases)
 		sidecars := map[string]string{}
@@ -740,7 +740,7 @@ func mismatchedIndex(t *testing.T) string {
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
-		"plugin.json":  `{"id": "other"}`,
+		"plugin.json":  `{"id": "other", "name": "Other", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`,
 	})
 	releases := t.TempDir()
 	result := runJSON(t, "plugin", "pack", dir, releases)
@@ -773,7 +773,7 @@ func TestReadInstalledRefusesAPluginWhosePluginIDDiffers(t *testing.T) {
 	writeTree(t, config, map[string]string{
 		"plugins/installed.json":           `{"format": 3, "plugins": {"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {}}}, "sidecars": {}}`,
 		"plugins/probe/0.2.0/package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
-		"plugins/probe/0.2.0/plugin.json":  `{"id": "other"}`,
+		"plugins/probe/0.2.0/plugin.json":  `{"id": "other", "name": "Other", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}`,
 	})
 	_, err := sok.ReadInstalled(config)
 	rejects(t, err, "plugin.json id other differs from the installed plugin probe")
@@ -801,7 +801,7 @@ func TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset(t *testing.T) 
 	runJSON(t, "registry", "use", index, "--config-dir", config)
 	writeTree(t, filepath.Join(config, "plugins/probe/0.2.0"), map[string]string{
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
-		"plugin.json":  `{"id": "probe", "surface": {"params": {"type": "object", "required": ["path"]}}}`,
+		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "required": ["path"]}}}`,
 	})
 	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
 	rejects(t, err, "plugin probe surface params: unknown field required")
