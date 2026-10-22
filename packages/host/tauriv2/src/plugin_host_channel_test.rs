@@ -339,6 +339,30 @@ fn the_posts_of_the_main_page_are_host_messages_and_need_a_ready_document() {
     assert_eq!(host_channels(true).check_post("probe"), Ok(()));
 }
 
+// contract: plugin-host.declared-ui.expanded
+#[test]
+fn the_main_page_posts_declared_ui_expansion_to_the_host() {
+    let data = json!({
+        "status": "tree-status",
+        "tree": "example-tree",
+        "path": ["root", "child"],
+        "expanded": true,
+    });
+    let event = PluginHostEvent {
+        plugin: "probe".into(),
+        event: "declared-ui.expanded".into(),
+        data: Some(data.clone()),
+    };
+    assert_eq!(
+        event_message(&event),
+        Ok(json!({
+            "sok": 1,
+            "event": "declared-ui.expanded",
+            "data": data,
+        }))
+    );
+}
+
 /// Returns the channels of a window whose host of plugin probe declares declared and has the ready document doc-1.
 fn state_channels(declared: Option<HostState>) -> PluginHostChannels {
     let channels = PluginHostChannels::default();

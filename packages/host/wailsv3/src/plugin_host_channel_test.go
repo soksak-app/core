@@ -351,6 +351,20 @@ func TestPluginHostChannelPostsTheMessagesOfTheMainPage(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.declared-ui.expanded
+func TestPluginHostEventPostsDeclaredUIExpansion(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, true)
+	data := json.RawMessage(`{"status":"tree-status","tree":"example-tree","path":["root","child"],"expanded":true}`)
+	if err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Event: "declared-ui.expanded", Data: data}); err != nil {
+		t.Fatalf("declared UI expansion post: %v", err)
+	}
+	want := []string{`{"data":{"status":"tree-status","tree":"example-tree","path":["root","child"],"expanded":true},"event":"declared-ui.expanded","sok":1}`}
+	if !reflect.DeepEqual(fake.posted, want) {
+		t.Fatalf("posted %v, want %v", fake.posted, want)
+	}
+}
+
 // stateSurfaces returns the Surfaces of channelSurfaces whose host of plugin probe declares state, when declared is not
 // nil, and has the ready document "doc-1".
 func stateSurfaces(t *testing.T, fake platform.Platform, declared *hostState) *Surfaces {
