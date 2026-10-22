@@ -87,6 +87,8 @@ export function createViewBridge({ handler, report }) {
   const listeners = new Map();
   const subscriptions = new Map();
   let lastTheme;
+  // The last project of the window that the host sent to a plugin host page; undefined until the host sends one.
+  let lastProject;
   const listen = (key, call, listener) => {
     if (typeof listener !== "function") throw new TypeError(`${key} requires a listener`);
     if (!listeners.has(key)) listeners.set(key, new Set());
@@ -214,10 +216,19 @@ export function createViewBridge({ handler, report }) {
       if (lastTheme !== undefined) listener(lastTheme);
       return { ready: Promise.resolve(), dispose: Promise.resolve(() => listeners.get("theme")?.delete(listener)) };
     },
+    // The project that the window shows reaches a plugin host page as the project message, as the theme does (docs/spec/plugin-host.md).
+    // The listener gets the last project at once, and a null project is a value of its own.
+    project: (listener) => {
+      if (typeof listener !== "function") throw new TypeError("runtime.project requires a listener");
+      if (!listeners.has("project")) listeners.set("project", new Set());
+      listeners.get("project").add(listener);
+      if (lastProject !== undefined) listener(lastProject);
+      return { ready: Promise.resolve(), dispose: Promise.resolve(() => listeners.get("project")?.delete(listener)) };
+    },
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (message.event === "theme" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
+    if (message.event === "theme" || message.event === "project" || message.event === "textSize" || message.event === "settings" || message.event === "log.levels") {
       return message.event;
     }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
@@ -286,6 +297,7 @@ export function createViewBridge({ handler, report }) {
   };
   const dispatch = (message) => {
     if (message.event === "theme") lastTheme = message.data;
+    if (message.event === "project") lastProject = message.data;
     // A status value reaches its listeners as the value, without the name that keys the event.
     const data = message.event === "status" ? message.data.value : message.data;
     // default: an event that no listener has has no listener to pass it to, so it is passed to none.

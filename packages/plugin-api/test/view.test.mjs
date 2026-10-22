@@ -310,6 +310,18 @@ test("runtime.theme gives the listener the last theme that the host sent, then e
   assert.deepEqual(seen, [{ scheme: "dark", tokens: { bg: "#000" } }, { scheme: "light", tokens: { bg: "#fff" } }]);
 });
 
+test("runtime.project gives the listener the last project that the host sent, then each later project, with no call to the host", (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  assert.equal(typeof runtime.project, "function", "runtime.project is not served by the view bridge");
+  host({ sok: 1, event: "project", data: { id: "project-a", root: "/work/a" } });
+  const seen = [];
+  runtime.project((project) => seen.push(project));
+  host({ sok: 1, event: "project", data: null });
+  assert.deepEqual(seen, [{ id: "project-a", root: "/work/a" }, null]);
+  assert.equal(posted.some((message) => message.call === "runtime.native.on" || /project/.test(JSON.stringify(message))), false);
+});
+
 test("runtime.textSize.read reads the scale of the surface and runtime.textSize.on subscribes once", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];
