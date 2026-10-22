@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-d-1, F238-d-2, F238-d-4: The Repositories paragraph states what `make boundaries` reads from each declared folder, and what `make registry` and `make install-plugins` read; `make install-plugins` runs `make registry` and installs from its `index.json`. The repository table lists the declared plugins `browser`, `editor`, `files`, `hwp` and `terminal`, and names `vt-alacritty` in the sidecar row. A registry test asserts that the table names the declared plugins: Red on the earlier table (actual `[browser, files, shell, terminal]`), Green on the current table (6/6).
+
 - F243: `make push-check` checks that every package `bin` target is tracked as executable with a `#!` line; `packages/plugin-api/view-check.js` is tracked as 100755, so a pnpm install no longer modifies the working tree.
 - F238-c-27 (terminal consumer follow-up): Core publishes four `shellQuotePath` examples in `contract/clipboard.json` and 42 screen cases in `contract/screen-hash.json` for terminal's table fakes. Contract checks pass (clipboard 5/5, screen 44/44); the full `@soksak/plugin-api` suite passes 436/436. No release tag or dependency pin changed.
 

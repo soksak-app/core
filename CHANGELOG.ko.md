@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-d-1, F238-d-2, F238-d-4: Repositories 단락은 `make boundaries`가 선언된 각 폴더에서 읽는 것과 `make registry`, `make install-plugins`가 읽는 것을 적는다. `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다. 저장소 표는 선언된 plugin `browser`, `editor`, `files`, `hwp`, `terminal`을 적고, 사이드카 행은 `vt-alacritty`를 적는다. Registry 테스트는 표가 선언된 plugin을 적는지 검사한다. 이전 표에서 Red(actual `[browser, files, shell, terminal]`), 현재 표에서 Green(6/6).
+
 - F243: `make push-check`가 package의 모든 `bin` 대상이 `#!` 줄을 가진 실행 파일로 기록되었는지 검사한다. `packages/plugin-api/view-check.js`를 100755로 기록해 pnpm install이 작업 트리를 바꾸지 않는다.
 - F238-c-27 (terminal consumer 후속): core가 terminal 표 가짜용 `contract/clipboard.json`에 `shellQuotePath` 사례 4개를, `contract/screen-hash.json`에 screen 사례 42개를 공개한다. 계약 검사는 통과했다(clipboard 5/5, screen 44/44). 전체 `@soksak/plugin-api` 테스트는 436/436 통과한다. release tag와 dependency pin은 변경하지 않았다.
 
