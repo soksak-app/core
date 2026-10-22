@@ -6,7 +6,7 @@ use crate::documents::ViewReplyError;
 use crate::plugin_host::{HostState, PluginHostStates, PluginHosts};
 use crate::plugin_host_channel::{
     PluginHostChannels, PluginHostEvent, PluginHostReply, PluginHostRequest, Received, end_host,
-    ended_event, event_message, reply_message, request_message,
+    ended_event, event_message, host_end_report, reply_message, request_message,
 };
 use crate::view_lifecycle::is_queue_full;
 
@@ -815,5 +815,30 @@ fn a_project_change_posts_the_project_event_to_each_host_with_a_ready_document()
             "probe".to_string(),
             serde_json::json!({"sok": 1, "event": "project", "data": null})
         )]
+    );
+}
+
+// contract: plugin-host.channel.end-of-closed-window-is-not-an-error
+#[test]
+fn the_end_of_a_host_whose_window_is_closed_is_not_reported() {
+    let closed: Result<std::sync::Arc<crate::windows::WindowData>, String> =
+        Err("project window is closed".to_string());
+    assert_eq!(
+        host_end_report(&closed, "probe", 7),
+        None,
+        "the end of a host of a closed window is not a failure"
+    );
+    let records = std::sync::Arc::new(crate::windows::WindowData::default());
+    records.plugin_hosts.insert("probe", 7);
+    let open = Ok(records);
+    assert_eq!(
+        host_end_report(&open, "probe", 7),
+        Some("plugin probe: the host process ended".to_string()),
+        "the end of the current host is reported"
+    );
+    assert_eq!(
+        host_end_report(&open, "probe", 8),
+        None,
+        "the end of a host that is not the current one is not reported"
     );
 }

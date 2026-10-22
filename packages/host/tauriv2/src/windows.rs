@@ -190,14 +190,21 @@ fn remove_window_records(registry: &Windows, label: &str) -> bool {
 
 /// Returns the state of the window.
 pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
-    window
-        .state::<Windows>()
+    window_records_in(&window.state::<Windows>(), window.label())
+}
+
+/// Returns the state of the window of label in the registry, or the error of a window that is closed.
+pub(crate) fn window_records_in(
+    registry: &Windows,
+    label: &str,
+) -> Result<Arc<WindowData>, String> {
+    registry
         .windows
         .lock()
         // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the
         // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
-        .get(window.label())
+        .get(label)
         .cloned()
         .ok_or_else(|| "project window is closed".into())
 }

@@ -647,19 +647,27 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
 /// Handles the end of the page process of the host webview handle of plugin: the end is written to the application log
 /// and handled as a failure of the host.
 pub(crate) fn ended(window: &Window, plugin: &str, handle: Handle) {
-    // A host process that ends with its closed window is the close of the window, not a failure: the records of a closed window
-    // are gone, so there is nothing to report (docs/spec/plugin-host.md#channel).
-    let Ok(data) = window_data(window) else {
+    let Some(text) = host_end_report(&window_data(window), plugin, handle) else {
         return;
     };
-    if data.plugin_hosts.get(plugin) != Some(handle) {
-        return;
-    }
-    log_error(
-        "plugin host",
-        format!("plugin {plugin}: the host process ended"),
-    );
+    log_error("plugin host", text);
     failed(window, plugin, handle);
+}
+
+/// Returns the text that the application log records for the end of the host process of plugin in a window, or None when nothing is
+/// recorded. A window whose records are gone was closed, and its host ended with it, so that end is not a failure
+/// (docs/spec/plugin-host.md#channel).
+pub(crate) fn host_end_report(
+    data: &Result<std::sync::Arc<crate::windows::WindowData>, String>,
+    plugin: &str,
+    handle: Handle,
+) -> Option<String> {
+    // default: a window whose records are gone was closed, and its host ended with it, so there is no report.
+    let data = data.as_ref().ok()?;
+    if data.plugin_hosts.get(plugin) != Some(handle) {
+        return None;
+    }
+    Some(format!("plugin {plugin}: the host process ended"))
 }
 
 /// Handles a failure of the host webview handle of plugin in window: an end of its page process that the host did not

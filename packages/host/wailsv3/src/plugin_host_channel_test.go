@@ -706,3 +706,32 @@ func TestPluginHostReplyWithANullResultPostsTheNullResult(t *testing.T) {
 		t.Fatalf("posted %v, want the null result", fake.posted)
 	}
 }
+
+// contract: plugin-host.channel.end-of-closed-window-is-not-an-error
+func TestPluginHostEndOfAClosedHostIsNotCountedAsAFailure(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, true)
+	handle := unsafe.Pointer(new(int))
+	s.pluginHosts["probe"] = handle
+	// The close of the window removed the host before its process ended.
+	delete(s.pluginHosts, "probe")
+	s.pluginHostEnded("probe", handle)
+	if attempt, _ := s.pluginHostRestarts.failed("probe"); attempt != 1 {
+		t.Fatalf("the end of a closed host was counted as a failure: attempt %d, want 1", attempt)
+	}
+}
+
+// contract: host.window.close-keeps-plugin-host-records
+func TestClosingWindowDisposesEveryPluginHostItHolds(t *testing.T) {
+	fake := &closingPlatform{}
+	s, _ := channelSurfaces(t, fake, true)
+	s.pluginHosts["other"] = unsafe.Pointer(new(int))
+	// The close step runs with the hosts the window holds; it closes each of them once.
+	s.disposePluginHosts()
+	if fake.closed != 2 {
+		t.Fatalf("the close step closed %d host web views, want the 2 that the window held", fake.closed)
+	}
+	if len(s.pluginHosts) != 0 {
+		t.Fatalf("the window still records %d plugin hosts after its close", len(s.pluginHosts))
+	}
+}

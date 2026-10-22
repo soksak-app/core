@@ -100,3 +100,30 @@ fn a_poisoned_owner_lock_releases_the_project_of_a_poisoned_lock() {
         "the release left the project window occupied while the owner lock was poisoned"
     );
 }
+
+// contract: host.window.close-keeps-plugin-host-records
+#[test]
+fn a_closing_window_keeps_its_plugin_host_records_for_the_close_step() {
+    let registry = Windows::default();
+    let records = Arc::new(WindowData::default());
+    records.plugin_hosts.insert("probe", 7);
+    registry
+        .windows
+        .lock()
+        .unwrap()
+        .insert("main".into(), Arc::clone(&records));
+    // The Destroyed handler takes the records before it removes them, and its main-thread step closes the hosts from them.
+    let held = window_records_in(&registry, "main")
+        .expect("the records are taken before the window is removed");
+    let _exit = remove_window_records(&registry, "main");
+    assert_eq!(
+        held.plugin_hosts.get("probe"),
+        Some(7),
+        "the taken records still hold the plugin host"
+    );
+    assert_eq!(
+        window_records_in(&registry, "main").err().as_deref(),
+        Some("project window is closed"),
+        "a lookup after the removal finds no record"
+    );
+}
