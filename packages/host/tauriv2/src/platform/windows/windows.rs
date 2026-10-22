@@ -30,6 +30,11 @@ impl CoreRootHost for Windows {
     fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
         unsupported::set_core_root(resolve)
     }
+
+
+    fn set_view_import_map(&self, map: &str) -> Result<(), String> {
+        unsupported::set_view_import_map(map)
+    }
 }
 
 impl Platform for Windows {

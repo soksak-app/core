@@ -31,6 +31,7 @@ unsafe extern "C" {
     ) -> *mut c_void;
     fn sp_document_last_error() -> *const c_char;
     fn sp_core_root_set_resolver(resolver: CoreRoot, context: *mut c_void);
+    fn sp_view_import_map_set(map: *const c_char);
     fn malloc(size: usize) -> *mut c_void;
     fn strdup(text: *const c_char) -> *mut c_char;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
@@ -292,6 +293,14 @@ pub fn set_core_root(resolve: CoreRootResolver) -> Result<(), String> {
     }
     let context = Box::into_raw(Box::new(resolve)) as *mut c_void;
     unsafe { sp_core_root_set_resolver(core_root, context) };
+    Ok(())
+}
+
+/// Sets the view import map of the native view handler, which copies the text.
+pub fn set_view_import_map(map: &str) -> Result<(), String> {
+    let text = std::ffi::CString::new(map)
+        .map_err(|error| format!("the view import map holds a NUL byte: {error}"))?;
+    unsafe { sp_view_import_map_set(text.as_ptr()) };
     Ok(())
 }
 

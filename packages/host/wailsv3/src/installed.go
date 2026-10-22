@@ -507,3 +507,9 @@ func ApplyPluginEventClasses(log *EventLog, configDir string) {
 		LogError("plugin catalog", err)
 	}
 }
+
+// RegisterViewImportMap sets the view import map of the application from view-imports.json of the bundled frontend. Red step:
+// the file is not read yet.
+func RegisterViewImportMap(system platform.CoreRootHost, frontend fs.FS) error {
+	return nil
+}

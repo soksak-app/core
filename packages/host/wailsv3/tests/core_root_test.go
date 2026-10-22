@@ -190,9 +190,15 @@ func TestCoreRootFailsAMalformedCoreRootFile(t *testing.T) {
 	}
 }
 
-// coreRootHost is the platform fake that keeps the core root resolver that the host registers.
+// coreRootHost is the platform fake that keeps the core root resolver and the view import map that the host registers.
 type coreRootHost struct {
-	resolve platform.CoreRootResolver
+	resolve   platform.CoreRootResolver
+	importMap string
+}
+
+func (h *coreRootHost) SetViewImportMap(text string) error {
+	h.importMap = text
+	return nil
 }
 
 func (h *coreRootHost) SetCoreRoot(resolve platform.CoreRootResolver) error {
@@ -263,5 +269,28 @@ func TestCoreRootResolverReportsAGrantedFileThatIsMissing(t *testing.T) {
 	}
 	if want := "error host core root: /modules/plugin-view/ui/item.js is granted to provider, but its file is missing"; !strings.Contains(written(), want) {
 		t.Fatalf("the log has no %q", want)
+	}
+}
+
+// viewImportsText is the view import map that staging writes to view-imports.json, which the tests give the bundled frontend.
+const viewImportsText = `{"imports":{"soksak":"sok://core/modules/soksak/dist/index.js"}}`
+
+// contract: document.view-import-map.native
+func TestViewImportMapIsSetFromTheStagedFile(t *testing.T) {
+	fake := &coreRootHost{}
+	frontend := coreFrontend()
+	frontend["view-imports.json"] = &fstest.MapFile{Data: []byte(viewImportsText)}
+	if err := host.RegisterViewImportMap(fake, frontend); err != nil {
+		t.Fatalf("the host did not set the view import map: %v", err)
+	}
+	if fake.importMap != viewImportsText {
+		t.Fatalf("the host set %q, want %q", fake.importMap, viewImportsText)
+	}
+}
+
+// contract: document.view-import-map.native
+func TestViewImportMapFailsWithoutTheStagedFile(t *testing.T) {
+	if err := host.RegisterViewImportMap(&coreRootHost{}, coreFrontend()); err == nil {
+		t.Fatal("a bundled frontend without view-imports.json sets no view import map")
 	}
 }

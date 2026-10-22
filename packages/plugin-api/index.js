@@ -39,6 +39,8 @@ export const DIAGNOSTICS = "diagnostics.json";
 export const INSTALLED_PLUGINS = "installed-plugins.json";
 /** The list of the core targets of the view import map in the staged frontend, written by the staging tool from viewCoreTargets. */
 export const CORE_ROOT_FILE = "core-root.json";
+/** The view import map of the staged frontend, written by the staging tool as the JSON text of VIEW_IMPORTS; each host passes the text to the view handler (docs/spec/plugin-processes.md, rule 4). */
+export const VIEW_IMPORTS_FILE = "view-imports.json";
 
 /** The name prefix of the core entries that the surface document registers. The main document registers the other core entries. */
 export const SURFACE_CORE = "core.surface.";

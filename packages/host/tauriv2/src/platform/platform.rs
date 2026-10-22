@@ -274,6 +274,9 @@ pub trait CoreRootHost {
     /// Receives the resolver. The native scheme of each view calls it on the main thread for each request of sok://core/<path>,
     /// and the view receives the file with the header Access-Control-Allow-Origin of its plugin when the resolver serves it.
     fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String>;
+    /// Sets the view import map of the application to the JSON text of the staged view-imports.json. The native view handler
+    /// inserts it into each view page (docs/spec/plugin-processes.md, rule 4). The application calls it once at its start.
+    fn set_view_import_map(&self, map: &str) -> Result<(), String>;
 }
 
 /// The window, webview, surface placement, shape, input, capture, Dock, directory identification and endpoint functions

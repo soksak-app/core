@@ -197,6 +197,14 @@ func (implementation) SetCoreRoot(resolve platform.CoreRootResolver) error {
 	return nil
 }
 
+// SetViewImportMap sets the view import map of the native view handler. The handler copies the text.
+func (implementation) SetViewImportMap(text string) error {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	C.sp_view_import_map_set(cText)
+	return nil
+}
+
 func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error) {
 	name := C.CString(directory)
 	defer C.free(unsafe.Pointer(name))

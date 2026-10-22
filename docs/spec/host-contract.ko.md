@@ -1,3 +1,4 @@
+| `document.view-import-map.native` | host는 view import map을 platform에 설정하며, 그 값은 bundled frontend의 `view-imports.json`에서 읽고, 파일이 없으면 host는 시작하지 않는다. | both |
 # 호스트 계약 사례
 
 [English](host-contract.md)

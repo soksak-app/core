@@ -1,3 +1,4 @@
+| `document.view-import-map.native` | The host sets the view import map of the application with the platform, from `view-imports.json` of the bundled frontend, and the host does not start when that file is missing. | both |
 # Host contract cases
 
 [한국어](host-contract.ko.md)

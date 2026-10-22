@@ -255,6 +255,9 @@ type CoreRootHost interface {
 	// SetCoreRoot receives the resolver. The native scheme of each view calls it on the UI thread for each request of sok://core/<path>,
 	// and the view receives the file with the header Access-Control-Allow-Origin of its plugin when found is true.
 	SetCoreRoot(resolve CoreRootResolver) error
+	// SetViewImportMap sets the view import map of the application to the JSON text of the staged view-imports.json. The native view
+	// handler inserts it into each view page (docs/spec/plugin-processes.md, rule 4). The application calls it once at its start.
+	SetViewImportMap(text string) error
 }
 
 // Platform is the behavior that differs for each operating system.

@@ -532,3 +532,9 @@ pub fn apply_plugin_event_classes(log: &crate::event_log::EventLog, config_dir: 
         log_error("plugin catalog", error);
     }
 }
+
+/// Sets the view import map of the application from view-imports.json of the bundled frontend. Red step: the file is not read yet.
+pub fn register_view_import_map(platform: &dyn CoreRootHost, frontend: CoreFrontend) -> Result<(), String> {
+    let _ = (platform, frontend);
+    Ok(())
+}

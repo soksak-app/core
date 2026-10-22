@@ -182,6 +182,11 @@ pub fn set_core_root(_resolve: CoreRootResolver) -> Result<(), String> {
     missing("core root")
 }
 
+
+pub fn set_view_import_map(_map: &str) -> Result<(), String> {
+    missing("view import map")
+}
+
 pub fn create_document(
     _surface: Handle,
     _store: &str,

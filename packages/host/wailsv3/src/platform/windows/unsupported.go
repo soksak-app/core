@@ -261,6 +261,11 @@ func (implementation) SetCoreRoot(platform.CoreRootResolver) error {
 	return unsupported("core root")
 }
 
+// SetViewImportMap is not implemented on Windows.
+func (implementation) SetViewImportMap(string) error {
+	return unsupported("view import map")
+}
+
 func (implementation) SetDocumentMessage(unsafe.Pointer, func(string)) error {
 	return unsupported("document messages")
 }

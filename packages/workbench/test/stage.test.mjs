@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { VIEW_IMPORTS, VIEW_IMPORTS_FILE } from "@soksak/plugin-api";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
@@ -178,4 +179,10 @@ test("staging writes core-root.json with the core targets of the view import map
   assert.ok(targets.includes("/modules/soksak/dist/index.js"));
   assert.ok(targets.includes("/modules/soksak/dist/soksak.js"));
   for (const path of targets) assert.equal(existsSync(join(app, "out", path)), true, path);
+});
+
+test("staging writes the view import map as the JSON text of VIEW_IMPORTS, which each host passes to the view handler", (t) => {
+  const app = fixtureApp(t);
+  stage(app);
+  assert.equal(readFileSync(join(app, "out", VIEW_IMPORTS_FILE), "utf8"), JSON.stringify({ imports: VIEW_IMPORTS }));
 });

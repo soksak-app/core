@@ -370,11 +370,17 @@ fn core_root_fails_a_malformed_core_root_file() {
 /// The platform fake that keeps the core root resolver that the host registers.
 struct FakeCoreRoot {
     resolver: Mutex<Option<CoreRootResolver>>,
+    map: Mutex<Option<String>>,
 }
 
 impl CoreRootHost for FakeCoreRoot {
     fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
         *self.resolver.lock().unwrap() = Some(resolve);
+        Ok(())
+    }
+
+    fn set_view_import_map(&self, map: &str) -> Result<(), String> {
+        *self.map.lock().unwrap() = Some(map.to_string());
         Ok(())
     }
 }
@@ -383,6 +389,7 @@ impl CoreRootHost for FakeCoreRoot {
 fn resolve_through_platform(config: &Path, plugin: &str, url_path: &str) -> Option<CoreRootFile> {
     let platform = FakeCoreRoot {
         resolver: Mutex::new(None),
+        map: Mutex::new(None),
     };
     installed::register_core_root(&platform, config.to_path_buf(), Arc::new(core_frontend))
         .expect("the host registers the core root");
@@ -462,5 +469,35 @@ fn core_root_resolver_reports_a_granted_file_that_is_missing() {
     assert!(
         written.contains(want),
         "the records have no {want:?}: {written}"
+    );
+}
+
+/// The view import map that staging writes to view-imports.json, which the tests give the bundled frontend.
+const VIEW_IMPORTS_TEXT: &str = r#"{"imports":{"soksak":"sok://core/modules/soksak/dist/index.js"}}"#;
+
+// contract: document.view-import-map.native
+#[test]
+fn view_import_map_is_set_from_the_staged_file() {
+    let platform = FakeCoreRoot {
+        resolver: Mutex::new(None),
+        map: Mutex::new(None),
+    };
+    let frontend: installed::CoreFrontend =
+        Arc::new(|name: &str| (name == "view-imports.json").then(|| VIEW_IMPORTS_TEXT.as_bytes().to_vec()));
+    installed::register_view_import_map(&platform, frontend).expect("the host sets the view import map");
+    assert_eq!(platform.map.lock().unwrap().as_deref(), Some(VIEW_IMPORTS_TEXT));
+}
+
+// contract: document.view-import-map.native
+#[test]
+fn view_import_map_fails_without_the_staged_file() {
+    let platform = FakeCoreRoot {
+        resolver: Mutex::new(None),
+        map: Mutex::new(None),
+    };
+    let frontend: installed::CoreFrontend = Arc::new(|_: &str| None);
+    assert!(
+        installed::register_view_import_map(&platform, frontend).is_err(),
+        "a bundled frontend without view-imports.json sets no view import map"
     );
 }

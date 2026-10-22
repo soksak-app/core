@@ -128,6 +128,10 @@ impl CoreRootHost for Darwin {
     fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String> {
         document::set_core_root(resolve)
     }
+
+    fn set_view_import_map(&self, map: &str) -> Result<(), String> {
+        document::set_view_import_map(map)
+    }
 }
 
 impl Platform for Darwin {
