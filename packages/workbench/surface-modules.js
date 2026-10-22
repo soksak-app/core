@@ -17,7 +17,7 @@ import { active, tabStateStore, tabStatesReady } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { logGate } from "./log-gate.js";
-import { emitEvent } from "./page-log.js";
+import { emitEvent, eventEnabled } from "./page-log.js";
 import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
@@ -263,7 +263,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     settings: (listener) => context.runtime.settings.on(listener),
     // The stored levels of a record of the plugin, read again at each change of the policy of the page gate.
     logLevels: {
-      read: () => LOG_LEVELS.filter((level) => context.runtime.log.enabled(level)),
+      read: () => LOG_LEVELS.filter((level) => eventEnabled(level)),
       on: (listener) => Promise.resolve(logGate.onChange(listener)),
     },
     push: (event, data) => scoped.native.call("viewEvent", { event, data }),

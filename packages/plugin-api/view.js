@@ -112,21 +112,6 @@ export function createViewBridge({ handler, report }) {
     // A refused error line is reported through the bridge's report, which the page writes to the application log.
     runtime.error(where, text).catch((failure) => report({ where, text, error: failure }));
   };
-  // The stored levels of a record of the plugin, which the page tells at the first use of runtime.log and at each change
-  // (docs/spec/native-surfaces.md#view-surfaces). Until the first answer every record is sent, and the level gate of the page
-  // counts what it does not store, so no record is lost before the levels are known.
-  let levels = null;
-  let levelsRequested = false;
-  const storedLevel = (level) => {
-    if (!levelsRequested) {
-      levelsRequested = true;
-      if (!listeners.has("log.levels")) listeners.set("log.levels", new Set());
-      listeners.get("log.levels").add((next) => { levels = next; });
-      // A refused read leaves every record sent, and the refusal is recorded as an error of the view.
-      calls.request("runtime.log.levels", null).then((next) => { levels = next; }, recordError("log levels"));
-    }
-    return levels === null || levels.includes(level);
-  };
   // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
   const prefix = `plugin.${plugin}.`;
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
@@ -134,7 +119,6 @@ export function createViewBridge({ handler, report }) {
       calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
         .catch(recordError(`log ${event}`));
     },
-    logEnabled: storedLevel,
   } });
   const runtime = {
     native: {
@@ -163,7 +147,7 @@ export function createViewBridge({ handler, report }) {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
     },
-    // The event log of the page: log.<level>(event, fields, {cids}) and log.enabled(level), as runtime.log of the surface context.
+    // The event log of the page: log.<level>(event, fields, {cids}), as runtime.log of the surface context. The page has no level query.
     log,
     // The error line of an error that the view shows on its own page: the page writes `surface <surface> <where>: <text>` to the
     // application log at the moment the view shows it (docs/spec/native-surfaces.md#view-surfaces).

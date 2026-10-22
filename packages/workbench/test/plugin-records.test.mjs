@@ -22,7 +22,6 @@ const batches = () => calls.filter(({ name }) => name === "log").flatMap(({ payl
 test("an event of a plugin leaves with its cids and its builder runs while the level is stored", async () => {
   calls.length = 0;
   const { log } = createPluginRuntime({ pluginId: "probe", surfaceId: "tab-1", hooks: pluginRecords });
-  assert.equal(log.enabled("trace"), true);
   log.info("started", { project: "p1" }, { cids: ["p1.1"] });
   log.debug("built", () => ({ rows: 2 }));
   await settled();

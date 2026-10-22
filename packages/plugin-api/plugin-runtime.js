@@ -13,13 +13,14 @@ const isObject = (value) => value !== null && typeof value === "object" && !Arra
 /**
  * Builds `{trace, log}` for the plugin `pluginId`. `surfaceId` is the surface that the events belong to, or null for the state
  * module, whose events have no surface. `hooks` is what the page offers:
- *   log(level, event, fields, cids)  stores an event; logEnabled(level) tells whether the level is stored
+ *   log(level, event, fields, cids)  stores an event; the writer of the page decides whether the event is stored
  *   trace(event, fields)             writes a trace event; traceEnabled() tells whether the trace is on
- * A page without a host offers none of them, and the calls then store nothing and build nothing. The function of a pair is not
- * accepted without its query, because it could not skip the building of the fields.
+ * A page without a host offers none of them, and the calls then store nothing. The function of a trace is not accepted without its
+ * query, because it could not skip the building of the fields. A log call builds the fields of each record, because the page has no
+ * level query: the writer of the event log decides whether the record is stored (docs/spec/logging.md#gate).
  */
 export function createPluginRuntime({ pluginId, surfaceId = null, hooks }) {
-  for (const [store, query] of [["log", "logEnabled"], ["trace", "traceEnabled"]]) {
+  for (const [store, query] of [["trace", "traceEnabled"]]) {
     if (hooks[store] !== undefined && typeof hooks[query] !== "function") throw new TypeError(`runtime.${store} requires runtime.${query}`);
     if (hooks[query] !== undefined && typeof hooks[store] !== "function") throw new TypeError(`runtime.${query} requires runtime.${store}`);
   }
@@ -43,9 +44,6 @@ export function createPluginRuntime({ pluginId, surfaceId = null, hooks }) {
   };
   // default: a page without a host (the browser application, a test) has no trace, as a trace that is off.
   trace.enabled = () => hooks.traceEnabled?.() ?? false;
-  const checkLevel = (level) => {
-    if (!LOG_LEVELS.includes(level)) throw new TypeError(`log level must be one of ${LOG_LEVELS.join(", ")}`);
-  };
   const cidsOf = (options) => {
     if (options === undefined) return undefined;
     if (!isObject(options) || Object.keys(options).some((key) => key !== "cids")) throw new TypeError("log options may only hold cids");
@@ -56,22 +54,16 @@ export function createPluginRuntime({ pluginId, surfaceId = null, hooks }) {
     }
     return cids.length === 0 ? undefined : cids;
   };
-  const enabled = (level) => {
-    checkLevel(level);
-    // default: a page without a host (the browser application, a test) has no event log, as a log that is off.
-    return hooks.logEnabled?.(level) ?? false;
-  };
   const log = Object.fromEntries(LOG_LEVELS.map((level) => [level, (event, fields = {}, options = undefined) => {
     if (typeof event !== "string" || !EVENT_NAME.test(event)) {
       throw new TypeError("log requires an event name of lowercase words separated by dots");
     }
     const cids = cidsOf(options);
-    const built = fieldsOf("log", fields, () => enabled(level));
-    if (built === null) return;
+    // default: a page without a host (the browser application, a test) has no event log, so a call stores nothing.
+    if (!hooks.log) return;
+    const built = fieldsOf("log", fields, () => true);
     if ("surface" in built) throw new TypeError("log fields must not name the surface; the context adds it");
-    if (!enabled(level)) return;
     hooks.log(level, `plugin.${pluginId}.${event}`, surfaceId === null ? { ...built } : { ...built, surface: surfaceId }, cids);
   }]));
-  log.enabled = enabled;
   return { trace, log: Object.freeze(log) };
 }

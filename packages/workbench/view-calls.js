@@ -83,7 +83,6 @@ function untilCancelled(promise, signal) {
   });
 }
 
-import { LOG_LEVELS } from "@soksak/plugin-api";
 
 // The place of an error line has no control character and no ": ", because the record splits the line at its first ": ".
 const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
@@ -268,10 +267,6 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       send(fields.event, fields.fields, fields.cids === undefined ? undefined : { cids: fields.cids });
       return null;
     }
-    case "runtime.log.levels":
-      // The view keeps the levels and skips the fields of a level that is not stored; each change arrives as log.levels.
-      await runtime.subscribe.logLevels();
-      return LOG_LEVELS.filter((level) => runtime.log.enabled(level));
     case "runtime.error": {
       // An error that the view shows on its own page is recorded at the moment it appears, as the error display of the page
       // records its errors (docs/spec/native-surfaces.md#view-surfaces).

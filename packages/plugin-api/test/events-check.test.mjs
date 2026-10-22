@@ -369,7 +369,7 @@ test('runtime.log entrances of plugin events are resolved by the plugin prefix',
     'ui/a.js:2: plugin.*.input.key has the field extra, which the catalog does not declare',
   ]);
   // The event name that a site builds needs the marker, as at every other site, and the gate query is no site.
-  assert.deepEqual(check('export function f(runtime, name) {\n  if (runtime.log.enabled("debug")) runtime.log.debug(name, {});\n}\n'), [
+  assert.deepEqual(check('export function f(runtime, name) {\n  if (runtime.trace.enabled()) runtime.log.debug(name, {});\n}\n'), [
     'ui/a.js:2: the name of this emit is not a literal; write a comment `events: <declared names>` above it, or `events: forwarded` when it passes the name of its caller',
     'events.json: plugin.fixture.input.key is declared and no source emits it',
   ]);

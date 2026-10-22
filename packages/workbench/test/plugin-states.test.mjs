@@ -35,9 +35,9 @@ configureStates({
 const source = `export function mount(context) {
   // The runtime of a state module records like the runtime of a surface; a document without a host stores nothing.
   context.runtime.log.info("mounted", { project: context.project.id }, { cids: ["p1.1"] });
-  context.runtime.log.debug("built", () => { throw new Error("a closed level built its fields"); });
+  context.runtime.log.debug("built", { rows: 2 });
   context.runtime.trace("mounted", () => { throw new Error("a trace that is off built its fields"); });
-  globalThis.stateLog = [context.runtime.log.enabled("info"), context.runtime.trace.enabled()];
+  globalThis.stateLog = [context.runtime.trace.enabled()];
   const marks = context.data.get("marks");
   const listeners = new Set();
   context.exposure.status("probe.marks", () => context.data.get("marks"), (fn) => { listeners.add(fn); return () => listeners.delete(fn); });
@@ -57,7 +57,7 @@ registerState({ plugin: "probe", module: `data:text/javascript,${encodeURICompon
 test("a state module is mounted for the shown project, answers its commands, stores data, and is disposed on switch", async () => {
   await showStates({ id: "p1", root: "/work/p1" });
   assert.equal(globalThis.mounted, 1);
-  assert.deepEqual(globalThis.stateLog, [false, false]);
+  assert.deepEqual(globalThis.stateLog, [false]);
   assert.equal(await registry.run("probe.mark", { path: "a.txt" }), "/work/p1");
   assert.deepEqual(stored.get("p1/probe"), { marks: { format: 1, value: ["a.txt"] } });
   assert.deepEqual(sent, [["@scope/sidecar-probe", "state:probe:p1", { operation: "list", path: "a.txt" }]]);

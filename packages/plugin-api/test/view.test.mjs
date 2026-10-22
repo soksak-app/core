@@ -379,29 +379,17 @@ test("contributions(point) returns the connected items of the point, and fail(re
   assert.equal(await failing, undefined);
 });
 
-test("runtime.log sends every record until the page tells the stored levels, then builds no fields of a level it does not store", async (t) => {
+test("the view bridge has no level query: runtime.log sends each record and asks no stored levels", async (t) => {
+  // The writer of the event log decides whether a record is stored, so the page has no level query (docs/spec/native-surfaces.md).
   const { posted, host } = setup(t);
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
-  assert.equal(typeof runtime.log?.info, "function", "the view bridge has no runtime.log");
+  assert.equal(runtime.log.enabled, undefined, "the view bridge still exports runtime.log.enabled");
   let built = 0;
-  const fields = () => { built += 1; return { n: built }; };
-  runtime.log.info("saved", fields, { cids: ["b.1"] });
-  assert.deepEqual(posted.slice(-2), [
-    { sok: 1, id: 1, command: "runtime.log.levels", params: null },
-    { sok: 1, id: 2, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } },
-  ]);
-  host({ sok: 1, id: 1, result: ["error"] });
-  host({ sok: 1, id: 2, result: null });
+  runtime.log.info("saved", () => { built += 1; return { n: built }; }, { cids: ["b.1"] });
+  assert.deepEqual(posted.filter(({ command }) => command !== undefined), [{ sok: 1, id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: { n: 1 }, cids: ["b.1"] } }]);
+  host({ sok: 1, id: 1, result: null });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(runtime.log.enabled("info"), false);
-  runtime.log.info("saved", fields);
-  assert.equal(built, 1, "the fields of a level that is not stored were built");
-  assert.equal(posted.length, 3);
-  runtime.log.error("failed", { n: 2 });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.log", params: { level: "error", event: "failed", fields: { n: 2 } } });
-  host({ sok: 1, event: "log.levels", data: ["error", "warn", "info"] });
-  assert.equal(runtime.log.enabled("info"), true);
-  assert.equal(posted.filter((message) => message.command === "runtime.log.levels").length, 1);
+  assert.equal(built, 1, "the builder of a record was not run once");
 });
 
 /** Dispatches a cancelable keydown on the window of the view and returns the event. */
@@ -490,10 +478,9 @@ test("a view record that the host refuses is reported, and so is its refused err
     report: (event) => reports.push(event),
   });
   runtime.log.info("saved", { n: 1 });
-  host({ sok: 1, id: 1, result: null });
-  host({ sok: 1, id: 2, error: { code: -32000, message: "log refused" } });
+  host({ sok: 1, id: 1, error: { code: -32000, message: "log refused" } });
   await new Promise((resolve) => setTimeout(resolve, 0));
-  host({ sok: 1, id: 3, error: { code: -32000, message: "error refused" } });
+  host({ sok: 1, id: 2, error: { code: -32000, message: "error refused" } });
   await new Promise((resolve) => setTimeout(resolve, 0));
   // The report also receives the counts and losses of the calls, which have no where.
   const refused = reports.filter((event) => event.where !== undefined);
@@ -619,7 +606,7 @@ const BRIDGE_ACTIONS = {
   "view.bridge.tab-state-read-write": ["create", "request", "host-reply", "request", "host-reply"],
   "view.bridge.sidecar-send": ["create", "sidecar-send", "host-reply"],
   "view.bridge.sidecar-subscriptions": ["create", "sidecar-subscribe", "host-reply", "sidecar-subscribe", "host-reply", "host-event", "host-event", "host-event"],
-  "view.bridge.runtime-log-level-gate": ["create", "log", "host-reply", "host-reply", "host-event", "log-disabled", "log", "host-reply"],
+  "view.bridge.runtime-log-without-level-query": ["create", "log", "host-reply", "log-builder", "log", "host-reply", "host-reply"],
 };
 const OPEN_CALL_COUNTS = {
   "view.bridge.ready-and-request-reply": [1, 0],
@@ -628,7 +615,7 @@ const OPEN_CALL_COUNTS = {
   "view.bridge.tab-state-read-write": [1, 0, 1, 0],
   "view.bridge.sidecar-send": [1, 0],
   "view.bridge.sidecar-subscriptions": [1, 0, 1, 0],
-  "view.bridge.runtime-log-level-gate": [1, 2, 1, 0, 1, 0],
+  "view.bridge.runtime-log-without-level-query": [1, 0, 1, 2, 1, 0],
 };
 function assertOpenCallSequence(reports, plugin, expected) {
   const updates = reports.filter(({ kind }) => kind === "open-calls");
@@ -647,7 +634,6 @@ function validateBridgeCases(cases) {
   const hostEvents = {
     "view.bridge.events-delivered-in-order": ["theme"],
     "view.bridge.sidecar-subscriptions": ["sidecar.message", "sidecar.failure"],
-    "view.bridge.runtime-log-level-gate": ["log.levels"],
   };
   for (const item of cases) {
     assert.deepEqual(item.steps.map(({ action }) => action), BRIDGE_ACTIONS[item.id], item.id + " ordered actions");
@@ -785,7 +771,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             throw new Error("unsupported sidecar-subscriptions action " + step.action);
           }
         }
-      } else if (item.id === "view.bridge.runtime-log-level-gate") {
+      } else if (item.id === "view.bridge.runtime-log-without-level-query") {
         assert.equal(globalThis.window.location.host, "probe");
         const { runtime } = bridge;
         for (const step of item.steps.slice(1)) {
@@ -797,13 +783,8 @@ test("published view bridge cases match calls, replies, events, and refusals", a
           } else if (step.action === "host-reply") {
             host(step.input);
             await new Promise((resolve) => setImmediate(resolve));
-            if (step.input.id === 1) assert.equal(runtime.log.enabled("debug"), step.output.includes("debug"));
-            assert.equal(bridge.calls.openCalls().count, step.input.id === 1 ? 1 : 0);
             assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), []);
-          } else if (step.action === "host-event") {
-            host(step.input);
-            assert.deepEqual({ debug: runtime.log.enabled("debug"), error: runtime.log.enabled("error") }, step.output);
-          } else if (step.action === "log-disabled") {
+          } else if (step.action === "log-builder") {
             const before = posted.length;
             let built = false;
             runtime.log[step.input.level](step.input.event, () => { built = true; return step.input.fields; });

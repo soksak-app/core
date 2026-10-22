@@ -252,11 +252,14 @@ test("runtime.log passes the cids of the record to the writer of the page", asyn
   assert.deepEqual(ran.log, [{ level: "info", event: "saved", fields: { n: 1 }, options: { cids: ["b.1"] } }]);
 });
 
-test("runtime.log.levels registers the change subscription of the stored levels and replies with them", async () => {
+test("a view call runtime.log.levels is refused as not served and runs no subscription", async () => {
+  // A view has no level query: the record is passed to runtime.log and the writer of the event log decides (docs/spec/native-surfaces.md).
   const { ran, options } = fakes();
-  const result = await answerViewCall({ id: 1, command: "runtime.log.levels", params: null }, options).catch((error) => error);
-  assert.deepEqual(result, ["error", "warn"]);
-  assert.deepEqual(ran.subscribed, [{ logLevels: true }]);
+  await assert.rejects(
+    answerViewCall({ id: 1, command: "runtime.log.levels", params: null }, options),
+    /^Error: view call runtime\.log\.levels is not served$/,
+  );
+  assert.deepEqual(ran.subscribed, []);
 });
 
 test("runtime.log refuses a level that the writer does not serve and writes nothing", async () => {
