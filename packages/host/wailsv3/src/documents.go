@@ -1614,6 +1614,7 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 		Command *string         `json:"command"`
 		Cancel  *bool           `json:"cancel"`
 		Params  json.RawMessage `json:"params"`
+		Cids    json.RawMessage `json:"cids"`
 	}
 	if err := json.Unmarshal(message, &call); err != nil {
 		return nil, false, fmt.Errorf("%s: view message is not an object: %w", surface, err)
@@ -1637,7 +1638,16 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 	if len(params) == 0 {
 		params = json.RawMessage(`null`)
 	}
-	return map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}, true, nil
+	cids, err := causeCidsOf(call.Cids)
+	if err != nil {
+		return nil, true, fmt.Errorf("%s: view call %d %w", surface, *call.ID, err)
+	}
+	payload := map[string]any{"surface": surface, "plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}
+	// The cids of the cause of the call are forwarded only when the call has some.
+	if len(cids) > 0 {
+		payload["cids"] = cids
+	}
+	return payload, true, nil
 }
 
 // The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
@@ -1774,6 +1784,23 @@ func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
 		message["cids"] = req.Cids
 	}
 	return s.postView(req.Surface, message)
+}
+
+// causeCidsOf returns the list of the cids member of a view message: none for an absent or null member, otherwise the list, which every
+// identifier of must be a non-empty string without a quote, a backslash or a control character (docs/spec/logging.md#correlation).
+func causeCidsOf(raw json.RawMessage) ([]string, error) {
+	const refusal = "cids must be non-empty strings without a quote, a backslash or a control character"
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var cids []string
+	if err := json.Unmarshal(raw, &cids); err != nil {
+		return nil, errors.New(refusal)
+	}
+	if !validCauseCids(cids) {
+		return nil, errors.New(refusal)
+	}
+	return cids, nil
 }
 
 // validCauseCids reports whether every identifier is a non-empty string without a quote, a backslash or a control character, which a

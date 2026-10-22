@@ -436,6 +436,27 @@ func TestViewCallCancelIsForwardedWithItsPluginAndSurface(t *testing.T) {
 }
 
 // contract: view.call.forward
+func TestViewCallCarriesTheCidsOfItsCause(t *testing.T) {
+	payload, ok, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":8,"command":"demo.run","params":{"x":1},"cids":["p1700000000000.3"]}`))
+	if err != nil || !ok {
+		t.Fatalf("call request with cids: ok %v, err %v", ok, err)
+	}
+	if !reflect.DeepEqual(payload["cids"], []string{"p1700000000000.3"}) {
+		t.Fatalf("forwarded call %v, want the cids of its cause", payload)
+	}
+	payload, ok, err = ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":9,"command":"demo.run","params":null}`))
+	if err != nil || !ok {
+		t.Fatalf("call request without cids: ok %v, err %v", ok, err)
+	}
+	if _, has := payload["cids"]; has {
+		t.Fatalf("forwarded call %v carries cids without a cause", payload)
+	}
+	if _, _, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":10,"command":"demo.run","params":null,"cids":["p1.7\"x"]}`)); err == nil || err.Error() != "probe-surface: view call 10 cids must be non-empty strings without a quote, a backslash or a control character" {
+		t.Fatalf("call request with an invalid cid: %v, want the cids refusal", err)
+	}
+}
+
+// contract: view.call.forward
 func TestViewCallInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
 	for _, message := range []string{
 		`{"id":"7","cancel":true}`,
