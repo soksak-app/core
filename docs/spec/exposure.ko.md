@@ -250,6 +250,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.watch`, `status.unwatch` | `{name}`. 표면 페이지가 값 추적을 시작하거나 멈춘다 |
 | 메인 페이지 → 표면 페이지(`exposureForward` 경유) | `status.next` | `{name, version}`. 표면 페이지는 값이 `version`보다 새로우면 `{version, value}`를, `status.unwatch` 뒤에는 `{closed: true}`를 응답한다. 호스트는 이 요청에 제한 시간을 두지 않으며, 표면이 닫히면 1003으로 실패한다 |
 | 호스트 → 메인 페이지 | 이벤트 `diagnostics-tick` | 내용 없음. 진단 빌드에서만 `diagnostics.drag`의 단계마다 한 번 보낸다 |
+| 표면 페이지 → 메인 페이지 | 없음 | view는 call `runtime.status.watch`로 status를 따라간다. 메인 페이지는 이 document의 registry observation으로 답한다. core status는 이 document에서 따라가고, plugin status는 그것을 등록한 표면을 통해 따라가며, 이 표의 `status.watch`, `status.next`, `status.unwatch`를 쓴다. 이 watch에는 호스트 메시지가 없다([view 표면](native-surfaces.ko.md#view-표면)). |
 
 메인 페이지는 이름을 등록하거나 전달하기 전에 선언과 대조해 검증한다. 불러온 배치에 아직 없는 표면의 등록은 보관했다가, 그 표면을 담은 배치를 불러오면 반영하거나 거부한다. 메인 페이지의 `exposureReply`는 호스트의 `exposure-request`에 대한 응답이고, 표면 페이지의 `exposureReply`는 전달된 요청에 대한 응답이다. 호스트는 호출한 웹뷰로 호출자를 구분한다. `core.sidebar.section.control` 요청에서는 메인 페이지가 응답하기 전에 `index`나 `address`를 검증하며, 호스트는 그 요청을 읽지 않고 중계한다.
 
