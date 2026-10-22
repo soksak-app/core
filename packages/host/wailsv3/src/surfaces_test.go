@@ -518,6 +518,39 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	if err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", ID: 8, Command: ""}); err == nil || err.Error() != "view request 8 has an empty command" {
 		t.Fatalf("request without a command: %v, want view request 8 has an empty command", err)
 	}
+	// A request that carries the cids of its cause posts them with the request, and a request without cids posts no member.
+	var caused ViewRequestRequest
+	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","id":9,"command":"probe.run","params":null,"cids":["p1700000000000.7"]}`), &caused); err != nil {
+		t.Fatalf("request with cids: %v", err)
+	}
+	before = len(fake.posted)
+	if err := s.pushViewRequest(caused); err != nil {
+		t.Fatalf("request with cids: %v", err)
+	}
+	var withCids map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &withCids); err != nil {
+		t.Fatalf("request message with cids is not JSON: %v", err)
+	}
+	if !reflect.DeepEqual(withCids["cids"], []any{"p1700000000000.7"}) {
+		t.Fatalf("request message %v, want the cids of its cause", withCids)
+	}
+	if err := s.pushViewRequest(request); err != nil {
+		t.Fatalf("request without cids: %v", err)
+	}
+	var withoutCids map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &withoutCids); err != nil {
+		t.Fatalf("request message without cids is not JSON: %v", err)
+	}
+	if _, ok := withoutCids["cids"]; ok {
+		t.Fatalf("request message %v carries cids without a cause", withoutCids)
+	}
+	var refused ViewRequestRequest
+	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","id":10,"command":"probe.run","cids":["p1.7\"x"]}`), &refused); err != nil {
+		t.Fatalf("request with an invalid cid: %v", err)
+	}
+	if err := s.pushViewRequest(refused); err == nil || err.Error() != "view request 10 cids must be non-empty strings without a quote, a backslash or a control character" {
+		t.Fatalf("request with an invalid cid: %v, want the cids refusal", err)
+	}
 }
 
 // contract: view.command.request

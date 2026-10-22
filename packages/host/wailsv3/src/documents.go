@@ -1742,16 +1742,19 @@ func (s *Surfaces) pushViewEvent(req ViewEventRequest) error {
 	return s.postView(req.Surface, map[string]any{"event": req.Event, "data": req.Data})
 }
 
-// ViewRequestRequest is the command request that the main page sends to the view of Surface. Params is the params of the command.
+// ViewRequestRequest is the command request that the main page sends to the view of Surface. Params is the params of the command, and
+// Cids are the correlation identifiers of the cause of the request, which the request carries only when it has some.
 type ViewRequestRequest struct {
 	Surface string          `json:"surface"`
 	ID      uint64          `json:"id"`
 	Command string          `json:"command"`
 	Params  json.RawMessage `json:"params"`
+	Cids    []string        `json:"cids,omitempty"`
 }
 
-// pushViewRequest posts the command request of req to the ready document of its view as {"sok": 1, "id", "command", "params"}. A request
-// has an id and a command; a request without params carries null. A view without a ready document refuses it.
+// pushViewRequest posts the command request of req to the ready document of its view as {"sok": 1, "id", "command", "params"}, with the
+// member "cids" when req has cids. A request has an id and a command; a request without params carries null. A view without a ready
+// document refuses it, and so does a cids list that a log line cannot hold (docs/spec/logging.md#correlation).
 func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
 	if req.ID == 0 {
 		return errors.New("view request has no id")
@@ -1759,11 +1762,34 @@ func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
 	if req.Command == "" {
 		return fmt.Errorf("view request %d has an empty command", req.ID)
 	}
+	if !validCauseCids(req.Cids) {
+		return fmt.Errorf("view request %d cids must be non-empty strings without a quote, a backslash or a control character", req.ID)
+	}
 	params := req.Params
 	if len(params) == 0 {
 		params = json.RawMessage(`null`)
 	}
-	return s.postView(req.Surface, map[string]any{"id": req.ID, "command": req.Command, "params": params})
+	message := map[string]any{"id": req.ID, "command": req.Command, "params": params}
+	if len(req.Cids) > 0 {
+		message["cids"] = req.Cids
+	}
+	return s.postView(req.Surface, message)
+}
+
+// validCauseCids reports whether every identifier is a non-empty string without a quote, a backslash or a control character, which a
+// log line holds (docs/spec/logging.md#correlation).
+func validCauseCids(cids []string) bool {
+	for _, cid := range cids {
+		if cid == "" {
+			return false
+		}
+		for _, r := range cid {
+			if r == '"' || r == '\\' || r < 0x20 || r == 0x7f {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // ViewReplyEvent returns the payload of the view-reply event for a reply of the view of surface, which has the plugin id. A reply is
