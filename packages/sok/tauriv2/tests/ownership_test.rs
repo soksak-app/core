@@ -56,13 +56,22 @@ fn run_cli(config: &Path, args: &[&str]) -> (i32, String, String) {
 }
 
 // contract: cli.plugin.writing-commands-own-the-configuration
+/// The owner of a live process in the form of the host: the process identifier and the boot identifier of its run.
+fn owner_text() -> String {
+    format!(
+        r#"{{"pid":{},"boot":"1700000000-{}"}}"#,
+        std::process::id(),
+        std::process::id()
+    )
+}
+
 #[test]
 fn a_plugin_command_refuses_while_another_process_owns_the_configuration() {
     let config = Folder::new("own-refuse");
     fs::create_dir_all(config.join("plugins")).unwrap();
     released_config(&config);
     // A live process (this test) owns the configuration directory through its lock, as a running host does.
-    fs::write(config.join("process.lock"), std::process::id().to_string()).unwrap();
+    fs::write(config.join("process.lock"), owner_text()).unwrap();
     let (code, _, stderr) = run_cli(&config, &["plugin", "disable", "probe"]);
     assert_eq!(code, 1, "{stderr}");
     let want = format!(
@@ -100,7 +109,7 @@ fn run_plugin_action_takes_no_lock_beside_a_live_owner() {
     let config = Folder::new("own-host");
     released_config(&config);
     // The host's own lock is present, owned by this live process.
-    fs::write(config.join("process.lock"), std::process::id().to_string()).unwrap();
+    fs::write(config.join("process.lock"), owner_text()).unwrap();
     if let Err(error) = run_plugin_action(&config, "disable", "probe", "", "") {
         panic!("the host entry refused beside its own lock: {error}");
     }

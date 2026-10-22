@@ -1,0 +1,35 @@
+{
+  "description": "Cases of the process.lock form (docs/spec/endpoint.md#discovery) that a writing command of sok replays in Go and Rust. A content is written to process.lock, then the command `plugin enable probe` runs. $LIVE is the pid of the test process, which is running; $DEAD is a pid that is not running. The outcome `refused-live` names the owner, `refused-invalid` names the file and its content, and `taken` runs the command beyond the lock.",
+  "cases": [
+    {
+      "id": "live-current-form",
+      "content": "{\"pid\":$LIVE,\"boot\":\"1700000000-1\"}",
+      "outcome": "refused-live"
+    },
+    {
+      "id": "dead-current-form",
+      "content": "{\"pid\":$DEAD,\"boot\":\"1700000000-1\"}",
+      "outcome": "taken"
+    },
+    {
+      "id": "bare-pid-is-not-the-form",
+      "content": "$LIVE",
+      "outcome": "refused-invalid"
+    },
+    {
+      "id": "empty-file-is-not-the-form",
+      "content": "",
+      "outcome": "refused-invalid"
+    },
+    {
+      "id": "unknown-member-is-not-the-form",
+      "content": "{\"pid\":$LIVE,\"boot\":\"1700000000-1\",\"extra\":1}",
+      "outcome": "refused-invalid"
+    },
+    {
+      "id": "zero-pid-is-not-the-form",
+      "content": "{\"pid\":0,\"boot\":\"1700000000-1\"}",
+      "outcome": "refused-invalid"
+    }
+  ]
+}

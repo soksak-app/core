@@ -16,9 +16,10 @@ func TestAPluginCommandRefusesWhileAnotherProcessOwnsTheConfiguration(t *testing
 	if err := os.MkdirAll(filepath.Join(config, "plugins"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// A live process (this test) owns the configuration directory through its lock, as a running host does.
+	// A live process (this test) owns the configuration directory through its lock, as a running host does, in the form of
+	// the host: the owner's process identifier and boot identifier.
 	lock := filepath.Join(config, "process.lock")
-	if err := os.WriteFile(lock, []byte(fmt.Sprintf("%d", os.Getpid())), 0o600); err != nil {
+	if err := os.WriteFile(lock, []byte(fmt.Sprintf(`{"pid":%d,"boot":"1700000000-%d"}`, os.Getpid(), os.Getpid())), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr := run("plugin", "disable", "probe", "--config-dir", config)
