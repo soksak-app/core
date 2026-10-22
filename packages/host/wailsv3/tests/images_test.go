@@ -1208,6 +1208,42 @@ func TestImageCallFailuresNameTheCall(t *testing.T) {
 	}
 }
 
+// A frame whose nonce is not base64, or does not decode to 16 bytes, leaves an error record that states the cause before the
+// refusal record.
+// contract: images.envelope.refusal-is-recorded
+func TestImageFrameNonceCauseIsRecorded(t *testing.T) {
+	written := captureLog(t)
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	attachImage(t, images, key)
+	configured := configureImage(t, images, key, 800, 600, 2.0)
+	send := func(string, map[string]interface{}) error { return nil }
+	onMain := func(run func() error) error { return run() }
+	recoverFrame := func(string) error { return nil }
+	frame := "generation=" + strconv.FormatUint(configured.Generation, 10) + " raster=" + strconv.FormatUint(configured.Raster, 10)
+	for _, tc := range []struct {
+		sequence int
+		nonce    string
+		want     string
+	}{
+		{3, "!!!", "nonce is not base64: "},
+		{4, "AAAA", "nonce is 3 bytes, want 16"},
+	} {
+		var envelope map[string]any
+		if err := json.Unmarshal(configuredEnvelope(t, configured, tc.sequence), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		token := envelope["image"].(map[string]any)["token"].(map[string]any)
+		token["nonce"] = tc.nonce
+		body, _ := json.Marshal(envelope)
+		host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true })
+		want := " error host image frame: surface=tab-1 name=view sender=sidecar-a " + frame + " sequence=" + strconv.Itoa(tc.sequence) + " " + tc.want
+		if log := written(); !strings.Contains(log, want) {
+			t.Fatalf("the log has no %q:\n%s", want, log)
+		}
+	}
+}
+
 // A frame that the host refuses, and an envelope that is not valid, leave a record with the frame and the current state
 // of the region.
 // contract: images.envelope.refusal-is-recorded

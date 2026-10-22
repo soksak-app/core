@@ -1336,3 +1336,72 @@ fn a_frame_of_a_sidecar_that_no_plugin_declares_is_invalidated() {
     assert_eq!(answers.len(), 1);
     assert_eq!(answers[0]["image"]["error"], "stale");
 }
+
+const IMAGE_NONCE_CHILD: &str = "SOKSAK_IMAGE_NONCE_CHILD";
+
+// A frame whose nonce is not base64, or does not decode to 16 bytes, leaves an error record that states the cause before the
+// refusal record.
+// contract: images.envelope.refusal-is-recorded
+#[test]
+fn image_frame_nonce_cause_is_recorded() {
+    if let Some(config) = std::env::var_os(IMAGE_NONCE_CHILD) {
+        let config = std::path::Path::new(&config);
+        start_standard_error(config, "com.soksak.test").unwrap();
+        let writer = records::start_writer(config);
+        let images = Images::default();
+        let key: Key = ("tab-1".to_string(), "view".to_string());
+        images.reserve(&key, "owner", "sidecar-a").unwrap();
+        assert!(images.set(&key, 100));
+        let configured = images
+            .configure_raster(&key, 800, 600, 2.0, true)
+            .unwrap()
+            .unwrap();
+        let send = |_name: &str, _json: serde_json::Value| Ok(());
+        let on_main = |work: Box<dyn Fn() -> Result<(), String> + Send>| work();
+        let frame = format!(
+            "generation={} raster={}",
+            configured.generation, configured.raster
+        );
+        for (sequence, nonce, want) in [
+            (3, "!!!", "nonce is not base64: "),
+            (4, "AAAA", "nonce is 3 bytes, want 16"),
+        ] {
+            let mut envelope: serde_json::Value =
+                serde_json::from_str(&configured_envelope(&configured, sequence)).unwrap();
+            envelope["image"]["token"]["nonce"] = json!(nonce);
+            handle_envelope(
+                &envelope.to_string(),
+                "sidecar-a",
+                "tab-1",
+                &images,
+                on_main,
+                send,
+            );
+            writer.flush(Duration::from_secs(5)).unwrap();
+            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
+            let line = format!(
+                "error host image frame: surface=tab-1 name=view sender=sidecar-a {frame} sequence={sequence} {want}"
+            );
+            assert!(log.contains(&line), "no {line:?} in {log:?}");
+        }
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "image_frame_nonce_cause_is_recorded",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(IMAGE_NONCE_CHILD, config.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "child ended with {:?}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

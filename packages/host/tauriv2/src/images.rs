@@ -1145,22 +1145,42 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
     }
 
     // Decodes the nonce from base64 into a [u8; 16] array.
-    let decoded_nonce =
-        match base64::engine::general_purpose::STANDARD.decode(&envelope.token.nonce) {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                return image_reply(
-                    "unsupported",
-                    &envelope.name,
-                    envelope.generation,
-                    envelope.raster,
-                    envelope.sequence,
-                );
-            }
-        };
+    let decoded_nonce = match base64::engine::general_purpose::STANDARD
+        .decode(&envelope.token.nonce)
+    {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            // The refusal record states only the reply, so the cause of the refusal is written here.
+            crate::application_log::log_error(
+                "image frame",
+                format!(
+                    "surface={surface} name={} sender={sender} generation={} raster={} sequence={} nonce is not base64: {error}",
+                    envelope.name, envelope.generation, envelope.raster, envelope.sequence
+                ),
+            );
+            return image_reply(
+                "unsupported",
+                &envelope.name,
+                envelope.generation,
+                envelope.raster,
+                envelope.sequence,
+            );
+        }
+    };
 
     // The decoded nonce must be exactly 16 bytes.
     if decoded_nonce.len() != 16 {
+        crate::application_log::log_error(
+            "image frame",
+            format!(
+                "surface={surface} name={} sender={sender} generation={} raster={} sequence={} nonce is {} bytes, want 16",
+                envelope.name,
+                envelope.generation,
+                envelope.raster,
+                envelope.sequence,
+                decoded_nonce.len()
+            ),
+        );
         return image_reply(
             "unsupported",
             &envelope.name,

@@ -716,11 +716,14 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	// Decodes the nonce from base64 and converts it to a [16]byte array
 	decodedNonce, err := base64.StdEncoding.DecodeString(envelope.Token.Nonce)
 	if err != nil {
+		// The refusal record states only the reply, so the cause of the refusal is written here.
+		LogError("image frame", fmt.Sprintf("surface=%s name=%s sender=%s generation=%d raster=%d sequence=%d nonce is not base64: %v", surface, envelope.Name, sender, envelope.Generation, envelope.Raster, envelope.Sequence, err))
 		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
 	// The decoded nonce must be exactly 16 bytes
 	if len(decodedNonce) != 16 {
+		LogError("image frame", fmt.Sprintf("surface=%s name=%s sender=%s generation=%d raster=%d sequence=%d nonce is %d bytes, want 16", surface, envelope.Name, sender, envelope.Generation, envelope.Raster, envelope.Sequence, len(decodedNonce)))
 		return imageReply("unsupported", envelope.Name, envelope.Generation, envelope.Raster, envelope.Sequence)
 	}
 
