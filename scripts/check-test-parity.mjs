@@ -187,6 +187,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-7",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotSender" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-snapshot-pull-contract.test.mjs", id: "view snapshot pull contract publishes the required cases in order" },
+    ],
+    expected: "The view answers a declared UI snapshot pull with seq 0 and value null only when the store has no value, and answers any other store error with that error and reports it, replayed against the bridge with a test-controlled store fault.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-6",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
