@@ -1891,7 +1891,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	// attaches again, and if it died, the stale endpoint cleanup of processPersistent respawns it (V5-106).
 	if wasCurrent {
 		c.failRequests(process.name, "connection lost")
-		c.revivePersistent(process.name)
+		c.revivePersistent(process.name, fmt.Sprintf("end: %s, waiting: %d", end, waiting))
 	}
 }
 
@@ -2054,7 +2054,7 @@ func logUnfinishedLine(sidecar string, unfinished int) {
 // revivePersistent connects a lost persistent connection again and tells the owning surfaces the result (V5-106). When
 // another path already restarted it or it is ending, it does nothing. It tries once for one connection loss;
 // a failure is reported by a notification, and the next send passes through the same path again.
-func (c *Sidecars) revivePersistent(name string) {
+func (c *Sidecars) revivePersistent(name, loss string) {
 	c.awaitReplacedService(name)
 	// One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
 	lost := &revival{}
@@ -2079,7 +2079,7 @@ func (c *Sidecars) revivePersistent(name string) {
 	switch {
 	case failure != nil:
 		// The start failed. The loss record is kept so that the next start announces it.
-		LogError("sidecar "+name, fmt.Sprintf("connection lost; restart failed: %v", failure))
+		LogError("sidecar "+name, fmt.Sprintf("connection lost; restart failed: %v (%s)", failure, loss))
 		c.notifyConnection(name, failure)
 	case announced && replacing:
 		// The replacement closed the connection on purpose and the installed service started: an expected state.
@@ -2092,7 +2092,7 @@ func (c *Sidecars) revivePersistent(name string) {
 		c.closingChanged()
 	case announced:
 		// When another path (a send) already restarted it, that call also sent the notification.
-		LogError("sidecar "+name, "connection lost; restarted")
+		LogError("sidecar "+name, "connection lost; restarted ("+loss+")")
 		c.notifyConnection(name, nil)
 	}
 }

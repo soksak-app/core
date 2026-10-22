@@ -3086,7 +3086,11 @@ impl<O: Owner> Core<O> {
             // again (V5-106).
             if was_current {
                 fail_requests(&state, &sidecar, "connection lost");
-                revive_persistent(&reader_core, &sidecar);
+                revive_persistent(
+                    &reader_core,
+                    &sidecar,
+                    &format!("end: {end}, waiting: {waiting}"),
+                );
             }
         }));
         crate::event_record::emit_host(
@@ -3158,7 +3162,7 @@ fn await_replaced_service<O: Owner>(core: &Arc<Core<O>>, name: &str) {
 /// when a recycled pid passes kill(pid, 0)). Only in a restart that has a connection loss record, it discards the
 /// endpoint and tries once more. The contract of the send path is unchanged: the live-unreachable report of a cold send
 /// does not replace the endpoint.
-fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
+fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
     await_replaced_service(core, name);
     // One disconnect counts at most one failure of the restart limit, whichever attempt below finds it.
     let lost = Revival::default();
@@ -3219,7 +3223,7 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str) {
             }
         }
         _ => {
-            if let Some((place, text)) = connection_loss_report(name, &outcome) {
+            if let Some((place, text)) = connection_loss_report(name, &outcome, loss) {
                 log_error(&place, text);
             }
         }
@@ -3244,12 +3248,16 @@ pub fn disconnect_fields(
 pub fn connection_loss_report(
     name: &str,
     outcome: &Result<bool, String>,
+    loss: &str,
 ) -> Option<(String, String)> {
     let place = format!("sidecar {name}");
     match outcome {
-        Ok(true) => Some((place, "connection lost; restarted".to_string())),
+        Ok(true) => Some((place, format!("connection lost; restarted ({loss})"))),
         Ok(false) => None,
-        Err(reason) => Some((place, format!("connection lost; restart failed: {reason}"))),
+        Err(reason) => Some((
+            place,
+            format!("connection lost; restart failed: {reason} ({loss})"),
+        )),
     }
 }
 

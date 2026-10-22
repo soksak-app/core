@@ -1714,7 +1714,7 @@ func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 	receiveSidecarMessage(t, owner.seen) // the connection notice of the reconnection
 	sidecars.Stop()
 	listener.Close()
-	count := strings.Count(logged.String(), "error host sidecar fixture-service: connection lost; restarted\n")
+	count := strings.Count(logged.String(), "error host sidecar fixture-service: connection lost; restarted (end: eof, waiting: 0)\n")
 	if count != 1 {
 		t.Fatalf("the log has %d lines of the lost connection: %q", count, logged.String())
 	}

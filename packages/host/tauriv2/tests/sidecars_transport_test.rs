@@ -1725,19 +1725,23 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
 #[test]
 fn a_lost_connection_is_reported_as_an_error_line() {
     use soksak_host_tauriv2::sidecars::connection_loss_report;
+    let loss = "end: eof, waiting: 2";
     assert_eq!(
-        connection_loss_report("fixture-service", &Ok(true)),
+        connection_loss_report("fixture-service", &Ok(true), loss),
         Some((
             "sidecar fixture-service".to_string(),
-            "connection lost; restarted".to_string()
+            "connection lost; restarted (end: eof, waiting: 2)".to_string()
         ))
     );
-    assert_eq!(connection_loss_report("fixture-service", &Ok(false)), None);
     assert_eq!(
-        connection_loss_report("fixture-service", &Err("refused".to_string())),
+        connection_loss_report("fixture-service", &Ok(false), loss),
+        None
+    );
+    assert_eq!(
+        connection_loss_report("fixture-service", &Err("refused".to_string()), loss),
         Some((
             "sidecar fixture-service".to_string(),
-            "connection lost; restart failed: refused".to_string()
+            "connection lost; restart failed: refused (end: eof, waiting: 2)".to_string()
         ))
     );
 }
