@@ -288,7 +288,7 @@ test("a dom request of a plugin host entry is refused as failed while the host p
 
 // contract: exposure.relay.one-answerer-per-request
 test("a view is forwarded only the requests it owns: a core surface entry is answered by the surface document alone", () => {
-  assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "terminal.session" } }), true);
+  assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "fixture.session" } }), true);
   assert.equal(viewOwns({ surface: "tab-a", method: "status.watch", params: { name: "core.surface.document" } }), false);
   assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "core.surface.input" } }), false);
 });
