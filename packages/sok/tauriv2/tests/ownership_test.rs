@@ -55,7 +55,6 @@ fn run_cli(config: &Path, args: &[&str]) -> (i32, String, String) {
     )
 }
 
-// contract: cli.plugin.writing-commands-own-the-configuration
 /// The owner of a live process in the form of the host: the process identifier and the boot identifier of its run.
 fn owner_text() -> String {
     format!(
@@ -65,6 +64,7 @@ fn owner_text() -> String {
     )
 }
 
+// contract: cli.plugin.writing-commands-own-the-configuration
 #[test]
 fn a_plugin_command_refuses_while_another_process_owns_the_configuration() {
     let config = Folder::new("own-refuse");
