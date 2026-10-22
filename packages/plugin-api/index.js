@@ -229,7 +229,7 @@ function checkHost(where, host) {
  */
 function checkHostOperationsDeclaration(where, hostOperations, dependencies) {
   if (!isObject(hostOperations)) throw new Error(`${where}: hostOperations must map sidecars to operations`);
-  for (const [name, operations] of Object.entries(hostOperations)) {
+  for (const [name, operations] of sortedEntries(hostOperations)) {
     if (!Object.hasOwn(dependencies, name)) throw new Error(`${where}: hostOperations ${name} is not a dependency`);
     if (!isOperationList(operations)) throw new Error(`${where}: hostOperations ${name} must be a list of distinct operation names`);
   }
@@ -289,7 +289,7 @@ function checkSidecarFacts(where, sidecars, dependencies) {
 /** Checks that dependencies give each sidecar or plugin a version range and returns their names. */
 function checkDependencies(where, dependencies) {
   if (!isObject(dependencies)) throw new Error(`${where}: dependencies must map sidecars and plugins to version ranges`);
-  for (const [name, range] of Object.entries(dependencies)) {
+  for (const [name, range] of sortedEntries(dependencies)) {
     if (!PACKAGE.test(name)) throw new Error(`${where}: dependencies: ${name} is not a sidecar or plugin name`);
     if (!isRange(range)) throw new Error(`${where}: dependencies ${name}: invalid range ${range}`);
   }
@@ -354,10 +354,45 @@ export function resolveContributions(installed) {
   return resolved;
 }
 
+/**
+ * Compares two keys by code point, so the order of the members that the checks read does not depend on the locale or on the
+ * order of the members in the file (docs/spec/installation.md#plugin-release).
+ */
+function compareKeys(a, b) {
+  const x = [...a].map((char) => char.codePointAt(0));
+  const y = [...b].map((char) => char.codePointAt(0));
+  const length = Math.min(x.length, y.length);
+  for (let index = 0; index < length; index += 1) {
+    if (x[index] !== y[index]) return x[index] - y[index];
+  }
+  return x.length - y.length;
+}
+
+/** The members of an object as [key, value] pairs sorted by key, the order in which the checks read them. */
+function sortedEntries(value) {
+  return Object.keys(value).sort(compareKeys).map((key) => [key, value[key]]);
+}
+
 function only(where, value, keys) {
-  for (const key of Object.keys(value)) {
+  for (const key of Object.keys(value).sort(compareKeys)) {
     if (!keys.includes(key)) throw new Error(`${where}: unknown field ${key}`);
   }
+}
+
+/** The command names that exposes declares. A commands value that is not a list declares no command. */
+function declaredCommandNames(manifest) {
+  const commands = manifest.exposes?.commands;
+  return Array.isArray(commands) ? commands.filter(isObject).map((command) => command.name) : [];
+}
+
+/** Whether two JSON values are equal: objects have the same members in any order, and lists have equal items in order. */
+function sameJson(a, b) {
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, index) => sameJson(item, b[index]));
+  if (isObject(a)) {
+    const keys = Object.keys(a);
+    return isObject(b) && keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && sameJson(a[key], b[key]));
+  }
+  return a === b;
 }
 
 /* The maximum length of the plugin description that the settings window shows. */
@@ -427,7 +462,7 @@ function checkSettingDeclaration(where, full) {
 function checkSettings(where, settings) {
   if (settings === undefined) return;
   if (!isObject(settings)) throw new Error(`${where}: settings must be an object`);
-  for (const [key, declaration] of Object.entries(settings)) {
+  for (const [key, declaration] of sortedEntries(settings)) {
     if (!SETTING.test(key)) throw new Error(`${where}: invalid setting name ${key}`);
     checkSettingDeclaration(`${where}.${key}`, declaration);
   }
@@ -529,7 +564,7 @@ function checkBackground(where, background, sidecars, settings = {}) {
   // of that setting into the request field.
   if (background.settings !== undefined) {
     if (!isObject(background.settings)) throw new Error(`${where} background: settings must map request fields to setting names`);
-    for (const [field, setting] of Object.entries(background.settings)) {
+    for (const [field, setting] of sortedEntries(background.settings)) {
       if (field === "operation") throw new Error(`${where} background: a setting cannot replace operation`);
       // default: settings is an optional field of plugin.json; for a plugin without it, background has no setting to point to.
       if (typeof setting !== "string" || !Object.hasOwn(settings ?? {}, setting)) {
@@ -557,7 +592,7 @@ const BARE = /^(@[a-z0-9-]+\/)?[a-z0-9][a-z0-9._-]*(\/[A-Za-z0-9._-]+)*$/;
 /** Validates the extension point declaration of a provider (docs/spec/plugins.md#extension-points). */
 function checkExtends(where, points) {
   if (!isObject(points)) throw new Error(`${where}: extends must be an object`);
-  for (const [name, point] of Object.entries(points)) {
+  for (const [name, point] of sortedEntries(points)) {
     if (!ID.test(name)) throw new Error(`${where}: invalid extension point ${name}`);
     const at = `${where} extension point ${name}`;
     if (!isObject(point)) throw new Error(`${at}: must be an object`);
@@ -566,7 +601,7 @@ function checkExtends(where, points) {
     checkSchema(`${at} schema`, point.schema);
     if (point.modules !== undefined) {
       if (!isObject(point.modules)) throw new Error(`${at}: modules must be an object`);
-      for (const [specifier, path] of Object.entries(point.modules)) {
+      for (const [specifier, path] of sortedEntries(point.modules)) {
         if (!BARE.test(specifier)) throw new Error(`${at} module ${specifier} is not a bare specifier`);
         if (!isModulePath(path)) throw new Error(`${at} module ${specifier} must be a JavaScript path inside the package`);
       }
@@ -577,7 +612,7 @@ function checkExtends(where, points) {
 /** Validates the contribution declaration of a contributor. The workbench validates the schema field of an entry with the declaration of the provider. */
 function checkContributes(where, id, contributes) {
   if (!isObject(contributes)) throw new Error(`${where}: contributes must be an object`);
-  for (const [name, items] of Object.entries(contributes)) {
+  for (const [name, items] of sortedEntries(contributes)) {
     const dot = name.indexOf(".");
     if (dot < 0 || !ID.test(name.slice(0, dot)) || !ID.test(name.slice(dot + 1))) {
       throw new Error(`${where}: contributes ${name} must be <plugin id>.<point>`);
@@ -645,12 +680,13 @@ export function validateManifest(manifest) {
     // The plugin host serves project data (docs/spec/plugins.md#project-data).
     if (manifest.host === undefined) throw new Error(`${where}: data requires a plugin host`);
     if (!isObject(manifest.data)) throw new Error(`${where}: data must be an object`);
-    for (const [key, entry] of Object.entries(manifest.data)) {
+    for (const [key, entry] of sortedEntries(manifest.data)) {
       if (!ID.test(key)) throw new Error(`${where}: invalid data key ${key}`);
       if (!isObject(entry) || !isObject(entry.schema) || !Object.hasOwn(entry, "default")) {
         throw new Error(`${where}: data ${key} requires schema and default`);
       }
       only(`${where} data ${key}`, entry, ["schema", "default", "format"]);
+      checkSchema(`${where} data ${key} schema`, entry.schema);
       if (!matchesSchema(entry.schema, entry.default)) throw new Error(`${where}: data ${key} default does not match its schema`);
       if (Object.hasOwn(entry, "format") && !(Number.isInteger(entry.format) && entry.format > 0)) {
         throw new Error(`${where}: data ${key} format must be a positive integer`);
@@ -695,7 +731,7 @@ export function validateManifest(manifest) {
         if (!isObject(item)) throw new Error(`${where}: a surface menu item must be an object`);
         only(`${where} surface menu item`, item, ["command", "title"]);
         // default: exposes and its commands are optional; a plugin without declared commands has no menu command.
-        if (!isText(item.command) || !(manifest.exposes?.commands ?? []).some((command) => command.name === item.command)) {
+        if (!isText(item.command) || !declaredCommandNames(manifest).includes(item.command)) {
           throw new Error(`${where}: surface menu command ${item.command} must name a command declared in exposes`);
         }
         if (seen.has(item.command)) throw new Error(`${where}: surface menu command ${item.command} is repeated`);
@@ -708,7 +744,7 @@ export function validateManifest(manifest) {
     // The command that saves the surface's changes before a modified tab closes (docs/spec/plugins.md#tab-reports).
     if (surface.save !== undefined && (!isText(surface.save) ||
       // default: exposes and its commands are optional; a plugin without declared commands has no save command.
-      !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.save))) {
+      !declaredCommandNames(manifest).includes(surface.save))) {
       throw new Error(`${where}: surface save must name a command declared in exposes`);
     }
     // The parameters of a tab of the plugin (docs/spec/plugins.md#pluginjson).
@@ -739,7 +775,7 @@ export function validateManifest(manifest) {
     // The drop command is a declared command that the page runs on a surface with {urls} when files are dropped on that surface.
     if (surface.drop !== undefined && (!isText(surface.drop) ||
       // default: exposes and its commands are optional fields; a plugin that declares no command has no drop command.
-      !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
+      !declaredCommandNames(manifest).includes(surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
     // The surface module is removed: a surface is a view, and its page is declared in the composition (docs/spec/plugins.md#view-surfaces).
@@ -1023,7 +1059,7 @@ function validatePluginSidebarDefaults(manifest) {
     if (kind === "card" && !manifest.surface) throw new Error(`${where}: card defaults require a surface`);
     if (!isObject(mapping)) throw new Error(`${where}: sidebar ${kind} defaults must be an object`);
     only(`${where} sidebar ${kind}`, mapping, sides);
-    for (const [side, set] of Object.entries(mapping)) {
+    for (const [side, set] of sortedEntries(mapping)) {
       if (!ids.has(set)) throw new Error(`${where}: ${kind} ${side} names unknown set ${String(set)}`);
     }
   }
@@ -1173,13 +1209,13 @@ function checkSchema(where, schema) {
   only(where, schema, ["type", "properties", "items", "enum"]);
   if (schema.type !== undefined) {
     const types = [].concat(schema.type);
-    if (types.length === 0 || types.some((type) => !Object.hasOwn(SCHEMA_TYPES, type))) {
+    if (types.length === 0 || types.some((type) => typeof type !== "string" || !Object.hasOwn(SCHEMA_TYPES, type))) {
       throw new Error(`${where}: unknown schema type ${JSON.stringify(schema.type)}`);
     }
   }
   if (schema.properties !== undefined) {
     if (!isObject(schema.properties)) throw new Error(`${where}: properties must be an object`);
-    for (const [key, value] of Object.entries(schema.properties)) checkSchema(`${where}.${key}`, value);
+    for (const [key, value] of sortedEntries(schema.properties)) checkSchema(`${where}.${key}`, value);
   }
   if (schema.items !== undefined) checkSchema(`${where}[]`, schema.items);
   if (schema.enum !== undefined && (!Array.isArray(schema.enum) || schema.enum.length === 0)) {
@@ -1191,7 +1227,7 @@ function checkSchema(where, schema) {
  * Returns whether the value satisfies the schema. properties checks only the keys that the value has.
  */
 export function matchesSchema(schema, value) {
-  if (schema.enum !== undefined && !schema.enum.some((item) => JSON.stringify(item) === JSON.stringify(value))) return false;
+  if (schema.enum !== undefined && !schema.enum.some((item) => sameJson(item, value))) return false;
   if (schema.type !== undefined && ![].concat(schema.type).some((type) => SCHEMA_TYPES[type](value))) return false;
   if (schema.properties !== undefined && isObject(value)) {
     for (const [key, sub] of Object.entries(schema.properties)) {
@@ -1224,7 +1260,7 @@ export function validateExposes(owner, exposes) {
   only(where, exposes, Object.keys(EXPOSE_KINDS));
   const seen = new Set();
   const fields = { status: ["schema"], commands: ["params", "result"], dom: [] };
-  for (const [key, entries] of Object.entries(exposes)) {
+  for (const [key, entries] of sortedEntries(exposes)) {
     if (!Array.isArray(entries)) throw new Error(`${where}: ${key} must be an array`);
     for (const entry of entries) {
       if (!isObject(entry)) throw new Error(`${where}: ${key} entry must be an object`);

@@ -42,7 +42,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | dom | `description` | One-sentence description |
 | dom | `many` | Optional. `true` when several elements share the name; requests address one element with `index`, or with `address` where [declared UI](declared-ui.md) defines one |
 
-A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`.
+A schema is a JSON Schema subset with the keywords `type`, `properties`, `items`, and `enum`. `type` is one of the names `string`, `number`, `integer`, `boolean`, `object`, `array`, and `null`, or a non-empty list of those names; any other value is refused, including `null` and a list inside a list. `enum` is a non-empty list, and a value matches an entry when both are the same JSON value, with the members of objects compared without regard to their order.
 
 The element for a dom entry carries the attribute `data-expose="<name>"`. Without `many`, exactly one element has the name. An interactive element that a [declared UI](declared-ui.md) value draws carries the attributes and the address that [declared UI](declared-ui.md) defines.
 

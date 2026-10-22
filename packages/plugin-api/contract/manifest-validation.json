@@ -1,0 +1,6164 @@
+{
+  "description": "Manifest cases of validateManifest (packages/plugin-api/index.js). The plugin-api runner, the pack and the install of sok replay every case: a case with `accepted` true is accepted, and a case with `error` is refused with exactly that text. `files` lists the package files of the case; pack writes the package from them, and each listed file exists and is empty.",
+  "cases": [
+    {
+      "id": "top.accepts-base",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.state-removed",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "state": {
+          "module": "s.js"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "bogus": 1
+      },
+      "accepted": false,
+      "error": "plugin.json: unknown field bogus",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.unknown-fields-sorted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "zeta": 1,
+        "alpha": 1
+      },
+      "accepted": false,
+      "error": "plugin.json: unknown field alpha",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.events-absolute",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "events": "/etc/c.json"
+      },
+      "accepted": false,
+      "error": "plugin.json: events must be a path inside the package",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.events-path",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "events": "events/catalog.json"
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.id-invalid",
+      "manifest": {
+        "id": "Probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin.json: invalid id Probe",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.id-not-text",
+      "manifest": {
+        "id": 5,
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin.json: invalid id 5",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.id-core",
+      "manifest": {
+        "id": "core",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin.json: plugin id core is reserved for the core root",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.name-missing",
+      "manifest": {
+        "id": "probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: name is required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.name-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: name is required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.description-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: description must be 1 to 200 characters",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.description-too-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: description must be 1 to 200 characters",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.description-200",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.surface-not-object-scalar",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": "x",
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.plugin-needs-a-part",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample."
+      },
+      "accepted": false,
+      "error": "plugin probe: a plugin requires a surface, sections or contributes",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "top.not-object",
+      "manifest": "x",
+      "accepted": false,
+      "error": "plugin.json: expected an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.requires-host",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "data": {
+          "k": {
+            "schema": {
+              "type": "string"
+            },
+            "default": "a"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: data requires a plugin host",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: data must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.invalid-key",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "Bad": {
+            "schema": {
+              "type": "string"
+            },
+            "default": "a"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: invalid data key Bad",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.requires-schema-and-default",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: data k requires schema and default",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "string"
+            },
+            "default": "a",
+            "x": 1
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe data k: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.default-mismatch",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "string"
+            },
+            "default": 1
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: data k default does not match its schema",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.format-zero",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "string"
+            },
+            "default": "a",
+            "format": 0
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: data k format must be a positive integer",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.schema-unknown-keyword",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "object",
+              "required": [
+                "a"
+              ]
+            },
+            "default": {}
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe data k schema: unknown field required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.schema-unknown-type",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "foo"
+            },
+            "default": "a"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe data k schema: unknown schema type \"foo\"",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.accepts-declared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "string"
+            },
+            "default": "a",
+            "format": 2
+          },
+          "n": {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "default": null
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.require-part",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies require a surface, a plugin host or contributes",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies must map sidecars and plugins to version ranges",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.bad-name",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "Bad Name": "^0.1.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies: Bad Name is not a sidecar or plugin name",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.bad-range",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "latest"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range latest",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-accepted-0",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "*"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-accepted-1",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "0.1.0"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-accepted-2",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-accepted-3",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "~0.1.0"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-accepted-4",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": ">=0.1.0"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-accepted-5",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": ">=0.1.0 <0.2.0"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-0",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "01.1.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range 01.1.0",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-1",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": ">=0.2.0 <0.1.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range >=0.2.0 <0.1.0",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-2",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range ^0.1",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-3",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": ">= 0.1.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range >= 0.1.0",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-4",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "**"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range **",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "deps.range-refused-5",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "1.0.0-beta"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: dependencies @scope/x: invalid range 1.0.0-beta",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: host must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html",
+          "x": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe host: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.page-absolute",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "/ui/h.html"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: host page must be a path inside the package",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.page-parent",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "../h.html"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: host page must be a path inside the package",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.state-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html",
+          "state": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: host state must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.state-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html",
+          "state": {
+            "format": 1,
+            "maxBytes": 9,
+            "x": 1
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe host state: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.state-format-zero",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html",
+          "state": {
+            "format": 0,
+            "maxBytes": 9
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: host state format must be a positive integer",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.state-maxbytes-fraction",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html",
+          "state": {
+            "format": 1,
+            "maxBytes": 1.5
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: host state maxBytes must be a positive integer",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "host.accepts-state",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html",
+          "state": {
+            "format": 1,
+            "maxBytes": 9
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "hostops.requires-host",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "hostOperations": {
+          "@scope/x": [
+            "op"
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: hostOperations requires host",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "hostops.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "hostOperations": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: hostOperations must map sidecars to operations",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "hostops.not-dependency",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "hostOperations": {
+          "@scope/x": [
+            "op"
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: hostOperations @scope/x is not a dependency",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "hostops.not-distinct",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "hostOperations": {
+          "@scope/x": [
+            "a",
+            "a"
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: hostOperations @scope/x must be a list of distinct operation names",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "hostops.empty-list",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "hostOperations": {
+          "@scope/x": []
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: hostOperations @scope/x must be a list of distinct operation names",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "hostops.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "hostOperations": {
+          "@scope/x": [
+            "op"
+          ]
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.requires-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "host": {
+          "page": "ui/host.html"
+        },
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: extends requires a surface",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: extends must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.invalid-point",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "Bad": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: invalid extension point Bad",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.point-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p: must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.point-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            },
+            "x": 1
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.version-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p version must be x.y.z",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.schema-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0.0"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p schema: schema must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.modules-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            },
+            "modules": 1
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p: modules must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.bare-specifier",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            },
+            "modules": {
+              "./x": "a.js"
+            }
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p module ./x is not a bare specifier",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.module-path",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            },
+            "modules": {
+              "@scope/lib": "../a.js"
+            }
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe extension point p module @scope/lib must be a JavaScript path inside the package",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            },
+            "modules": {
+              "@scope/lib": "ext/lib.js"
+            }
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html",
+        "ext/lib.js"
+      ]
+    },
+    {
+      "id": "contributes.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.no-dot",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "nodot": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes nodot must be <plugin id>.<point>",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.own-point",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "probe.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes to its own extension point probe.p",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.empty-items",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "other.p": []
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes other.p must be a non-empty array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.item-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "other.p": [
+            1
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes other.p item 1 must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.range-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "other.p": [
+            {
+              "range": "bad",
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes other.p item 1 range bad is invalid",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.range-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "other.p": [
+            {
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes other.p item 1 range undefined is invalid",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.module-path",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.txt"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: contributes other.p item 1 module must be a JavaScript path inside the package",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "contributes.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.requires-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run"
+        },
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: background requires a surface",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "background": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: background must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "x": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.settings-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": "x"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: settings must map request fields to setting names",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.setting-replaces-operation",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "operation": "s"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: a setting cannot replace operation",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.setting-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "f": "s"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: setting s is not declared by the plugin",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.sidecar-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: sidecar must be declared by the plugin",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.operation-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": ""
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: operation must be a non-empty string",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "x": 1
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.module-removed",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "module": "x.js"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-not-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": "x"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface menu must be an array of 1 to 16 items",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": []
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface menu must be an array of 1 to 16 items",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-item-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            1
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: a surface menu item must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-item-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            {
+              "command": "probe.run",
+              "title": "Run",
+              "x": 1
+            }
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface menu item: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-command-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            {
+              "command": "probe.run",
+              "title": "Run"
+            }
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface menu command probe.run must name a command declared in exposes",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-repeated",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            {
+              "command": "probe.run",
+              "title": "Run"
+            },
+            {
+              "command": "probe.run",
+              "title": "Again"
+            }
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface menu command probe.run is repeated",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-title-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            {
+              "command": "probe.run",
+              "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface menu title of probe.run must be 1 to 40 characters",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.menu-accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            {
+              "command": "probe.run",
+              "title": "Run"
+            }
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.save-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "save": "probe.run"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface save must name a command declared in exposes",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.drop-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "drop": "probe.run"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface drop must name a command declared in exposes",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.params-not-object-type",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "params": {
+            "type": "string"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface params must be a schema of type object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.params-unknown-keyword",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "params": {
+            "type": "object",
+            "required": [
+              "path"
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface params: unknown field required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": "x"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface opens must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": [
+              "md"
+            ],
+            "x": 1
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface opens: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-without-path",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": [
+              "md"
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface opens requires surface params with a string property path",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-no-extensions",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": []
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface opens extensions must be a non-empty array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-bad-extension",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": [
+              "MD"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface opens extension MD must be * or lowercase letters and digits",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-repeated",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": [
+              "md",
+              "md"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface opens extension md is repeated",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.opens-accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "opens": {
+            "extensions": [
+              "md",
+              "*"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.composition-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {},
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface requires a composition",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.composition-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": "x"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface: composition must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.composition-dom",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "dom"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: kind dom is removed; the composition takes kind view",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.composition-hybrid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "hybrid"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: kind hybrid is removed; the composition takes kind view",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.composition-kind-other",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "x"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: composition kind must be view",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.view-page-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: view composition requires page",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.view-page-not-html",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.js"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: page must be a path inside the plugin release that ends in .html",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.view-page-binary",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": ".binary/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: page must be a path inside the plugin release that ends in .html",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.view-page-absolute",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "/ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: page must be a path inside the plugin release that ends in .html",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.composition-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "x": 1
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.regions-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": []
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: regions must be a non-empty array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.overlays-not-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "overlays": "x"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: overlays must be an array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              1
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition region: expected an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-name-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "Bad",
+                "kind": "document",
+                "input": "native"
+              }
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: invalid region name Bad",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-duplicate",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "a",
+                "kind": "document",
+                "input": "native"
+              },
+              {
+                "name": "a",
+                "kind": "document",
+                "input": "native"
+              }
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: duplicate name a",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-document-input",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "a",
+                "kind": "document",
+                "input": "dom"
+              }
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition region a: document input must be native",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-image-input",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "a",
+                "kind": "image",
+                "sidecar": "@scope/x",
+                "input": "native"
+              }
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition region a: image input must be dom",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-image-sidecar",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "a",
+                "kind": "image",
+                "sidecar": "@scope/x",
+                "input": "dom"
+              }
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition region a: sidecar must be declared by the plugin",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.region-kind-unknown",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "a",
+                "kind": "video",
+                "input": "dom"
+              }
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition region a: kind must be document or image",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.overlay-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "overlays": [
+              "Bad"
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: invalid overlay name Bad",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.overlay-duplicates-region",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "a",
+                "kind": "document",
+                "input": "native"
+              }
+            ],
+            "overlays": [
+              "a"
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface composition: duplicate name a",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.regions-accept",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [
+              {
+                "name": "doc",
+                "kind": "document",
+                "input": "native"
+              },
+              {
+                "name": "img",
+                "kind": "image",
+                "sidecar": "@scope/x",
+                "input": "dom"
+              }
+            ],
+            "overlays": [
+              "tip"
+            ]
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.unload-with-background",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "unload": {
+            "format": 1,
+            "maxBytes": 10
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface unload is forbidden beside background",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.unload-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "unload": {
+            "format": 0,
+            "maxBytes": 10
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface unload must be {format, maxBytes} with positive integers",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.unload-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "unload": {
+            "format": 1,
+            "maxBytes": 10,
+            "x": 1
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe surface unload: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.unload-accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "unload": {
+            "format": 1,
+            "maxBytes": 1000
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.mark-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: mark is required with a surface",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.icon-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P"
+      },
+      "accepted": false,
+      "error": "plugin probe: icon is required with a surface",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.not-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sections": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: sections must be an array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sections": [
+          1
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.module-removed",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sections": [
+          {
+            "id": "probe.a",
+            "module": "x.js"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a module is removed; a section takes status (docs/spec/declared-ui.md)",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s",
+            "x": 1
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe section: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.wrong-prefix",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "other.a",
+            "name": "A",
+            "status": "probe.s"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section id other.a must be probe.<name>",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.duplicate",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s"
+          },
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: duplicate section probe.a",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.name-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "status": "probe.s"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a requires a name",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.status-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a requires a status",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.status-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.x"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a status probe.x is not a status of plugin probe",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.status-shared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s"
+          },
+          {
+            "id": "probe.b",
+            "name": "A",
+            "status": "probe.s"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: status probe.s backs section probe.a and section probe.b",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.fill-not-boolean",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s",
+            "fill": "yes"
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a fill must be a boolean",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s",
+            "fill": true
+          }
+        ]
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "preview.requires-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        },
+        "preview": {
+          "ink": "--rail"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: preview requires a surface",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "preview.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "preview": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: preview must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "preview.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "preview": {
+          "ink": "--rail",
+          "x": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe preview: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "preview.ink-not-token",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "preview": {
+          "ink": "rail"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: preview.ink must be a theme token name",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "preview.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "preview": {
+          "ink": "--rail"
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.requires-surface-or-host",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        },
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: exposes require a surface or a plugin host",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": "x"
+      },
+      "accepted": false,
+      "error": "probe exposes: expected an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.unknown-kind",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "foo": []
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: unknown field foo",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.kind-not-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": 1
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: status must be an array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.entry-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            1
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: status entry must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.name-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.Run",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: name probe.Run must be probe.<name> with lowercase letters, digits, dots, and hyphens",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.name-double-dot",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe..s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: name probe..s must be probe.<name> with lowercase letters, digits, dots, and hyphens",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.name-other-owner",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "other.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: name other.s must be probe.<name> with lowercase letters, digits, dots, and hyphens",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.duplicate",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            },
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: duplicate status probe.s",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.entry-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              },
+              "x": 1
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.description-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: description is required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.schema-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "S."
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: schema is required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.schema-unknown-keyword",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object",
+                "minimum": 1
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s schema: unknown field minimum",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.schema-type-null",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": null
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s schema: unknown schema type null",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.schema-type-nested-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  [
+                    "string"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s schema: unknown schema type [[\"string\"]]",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-params-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "R.",
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run: params is required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-params-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "string"
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run: params must be an object schema",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-result-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "R.",
+              "params": {
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run: result is required",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-timeout-high",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              },
+              "timeout": 600001
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-timeout-zero",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              },
+              "timeout": 0
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-timeout-fraction",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              },
+              "timeout": 1.5
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run: timeout must be an integer from 1 to 600000 milliseconds",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.dom-many-not-boolean",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "dom": [
+            {
+              "name": "probe.d",
+              "description": "D.",
+              "many": "yes"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.d: many must be a boolean",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.dom-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "dom": [
+            {
+              "name": "probe.d",
+              "description": "D.",
+              "params": {}
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.d: unknown field params",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.kinds-checked-in-sorted-order",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": 1,
+          "commands": 1
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes: commands must be an array",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ],
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ],
+          "dom": [
+            {
+              "name": "probe.d",
+              "description": "D.",
+              "many": true
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.menu-non-array-commands",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "menu": [
+            {
+              "command": "probe.run",
+              "title": "Run"
+            }
+          ]
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": 5
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface menu command probe.run must name a command declared in exposes",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: settings must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.invalid-name",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "Bad": {
+            "label": "L",
+            "type": "string",
+            "default": "a",
+            "maxLength": 3
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: invalid setting name Bad",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.declaration-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: setting must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.label-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "type": "string",
+            "default": "a",
+            "maxLength": 3
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: label must be 1 to 40 characters",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.description-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "description": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "type": "string",
+            "default": "a",
+            "maxLength": 3
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: description must be 1 to 200 characters",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.enum-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "enum",
+            "default": "a",
+            "values": [
+              "a"
+            ],
+            "x": 1
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.enum-values-repeated",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "enum",
+            "default": "a",
+            "values": [
+              "a",
+              "a"
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: enum values must be distinct non-empty strings",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.enum-default-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "enum",
+            "default": "b",
+            "values": [
+              "a"
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: default must be one of values",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.integer-bounds",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "integer",
+            "default": 11,
+            "minimum": 1,
+            "maximum": 10
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: integer default and bounds are invalid",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.string-maxlength-zero",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "string",
+            "default": "a",
+            "maxLength": 0
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: string default and maxLength are invalid",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.address-scheme",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "address",
+            "default": "ftp://x"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: address default must be empty or an http or https address",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.type-unknown",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "color",
+            "default": "a"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: setting type must be enum, integer, string, or address",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "e": {
+            "label": "L",
+            "type": "enum",
+            "default": "a",
+            "values": [
+              "a",
+              "b"
+            ]
+          },
+          "i": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "s": {
+            "label": "L",
+            "type": "string",
+            "default": "a",
+            "maxLength": 3
+          },
+          "u": {
+            "label": "L",
+            "type": "address",
+            "default": ""
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: sidebars must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [],
+          "x": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe sidebars: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.sets-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {}
+      },
+      "accepted": false,
+      "error": "plugin probe: sidebars requires sets and links",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-incomplete",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: every set requires id, title, and sections",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-title-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "ttttttttttttttttttttttttttttttttttttttttt",
+              "sections": [],
+              "layout": "list"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: set s title must be 1 to 40 characters",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-section-not-text",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                1
+              ],
+              "layout": "list"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: set s sections must be section ids",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-section-twice",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a",
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: set s lists section probe.a twice",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-layout",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [],
+              "layout": "grid"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: set s layout must be list or tabs",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-reserved",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "off",
+              "title": "S",
+              "sections": [],
+              "layout": "list"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: set id off is reserved",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-duplicate",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [],
+              "layout": "list"
+            },
+            {
+              "id": "s",
+              "title": "T",
+              "sections": [],
+              "layout": "tabs"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: duplicate set s",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-id-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "S1",
+              "title": "S",
+              "sections": [],
+              "layout": "list"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: invalid local set id S1",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.set-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [],
+              "layout": "list",
+              "x": 1
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe set s: unknown field x",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.card-needs-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        },
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [],
+              "layout": "list"
+            }
+          ],
+          "card": {
+            "top": "s"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: card defaults require a surface",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.mapping-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ],
+          "card": "x"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: sidebar card defaults must be an object",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.mapping-unknown-side",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ],
+          "card": {
+            "middle": "s"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe sidebar card: unknown field middle",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.mapping-unknown-set",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ],
+          "card": {
+            "top": "nope"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: card top names unknown set nope",
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sidebars.accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "status": "probe.s"
+          }
+        ],
+        "sidebars": {
+          "sets": [
+            {
+              "id": "s",
+              "title": "S",
+              "sections": [
+                "probe.a"
+              ],
+              "layout": "list"
+            }
+          ],
+          "card": {
+            "top": "s"
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.enum-object-members-in-any-order",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "host": {
+          "page": "ui/h.html"
+        },
+        "data": {
+          "k": {
+            "schema": {
+              "type": "object",
+              "enum": [
+                {
+                  "a": 1,
+                  "b": 2
+                }
+              ]
+            },
+            "default": {
+              "b": 2,
+              "a": 1
+            }
+          }
+        }
+      },
+      "accepted": true,
+      "files": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    }
+  ]
+}

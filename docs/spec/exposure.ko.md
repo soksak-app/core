@@ -42,7 +42,7 @@
 | dom | `description` | 한 문장 설명 |
 | dom | `many` | 선택. 여러 요소가 같은 이름을 쓰면 `true`이며, 요청은 `index`로 요소 하나를 지정하거나, [선언된 UI](declared-ui.ko.md)가 주소를 정하는 곳에서는 `address`로 지정한다 |
 
-스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다.
+스키마는 `type`, `properties`, `items`, `enum` 키워드만 쓰는 JSON Schema 부분집합이다. `type`은 `string`, `number`, `integer`, `boolean`, `object`, `array`, `null` 이름 가운데 하나이거나 그 이름들의 비어 있지 않은 목록이며, 그 밖의 값은 거부한다. `null`과 목록 안의 목록도 거부한다. `enum`은 비어 있지 않은 목록이고, 값은 같은 JSON 값일 때 항목과 일치하며, 객체의 member는 순서와 무관하게 비교한다.
 
 dom 항목의 요소는 `data-expose="<이름>"` 속성을 가진다. `many`가 없으면 그 이름을 가진 요소는 정확히 하나다. [선언된 UI](declared-ui.ko.md) 값이 그리는 조작 가능한 요소는 [선언된 UI](declared-ui.ko.md)가 정하는 속성과 주소를 가진다.
 
