@@ -23,7 +23,7 @@ test("state, data, and sidecars are rejected when their requirements are missing
     [{ ...base(), state: { module: "/abs.js" } }, /state module must be a JavaScript path/],
     [{ ...base(), state: { module: "ui/state.js", extra: 1 } }, /unknown field extra/],
     [without("sections"), /state requires sections/],
-    [{ ...without("state"), data: base().data }, /data requires a state module/],
+    [{ ...without("state"), data: base().data }, /data requires a state module or a plugin host/],
     [{ ...without("state"), data: undefined }, /dependencies require a surface, a state module, a plugin host or contributes/],
     [{ ...base(), data: { marks: { schema: { type: "array" }, default: "x" } } }, /data marks default does not match its schema/],
     [{ ...base(), data: { marks: { schema: { type: "array" } } } }, /data marks requires schema and default/],
@@ -32,6 +32,16 @@ test("state, data, and sidecars are rejected when their requirements are missing
     if (manifest.data === undefined) delete manifest.data;
     assert.throws(() => validateManifest(manifest), message);
   }
+});
+
+test("project data is accepted for a plugin host without a state module and refused without a state or a host", () => {
+  const host = () => { const m = base(); delete m.state; m.host = { page: "ui/host.html" }; return m; };
+  const manifest = host();
+  assert.equal(validateManifest(manifest), manifest);
+  assert.equal(validateManifest(manifest).data.marks.default.length, 0);
+  const bare = base();
+  delete bare.state;
+  assert.throws(() => validateManifest(bare), /data requires a state module or a plugin host/);
 });
 
 test("checkProjectData accepts declared values and rejects undeclared keys and mismatches", () => {

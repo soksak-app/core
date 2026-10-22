@@ -650,7 +650,8 @@ export function validateManifest(manifest) {
     if (manifest.sections === undefined) throw new Error(`${where}: state requires sections`);
   }
   if (manifest.data !== undefined) {
-    if (manifest.state === undefined) throw new Error(`${where}: data requires a state module`);
+    // The state module and the plugin host both serve project data (docs/spec/plugins.md#project-data).
+    if (manifest.state === undefined && manifest.host === undefined) throw new Error(`${where}: data requires a state module or a plugin host`);
     if (!isObject(manifest.data)) throw new Error(`${where}: data must be an object`);
     for (const [key, entry] of Object.entries(manifest.data)) {
       if (!ID.test(key)) throw new Error(`${where}: invalid data key ${key}`);
@@ -830,8 +831,9 @@ export function validateManifest(manifest) {
     }
   }
   if (manifest.exposes !== undefined) {
-    if (manifest.surface === undefined && manifest.state === undefined) {
-      throw new Error(`${where}: exposes require a surface or a state module`);
+    // A plugin host registers the declared statuses and commands of its plugin (docs/spec/plugin-host.md#exposure).
+    if (manifest.surface === undefined && manifest.state === undefined && manifest.host === undefined) {
+      throw new Error(`${where}: exposes require a surface, a state module or a plugin host`);
     }
     validateExposes(id, manifest.exposes);
   }
