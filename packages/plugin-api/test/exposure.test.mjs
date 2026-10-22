@@ -396,3 +396,22 @@ test("a dom request refuses an index that is not a non-negative integer instead 
   assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: -1 })), EXPOSURE_ERRORS.invalidParams);
   assert.equal(input.clicks ?? 0, 0, "a refused dom.act does not reach the element");
 });
+
+test("an undefined status value or command result is refused with an error that names it, and null is the no-value", async () => {
+  const declared = { ...exposes(), commands: [...exposes().commands, {
+    name: "probe.value", description: "Returns a value.", params: { type: "object" }, result: { type: "string" },
+  }] };
+  const entries = exposureEntries(declarationMap(declared));
+  entries.status("probe.lines", () => undefined, () => () => {});
+  entries.command("probe.value", () => undefined);
+  const failure = async (method, params) => replyPayload(() => entries.answer(method, params));
+  const status = await failure("status.get", { name: "probe.lines" });
+  assert.equal(status.error?.code, EXPOSURE_ERRORS.failed, JSON.stringify(status));
+  assert.match(status.error.message, /status probe\.lines value is undefined/);
+  const command = await failure("command.run", { name: "probe.value", params: {} });
+  assert.equal(command.error?.code, EXPOSURE_ERRORS.failed, JSON.stringify(command));
+  assert.match(command.error.message, /command probe\.value result is undefined/);
+  const nullResult = exposureEntries(declarationMap(exposes()));
+  nullResult.command("probe.send", () => null);
+  assert.deepEqual(await replyPayload(() => nullResult.answer("command.run", { name: "probe.send", params: {} })), { result: null });
+});

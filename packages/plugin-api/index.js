@@ -1498,6 +1498,12 @@ export function exposureEntries(declared) {
   // default: an unregistered dom name has no element, and the caller reports that case as an unregistered error.
   const elements = (name) => (doms.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
 
+  // A status value is JSON, and null is its no-value (docs/spec/declared-ui.md). undefined is not a JSON value, so it is refused.
+  function jsonStatusValue(name, value) {
+    if (value === undefined) throw new ExposureError(EXPOSURE_ERRORS.failed, `status ${name} value is undefined; a status value is JSON, and null is its no-value`);
+    return value;
+  }
+
   function status(name) {
     const entry = statuses.get(name);
     if (!entry) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `status ${name} is not registered`);
@@ -1514,12 +1520,10 @@ export function exposureEntries(declared) {
 
   function update(entry, value, changed) {
     if (!entry.watching) return;
-    // default: an undefined status value is not in JSON, so it is exposed as null.
-    const text = JSON.stringify(value ?? null);
+    const text = JSON.stringify(jsonStatusValue(entry.name, value));
     if (text === entry.text) return;
     entry.text = text;
-    // default: an undefined status value is not in JSON, so it is exposed as null.
-    entry.value = value ?? null;
+    entry.value = value;
     entry.version++;
     for (const resolve of entry.waiters.splice(0)) resolve({ version: entry.version, value: entry.value });
     changed(entry.value);
@@ -1537,12 +1541,10 @@ export function exposureEntries(declared) {
       let active = true;
       let text;
       const deliver = (value) => {
-        // default: an undefined status value is not in JSON, so it is exposed as null.
-        const next = JSON.stringify(value ?? null);
+        const next = JSON.stringify(jsonStatusValue(name, value));
         if (!active || next === text) return;
         text = next;
-        // default: an undefined status value is not in JSON, so it is exposed as null.
-        fn(value ?? null);
+        fn(value);
       };
       const stopper = entry.subscribe(deliver);
       Promise.resolve(entry.read()).then(deliver);
@@ -1563,7 +1565,7 @@ export function exposureEntries(declared) {
       if (typeof read !== "function" || typeof subscribe !== "function") {
         throw new Error(`status ${name} requires read and subscribe functions`);
       }
-      statuses.set(name, { read, subscribe, watching: false, stop: null, text: undefined, value: null, version: 0, waiters: [] });
+      statuses.set(name, { name, read, subscribe, watching: false, stop: null, text: undefined, value: null, version: 0, waiters: [] });
     },
 
     command(name, run) {
@@ -1607,8 +1609,7 @@ export function exposureEntries(declared) {
       const { name } = params;
       const found = declared.get(declarationKey(kind, name));
       if (!found) throw new ExposureError(EXPOSURE_ERRORS.unknownName, `unknown ${kind} ${name}`);
-      // default: an undefined status value is not in JSON, so it is answered as null.
-      if (method === "status.get") return (await status(name).read()) ?? null;
+      if (method === "status.get") return jsonStatusValue(name, await status(name).read());
       if (method === "status.watch") {
         const entry = status(name);
         if (entry.watching) return null;
@@ -1651,8 +1652,12 @@ export function exposureEntries(declared) {
         } catch (error) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `${method} for ${name}: ${error.message}`);
         }
-        // default: an undefined result of a command without a result is not in JSON, so it is answered as null.
-        return (await run(input, { cids })) ?? null;
+        const result = await run(input, { cids });
+        // A command that declares no result (result type null) answers null when it returns nothing. Any other command
+        // returns a JSON value, so undefined is refused.
+        if (result === undefined && found.declaration.result?.type === "null") return null;
+        if (result === undefined) throw new ExposureError(EXPOSURE_ERRORS.failed, `command ${name} result is undefined; a result is a JSON value or null`);
+        return result;
       }
       if (params.address !== undefined) {
         if (params.index !== undefined) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "a request gives index or address, not both");
@@ -1682,8 +1687,9 @@ export function exposureEntries(declared) {
 /** Converts the result of a request into the answer format {result} or {error: {code, message}} of the relay. */
 export async function replyPayload(work) {
   try {
-    // default: an undefined result of a request without a result is not in JSON, so it is answered as null.
-    return { result: (await work()) ?? null };
+    const result = await work();
+    if (result === undefined) throw new ExposureError(EXPOSURE_ERRORS.failed, "a request returned undefined; a result is a JSON value or null");
+    return { result };
   } catch (error) {
     // A general exception thrown by a registered function is a failure of execution, not of the request format.
     const code = error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed;
