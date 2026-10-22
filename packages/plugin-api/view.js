@@ -227,6 +227,7 @@ export function createViewBridge({ handler, report }) {
     try {
       value = snapshots.pull(status);
     } catch (error) {
+      // default: a thrown value that is not an Error carries its value as the text.
       const text = String(error?.message ?? error);
       report({ where: `declared-ui.snapshot.request ${status}`, text });
       channel.send({ sok: 1, reply: request.id, error: { code: FAILED_COMMAND, message: text } });
