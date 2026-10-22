@@ -2,7 +2,7 @@
 // starts and ends with its elapsed time, has its own limit, and runs in parallel (docs/operations/examples.md#test-runner).
 // The test script of each package names the flags and the paths: `node --test [flags] <paths>`, optionally after commands such as
 // `pnpm build`. `--script <name>` reads another script of the packages that have it (`verify` runs the window checks, with
-// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it.
+// `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, and `--when-idle <seconds>` starts a file only after the person gave no input for that long, so the checks do not take the focus of the person). The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists; `make push-check` runs the tests of the changed packages with it.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -90,17 +90,35 @@ function filesOf(folder, path) {
   return statSync(full).isDirectory() ? filesUnder(full) : [full];
 }
 
-/**
- * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
- * and the flags of its script, and the commands to run before them.
- */
 /** The reporters of a test file: the spec form on the standard output and the TAP form on the standard error. */
 const REPORTERS = ['--test-reporter=spec', '--test-reporter-destination=stdout', '--test-reporter=tap', '--test-reporter-destination=stderr'];
 
-export function discoverNodeTests({ root, packages, script: scriptName = 'test' }) {
+/**
+ * The packages that hold the changed files (paths relative to the root). A file belongs to the deepest package folder that contains
+ * it; a file that no package folder contains belongs to the root `.`. The result keeps the order of `packages`.
+ */
+export function changedPackages(files, packages) {
+  const owned = new Set();
+  for (const file of files) {
+    let owner = null;
+    for (const folder of packages) {
+      if (folder !== '.' && file.startsWith(`${folder}/`) && (owner === null || folder.length > owner.length)) owner = folder;
+    }
+    owned.add(owner ?? '.');
+  }
+  return packages.filter((folder) => owned.has(folder));
+}
+
+/**
+ * The tests of the packages (folders relative to `root`, or `.` for the root): one test per file, with the folder of its package
+ * and the flags of its script, and the commands to run before them. With `changed` (the changed files), only the packages that hold
+ * a changed file are discovered.
+ */
+export function discoverNodeTests({ root, packages, script: scriptName = 'test', changed }) {
   const tests = [];
   const before = [];
-  for (const folder of packages) {
+  const selected = changed === undefined ? packages : changedPackages(changed, packages);
+  for (const folder of selected) {
     const directory = join(root, folder);
     const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'));
     // The test script of the root runs this runner, so the root names the files of its own scripts in `test:scripts`.
@@ -157,6 +175,7 @@ async function main(argv) {
       timeout: { type: 'string', default: String(TEST_TIMEOUT_MS / 1000) },
       concurrency: { type: 'string', default: String(Math.max(2, cpus().length - 2)) },
       'when-idle': { type: 'string' },
+      changed: { type: 'string' },
     },
   });
   const count = (name) => {
@@ -168,7 +187,14 @@ async function main(argv) {
   const scriptName = values.script;
   const limitMs = count('timeout') * 1000;
   const write = (line) => process.stdout.write(`${line}\n`);
-  const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName });
+  // With --changed, the files that the revision range changes select the packages; the push gate runs them.
+  const changed = values.changed === undefined ? undefined
+    : execFileSync('git', ['diff', '--name-only', values.changed], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed });
+  if (changed !== undefined && all.length === 0) {
+    write(`SKIP no test file of a package changed in ${values.changed}`);
+    return 0;
+  }
   const tests = all.filter((item) => item.name.includes(only));
   if (tests.length === 0) throw new Error(`no test file contains ${JSON.stringify(only)}`);
   // The commands before the tests run one at a time, each with its elapsed time, and a failure ends the run.

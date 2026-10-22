@@ -152,3 +152,29 @@ test("the audit of the logs runs after a run of window checks and of the activat
   assert.equal(auditAfterRun("verify", run, (line) => lines.push(line), () => { throw new Error("marks.jsonl: the run left no test marks"); }), 1);
   assert.equal(lines.at(-1), "AUDIT FAIL marks.jsonl: the run left no test marks");
 });
+
+// The push gate runs the test files of the packages whose files the push range changes, and no other package.
+test("a change under a package selects the test files of that package only", () => {
+  const root = workspace();
+  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
+  put(root, "a/test/one.test.mjs", "");
+  put(root, "b/package.json", JSON.stringify({ name: "b", scripts: { test: "node --test test/" } }));
+  put(root, "b/test/two.test.mjs", "");
+  const { tests } = discoverNodeTests({ root, packages: ["a", "b"], changed: ["a/src/index.js"] });
+  assert.deepEqual(tests.map((item) => item.name), ["a/test/one.test.mjs"]);
+});
+
+test("a change selects the deepest package that holds it, and a change outside every package selects the root", () => {
+  const root = workspace();
+  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
+  put(root, "scripts/test/s.test.mjs", "");
+  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
+  put(root, "a/test/one.test.mjs", "");
+  put(root, "a/inner/package.json", JSON.stringify({ name: "inner", scripts: { test: "node --test test/" } }));
+  put(root, "a/inner/test/two.test.mjs", "");
+  const packages = [".", "a", "a/inner"];
+  const names = (changed) => discoverNodeTests({ root, packages, changed }).tests.map((item) => item.name);
+  assert.deepEqual(names(["a/inner/src/x.js"]), ["a/inner/test/two.test.mjs"]);
+  assert.deepEqual(names(["README.md"]), ["scripts/test/s.test.mjs"]);
+  assert.deepEqual(names([]), []);
+});
