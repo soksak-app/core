@@ -1207,6 +1207,35 @@ impl<O: Owner> Sidecars<O> {
         self.clear_dependency_stops(plugin, "surface", surface);
     }
 
+    /// Counts the restart limit of sidecar as a failed process does, so that its restarts stop. A test seam for the stop of
+    /// a sidecar that a plugin host creation must keep (docs/spec/sidecars.md#failure).
+    #[cfg(test)]
+    pub(crate) fn stop_restarts_for_test(&self, sidecar: &str) {
+        let mut state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let record = state.restarts.entry(sidecar.to_string()).or_default();
+        let now = Instant::now();
+        for _ in 0..RESTART_LIMIT {
+            record.count(now);
+        }
+    }
+
+    /// Returns true when the restart limit stopped sidecar. A test seam (docs/spec/sidecars.md#failure).
+    #[cfg(test)]
+    pub(crate) fn restart_stopped_for_test(&self, sidecar: &str) -> bool {
+        let state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        restart_stopped(&state, sidecar)
+    }
+
     /// Called when the person enables plugin. It clears the restart limit of each stopped sidecar that the plugin lists in
     /// dependencies, in the same step as the plugin host stop of the plugin (docs/spec/sidecars.md#failure).
     pub fn plugin_enabled(&self, plugin: &str) {

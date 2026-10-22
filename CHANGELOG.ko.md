@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F238-d-18-2: F238-d-18의 pin을 마쳤다. plugin host 생성은 sidecar stop을 유지하고, 재시작 stop 뒤의 plugin 세션 send는 소유 창에 실패로 전달되며, plugin 세션 실패는 앱 오류 경고를 보이지 않고, host 페이지 시작은 원천이 바뀔 때 선언된 status를 한 번씩 pull한다. 각 pin은 수정 전 코드에서 통과하며 Red가 아닌 pin으로 기록한다. Rust `#[cfg(test)]` seam은 `Sidecars::stop_restarts_for_test`다. 계약 행은 `plugin-host.sidecar.stop-kept`와 `plugin-host.sidecar.failure`이며, project-switch 사례는 F229-1에 남는다.
 - F238-d-19: host 페이지는 listing 오류를 served call `runtime.error {where, text}`로 알리며 검사는 view call과 같다. main page는 `error plugin <id> <where>: <text>`를 오류 표시를 통해 쓴다. 두 host가 이 call을 전달한다(계약 `plugin-host.error.display`). Red: workbench 사례는 표시 줄 없이 실패했고, Go 사례는 전달 assertion에서 실패했으며, Rust 사례는 `plugin host call runtime.error is not served`로 실패했다. Green: workbench plugin host call 15/15, Go 사례 1/1, Rust 사례 1/1.
 - F238-d-18: 구독된 plugin 세션의 실패는 host 페이지에 failure event로 전달된다. workbench 사례가 이를 고정하며 수정 전 코드에서 통과한다. 이 항목의 나머지 pin은 F238-d-18-2에 있다.
 - F248-2: `packages/plugin-api/contract/contributions.json`은 `resolveContributions`의 모든 결과(connected, provider-missing, invalid, version-mismatch, 순서, contributes가 없는 plugin)를 게시하며 `test/contributions-contract.test.mjs`가 재생한다. `view-native.json`은 구독 전에 도착한 view 이벤트의 버림을 게시한다. 동작은 바뀌지 않았다. 소유 시험: plugin-api 504/504.

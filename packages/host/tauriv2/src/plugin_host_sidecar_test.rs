@@ -499,3 +499,116 @@ fn a_page_start_closes_the_plugin_sessions_of_the_window_and_keeps_its_surfaces(
     sidecars.stop();
     thread.join().unwrap();
 }
+
+// The creation of a plugin host keeps the restart stop of each sidecar that its plugin lists: only the open of a surface or the enable of
+// the plugin clears a stop (docs/spec/plugin-host.md#restarts, docs/spec/sidecars.md#failure).
+// contract: plugin-host.sidecar.stop-kept
+#[test]
+fn creating_a_plugin_host_keeps_the_restart_stop_of_its_sidecar() {
+    use crate::plugin_host::{HostPlugin, HostView, PluginHostRestarts, PluginHosts, create_host};
+    let executable = Folder::new();
+    let config = Folder::new();
+    let sidecars = declared(executable.path(), config.path());
+    sidecars.stop_restarts_for_test(SIDECAR);
+    let plugins = vec![HostPlugin {
+        id: "probe".into(),
+        page: "ui/host.html".into(),
+        state: None,
+    }];
+    let hosts = PluginHosts::default();
+    let restarts = PluginHostRestarts::default();
+    let wanted = hosts.missing(&plugins, &restarts);
+    assert_eq!(wanted.len(), 1, "the plugin host of probe is not wanted");
+    for plugin in &wanted {
+        let view = HostView {
+            directory: "/config/document-data",
+            folder: "/config/plugins/probe",
+            plugin: &plugin.id,
+            page: &plugin.page,
+        };
+        let handle = create_host(
+            "channel-script",
+            view,
+            |_channel, _view| Ok(1),
+            |_handle, _address| Ok(true),
+            |_handle| Ok(()),
+        )
+        .unwrap();
+        hosts.insert(&plugin.id, handle);
+    }
+    assert!(
+        sidecars.restart_stopped_for_test(SIDECAR),
+        "the creation of the plugin host cleared the sidecar stop of its plugin"
+    );
+    sidecars.stop();
+}
+
+/// The owner of a test that records each sidecar failure that the window receives.
+#[derive(Clone)]
+struct RecordingOwner(Arc<Mutex<Vec<Failure>>>);
+
+impl Owner for RecordingOwner {
+    fn key(&self) -> String {
+        "window-a".to_string()
+    }
+    fn root(&self) -> Result<String, String> {
+        Ok(ROOT.to_string())
+    }
+    fn deliver(&self, _message: Message) {}
+    fn deliver_failure(&self, failure: Failure) {
+        self.0.lock().unwrap().push(failure);
+    }
+    fn decide_image_envelope(
+        &self,
+        _sidecar_name: &str,
+        _surface: &str,
+        _body: &RawValue,
+        _response_sender: &dyn crate::sidecars::ResponseSender,
+    ) -> bool {
+        false
+    }
+}
+
+/// A standard input and output declaration of fixture-sidecar that the plugin probe depends on (no persistent transport).
+fn declared_stdio(executable: &Path, config: &Path) -> Sidecars<RecordingOwner> {
+    Sidecars::new(
+        &[SidecarDeclaration {
+            name: SIDECAR.to_string(),
+            folder: executable.to_path_buf(),
+            data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+            version: "0.0.1".to_string(),
+            dependents: vec!["probe".to_string()],
+        }],
+        config.to_path_buf(),
+    )
+    .unwrap()
+}
+
+// A send of a plugin session while its sidecar is stopped by the restart limit is refused before any start, and the refusal reaches
+// the owner window as the failure of the plugin session (docs/spec/sidecars.md#failure, docs/spec/plugin-host.md#restarts).
+// contract: plugin-host.sidecar.failure
+#[test]
+fn a_plugin_send_after_the_restart_stop_fails_to_its_owner() {
+    let executable = Folder::new();
+    let config = Folder::new();
+    let sidecars = declared_stdio(executable.path(), config.path());
+    sidecars.stop_restarts_for_test(SIDECAR);
+    let recorded = Arc::new(Mutex::new(Vec::new()));
+    let owner = RecordingOwner(recorded.clone());
+    let session = "plugin:probe:project-a:fixture-sidecar";
+    let body = raw(r#"{"operation":"list"}"#);
+    assert_eq!(
+        sidecars.send_plugin_with_cids(&owner, SIDECAR, session, ROOT, &body, &[]),
+        Err("sidecar fixture-sidecar: restart limit".to_string())
+    );
+    let failures = recorded.lock().unwrap();
+    assert_eq!(
+        failures.len(),
+        1,
+        "the owner received {} failures",
+        failures.len()
+    );
+    assert_eq!(failures[0].sidecar, SIDECAR);
+    assert_eq!(failures[0].surface, session);
+    assert_eq!(failures[0].reason, "restart limit");
+}

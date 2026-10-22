@@ -5,6 +5,7 @@ package host
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -328,5 +329,47 @@ func TestPageStartClosesThePluginSessionsOfTheWindow(t *testing.T) {
 	}
 	if _, ok := c.owners["fixture-surface"]; !ok {
 		t.Fatal("a surface of the window was closed by the plugin session close")
+	}
+}
+
+// failureOwner is the window of a test that receives the events of the sidecar: it records each Emit in order.
+type failureOwner struct {
+	root   string
+	events []hostEvent
+}
+
+func (o *failureOwner) ProjectRoot() string { return o.root }
+
+func (o *failureOwner) Emit(name string, data ...any) {
+	o.events = append(o.events, hostEvent{name, data[0]})
+}
+
+// stopFixtureSidecar puts the restart limit on fixture-sidecar: the fourth failure within the window stops its restarts, as a
+// sidecar of standard input and output reaches it (docs/spec/sidecars.md#failure).
+func stopFixtureSidecar(c *Sidecars) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.stopped = false
+	c.restarts["fixture-sidecar"] = &restartRecord{}
+	for i := 0; i < restartLimit; i++ {
+		c.restarts["fixture-sidecar"].count(time.Now())
+	}
+}
+
+// A send of a plugin session while its sidecar is stopped by the restart limit is refused, and the refusal reaches the owner window as the
+// failure of the plugin session (docs/spec/sidecars.md#failure, docs/spec/plugin-host.md#restarts).
+// contract: plugin-host.sidecar.failure
+func TestPluginSessionSendAfterTheRestartStopFailsToItsOwner(t *testing.T) {
+	c := sidecarSessionSurfaces(t).sidecars
+	stopFixtureSidecar(c)
+	owner := &failureOwner{root: "/fixture/root"}
+	session := "plugin:probe:project-a:fixture-sidecar"
+	err := c.SendPluginWithCids(owner, "fixture-sidecar", session, "/fixture/root", json.RawMessage(`{"operation":"list"}`), nil)
+	if err == nil || err.Error() != "sidecar fixture-sidecar: restart limit" {
+		t.Fatalf("send after the restart stop: %v, want sidecar fixture-sidecar: restart limit", err)
+	}
+	want := []hostEvent{{"sidecar-failure", SidecarFailure{Sidecar: "fixture-sidecar", Surface: session, Reason: "restart limit"}}}
+	if !reflect.DeepEqual(owner.events, want) {
+		t.Fatalf("owner events %v, want %v", owner.events, want)
 	}
 }

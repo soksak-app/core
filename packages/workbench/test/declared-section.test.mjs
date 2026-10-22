@@ -33,7 +33,7 @@ async function harness() {
     options: { declared: (command) => command === "demo.open", hasIcon: () => true, bind: (el) => el },
     expanded: (source, request) => world.expanded.push({ source: source.id, request }),
     orientation: () => world.orientation,
-    choose: () => module.chooseSource({ statusId, active: world.active, registrants: world.registrants }),
+    choose: () => module.chooseSource({ statusId, active: world.active, registrants: world.registrants, host: world.host ?? null }),
     channel: (source) => ({
       send: (message) => { world.acks.push({ source: source.id, message }); },
       onMessage: (listener) => { world.channels.set(source.id, listener); return () => { world.channels.delete(source.id); }; },
@@ -241,7 +241,28 @@ test("the active view serves only when it registered the status, and a plugin ho
   assert.deepEqual(module.chooseSource({ statusId: "demo.s", active: "view-a", registrants: ["view-a"], host: "host:demo" }), { id: "view-a", surface: "view-a" }, "the host served before the view");
 });
 
-test("a snapshot that overwrote values reports their count once to skipped", async () => {
+// The start of a plugin host page makes the host the chosen source, a new source pair, so the status is pulled once at that change of
+// source, and a reconcile without a change pulls nothing (docs/spec/declared-ui.md, pull at a change of source).
+test("the start of a plugin host page pulls each declared status once, at the change of source", async () => {
+  const h = await harness();
+  h.world.host = "host:demo";
+  h.world.pullReply = { seq: 3, value: list(["h"]) };
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.world.pulls, ["host:demo"], "the host page start did not pull the status once");
+  assert.deepEqual(h.labels(), ["h"], "the pulled host value was not drawn");
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.world.pulls, ["host:demo"], "a reconcile without a change of source pulled again");
+  h.world.host = null;
+  h.section.reconcile();
+  h.world.host = "host:demo";
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.world.pulls, ["host:demo", "host:demo"], "the next host page start did not pull the status once");
+});
+
+test("a snapshot that overwrote values reports their count once to skipped",async () => {
   const h = await harness();
   h.world.registrants = ["view-a"];
   h.world.active = "view-a";

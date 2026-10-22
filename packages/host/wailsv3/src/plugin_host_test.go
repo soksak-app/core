@@ -396,3 +396,34 @@ func TestPluginHostRestartResetsOnTheOpenOfASurfaceOfThePlugin(t *testing.T) {
 		}
 	}
 }
+
+// The creation of a plugin host keeps the restart stop of each sidecar that its plugin lists: only the open of a surface or the enable of
+// the plugin clears a stop (docs/spec/plugin-host.md#restarts, docs/spec/sidecars.md#failure).
+// contract: plugin-host.sidecar.stop-kept
+func TestPluginHostCreationKeepsTheSidecarStopOfItsPlugin(t *testing.T) {
+	config := hostFixture(t)
+	fake := &hostViewPlatform{}
+	saved := system
+	system = fake
+	savedScript := viewChannelScript
+	viewChannelScript = "channel-script"
+	t.Cleanup(func() { system = saved; viewChannelScript = savedScript })
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatalf("host plugins: %v", err)
+	}
+	s := hostTestSurfaces(config)
+	c := sidecarSessionSurfaces(t).sidecars
+	s.sidecars = c
+	stopFixtureSidecar(c)
+	s.createPluginHosts(unsafe.Pointer(new(int)), plugins)
+	if len(fake.created) != 1 {
+		t.Fatalf("created host web views: %+v, want one", fake.created)
+	}
+	c.mu.Lock()
+	stopped := c.restartStopped("fixture-sidecar")
+	c.mu.Unlock()
+	if !stopped {
+		t.Fatal("the creation of the plugin host cleared the sidecar stop of its plugin")
+	}
+}
