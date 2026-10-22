@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F262-5: A navigation state or message of a plugin host that arrives after its window closed is not reported as `project window is closed`.
 - F262-3: The project settings file is written in the current numbered form by both hosts: a settings write migrates the file at its entry and stores the `format` member, and the diagnostics fixture writes the current form too.
 - F262: The projects check reads the project settings file in its current numbered form, and a tab of a new space keeps its origin until a stored layout has held it and dropped it, so the first tab of an added space no longer fails to present with `has no origin`.
 - F212.12-1-10-6: The native suite run of the view import map owner (76 tests) passed 75 tests; a test that loads a view page without the application map was corrected and passed three runs. The plugin repositories still ship their own import maps, so their view pages are refused until their releases remove them (see F212.12-1-10-6g).

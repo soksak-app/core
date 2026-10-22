@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F262-5: 창이 닫힌 뒤 도착한 plugin host의 navigation state나 message는 `project window is closed`로 보고되지 않는다.
 - F262-3: 두 host 모두 프로젝트 설정 파일을 현재 번호 있는 형태로 쓴다. settings 쓰기는 입구에서 파일을 migration하고 `format` member를 저장하며, diagnostics fixture도 현재 형태를 쓴다.
 - F262: 프로젝트 검사는 프로젝트 설정 파일을 현재의 번호 있는 형태로 읽고, 새 space의 tab은 저장된 layout이 가졌다가 버린 뒤에야 origin을 잃는다. 그래서 추가한 space의 첫 tab이 `has no origin`으로 표시에 실패하지 않는다.
 - F212.12-1-10-6: view import map 소유자의 native 전체 시험 실행(76개)은 75개를 통과했다. application map 없이 view page를 여는 시험을 고쳐 연속 세 번 통과시켰다. plugin 저장소는 아직 자기 import map을 담으므로, release가 그 map을 제거할 때까지 그 view page는 거부된다(F212.12-1-10-6g 참조).
