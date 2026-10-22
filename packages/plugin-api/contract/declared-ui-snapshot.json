@@ -1,0 +1,210 @@
+{
+  "surface": "packages/plugin-api/snapshots.js#createSnapshotSender",
+  "description": "Ordered steps of the declared UI snapshot push between a plugin and the workbench. A sender case (role sender, the default) calls push, pull, and peerLost on the plugin side and delivers an acknowledgement (ack) from the workbench. A receiver case (role receiver) delivers a snapshot message to the workbench side. Each step lists what it produces: sent is the messages the module sends in order, reports is the reports it makes in order, delivered is the snapshots that the receiver passes on, result is the value of a pull, and throws is the text of the error the step raises, or null. The plugin id of every case is demo.",
+  "cases": [
+    {
+      "id": "snapshot.push.sends-first-value-and-releases-on-ack",
+      "steps": [
+        {
+          "push": { "status": "demo.count", "value": 1 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 1, "value": 1, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "push": { "status": "demo.count", "value": 2 },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": null, "throws": null }
+        },
+        {
+          "ack": { "status": "demo.count", "seq": 1 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 2, "value": 2, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "ack": { "status": "demo.count", "seq": 2 },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": null, "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "snapshot.push.counts-values-overwritten-in-transit",
+      "steps": [
+        {
+          "push": { "status": "demo.count", "value": 1 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 1, "value": 1, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "push": { "status": "demo.count", "value": 2 },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": null, "throws": null }
+        },
+        {
+          "push": { "status": "demo.count", "value": 3 },
+          "output": {
+            "sent": [],
+            "reports": [{ "kind": "skipped", "plugin": "demo", "status": "demo.count", "count": 1 }],
+            "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "ack": { "status": "demo.count", "seq": 1 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 3, "value": 3, "skipped": 1 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "ack": { "status": "demo.count", "seq": 3 },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": null, "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "snapshot.ack.refuses-a-seq-that-is-not-in-transit",
+      "steps": [
+        {
+          "push": { "status": "demo.count", "value": 1 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 1, "value": 1, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "ack": { "status": "demo.count", "seq": 9 },
+          "output": {
+            "sent": [], "reports": [], "delivered": [], "result": null,
+            "throws": "declared UI snapshot ack demo.count 9 has no snapshot in transit"
+          }
+        },
+        {
+          "ack": { "status": "demo.absent", "seq": 1 },
+          "output": {
+            "sent": [], "reports": [], "delivered": [], "result": null,
+            "throws": "declared UI snapshot ack demo.absent 1 has no snapshot in transit"
+          }
+        }
+      ]
+    },
+    {
+      "id": "snapshot.peer-lost.reports-the-transit-and-the-dirty-value",
+      "steps": [
+        {
+          "push": { "status": "demo.count", "value": 1 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 1, "value": 1, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "push": { "status": "demo.count", "value": 2 },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": null, "throws": null }
+        },
+        {
+          "peerLost": "process-ended",
+          "output": {
+            "sent": [],
+            "reports": [{ "kind": "stalled", "plugin": "demo", "status": "demo.count", "reason": "process-ended", "count": 1 }],
+            "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "push": { "status": "demo.count", "value": 3 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 3, "value": 3, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "peerLost": "surface-closed",
+          "output": {
+            "sent": [],
+            "reports": [
+              { "kind": "stalled", "plugin": "demo", "status": "demo.count", "reason": "surface-closed", "count": 1 }
+            ],
+            "delivered": [], "result": null, "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "snapshot.peer-lost.refuses-an-unknown-reason",
+      "steps": [
+        {
+          "peerLost": "gone",
+          "output": {
+            "sent": [], "reports": [], "delivered": [], "result": null,
+            "throws": "peer lost reason must be one of process-ended, surface-closed, sidecar-ended, got gone"
+          }
+        }
+      ]
+    },
+    {
+      "id": "snapshot.pull.returns-the-latest-value-and-refuses-a-missing-one",
+      "steps": [
+        {
+          "pull": { "status": "demo.count" },
+          "output": {
+            "sent": [], "reports": [], "delivered": [], "result": null,
+            "throws": "declared UI snapshot demo.count has no value"
+          }
+        },
+        {
+          "push": { "status": "demo.count", "value": 5 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 1, "value": 5, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "ack": { "status": "demo.count", "seq": 1 },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": null, "throws": null }
+        },
+        {
+          "push": { "status": "demo.count", "value": 6 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 2, "value": 6, "skipped": 0 }],
+            "reports": [], "delivered": [], "result": null, "throws": null
+          }
+        },
+        {
+          "pull": { "status": "demo.count" },
+          "output": { "sent": [], "reports": [], "delivered": [], "result": { "seq": 2, "value": 6 }, "throws": null }
+        }
+      ]
+    },
+    {
+      "id": "snapshot.receiver.acknowledges-then-delivers",
+      "role": "receiver",
+      "steps": [
+        {
+          "receive": { "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 4, "value": 9, "skipped": 2 },
+          "output": {
+            "sent": [{ "event": "declared-ui.snapshot.ack", "plugin": "demo", "status": "demo.count", "seq": 4 }],
+            "reports": [],
+            "delivered": [{ "status": "demo.count", "seq": 4, "value": 9, "skipped": 2 }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "receive": { "event": "declared-ui.snapshot", "plugin": "demo", "status": "demo.count", "seq": 5, "value": 10, "skipped": -1 },
+          "output": {
+            "sent": [], "reports": [], "delivered": [], "result": null,
+            "throws": "snapshot of demo.count skipped must be a count of 0 or more, got -1"
+          }
+        },
+        {
+          "receive": { "event": "declared-ui.snapshot", "plugin": "other", "status": "demo.count", "seq": 6, "value": 11, "skipped": 0 },
+          "output": {
+            "sent": [], "reports": [], "delivered": [], "result": null,
+            "throws": "snapshot names plugin other, expected demo"
+          }
+        }
+      ]
+    }
+  ]
+}
