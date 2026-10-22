@@ -84,6 +84,7 @@ view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.
   - `isView` 설정. 이 구성만 `core` scheme을 core root resolver로 보낸다([문서 영역](#문서-영역));
   - 표면 plugin의 plugin id. view의 origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다. 요청은 plugin id를 제공하지 않는다;
   - `packages/plugin-api/view-start.js`의 text를 담은 document-start 사용자 script. view channel script이며 staged 사본에서 가져온다;
+  - view import map: native view handler가 view 구성 페이지의 doctype 뒤에 넣으므로 view 페이지는 자기 import map을 갖지 않는다([plugin 처리](plugin-processes.ko.md), rule 4);
   - 테마 토큰을 담은 document-start 사용자 script(아래 테마 참조);
   - surface의 시작 값을 담은 document-start 사용자 script(아래 시작 값 참조);
   - [호스트 계약](host-contract.ko.md)이 이름으로 선언한 script message handler `sok-view`;

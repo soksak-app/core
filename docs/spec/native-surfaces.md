@@ -84,6 +84,7 @@ A view is the native web view of a surface whose composition is `view` ([plugins
   - `isView` set, so that only this configuration dispatches the `core` scheme to the core root resolver ([document regions](#document-regions));
   - the plugin id of the surface's plugin, which sets the origin of the view and the `Access-Control-Allow-Origin` of its core root responses. A request never supplies the plugin id;
   - a document-start user script with the text of `packages/plugin-api/view-start.js`, the view channel script, taken from the staged copy of that file;
+  - the view import map, which the native view handler inserts after the doctype of the view composition page ([plugin processes](plugin-processes.md), rule 4), so the view page holds no import map of its own;
   - a document-start user script with the theme tokens (see Theme below);
   - a document-start user script with the start values of the surface (see Start values below);
   - the script message handler `sok-view`, which the [host contract](host-contract.md) declares by name;
