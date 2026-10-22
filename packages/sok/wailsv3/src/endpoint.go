@@ -35,6 +35,26 @@ type EndpointError struct {
 
 func (e *EndpointError) Error() string { return fmt.Sprintf("%s (%d)", e.Message, e.Code) }
 
+// UnmarshalJSON reads an error member, which names its code and its message. A member without either is refused, so no empty
+// message or code stands for it.
+func (e *EndpointError) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Code    *int    `json:"code"`
+		Message *string `json:"message"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw.Code == nil {
+		return errors.New("invalid frame from endpoint: error has no code")
+	}
+	if raw.Message == nil {
+		return errors.New("invalid frame from endpoint: error has no message")
+	}
+	e.Code, e.Message = *raw.Code, *raw.Message
+	return nil
+}
+
 // ReadEndpoint reads endpoint.json of configDir and checks that its transport belongs to this platform and that its
 // process is running.
 func ReadEndpoint(configDir string) (Endpoint, error) {

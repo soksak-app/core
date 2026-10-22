@@ -91,12 +91,12 @@ pub struct Client {
 }
 
 /// One message that the endpoint sent.
-struct Message {
-    id: Option<u64>,
-    method: Option<String>,
-    params: Option<Box<RawValue>>,
-    result: Option<Box<RawValue>>,
-    error: Option<(i64, String)>,
+pub struct Message {
+    pub id: Option<u64>,
+    pub method: Option<String>,
+    pub params: Option<Box<RawValue>>,
+    pub result: Option<Box<RawValue>>,
+    pub error: Option<(i64, String)>,
 }
 
 impl Client {
@@ -150,40 +150,7 @@ impl Client {
         self.stream
             .read_exact(&mut body)
             .map_err(|_| "endpoint connection closed".to_string())?;
-        let raw: std::collections::HashMap<String, Box<RawValue>> =
-            serde_json::from_slice(&body)
-                .map_err(|error| format!("invalid frame from endpoint: {error}"))?;
-        let id = raw
-            .get("id")
-            .map(|value| value.get().parse::<u64>())
-            .transpose()
-            .map_err(|_| "invalid frame from endpoint: id is not a number".to_string())?;
-        let method = raw
-            .get("method")
-            .map(|value| serde_json::from_str::<String>(value.get()))
-            .transpose()
-            .map_err(|error| format!("invalid frame from endpoint: {error}"))?;
-        let error = match raw.get("error") {
-            None => None,
-            Some(value) => {
-                let error: Value =
-                    serde_json::from_str(value.get()).map_err(|error| error.to_string())?;
-                // default: a JSON-RPC error without a message is reported with an empty message and code.
-                let message = error["message"].as_str().unwrap_or("").to_string();
-                let code = error["code"]
-                    .as_i64()
-                    .ok_or("invalid frame from endpoint: error has no code")?;
-                Some((code, message))
-            }
-        };
-        let mut raw = raw;
-        Ok(Message {
-            id,
-            method,
-            params: raw.remove("params"),
-            result: raw.remove("result"),
-            error,
-        })
+        parse_frame(&body)
     }
 
     /// Sends the method and returns the result as the original JSON. The result is null when there is none.
@@ -248,3 +215,44 @@ impl Client {
         }
     }
 }
+
+/// Parses the body of one frame of the endpoint into a message.
+pub fn parse_frame(body: &[u8]) -> Result<Message, String> {
+    let raw: std::collections::HashMap<String, Box<RawValue>> = serde_json::from_slice(body)
+        .map_err(|error| format!("invalid frame from endpoint: {error}"))?;
+    let id = raw
+        .get("id")
+        .map(|value| value.get().parse::<u64>())
+        .transpose()
+        .map_err(|_| "invalid frame from endpoint: id is not a number".to_string())?;
+    let method = raw
+        .get("method")
+        .map(|value| serde_json::from_str::<String>(value.get()))
+        .transpose()
+        .map_err(|error| format!("invalid frame from endpoint: {error}"))?;
+    let error = match raw.get("error") {
+        None => None,
+        Some(value) => {
+            let error: Value =
+                serde_json::from_str(value.get()).map_err(|error| error.to_string())?;
+            // default: a JSON-RPC error without a message is reported with an empty message and code.
+            let code = error["code"]
+                .as_i64()
+                .ok_or("invalid frame from endpoint: error has no code")?;
+            let message = error["message"]
+                .as_str()
+                .ok_or("invalid frame from endpoint: error has no message")?
+                .to_string();
+            Some((code, message))
+        }
+    };
+    let mut raw = raw;
+    Ok(Message {
+        id,
+        method,
+        params: raw.remove("params"),
+        result: raw.remove("result"),
+        error,
+    })
+}
+
