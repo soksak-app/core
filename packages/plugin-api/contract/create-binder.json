@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/binder.js#createBinder",
-  "description": "Ordered calls and events exercise the binder contract used by plugin pages. Each step observes command calls, change notifications, failures, element markings, audit results, or errors.",
+  "description": "Ordered calls and events exercise the binder contract used by plugin pages. Each step observes command calls, change notifications, failures, element markings, audit results, or errors. A bind step names its event type with event (default click), and its when is {key}: the predicate accepts an event whose key equals key. A keydown event step carries key.",
   "cases": [
     {
       "id": "binder.bind.runs-declared-command",
@@ -541,6 +541,147 @@
             "result": null,
             "error": "command fixture.absent is not declared",
             "element": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.bind.keydown-when-selects-events",
+      "steps": [
+        {
+          "bind": {
+            "id": "field",
+            "tag": "input",
+            "command": "fixture.set",
+            "event": "keydown",
+            "when": {
+              "key": "Enter"
+            }
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "field",
+            "type": "keydown",
+            "key": "a"
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "field",
+            "type": "click"
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "field",
+            "type": "keydown",
+            "key": "Enter"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.set",
+                "params": {},
+                "element": "field"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.bind.reports-failed-keydown-run",
+      "steps": [
+        {
+          "bind": {
+            "id": "save-key",
+            "tag": "input",
+            "command": "fixture.save",
+            "params": {
+              "fail": true
+            },
+            "event": "keydown",
+            "when": {
+              "key": "Enter"
+            },
+            "failed": true
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"fail\":true}"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "save-key",
+            "type": "keydown",
+            "key": "Enter"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.save",
+                "params": {
+                  "fail": true
+                },
+                "element": "save-key"
+              }
+            ],
+            "changed": 1,
+            "failed": [
+              "command failed"
+            ],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.save",
+              "params": "{\"fail\":true}"
+            }
           }
         }
       ]

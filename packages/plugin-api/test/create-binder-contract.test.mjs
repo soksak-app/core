@@ -13,6 +13,8 @@ const EXPECTED_IDS = [
   "binder.delegate.dispatches-declared-controls",
   "binder.audit.reports-unbound-controls",
   "binder.run.runs-and-refuses",
+  "binder.bind.keydown-when-selects-events",
+  "binder.bind.reports-failed-keydown-run",
 ];
 
 function makeElement(document, elements, spec) {
@@ -64,6 +66,9 @@ export async function runCreateBinderCase(testCase) {
         const input = step.bind;
         const element = makeElement(document, elements, input);
         binder.bind(element, input.command, input.params ?? {}, {
+          event: input.event,
+          // A when of the contract is {key}: it selects the events whose key is that key.
+          ...(input.when ? { when: (event) => event.key === input.when.key } : {}),
           ...(input.failed ? { failed: (reason) => failed.push(reason.message) } : {}),
         });
       } else if (step.mark) {
@@ -78,7 +83,11 @@ export async function runCreateBinderCase(testCase) {
         const element = elements.get(input.id);
         assert.ok(element, `contract event targets missing element ${input.id}`);
         if (input.value !== undefined) element.value = input.value;
-        element.dispatchEvent(new window.Event(input.type, { bubbles: true }));
+        // A keydown step carries the key of the event; the other steps dispatch an event without a key.
+        const event = input.key === undefined
+          ? new window.Event(input.type, { bubbles: true })
+          : new window.KeyboardEvent(input.type, { bubbles: true, key: input.key });
+        element.dispatchEvent(event);
       } else if (step.run) {
         result = await binder.run(step.run.command, step.run.params);
       } else if (step.audit) {
