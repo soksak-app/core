@@ -913,9 +913,13 @@ fn read_body<R: Read + ?Sized>(reader: &mut R) -> Result<Option<Vec<u8>>, BodyEr
         return Err(BodyError::TooLarge(length));
     }
     let mut body = vec![0u8; length];
-    reader
-        .read_exact(&mut body)
-        .map_err(|e| BodyError::Io(e.to_string()))?;
+    reader.read_exact(&mut body).map_err(|e| {
+        BodyError::Io(if e.kind() == ErrorKind::UnexpectedEof {
+            "connection closed inside a frame body".into()
+        } else {
+            e.to_string()
+        })
+    })?;
     Ok(Some(body))
 }
 
@@ -1037,7 +1041,11 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
     loop {
         let body = match read_body(&mut connection) {
             Ok(Some(body)) => body,
-            Ok(None) | Err(BodyError::Io(_)) => break,
+            Ok(None) => break,
+            Err(BodyError::Io(error)) => {
+                reason = error;
+                break;
+            }
             Err(BodyError::TooLarge(length)) => {
                 reason = format!("frame of {length} bytes exceeds the limit of {MAX_FRAME}");
                 break;

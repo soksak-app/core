@@ -1044,6 +1044,25 @@ fn the_endpoint_records_why_a_connection_closes() {
             json!({"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "w1"}}),
         );
         assert_eq!(receive(&mut connection), None);
+        // A frame that ends early closes with the reason of the read. The record is written by the serve loop after it
+        // reads the end of the connection, and nothing else reports that write, so the event log is read until it appears.
+        let mut connection = open(&endpoint);
+        connection.write_all(&10u32.to_be_bytes()).unwrap();
+        connection.write_all(b"{\"j").unwrap();
+        drop(connection);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            writer.flush(Duration::from_secs(5)).unwrap();
+            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
+            if log.contains("connection closed: connection closed inside a frame body") {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no close record for the frame that ended early in {log:?}"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
         // The record of a close by the peer is written before the page is told that the last watcher ended.
         let mut connection = open(&endpoint);
         request(
@@ -1089,6 +1108,7 @@ fn the_endpoint_records_why_a_connection_closes() {
         "frame is not a JSON-RPC 2.0 request: {not json",
         "frame is not a JSON-RPC 2.0 request: [1,2]",
         "method \"page.eval\" is not declared",
+        "connection closed inside a frame body",
         "peer closed",
     ] {
         let found = log.lines().any(|line| {

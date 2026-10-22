@@ -1267,6 +1267,28 @@ func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
 	closeRecord(t, written, "peer closed")
 }
 
+// A connection that ends inside a frame closes with the reason of the read, not with peer closed.
+// contract: endpoint.close.reason-of-read-error
+func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
+	written := captureLog(t)
+	backend := newFakeBackend()
+	_, address, _ := serve(t, backend)
+
+	conn := dial(t, address)
+	frame := binary.BigEndian.AppendUint32(nil, 10)
+	if _, err := conn.Write(append(frame, []byte("{\"j")...)); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(written(), "connection closed: connection closed inside a frame body") {
+		if time.Now().After(deadline) {
+			t.Fatalf("no close record for the frame that ended early:\n%s", written())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // acceptFault is a listener whose Accept fails with err, as a listener of the operating system does when it cannot accept.
 type acceptFault struct {
 	net.Listener

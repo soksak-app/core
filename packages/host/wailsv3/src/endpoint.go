@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/wailsv3/src/platform"
@@ -681,6 +682,18 @@ type request struct {
 	Params  json.RawMessage `json:"params"`
 }
 
+// readReason is the close reason of a failed read. A connection that ends or resets at a frame boundary is a peer close. A frame
+// that ends early has the reason truncated. Any other I/O error keeps its own text, as the Rust host does.
+func readReason(err error, boundary bool, truncated string) string {
+	if boundary && (errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET)) {
+		return "peer closed"
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return truncated
+	}
+	return err.Error()
+}
+
 // read reads the frames of the connection. When it receives a frame that breaks a rule, it does not reply but closes the connection and records the reason for closing.
 func (e *Endpoint) read(c *endpointConn) {
 	reason := "peer closed"
@@ -688,6 +701,7 @@ func (e *Endpoint) read(c *endpointConn) {
 	var size [4]byte
 	for {
 		if _, err := io.ReadFull(c.conn, size[:]); err != nil {
+			reason = readReason(err, true, "connection closed inside a length prefix")
 			return
 		}
 		length := binary.BigEndian.Uint32(size[:])
@@ -697,6 +711,7 @@ func (e *Endpoint) read(c *endpointConn) {
 		}
 		body := make([]byte, length)
 		if _, err := io.ReadFull(c.conn, body); err != nil {
+			reason = readReason(err, false, "connection closed inside a frame body")
 			return
 		}
 		var req request
