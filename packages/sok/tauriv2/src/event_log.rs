@@ -993,13 +993,25 @@ impl Output {
                     self.append(channel, &open);
                 }
                 Err(error) => {
-                    // The event is not written; its seq stays taken, so the audit shows the gap next to this report.
-                    self.seq += 1;
+                    let path = self.files[channel.index()].path.display().to_string();
                     eprintln!(
-                        "event writer: {} cannot be written: {}: {error}",
-                        pending.event,
-                        self.files[channel.index()].path.display()
+                        "event writer: {} cannot be written: {path}: {error}",
+                        pending.event
                     );
+                    // The event is not written. Its seq is the gap, and log.dropped names the gap with the cause in the main file
+                    // (docs/spec/logging.md#event). A log.dropped that cannot be opened has no further record.
+                    if pending.event == "log.dropped" {
+                        self.seq += 1;
+                    } else {
+                        let bytes = (pending.event.len() + pending.fields.get().len()) as u64;
+                        self.dropped(
+                            1,
+                            bytes,
+                            &format!("{path} cannot be opened: {error}"),
+                            channel,
+                            None,
+                        );
+                    }
                     return;
                 }
             }
@@ -1324,3 +1336,7 @@ fn write_loop(
 #[cfg(test)]
 #[path = "event_log_lock_test.rs"]
 mod lock_test;
+
+#[cfg(test)]
+#[path = "event_log_loss_test.rs"]
+mod loss_tests;

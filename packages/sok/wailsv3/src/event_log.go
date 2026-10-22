@@ -729,12 +729,19 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 		if f.file == nil {
 			file, err := openLogFile(f.path)
 			if err != nil {
-				// The event is not written; its seq stays taken, so the audit shows the gap next to this report.
+				// The event is not written. Its seq is the gap, and log.dropped names the gap with the cause in the main file
+				// (docs/spec/logging.md#event). A log.dropped that cannot be opened has no further record.
 				seq++
 				if e.placed != nil {
 					close(e.placed)
 				}
 				fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
+				if e.event != "log.dropped" {
+					reason, _ := json.Marshal(fmt.Sprintf("%s cannot be opened: %v", f.path, err))
+					push(l.writerEvent(LevelWarn, "log.dropped", json.RawMessage(fmt.Sprintf(
+						`{"from_seq":%d,"to_seq":%d,"count":1,"bytes":%d,"reason":%s,"channel":%q}`,
+						seq, seq, len(e.event)+len(e.fields), reason, ChannelOf(e.level).String()))))
+				}
 				return
 			}
 			f.file = file
