@@ -40,22 +40,22 @@ function hasEnabledLabel(row) {
   return Array.from(row.children).some((child) => child.dataset.role === "label" && !child.disabled);
 }
 
-/** The first focus target of the nodes at the given path, or null. */
-const targetAt = (targets, path) => targets.find((target) => target.path === pathKey(path)) ?? null;
+/** The focus target of the node at path, or undefined when that node has none. */
+const targetAt = (targets, path) => targets.find((target) => target.path === pathKey(path));
 
 /** Moves focus to the focus target of the node at path for a key of the tree. A key at the end of its direction keeps focus. */
 export function stepFocus(box, { tree, path, key }) {
   const targets = focusTargets(box);
   const here = targetAt(targets, path);
-  if (here === null) throw new Error(`tree ${tree} path ${pathKey(path)} has no focus target`);
+  if (here === undefined) throw new Error(`tree ${tree} path ${pathKey(path)} has no focus target`);
   const at = targets.indexOf(here);
   let next = null;
   switch (key) {
     case "ArrowDown":
-      next = targets[at + 1] ?? here;
+      next = at + 1 < targets.length ? targets[at + 1] : here;
       break;
     case "ArrowUp":
-      next = targets[at - 1] ?? here;
+      next = at > 0 ? targets[at - 1] : here;
       break;
     case "Home":
       next = targets[0];
@@ -63,14 +63,16 @@ export function stepFocus(box, { tree, path, key }) {
     case "End":
       next = targets[targets.length - 1];
       break;
-    case "ArrowRight":
-      // The first child with a focus target; a child is a node one level below path.
-      next = targets.find((target) => isChildPath(target.path, path)) ?? here;
+    case "ArrowRight": {
+      // The first child with a focus target; a child is a node one level below path. With no such child, focus stays on the node.
+      const child = targets.find((target) => isChildPath(target.path, path));
+      next = child === undefined ? here : child;
       break;
+    }
     case "ArrowLeft":
       // The parent node of a root node is none, so focus stays on a root node.
       next = path.length === 1 ? here : targetAt(targets, path.slice(0, -1));
-      if (next === null) throw new Error(`tree ${tree} path ${pathKey(path)} has a parent with no focus target`);
+      if (next === undefined) throw new Error(`tree ${tree} path ${pathKey(path)} has a parent with no focus target`);
       break;
     default:
       throw new Error(`tree ${tree} has no move for the key ${key}`);
@@ -126,7 +128,7 @@ function planOf(event, { box, statusId, tree }) {
 /** The tree box that draws the tree of key, found through one of its controls, or null when no control of it is drawn. */
 export function treeBox(body, tree) {
   const control = Array.from(body.querySelectorAll('[data-role="label"], [data-role="expand"]')).find((el) => el.dataset.key === tree);
-  return control?.closest(".declared-tree") ?? null;
+  return control === undefined ? null : control.closest(".declared-tree");
 }
 
 /**
@@ -147,8 +149,8 @@ export function redrawKeepingFocus(body, redraw) {
   if (was === null || was.isConnected) return;
   const box = treeBox(body, tree);
   const after = box === null ? [] : focusTargets(box);
-  const nearest = preceding.map((target) => targetAt(after, JSON.parse(target.path))).reverse().find((target) => target !== null);
-  const next = nearest ?? after[0] ?? null;
+  const nearest = preceding.map((target) => targetAt(after, JSON.parse(target.path))).reverse().find((target) => target !== undefined);
+  const next = nearest !== undefined ? nearest : after[0];
   // Without a next focus target the removal leaves focus on the document body (the focus fixup of the document).
-  next?.el.focus();
+  if (next !== undefined) next.el.focus();
 }
