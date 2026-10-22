@@ -12,6 +12,7 @@ const EXPECTED_IDS = [
   "expose.status.get-watch-and-next-in-order",
   "expose.status.refuses-undeclared-and-duplicate",
   "expose.dom.act-rect-and-refusals",
+  "expose.dispose.ends-registrations-and-requests",
 ];
 
 // Lets every pending promise of the registration and reply chain settle before a step reports its output.
@@ -33,9 +34,12 @@ async function runCase(testCase) {
       element.addEventListener("click", () => effects.push(`click ${element.id}`));
     }
     const port = {
+      // The remover of the request listener is the one that the host port returns; dispose must call it.
       onRequest(listener) {
         request = listener;
-        return () => {};
+        return () => {
+          request = null;
+        };
       },
       reply(id, payload) {
         replies.push({ id, payload: structuredClone(payload) });
@@ -43,6 +47,11 @@ async function runCase(testCase) {
       },
       register(kind, name) {
         registered.push({ kind, name });
+        return Promise.resolve();
+      },
+      // The unregister of the surface port: the page registration ends, which the case records as an unregister.
+      unregister() {
+        registered.push({ kind: "unregister" });
         return Promise.resolve();
       },
       report() {},
@@ -63,7 +72,10 @@ async function runCase(testCase) {
         } else if ("dom" in step) {
           result = await expose.dom(step.dom.name, document.querySelector(step.dom.selector));
         } else if ("request" in step) {
-          request(step.request);
+          // A request after the listener is removed is not dispatched, so no reply is sent.
+          request?.(step.request);
+        } else if ("dispose" in step) {
+          await expose.dispose();
         } else if ("set" in step) {
           value = step.set;
           for (const listener of [...subscribers]) listener(value);

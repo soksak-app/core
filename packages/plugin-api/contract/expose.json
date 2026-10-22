@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/index.js#createExpose",
-  "description": "Ordered steps of the exposure registration of a surface page: the status and dom registrations the page makes, the requests the host forwards (status.get, status.watch, status.next, status.unwatch, dom.act, dom.rect), and the replies the page sends. A step is one of status (register a status with a read and a subscribe function), dom (register a dom name for the element that the selector finds), request (a host request {id, method, params}), or set (the status value changes and its subscribers are called with it). Each step lists what it produces: registered is the port registrations in order, replies is the replies sent in order, effects is the clicks the page elements received in order, result is the value of the step's registration, and throws is the text of the error the step raises, or null. The declarations are the bundle that load returns. Each reply is {id, payload} with payload {result} or {error: {code, message}}.",
+  "description": "Ordered steps of the exposure registration of a surface page: the status and dom registrations the page makes, the requests the host forwards (status.get, status.watch, status.next, status.unwatch, dom.act, dom.rect), and the replies the page sends. A step is one of status (register a status with a read and a subscribe function), dom (register a dom name for the element that the selector finds), request (a host request {id, method, params}), or set (the status value changes and its subscribers are called with it). Each step lists what it produces: registered is the port registrations in order, replies is the replies sent in order, effects is the clicks the page elements received in order, result is the value of the step's registration, and throws is the text of the error the step raises, or null. The declarations are the bundle that load returns. Each reply is {id, payload} with payload {result} or {error: {code, message}}. A step with dispose ends the page registration (createExpose dispose): it runs the dispose of the page and records the unregister of the port as {kind: \"unregister\"} in registered, and a request after it is not answered.",
   "cases": [
     {
       "id": "expose.status.get-watch-and-next-in-order",
@@ -138,6 +138,93 @@
           "output": {
             "registered": [], "effects": [], "result": null, "throws": null,
             "replies": [{ "id": 7, "payload": { "error": { "code": -32601, "message": "unknown method dom.hover" } } }]
+          }
+        }
+      ]
+    },
+    {
+      "id": "expose.dispose.ends-registrations-and-requests",
+      "initial": 3,
+      "declarations": {
+        "status": [
+          {
+            "name": "demo.count",
+            "description": "The count of the demo.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "status": {
+            "name": "demo.count"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "status",
+                "name": "demo.count"
+              }
+            ],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "request": {
+            "id": 1,
+            "method": "status.get",
+            "params": {
+              "name": "demo.count"
+            }
+          },
+          "output": {
+            "registered": [],
+            "replies": [
+              {
+                "id": 1,
+                "payload": {
+                  "result": 3
+                }
+              }
+            ],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "dispose": true,
+          "output": {
+            "registered": [
+              {
+                "kind": "unregister"
+              }
+            ],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "request": {
+            "id": 2,
+            "method": "status.get",
+            "params": {
+              "name": "demo.count"
+            }
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
           }
         }
       ]

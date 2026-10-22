@@ -1726,6 +1726,8 @@ export async function replyPayload(work) {
 export function createExpose(port, load) {
   let entries = null;
   let loaded = null;
+  // The remover of the request listener that the port returns. Dispose calls it, so no request is answered after dispose.
+  let stopRequests = null;
   const ready = () => {
     // default: concurrent requests share the same manifest loading Promise.
     entries ??= Promise.resolve().then(load).then(async (declarations) => {
@@ -1734,7 +1736,7 @@ export function createExpose(port, load) {
       const declared = declarations instanceof Map ? declarations : declarationMap(declarations);
       const made = exposureEntries(declared);
       loaded = made;
-      await port.onRequest(({ id, method, params }) => {
+      stopRequests = await port.onRequest(({ id, method, params }) => {
         replyPayload(() => made.answer(method, params)).then(async (payload) => {
           try {
             await port.reply(id, payload);
@@ -1794,6 +1796,8 @@ export function createExpose(port, load) {
     }),
     dispose: async () => {
       binder.dispose();
+      stopRequests?.();
+      stopRequests = null;
       loaded?.clear();
       registered.clear();
       // default: only a surface inside the main page unregisters. The port of a separate document has no unregister, and its registration ends with the document.
