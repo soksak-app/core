@@ -4,7 +4,7 @@ package host
 // receives the host messages that the host posts to its ready document. A reply answers a request of the main page and goes
 // to it as the event plugin-host-reply; a call request or a cancel of the page goes to the main page as the event
 // plugin-host-call, and the main page answers it with the PluginHostReply call; a declared UI snapshot goes to the main page
-// as the event declared-ui.snapshot. The served calls of the channel are the registration calls of exposure; every other
+// as the window event declared-ui-snapshot. The served calls of the channel are the registration calls of exposure; every other
 // command is refused with plugin host call <name> is not served. The events carry the plugin and no surface, because the
 // host page holds no surface.
 
@@ -248,7 +248,7 @@ func PluginHostCallEvent(plugin string, message json.RawMessage) (map[string]any
 	return map[string]any{"plugin": plugin, "id": *call.ID, "command": *call.Command, "params": params}, true, nil
 }
 
-// PluginHostSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the host of plugin. A
+// PluginHostSnapshotEvent returns the payload of the window event for a declared UI snapshot message of the host of plugin. A
 // snapshot is {"event": "declared-ui.snapshot", "plugin", "status", "seq", "value", "skipped"}, whose seq is an integer
 // from 1 and whose skipped is a count of 0 or more. It returns false when message is not a snapshot, and an error for a
 // snapshot whose fields are invalid. The host relays the snapshot and writes no event for it
@@ -351,7 +351,7 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 	if isSnapshot {
 		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
 		// (docs/spec/plugin-host.md#declared-ui-snapshots). The host relays the snapshot and writes no event for it.
-		s.windowEvent(declaredSnapshotEvent, snapshot)
+		s.windowEvent(declaredSnapshotWindowEvent, snapshot)
 		return nil
 	}
 	var event struct {

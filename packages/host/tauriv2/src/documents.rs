@@ -996,7 +996,7 @@ impl ViewChannels {
         let Some(message) = received.message else {
             return Ok(None);
         };
-        if message.get("event").and_then(Value::as_str) != Some(DECLARED_SNAPSHOT_EVENT) {
+        if message.get("event").and_then(Value::as_str) != Some(DECLARED_SNAPSHOT_MESSAGE) {
             return Ok(None);
         }
         let plugin = self
@@ -1086,7 +1086,11 @@ impl ViewChannels {
 /// region, and the view closes with the other documents of its surface.
 const VIEW_NAME: &str = "";
 /// The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
-const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
+/// The event name of a declared UI snapshot message that a view sends (docs/spec/plugin-host.md#declared-ui-snapshots).
+pub const DECLARED_SNAPSHOT_MESSAGE: &str = "declared-ui.snapshot";
+/// The window event that relays a declared UI snapshot to the main page. Tauri accepts only alphanumeric characters, '-', '/', ':' and
+/// '_' in an event name, so the relay name is not the message name; the main page listens to this name.
+pub const DECLARED_SNAPSHOT_WINDOW_EVENT: &str = "declared-ui-snapshot";
 
 /// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads sok://<plugin>/<page>
 /// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
@@ -1334,7 +1338,7 @@ fn view_message(
         window_data(window).and_then(|data| data.documents.views().snapshot(surface, value));
     match snapshot {
         Ok(Some(payload)) => {
-            if let Err(error) = emit_window(window, DECLARED_SNAPSHOT_EVENT, payload) {
+            if let Err(error) = emit_window(window, DECLARED_SNAPSHOT_WINDOW_EVENT, payload) {
                 log_error("view channel", error);
             }
             return;

@@ -246,7 +246,7 @@ func TestPluginHostChannelRelaysADeclaredUISnapshot(t *testing.T) {
 	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "declared-ui.snapshot", "plugin": "probe", "status": "list", "seq": 2, "skipped": 1, "value": {"x": 1}}`)); err != nil {
 		t.Fatalf("snapshot: %v", err)
 	}
-	want := []hostEvent{{"declared-ui.snapshot", map[string]any{"plugin": "probe", "status": "list", "seq": uint64(2), "skipped": uint64(1), "value": json.RawMessage(`{"x": 1}`)}}}
+	want := []hostEvent{{"declared-ui-snapshot", map[string]any{"plugin": "probe", "status": "list", "seq": uint64(2), "skipped": uint64(1), "value": json.RawMessage(`{"x": 1}`)}}}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
 	}

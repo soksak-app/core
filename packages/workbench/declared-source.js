@@ -1,6 +1,6 @@
 // The declared UI snapshot transport of the main page (docs/spec/declared-ui.md, status mapping;
 // docs/spec/plugin-host.md#declared-ui-snapshots). The host relays each snapshot of a view as the event
-// declared-ui.snapshot of the window; the page acknowledges a snapshot as the view event declared-ui.snapshot.ack and pulls
+// declared-ui-snapshot of the window; the page acknowledges a snapshot as the view event declared-ui.snapshot.ack and pulls
 // the current value of a status through the command layer of the view. The source of a plugin host carries no surface: the
 // host relays its snapshots without a surface field, the page acknowledges through the pluginHostEvent host call, and the
 // pull runs declared-ui.snapshot.request through the pluginHostRequest host call (plugin-host.js).
@@ -38,7 +38,7 @@ export function createDeclaredSource({ plugin, status }) {
           onMessage: (receive) => {
             let unsubscribe = null;
             let closed = false;
-            Promise.resolve(bridge.on("declared-ui.snapshot", (event) => {
+            Promise.resolve(bridge.on("declared-ui-snapshot", (event) => {
               if (event?.plugin !== plugin || event?.surface !== undefined) return;
               receive({ event: SNAPSHOT_EVENT, plugin, status: event.status, seq: event.seq, value: event.value, skipped: event.skipped });
             })).then((off) => {
@@ -65,7 +65,7 @@ export function createDeclaredSource({ plugin, status }) {
           let unsubscribe = null;
           let closed = false;
           // The registration of a runtime listener is asynchronous; the unsubscribe ends it as soon as it is registered.
-          Promise.resolve(bridge.on("declared-ui.snapshot", (event) => {
+          Promise.resolve(bridge.on("declared-ui-snapshot", (event) => {
             if (event?.surface !== source.surface || event?.plugin !== plugin) return;
             receive({ event: SNAPSHOT_EVENT, plugin, status: event.status, seq: event.seq, value: event.value, skipped: event.skipped });
           })).then((off) => {

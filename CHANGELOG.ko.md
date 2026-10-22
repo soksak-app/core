@@ -13,6 +13,7 @@
 
 - F260: `sok`의 쓰기 명령은 host의 형식으로 `process.lock`을 읽고 쓴다(`{"pid", "boot"}`). 그래서 실행 중인 application의 잠금은 `invalid process lock` 대신 pid와 함께 거부되며, 다른 형식의 잠금은 내용을 밝혀 거부하고 남겨 둔다. 형식은 `docs/spec/endpoint.md`에 있고, 사례표 `docs/spec/cases/process-lock.json`은 Go와 Rust 시험이 재생한다.
 
+- F212.12-1-14-1: declared UI snapshot을 relay하는 window event는 두 host와 main page 모두에서 `declared-ui-snapshot`이다. Tauri가 점이 든 event 이름을 거부하기 때문이다. view와 plugin host 페이지가 보내는 message 이름 `declared-ui.snapshot`은 그대로 둔다.
 - F212.12-1-12-2: view의 text size와 settings 구독은 view의 모든 구독 등록과 같이 off 함수의 promise로 답한다. `subscribe`는 promise가 아닌 registrar 결과를 registrar 이름을 밝힌 오류로 거부하므로, `runtime.textSize.on`과 `runtime.settings.on`이 `register().then is not a function`으로 실패하지 않고 view에서 답한다.
 - F212.12-1-12-1: null result인 view reply를 Tauri host가 받아 `result: null`로 post한다. Wails host는 이미 그렇게 한다. Tauri decoder가 null field를 뺀 struct로 읽어서, 값이 없는 명령의 reply가 `view reply N has neither a result nor an error`로 거부되었다. view reply의 result, view event의 data, view request의 params는 null 값을 유지한다.
 - F212.12-1-11-1: plugin host도 자신의 navigation의 progress 동안 ready document를 유지한다. 문서 상태가 탐색 수를 세고, 두 host 모두 그 수가 올라갈 때만 ready 기록을 지운다. 수가 없거나 직전보다 작은 상태는 거부된다. Red와 Green은 체크리스트 항목에 기록했다.

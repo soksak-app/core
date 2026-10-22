@@ -225,10 +225,22 @@ fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
             )
         ),
         Ok(Received::Emit(
-            "declared-ui.snapshot",
+            "declared-ui-snapshot",
             json!({"plugin": "probe", "status": "list", "seq": 2, "skipped": 1, "value": {"x": 1}})
         ))
     );
+    // Tauri accepts only alphanumeric characters, '-', '/', ':' and '_' in a window event name, so the name of the relayed snapshot
+    // must be one of them (the host refuses any other name at emit).
+    match channels.receive(
+        "probe",
+        &host_message(r#"{"event": "declared-ui.snapshot", "plugin": "probe", "status": "list", "seq": 3, "skipped": 0, "value": null}"#),
+    ) {
+        Ok(Received::Emit(name, _)) => assert!(
+            name.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '/' | ':' | '_')),
+            "the window event name {name:?} has a character that Tauri refuses"
+        ),
+        other => panic!("a snapshot is not relayed: {other:?}"),
+    }
     for message in [
         r#"{"event": "declared-ui.snapshot", "status": "list", "seq": 2, "skipped": 0, "value": null}"#,
         r#"{"event": "declared-ui.snapshot", "plugin": "other", "status": "list", "seq": 2, "skipped": 0, "value": null}"#,

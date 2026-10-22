@@ -1526,7 +1526,7 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 	if isSnapshot {
 		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
 		// (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
-		s.emitToSurface(surface, declaredSnapshotEvent, snapshot)
+		s.emitToSurface(surface, declaredSnapshotWindowEvent, snapshot)
 		return nil
 	}
 	var event struct {
@@ -1704,6 +1704,10 @@ func ViewCallEvent(surface, plugin string, message json.RawMessage) (map[string]
 
 // The event name of a declared UI snapshot of a view (docs/spec/plugin-processes.md, messages and events).
 const declaredSnapshotEvent = "declared-ui.snapshot"
+
+// declaredSnapshotWindowEvent is the window event that relays a declared UI snapshot to the main page. It is not the message name, so the
+// relay name is the one that the Tauri host also uses (docs/spec/plugin-host.md#declared-ui-snapshots).
+const declaredSnapshotWindowEvent = "declared-ui-snapshot"
 
 // DeclaredSnapshotEvent returns the payload of the declared-ui.snapshot event for a snapshot of the view of surface, which has the
 // plugin id. A snapshot is {"event": "declared-ui.snapshot", "plugin", "status", "seq", "value", "skipped"}, whose seq is an integer

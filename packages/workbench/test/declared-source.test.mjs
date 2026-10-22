@@ -89,15 +89,15 @@ test("the channel delivers each snapshot of its surface and plugin, and the unsu
   const received = [];
   const unsubscribe = link.onMessage((message) => received.push(message));
   await new Promise((resolve) => setImmediate(resolve));
-  emit("declared-ui.snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 2, value: { n: 1 }, skipped: 1 });
-  emit("declared-ui.snapshot", { surface: "view-b", plugin: "probe", status: "lines", seq: 3, value: null, skipped: 0 });
-  emit("declared-ui.snapshot", { surface: "view-a", plugin: "other", status: "lines", seq: 4, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 2, value: { n: 1 }, skipped: 1 });
+  emit("declared-ui-snapshot", { surface: "view-b", plugin: "probe", status: "lines", seq: 3, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { surface: "view-a", plugin: "other", status: "lines", seq: 4, value: null, skipped: 0 });
   assert.deepEqual(received, [{
     event: "declared-ui.snapshot", plugin: "probe", status: "lines", seq: 2, value: { n: 1 }, skipped: 1,
   }], "the channel delivered a snapshot of another source");
   unsubscribe();
   await new Promise((resolve) => setImmediate(resolve));
-  emit("declared-ui.snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
   assert.deepEqual(received.length, 1, "the unsubscribe did not end the delivery");
 });
 
@@ -112,15 +112,15 @@ test("the channel of a plugin host source acknowledges through pluginHostEvent a
   }, "the acknowledgement was not the plugin host event of the source");
   const received = [];
   const unsubscribe = link.onMessage((message) => received.push(message));
-  emit("declared-ui.snapshot", { plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
-  emit("declared-ui.snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 6, value: null, skipped: 0 });
-  emit("declared-ui.snapshot", { plugin: "other", status: "lines", seq: 7, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 6, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { plugin: "other", status: "lines", seq: 7, value: null, skipped: 0 });
   assert.deepEqual(received, [
     { event: "declared-ui.snapshot", plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 },
   ], "the channel delivered a snapshot of another source");
   unsubscribe();
   await new Promise((resolve) => setImmediate(resolve));
-  emit("declared-ui.snapshot", { plugin: "probe", status: "lines", seq: 8, value: null, skipped: 0 });
+  emit("declared-ui-snapshot", { plugin: "probe", status: "lines", seq: 8, value: null, skipped: 0 });
   assert.deepEqual(received.length, 1, "the unsubscribe did not end the delivery");
 });
 

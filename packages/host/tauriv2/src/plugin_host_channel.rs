@@ -2,7 +2,7 @@
 //! receives the host messages that the host posts to its ready document. A reply answers a request of the main page and
 //! goes to it as the event plugin-host-reply; a registration call or a cancel of the page goes to the main page as the
 //! event plugin-host-call, and the main page answers it with the plugin_host_reply command; a declared UI snapshot goes to
-//! the main page as the event declared-ui.snapshot. The host answers a call of any other command itself with
+//! the main page as the window event declared-ui-snapshot. The host answers a call of any other command itself with
 //! plugin host call <name> is not served. The events carry the plugin and no surface, because the host page holds no
 //! surface.
 
@@ -14,7 +14,10 @@ use serde_json::{Value, json};
 use tauri::{AppHandle, Manager, Webview, Window};
 
 use crate::application_log::{log_error, log_failure};
-use crate::documents::{ViewReplyError, post_document_via, theme_message};
+use crate::documents::{
+    DECLARED_SNAPSHOT_MESSAGE, DECLARED_SNAPSHOT_WINDOW_EVENT, ViewReplyError, post_document_via,
+    theme_message,
+};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::platform::{self, Handle};
@@ -26,7 +29,6 @@ use crate::view_lifecycle::is_queue_full;
 use crate::windows::{emit_window, window_data};
 
 /// The event name of a declared UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
-const DECLARED_SNAPSHOT_EVENT: &str = "declared-ui.snapshot";
 /// The code with which the host refuses a call that the channel does not serve: EXPOSURE_ERRORS.failed of plugin-api.
 const REFUSAL_CODE: i64 = -32000;
 
@@ -226,8 +228,8 @@ impl PluginHostChannels {
             // default: a message without an event name is refused below as the unknown event "".
             .unwrap_or_default();
         match event {
-            DECLARED_SNAPSHOT_EVENT => snapshot(plugin, fields)
-                .map(|payload| Received::Emit(DECLARED_SNAPSHOT_EVENT, payload)),
+            DECLARED_SNAPSHOT_MESSAGE => snapshot(plugin, fields)
+                .map(|payload| Received::Emit(DECLARED_SNAPSHOT_WINDOW_EVENT, payload)),
             "view.ready" => {
                 let named = fields
                     .get("plugin")
