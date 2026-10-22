@@ -1209,6 +1209,40 @@ fn view_event_message_is_the_host_message_with_its_event_and_data() {
     );
 }
 
+// contract: view.status.relay
+// A status watch is forwarded as a view call with its command and params, and a status value is posted as a view event with
+// its name and data. The host names neither command: it relays both unchanged (docs/spec/native-surfaces.md#view-surfaces).
+#[test]
+fn view_status_watch_is_forwarded_and_a_status_value_is_posted() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(
+        channels.call(
+            "probe-surface",
+            r#"{"message":{"sok":1,"id":3,"command":"runtime.status.watch","params":{"name":"core.grid"}}}"#
+        ),
+        Ok(Some(json!({
+            "surface": "probe-surface",
+            "plugin": "probe",
+            "id": 3,
+            "command": "runtime.status.watch",
+            "params": {"name": "core.grid"}
+        }))),
+        "a status watch is forwarded as a view call with its params"
+    );
+    use soksak_host_tauriv2::documents::{ViewEventRequest, view_event_message};
+    let value = ViewEventRequest {
+        surface: "probe-surface".to_string(),
+        event: "status".to_string(),
+        data: Some(json!({"name": "core.grid", "value": {"tabs": 2}})),
+    };
+    assert_eq!(
+        view_event_message(&value),
+        Ok(json!({"sok": 1, "event": "status", "data": {"name": "core.grid", "value": {"tabs": 2}}})),
+        "a status value is posted as the status event with its name and value"
+    );
+}
+
 // contract: view.call.cancel
 #[test]
 fn view_call_cancel_is_forwarded_with_its_plugin_and_surface() {

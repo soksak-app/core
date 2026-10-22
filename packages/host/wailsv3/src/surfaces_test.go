@@ -512,6 +512,43 @@ func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 	}
 }
 
+// contract: view.status.relay
+// A status watch is forwarded as a view call with its command and params, and a status value is posted as a view event with its
+// name and data. The host names neither command: it relays both unchanged (docs/spec/native-surfaces.md#view-surfaces).
+func TestViewStatusWatchIsForwardedAndStatusValueIsPosted(t *testing.T) {
+	message := json.RawMessage(`{"sok":1,"id":3,"command":"runtime.status.watch","params":{"name":"core.grid"}}`)
+	payload, ok, err := ViewCallEvent("probe-surface", "probe", message)
+	if err != nil || !ok {
+		t.Fatalf("status watch: ok %v, error %v, want a forwarded call", ok, err)
+	}
+	forwarded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("forwarded call is not JSON: %v", err)
+	}
+	if string(forwarded) != `{"command":"runtime.status.watch","id":3,"params":{"name":"core.grid"},"plugin":"probe","surface":"probe-surface"}` {
+		t.Fatalf("forwarded call %s, want the command and params of the watch", forwarded)
+	}
+	s, fake := newViewChannelSurfaces(t)
+	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
+	if err := s.viewMessage("probe-surface", ready); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	before := len(fake.posted)
+	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "status", Data: json.RawMessage(`{"name":"core.grid","value":{"tabs":2}}`)}); err != nil {
+		t.Fatalf("status event: %v", err)
+	}
+	if len(fake.posted) != before+1 {
+		t.Fatalf("events posted: %d, want 1", len(fake.posted)-before)
+	}
+	var posted map[string]any
+	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &posted); err != nil {
+		t.Fatalf("event message is not JSON: %v", err)
+	}
+	if posted["sok"] != float64(1) || posted["event"] != "status" || !reflect.DeepEqual(posted["data"], map[string]any{"name": "core.grid", "value": map[string]any{"tabs": float64(2)}}) {
+		t.Fatalf("event message %v, want sok 1, event status and the name and value", posted)
+	}
+}
+
 // contract: view.command.request
 func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
