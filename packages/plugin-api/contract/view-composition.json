@@ -1008,6 +1008,649 @@
         }
       ]
     }
-
+,
+    {
+      "id": "view.composition.load-alone",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": false
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "do": {
+            "region": "doc",
+            "call": "load",
+            "args": [
+              "https://example.test/a"
+            ]
+          },
+          "answers": [
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 7,
+                "command": "document.load",
+                "params": {
+                  "name": "doc",
+                  "url": "https://example.test/a"
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.composition.post-alone",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": false
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "do": {
+            "region": "doc",
+            "call": "post",
+            "args": [
+              {
+                "x": 1
+              }
+            ]
+          },
+          "answers": [
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 7,
+                "command": "document.post",
+                "params": {
+                  "name": "doc",
+                  "message": {
+                    "x": 1
+                  }
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.composition.dispose-twice-detaches-once",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": false
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "dispose": true,
+          "answers": [
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 7,
+                "command": "document.detach",
+                "params": {
+                  "name": "doc"
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "dispose": true,
+          "answers": [],
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.composition.dispose-reports-a-refused-detach",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": false
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "dispose": true,
+          "answers": [
+            {
+              "error": {
+                "code": 1,
+                "message": "detach refused"
+              }
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 7,
+                "command": "document.detach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 8,
+                "command": "composition.report",
+                "params": "surface composition cleanup failed: detach refused"
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": "surface composition cleanup failed",
+            "state": null,
+            "history": false
+          }
+        }
+      ]
+    }
   ]
 }

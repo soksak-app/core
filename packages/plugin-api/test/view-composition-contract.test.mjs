@@ -18,6 +18,10 @@ const EXPECTED_IDS = [
   "view.composition.message-listener-receives-document-messages",
   "view.composition.stream-subscribe-and-close",
   "view.composition.reload-and-restored-state",
+  "view.composition.load-alone",
+  "view.composition.post-alone",
+  "view.composition.dispose-twice-detaches-once",
+  "view.composition.dispose-reports-a-refused-detach",
 ];
 
 // Lets every pending promise of the call layer settle before a step reports its output.
