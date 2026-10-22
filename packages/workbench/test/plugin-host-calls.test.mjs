@@ -27,6 +27,10 @@ mock.module("@soksak/plugin-api", { namedExports: {
   SNAPSHOT_ACK_EVENT: "declared-ui.snapshot.ack",
   SNAPSHOT_REQUEST_COMMAND: "declared-ui.snapshot.request",
   DEFAULT_CALL_TIMEOUT: 10000,
+  // operations.js takes its identifier counter from the API; this test starts no operation.
+  createOperationCids: () => () => { throw new Error("the plugin host calls start no operation"); },
+  // The plugin host calls of this test carry no cids; a list here would be a test defect, so it is refused.
+  causeCids: (cids) => { if (cids !== undefined) throw new Error("the plugin host calls of this test carry no cids"); return undefined; },
   createCalls: ({ send, onMessage }) => {
     let nextId = 0;
     const open = new Map();
