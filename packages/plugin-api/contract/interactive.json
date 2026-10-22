@@ -1,0 +1,27 @@
+{
+  "surface": "packages/plugin-api/binder.js#INTERACTIVE",
+  "description": "The operable elements of a document and the audit rows that createBinder reports for them. The selector is the list of element kinds that an audit examines. Each case marks up a delegated root (markup) and lists the audit rows in document order; an element with a command inside the delegated root and a dom name is connected and not listed. A row holds the tag, the dom name or null, the command or null, and the text, which is the aria-label, else the title, else the text content, trimmed and cut to 40 characters.",
+  "selector": "button, input, select, textarea, [role=\"button\"], [contenteditable]:not([contenteditable=\"false\"])",
+  "cases": [
+    {
+      "id": "interactive.audit.lists-unconnected-and-unnamed-elements",
+      "markup": "<button data-expose='demo.save' data-command='fixture.save'>Save</button><button>Free</button><input type='text' data-expose='demo.name' data-command='fixture.set' data-value='text'><input type='text' data-expose='demo.note'><select data-expose='demo.mode' data-command='fixture.set'><option>a</option></select><textarea data-command='fixture.set' data-expose='demo.body'></textarea><textarea></textarea><div role='button' data-command='fixture.save' data-expose='demo.role'>Role</div><div role='button'>Bare</div><div contenteditable='true' data-command='fixture.set' data-expose='demo.editor'></div><div contenteditable='true'>Editable</div><div contenteditable='false'>Static</div><span>Plain</span>",
+      "output": [
+        { "tag": "button", "expose": null, "command": null, "text": "Free" },
+        { "tag": "input", "expose": "demo.note", "command": null, "text": "" },
+        { "tag": "textarea", "expose": null, "command": null, "text": "" },
+        { "tag": "div", "expose": null, "command": null, "text": "Bare" },
+        { "tag": "div", "expose": null, "command": null, "text": "Editable" }
+      ]
+    },
+    {
+      "id": "interactive.audit.text-takes-label-then-title-then-truncates",
+      "markup": "<button aria-label='Close dialog' title='Dismiss'>x</button><button title='Dismiss'>x</button><div role='button'>Adjust the layout of every visible panel in the window now</div>",
+      "output": [
+        { "tag": "button", "expose": null, "command": null, "text": "Close dialog" },
+        { "tag": "button", "expose": null, "command": null, "text": "Dismiss" },
+        { "tag": "div", "expose": null, "command": null, "text": "Adjust the layout of every visible panel" }
+      ]
+    }
+  ]
+}
