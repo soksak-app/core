@@ -187,6 +187,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-2",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function resolveContributions" },
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/contributions-contract.test.mjs", id: "contributions contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-native-contract.test.mjs", id: "view native contract publishes the required cases in order" },
+    ],
+    expected: "The contribution cases resolve every state of resolveContributions, and the view native case drops an event that arrives before its subscription, each against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-1",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
