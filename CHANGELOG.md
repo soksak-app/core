@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F262-3: The project settings file is written in the current numbered form by both hosts: a settings write migrates the file at its entry and stores the `format` member, and the diagnostics fixture writes the current form too.
 - F262: The projects check reads the project settings file in its current numbered form, and a tab of a new space keeps its origin until a stored layout has held it and dropped it, so the first tab of an added space no longer fails to present with `has no origin`.
 - F212.12-1-19: A view call of a surface that declares surface.unload waits for the tab state store to be tried, so a view's first tab state call during the page start is answered by the store instead of failing with `the tab state store is not open`.
 - F212.12-1-18: A view receives only the exposure requests it owns, so a core surface entry is answered once, by the surface document; a view mark belongs to its mount. Plugin host call records update the plugin statuses instead of the error display. The files sidecar body is the object of the json-object form, and a plugin host sidecar event carries its session data as `sidecar.message` or `sidecar.failure`.

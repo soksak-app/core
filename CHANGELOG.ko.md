@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F262-3: 두 host 모두 프로젝트 설정 파일을 현재 번호 있는 형태로 쓴다. settings 쓰기는 입구에서 파일을 migration하고 `format` member를 저장하며, diagnostics fixture도 현재 형태를 쓴다.
 - F262: 프로젝트 검사는 프로젝트 설정 파일을 현재의 번호 있는 형태로 읽고, 새 space의 tab은 저장된 layout이 가졌다가 버린 뒤에야 origin을 잃는다. 그래서 추가한 space의 첫 tab이 `has no origin`으로 표시에 실패하지 않는다.
 - F212.12-1-19: surface.unload를 선언한 surface의 view call은 탭 상태 저장소를 시도할 때까지 기다린다. 그래서 페이지 시작 중의 view 첫 탭 상태 call은 `the tab state store is not open` 오류 대신 저장소가 답한다.
 - F212.12-1-18: view는 자기가 소유한 exposure 요청만 받으므로 core surface 항목은 surface 문서가 한 번 답한다. view 표지는 mount마다 가진다. plugin host의 call 기록은 오류 표시 대신 plugin 상태를 갱신한다. files sidecar의 body는 json-object 형식의 객체이며, plugin host의 sidecar event는 세션 data를 `sidecar.message` 또는 `sidecar.failure`로 싣는다.
