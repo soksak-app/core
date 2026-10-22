@@ -126,7 +126,6 @@ var eventClasses = map[string]Class{
 	"page.trace.declared-ui.snapshot.skipped": ClassCall,
 	"page.trace.modal.answer":                 ClassCall,
 	"page.trace.picker.close":                 ClassCall,
-	"page.trace.surface.mount":                ClassCall,
 	"page.update.operation":                   ClassCall,
 	"page.window.operation":                   ClassCall,
 	"sok.command":                             ClassCall,

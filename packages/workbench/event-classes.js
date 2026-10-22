@@ -113,7 +113,6 @@ const EXACT = new Map([
   ["page.trace.declared-ui.snapshot.skipped", "call"],
   ["page.trace.modal.answer", "call"],
   ["page.trace.picker.close", "call"],
-  ["page.trace.surface.mount", "call"],
   ["page.update.operation", "call"],
   ["page.window.operation", "call"],
   ["sok.command", "call"],

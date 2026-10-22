@@ -247,17 +247,6 @@
       },
       "description": "A value of a declared UI status was overwritten while its snapshot was in transit, while the performance trace is on: the main page writes it with the count of the overwritten values, which the snapshot message carries as its skipped field (docs/spec/plugin-processes.md, rule 2)."
     },
-    "page.trace.surface.mount": {
-      "layer": "page",
-      "class": "call",
-      "level": "debug",
-      "fields": {
-        "plugin": "string",
-        "surface": "string",
-        "ms": "number"
-      },
-      "description": "The mount of one plugin surface in the page, while the trace is on: plugin and surface name the surface, and ms is the time in milliseconds from the start of its mount to the end of the module mount, including the awaited promise of the module (performance.now). A mount that fails writes no event; its error has its own record."
-    },
     "page.trace.modal.answer": {
       "layer": "page",
       "class": "call",

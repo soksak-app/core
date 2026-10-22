@@ -168,7 +168,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.trace.declared-ui.snapshot.skipped" => Some(Class::Call),
         "page.trace.modal.answer" => Some(Class::Call),
         "page.trace.picker.close" => Some(Class::Call),
-        "page.trace.surface.mount" => Some(Class::Call),
         "page.update.operation" => Some(Class::Call),
         "page.window.operation" => Some(Class::Call),
         "sok.command" => Some(Class::Call),
