@@ -497,6 +497,10 @@ func (e *Endpoint) accept(listener net.Listener) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			// Close clears e.listener before it closes the listener, so an accept that fails after Close is the end of serving and is not an error.
+			if e.serving(listener) {
+				LogError("endpoint accept", err)
+			}
 			return
 		}
 		c := &endpointConn{conn: conn, topics: map[topic]bool{}, out: make(chan []byte, EndpointOutputFrames), done: make(chan struct{})}
@@ -506,6 +510,13 @@ func (e *Endpoint) accept(listener net.Listener) {
 		routine.Go("endpoint-write", c.write)
 		routine.Go("endpoint-read", func() { e.read(c) })
 	}
+}
+
+// serving reports whether listener is the listener that the endpoint serves.
+func (e *Endpoint) serving(listener net.Listener) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.listener == listener
 }
 
 // StatusChanged announces the new value to the connections that watch the status name of the window window. surface is the surface that the watch

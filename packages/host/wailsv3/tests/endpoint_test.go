@@ -1267,6 +1267,40 @@ func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
 	closeRecord(t, written, "peer closed")
 }
 
+// acceptFault is a listener whose Accept fails with err, as a listener of the operating system does when it cannot accept.
+type acceptFault struct {
+	net.Listener
+	err error
+}
+
+func (l acceptFault) Accept() (net.Conn, error) { return nil, l.err }
+
+// An accept that fails while the endpoint serves ends the accept loop and writes the reason to the application log.
+// contract: endpoint.accept.error-is-recorded
+func TestEndpointRecordsAnAcceptError(t *testing.T) {
+	written := captureLog(t)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := host.NewEndpoint(newFakeBackend())
+	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
+		Application: "wailsv3", Version: "0.0.2", Started: time.Now()}
+	if err := endpoint.Serve(acceptFault{Listener: listener, err: errors.New("accept fault")}, info, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = endpoint.Close() })
+	// The record is written by the accept goroutine after Accept returns, and no event reports that write, so the log is read until it appears.
+	want := " error host endpoint accept: accept fault"
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(written(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the log has no %q:\n%s", want, written())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // A request that ends with a timeout error writes the method and the reason to the application log before the client
 // receives the error.
 // contract: endpoint.timeout.is-recorded
