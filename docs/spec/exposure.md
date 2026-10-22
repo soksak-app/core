@@ -209,7 +209,7 @@ Clients call these JSON-RPC 2.0 methods.
 | `status.get` | `{window, name, surface?}` | Current value |
 | `status.watch` | `{window, name, surface?}` | `null`; the host then sends `status.changed` notifications `{window, name, surface?, value}` on each change until `status.unwatch` or until the connection closes. Watches with different `surface` values are separate |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
-| `command.run` | `{window, name, params, surface?}` | Command result |
+| `command.run` | `{window, name, params, surface?, cids?}` | Command result. `cids` are the correlation identifiers of the cause of the run, which a command of a view receives (native-surfaces.md#view-surfaces) |
 | `dom.rect` | `{window, name, index?, address?}` | `{x, y, width, height}` in CSS pixels of the owning document, plus `{document}`: the document origin in window coordinates |
 | `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action` is `click`, `input`, or `dispatch`. The page receives synthetic DOM events with `isTrusted` false |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. Window coordinates. `phase` is `move`, `down`, `drag`, `up`, or `scroll`. `button` is `left` (default) or `right`. `deltaX` and `deltaY` are scroll distances in points. `activate` applies to `move` |

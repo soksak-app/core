@@ -209,7 +209,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `status.get` | `{window, name, surface?}` | 현재 값 |
 | `status.watch` | `{window, name, surface?}` | `null`. 이후 `status.unwatch`를 받거나 연결이 닫힐 때까지 값이 바뀔 때마다 호스트가 `status.changed` 알림 `{window, name, surface?, value}`를 보낸다. `surface` 값이 다른 감시는 서로 별개다 |
 | `status.unwatch` | `{window, name, surface?}` | `null` |
-| `command.run` | `{window, name, params, surface?}` | 명령 결과 |
+| `command.run` | `{window, name, params, surface?, cids?}` | 명령 결과. `cids`는 실행의 원인인 상관 식별자이며, view의 명령이 받는다([view 표면](native-surfaces.ko.md#view-표면)) |
 | `dom.rect` | `{window, name, index?, address?}` | 소유 문서의 CSS 픽셀 좌표 `{x, y, width, height}`와, 창 좌표로 나타낸 문서 원점 `{document}` |
 | `dom.act` | `{window, name, index?, address?, action, value?, event?}` | `null`. `action`은 `click`, `input`, `dispatch` 중 하나다. 페이지는 `isTrusted`가 false인 합성 DOM 이벤트를 받는다 |
 | `input.pointer` | `{window, x, y, phase, button?, deltaX?, deltaY?, activate?}` | `null`. 창 좌표를 쓴다. `phase`는 `move`, `down`, `drag`, `up`, `scroll` 중 하나다. `button`은 `left`(기본값) 또는 `right`다. `deltaX`, `deltaY`는 포인트 단위 스크롤 거리다. `activate`는 `move`에 적용한다 |
