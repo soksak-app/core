@@ -591,8 +591,11 @@ type eventRecord struct {
 	Truncated int `json:"truncated,omitempty"`
 }
 
+// marshalRecord serializes a record of the writer. A test replaces it to fail the serialization of one event.
+var marshalRecord = func(record eventRecord) ([]byte, error) { return json.Marshal(record) }
+
 func serializeEvent(seq uint64, e *pendingEvent) ([]byte, error) {
-	line, err := json.Marshal(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Class: e.class, Layer: e.layer, Page: e.page, Event: e.event, Cids: e.cids, Fields: e.fields, Undeclared: e.undeclared, Truncated: e.truncated})
+	line, err := marshalRecord(eventRecord{TsMicros: e.tsMicros, MonoNs: e.monoNs, Seq: seq, Level: e.level, Class: e.class, Layer: e.layer, Page: e.page, Event: e.event, Cids: e.cids, Fields: e.fields, Undeclared: e.undeclared, Truncated: e.truncated})
 	if err != nil {
 		return nil, err
 	}
@@ -694,6 +697,8 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			flushFile(f)
 		}
 	}
+	// push queues an event into the file of its channel; appendLine reports a line it cannot serialize through it.
+	var push func(e *pendingEvent)
 	appendLine := func(f *logFile, e *pendingEvent) {
 		seq++
 		line, err := serializeEvent(seq, e)
@@ -705,14 +710,21 @@ func (l *EventLog) write(main *os.File, interval time.Duration, open *pendingEve
 			}
 		}
 		if err != nil {
-			// The line is not written; the seq stays taken, so the audit shows the gap next to this report.
+			// The line is not written; the seq stays taken and log.dropped names that gap with its cause after it (logging.md). The
+			// record of a loss is not reported again when its own line cannot be serialized.
 			fmt.Fprintf(os.Stderr, "event writer: %s cannot be written: %v\n", e.event, err)
+			if e.event != "log.dropped" {
+				reason, _ := json.Marshal("the line cannot be serialized: " + err.Error())
+				push(l.writerEvent(LevelWarn, "log.dropped", json.RawMessage(fmt.Sprintf(
+					`{"from_seq":%d,"to_seq":%d,"count":1,"bytes":%d,"reason":%s,"channel":%q}`,
+					seq, seq, len(e.event), reason, ChannelOf(e.level).String()))))
+			}
 			return
 		}
 		f.batch = append(f.batch, line...)
 		f.size += int64(len(line))
 	}
-	push := func(e *pendingEvent) {
+	push = func(e *pendingEvent) {
 		f := files[ChannelOf(e.level)]
 		if f.file == nil {
 			file, err := openLogFile(f.path)
