@@ -40,10 +40,17 @@ static void viewEndedReceiver(void *context) {
 
 static NSDictionary *latest;
 static NSMutableArray<NSDictionary *> *viewMessages;
+static NSMutableArray<NSDictionary *> *viewStates;
 
 static void changed(void *context, const char *text) {
     (void)context;
     latest = [[NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:text length:strlen(text)] options:0 error:nil] retain];
+    [viewStates addObject:latest ?: @{}];
+}
+
+// A JSON boolean parses to a CFBoolean; a number such as 1 or 0 parses to a CFNumber.
+static BOOL isJSONBoolean(id value) {
+    return value != nil && CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID();
 }
 
 static void viewMessage(void *context, const char *text) {
@@ -106,6 +113,7 @@ int main(void) { @autoreleasepool {
     webviewSetSurfaceHidden(surface, false);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
     viewMessages = [NSMutableArray array];
+    viewStates = [NSMutableArray array];
 
     @autoreleasepool {
         void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe",
@@ -117,6 +125,13 @@ int main(void) { @autoreleasepool {
         latest = nil;
         check(sp_document_load(view, "sok://probe/ui/page.html"), @"the view loads the page of its plugin");
         until(@"the view page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
+        check(viewStates.count > 0, @"the view reports its navigation state");
+        BOOL everyLoadingIsBoolean = YES;
+        for (NSDictionary *state in viewStates) {
+            if (!isJSONBoolean(state[@"loading"])) everyLoadingIsBoolean = NO;
+        }
+        check(everyLoadingIsBoolean,
+            [NSString stringWithFormat:@"every view state reports loading as a JSON boolean: %@", viewStates.lastObject[@"loading"]]);
         check([latest[@"title"] isEqual:@"handler object"],
             [NSString stringWithFormat:@"the view page has the sok-view handler: %@", latest[@"title"]]);
         until(@"the ready message reaches the view receiver", ^BOOL{ return viewMessages.count > 0; });

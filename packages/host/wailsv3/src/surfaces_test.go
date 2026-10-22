@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -210,6 +211,28 @@ func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testi
 	s.viewState("probe-surface", `{"loading":true}`)
 	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err == nil {
 		t.Fatalf("post after navigation is accepted, want the ready record cleared")
+	}
+}
+
+// nativeViewState is the document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state):
+// loading is a JSON boolean.
+const nativeViewState = `{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":""}`
+
+// contract: view.channel.state-boolean
+func TestViewStateAcceptsTheNativePayloadWithABooleanLoading(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	if err := s.viewState("probe-surface", nativeViewState); err != nil {
+		t.Fatalf("native view state: %v", err)
+	}
+}
+
+// contract: view.channel.state-numeric-refused
+func TestViewStateRefusesANumericLoadingWithTheSurfaceAndTheTypeError(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	payload := strings.Replace(nativeViewState, `"loading":false`, `"loading":1`, 1)
+	err := s.viewState("probe-surface", payload)
+	if err == nil || !strings.HasPrefix(err.Error(), "probe-surface: view state is not JSON: json: cannot unmarshal number into Go struct field") {
+		t.Fatalf("numeric loading: %v, want the surface and the type error", err)
 	}
 }
 

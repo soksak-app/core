@@ -592,6 +592,34 @@ fn view_channel_records_the_ready_document_and_clears_it_on_navigation() {
     );
 }
 
+// The document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state): loading is a JSON boolean.
+const NATIVE_VIEW_STATE: &str = r#"{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":""}"#;
+
+// contract: view.channel.state-boolean
+#[test]
+fn view_channel_accepts_the_native_state_payload_with_a_boolean_loading() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    assert_eq!(channels.state("probe-surface", NATIVE_VIEW_STATE), Ok(()));
+}
+
+// contract: view.channel.state-numeric-refused
+#[test]
+fn view_channel_refuses_a_numeric_loading_with_the_surface_and_the_type_error() {
+    let channels = soksak_host_tauriv2::documents::ViewChannels::default();
+    channels.register("probe-surface", "probe");
+    let payload = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":1"#);
+    let error = channels
+        .state("probe-surface", &payload)
+        .expect_err("a numeric loading is refused");
+    assert!(
+        error.starts_with(
+            "probe-surface: view state is not JSON: invalid type: integer `1`, expected a boolean"
+        ),
+        "error text: {error}"
+    );
+}
+
 // contract: view.channel.post-before-ready
 #[test]
 fn view_channel_refuses_a_post_before_ready_with_its_text() {

@@ -704,7 +704,8 @@ static NSString *const kCoreHost = @"core";
     NSDictionary *state = @{
         @"url": self.URL.absoluteString ?: @"",
         @"title": self.title ?: @"",
-        @"loading": @(self.loading || self.navigation != nil),
+        // A C logical operator yields an int, which boxes as a JSON number; the state needs a JSON boolean.
+        @"loading": (self.loading || self.navigation != nil) ? @YES : @NO,
         @"progress": @(self.estimatedProgress),
         @"canGoBack": @(self.canGoBack),
         @"canGoForward": @(self.canGoForward),
