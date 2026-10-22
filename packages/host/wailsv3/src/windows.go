@@ -439,9 +439,7 @@ func (h *Host) shouldQuit() bool {
 			unready = append(unready, s)
 		}
 	}
-	if len(windows) > 0 {
-		h.quit.Begin()
-	}
+	quitNow := h.quit.BeginRequest(len(windows))
 	h.mu.Unlock()
 	for _, s := range windows {
 		s.Emit("project-close-request")
@@ -451,7 +449,7 @@ func (h *Host) shouldQuit() bool {
 			s.window.Close()
 		}
 	}
-	return len(windows) == 0
+	return quitNow
 }
 
 // Chrome is the window values that the page uses to draw the first row. Controls is the region that the window buttons occupy and

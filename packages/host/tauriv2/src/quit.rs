@@ -23,4 +23,19 @@ impl Quit {
     pub fn active(&self) -> bool {
         self.active.load(Ordering::Relaxed)
     }
+
+    /// Runs quit, which asks the application to end, for a quit request. Every quit request begins the quit state, with or without a
+    /// ready window (docs/spec/hosts.md#process-lifecycle).
+    pub fn request(&self, quit: impl FnOnce()) {
+        self.begin();
+        quit();
+    }
+
+    /// Begins the quit state for an operating system quit request and reports whether the application quits at once, which it does
+    /// when no ready window exists. ready is the number of ready windows that the request asks to close. Every quit request begins
+    /// the state, with or without a ready window (docs/spec/hosts.md#process-lifecycle).
+    pub fn begin_quit_request(&self, ready: usize) -> bool {
+        self.begin();
+        ready == 0
+    }
 }

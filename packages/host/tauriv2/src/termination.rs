@@ -11,7 +11,6 @@ pub fn on_termination(state: Arc<Quit>, quit: Box<dyn Fn() + Send>) -> Result<()
     platform::current()?.on_termination(Box::new(move || {
         // The quit that the signal requests is the quit of host.quit, so the quit state begins before quit runs; the end of a page
         // process during that quit is not an error (docs/spec/hosts.md#process-lifecycle).
-        state.begin();
-        quit();
+        state.request(&quit);
     }))
 }

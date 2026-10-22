@@ -26,7 +26,6 @@ func OnTermination(state *Quit, quit func()) error {
 		}
 		// The quit that the signal requests is the quit of host.quit, so the quit state begins before quit runs; the end of a page
 		// process during that quit is not an error (docs/spec/hosts.md#process-lifecycle).
-		state.Begin()
-		quit()
+		state.Request(quit)
 	})
 }

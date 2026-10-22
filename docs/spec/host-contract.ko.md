@@ -662,6 +662,7 @@ fn invalid_json_closes_connection() {
 | `assets.missing.runtime-optional-file-is-not-reported` | Wails runtime이 요청하고 애플리케이션이 제공하지 않는 runtime 파일 `/wails/custom.js`는 알리지 않는다. | wailsv3 only: Wails runtime이 이 선택 파일을 설계상 요청한다 |
 | `page.process.termination-writes-an-error-line` | host가 실행되는 동안 창의 WebContent process가 끝나면 host는 그 종료마다 한 번 `error host page process: <window>: terminated`를 쓴다. 단 host가 종료하는 동안은 process를 일부러 끝내므로 쓰지 않는다. | both |
 | `quit.cancel.ends-the-quit-state` | 시작한 종료 상태는 `windowCloseKept`가 취소할 때까지 유지된다. 시작과 취소는 멱등이고, `host.window`가 이 상태를 `quitting`으로 보고한다. | both |
+| `quit.request.begins-the-quit-state` | quit 요청은 준비된 창이 있든 없든 quit을 실행하기 전에 종료 상태를 시작하므로, 그 종료 중의 page process 종료는 오류 줄을 쓰지 않는다. | both |
 | `project-removal.ask.waits-for-the-owner-answer` | 프로젝트의 제거 요청은 그 프로젝트를 보이는 창의 답으로 이행한다. 요청이 대기 중인 프로젝트에 대한 두 번째 요청, 요청 없는 답, 올바르지 않은 project id는 오류로 실패하고, 요청을 받은 창이 끝나면 제거해도 된다고 답한 것으로 본다. | both |
 | `project-removal.abandon.records-each-allowed-removal` | 제거에 대한 질문을 받은 창이 끝나면 제거를 허용하고, 그 요청마다 `window`와 `project`를 가진 event `host.project.removal_allowed`를 저장한다. 다른 창의 요청에는 저장하지 않는다. | both |
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | both |

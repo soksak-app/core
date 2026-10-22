@@ -1268,11 +1268,11 @@ pub(crate) fn quit(app: &AppHandle, api: tauri::ExitRequestApi) {
         .filter(|(_, context)| context.ready.load(Ordering::Relaxed))
         .map(|(label, _)| label.clone())
         .collect();
-    if waiting.is_empty() {
+    // Every termination request begins the quit state, with or without a ready window (docs/spec/hosts.md#process-lifecycle).
+    if registry.quit.begin_quit_request(waiting.len()) {
         return;
     }
     api.prevent_exit();
-    registry.quit.begin();
     for (label, window) in app.windows() {
         let result = if waiting.contains(&label) {
             emit_window(&window, "project-close-request", ())
