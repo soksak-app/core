@@ -476,6 +476,21 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	}
 }
 
+// contract: view.call.reply-null-result
+func TestViewReplyWithANullResultKeepsTheNullResult(t *testing.T) {
+	req, err := argument[ViewReplyRequest]("request", json.RawMessage(`{"surface":"probe-surface","id":1,"result":null}`))
+	if err != nil {
+		t.Fatalf("reply with a null result: %v", err)
+	}
+	message, err := ViewReplyMessage(req)
+	if err != nil {
+		t.Fatalf("reply with a null result is refused: %v", err)
+	}
+	if result, ok := message["result"].(json.RawMessage); !ok || string(result) != "null" {
+		t.Fatalf("posted result %v, want null", message["result"])
+	}
+}
+
 // contract: view.call.cancel
 func TestViewCallCancelIsForwardedWithItsPluginAndSurface(t *testing.T) {
 	payload, ok, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":7,"cancel":true}`))

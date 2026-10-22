@@ -12,7 +12,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
 
-use serde::{Deserialize, Serialize};
+use serde::de::{self, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 use tauri::{Manager, Webview, Window};
 
@@ -2101,20 +2102,57 @@ pub(crate) fn unsubscribe(webview: &Webview, request: Request) -> Result<(), Str
     })
 }
 
-/// Keeps a field that is present as Some, including null, and leaves an absent field as None.
-fn present<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<Value>, D::Error> {
-    Value::deserialize(deserializer).map(Some)
+/// Reads a field whose value is a JSON value from the map of a view message. A null value is kept as Value::Null, because it is a value
+/// (docs/spec/native-surfaces.md#view-surfaces). An absent field is None, which the caller refuses or defaults.
+fn value_field<'de, A: MapAccess<'de>>(map: &mut A) -> Result<Option<Value>, A::Error> {
+    map.next_value::<Value>().map(Some)
 }
 
-/// A reply of the main page to a call request of a view: a result or an error (docs/spec/native-surfaces.md#view-surfaces).
-#[derive(Deserialize)]
+/// A reply of the main page to a call request of a view: a result or an error (docs/spec/native-surfaces.md#view-surfaces). A null
+/// result is the result of a command without a value, so it is kept as a value.
 pub struct ViewReply {
     pub surface: String,
     pub id: u64,
-    #[serde(default, deserialize_with = "present")]
     pub result: Option<Value>,
-    #[serde(default)]
     pub error: Option<ViewReplyError>,
+}
+
+impl<'de> Deserialize<'de> for ViewReply {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = ViewReply;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a view reply")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut surface = None;
+                let mut id = None;
+                let mut result = None;
+                let mut error = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "surface" => surface = map.next_value::<Option<String>>()?,
+                        "id" => id = map.next_value::<Option<u64>>()?,
+                        "result" => result = value_field(&mut map)?,
+                        "error" => error = map.next_value::<Option<ViewReplyError>>()?,
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(ViewReply {
+                    surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
+                    id: id.ok_or_else(|| de::Error::missing_field("id"))?,
+                    result,
+                    error,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
 }
 
 /// The error of a view reply, with the code and the message of the call envelope.
@@ -2126,25 +2164,97 @@ pub struct ViewReplyError {
 
 /// An event that the main page pushes to the view of surface: its name and its data (docs/spec/native-surfaces.md#view-surfaces).
 /// A null data is a value; an absent data is None and is refused.
-#[derive(Deserialize)]
 pub struct ViewEventRequest {
     pub surface: String,
     pub event: String,
-    #[serde(default, deserialize_with = "present")]
     pub data: Option<Value>,
+}
+
+impl<'de> Deserialize<'de> for ViewEventRequest {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = ViewEventRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a view event")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut surface = None;
+                let mut event = None;
+                let mut data = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "surface" => surface = map.next_value::<Option<String>>()?,
+                        "event" => event = map.next_value::<Option<String>>()?,
+                        "data" => data = value_field(&mut map)?,
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(ViewEventRequest {
+                    surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
+                    event: event.ok_or_else(|| de::Error::missing_field("event"))?,
+                    data,
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
 }
 
 /// A command request that the main page sends to the view of surface: the command, its id, its params and the correlation identifiers
 /// of its cause, which are empty when the cause has none (docs/spec/native-surfaces.md#view-surfaces).
-#[derive(Deserialize)]
 pub struct ViewRequest {
     pub surface: String,
     pub id: u64,
     pub command: String,
-    #[serde(default, deserialize_with = "present")]
     pub params: Option<Value>,
-    #[serde(default)]
     pub cids: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for ViewRequest {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Fields;
+        impl<'de> Visitor<'de> for Fields {
+            type Value = ViewRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a view request")
+            }
+
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+                let mut surface = None;
+                let mut id = None;
+                let mut command = None;
+                let mut params = None;
+                let mut cids = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "surface" => surface = map.next_value::<Option<String>>()?,
+                        "id" => id = map.next_value::<Option<u64>>()?,
+                        "command" => command = map.next_value::<Option<String>>()?,
+                        "params" => params = value_field(&mut map)?,
+                        "cids" => cids = map.next_value::<Option<Vec<String>>>()?,
+                        _ => {
+                            map.next_value::<de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(ViewRequest {
+                    surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
+                    id: id.ok_or_else(|| de::Error::missing_field("id"))?,
+                    command: command.ok_or_else(|| de::Error::missing_field("command"))?,
+                    params,
+                    // default: an absent cids member is an empty list, and a null member counts as absent (docs/spec/native-host.md).
+                    cids: cids.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_map(Fields)
+    }
 }
 
 /// Returns the host message of a command request: {"sok", "id", "command", "params"}, with the member "cids" when the request has

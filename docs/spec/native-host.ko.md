@@ -68,7 +68,7 @@ WebKit은 window가 화면에 있는 동안에만 web view를 그리고, window�
 
 각 host는 host 호출과 surface 페이지가 page runtime으로 보내는 호출의 모든 인자를 호출이 실행되기 전에 자기 인자 decoder로 해석한다. framework 자체의 인자 해석은 인자를 raw JSON으로 받아 아무것도 거부하지 않으므로, 두 host는 같은 인자를 같은 문장으로 거부한다. field는 선언이 그렇게 말할 때 선택 사항이다: Tauri host에서는 `Option` field나 `#[serde(default)]` field, Wails host에서는 pointer field나 `json` tag에 `omitempty`가 있는 field다. 값이 `null`인 field는 빠진 field로 보므로, 선택 field는 빠지거나 `null`일 수 있다. decoder는 인자를 `argument <path> <problem>` message로 거부한다:
 
-- `<path> is missing`: 선택 사항이 아닌 field가 빠졌거나 `null`이다.
+- `<path> is missing`: 선택 사항이 아닌 field가 빠졌거나 `null`이다. view message의 JSON 값 field인 view reply의 `result`, view event의 `data`, view request의 `params`는 예외로, 그 `null`은 값이며 보존된다([view 표면](native-surfaces.ko.md#view-표면)).
 - `<path> must be <expected>, not <actual>`: 값이 다른 JSON 형식이다. `<expected>`와 `<actual>`은 `null`, `a boolean`, `a number`, `a string`, `an array`, `an object` 중 하나다.
 - `<path> must be an integer from <min> to <max>`: 정수 field의 수가 그 field 범위의 정수가 아니다.
 - `<path> must be an array of <n> items`: 고정 길이 배열의 길이가 다르다.
