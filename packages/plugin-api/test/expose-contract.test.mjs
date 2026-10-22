@@ -16,6 +16,7 @@ const EXPECTED_IDS = [
   "expose.dispose.refuses-a-registration-after-dispose",
   "expose.dispose.removes-bindings",
   "expose.dispose.races-a-registration-loading-declarations",
+  "expose.bind.function-params-are-read-at-each-run",
 ];
 
 // Lets every pending promise of the registration and reply chain settle before a step reports its output.
@@ -84,7 +85,12 @@ async function runCase(testCase) {
             return params;
           });
         } else if ("bind" in step) {
-          await expose.bind(document.querySelector(step.bind.selector), step.bind.command, step.bind.params);
+          // paramsFromValue gives a params function that reads the value of the element at each run.
+          const params = step.bind.paramsFromValue ? (event) => ({ value: event.target.value }) : step.bind.params;
+          await expose.bind(document.querySelector(step.bind.selector), step.bind.command, params);
+        } else if ("inspect" in step) {
+          // The result is the data-params attribute of the selected element, or null when it has none.
+          result = document.querySelector(step.inspect.selector).dataset.params ?? null;
         } else if ("race" in step) {
           // Starts a status registration and disposes the exposure in the same turn, before its declarations are loaded.
           const pending = expose.status(step.race.name, () => value, () => () => {});
@@ -93,7 +99,9 @@ async function runCase(testCase) {
             throws = error.message;
           });
         } else if ("click" in step) {
-          document.querySelector(step.click.selector).click();
+          const element = document.querySelector(step.click.selector);
+          if (step.click.value !== undefined) element.value = step.click.value;
+          element.click();
         } else if ("dispose" in step) {
           await expose.dispose();
         } else if ("set" in step) {
