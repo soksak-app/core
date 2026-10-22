@@ -26,6 +26,7 @@
     "sidecar-port.js",
     "surface-composition.js",
     "surface.js",
+    "view-page.js",
     "plugin-runtime.js",
     "operation.js",
     "clipboard.js",

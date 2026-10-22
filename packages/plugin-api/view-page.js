@@ -1,4 +1,5 @@
-// The view page insertion of docs/spec/plugin-processes.md (rule 4). The native view handler of each host applies the same rule
+// The view page rules of docs/spec/plugin-processes.md (rule 4). The host inserts the view import map into each view page, so a
+// plugin page holds no map of its own. The native view handler of each host applies the same insertion
 // (sp_view_page_insert in native/darwin/src/document_view.m), and the shared cases of contract/view-page.json check both.
 
 /** The doctype token that a view page begins with. */
@@ -9,15 +10,22 @@ const IMPORT_MAP = /<script\b[^>]*\btype\s*=\s*["']?importmap\b/i;
 const SCRIPT_END = /<\/script/i;
 
 /**
- * Returns the view page with the import map text map inserted directly after its doctype. A page that has no doctype at its
- * start, that already holds an import map, or whose map text is empty or ends a script element is refused with an error that
- * names the reason.
+ * Checks a view page that a plugin ships: it begins with a doctype and holds no import map. Throws an error that names the
+ * reason when the page does not meet the rule.
+ */
+export function checkViewPage(html) {
+  if (DOCTYPE.exec(html) === null) throw new Error("view page has no doctype at its start");
+  if (IMPORT_MAP.test(html)) throw new Error("view page has an import map");
+}
+
+/**
+ * Returns the view page with the import map text map inserted directly after its doctype. A page that does not meet checkViewPage
+ * is refused, and so is a map text that is empty or ends a script element.
  */
 export function insertViewImportMap(html, map) {
-  const doctype = DOCTYPE.exec(html);
-  if (doctype === null) throw new Error("view page has no doctype at its start");
-  if (IMPORT_MAP.test(html)) throw new Error("view page has an import map");
+  checkViewPage(html);
   if (map === "") throw new Error("the view import map is empty");
   if (SCRIPT_END.test(map)) throw new Error("import map text ends a script element");
-  return `${doctype[0]}<script type="importmap">${map}</script>${html.slice(doctype[0].length)}`;
+  const doctype = DOCTYPE.exec(html)[0];
+  return `${doctype}<script type="importmap">${map}</script>${html.slice(doctype.length)}`;
 }

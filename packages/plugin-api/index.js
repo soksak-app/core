@@ -151,28 +151,7 @@ export function pageImports(html) {
   return importMap(html).imports;
 }
 
-/**
- * Checks that a view page has exactly one static import map whose imports equal VIEW_IMPORTS, and that the map has no other
- * field, because a scopes field could remap the imports (docs/spec/plugins.md#view-surfaces). Returns nothing; throws an error
- * that names the first difference.
- */
-export function checkViewPage(html) {
-  const map = importMap(html);
-  if (!isObject(map)) throw new Error("view page import map: expected an object");
-  const field = Object.keys(map).find((key) => key !== "imports");
-  if (field !== undefined) throw new Error(`view page import map: unexpected field ${JSON.stringify(field)}`);
-  if (!isObject(map.imports)) throw new Error("view page import map: imports must be an object");
-  for (const [key, target] of Object.entries(VIEW_IMPORTS)) {
-    if (!Object.hasOwn(map.imports, key)) throw new Error(`view page import map: missing entry ${JSON.stringify(key)}`);
-    if (map.imports[key] !== target) {
-      throw new Error(
-        `view page import map: entry ${JSON.stringify(key)} is ${JSON.stringify(map.imports[key])}, want ${JSON.stringify(target)}`,
-      );
-    }
-  }
-  const extra = Object.keys(map.imports).find((key) => !Object.hasOwn(VIEW_IMPORTS, key));
-  if (extra !== undefined) throw new Error(`view page import map: unexpected entry ${JSON.stringify(extra)}`);
-}
+export { checkViewPage } from "./view-page.js";
 
 const ID = /^[a-z][a-z0-9-]*$/;
 const PACKAGE = /^(@[a-z0-9-]+\/)?[a-z0-9-]+$/;

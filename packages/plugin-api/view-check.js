@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 // Checks a plugin's literal copy of the view wire against the SDK (decision D1, required changes 5, 6, 7 and 12; F238-c-11).
-// A plugin's make check runs it on its literal file, which holds three values: the SHA-256 of view-start.js, the four
-// entries of VIEW_IMPORTS, and one screen-message vector. The script compares each value with the SDK and fails on the
+// A plugin's make check runs it on its literal file, which holds two values: the SHA-256 of view-start.js and one
+// screen-message vector. The script compares each value with the SDK and fails on the
 // first difference it finds in each group. The check holds VIEW_START_SHA256 as a constant, so an edit of view-start.js
 // fails here until the constant and every plugin literal are updated together.
 //
 //   soksak-view-check <literal.json> <screen-message vectors.json>
 //
-// The literal is JSON: {"viewStartSha256": "<64 hex>", "viewImports": {<four entries>}, "screenMessage": {"name", "message", "hash"}}.
+// The literal is JSON: {"viewStartSha256": "<64 hex>", "screenMessage": {"name", "message", "hash"}}. It holds no viewImports,
+// because the host inserts the view import map into each view page (docs/spec/plugin-processes.md, rule 4).
 // The vectors are the caller's input: the screen-message vectors of the core release that the plugin pins (the vector file of
 // docs/spec/cases/log-contract/replay/screen-message.json in the core checkout). The package holds no path into a checkout.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import { pathToFileURL } from "node:url";
-import { VIEW_IMPORTS } from "./index.js";
 
 /** The SHA-256 of view-start.js as of this check. */
 export const VIEW_START_SHA256 = "d96923ada1f03a2af97f8e09ee32bc323ec72f235fffc1d4519f6f641db1dffc";
@@ -44,13 +44,8 @@ export function checkViewLiteral(literal, {
   if (literal?.viewStartSha256 !== VIEW_START_SHA256) {
     errors.push(`viewStartSha256 is ${shown(literal?.viewStartSha256)}, want ${VIEW_START_SHA256}`);
   }
-  // default: an absent import map is empty so every required import is reported missing.
-  const imports = literal?.viewImports ?? {};
-  for (const [key, want] of Object.entries(VIEW_IMPORTS)) {
-    if (imports[key] !== want) errors.push(`viewImports ${shown(key)} is ${shown(imports[key])}, want ${shown(want)}`);
-  }
-  for (const key of Object.keys(imports)) {
-    if (!Object.hasOwn(VIEW_IMPORTS, key)) errors.push(`viewImports has unexpected entry ${shown(key)}`);
+  if (literal?.viewImports !== undefined) {
+    errors.push("viewImports is not part of the literal: the host inserts the view import map (docs/spec/plugin-processes.md, rule 4)");
   }
   const vector = literal?.screenMessage;
   const core = vectors.vectors.find((item) => item.name === vector?.name);
