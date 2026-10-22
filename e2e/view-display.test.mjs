@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
+import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
 import { fresh } from "./fixture.mjs";
 
 /** Samples per axis of the card area; a frame whose sampled points show one colour is blank. */
@@ -25,10 +27,30 @@ function colours(frame, grid, card) {
   return seen.size;
 }
 
+/**
+ * Runs the wait of a view check. When the wait fails, the failure names each view call that the page received after offsets and
+ * never answered, with its plugin, surface, id, command and the time it waited (docs/spec/native-surfaces.md#view-surfaces).
+ */
+async function untilViewReady(s, offsets, wait) {
+  try {
+    return await wait();
+  } catch (error) {
+    await s.flushLog();
+    const { events } = readEvents(s.app.configDir, offsets);
+    const calls = unansweredViewCalls(events.filter((event) => event.event.startsWith("page.view.")));
+    const detail = calls.length === 0 ? "none" : calls.map((call) => `${call.plugin} ${call.surface} call ${call.id} ${call.command} ` +
+      `waited ${(call.waitingUs / 1000).toFixed(0)} ms`).join("; ");
+    throw new Error(`${error.message}; view calls without a reply: ${detail}`, { cause: error });
+  }
+}
+
 for (const app of Object.values(APPS)) {
   test(`${app.name}: each installed view plugin shows its first content in a card`, { timeout: 240000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    // The view calls of the page are records at the debug level of the class call; the check declares that policy, and the
+    // preparation restores the setting when the check ends (keepCommonSettings).
+    const offsets = currentEventOffsets(s.app.configDir);
+    await untilViewReady(s, offsets, () => fresh(s, { log: { call: "debug" }, reads: ["page.view.call", "page.view.reply"] }));
     const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.plugin === "terminal"));
     assert.ok(card, "no card holds the fixture terminal");
     const views = [...new Map((await s.get("core.surfaces"))
