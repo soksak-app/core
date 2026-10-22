@@ -1073,9 +1073,10 @@
       "class": "lifecycle",
       "level": "warn",
       "fields": {
-        "late_ms": "number"
+        "late_ms": "number",
+        "watch_late_ms": "number"
       },
-      "description": "The heartbeat of the main thread of the host was late_ms milliseconds late, 1 s or more: the main thread ran nothing else in that time."
+      "description": "The heartbeat of the main thread of the host was late_ms milliseconds late, 1 s or more: the main thread ran nothing else in that time. watch_late_ms is the lateness of the watch's own wake beyond its 250 ms beat: at least half of late_ms means the process was not scheduled, and less than half means the main thread was blocked."
     },
     "host.stall.sampled": {
       "layer": "host",

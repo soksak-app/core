@@ -432,6 +432,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                         sample: Box::new(|path| platform::current()?.sample_threads(path)),
                         folder: directory.join("logs"),
                         emit_host: Box::new(event_record::emit_host),
+                        clock: None,
+                        wait: None,
                     });
                 let handle = app.handle().clone();
                 // Applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page
