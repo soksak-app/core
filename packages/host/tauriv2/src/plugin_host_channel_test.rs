@@ -86,7 +86,11 @@ fn the_host_forwards_the_project_data_calls_to_the_main_page() {
     let channels = host_channels(true);
     for (id, command, params) in [
         (13, "runtime.data.get", json!({"key": "note"})),
-        (14, "runtime.data.set", json!({"key": "note", "value": "new"})),
+        (
+            14,
+            "runtime.data.set",
+            json!({"key": "note", "value": "new"}),
+        ),
     ] {
         let message = format!(r#"{{"id": {id}, "command": "{command}", "params": {params}}}"#);
         assert_eq!(
