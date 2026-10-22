@@ -23,15 +23,22 @@ export function checkViewModules(read, entry) {
   const errors = [];
   const seen = new Set();
   const pending = [entry];
-  const pattern = /(?:import|export)\s[^'"`;]*?from\s*["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)|import\s*["']([^"']+)["']/g;
+  // One pattern per form, each with one capture group, so every match names its specifier in group 1.
+  const patterns = [
+    /(?:import|export)\s[^'"`;]*?from\s*["']([^"']+)["']/g,
+    /import\s*\(\s*["']([^"']+)["']\s*\)/g,
+    /import\s*["']([^"']+)["']/g,
+  ];
   while (pending.length > 0) {
     const path = pending.shift();
     if (seen.has(path)) continue;
     seen.add(path);
     const text = read(path);
     if (text === null) continue;
-    for (const match of withoutComments(text).matchAll(pattern)) {
-      const specifier = match[1] ?? match[2] ?? match[3];
+    const code = withoutComments(text);
+    const imports = patterns.flatMap((pattern) => [...code.matchAll(pattern)].map((match) => ({ index: match.index, specifier: match[1] })))
+      .sort((a, b) => a.index - b.index);
+    for (const { specifier } of imports) {
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
         const target = resolveRelative(path, specifier);
         if (read(target) === null) errors.push(`${path}: module ${target} does not exist`);
