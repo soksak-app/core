@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.12-1-18: A view receives only the exposure requests it owns, so a core surface entry is answered once, by the surface document; a view mark belongs to its mount. Plugin host call records update the plugin statuses instead of the error display. The files sidecar body is the object of the json-object form, and a plugin host sidecar event carries its session data as `sidecar.message` or `sidecar.failure`.
 - F212.12-1-17: The window check judges the host event files of its own boot: the files of an earlier run that were flushed after the stored offsets no longer count as errors. Plugin host reports carry the message, code and data of a rejection instead of `[object Object]`. A sidecar request body of a plugin host is the JSON object that the page sends. The host records each exposure request, reply and unmatched reply with the id and where the relay holds it.
 - F212.12-1-15-1: The Tauri host accepts a plugin host reply with a null result, as the Wails host does: the reply, request params and event data of a plugin host keep their null values, so a command without a value no longer fails with `has both or neither of a result and an error`.
 - F212.12-1-15-4: The lost persistent sidecar connection error record names how the connection ended (`end`) and how many requests waited (`waiting`), in both hosts.
