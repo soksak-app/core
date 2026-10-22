@@ -386,6 +386,28 @@ test("an initial snapshot failure detaches every attached region", async () => {
   assert.equal(f.window.document.documentElement.dataset.surfaceComposition, undefined);
 });
 
+test("a creation failure reports each cleanup failure once and the composition failure once", async () => {
+  const f = fixture();
+  const r = runtime({ place: () => Promise.reject(new Error("initial snapshot failed")) });
+  r.page.document.detach = () => Promise.reject(new Error("page detach failed"));
+  const reports = [];
+  r.page.surfaces.report = (message) => reports.push(message);
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
+      regions: { page: f.page, image: f.image },
+      overlays: { toolbar: f.toolbar, badge: f.badge },
+    }, f.window), /initial snapshot failed/);
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(reports.filter((message) => message.startsWith("surface composition cleanup failed")), [
+    "surface composition cleanup failed: page detach failed",
+  ]);
+  assert.equal(reports.filter((message) => message.startsWith("surface composition failed")).length, 1);
+});
+
 test("declaration keys and document ownership are validated before attachment", async () => {
   const f = fixture();
   const r = runtime();

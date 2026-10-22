@@ -208,8 +208,10 @@ export async function createSurfaceCompositionController(
   };
 
   let cleanupPromise = null;
+  // Detaches every region once and reports each failure; it returns the failures and never throws, so the creation
+  // path and dispose share one cleanup and each failure is reported once.
   // default: a repeated call must wait for the same cleanup operation.
-  const detachAll = () => cleanupPromise ??= (async () => {
+  const cleanup = () => cleanupPromise ??= (async () => {
     active = false;
     observer?.disconnect();
     if (changed) {
@@ -225,8 +227,12 @@ export async function createSurfaceCompositionController(
     const failures = results.filter((result) => result.status === "rejected");
     // default: the thrown value may not be an Error, so without message the value itself is written.
     for (const failure of failures) runtimePage.surfaces.report(`surface composition cleanup failed: ${failure.reason?.message ?? failure.reason}`);
-    if (failures.length) throw new AggregateError(failures.map(({ reason }) => reason), "surface composition cleanup failed");
+    return failures;
   })();
+  const detachAll = async () => {
+    const failures = await cleanup();
+    if (failures.length) throw new AggregateError(failures.map(({ reason }) => reason), "surface composition cleanup failed");
+  };
 
   try {
     if (declaration.kind === "hybrid") {
@@ -361,11 +367,7 @@ export async function createSurfaceCompositionController(
       dispose: detachAll,
     });
   } catch (error) {
-    try {
-      await detachAll();
-    } catch (cleanupError) {
-      runtimePage.surfaces.report(`surface composition cleanup failed: ${cleanupError.message}`);
-    }
+    await cleanup();
     throw error;
   }
 }
