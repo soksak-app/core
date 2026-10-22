@@ -1,4 +1,4 @@
-import { LOG_LEVELS, createSurfaceCompositionController, createSurfaceContext, mountSurfaceModule, releaseSurfaceReady } from "@soksak/plugin-api";
+import { LOG_LEVELS, createSurfaceContext } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
 import { registry, registerSurfacePort } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
@@ -24,20 +24,7 @@ import { trace } from "./performance.js";
 const mounted = new Map();
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
-const parking = document.createDocumentFragment();
 
-/**
- * The elements of the parked surface hosts and of their shadow roots. A parked host is outside the document, so a count of the
- * document does not reach it; the object counts of diagnostics.objects read it as parkedElements (docs/spec/endpoint.md).
- */
-export function parkedElements() {
-  const count = (root) => {
-    let total = 0;
-    for (const element of root.querySelectorAll("*")) total += 1 + (element.shadowRoot ? count(element.shadowRoot) : 0);
-    return total;
-  };
-  return count(parking);
-}
 const authorization = new Map();
 // The listeners (surfaceId, error) of the end of each mount; error is null for a mount that ended.
 const mountListeners = new Set();
@@ -155,7 +142,7 @@ export function placePluginPlaceholder(slot, surfaceId, element) {
   for (const other of mounted.values()) {
     if (other.slot === slot) {
       other.host.dataset.surfaceSuspended = "true";
-      parking.append(other.host);
+      other.host.remove();
     }
   }
   clearSlotPlaceholders(slot, surfaceId);
@@ -342,7 +329,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
         },
       },
     },
-    // The composition of the view runs the page operations of the surface that a hybrid composition uses: the revision of the
+    // The composition of the view runs the page operations of its surface: the revision of the
     // document, the region lifetime of a place and the region record (docs/spec/native-surfaces.md#view-surfaces, regions).
     composition: {
       // default: a view without regions or overlays declares none of them.
@@ -393,17 +380,17 @@ function answerViewCalls(surface, scoped, page, context, closing) {
 
 export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
   // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
-  const viewSurface = surface?.composition?.kind === "view";
-  if (!slot || (!surface?.module && !viewSurface)) throw new TypeError("surface module mount requires a slot and module");
+  // A surface is a view: its page runs in its view, and the workbench mounts no module (docs/spec/plugins.md#surface-ownership).
+  if (!slot) throw new TypeError("surface mount requires a slot");
+  if (surface?.composition?.kind !== "view") throw new TypeError(`surface ${surface?.surfaceId} requires a view composition`);
   // The start of the mount for the trace event surface.mount, which covers the wait for the earlier dispose too.
   const started = performance.now();
   // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
   const leaving = mounted.get(surface.surfaceId)?.disposing;
   if (leaving) await leaving;
   clearSlotPlaceholders(slot, surface.surfaceId);
-  // Without a host there are no sidecars and no native regions. A surface that needs them is not mounted and a placeholder is drawn.
-  // (docs/spec/plugins.md#runtime-module).
-  if (!native && (surface.sidecars.length > 0 || surface.composition?.kind === "hybrid" || viewSurface)) {
+  // Without a host there are no native regions, so a view is not mounted and a placeholder is drawn (docs/spec/plugins.md#runtime-module).
+  if (!native) {
     const placeholder = document.createElement("div");
     placeholder.className = "surface-placeholder";
     placeholder.dataset.surfaceId = surface.surfaceId;
@@ -427,7 +414,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     for (const other of mounted.values()) {
       if (other.slot === slot && other.surfaceId !== surface.surfaceId) {
         other.host.dataset.surfaceSuspended = "true";
-        parking.append(other.host);
+        other.host.remove();
       }
     }
     const host = document.createElement("div");
@@ -446,8 +433,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       resolve: resolveComposition,
       reject: rejectComposition,
     };
-    // A dom composition has no native region; plugin.json declares it, and its module does not create one.
-    if (!native || surface.composition?.kind === "dom") compositionReady.resolve();
+    if (!native) compositionReady.resolve();
     // released becomes true when a place left the surface out; the host then owns the end of its regions.
     const lifetime = { released: false, suspended: false, held: [] };
     const page = pageRuntime(surface, scoped, compositionReady, lifetime);
@@ -462,18 +448,6 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
       eventListeners.get(type).add(listener);
       return () => eventListeners.get(type)?.delete(listener);
     };
-    // The composition that the module created. When a surface is removed, it is released before the dispose of the module (disposeModule).
-    const compositions = [];
-    const composition = {
-      create: async (elements) => {
-        if (entry.disposed) throw new Error(`surface ${surface.surfaceId} closed before it created its composition`);
-        await page.composition.declare(surface.composition);
-        const controller = await createSurfaceCompositionController(page, surface.composition, elements, view,
-          () => viewport);
-        compositions.push(controller);
-        return controller;
-      },
-    };
     // The mount starts when the tab is in the plane. When the tab leaves the plane, it keeps the last scale until it is released
     // (docs/spec/text-size.md). Even if it leaves during the mount, the module reads the scale from the time the mount started.
     let factor = surfaceTextSize(surface.surfaceId);
@@ -482,7 +456,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const closing = new AbortController();
     const context = createSurfaceContext({
       root: shadow, closing: closing.signal, surfaceId: surface.surfaceId, pluginId: surface.pluginId,
-      declarations: surface.declarations, composition, diagnostics: () => diagnostics, contributions: surface.contributions,
+      declarations: surface.declarations, diagnostics: () => diagnostics, contributions: surface.contributions,
       tab: { title: (text) => {
         reportTitle(surface.surfaceId, text);
         if (surface.unload) tabStates().cacheLabel(surface.surfaceId, surface.pluginId, text);
@@ -532,33 +506,31 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     });
     const state = context.status.subscribe(onState);
     onState(context.status.read());
-    entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise, compositions,
+    entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
       mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
-    if (viewSurface) {
-      const answering = answerViewCalls(surface, scoped, page, context, closing.signal);
-      // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
-      const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
-      // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
-      const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
-      // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
-      const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
-      // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
-      // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
-      const ending = scoped.native.on("view-process-ended", () => documentRegions.released(surface.surfaceId));
-      closing.signal.addEventListener("abort", () => {
-        answering.then((off) => off());
-        stopping.then((off) => off());
-        responding.then((off) => off());
-        abandoning.then((off) => off());
-        ending.then((off) => off());
-        forgetView(surface.surfaceId);
-      }, { once: true });
-    }
+    const answering = answerViewCalls(surface, scoped, page, context, closing.signal);
+    // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
+    const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
+    // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
+    const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
+    // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
+    const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
+    // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
+    // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
+    const ending = scoped.native.on("view-process-ended", () => documentRegions.released(surface.surfaceId));
+    closing.signal.addEventListener("abort", () => {
+      answering.then((off) => off());
+      stopping.then((off) => off());
+      responding.then((off) => off());
+      abandoning.then((off) => off());
+      ending.then((off) => off());
+      forgetView(surface.surfaceId);
+    }, { once: true });
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
       .then(async () => {
-        // Does not start the registration and module of a surface that was removed while waiting for approval.
+        // Does not start the registration of a surface that was removed while waiting for approval.
         if (entry.disposed) return null;
         entry.authorized = true;
         // Starts the registrations of the core and the plugin after the same native approval.
@@ -566,34 +538,14 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
           declarations: registry.surfaceDeclarations() });
         await entry.exposure.ready;
         diagnostics = await pluginDiagnostics(surface.pluginId);
-        // The module of a declaring surface reads and writes its tab state, which the page opens after the first plane.
+        // The tab state of a declaring surface is read after it opens, which the page does after the first plane.
         if (surface.unload) await tabStatesReady();
         if (entry.disposed) return null;
-        // The workbench mounts no module for a view. It declares the view composition, which resolves the composition wait of the surface.
-        if (viewSurface) {
-          await page.composition.declare(surface.composition);
-          return null;
-        }
-        return import(surface.module);
-      }).then((module) => {
-        return module && mountSurfaceModule(module, shadow, context);
-      })
-      ;
-    entry.ready = entry.mounted.then(async (mountedModule) => {
-        if (!mountedModule) return null;
-        if (entry.disposed) {
-          await disposeModule(entry, mountedModule);
-          return null;
-        }
-        entry.module = mountedModule;
-        trace("surface.mount", { plugin: surface.pluginId, surface: surface.surfaceId, ms: performance.now() - started });
-        // A newly created native surface must declare and lay out its image before its first presentation can wait for the raster of that image.
-        // Waiting here creates a cycle: the presentation waits for the module, and the
-        // composition of the module is the work that builds the raster.
-        releaseSurfaceReady(context);
-        for (const listener of mountListeners) listener(surface.surfaceId, null);
-        return mountedModule;
-      }).catch((error) => {
+        // The view declares its composition, which resolves the composition wait of the surface.
+        await page.composition.declare(surface.composition);
+        return null;
+      });
+    entry.ready = entry.mounted.catch((error) => {
         if (entry.disposed) return null;
         context.status.report("error", error);
         for (const listener of mountListeners) listener(surface.surfaceId, error);
@@ -603,7 +555,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     for (const other of mounted.values()) {
       if (other.slot === slot && other.surfaceId !== surface.surfaceId) {
         other.host.dataset.surfaceSuspended = "true";
-        parking.append(other.host);
+        other.host.remove();
       }
     }
     entry.slot = slot;
@@ -625,35 +577,9 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
   await Promise.race([entry.composition, entry.ready.then(() => entry.composition)]);
 }
 
-/**
- * After the card of the mounted surface has settled, gives focus to its native input owner. If the tab is closed while waiting and the release of the surface
- * starts, the region of the released module does not receive focus, so it gives no focus and returns false.
- */
-export async function focusSurface(surfaceId) {
-  if (placeholders.has(surfaceId)) return false;
-  const entry = mounted.get(surfaceId);
-  if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
-  await entry.ready;
-  if (typeof entry.module?.focus !== "function") return false;
-  if (native) await hostSurfaces.waitPresented();
-  if (entry.disposed) return false;
-  await entry.module.focus();
-  return true;
-}
-
 export function suspendSurface(surfaceId) {
   const entry = mounted.get(surfaceId);
   if (entry) entry.host.dataset.surfaceSuspended = "true";
-}
-
-/**
- * Detaches the region of the surface and releases the module. The dispose of the module ends the sidecar session, and the provider releases the transfer image when it ends the session.
- * The region is detached first, so a frame that the provider sent before that is answered as stale, and the attached region does not show the released image
- * (docs/spec/plugins.md#surface-module-ownership). Repeating the release of a composition waits for the same cleanup, so the module may release it again.
- */
-async function disposeModule(entry, module) {
-  for (const composition of entry.compositions) await composition.dispose();
-  await module.dispose();
 }
 
 /**
@@ -673,11 +599,7 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
   entry.closing.abort();
   entry.disposing = (async () => {
     // It does not wait for approval here. A removed tab must not keep a layout commit alive only because
-    // the module was never permitted to mount.
-    // A module that has not finished mounting is not waited for: closing removes the surface at once, the compositions
-    // that the module created are released here, and a mount that ends later disposes its module (entry.ready).
-    if (entry.module) await disposeModule(entry, entry.module);
-    else for (const composition of entry.compositions) await composition.dispose();
+    // the view was never permitted to mount.
     if (entry.exposure) entry.exposure.dispose();
     await entry.context.exposure.dispose();
     entry.state();
@@ -714,8 +636,7 @@ export async function disposeSurfacesExcept(surfaceIds, { released = false } = {
  * Resolves the reply of the place.
  */
 export async function placeSurfaces(place, { retain, unload = [] }) {
-  // The place removes the compositions of the surfaces it leaves out before it replies, so their compositions stop sending
-  // placements first; the release that follows a successful place does not detach them.
+  // The place leaves the regions of the surfaces it leaves out to the host, which closes them before the reply.
   const left = new Set(unload);
   for (const id of mounted.keys()) if (!retain.has(id)) left.add(id);
   const leftOut = [...left].filter((id) => mounted.has(id)).map((id) => mounted.get(id));
@@ -724,16 +645,11 @@ export async function placeSurfaces(place, { retain, unload = [] }) {
   try {
     answer = await place();
   } catch (error) {
-    // A failed place keeps the surfaces mounted, so their compositions resume and place their current geometry. A resume that
-    // fails is part of the failure of the place, which the caller reports.
-    const resumed = [];
+    // A failed place keeps the surfaces mounted and resumes their held requests.
     for (const entry of leftOut) {
       entry.lifetime.suspended = false;
       for (const held of entry.lifetime.held.splice(0)) held.run().then(held.resolve, held.reject);
-      for (const composition of entry.compositions) resumed.push(composition.update(() => {}));
     }
-    const failures = (await Promise.allSettled(resumed)).filter((result) => result.status === "rejected").map((result) => result.reason);
-    if (failures.length) throw new AggregateError([error, ...failures], `${error.message}; ${failures.length} compositions did not resume`);
     throw error;
   }
   for (const entry of leftOut) {

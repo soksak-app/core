@@ -56,7 +56,7 @@ test("a background session opens only for a tab without a mounted surface and en
     mountSurface: (slot, surface) => { mounted.add(surface.surfaceId); return Promise.resolve(); },
     disposeSurface: (id) => { mounted.delete(id); return Promise.resolve(); },
     mountedSurface: (id) => (mounted.has(id) ? { surfaceId: id } : null),
-    focusSurface: () => true, placePluginPlaceholder: () => {},
+    placePluginPlaceholder: () => {},
   } });
   // One card with two tabs of the plugin that declares the background session; the first is shown.
   t.mock.module("../environment.js", { exports: {

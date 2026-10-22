@@ -43,7 +43,7 @@ import { runCommandCall } from "./command-route.js";
  *                   another plugin or an undeclared name is refused (view-commands.js)
  *                 exposure.registered({kind, name}): applies the status or dom registration of the view through the exposure registry
  *                   and relays it to the host (surface-modules.js)
- *               composition: the page operations of the surface that a hybrid composition uses (surface-modules.js)
+ *               composition: the page operations of the surface view (surface-modules.js)
  *                 declaration(): the declared {kind, regions, overlays} of the surface
  *                 place(regions, overlays): places one complete snapshot with the composition revision of the document
  *                 report(text): reports a failure of the composition through the report host call of the surface

@@ -46,14 +46,14 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, focusSurface, onSurfaceMounted, placeSurfaces, viewStartValues, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, onSurfaceMounted, placeSurfaces, viewStartValues, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from "./tab-reports.js";
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
-  currentGrid, onLayout, onRender, takeSurfaceFocus, setGap, settle, settleModifiedTabsToClose, tabsOf,
+  currentGrid, onLayout, onRender, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
 
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
@@ -280,10 +280,6 @@ onRender(() => {
       pageLayout.reportSuperseded();
     }
     return true;
-  }).then(async () => {
-    if (latest() !== record) return;
-    const surfaceId = takeSurfaceFocus();
-    if (surfaceId) await focusSurface(surfaceId);
   });
 });
 

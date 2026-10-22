@@ -6,7 +6,7 @@ import test from "node:test";
 const SIDECAR = "@fixture/sidecar-probe";
 const manifest = {
   id: "probe", name: "Probe", description: "검사용 플러그인 호스트.",
-  mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+  mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
   host: { page: "ui/host.html" },
   dependencies: { [SIDECAR]: "^0.1.0" },
   hostOperations: { [SIDECAR]: ["list"] },

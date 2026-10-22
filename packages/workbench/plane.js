@@ -25,7 +25,7 @@ import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
-import { focusSurface, mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
+import { mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
@@ -194,17 +194,9 @@ function createCard(card) {
     // The pressed card is the scope of the text size (docs/spec/text-size.md).
     if (id) setTextScope({ kind: "card", card: id });
     if (!id || isPlace(id) || e.target.closest(".tab__x, .chrome__act, .chrome__ham, .card-sidebar__grip, .set button")) return;
-    const active = activeTab(grid.card(id));
     if (focusedId !== id) {
-      // A render caused by card focus takes the pending surface focus after it finishes drawing. If the focus is written after the
-      // command ends, the render finishes first and the focus moves to the next render, so it is written before the command runs (V5-46).
-      if (active) requestSurfaceFocus(active.id);
-      return Promise.resolve(run("core.card.focus", { card: id })).catch((error) => {
-        if (active) cancelSurfaceFocus(active.id);
-        throw error;
-      });
+      return Promise.resolve(run("core.card.focus", { card: id }));
     }
-    return active ? focusSurface(active.id) : false;
   });
   return el;
 }
@@ -1070,25 +1062,6 @@ function settle() {
 
 /* The scrollend wait in progress. The next request cancels the previous wait. */
 const landing = new WeakMap();
-
-// Card focus can replace the native surface at the same position. The native input owner must receive focus after that
-// display, not before it.
-let pendingSurfaceFocus = null;
-
-export function requestSurfaceFocus(surfaceId) {
-  pendingSurfaceFocus = surfaceId;
-}
-
-/** When a command fails and no render follows, the pending surface focus is cleared. */
-export function cancelSurfaceFocus(surfaceId) {
-  if (pendingSurfaceFocus === surfaceId) pendingSurfaceFocus = null;
-}
-
-export function takeSurfaceFocus() {
-  const surfaceId = pendingSurfaceFocus;
-  pendingSurfaceFocus = null;
-  return surfaceId;
-}
 
 // A persistent surface actor is owned by the window sidecar and not by a native image surface.
 // So a hidden tab keeps its session without creating a WebView or an image region.

@@ -13,7 +13,7 @@ const environmentFile = {
 };
 const manifest = {
   id: "probe", name: "Probe", description: "검사용 표면.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
-  surface: { module: "ui/surface.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+  surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
 };
 
 const { installEnvironment } = await import("../environment.js");

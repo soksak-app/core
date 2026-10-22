@@ -490,7 +490,6 @@ export const surfaces = native ? {
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
         dim: s.dim,
-        module: s.surface.module,
         plugin: s.surface.pluginId,
         composition: s.surface.composition,
         visible: s.visible,
@@ -509,7 +508,7 @@ export const surfaces = native ? {
         // The image raster must commit after the DOM frame of the page. Other
         // surfaces can commit consecutive frames immediately.
         waitForPresentation: record.surfaces.some(({ surface, visible }) =>
-          visible === true && surface?.composition?.kind === "hybrid" &&
+          visible === true && surface?.composition?.kind === "view" &&
           surface.composition.regions?.some(({ kind }) => kind === "image") === true),
         overlays: windowOverlays(),
         surfaces,

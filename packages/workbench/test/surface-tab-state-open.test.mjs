@@ -18,27 +18,3 @@ globalThis.dispatchEvent = (event) => { reported.push(event.message); return tru
 registerPlugin({ id: "fixture-early", surface: () => null });
 const { setSurfaceTextSize } = await import("../text-size.js");
 setSurfaceTextSize(() => 1);
-
-test("a declaring surface mounted before the tab state store opens keeps its state and label", async () => {
-  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
-  globalThis.document = dom.window.document;
-  const { mountSurface, disposeSurface } = await import("../surface-modules.js");
-  const moduleUrl = `data:text/javascript,${encodeURIComponent(`export function mount(root, context) {
-    context.tab.title("Early");
-    context.tab.state.write({ page: 4 });
-    return { dispose() {} };
-  }`)}`;
-  recordOrigin("tab-early", null);
-  const mounting = mountSurface(document.querySelector("#slot"), { module: moduleUrl, surfaceId: "tab-early",
-    pluginId: "fixture-early", unload: UNLOAD, composition: { kind: "dom" }, declarations: {}, sidecars: [] });
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  store = await openTabStates({ store: { tabState: async () => null, tabStatePut: async () => 0 },
-    failed: (error) => { throw error; }, unloadOf: () => UNLOAD });
-  opened();
-  await mounting;
-  assert.deepEqual(reported, []);
-  assert.deepEqual(store.entry("tab-early").state, { format: 1, value: { page: 4 } });
-  assert.equal(store.label("tab-early"), "Early");
-  await disposeSurface("tab-early");
-  dom.window.close();
-});

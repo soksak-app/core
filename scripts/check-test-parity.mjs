@@ -522,7 +522,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/surface-modules.js", symbol: "authorizeSurface" },
     ],
     tests: [
-      { file: "packages/workbench/test/surface-presentation.test.mjs", id: "native preparation cannot present before DOM drawing and presents each ticket once" },
       { file: "e2e/terminal.test.mjs", id: "newly split terminal presents its first native raster" },
       { file: "e2e/terminal.test.mjs", id: "four split terminals complete native presentation without a host crash" },
       { file: "e2e/terminal.test.mjs", id: "endpoint split requests survive repeated native WebView presentation" },
@@ -641,11 +640,10 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/surface-composition.js", symbol: "boundaryToken" },
     ],
     tests: [
-      { file: "packages/workbench/test/surface-modules.test.mjs", id: "surface mount readiness separates module mount from native presentation" },
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
-    expected: "Command settling waits for module mount and composition declaration without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
+    expected: "Command settling waits for the composition declaration of a view without waiting on native presentation, so surface startup cannot form a presentation cycle; project-window and normal-shutdown evidence must pass independently.",
     levels: ["unit", "application"],
   },
   {
@@ -2117,13 +2115,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F114",
-    implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" }],
-    tests: [{ file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" }],
-    expected: "A plugin surface whose start does not answer is ended by the close of its tab, so the next check starts from a clean state.",
-    levels: ["unit"],
-  },
-  {
     id: "F123",
     implementation: [{ file: "packages/host/wailsv3/src/surfaces.go", symbol: "func FrameAnswerEvent" }],
     tests: [
@@ -2498,7 +2489,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
     tests: [
       { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry its params, origin, project and declarations" },
-      { file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" },
       { file: "packages/workbench/test/declared-ui-draw-time.test.mjs", id: "a list of 1000 items validates and draws every item" },
       { file: "scripts/test/check-release-paths.test.mjs", id: "release CLI inspects every executable in the bundle" },
       { file: "scripts/test/native-tests.test.mjs", id: "the native tests run one at a time, each with its start and end, and a failure fails the run" },
@@ -3695,17 +3685,6 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
-    id: "F60",
-    implementation: [
-      { file: "packages/workbench/surface-modules.js", symbol: "async function disposeModule" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/surface-dispose-order.test.mjs", id: "removing a surface detaches its regions before the module ends its sidecar session" },
-    ],
-    expected: "Removing a surface detaches its image regions before its module ends the sidecar session, so no frame reaches a region whose image was released.",
-    levels: ["unit", "application"],
-  },
-  {
     id: "F61",
     implementation: [
       { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn close_answer" },
@@ -3994,17 +3973,6 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
-    id: "F91",
-    implementation: [
-      { file: "packages/workbench/surface-modules.js", symbol: "if (entry.disposed) return false;" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/surface-focus-dispose.test.mjs", id: "a surface removed while its focus waits for presentation takes no focus" },
-    ],
-    expected: "A surface removed while its focus waits takes no focus, and the disposed module is not asked for focus.",
-    levels: ["unit"],
-  },
-  {
     id: "F90",
     implementation: [
       { file: "packages/soksak/src/dom.ts", symbol: "const step = snapshot.step;" },
@@ -4140,17 +4108,6 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/session-steps.test.mjs", id: "a check that its test limit ends names the steps it started" },
     ],
     expected: "A window check writes each request and status wait it starts with its elapsed time, so a check that its test limit ends names the step that ran.",
-    levels: ["unit"],
-  },
-  {
-    id: "F116",
-    implementation: [
-      { file: "packages/workbench/surface-modules.js", symbol: "closed before it created its composition" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/surface-dispose-pending.test.mjs", id: "a surface whose module has not finished mounting is disposed without waiting for the mount" },
-    ],
-    expected: "Closing a tab removes its surface at once also while its module is mounting, and a mount that ends later disposes its module.",
     levels: ["unit"],
   },
   {
@@ -5270,7 +5227,9 @@ const MOVED_COMPLETIONS = new Set(["F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.
-const REMOVED_COMPLETIONS = new Set(["F68"]);
+// F60, F91, F114 and F116 wrote the module mount and dispose of a surface, which F212.11-2b removes with the module mount; their
+// tests and symbols are removed with it.
+const REMOVED_COMPLETIONS = new Set(["F68", "F60", "F91", "F114", "F116"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

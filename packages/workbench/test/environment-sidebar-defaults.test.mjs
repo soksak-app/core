@@ -7,7 +7,7 @@ const files = {
       { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] },
     ] } } },
   card: { id: "fixture", name: "Fixture", description: "Fixture card.",
-    mark: "f", icon: "<path/>", surface: { module: "ui/card.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+    mark: "f", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["sections.tree"], layout: "list" }],
       card: { left: "main", top: "main" }, window: { right: "main" } } },
   sections: { id: "sections", name: "Sections", description: "Fixture sections.",

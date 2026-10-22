@@ -39,7 +39,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
     mountSurface: (slot, surface) => { mounts.push(surface.surfaceId); return Promise.resolve(); },
-    disposeSurface: () => Promise.resolve(), focusSurface: () => true, placePluginPlaceholder: () => {},
+    disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
   } });
   // The layout of a new space: one card that cannot be closed.
   t.mock.module("../environment.js", { exports: {

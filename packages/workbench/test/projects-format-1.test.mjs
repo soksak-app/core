@@ -13,7 +13,7 @@ const viewManifest = {
 };
 const plainManifest = {
   id: "probe-plain", name: "Plain", description: "검사용.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
-  surface: { module: "ui/surface.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+  surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
 };
 const environmentFile = {
   runtime: "runtime",

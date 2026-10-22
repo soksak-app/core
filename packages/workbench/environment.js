@@ -28,11 +28,9 @@ export function defaultRegistry() {
   return registry;
 }
 
-/** Converts a surface declaration into a function that returns the surface module target for a tab id. */
+/** Converts a surface declaration into a function that returns the surface target for a tab id. */
 function surfaceOf(name, pluginId, surface) {
-  // A view surface has no module (docs/spec/plugins.md#view-surfaces).
-  const module = surface.composition?.kind === "view" ? null : `/${modulePath(name, surface.module)}`;
-  return (tabId) => ({ module, composition: surface.composition, surfaceId: tabId,
+  return (tabId) => ({ composition: surface.composition, surfaceId: tabId,
     pluginId, declarations: surface.declarations, sidecars: surface.sidecars,
     // default: a surface without surface.unload (undeclared, or beside background) is never unloaded.
     unload: surface.unload ?? false,

@@ -85,7 +85,7 @@ function fakes() {
         registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
       },
     },
-    // The page operations of the surface that a hybrid composition uses; each records its arguments.
+    // The page operations of the surface view; each records its arguments.
     composition: (() => {
       const record = (name) => async (...args) => { ran.composition.push([name, ...args]); return { [name]: true }; };
       return {

@@ -39,7 +39,7 @@ test("closing the picker writes picker.close with the reason of the close", { ti
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
     mountSurface: () => Promise.resolve(),
-    disposeSurface: () => Promise.resolve(), focusSurface: () => true, placePluginPlaceholder: () => {},
+    disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
   } });
   t.mock.module("../environment.js", { exports: {
     environment: () => ({ workspace: { focus: "main", grid: {

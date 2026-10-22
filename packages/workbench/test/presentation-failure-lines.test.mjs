@@ -36,7 +36,7 @@ test("one presentation timeout writes one page error line", async () => {
   const record = {
     surfaces: [{
       id: "tab-1", dim: false, visible: true,
-      surface: { module: "surface-module", composition: { kind: "hybrid", regions: [{ name: "view", kind: "image" }], overlays: [] } },
+      surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "view", kind: "image" }], overlays: [] } },
       applied: { x: 0, y: 0, w: 10, h: 10 },
     }],
     settled: true, drawn: false, titlebar: 40,
