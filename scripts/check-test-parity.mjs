@@ -187,6 +187,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F258",
+    implementation: [{ file: "packages/sok/wailsv3/src/install.go", symbol: "func checkPluginSchemas" }],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/release_test.go", id: "TestPluginPackRefusesASchemaOutsideTheSubset" },
+      { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset" },
+      { file: "packages/sok/tauriv2/tests/release_test.rs", id: "plugin_pack_refuses_a_schema_outside_the_subset" },
+      { file: "packages/sok/tauriv2/tests/plugins_test.rs", id: "plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset" },
+    ],
+    expected: "The pack and the install of sok refuse a plugin.json whose exposes declaration or surface params schema the reader refuses, with the reader's error text, in both the Go and the Rust implementation.",
+    levels: ["unit"],
+  },
+  {
     id: "F252-2",
     implementation: [{ file: "packages/host/wailsv3/src/endpoint.go", symbol: "func (e *Endpoint) accept" }],
     tests: [
