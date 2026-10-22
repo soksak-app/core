@@ -188,6 +188,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F260",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func parseLockOwner" },
+      { file: "packages/sok/tauriv2/src/ownership.rs", symbol: "fn parse_lock_owner" },
+    ],
+    tests: [
+      { file: "packages/sok/wailsv3/tests/process_lock_cases_test.go", id: "TestAWritingCommandReadsTheProcessLockFormOfTheCaseTable" },
+      { file: "packages/sok/tauriv2/tests/process_lock_cases_test.rs", id: "a_writing_command_reads_the_process_lock_form_of_the_case_table" },
+    ],
+    expected: "A writing command of sok reads process.lock in the form of the host: a live owner is refused with its pid, an ended owner is taken over, and a lock in another form is refused with its content named and kept, in both implementations.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.6a-1-3-2-3",
     implementation: [
       { file: "packages/host/tauriv2/src/stall_watch.rs", symbol: "pub fn start_stall_watch" },

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F260: `sok`의 쓰기 명령은 host의 형식으로 `process.lock`을 읽고 쓴다(`{"pid", "boot"}`). 그래서 실행 중인 application의 잠금은 `invalid process lock` 대신 pid와 함께 거부되며, 다른 형식의 잠금은 내용을 밝혀 거부하고 남겨 둔다. 형식은 `docs/spec/endpoint.md`에 있고, 사례표 `docs/spec/cases/process-lock.json`은 Go와 Rust 시험이 재생한다.
+
 - F212.12-1-9: theme 변경이 두 host에서 plugin host와 view document에 main thread에서 post된다. Wails theme binding과 Tauri async command가 자신의 thread에서 native document post를 호출했고, 그 main thread assertion이 application을 SIGABRT로 중단시켰다. Red: Go 테스트 `TestPluginHostPostsRunOnTheUIThread`와 `TestViewPostsRunOnTheUIThread`가 UI thread 작업 밖의 native post로 실패했고, Rust 테스트 `a_native_document_post_is_a_main_thread_task`가 SIGABRT로 중단되었다. Green: 같은 테스트가 통과하고, Wails host package와 Tauri host 단위 테스트가 통과한다.
 - F257-1: 한도에서 test runner는 leftover 목록을 만들기 전에 시험 process group에 SIGSTOP을 보내 멈추고, 시한 경과 시간을 그 멈춘 시점에서 잡은 뒤 group을 끝낸다. 그래서 load 아래의 느린 process table 읽기 때문에 시험이 한도를 넘어 실행되지 않는다. exit 경로도 같은 순서를 쓴다. Red: runner 시험 `a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop`은 PATH의 가짜 `ps`가 5초 잠들어 한도 2000 ms에 경과 7296 ms로 실패한다. Green: 시험이 통과하고 runner 시험 파일 3개가 37개 중 37개를 통과한다.
 - F212.6a-1-3-2-3: 두 host의 `host.stall`이 `watch_late_ms`를 가진다. 이는 250 ms 박자를 넘어 깨어난 정지 감시 자신의 지연이며, 일정에 들어가지 않은 process의 정지(감시 지연이 정지의 절반 이상)와 막힌 main thread의 정지(감시 지연 0)를 가른다. 감시는 host가 비워 두는 선언된 seam `clock`과 `wait`을 받는다.
