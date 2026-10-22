@@ -187,6 +187,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
+    ],
+    expected: "The exposure case disposes a registration and answers no request after dispose, and the view composition cases replay a document region load and post alone and the teardown of a composition, each against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F248",
     implementation: [
       { file: "packages/plugin-api/binder.js", symbol: "export function createBinder" },
