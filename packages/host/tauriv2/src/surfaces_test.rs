@@ -103,7 +103,8 @@ fn a_hybrid_composition_is_refused_with_the_plugin_and_the_field() {
     ] {
         let composition: SurfaceComposition =
             serde_json::from_value(value.clone()).expect("the fixture is valid");
-        let error = validate_composition("probe", &composition).expect_err("the hybrid kind is removed");
+        let error =
+            validate_composition("probe", &composition).expect_err("the hybrid kind is removed");
         assert_eq!(
             error,
             "plugin probe surface composition: kind hybrid is removed; the composition takes kind view",

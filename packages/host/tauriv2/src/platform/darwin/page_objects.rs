@@ -23,12 +23,7 @@ unsafe extern "C" {
 
 type Done = crate::object_counts::PageCountDone;
 
-extern "C" fn counted(
-    context: *mut c_void,
-    elements: i64,
-    documents: i64,
-    error: *const c_char,
-) {
+extern "C" fn counted(context: *mut c_void, elements: i64, documents: i64, error: *const c_char) {
     // context is the value that Box::into_raw made from done, and the library calls done once.
     let done = unsafe { Box::from_raw(context.cast::<Done>()) };
     let result = if error.is_null() {
