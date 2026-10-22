@@ -140,3 +140,28 @@ test("project data stored in an earlier form or format is converted once before 
     "plugin data: converted project p9 plugin conv data names from format 1 to format 2",
   ]);
 });
+
+test("a plugin host reads and writes the project data of the shown project, and is refused without one", async () => {
+  const { declareProjectData, pluginHostData } = await import("../plugin-states.js");
+  declareProjectData("hostonly", {
+    note: { schema: { type: "string" }, default: "" },
+    names: { schema: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } }, default: [], format: 2 },
+  });
+  await assert.rejects(pluginHostData.get("hostonly", "note"), /plugin host hostonly: no project is shown/);
+  await assert.rejects(pluginHostData.set("hostonly", "note", "x"), /plugin host hostonly: no project is shown/);
+  stored.set("p10/hostonly", { names: { format: 1, value: ["a"] } });
+  await showStates({ id: "p10", root: "/work/p10" });
+  assert.equal(await pluginHostData.get("hostonly", "note"), "");
+  await pluginHostData.set("hostonly", "note", "kept");
+  assert.deepEqual(stored.get("p10/hostonly").note, { format: 1, value: "kept" });
+  assert.equal(await pluginHostData.get("hostonly", "note"), "kept");
+  // A key that the manifest does not declare, and a value that does not match its schema, are refused without a write.
+  await assert.rejects(pluginHostData.get("hostonly", "other"), /hostonly data other is not declared/);
+  await assert.rejects(pluginHostData.set("hostonly", "other", "x"), /hostonly data other is not declared/);
+  await assert.rejects(pluginHostData.set("hostonly", "note", 5), /hostonly data note does not match its schema/);
+  assert.deepEqual(stored.get("p10/hostonly").note, { format: 1, value: "kept" });
+  // A stored value of a format that the host cannot convert is refused by the read, as the state module context refuses it.
+  await assert.rejects(pluginHostData.get("hostonly", "names"), /project p10 plugin hostonly data names: stored format 1 needs convertData to reach format 2/);
+  await showStates(null);
+  await assert.rejects(pluginHostData.get("hostonly", "note"), /plugin host hostonly: no project is shown/);
+});

@@ -655,7 +655,7 @@ export function installExposure(document) {
  *
  * When a registration does not match the declaration, values.report(line) leaves an error line. The host has already received the call of the surface, so there is no path that returns the failure to that surface.
  */
-export async function connectExposure({ report, ...values }) {
+export async function connectExposure({ report, projectData, ...values }) {
   if (typeof report !== "function") throw new TypeError("connectExposure requires report(line)");
   registry.configure({
     ...values,
@@ -690,5 +690,7 @@ export async function connectExposure({ report, ...values }) {
     report: (error) => report(`plugin host: ${String(error?.message ?? error)}`),
     // The sidecars that environment.js declared for each plugin (docs/plans/plugin-host-routes.md rule 8).
     sidecarsOf: pluginSidecarsOf,
+    // The project data of the shown project, which answers the data calls of a plugin host.
+    projectData,
   });
 }

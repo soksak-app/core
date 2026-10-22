@@ -5,7 +5,7 @@
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
 import { declarePluginSidecars } from "./plugin-host.js";
-import { registerState } from "./plugin-states.js";
+import { declareProjectData, registerState } from "./plugin-states.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
@@ -115,6 +115,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
       registerSection({ ...section, module });
     }
     if (exposes) exposure.declare(manifest.id, exposes);
+    // default: data is an optional field of plugin.json; without it the plugin declares no project data.
+    declareProjectData(manifest.id, manifest.data ?? {});
     if (manifest.state) {
       registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
         // default: data is an optional field of plugin.json; without it the value is empty.

@@ -55,7 +55,8 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
 
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */
 export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register"
-  || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure";
+  || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure"
+  || command === "runtime.data.get" || command === "runtime.data.set";
 
 /*
  * The sidecars that each installed plugin declares as dependencies: plugin id -> [{name, declared, declaration}]. declared is the
@@ -181,7 +182,7 @@ export function createHostCommands({ plugin, timeoutOf, report }) {
  * Returns {receive(event), close()}. receive takes one plugin-host-call event; close() ends the subscription and every open
  * call of every host with surface-closed.
  */
-export function listenPluginHostCalls({ register, unregister, timeoutOf, report, sidecarsOf = () => [] }) {
+export function listenPluginHostCalls({ register, unregister, timeoutOf, report, sidecarsOf = () => [], projectData = null }) {
   if ([register, unregister, timeoutOf, report, sidecarsOf].some((value) => typeof value !== "function")) {
     throw new TypeError("listenPluginHostCalls requires the register, unregister, timeoutOf, report and sidecarsOf functions");
   }
@@ -211,6 +212,16 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
     await bridge.call("pluginHostSidecarSend", { plugin, sidecar: params.sidecar, id: params.id, body, cids: params.cids });
     return { result: null };
   };
+  // The project data calls of a plugin host are answered by the project data of the shown project (docs/spec/plugin-host.md#project-data-calls).
+  const answerData = async (event, params) => {
+    const { plugin } = event;
+    if (projectData === null) throw new Error(`plugin host ${plugin}: project data is not connected`);
+    if (typeof params.key !== "string" || params.key === "") throw new TypeError(`plugin host call ${event.command} requires a key`);
+    if (event.command === "runtime.data.get") return { result: await projectData.get(plugin, params.key) };
+    if (!Object.hasOwn(params, "value")) throw new TypeError(`plugin host call ${event.command} requires a value`);
+    await projectData.set(plugin, params.key, params.value);
+    return { result: null };
+  };
   const answer = async (event) => {
     const { plugin, id } = event;
     try {
@@ -230,6 +241,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
         keepHostCommands(plugin, commands);
       }
       if (event.command.startsWith("runtime.sidecar.")) return await answerSidecar(event, params);
+      if (event.command.startsWith("runtime.data.")) return await answerData(event, params);
       if (event.command === "runtime.command.register") {
         if (typeof params.name !== "string" || params.name === "") throw new TypeError(`plugin host call ${event.command} requires a non-empty name`);
       } else if (params.kind !== "status" && params.kind !== "dom") {

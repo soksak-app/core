@@ -64,6 +64,20 @@ const probeSidecars = [{
   declared: ["list"],
   declaration: { executable: "build/worker", protocol: 1, message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] },
 }];
+// The project data of the shown project: each call is recorded, and projectRefusal makes every call refuse with its text.
+const projectCalls = [];
+let projectRefusal = null;
+const projectData = {
+  get: async (plugin, key) => {
+    projectCalls.push(["get", plugin, key]);
+    if (projectRefusal !== null) throw new Error(projectRefusal);
+    return "kept";
+  },
+  set: async (plugin, key, value) => {
+    projectCalls.push(["set", plugin, key, value]);
+    if (projectRefusal !== null) throw new Error(projectRefusal);
+  },
+};
 function listen() {
   return listenPluginHostCalls({
     register: (plugin, kind, name) => registered.push({ plugin, kind, name }),
@@ -71,6 +85,7 @@ function listen() {
     timeoutOf: () => undefined,
     report: (error) => reports.push(String(error?.message ?? error)),
     sidecarsOf: (plugin) => (plugin === "probe" ? probeSidecars : []),
+    projectData,
   });
 }
 
@@ -109,6 +124,37 @@ test("an unserved call is refused and registers nothing", async () => {
     assert.equal(calls.at(-1).name, "pluginHostReply");
     assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: `plugin host call ${command} is not served` });
   }
+  pluginHost.close();
+});
+
+test("runtime.data.get and runtime.data.set are answered by the project data of the shown project", async () => {
+  const pluginHost = listen();
+  emit("plugin-host-call", { plugin: "probe", id: 6, command: "runtime.data.get", params: { key: "note" } });
+  await tick();
+  assert.deepEqual(projectCalls.at(-1), ["get", "probe", "note"]);
+  assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 6, result: "kept" } });
+  emit("plugin-host-call", { plugin: "probe", id: 7, command: "runtime.data.set", params: { key: "note", value: "new" } });
+  await tick();
+  assert.deepEqual(projectCalls.at(-1), ["set", "probe", "note", "new"]);
+  assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 7, result: null } });
+  // A refusal of the project data reaches the page as the error of its call, with the text of the refusal.
+  projectRefusal = "plugin probe data other is not declared";
+  emit("plugin-host-call", { plugin: "probe", id: 8, command: "runtime.data.get", params: { key: "other" } });
+  await tick();
+  assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin probe data other is not declared" });
+  projectRefusal = "plugin host probe: no project is shown";
+  emit("plugin-host-call", { plugin: "probe", id: 9, command: "runtime.data.set", params: { key: "note", value: "x" } });
+  await tick();
+  assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin host probe: no project is shown" });
+  projectRefusal = null;
+  // A call without a key, or a set without a value, is refused before the project data is reached.
+  const reached = projectCalls.length;
+  emit("plugin-host-call", { plugin: "probe", id: 10, command: "runtime.data.get", params: {} });
+  emit("plugin-host-call", { plugin: "probe", id: 11, command: "runtime.data.set", params: { key: "note" } });
+  await tick();
+  assert.equal(projectCalls.length, reached, "a refused call reached the project data");
+  assert.deepEqual(calls.at(-2).arg.error, { code: -32000, message: "plugin host call runtime.data.get requires a key" });
+  assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin host call runtime.data.set requires a value" });
   pluginHost.close();
 });
 

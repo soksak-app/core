@@ -9,6 +9,7 @@ import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
 import { log, reloadPage, report } from "./host.js";
+import { pluginHostData } from "./plugin-states.js";
 import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
@@ -606,7 +607,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onSaved(coreChanged);
 
   await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report,
-    unloaded: (surface) => memory.unloaded(surface) });
+    unloaded: (surface) => memory.unloaded(surface), projectData: pluginHostData });
 }
 
 // Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.
