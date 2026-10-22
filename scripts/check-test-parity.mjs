@@ -187,6 +187,27 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F246",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
+      { file: "packages/plugin-api/index.js", symbol: "export function createExpose" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
+      { file: "packages/plugin-api/binder.js", symbol: "export const INTERACTIVE" },
+      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotSender" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/command-registration-contract.test.mjs", id: "command registration contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-commands-contract.test.mjs", id: "view command contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/view-native-contract.test.mjs", id: "view native contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/declared-ui-snapshot-contract.test.mjs", id: "declared UI snapshot contract publishes the required cases in order" },
+      { file: "packages/plugin-api/test/interactive-contract.test.mjs", id: "INTERACTIVE is the published selector of operable elements" },
+    ],
+    expected: "Each published case file lists its ordered steps, and the owning test runs each case against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "V5-118",
     implementation: [{ file: "packages/workbench/plane.js", symbol: "export function toggleCardFullscreen" }],
     tests: [
