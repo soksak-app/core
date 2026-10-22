@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { openTabStates } from "../tab-state.js";
 
 // The page draws the first plane before projects.initialise opens the tab state store; the test holds the open until the
@@ -27,6 +28,7 @@ test("a declaring surface mounted before the tab state store opens keeps its sta
     context.tab.state.write({ page: 4 });
     return { dispose() {} };
   }`)}`;
+  recordOrigin("tab-early", null);
   const mounting = mountSurface(document.querySelector("#slot"), { module: moduleUrl, surfaceId: "tab-early",
     pluginId: "fixture-early", unload: UNLOAD, composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   await new Promise((resolve) => setTimeout(resolve, 50));

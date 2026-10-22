@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -17,6 +18,7 @@ test("native closure before authorization cannot erase the mounted module's core
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?authorization-closure");
   const pluginId = "fixture-authorization";
   const surfaceId = "fixture-authorization-surface";
+  recordOrigin(surfaceId, null);
   registry.declare("core", {
     status: [
       { name: "core.surface.document", description: "Surface document.", schema: { type: "object" } },

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -32,6 +33,7 @@ test("mounting a view surface imports no module and declares its view compositio
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view");
   const pluginId = "fixture-view";
   const surfaceId = "fixture-view-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -74,6 +76,7 @@ test("a view that stopped its restarts shows its reason as the error state of it
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-stop");
   const pluginId = "fixture-stopped-view";
   const surfaceId = "fixture-stopped-view-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -125,6 +128,7 @@ test("a view responsiveness notice is the state of its surface until the surface
   const { views } = await import("../plugin-processes.js");
   const pluginId = "fixture-responsive-view";
   const surfaceId = "fixture-responsive-view-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -150,7 +154,7 @@ test("a view responsiveness notice is the state of its surface until the surface
 // window shows, or null.
 test("the start values of a view carry its params, origin, project and declarations", async () => {
   const { viewStartValues } = await import("../surface-modules.js?view-start");
-  const { recordOrigin, reportDirectory } = await import("../tab-reports.js");
+  const { reportDirectory } = await import("../tab-reports.js");
   reportDirectory("tab-with-directory", "/work/one");
   recordOrigin("tab-of-directory", "tab-with-directory");
   const surface = { surfaceId: "tab-of-directory", params: { path: "a.md" }, declarations: { commands: [] } };
@@ -160,6 +164,7 @@ test("the start values of a view carry its params, origin, project and declarati
     project: { root: "/work/one" },
     declarations: { commands: [] },
   });
+  recordOrigin("tab-without-directory", null);
   assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {} }, null), {
     params: null,
     origin: { directory: null },
@@ -201,6 +206,7 @@ test("a view registers its exposure through the page and its port consumes forwa
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-exp");
   const pluginId = "fixture-exp";
   const surfaceId = "fixture-exp-surface";
+  recordOrigin(surfaceId, null);
   registry.configure({ surfacePlugin: () => pluginId });
   registry.declare(pluginId, {
     status: [{ name: `${pluginId}.lines`, description: "Lines.", schema: { type: "array" } }],
@@ -271,6 +277,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-sidecar");
   const pluginId = "fixture-view-sidecar";
   const surfaceId = "fixture-view-sidecar-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: ["fixture-sidecar"], composition };
@@ -328,6 +335,7 @@ test("the region calls of a view run the page operations of its surface", { time
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-region");
   const pluginId = "fixture-region";
   const surfaceId = "fixture-region-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -395,6 +403,7 @@ test("a view process end forgets the regions that its surface attached", { timeo
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-process-end");
   const pluginId = "fixture-region-end";
   const surfaceId = "fixture-region-process-end";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };

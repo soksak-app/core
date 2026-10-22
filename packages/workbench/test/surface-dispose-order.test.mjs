@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -37,6 +38,7 @@ test("removing a surface detaches its regions before the module ends its sidecar
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?dispose-order");
   const pluginId = "fixture-dispose-order";
   const surfaceId = "fixture-dispose-order-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   // Like a providing plugin, the module first ends the sidecar session in dispose and then releases the composition.
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {

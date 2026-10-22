@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -35,6 +36,7 @@ test("a surface that a place leaves out sends no composition place while the pla
   const { mountSurface, authorizeSurface, placeSurfaces } = await import("../surface-modules.js?place-left-out");
   const pluginId = "fixture-place-left-out";
   const surfaceId = "fixture-place-left-out-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
     root.innerHTML = "<div id=view></div>";
@@ -100,6 +102,7 @@ test("a surface that a place leaves out sends nothing to its sidecar after the p
   const { mountSurface, authorizeSurface, placeSurfaces, mountedSurface } = await import("../surface-modules.js?place-left-out-sidecar");
   const pluginId = "fixture-place-left-out-sidecar";
   const surfaceId = "fixture-place-left-out-sidecar-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
     const port = context.runtime.sidecar();
@@ -170,6 +173,7 @@ test("a failed place reports a composition that does not resume and resumes the 
       overlays: [] } });
   try {
     for (const id of ["a", "b"]) {
+      recordOrigin(`fixture-resume-${id}`, null);
       authorizeSurface(`fixture-resume-${id}`);
       await mountSurface(document.querySelector(`#${id}`), surfaceOf(id));
     }

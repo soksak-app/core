@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -33,6 +34,7 @@ test("a surface mounted again in the same document continues its composition rev
   const { mountSurface, authorizeSurface, disposeSurface, disposeSurfacesExcept } = await import("../surface-modules.js?composition-revision");
   const pluginId = "fixture-composition-revision";
   const surfaceId = "fixture-composition-revision-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {
     const composition = await context.composition.create({});

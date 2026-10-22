@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 
 // The diagnostics module is started by environment at registration and handed out as pluginDiagnostics. The consumer test replaces that boundary.
 const diagnostics = { attach() {} };
@@ -21,6 +22,7 @@ test("a surface context carries its plugin's diagnostic module", async () => {
   const { mountSurface } = await import("../surface-modules.js");
   registerPlugin({ id: "fixture-diagnostics", surface: () => null });
   const moduleUrl = "data:text/javascript,export function mount(root,c){globalThis.mountedDiagnostics=c.diagnostics;return {dispose(){}}}";
+  recordOrigin("tab-diagnostics", null);
   await mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId: "tab-diagnostics", pluginId: "fixture-diagnostics", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   assert.equal(globalThis.mountedDiagnostics, diagnostics);
@@ -32,6 +34,7 @@ test("surface mount keeps one module host when a tab moves slots", async () => {
   globalThis.document = dom.window.document;
   const { mountSurface } = await import("../surface-modules.js");
   const moduleUrl = "data:text/javascript,export function mount(root,c){c.status.report('ready');return {dispose(){}}}";
+  recordOrigin("tab-1", null);
   const surface = { module: moduleUrl, surfaceId: "tab-1", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
   const first = document.querySelector("#a");
   const second = document.querySelector("#b");
@@ -49,7 +52,9 @@ test("selecting a parked tab reattaches its existing module host", async () => {
   globalThis.document = dom.window.document;
   const { mountSurface } = await import("../surface-modules.js");
   const moduleUrl = "data:text/javascript,export function mount(){return {dispose(){}}}";
+  recordOrigin("tab-park-first", null);
   const first = { module: moduleUrl, surfaceId: "tab-park-first", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
+  recordOrigin("tab-park-second", null);
   const second = { module: moduleUrl, surfaceId: "tab-park-second", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
   const slot = document.querySelector("#slot");
 
@@ -74,6 +79,7 @@ test("a mounted module registers and releases its declared exposure through the 
   const { mountSurface, disposeSurface } = await import("../surface-modules.js");
   const pluginId = "fixture-integration";
   const surfaceId = "fixture-module-surface";
+  recordOrigin(surfaceId, null);
   const declarations = {
     status: [],
     commands: [{
@@ -120,6 +126,7 @@ test("surface mount readiness separates module mount from native presentation", 
     return { dispose() {} };
   }`)}`;
   const surface = { module: moduleUrl, surfaceId: "tab-mounted", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] };
+  recordOrigin("tab-mounted", null);
   const mounting = mountSurface(document.querySelector("#slot"), surface);
   await waitSurfaceCompositionDeclared(surface.surfaceId);
   await mounting;
@@ -136,6 +143,7 @@ test("a tab that leaves the layout during its mount reads the factor it was moun
   globalThis.leaveLayout = () => { inLayout = false; };
   const moduleUrl = "data:text/javascript,export async function mount(root,c){await Promise.resolve();" +
     "globalThis.leaveLayout();globalThis.readFactor=c.runtime.textSize.read();return {dispose(){}}}";
+  recordOrigin("tab-leaving", null);
   await mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId: "tab-leaving", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   assert.equal(globalThis.readFactor, 1.5);
@@ -153,6 +161,7 @@ test("a surface announces its removal through context.closing before the module 
     return { dispose() { globalThis.closingSeen.push(["dispose", context.closing.aborted]); } };
   }`)}`;
   const surfaceId = "tab-closing";
+  recordOrigin(surfaceId, null);
   await mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId, pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   await disposeSurface(surfaceId);
@@ -177,6 +186,7 @@ test("a surface module runs a command of core through runtime.command and cannot
     globalThis.commandRefusal = await context.runtime.command('fixture.ping', {}).then(() => null, (error) => error.message);
     return { dispose() {} };
   }`)}`;
+  recordOrigin("tab-core-command", null);
   await mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId: "tab-core-command", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   assert.deepEqual(globalThis.commandReply, { echoed: 7 });
@@ -209,6 +219,7 @@ test("a surface mount writes one surface.mount trace with its plugin, its surfac
   const { records, mountSurface } = await tracedSurfaceModules(t, clock);
   globalThis.advanceClock = (ms) => { clock.now += ms; };
   const moduleUrl = "data:text/javascript,export async function mount(root,c){await Promise.resolve();globalThis.advanceClock(42.5);return {dispose(){}}}";
+  recordOrigin("tab-mount-trace", null);
   await mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId: "tab-mount-trace", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] });
   const mounts = records.filter(({ event }) => event === "surface.mount");
@@ -226,6 +237,7 @@ test("a failed surface mount writes no surface.mount trace", async (t) => {
   const clock = { now: 1000 };
   const { records, mountSurface } = await tracedSurfaceModules(t, clock);
   const moduleUrl = "data:text/javascript,export function mount(){throw new Error('fixture mount failed')}";
+  recordOrigin("tab-mount-failed", null);
   await assert.rejects(mountSurface(document.querySelector("#slot"),
     { module: moduleUrl, surfaceId: "tab-mount-failed", pluginId: "fixture", composition: { kind: "dom" }, declarations: {}, sidecars: [] }),
   /fixture mount failed/);

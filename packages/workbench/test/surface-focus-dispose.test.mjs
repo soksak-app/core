@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -36,6 +37,7 @@ test("a surface removed while its focus waits for presentation takes no focus", 
   const { mountSurface, authorizeSurface, disposeSurface, focusSurface } = await import("../surface-modules.js?focus-dispose");
   const pluginId = "fixture-focus-dispose";
   const surfaceId = "fixture-focus-dispose-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   // The module passes focus to the drawing region, like a terminal.
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount(root, context) {

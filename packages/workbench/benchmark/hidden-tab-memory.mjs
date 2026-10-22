@@ -15,6 +15,7 @@ import { JSDOM } from "jsdom";
 
 const { registerPlugin } = await import("../registry.js");
 const { openTabStates } = await import("../tab-state.js");
+const { recordOrigin } = await import("../tab-reports.js");
 const UNLOAD = { format: 1, maxBytes: 65536 };
 const store = await openTabStates({
   store: { tabState: async () => null, tabStatePut: async () => 0 },
@@ -104,10 +105,14 @@ export const FIXTURES = {
   }`,
 };
 
-const surface = (kind, surfaceId, source) => ({
-  module: `data:text/javascript,${encodeURIComponent(source)}`,
-  surfaceId, pluginId: `fixture-${kind}`, unload: UNLOAD, composition: { kind: "dom" }, declarations: {}, sidecars: [],
-});
+// The tab creation of the workbench records the origin of each tab (docs/spec/projects.md#tab-origin); a mount reads it, so the benchmark records it.
+const surface = (kind, surfaceId, source) => {
+  recordOrigin(surfaceId, null);
+  return {
+    module: `data:text/javascript,${encodeURIComponent(source)}`,
+    surfaceId, pluginId: `fixture-${kind}`, unload: UNLOAD, composition: { kind: "dom" }, declarations: {}, sidecars: [],
+  };
+};
 // The nodes of the document and of every shadow root in it, because a surface draws in the shadow root of its host.
 const countNodes = (root) => {
   let count = 0;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -29,6 +30,7 @@ test("the composition of a dom surface is declared when its module mounts withou
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?dom-composition");
   const pluginId = "fixture-dom-composition";
   const surfaceId = "fixture-dom-composition-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export function mount(root, context) {
     root.textContent = "text";

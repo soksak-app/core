@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
@@ -18,6 +19,7 @@ test("disposing a native surface whose module failed to mount removes it", { tim
     await import("../surface-modules.js?dispose-failed");
   const pluginId = "fixture-dispose-failed";
   const surfaceId = "fixture-dispose-failed-surface";
+  recordOrigin(surfaceId, null);
   registerPlugin({ id: pluginId, surface: () => null });
   const module = `data:text/javascript,${encodeURIComponent(`export async function mount() {
     throw new Error("fixture mount failed");

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
+import { recordOrigin } from "../tab-reports.js";
 import { registerPlugin } from "../registry.js";
 
 mock.module("../projects.js", { namedExports: { active: () => null, tabStateStore: () => null, tabStatesReady: async () => null } });
@@ -20,7 +21,11 @@ const MODULE = `data:text/javascript,${encodeURIComponent(`export function mount
   root.append(list);
   return { dispose() { root.replaceChildren(); } };
 }`)}`;
-const surface = (surfaceId) => ({ module: MODULE, surfaceId, pluginId: "fixture-parked", unload: false, composition: { kind: "dom" }, declarations: {}, sidecars: [] });
+// The tab creation of the workbench records the origin of each tab (docs/spec/projects.md#tab-origin); a mount reads it, so the fixture records it.
+const surface = (surfaceId) => {
+  recordOrigin(surfaceId, null);
+  return { module: MODULE, surfaceId, pluginId: "fixture-parked", unload: false, composition: { kind: "dom" }, declarations: {}, sidecars: [] };
+};
 
 test("parkedElements counts the elements of the parked surface hosts and their shadow roots, and is not published by the module", async () => {
   await mountSurface(slot, surface("parked-a"));
