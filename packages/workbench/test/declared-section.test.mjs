@@ -270,3 +270,27 @@ test("the section reports mounted while it draws an accepted value and the rejec
   h.section.reconcile();
   assert.deepEqual(h.section.state(), { mounted: false, error: null }, "a change of source is not reported as cleared");
 });
+
+test("a change of source that removes the focused tree control moves focus to the document body", async () => {
+  const h = await harness();
+  document.body.append(h.body);
+  try {
+    h.world.registrants = ["view-a"];
+    h.world.active = "view-a";
+    h.world.pullReply = { seq: 1, value: tree([{ key: "a", label: "a", command: "demo.open" }]) };
+    h.section.reconcile();
+    await settle();
+    const label = h.body.querySelector(".declared-label");
+    label.focus();
+    assert.equal(document.activeElement, label, "the label did not take focus");
+    h.world.registrants = ["view-b"];
+    h.world.active = "view-b";
+    h.world.pullReply = { seq: 1, value: tree([leaf("z")]) };
+    h.section.reconcile();
+    await settle();
+    assert.deepEqual(h.labels(), ["z"], "the new source did not draw its value");
+    assert.equal(document.activeElement, document.body, "focus stayed on the removed control after the change of source");
+  } finally {
+    h.body.remove();
+  }
+});

@@ -24,6 +24,7 @@
     "sidebar-sections.js",
     "declared-source.js",
     "declared-section.js",
+    "declared-tree-keys.js",
     "section-address.js",
     "view-calls.js",
     "shortcuts.json",

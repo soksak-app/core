@@ -21,6 +21,14 @@
     { "key": "Enter", "owner": "workbench", "command": "core.library.form.submit", "menu": null, "when": "A library form field has focus" },
     { "key": "Escape", "owner": "workbench", "command": "core.picker.close", "menu": null, "when": "A picker layer is open" },
     { "key": "Escape", "owner": "workbench", "command": "core.modal.dismiss", "menu": null, "when": "A native modal menu is open and has keyboard focus" },
+    { "key": "ArrowDown", "owner": "workbench", "command": "core.declared-ui.tree.move", "menu": null, "when": "A label or expand control of a declared tree node has focus" },
+    { "key": "ArrowUp", "owner": "workbench", "command": "core.declared-ui.tree.move", "menu": null, "when": "A label or expand control of a declared tree node has focus" },
+    { "key": "Home", "owner": "workbench", "command": "core.declared-ui.tree.move", "menu": null, "when": "A label or expand control of a declared tree node has focus" },
+    { "key": "End", "owner": "workbench", "command": "core.declared-ui.tree.move", "menu": null, "when": "A label or expand control of a declared tree node has focus" },
+    { "key": "ArrowRight", "owner": "workbench", "command": "core.declared-ui.tree.expand", "menu": null, "when": "A collapsed branch has focus" },
+    { "key": "ArrowRight", "owner": "workbench", "command": "core.declared-ui.tree.move", "menu": null, "when": "An expanded branch has focus" },
+    { "key": "ArrowLeft", "owner": "workbench", "command": "core.declared-ui.tree.expand", "menu": null, "when": "An expanded branch has focus" },
+    { "key": "ArrowLeft", "owner": "workbench", "command": "core.declared-ui.tree.move", "menu": null, "when": "A collapsed branch or a leaf has focus" },
     { "key": "Escape", "owner": "view", "command": "none", "menu": null, "when": "A plugin view has keyboard focus; the view handles the key itself, and runs the Escape command of an open picker only when it forwards the key" },
     { "key": "text input keys", "owner": "view", "command": "none", "menu": null, "when": "A plugin view has a text input focused; the view handles the key itself and it keeps its default action" }
   ]

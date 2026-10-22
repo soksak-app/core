@@ -3196,6 +3196,33 @@
         }
       },
       {
+        "name": "core.declared-ui.tree.move",
+        "description": "Moves keyboard focus between the nodes of a declared UI tree of the status: the arrow keys, Home and End, from the label or expand control of a node. It changes only the focus in the drawn tree and sends no request to the source; the expand rows run core.declared-ui.tree.expand.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "tree": {
+              "type": "string"
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "key": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.sidebar.section.select",
         "description": "Shows one section of a sidebar whose set uses the tabs layout; the selection is kept for that sidebar.",
         "params": {

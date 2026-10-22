@@ -4,12 +4,10 @@
 import { drawList } from "@soksak/plugin-api";
 import { icon } from "./icons.js";
 import { hideError, showError } from "./shown-errors.js";
+import { connectTreeKeys, EXPAND, redrawKeepingFocus, stepFocus, treeBox } from "./declared-tree-keys.js";
 
 /** The dom name of every control that a declared UI value draws (docs/spec/exposure.md). */
 export const CONTROL_NAME = "core.sidebar.section.control";
-
-/** The command of the expand control of a tree branch (docs/spec/declared-ui.md, binding). */
-const EXPAND = "core.declared-ui.tree.expand";
 
 const MAX_BYTES = 1048576;
 const MAX_ROOT_ELEMENTS = 64;
@@ -491,6 +489,7 @@ function paintExpand(control, { statusId, tree, path, expanded, bind }) {
   const mark = document.createElement("span");
   mark.className = "declared-icon";
   mark.innerHTML = icon(expanded ? "chevron-down" : "chevron-right");
+  control.dataset.expanded = String(expanded);
   control.replaceChildren(mark);
   connect(control, EXPAND, { status: statusId, tree, path, expanded: !expanded }, bind);
 }
@@ -569,6 +568,7 @@ function paintRoot(box, element, ctx) {
     return;
   }
   box.className = "declared-tree";
+  connectTreeKeys(box, { bind: ctx.bind, statusId: ctx.statusId, tree: element.key });
   drawList(box, element.nodes, {
     key: entryKey,
     create: createNode,
@@ -652,7 +652,7 @@ export function receive(body, value, options) {
     return false;
   }
   const settled = settle(elements);
-  drawValue(body, elements, { statusId, bind: options.bind, expandedByTree: settled.expandedByTree });
+  redrawKeepingFocus(body, () => drawValue(body, elements, { statusId, bind: options.bind, expandedByTree: settled.expandedByTree }));
   source.accepted = settled.accepted;
   source.view = { body, elements, bind: options.bind, expanded: options.expanded };
   hideError(body, where);
@@ -670,6 +670,17 @@ export function setTreeExpanded({ status, tree, path, expanded }) {
   const send = source.view?.expanded;
   if (typeof send !== "function") throw new Error(`tree ${tree} path ${key} has no expansion source`);
   return send({ status, tree, path: [...path], expanded });
+}
+
+/**
+ * Runs core.declared-ui.tree.move: moves keyboard focus inside the drawn tree of the status (docs/spec/declared-ui.md, Tree keys). It
+ * sends no request to the source. A tree that is not drawn fails the command, as setTreeExpanded does.
+ */
+export function moveTreeFocus({ status, tree, path, key }) {
+  const body = sources.get(status)?.view?.body;
+  const box = body === undefined ? null : treeBox(body, tree);
+  if (box === null) throw new Error(`tree ${tree} path ${JSON.stringify(path)} is not drawn`);
+  stepFocus(box, { tree, path, key });
 }
 
 /**

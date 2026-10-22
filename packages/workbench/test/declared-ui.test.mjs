@@ -277,7 +277,8 @@ test("an accepted value after a rejection withdraws the error and draws the list
 
 // Tree elements (docs/spec/declared-ui.md): node drawing, expand requests, plugin-authoritative expanded values, and tree rules.
 const EXPAND = "core.declared-ui.tree.expand";
-const branch = (key, children, extra = {}) => ({ key, label: key, children, ...extra });
+const MOVE = "core.declared-ui.tree.move";
+const branch =(key, children, extra = {}) => ({ key, label: key, children, ...extra });
 const leaf = (key, extra = {}) => ({ key, label: key, ...extra });
 const tree = (nodes, extra = {}) => ({ elements: [{ kind: "tree", key: "t1", empty: "none", nodes, ...extra }] });
 
@@ -296,7 +297,11 @@ function section(module, orientation = "vertical") {
     el.addEventListener(options.event ?? "click", (event) => {
       if (options.when && !options.when(event)) return;
       if (options.stop) event.stopPropagation();
-      runs.push({ name, params: entry.params(), type: event.type, detail: event.detail ?? 0 });
+      const args = typeof params === "function" ? params(event) : params;
+      runs.push({ name, params: args, type: event.type, detail: event.detail ?? 0 });
+      // The registry runs the handlers of the core commands; the harness calls the same handlers.
+      if (name === MOVE) module.moveTreeFocus(args);
+      if (name === EXPAND) module.setTreeExpanded(args);
     });
     return el;
   };
@@ -600,9 +605,10 @@ test("a redraw keeps the expand control of a branch and binds it once", async ()
   const s = section(module);
   s.show(tree([branch("b", [leaf("c")])]));
   const control = s.body.querySelector('[data-role="expand"]');
+  const bound = s.calls.length;
   s.show(tree([branch("b", [leaf("c")])]));
   assert.equal(s.body.querySelector('[data-role="expand"]'), control, "the expand control was replaced");
-  assert.equal(s.calls.length, 1, "the control was bound again by the redraw");
+  assert.equal(s.calls.length, bound, "the control or the tree was bound again by the redraw");
 });
 
 test("the expand control keeps keyboard focus after its command draws the tree again", async () => {
@@ -848,4 +854,229 @@ test("a status line with a command is rejected at the unknown field", async () =
   assert.ok(error, "no rejection");
   assert.equal(error.pointer, "/elements/0");
   assert.equal(error.reason, 'unknown field "command"');
+});
+
+// Tree keys (docs/spec/declared-ui.md, Tree keys): the arrow keys, Home and End move focus between the focus targets of the visible
+// nodes, and the expansion rows run core.declared-ui.tree.expand. The harness runs the handlers of the core commands, as the registry does.
+const keyNodes = () => [
+  leaf("a", { command: "demo.open" }),
+  branch("b", [leaf("b1", { command: "demo.open" }), leaf("b2")], { command: "demo.open", expanded: true }),
+  branch("c", [leaf("c1", { command: "demo.open" })]),
+  leaf("d"),
+  leaf("e", { command: "demo.open", enabled: false }),
+];
+
+/** A section of the status demo.s drawn in the document, so that focus can move between its controls. */
+async function keyboardSection(name, value) {
+  const module = await load(name);
+  const s = section(module);
+  document.body.append(s.body);
+  s.show(value);
+  return s;
+}
+
+/** The focused control as `<role> <path>`, or `body` when no control has focus. */
+const focusName = () => {
+  const el = document.activeElement;
+  return el?.dataset.role ? `${el.dataset.role} ${el.dataset.path}` : "body";
+};
+
+/** Sends a keydown to the focused control and returns the event. */
+function press(name, init = {}) {
+  const event = new dom.window.KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true, ...init });
+  document.activeElement.dispatchEvent(event);
+  return event;
+}
+
+/** Focuses the control of the node at path with the role label or expand. */
+function focusOn(s, path, role) {
+  const el = s.body.querySelector(`[data-role="${role}"][data-path='${JSON.stringify(path)}']`);
+  assert.ok(el, `no ${role} control for ${JSON.stringify(path)}`);
+  el.focus();
+  assert.equal(focusName(), `${role} ${JSON.stringify(path)}`, "the control did not take focus");
+}
+
+test("ArrowDown and ArrowUp move focus between focus targets, and skip a node that has none", async () => {
+  const s = await keyboardSection("keys-down-up", tree(keyNodes()));
+  try {
+    focusOn(s, ["a"], "label");
+    press("ArrowDown");
+    assert.equal(focusName(), 'label ["b"]', "ArrowDown did not move to the next node");
+    press("ArrowDown");
+    assert.equal(focusName(), 'label ["b","b1"]', "ArrowDown did not move to the first child");
+    press("ArrowDown");
+    assert.equal(focusName(), 'expand ["c"]', "ArrowDown did not skip b2, which has no focus target");
+    press("ArrowDown");
+    assert.equal(focusName(), 'expand ["c"]', "ArrowDown at the last node moved focus");
+    press("ArrowUp");
+    assert.equal(focusName(), 'label ["b","b1"]', "ArrowUp did not move to the previous node with a focus target");
+    press("ArrowUp");
+    assert.equal(focusName(), 'label ["b"]', "ArrowUp did not move to the parent's previous node");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("Home and End move focus to the first and the last node with a focus target, and the ends keep focus", async () => {
+  const s = await keyboardSection("keys-home-end", tree(keyNodes()));
+  try {
+    focusOn(s, ["b", "b1"], "label");
+    const home = press("Home");
+    assert.equal(home.defaultPrevented, true, "Home was not handled");
+    assert.equal(focusName(), 'label ["a"]', "Home did not move to the first node");
+    const up = press("ArrowUp");
+    assert.equal(up.defaultPrevented, true, "ArrowUp at the first node was not handled");
+    assert.equal(focusName(), 'label ["a"]', "ArrowUp at the first node moved focus");
+    press("End");
+    assert.equal(focusName(), 'expand ["c"]', "End did not move to the last node with a focus target");
+    press("ArrowDown");
+    assert.equal(focusName(), 'expand ["c"]', "ArrowDown at the last node moved focus");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("ArrowRight on a collapsed branch requests its expansion, and ArrowLeft on a root branch keeps focus", async () => {
+  const s = await keyboardSection("keys-collapsed", tree(keyNodes()));
+  try {
+    focusOn(s, ["c"], "expand");
+    const right = press("ArrowRight");
+    assert.equal(right.defaultPrevented, true, "ArrowRight on a collapsed branch was not handled");
+    assert.deepEqual(s.expansionRequests, [{ status: "demo.s", tree: "t1", path: ["c"], expanded: true }]);
+    assert.equal(focusName(), 'expand ["c"]', "ArrowRight moved focus");
+    const left = press("ArrowLeft");
+    assert.equal(left.defaultPrevented, true, "ArrowLeft on a root node was not handled");
+    assert.equal(focusName(), 'expand ["c"]', "ArrowLeft on a root node moved focus");
+    assert.equal(s.expansionRequests.length, 1, "ArrowLeft on a collapsed branch requested a collapse");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("ArrowRight on an expanded branch moves focus to its first child with a focus target, and ArrowLeft requests its collapse", async () => {
+  const s = await keyboardSection("keys-expanded", tree(keyNodes()));
+  try {
+    focusOn(s, ["b"], "label");
+    press("ArrowRight");
+    assert.equal(focusName(), 'label ["b","b1"]', "ArrowRight did not move to the first child with a focus target");
+    press("ArrowLeft");
+    assert.equal(focusName(), 'label ["b"]', "ArrowLeft on a leaf did not move to the parent");
+    const left = press("ArrowLeft");
+    assert.equal(left.defaultPrevented, true, "ArrowLeft on an expanded branch was not handled");
+    assert.deepEqual(s.expansionRequests, [{ status: "demo.s", tree: "t1", path: ["b"], expanded: false }]);
+    assert.equal(focusName(), 'label ["b"]', "ArrowLeft on an expanded branch moved focus");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("ArrowRight on an expanded branch keeps focus when no child has a focus target", async () => {
+  const s = await keyboardSection("keys-no-child-target", tree([branch("f", [leaf("f1")], { command: "demo.open", expanded: true })]));
+  try {
+    focusOn(s, ["f"], "label");
+    const right = press("ArrowRight");
+    assert.equal(right.defaultPrevented, true, "ArrowRight on an expanded branch was not handled");
+    assert.equal(focusName(), 'label ["f"]', "ArrowRight moved focus to a node with no focus target");
+    assert.deepEqual(s.expansionRequests, [], "ArrowRight on an expanded branch requested a change");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("ArrowRight on a leaf is not handled and keeps its default", async () => {
+  const s = await keyboardSection("keys-leaf-right", tree(keyNodes()));
+  try {
+    focusOn(s, ["a"], "label");
+    const right = press("ArrowRight");
+    assert.equal(right.defaultPrevented, false, "ArrowRight on a leaf was handled");
+    assert.equal(focusName(), 'label ["a"]', "ArrowRight on a leaf moved focus");
+    assert.deepEqual(s.runs, [], "ArrowRight on a leaf ran a command");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a key with a modifier is not handled", async () => {
+  const s = await keyboardSection("keys-modifier", tree(keyNodes()));
+  try {
+    focusOn(s, ["a"], "label");
+    for (const modifier of ["shiftKey", "ctrlKey", "altKey", "metaKey"]) {
+      const event = press("ArrowDown", { [modifier]: true });
+      assert.equal(event.defaultPrevented, false, `ArrowDown with ${modifier} was handled`);
+      assert.equal(focusName(), 'label ["a"]', `ArrowDown with ${modifier} moved focus`);
+    }
+    assert.deepEqual(s.runs, [], "a modifier key ran a command");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a node whose label is disabled has the expand control of its branch as focus target", async () => {
+  const value = tree([
+    leaf("x", { command: "demo.open" }),
+    branch("g", [leaf("g1", { command: "demo.open" })], { command: "demo.open", enabled: false }),
+  ]);
+  const s = await keyboardSection("keys-disabled-label", value);
+  try {
+    focusOn(s, ["x"], "label");
+    press("ArrowDown");
+    assert.equal(focusName(), 'expand ["g"]', "the disabled label of a branch was used as focus target");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a redraw that removes the focused node moves focus to the nearest preceding node with a focus target", async () => {
+  const s = await keyboardSection("keys-redraw-preceding", tree(keyNodes()));
+  try {
+    focusOn(s, ["c"], "expand");
+    s.show(tree(keyNodes().filter((node) => node.key !== "c")));
+    assert.equal(focusName(), 'label ["b","b1"]', "focus did not move to the nearest preceding node");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a redraw that removes the nearest preceding nodes moves focus to the nearest one that remains", async () => {
+  const s = await keyboardSection("keys-redraw-remaining", tree(keyNodes()));
+  try {
+    focusOn(s, ["c"], "expand");
+    s.show(tree(keyNodes().filter((node) => node.key !== "b" && node.key !== "c")));
+    assert.equal(focusName(), 'label ["a"]', "focus did not skip the removed preceding nodes");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a redraw that removes the first node moves focus to the first node with a focus target", async () => {
+  const s = await keyboardSection("keys-redraw-first", tree(keyNodes()));
+  try {
+    focusOn(s, ["a"], "label");
+    s.show(tree([leaf("p", { command: "demo.open" }), leaf("q")]));
+    assert.equal(focusName(), 'label ["p"]', "focus did not move to the first node with a focus target");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a redraw that leaves no node with a focus target moves focus to the document body", async () => {
+  const s = await keyboardSection("keys-redraw-none", tree(keyNodes()));
+  try {
+    focusOn(s, ["a"], "label");
+    s.show(tree([leaf("q")]));
+    assert.equal(focusName(), "body", "focus stayed on a removed control");
+  } finally {
+    s.body.remove();
+  }
+});
+
+test("a rejected value that removes the focused node moves focus to the document body", async () => {
+  const s = await keyboardSection("keys-rejected", tree(keyNodes()));
+  try {
+    focusOn(s, ["a"], "label");
+    s.show({ elements: [{ kind: "chart", key: "x" }] });
+    assert.equal(focusName(), "body", "focus stayed on a removed control after a rejection");
+  } finally {
+    s.body.remove();
+  }
 });

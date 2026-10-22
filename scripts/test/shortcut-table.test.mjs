@@ -30,18 +30,27 @@ function specRows(markdown, heading) {
     .map((line) => line.split("|").slice(1, -1).map((cell) => cell.trim().replace(/^`(.*)`$/, "$1")));
 }
 
-/** Key comparisons of the workbench key handlers: `e.key === "Enter"` and `event.key.toLowerCase() === "n"`. */
+/** The key names that the key comparisons of one source text test: `e.key === "Enter"` and `event.key.toLowerCase() === "n"`, lower-cased. */
+function keyComparisons(source) {
+  const pattern = /\.key(?:\.toLowerCase\(\))?\s*[!=]==?\s*["']([^"']+)["']/g;
+  return new Set([...source.matchAll(pattern)].map((match) => match[1].toLowerCase()));
+}
+
+/** Key comparisons of the workbench key handlers. */
 function workbenchKeyLiterals() {
   const dir = join(ROOT, "packages/workbench");
   const files = readdirSync(dir).filter((file) => file.endsWith(".js") || file.endsWith(".html"));
   const literals = new Set();
-  const pattern = /\.key(?:\.toLowerCase\(\))?\s*[!=]==?\s*["']([^"']+)["']/g;
   for (const file of files) {
-    for (const match of read(`packages/workbench/${file}`).matchAll(pattern)) {
-      literals.add(match[1].toLowerCase());
-    }
+    for (const key of keyComparisons(read(`packages/workbench/${file}`))) literals.add(key);
   }
   return literals;
+}
+
+/** The key comparisons that no workbench row of rows declares. */
+function undeclaredKeys(literals, rows) {
+  const declared = new Set(rows.filter((entry) => entry.owner === "workbench").map((entry) => keyName(entry.key)));
+  return [...literals].filter((key) => !declared.has(key));
 }
 
 test("every shortcut has a key, an owner, a command, and a context", () => {
@@ -86,13 +95,20 @@ test("every application menu key equivalent is a native menu shortcut", () => {
 test("every workbench key handler has a workbench or view shortcut, and every such shortcut has a handler", () => {
   const handled = workbenchKeyLiterals();
   assert.ok(handled.size > 0, "no workbench key handler was found");
-  const declared = new Set(TABLE.filter((entry) => entry.owner === "workbench").map((entry) => keyName(entry.key)));
-  for (const key of handled) {
-    assert.ok(declared.has(key), `workbench key handler for ${key} is missing from packages/workbench/shortcuts.json`);
+  for (const key of undeclaredKeys(handled, TABLE)) {
+    assert.fail(`workbench key handler for ${key} is missing from packages/workbench/shortcuts.json`);
   }
+  const declared = new Set(TABLE.filter((entry) => entry.owner === "workbench").map((entry) => keyName(entry.key)));
   for (const key of declared) {
     assert.ok(handled.has(key), `packages/workbench/shortcuts.json declares ${key}, which no workbench key handler compares`);
   }
+});
+
+test("an arrow-key comparison without a workbench row is reported, and the table row clears it", () => {
+  const source = 'if (event.key === "ArrowLeft") moveTreeFocus();';
+  const withoutRow = TABLE.filter((entry) => keyName(entry.key) !== "arrowleft");
+  assert.deepEqual(undeclaredKeys(keyComparisons(source), withoutRow), ["arrowleft"], "the ArrowLeft comparison has no row");
+  assert.deepEqual(undeclaredKeys(keyComparisons(source), TABLE), [], "the table row of ArrowLeft does not clear the comparison");
 });
 
 test("the exposure spec table lists every shortcut and nothing else", () => {

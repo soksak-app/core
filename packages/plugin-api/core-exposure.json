@@ -110,6 +110,7 @@
     "core.card.sidebar.set",
     "core.card.sidebar.toggle",
     "core.card.sidebar.size",
+    "core.declared-ui.tree.move",
     "core.sidebar.section.select",
     "core.declared-ui.tree.expand",
     "core.sidebar.section.fold",
