@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyInstalledState, parseOptions, releaseKey, withCore } from "../check-app-update.mjs";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { emptyInstalledState, endpointOf, parseOptions, releaseKey, withCore } from "../check-app-update.mjs";
 
 test("the options name the host, the bundle and the registry index", () => {
   assert.deepEqual(parseOptions(["--host", "tauriv2", "--bundle", "b.app", "--registry", "i.json"]), { host: "tauriv2", bundle: "b.app", registry: "i.json" });
@@ -26,4 +29,11 @@ test("the index lists one newer core release for the key and keeps the rest", ()
     plugins: [],
     core: { versions: [{ version: "99.0.0", releases: { "darwin-arm64-wailsv3": { url: "file:///r.zip", sha256: "0".repeat(64) } } }] },
   });
+});
+
+test("the endpoint file is absent until written, and a file that is not JSON is an error that names the path", () => {
+  const config = mkdtempSync(join(tmpdir(), "endpoint-"));
+  assert.equal(endpointOf(config), null, "a missing endpoint file is not yet written");
+  writeFileSync(join(config, "endpoint.json"), "{not json");
+  assert.throws(() => endpointOf(config), (error) => error.message.includes(join(config, "endpoint.json")));
 });

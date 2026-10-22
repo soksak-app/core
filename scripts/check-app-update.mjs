@@ -54,13 +54,23 @@ function untilChange(folder, ready, what) {
     () => new Error(`${what} did not happen in ${WAIT_MS / 1000} s`));
 }
 
-/** The endpoint of the configuration directory, or null while it is not written. */
-function endpointOf(config) {
+/**
+ * The endpoint of the configuration directory, or null while it is not written. The hosts write endpoint.json atomically
+ * (a temporary file renamed into place), so a file that does not parse is an error, and it names the path.
+ */
+export function endpointOf(config) {
+  const path = join(config, "endpoint.json");
+  let text;
   try {
-    return JSON.parse(readFileSync(join(config, "endpoint.json"), "utf8"));
+    text = readFileSync(path, "utf8");
   } catch (error) {
-    if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
+    if (error.code === "ENOENT") return null;
     throw error;
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${path}: endpoint file is not JSON: ${error.message}`, { cause: error });
   }
 }
 
