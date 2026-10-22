@@ -59,8 +59,14 @@ fn a_view_call_and_its_reply_are_recorded_at_debug_with_their_identifier() {
         String::from_utf8_lossy(&output.stderr)
     );
     let events = records::read_events(&records::event_log_path(config.path()));
-    let calls: Vec<_> = events.iter().filter(|event| event["event"] == "host.view.call").collect();
-    let replies: Vec<_> = events.iter().filter(|event| event["event"] == "host.view.reply").collect();
+    let calls: Vec<_> = events
+        .iter()
+        .filter(|event| event["event"] == "host.view.call")
+        .collect();
+    let replies: Vec<_> = events
+        .iter()
+        .filter(|event| event["event"] == "host.view.reply")
+        .collect();
     assert_eq!(calls.len(), 1, "host.view.call records: {calls:?}");
     assert_eq!(calls[0]["level"], "debug");
     assert_eq!(calls[0]["fields"]["plugin"], "probe");

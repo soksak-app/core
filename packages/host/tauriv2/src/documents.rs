@@ -787,14 +787,14 @@ impl ViewChannels {
 
     /// Records a reply that the host forwards to the view, at the debug level (docs/spec/logging.md).
     fn record_view_reply(plugin: &str, surface: &str, id: u64, outcome: &str) {
-    emit_host(
-        Level::Debug,
-        "host.view.reply",
-        json!({"plugin": plugin, "surface": surface, "id": id, "outcome": outcome}),
-    );
-}
+        emit_host(
+            Level::Debug,
+            "host.view.reply",
+            json!({"plugin": plugin, "surface": surface, "id": id, "outcome": outcome}),
+        );
+    }
 
-/// Dispatches one message of the sok-view handler of the view of surface, which is {"message": value} or {"error": reason}.
+    /// Dispatches one message of the sok-view handler of the view of surface, which is {"message": value} or {"error": reason}.
     /// It returns Ok(true) when the message makes the view ready, and the reason that the host logs for any other failure.
     pub fn message(&self, surface: &str, value: &str) -> Result<bool, String> {
         let received: ViewReceived = serde_json::from_str(value)
@@ -874,11 +874,11 @@ impl ViewChannels {
             (Some(result), None) => {
                 Self::record_view_reply(&plugin, surface, id, "result");
                 Ok(Some(json!({
-                "surface": surface,
-                "plugin": plugin,
-                "id": id,
-                "result": result,
-            })))
+                    "surface": surface,
+                    "plugin": plugin,
+                    "id": id,
+                    "result": result,
+                })))
             }
             (None, Some(error)) => {
                 let code = error.get("code").and_then(Value::as_i64).ok_or_else(|| {
