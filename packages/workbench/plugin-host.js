@@ -304,8 +304,9 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
   };
   replies = bridge.on("plugin-host-reply", (event) => {
     const commands = event?.plugin && hostCommandsOf(event.plugin);
-    // default: a reply whose host has no layer arrived after the layer left; it answers no open call.
-    commands?.receive(event);
+    // A reply whose host has no layer arrived after the layer left. It answers no open call, so it is reported.
+    if (commands) commands.receive(event);
+    else report(new Error(`plugin host reply ${event?.id} arrived after its host layer left`));
   });
   // The end of a host removes its registrations and ends the open requests of this document to it.
   const ended = bridge.on("plugin-host-ended", (event) => {

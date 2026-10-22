@@ -401,3 +401,15 @@ test("a sidecar message of a plugin session reaches its host page only with a su
   assert.equal(calls.slice(after).some((call) => call.name === "pluginHostEvent"), false, "the ended host still received a message");
   pluginHost.close();
 });
+
+test("a host reply that arrives after its layer left is reported, not dropped", async () => {
+  const pluginHost = listen();
+  try {
+    reports.length = 0;
+    emit("plugin-host-reply", { plugin: "probe", id: 99, result: null });
+    await tick();
+    assert.deepEqual(reports, ["plugin host reply 99 arrived after its host layer left"]);
+  } finally {
+    pluginHost.close();
+  }
+});
