@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-15-1: The Tauri host accepts a plugin host reply with a null result, as the Wails host does: the reply, request params and event data of a plugin host keep their null values, so a command without a value no longer fails with `has both or neither of a result and an error`.
+- F212.12-1-15-4: The lost persistent sidecar connection error record names how the connection ended (`end`) and how many requests waited (`waiting`), in both hosts.
 - F212.12-1-14-4: The `host.sidecar.disconnect` record of a lost persistent sidecar connection names how it ended (`end`) and how many requests waited for it (`waiting`) in both hosts.
 - F257-3: The test runner ends a test's process group without error when macOS refuses the group signal with EPERM because only zombies remain, at the exit path and at the limit, and it fails with the running members named when a running member is refused. The stop, list and kill of a group share one signal helper and one predicate for running members with the command supervisor. Red: the runner tests `a refused group signal with no running member ends without error` and `a refused group signal with a running member names it` fail with `kill EPERM` on the unchanged logic. Green: the three runner test files pass 39 of 39 tests, and the native repeat test file passes 2 of 2.
 

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1-15-1: Tauri host가 null result인 plugin host reply를 받는다. Wails host와 같다. plugin host의 reply, request params, event data가 null 값을 유지하므로, 값이 없는 명령이 `has both or neither of a result and an error`로 실패하지 않는다.
+- F212.12-1-15-4: 끊긴 영속 sidecar 연결의 error 기록이 연결이 어떻게 끝났는지(`end`)와 기다리던 요청 수(`waiting`)를 두 host에서 담는다.
 - F212.12-1-14-4: 끊긴 영속 sidecar 연결의 `host.sidecar.disconnect` 기록이 두 host에서 연결이 어떻게 끝났는지(`end`)와 기다리던 요청 수(`waiting`)를 담는다.
 - F257-3: test runner는 group에 zombie만 남아 macOS가 group 신호를 EPERM으로 거부하면, exit 경로와 한도 경로 모두에서 오류 없이 group을 끝낸다. 실행 중인 member가 거부되면 그 member를 이름으로 밝혀 실패한다. group의 멈춤, 목록, 종료는 하나의 신호 helper와 실행 중 member 판정을 명령 감독기와 공유한다. Red: runner 시험 `a refused group signal with no running member ends without error`와 `a refused group signal with a running member names it`이 변경 전 논리에서 `kill EPERM`으로 실패한다. Green: runner 시험 파일 3개가 39개 중 39개를, native repeat 시험 파일이 2개 중 2개를 통과한다.
 
