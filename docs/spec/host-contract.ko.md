@@ -210,6 +210,8 @@ fn invalid_json_closes_connection() {
 | `view.channel.queue-full` | queue overflow 이유의 `view.error` message는 그 이유를 `error: view channel: <reason>`으로 application log에 쓰고, 다른 frame에서 온 view의 `{"error": reason}` message도 같은 형식으로 이유를 쓴다. | both |
 | `view.error.display` | 다른 이유의 `view.error` message는 `error: view <plugin> <surface>: <reason>`으로 오류 표시 경로에 한 번 쓰이고 view는 계속된다. 이유가 빈 `view.error`는 거부한다. | both |
 | `view.call.record` | view의 call 요청은 debug 수준의 `host.view.call`(plugin, surface, id, command)로 기록되고, 그 회신은 결과(outcome)와 함께 `host.view.reply`로 기록된다. cancel은 call로 기록하지 않는다. | both |
+| `plugin-host.start-values.first-script` | plugin host page는 page를 불러오기 전에 window.sokHost를 가지며, 동결된 window의 project(또는 null)와 plugin의 exposes를 담고 surface는 없다. exposes가 객체가 아니면 거부한다. | both |
+| `plugin-host.project.post` | window가 보여 주는 project가 바뀌면 준비된 document가 있는 각 plugin host에 {root} 또는 null인 event project를 보낸다. | both |
 | `view.restart.limit` | process가 끝했거나 message queue가 넘친 view는 300초 안에 네 번째 failure까지 닫히고 다시 만들어지며, surface마다 sliding window로 센다: 새 failure보다 300초 이전인 failure은 세지 않는다. 네 번째 failure가 restart를 멈추고, 멈춘 surface는 view를 만들지 않으며, surface를 제거하면 그 failure 기록을 지운다. | both |
 | `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, responsive: false}`를 메인 page에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 `responsive: true`를 보낸다. 두 알림 모두 view의 call을 끝내지 않는다. | both |
 | `view.process.events` | view를 만들면 `host.trace.view.process-request {plugin, surface}`를 쓰고, 그 view의 첫 ready message는 `host.trace.view.process-ready {plugin, surface}`를 쓴다. | both |
