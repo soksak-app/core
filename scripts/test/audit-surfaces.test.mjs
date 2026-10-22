@@ -10,9 +10,9 @@ test("a visible view whose page does not expose core.surface.document is not aud
   assert.deepEqual(unauditedViews([view({})]).map((surface) => surface.surface), ["tab-1"]);
 });
 
-test("a view that exposes core.surface.document, a hidden view and a non-view surface are audited by their documents", () => {
+test("a view that exposes core.surface.document, a hidden view and a surface without a view composition are audited by their documents", () => {
   const exposed = view({ surface: "tab-2", exposes: ["status core.surface.document"] });
   const hidden = view({ surface: "tab-3", visible: false });
-  const hybrid = view({ surface: "tab-4", composition: "hybrid" });
-  assert.deepEqual(unauditedViews([exposed, hidden, hybrid]), []);
+  const nonView = view({ surface: "tab-4", composition: null });
+  assert.deepEqual(unauditedViews([exposed, hidden, nonView]), []);
 });

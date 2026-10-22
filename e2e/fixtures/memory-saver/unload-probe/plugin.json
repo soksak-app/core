@@ -3,9 +3,22 @@
   "name": "Unload probe",
   "description": "Window check fixture that declares surface.unload, shows one document region, stores its address as the tab state and reports the region state.",
   "surface": {
-    "module": "ui/page.js",
-    "composition": { "kind": "hybrid", "regions": [{ "name": "page", "kind": "document", "input": "native" }], "overlays": [] },
-    "unload": { "format": 1, "maxBytes": 4096 }
+    "unload": {
+      "format": 1,
+      "maxBytes": 4096
+    },
+    "composition": {
+      "kind": "view",
+      "page": "ui/page.html",
+      "regions": [
+        {
+          "name": "page",
+          "kind": "document",
+          "input": "native"
+        }
+      ],
+      "overlays": []
+    }
   },
   "mark": "U",
   "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
@@ -14,21 +27,53 @@
       {
         "name": "probeunload.location",
         "description": "The state of the document region: its address, whether it loads, its session history, and the tab state that the surface read at its mount.",
-        "schema": { "type": "object", "properties": { "url": { "type": "string" }, "loading": { "type": "boolean" }, "history": { "type": "object" }, "restored": {} } }
+        "schema": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "loading": {
+              "type": "boolean"
+            },
+            "history": {
+              "type": "object"
+            },
+            "restored": {}
+          }
+        }
       }
     ],
     "commands": [
       {
         "name": "probeunload.load",
         "description": "Opens an http address in the document region.",
-        "params": { "type": "object", "properties": { "url": { "type": "string" } } },
-        "result": { "type": "null" }
+        "params": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
       },
       {
         "name": "probeunload.modified",
         "description": "Reports the tab as modified or clean through the tab report modified.",
-        "params": { "type": "object", "properties": { "modified": { "type": "boolean" } } },
-        "result": { "type": "null" }
+        "params": {
+          "type": "object",
+          "properties": {
+            "modified": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
       }
     ],
     "dom": []

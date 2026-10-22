@@ -2,18 +2,57 @@
   "id": "probeprovider",
   "name": "Probe provider",
   "description": "Window check fixture that declares the extension point items and reports the answer of each contributed item.",
-  "surface": { "module": "ui/page.js", "composition": { "kind": "hybrid", "regions": [{ "name": "page", "kind": "document", "input": "native" }], "overlays": [] } },
+  "surface": {
+    "composition": {
+      "kind": "view",
+      "page": "ui/page.html",
+      "regions": [
+        {
+          "name": "page",
+          "kind": "document",
+          "input": "native"
+        }
+      ],
+      "overlays": []
+    }
+  },
   "mark": "P",
   "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
   "extends": {
-    "items": { "version": "1.0.0", "schema": { "type": "object", "properties": { "label": { "type": "string" } } } }
+    "items": {
+      "version": "1.0.0",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          }
+        }
+      }
+    }
   },
   "exposes": {
     "status": [
       {
         "name": "probeprovider.items",
         "description": "The answer of each connected item of the point items: its plugin, its label and what its module returned.",
-        "schema": { "type": "array", "items": { "type": "object", "properties": { "plugin": { "type": "string" }, "label": { "type": "string" }, "answer": { "type": "string" } } } }
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "answer": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     ],
     "commands": [],
