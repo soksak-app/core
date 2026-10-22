@@ -276,7 +276,6 @@ func TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 }
 
 // contract: host.stall.passes-every-gate
-// contract: host.stall.passes-every-gate
 func TestTheStallRecordsAreStoredUnderAPolicyThatTurnsLifecycleOff(t *testing.T) {
 	log, err := sok.StartEventLog(optionsIn(t.TempDir(), "b1"))
 	if err != nil {
