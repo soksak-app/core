@@ -114,6 +114,8 @@ const EXACT = new Map([
   ["page.trace.modal.answer", "call"],
   ["page.trace.picker.close", "call"],
   ["page.update.operation", "call"],
+  ["page.view.call", "call"],
+  ["page.view.reply", "call"],
   ["page.window.operation", "call"],
   ["sok.command", "call"],
   ["sok.panic", "lifecycle"],

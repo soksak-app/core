@@ -127,6 +127,8 @@ var eventClasses = map[string]Class{
 	"page.trace.modal.answer":                 ClassCall,
 	"page.trace.picker.close":                 ClassCall,
 	"page.update.operation":                   ClassCall,
+	"page.view.call":                          ClassCall,
+	"page.view.reply":                         ClassCall,
 	"page.window.operation":                   ClassCall,
 	"sok.command":                             ClassCall,
 	"sok.panic":                               ClassLifecycle,

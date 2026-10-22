@@ -169,6 +169,8 @@ pub fn class_of(name: &str) -> Option<Class> {
         "page.trace.modal.answer" => Some(Class::Call),
         "page.trace.picker.close" => Some(Class::Call),
         "page.update.operation" => Some(Class::Call),
+        "page.view.call" => Some(Class::Call),
+        "page.view.reply" => Some(Class::Call),
         "page.window.operation" => Some(Class::Call),
         "sok.command" => Some(Class::Call),
         "sok.panic" => Some(Class::Lifecycle),
