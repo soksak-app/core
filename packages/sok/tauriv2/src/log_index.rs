@@ -6,7 +6,8 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Instant, UNIX_EPOCH};
 
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
@@ -937,6 +938,35 @@ fn close_index(system: &dyn Platform, idx: File, path: &Path) -> Result<(), Stri
 }
 
 /// Brings the index of the event file at `path` up to date, building it when it does not exist, and says what it did.
+/// Head read faults that a test injects per log file: the next read of the head of that file fails with the error. The seam
+/// exists because an ordinary file does not fail a read of its head.
+static HEAD_READ_FAULTS: Mutex<Vec<(PathBuf, String)>> = Mutex::new(Vec::new());
+
+/// Reads the head of the log file at path, or returns the injected fault of that file.
+fn read_head(source: &File, path: &Path, length: usize) -> std::io::Result<Vec<u8>> {
+    let fault = {
+        let mut faults = HEAD_READ_FAULTS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        faults
+            .iter()
+            .position(|(faulty, _)| faulty == path)
+            .map(|index| faults.remove(index).1)
+    };
+    match fault {
+        Some(error) => Err(std::io::Error::other(error)),
+        None => read_range(source, 0, length),
+    }
+}
+
+/// Makes the next head read of the log file at path fail with error.
+pub fn fail_head_read_for_test(path: &Path, error: &str) {
+    HEAD_READ_FAULTS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push((path.to_path_buf(), error.to_string()));
+}
+
 pub fn update_log_index(path: &Path) -> Result<IndexUpdate, String> {
     open_log(path).map(|opened| opened.update)
 }
@@ -993,11 +1023,10 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, St
     } else if size == state.source_size {
         rebuild = "the modification time changed at the same size".into();
     } else if state.head_len > 0 {
-        let matches = read_range(&source, 0, state.head_len as usize)
-            .map(|head| fnv1a(&head) == state.head_hash)
-            // default: a head that cannot be read is not the head that was indexed, so the index is built again.
-            .unwrap_or(false);
-        if !matches {
+        // A head that cannot be read is an error of the file, not a changed first line.
+        let head = read_head(&source, path, state.head_len as usize)
+            .map_err(|error| file_error(path.display(), &error))?;
+        if fnv1a(&head) != state.head_hash {
             rebuild = "the first line changed".into();
         }
     }

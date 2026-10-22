@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -587,6 +588,27 @@ func stillAt(file *os.File, path string) (bool, error) {
 }
 
 // UpdateLogIndex brings the index of the event file at path up to date, building it when it does not exist, and says what it did.
+// headReadFaults are the head read faults that a test injects per log file, keyed by the path of the file. The seam exists because
+// an ordinary file does not fail a read of its head.
+var headReadFaults sync.Map
+
+// readHead reads the head of the log file at path, or returns the injected fault of that file.
+func readHead(path string, source *os.File, length int64) ([]byte, error) {
+	if fault, found := headReadFaults.LoadAndDelete(path); found {
+		return nil, fault.(error)
+	}
+	head := make([]byte, length)
+	if _, err := source.ReadAt(head, 0); err != nil {
+		return nil, err
+	}
+	return head, nil
+}
+
+// FailHeadReadForTest makes the next head read of the log file at path fail with err.
+func FailHeadReadForTest(path string, err error) {
+	headReadFaults.Store(path, err)
+}
+
 func UpdateLogIndex(path string) (IndexUpdate, error) {
 	opened, err := openLog(path)
 	if err != nil {
@@ -648,8 +670,12 @@ func refreshLocked(path string, source, idx *os.File) (*openedLog, error) {
 	case size == state.sourceSize:
 		rebuild = "the modification time changed at the same size"
 	case state.headLen > 0:
-		head := make([]byte, state.headLen)
-		if _, err := source.ReadAt(head, 0); err != nil || fnv1a(head) != state.headHash {
+		// A head that cannot be read is an error of the file, not a changed first line.
+		head, err := readHead(path, source, int64(state.headLen))
+		if err != nil {
+			return nil, fileError(path, err)
+		}
+		if fnv1a(head) != state.headHash {
 			rebuild = "the first line changed"
 		}
 	}

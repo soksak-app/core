@@ -466,3 +466,30 @@ func TestLogIndexUpdateAllocatesForTheAppendedBytesOnly(t *testing.T) {
 		t.Fatalf("an update of two appended lines allocated %d bytes, want less than 1 MiB", allocated)
 	}
 }
+
+// A head read that fails fails the index update with the read error. The update does not rebuild with a reason that the file
+// does not show, such as the first line changed.
+// contract: log.index.head-read-error-is-reported
+func TestLogIndexHeadReadErrorFailsTheUpdate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "host-a.jsonl")
+	if err := os.WriteFile(path, []byte(linesOf(1, 4)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.UpdateLogIndex(path); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(linesOf(5, 9)); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sok.FailHeadReadForTest(path, errors.New("head read fault"))
+	if _, err := sok.UpdateLogIndex(path); err == nil || !strings.Contains(err.Error(), "head read fault") {
+		t.Fatalf("a failed head read gave %v, want the read error", err)
+	}
+}

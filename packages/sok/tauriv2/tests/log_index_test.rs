@@ -474,3 +474,22 @@ fn index_update_allocates_for_the_appended_bytes_only() {
         "a source shorter than the start allocates bytes"
     );
 }
+
+// A head read that fails fails the index update with the read error. The update does not rebuild with a reason that the file
+// does not show, such as the first line changed.
+// contract: log.index.head-read-error-is-reported
+#[test]
+fn a_head_read_error_fails_the_index_update() {
+    let (_config, path) = temp_file("index-head-read");
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+    std::fs::write(&path, lines_of(1, 4)).expect("write");
+    update_log_index(&path).expect("first update");
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("open");
+    file.write_all(lines_of(5, 9).as_bytes()).expect("append");
+    soksak_sok::log_index::fail_head_read_for_test(&path, "head read fault");
+    let error = update_log_index(&path).expect_err("a failed head read is an error");
+    assert!(error.contains("head read fault"), "{error}");
+}
