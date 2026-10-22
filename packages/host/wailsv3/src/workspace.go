@@ -497,6 +497,11 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			}
 			path = filepath.Join(projects[at]["root"].(string), ".soksak", "settings.json")
 		}
+		// The write reads the file through the entry of the shared reader, which migrates it first, and stores the current form of
+		// the file (docs/spec/installation.md#stored-data-migration).
+		if _, err := sok.MigrateSettings(filepath.Dir(path)); err != nil {
+			return nil, err
+		}
 		settings := Record{}
 		if err := readJSON(path, &settings); err != nil {
 			return nil, err
@@ -513,6 +518,11 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 				removed = append(removed, key)
 			}
 		}
+		format, err := sok.SettingsFormat()
+		if err != nil {
+			return nil, err
+		}
+		settings["format"] = format
 		if err := writeJSON(path, settings); err != nil {
 			return nil, err
 		}

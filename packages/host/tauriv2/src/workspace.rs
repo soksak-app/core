@@ -486,6 +486,11 @@ impl Workspace {
                 } else {
                     self.directory.join("settings.json")
                 };
+                // The write reads the file through the entry of the shared reader, which migrates it first, and stores the current form
+                // of the file (docs/spec/installation.md#stored-data-migration).
+                soksak_sok::migrate::migrate_settings(
+                    path.parent().ok_or("invalid settings path")?,
+                )?;
                 let mut settings: Map<String, Value> = read(&path)?;
                 let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
@@ -496,6 +501,10 @@ impl Workspace {
                         removed.push(key);
                     }
                 }
+                settings.insert(
+                    "format".into(),
+                    json!(soksak_sok::migrate::settings_format()?),
+                );
                 write(&path, &settings)?;
                 set.sort();
                 removed.sort();

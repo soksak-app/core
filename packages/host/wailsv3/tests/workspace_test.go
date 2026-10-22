@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"sync"
 	"testing"
@@ -120,7 +121,8 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 	if err := readJSON(t, filepath.Join(root, ".soksak", "settings.json"), &project); err != nil {
 		t.Fatal(err)
 	}
-	if len(project) != 1 || project["gap"] != float64(12) {
+	// The file holds its overrides and the format member of the current form (docs/spec/installation.md#stored-data-migration).
+	if len(project) != 2 || project["gap"] != float64(12) || project["format"] != float64(1) {
 		t.Fatalf("project file includes inherited settings: %v", project)
 	}
 	reopened := host.NewWorkspace(config)
@@ -517,5 +519,49 @@ func TestTabStateRejectsOtherFormatAndInvalidEntries(t *testing.T) {
 		if err == nil || err.Error() != c.want {
 			t.Errorf("put %q %v returned %v, want %q", c.tab, c.entry, err, c.want)
 		}
+	}
+}
+
+// contract: workspace.settings.write-stores-current-form
+func TestProjectSettingsWriteStoresTheCurrentNumberedForm(t *testing.T) {
+	config := t.TempDir()
+	w := host.NewWorkspace(config)
+	earlier := t.TempDir()
+	apply := func(req host.WorkspaceRequest) {
+		t.Helper()
+		if _, err := w.Apply(req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-earlier", "root": earlier, "identity": "1:4"}})
+	if err := os.MkdirAll(filepath.Join(earlier, ".soksak"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(earlier, ".soksak", "settings.json")
+	if err := os.WriteFile(file, []byte(`{"gap":6}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-earlier", Patch: map[string]any{"gap": 12}})
+	assertProjectFileForm(t, file, map[string]any{"format": float64(1), "gap": float64(12)})
+	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-earlier", Remove: []string{"gap"}})
+	assertProjectFileForm(t, file, map[string]any{"format": float64(1)})
+	fresh := t.TempDir()
+	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-fresh", "root": fresh, "identity": "1:5"}})
+	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-fresh", Patch: map[string]any{"gap": 3}})
+	assertProjectFileForm(t, filepath.Join(fresh, ".soksak", "settings.json"), map[string]any{"format": float64(1), "gap": float64(3)})
+}
+
+func assertProjectFileForm(t *testing.T, path string, want map[string]any) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s holds %v, want %v", path, got, want)
 	}
 }

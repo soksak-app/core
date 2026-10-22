@@ -42,9 +42,10 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
         &store,
         json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
     );
+    // The written file is in the current numbered form (docs/spec/installation.md#stored-data-migration).
     assert_eq!(
         read(&root.path().join(".soksak/settings.json")),
-        json!({"gap":12})
+        json!({"format": 1, "gap": 12})
     );
     let reopened = Workspace::new(config.path().into());
     let snapshot = apply(&reopened, json!({"kind":"snapshot"}));
@@ -568,4 +569,49 @@ fn tab_state_rejects_other_format_and_invalid_entries() {
     ] {
         assert_eq!(put(tab, entry.clone()), want, "{tab} {entry}");
     }
+}
+
+// contract: workspace.settings.write-stores-current-form
+#[test]
+fn a_project_settings_write_stores_the_current_numbered_form() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    // A project whose settings file is in the earlier form (no format member).
+    let earlier = folder::Folder::new();
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-earlier", "root":earlier.path(), "identity":"1:4"}}),
+    );
+    fs::create_dir_all(earlier.path().join(".soksak")).unwrap();
+    fs::write(earlier.path().join(".soksak/settings.json"), r#"{"gap":6}"#).unwrap();
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-earlier", "patch":{"gap":12}}),
+    );
+    assert_eq!(
+        read(&earlier.path().join(".soksak/settings.json")),
+        json!({"format": 1, "gap": 12})
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-earlier", "remove":["gap"]}),
+    );
+    assert_eq!(
+        read(&earlier.path().join(".soksak/settings.json")),
+        json!({"format": 1})
+    );
+    // A project whose settings file does not exist yet.
+    let fresh = folder::Folder::new();
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-fresh", "root":fresh.path(), "identity":"1:5"}}),
+    );
+    apply(
+        &store,
+        json!({"kind":"settings", "id":"prj-fresh", "patch":{"gap":3}}),
+    );
+    assert_eq!(
+        read(&fresh.path().join(".soksak/settings.json")),
+        json!({"format": 1, "gap": 3})
+    );
 }

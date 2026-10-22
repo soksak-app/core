@@ -512,8 +512,13 @@ fn fixture(host: &Host, window: &Window, request: Map<String, Value>) -> Result<
     let root = window.state::<Workspace>().directory().join("test-project");
     let settings = root.join(".soksak");
     platform.private_directory(&settings).map_err(internal)?;
+    // The project settings file is written in the current numbered form (docs/spec/installation.md#stored-data-migration).
+    let format = soksak_sok::migrate::settings_format().map_err(internal)?;
     platform
-        .write_private_file(&settings.join("settings.json"), b"{}\n")
+        .write_private_file(
+            &settings.join("settings.json"),
+            format!("{{\"format\": {format}}}\n").as_bytes(),
+        )
         .map_err(internal)?;
     let mut params = Map::new();
     params.insert(

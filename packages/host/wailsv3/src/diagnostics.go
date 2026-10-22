@@ -142,7 +142,12 @@ func diagnosticFixture(e *Endpoint, _ *endpointConn, params json.RawMessage) (an
 	if err := system.PrivateDirectory(filepath.Join(root, ".soksak")); err != nil {
 		return nil, err
 	}
-	if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{}); err != nil {
+	// The project settings file is written in the current numbered form (docs/spec/installation.md#stored-data-migration).
+	format, err := sok.SettingsFormat()
+	if err != nil {
+		return nil, err
+	}
+	if err := writeJSON(filepath.Join(root, ".soksak", "settings.json"), Record{"format": format}); err != nil {
 		return nil, err
 	}
 	// settings are the common settings applied over the defaults. When given, it must be an object.
