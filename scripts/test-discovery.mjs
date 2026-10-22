@@ -66,15 +66,7 @@ export async function discoverRust({ packageName, features, cwd, env, id, write 
   const result = build.results.get(`build ${id}`);
   write(`${result.status === 'pass' ? 'PASS' : 'FAIL'} build ${id} ${(result.elapsedMs / 1000).toFixed(3)}s`);
   if (result.status !== 'pass') return { tests: [], failures: [`${id}: the build failed`] };
-  const executables = [];
-  for (const line of result.output.split('\n')) {
-    if (!line.startsWith('{')) continue;
-    let message;
-    try { message = JSON.parse(line); } catch { continue; }
-    if (message.reason === 'compiler-artifact' && message.profile?.test && message.executable) {
-      executables.push({ executable: message.executable, dir: dirname(message.manifest_path), target: message.target.name });
-    }
-  }
+  const executables = cargoTestExecutables(result.output);
   const tests = [];
   for (const { executable, dir, target } of executables) {
     const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
@@ -84,6 +76,25 @@ export async function discoverRust({ packageName, features, cwd, env, id, write 
     }
   }
   return { tests, failures: [] };
+}
+
+/**
+ * The test executables of the cargo JSON messages. A line that starts with a brace must parse: a line that does not is an
+ * error that names the line, because a skipped message would hide a test executable.
+ */
+export function cargoTestExecutables(output) {
+  const executables = [];
+  for (const line of output.split('\n')) {
+    if (!line.startsWith('{')) continue;
+    let message;
+    try { message = JSON.parse(line); } catch (error) {
+      throw new Error(`cargo message is not JSON (${error.message}): ${line}`, { cause: error });
+    }
+    if (message.reason === 'compiler-artifact' && message.profile?.test && message.executable) {
+      executables.push({ executable: message.executable, dir: dirname(message.manifest_path), target: message.target.name });
+    }
+  }
+  return executables;
 }
 
 /**
