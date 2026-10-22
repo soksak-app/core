@@ -473,7 +473,8 @@ fn core_root_resolver_reports_a_granted_file_that_is_missing() {
 }
 
 /// The view import map that staging writes to view-imports.json, which the tests give the bundled frontend.
-const VIEW_IMPORTS_TEXT: &str = r#"{"imports":{"soksak":"sok://core/modules/soksak/dist/index.js"}}"#;
+const VIEW_IMPORTS_TEXT: &str =
+    r#"{"imports":{"soksak":"sok://core/modules/soksak/dist/index.js"}}"#;
 
 // contract: document.view-import-map.native
 #[test]
@@ -482,10 +483,15 @@ fn view_import_map_is_set_from_the_staged_file() {
         resolver: Mutex::new(None),
         map: Mutex::new(None),
     };
-    let frontend: installed::CoreFrontend =
-        Arc::new(|name: &str| (name == "view-imports.json").then(|| VIEW_IMPORTS_TEXT.as_bytes().to_vec()));
-    installed::register_view_import_map(&platform, frontend).expect("the host sets the view import map");
-    assert_eq!(platform.map.lock().unwrap().as_deref(), Some(VIEW_IMPORTS_TEXT));
+    let frontend: installed::CoreFrontend = Arc::new(|name: &str| {
+        (name == "view-imports.json").then(|| VIEW_IMPORTS_TEXT.as_bytes().to_vec())
+    });
+    installed::register_view_import_map(&platform, frontend)
+        .expect("the host sets the view import map");
+    assert_eq!(
+        platform.map.lock().unwrap().as_deref(),
+        Some(VIEW_IMPORTS_TEXT)
+    );
 }
 
 // contract: document.view-import-map.native

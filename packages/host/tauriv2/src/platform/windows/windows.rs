@@ -31,7 +31,6 @@ impl CoreRootHost for Windows {
         unsupported::set_core_root(resolve)
     }
 
-
     fn set_view_import_map(&self, map: &str) -> Result<(), String> {
         unsupported::set_view_import_map(map)
     }
