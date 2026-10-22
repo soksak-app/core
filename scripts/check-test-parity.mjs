@@ -187,6 +187,25 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F249",
+    implementation: [
+      { file: "packages/workbench/command-route.js", symbol: "export function runCommandCall" },
+      { file: "packages/workbench/plugin-host.js", symbol: "export function listenPluginHostCalls" },
+      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func servedPluginHostCall" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub fn forwarded_call" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "runtime.command runs a core command through runCore and a command of the plugin through runOwned, with the checks of the view call" },
+      { file: "packages/workbench/test/plugin-host-calls.test.mjs", id: "runtime.log writes the record of the plugin through its log with the checks of the plugin context" },
+      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsTheCommandCall" },
+      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostChannelForwardsTheLogCall" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_the_command_call_to_the_main_page" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "the_host_forwards_the_log_call_to_the_main_page" },
+    ],
+    expected: "A plugin host page runs a command with runtime.command and writes an event with runtime.log; both hosts forward the calls and the main page answers them with the checks of the view calls, each checked by a workbench, a Go and a Rust test.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-8",
     implementation: [
       { file: "packages/workbench/declared-section.js", symbol: "export function createDeclaredSection" },
