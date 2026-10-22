@@ -43,6 +43,11 @@ const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
 // Holds the request receivers of the surface modules mounted in this document.
 const surfacePorts = new Map();
 
+// The surfaces whose page is a view. A view answers the forwarded requests of its own names through its exposure-request subscription
+// (docs/spec/native-surfaces.md#view-surfaces), so a request of a view surface reaches the port of the page only when it names a core
+// surface entry, which the page registers for every surface (docs/spec/exposure.md#surface-documents).
+const viewSurfaces = new Set();
+
 /**
  * Creates one registry.
  *
@@ -662,7 +667,17 @@ export function whenRepliesSent() {
   return unanswered === 0 ? Promise.resolve() : new Promise((resolve) => answeredWaiters.push(resolve));
 }
 
+/** Marks a surface as a view for the lifetime of its mount. The returned function ends the mark. */
+export function markViewSurface(surface) {
+  viewSurfaces.add(surface);
+  return () => { viewSurfaces.delete(surface); };
+}
+
+const isCoreSurfaceRequest = ({ params }) => typeof params?.name === "string" && params.name.startsWith(SURFACE_CORE);
+
 export async function dispatchSurfaceRequest(request) {
+  // A view answers its own request through its subscription, so the request is consumed here and is not forwarded to the view again.
+  if (viewSurfaces.has(request.surface) && !isCoreSurfaceRequest(request)) return true;
   const port = surfacePorts.get(request.surface);
   if (!port) return false;
   await port(request);

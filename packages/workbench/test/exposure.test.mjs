@@ -12,7 +12,7 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, installExposure, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
+const { createRegistry, installExposure, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
 const { keepHostCommands } = await import("../plugin-host.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
@@ -27,6 +27,25 @@ test("mounted surface exposure routes through its registered module and releases
     remove();
     assert.equal(await dispatchSurfaceRequest(request), false);
   } finally {
+    remove();
+  }
+});
+
+test("a view surface sends only its core surface entries to the page port, and consumes its other requests for the view", async () => {
+  const surface = "fixture-view-surface";
+  const received = [];
+  const remove = registerSurfacePort(surface, async (request) => { received.push(request.id); });
+  const unmark = markViewSurface(surface);
+  try {
+    assert.equal(await dispatchSurfaceRequest({ surface, id: 1, method: "status.get", params: { name: "fixture-view.lines" } }), true);
+    assert.equal(await dispatchSurfaceRequest({ surface, id: 2, method: "status.get", params: { name: "core.surface.document" } }), true);
+    assert.equal(await dispatchSurfaceRequest({ surface, id: 3, method: "exposure.list", params: {} }), true);
+    assert.deepEqual(received, [2], "a request of the view reached the page port");
+    unmark();
+    assert.equal(await dispatchSurfaceRequest({ surface, id: 4, method: "status.get", params: { name: "fixture-view.lines" } }), true);
+    assert.deepEqual(received, [2, 4], "a surface that is no longer a view does not consume its requests");
+  } finally {
+    unmark();
     remove();
   }
 });

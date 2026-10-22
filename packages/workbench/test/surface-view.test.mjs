@@ -579,3 +579,102 @@ test("a view reply the host refuses is reported through the page error path", { 
     dom.window.close();
   }
 });
+
+// A view surface mounts with the core surface entries that exposure.json declares. The view registers its own port for the forwarded
+// requests, and the page registers the core entries of the surface, so the surface mounts once and the entries are registered.
+test("a view surface mounts with the core surface entries that exposure.json declares", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
+        calls.push({ name, payload });
+        return null;
+      } } };
+    },
+  } });
+  const calls = [];
+  const exposureFile = (await import("../exposure.json", { with: { type: "json" } })).default;
+  const { installExposure, registry, dispatchSurfaceRequest } = await import("../exposure.js");
+  installExposure(structuredClone(exposureFile));
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-core-exposure");
+  const pluginId = "fixture-core-view";
+  const surfaceId = "fixture-core-view-surface";
+  recordOrigin(surfaceId, null);
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+    const names = registry.namesOf(surfaceId);
+    assert.ok(names.includes("status core.surface.document"), `the document status is not registered: ${JSON.stringify(names)}`);
+    assert.ok(names.includes("command core.surface.hit"), `the hit command is not registered: ${JSON.stringify(names)}`);
+    assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 7, method: "status.get", params: { name: "core.surface.document" } }),
+      true, "the core entry of the view surface is not served by its page");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
+// A view mount, then the core registration of the surface, then a command that the view registers: all three use the one exposure
+// port of the surface, so the mount succeeds and the command reaches the registry of the surface.
+test("a view mount, its core registration and its command registration share one exposure port", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async () => null } };
+    },
+  } });
+  const exposureFile = (await import("../exposure.json", { with: { type: "json" } })).default;
+  const { installExposure, registry, dispatchSurfaceRequest } = await import("../exposure.js");
+  // The core declarations are installed once per document; an earlier test of this file may have installed them.
+  if (!registry.declared("status", "core.surface.document")) installExposure(structuredClone(exposureFile));
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-one-port");
+  const pluginId = "fixture-one-port-view";
+  const surfaceId = "fixture-one-port-view-surface";
+  const command = `${pluginId}.run`;
+  const commands = [{ name: command, description: "Runs the fixture.", params: { type: "object" }, result: { type: "null" } }];
+  recordOrigin(surfaceId, null);
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, { status: [], dom: [], commands });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const composition = { kind: "view", page: "ui/page.html" };
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands, dom: [] }, sidecars: [], composition };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+    assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.get", params: { name: "core.surface.document" } }),
+      true, "the core entry of the view surface is not served by its page");
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 2, command: "runtime.command.register", params: { name: command } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.ok(registry.namesOf(surfaceId).includes(`command ${command}`), `the view command is not registered: ${JSON.stringify(registry.namesOf(surfaceId))}`);
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});

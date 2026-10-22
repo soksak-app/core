@@ -1,6 +1,6 @@
 import { LOG_LEVELS, createSurfaceContext } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
-import { registry, registerSurfacePort } from "./exposure.js";
+import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
@@ -268,13 +268,14 @@ function answerViewCalls(surface, scoped, page, context, closing) {
   });
   // The declared UI pull of a declared section sends through this layer, so it is kept by surface until the answers end.
   const forgetCommands = keepViewCommands(surface.surfaceId, viewCommands);
-  // The exposure of the view. A forwarded exposure request reaches the view through its exposure-request subscription and is
-  // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the port
-  // only consumes the request: without it the page would forward the request to the view again (docs/spec/exposure.md#relay).
-  const removeExposurePort = registerSurfacePort(surface.surfaceId, () => {});
-  // The port ends at the dispose of the mount, which is synchronous. The listener registrations below settle later, so their teardown
-  // is not the end of the port: a mount of the same surface that follows the dispose registers its own port.
-  closing.addEventListener("abort", removeExposurePort, { once: true });
+  // The exposure of the view. A forwarded exposure request of the view reaches the view through its exposure-request subscription and is
+  // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the page does not
+  // forward it again (docs/spec/exposure.md#relay). The mark is set here and not through the surface port, which the page registers for
+  // the core surface entries of the same surface (registerSurfaceExposure).
+  const unmarkView = markViewSurface(surface.surfaceId);
+  // The mark ends at the dispose of the mount, which is synchronous. The listener registrations below settle later, so their teardown
+  // is not the end of the mark: a mount of the same surface that follows the dispose marks it again.
+  closing.addEventListener("abort", unmarkView, { once: true });
   const options = {
     plugin: surface.pluginId,
     surface: surface.surfaceId,
@@ -372,7 +373,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     offCall();
     offReply();
     forgetCommands();
-    removeExposurePort();
+    unmarkView();
     viewCommands.close();
     return subscriptions.close();
   });
