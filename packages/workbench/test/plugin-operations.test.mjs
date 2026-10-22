@@ -299,3 +299,10 @@ test("update-all updates the plugins of updates one after the other and stops at
   await quiet.updateAll();
   assert.deepEqual(current.calls, [["pluginsState"]]);
 });
+
+test("a host call that rejects with a value that is not an Error is reported with its text", async () => {
+  const host = { call: async () => { throw "installed.json is not valid JSON"; } };
+  const operations = createPluginOperations({ host, loaded: () => loaded, changed: () => {} });
+  await operations.refresh();
+  assert.deepEqual(operations.failure(), { kind: "state", message: "installed.json is not valid JSON" });
+});
