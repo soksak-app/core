@@ -21,6 +21,8 @@ pub struct HostPlugin {
     pub id: String,
     pub page: String,
     pub state: Option<HostState>,
+    /// The exposes of the manifest of the plugin, as an object (docs/spec/plugin-host.md#configuration).
+    pub exposes: Value,
 }
 
 /// The state field of a host declaration: the format number of the saved value and its size limit in bytes
@@ -47,14 +49,36 @@ pub fn host_plugins(config_dir: &Path) -> Result<Vec<HostPlugin>, String> {
             .get(id)
             .ok_or_else(|| format!("plugin {id} has no installed manifest"))?;
         if let Some((page, state)) = host_declaration(id, &manifest.value)? {
+            let exposes = host_exposes(id, &manifest.value)?;
             hosts.push(HostPlugin {
                 id: id.clone(),
                 page,
                 state,
+                exposes,
             });
         }
     }
     Ok(hosts)
+}
+
+/// Returns the exposes of the manifest of plugin as an object, or {} when the manifest declares none. An exposes that is not an
+/// object is refused with the text of the Go host (docs/spec/plugin-host.md#configuration).
+pub fn host_exposes(plugin: &str, manifest: &Value) -> Result<Value, String> {
+    match manifest.get("exposes") {
+        None | Some(Value::Null) => Ok(json!({})),
+        Some(value) if value.is_object() => Ok(value.clone()),
+        Some(_) => Err(format!("the exposes of plugin {plugin} are not an object")),
+    }
+}
+
+/// Returns the document-start script that sets window.sokHost to the frozen project of the window and the exposes of the plugin,
+/// with no surface (docs/spec/plugin-host.md#configuration). root is None in a window that shows no project.
+pub fn host_start_script(root: Option<&str>, exposes: &Value) -> String {
+    let project = match root {
+        Some(root) => format!("Object.freeze({{\"root\":{}}})", json!(root)),
+        None => "null".to_string(),
+    };
+    format!("window.sokHost = Object.freeze({{project: {project}, declarations: {exposes}}});")
 }
 
 /// Returns the page and the state of the host declaration of the manifest of plugin, or None when the manifest declares

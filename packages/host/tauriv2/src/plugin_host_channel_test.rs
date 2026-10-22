@@ -749,3 +749,42 @@ fn a_native_view_post_is_a_main_thread_task() {
         "the native view post runs on the main thread through the dispatch"
     );
 }
+
+// contract: plugin-host.project.post
+// A change of the project that the window shows is posted to each plugin host with a ready document as the event project with {root} or
+// null; a host without a ready document is skipped (docs/spec/plugin-host.md#configuration).
+#[test]
+fn a_project_change_posts_the_project_event_to_each_host_with_a_ready_document() {
+    let plugins = vec!["probe".to_string(), "other".to_string()];
+    let ready = |plugin: &str| plugin == "probe";
+    let mut posted = vec![];
+    let failed = crate::plugin_host_channel::post_project_via(
+        &plugins,
+        ready,
+        Some("/work/two"),
+        |plugin, message| {
+            posted.push((plugin.to_string(), message.clone()));
+            Ok(())
+        },
+    );
+    assert!(failed.is_empty());
+    assert_eq!(
+        posted,
+        vec![(
+            "probe".to_string(),
+            serde_json::json!({"sok": 1, "event": "project", "data": {"root": "/work/two"}})
+        )]
+    );
+    posted.clear();
+    crate::plugin_host_channel::post_project_via(&plugins, ready, None, |plugin, message| {
+        posted.push((plugin.to_string(), message.clone()));
+        Ok(())
+    });
+    assert_eq!(
+        posted,
+        vec![(
+            "probe".to_string(),
+            serde_json::json!({"sok": 1, "event": "project", "data": null})
+        )]
+    );
+}

@@ -742,6 +742,65 @@ fn post(window: &Window, plugin: &str, message: &Value) -> Result<(), String> {
     }
 }
 
+/// Returns the root of the project that the window shows, or None when it shows none (docs/spec/plugin-host.md#configuration).
+pub(crate) fn shown_project_root(window: &Window) -> Result<Option<String>, String> {
+    let data = window_data(window)?;
+    let shown = data
+        .shown
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if shown.is_empty() {
+        return Ok(None);
+    }
+    Ok(data
+        .projects
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&shown)
+        .cloned())
+}
+
+/// Posts the event project with the root of the shown project, or null, to each plugin of plugins that is ready, and returns the
+/// failures of the posts. dispatch(plugin, message) posts the message to the host of plugin. A host without a ready document is
+/// skipped, because the project of its window reaches it with its ready message (docs/spec/plugin-host.md#configuration).
+pub(crate) fn post_project_via(
+    plugins: &[String],
+    ready: impl Fn(&str) -> bool,
+    root: Option<&str>,
+    mut dispatch: impl FnMut(&str, &Value) -> Result<(), String>,
+) -> Vec<String> {
+    let data = root.map_or(Value::Null, |root| json!({ "root": root }));
+    let mut failures = vec![];
+    for plugin in plugins {
+        if !ready(plugin) {
+            continue;
+        }
+        let message = json!({"sok": 1, "event": "project", "data": data});
+        if let Err(error) = dispatch(plugin, &message) {
+            failures.push(error);
+        }
+    }
+    failures
+}
+
+/// Posts the project that the window shows to each plugin host with a ready document, as the event project. It runs after the
+/// project of the window changed, as the theme does (docs/spec/plugin-host.md#configuration).
+pub(crate) fn post_project_to_plugin_hosts(window: &Window) -> Result<(), String> {
+    let root = shown_project_root(window)?;
+    let data = window_data(window)?;
+    let plugins = data.plugin_host_channels.plugins();
+    for failure in post_project_via(
+        &plugins,
+        |plugin| data.plugin_host_channels.ready_document(plugin).is_some(),
+        root.as_deref(),
+        |plugin, message| post(window, plugin, message),
+    ) {
+        log_error("plugin host channel", failure);
+    }
+    Ok(())
+}
+
 /// Posts the current theme to the ready document of the host of plugin.
 fn post_theme(window: &Window, plugin: &str) -> Result<(), String> {
     let theme = crate::theme::get(window)?;

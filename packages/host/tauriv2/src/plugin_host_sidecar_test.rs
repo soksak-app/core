@@ -14,6 +14,7 @@ fn the_page_start_closes_plugin_host_sessions_only() {
     assert_eq!(parse_session("plugin:probe:project-a"), None);
 }
 
+use serde_json::json;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::path::Path;
@@ -514,6 +515,7 @@ fn creating_a_plugin_host_keeps_the_restart_stop_of_its_sidecar() {
         id: "probe".into(),
         page: "ui/host.html".into(),
         state: None,
+        exposes: json!({}),
     }];
     let hosts = PluginHosts::default();
     let restarts = PluginHostRestarts::default();

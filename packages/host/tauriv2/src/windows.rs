@@ -837,6 +837,7 @@ fn project_open_on_main(
             // default: a lock that a panicking thread poisoned still holds the shown project, which this call replaces; the
             // panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner) = request.id.clone();
+        crate::plugin_host_channel::post_project_to_plugin_hosts(&owner)?;
         owner
             .set_title(&format!("{} / Tauri v2", request.title))
             .map_err(|e| e.to_string())?;
@@ -944,6 +945,9 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
                     .unwrap_or_else(PoisonError::into_inner),
                 &id,
             );
+            if shown_released {
+                crate::plugin_host_channel::post_project_to_plugin_hosts(&owner)?;
+            }
             crate::plugin_host_sidecar::close_project_plugin_sessions(
                 &window.state::<crate::sidecars::WindowSidecars>(),
                 &owner,
@@ -1102,6 +1106,8 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
     let theme = crate::theme::get(window)?;
     let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
     let theme = crate::documents::theme_script(&theme);
+    // The project that the window shows when the plugin host is created; a later change is posted as the event project.
+    let root = crate::plugin_host_channel::shown_project_root(window)?;
     let channel = crate::documents::view_channel()?;
     for plugin in wanted {
         let folder = crate::installed::plugin_folder(&config, &plugin.id)?;
@@ -1111,6 +1117,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             .to_string();
         let host_plugin = plugin.id.clone();
         let theme = theme.clone();
+        let start_script = crate::plugin_host::host_start_script(root.as_deref(), &plugin.exposes);
         let host_window = window.clone();
         data.plugin_host_channels.register(&plugin.id, plugin.state);
         let view = crate::plugin_host::HostView {
@@ -1155,6 +1162,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
                     }),
                 )?;
                 platform.add_document_script(handle, &theme)?;
+                platform.add_document_script(handle, &start_script)?;
                 Ok(handle)
             },
             |handle, address| platform.load_document(handle, address),

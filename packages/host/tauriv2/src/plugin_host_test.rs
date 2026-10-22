@@ -87,7 +87,8 @@ fn the_host_creates_the_host_webview_of_a_plugin_that_declares_host_and_loads_it
         vec![HostPlugin {
             id: "probe".into(),
             page: "ui/host.html".into(),
-            state: None
+            state: None,
+            exposes: json!({})
         }],
         "only probe declares host"
     );
@@ -139,6 +140,7 @@ fn the_host_creates_one_host_webview_per_plugin_per_window() {
         id: "probe".into(),
         page: "ui/host.html".into(),
         state: None,
+        exposes: json!({}),
     }];
     assert_eq!(
         hosts.missing(&plugins, &PluginHostRestarts::default()),
@@ -196,6 +198,7 @@ fn a_page_start_disposes_every_host_webview_and_the_next_readiness_creates_them_
         id: "probe".into(),
         page: "ui/host.html".into(),
         state: None,
+        exposes: json!({}),
     }];
     assert_eq!(
         hosts.missing(&plugins, &PluginHostRestarts::default()),
@@ -316,6 +319,7 @@ fn probe() -> Vec<HostPlugin> {
         id: "probe".into(),
         page: "ui/host.html".into(),
         state: None,
+        exposes: json!({}),
     }]
 }
 
@@ -434,5 +438,36 @@ fn the_enable_of_the_plugin_clears_the_stop_and_reloads_every_window_once() {
         fail_at(&restarts, &offset, 40),
         Failure::Restart(1),
         "the enable kept the failures or the attempts"
+    );
+}
+
+// contract: plugin-host.start-values.first-script
+// The start values script of a plugin host sets window.sokHost to the frozen project of the window and the exposes of the plugin, with
+// no surface (docs/spec/plugin-host.md#configuration).
+#[test]
+fn the_start_values_script_of_a_plugin_host_holds_the_project_and_the_exposes_and_no_surface() {
+    let exposes = json!({"status": [{"name": "probe.value"}]});
+    assert_eq!(
+        plugin_host::host_start_script(Some("/work/one"), &exposes),
+        r#"window.sokHost = Object.freeze({project: Object.freeze({"root":"/work/one"}), declarations: {"status":[{"name":"probe.value"}]}});"#
+    );
+    assert_eq!(
+        plugin_host::host_start_script(None, &json!({})),
+        "window.sokHost = Object.freeze({project: null, declarations: {}});"
+    );
+}
+
+// contract: plugin-host.start-values.first-script
+// The exposes of a manifest are an object: a manifest without exposes has {}, and an exposes that is not an object is refused with the
+// text of the Go host (docs/spec/host-contract.md).
+#[test]
+fn the_exposes_of_a_manifest_are_an_object_or_empty() {
+    assert_eq!(
+        plugin_host::host_exposes("probe", &json!({"id": "probe"})),
+        Ok(json!({}))
+    );
+    assert_eq!(
+        plugin_host::host_exposes("probe", &json!({"id": "probe", "exposes": [1]})),
+        Err("the exposes of plugin probe are not an object".to_string())
     );
 }
