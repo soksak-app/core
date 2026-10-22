@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { checkNames, components, corePackageNames } from "../check-boundaries.mjs";
+import { checkNames, checkTestPathReads, components, corePackageNames } from "../check-boundaries.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
@@ -76,3 +76,37 @@ for (const [file, text, allowed] of cases) {
     assert.equal(errors.length === 0, allowed, errors.join("\n"));
   });
 }
+
+// The test paths: a test file under a component's test folder, or a file named as a test of Go, Rust or Node.
+const TEST_FILE = /(^|\/)tests?\/|_test\.(go|rs)$|\.test\.mjs$/;
+const testFiles = (files) => files.filter((file) => TEST_FILE.test(file));
+
+test("checkTestPathReads refuses a test that reads a path of another core package", () => {
+  // A test reads its own package and the repository's docs; a read of another package's folder is refused.
+  const parts = (...items) => items.join("");
+  const components = [
+    { dir: "packages/sok/wailsv3", kind: "core", name: scoped("sok-wails") },
+    { dir: "packages/sok/tauriv2", kind: "core", name: scoped("sok-tauri") },
+    { dir: "packages/log-contract", kind: "core", name: scoped("log-contract") },
+    { dir: "packages/plugin-api", kind: "core", name: scoped("plugin-api") },
+  ];
+  const sources = {
+    "packages/sok/wailsv3/tests/a_test.go": `package tests\nvar p = filepath.Join(dir, "../../../log-contract/fixtures/x.json")\n`,
+    "packages/sok/tauriv2/tests/b_test.rs": `const P: &str = "/../../plugin-api/contract/x.json";\n`,
+    "packages/sok/wailsv3/tests/c_test.go": `var p = filepath.Join(dir, "..", "..", "..", "log-contract", "fixtures")\n`,
+    "packages/sok/wailsv3/tests/d_test.go": `var p = filepath.Join(dir, "..", "..", "..", "..", "docs", "spec", "cases", "x.json")\n`,
+    "packages/sok/tauriv2/tests/e_test.rs": `const URL: &str = "/modules/@soksak/plugin-api/index.js";\n`,
+    "packages/sok/tauriv2/tests/f_test.rs": `const P: &str = "/../../sok/wailsv3/tests/x.json";\n`,
+    [`packages/plugin-api/test/${parts("g", ".test.mjs")}`]: `const P = new URL("../../../docs/spec/cases/x.json", import.meta.url);\n`,
+    [`packages/plugin-api/test/${parts("h", ".test.mjs")}`]: `const P = new URL("../../log-contract/fixtures/x.json", import.meta.url);\n`,
+  };
+  const errors = checkTestPathReads(components, testFiles(Object.keys(sources)), (file) => sources[file]);
+  const flagged = errors.map((error) => error.split(":")[0]).sort();
+  assert.deepEqual(flagged, [
+    "packages/plugin-api/test/h.test.mjs",
+    "packages/sok/tauriv2/tests/b_test.rs",
+    "packages/sok/tauriv2/tests/f_test.rs",
+    "packages/sok/wailsv3/tests/a_test.go",
+    "packages/sok/wailsv3/tests/c_test.go",
+  ]);
+});

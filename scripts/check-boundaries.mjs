@@ -10,7 +10,7 @@
 //   node scripts/check-boundaries.mjs [core checkout]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, posix, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { checkDeclaration, gitCommonDir, repositoryFolder } from "./workspace-registry.mjs";
 
@@ -97,6 +97,94 @@ function trackedSources(root) {
     .filter((file) => file !== "")
     .filter((file) => SOURCE.test(file) && !SKIP_FILES.has(file.split("/").pop()))
     .filter((file) => !file.split("/").some((segment) => SKIP_DIRS.has(segment)));
+}
+
+// The folders of the core packages that tests belong to: a folder under packages/ or packages/<group>/ with a package.json,
+// go.mod or Cargo.toml. The Go and Rust packages of sok and the host have no package.json.
+const PACKAGE_MARKERS = ["package.json", "go.mod", "Cargo.toml"];
+export function corePackageFolders(root = ROOT) {
+  const folders = [];
+  const isPackage = (dir) => PACKAGE_MARKERS.some((marker) => existsSync(join(dir, marker)));
+  const subdirs = (dir) => existsSync(dir)
+    ? readdirSync(dir).map((name) => join(dir, name)).filter((path) => statSync(path).isDirectory())
+    : [];
+  for (const dir of subdirs(join(root, "packages"))) {
+    if (isPackage(dir)) folders.push({ dir: relative(root, dir), kind: "core", name: relative(root, dir) });
+    for (const inner of subdirs(dir)) {
+      if (isPackage(inner)) folders.push({ dir: relative(root, inner), kind: "core", name: relative(root, inner) });
+    }
+  }
+  return folders;
+}
+
+// The test files: a file under a test folder, or named as a Go, Rust or Node test.
+const TEST_FILE = /(^|\/)tests?\/|_test\.(go|rs)$|\.test\.mjs$/;
+
+// A string literal of a test source: double, single or back quoted, or a Rust raw string.
+const LITERAL = /"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`([^`\n]*)`|r#"([^"\n]*)"#/g;
+
+/** The core package whose folder holds the file, the innermost one. */
+function owningComponent(cores, file) {
+  return cores
+    .filter((item) => file.startsWith(`${item.dir}/`))
+    .sort((a, b) => b.dir.length - a.dir.length)[0] ?? null;
+}
+
+/**
+ * The core package that a string of a test reads a path of, or null. A relative path is resolved from the folder of the
+ * test file and from the folder of its package (cargo runs a Rust test in its package folder); a path that starts with
+ * `packages/` is resolved from the checkout. A Go or Rust join that names another package folder as its own segment is
+ * recognized when its line also holds a `..` literal.
+ */
+function readsOtherPackage(text, file, owner, cores, lineHasParent) {
+  if (text.includes("@") || text.startsWith("/modules/")) return null;
+  const path = text.replace(/^file:\/\//, "");
+  const segments = path.split("/");
+  const parent = segments.indexOf("..");
+  if (parent >= 0 || segments[0] === "packages") {
+    const bases = segments[0] === "packages" ? [""] : [posix.dirname(file), owner.dir];
+    const rest = segments[0] === "packages" ? path : segments.slice(parent).join("/");
+    for (const base of bases) {
+      const resolved = posix.normalize(posix.join(base, rest));
+      const target = owningComponent(cores, `${resolved}/`);
+      if (target && target !== owner) return target.name;
+    }
+    return null;
+  }
+  if (path.length >= 3 && !path.includes("/") && lineHasParent) {
+    const target = cores.find((item) => item !== owner && posix.basename(item.dir) === path);
+    if (target) return target.name;
+  }
+  return null;
+}
+
+/**
+ * Checks that a test of a core package does not read a path of another core package (docs/spec/host-contract.md, AGENTS
+ * structure rule: tests use their own package, the shared contract cases of docs/spec, and fakes). `files` are the test
+ * files of the checkout; readSource reads a file by its path relative to the checkout.
+ */
+export function checkTestPathReads(components, files, readSource = (file) => readFileSync(join(ROOT, file), "utf8")) {
+  const cores = components.filter((item) => item.kind === "core");
+  const errors = [];
+  for (const file of files) {
+    const owner = owningComponent(cores, file);
+    if (!owner) continue;
+    let source;
+    try { source = readSource(file); }
+    catch (error) {
+      errors.push(`${file}: cannot be read: ${error?.message ?? error}`);
+      continue;
+    }
+    source.split("\n").forEach((line, index) => {
+      const lineHasParent = /"\.\."/.test(line);
+      for (const match of line.matchAll(LITERAL)) {
+        const text = match[1] ?? match[2] ?? match[3] ?? match[4] ?? "";
+        const target = readsOtherPackage(text, file, owner, cores, lineHasParent);
+        if (target) errors.push(`${file}:${index + 1}: test of ${owner.name} reads a path of ${target}: ${text}`);
+      }
+    });
+  }
+  return errors;
 }
 
 function main() {
