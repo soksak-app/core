@@ -187,6 +187,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248-8",
+    implementation: [
+      { file: "packages/workbench/declared-section.js", symbol: "export function createDeclaredSection" },
+      { file: "packages/workbench/page-layout.js", symbol: "export function reportUncaught" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "a failed pull leaves the section cleared, reports its error once, and is not retried" },
+      { file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section whose pull fails reports the error once through the page error event and draws nothing" },
+      { file: "packages/workbench/test/page-error-display.test.mjs", id: "an error event without a source location writes no location detail" },
+    ],
+    expected: "A failed declared pull leaves the section cleared, reports its error once through the page error event, is not retried on a timer, and an error event without a source location writes no location detail, each checked by a workbench test.",
+    levels: ["unit"],
+  },
+  {
     id: "F248-7",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
