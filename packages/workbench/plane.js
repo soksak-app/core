@@ -30,7 +30,7 @@ import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
-import { clearVisibleNotices, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
+import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
   tabModified, tabNotice } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
@@ -1541,11 +1541,14 @@ export function setGap(half) {
  * The layout, the focus, and the widths of the fixed window sidebars are values of the space.
  * The plane draws one space at a time.
  */
-export const capture = () => {
+export const capture = (path = null) => {
   keepWindowSidebarWidths(grid.cards, windowSidebars);
+  const displayed = grid.toJSON();
+  // A write names its writing path, and each view tab that it stores without an origin member is recorded (docs/spec/projects.md#tab-origin).
+  for (const text of missingOriginRecords(displayed, path)) report(text);
   return {
     // Each content-card tab stores its origin with the layout (docs/spec/projects.md#tab-origin).
-    state: storedLayoutState(grid.toJSON()), focusedId,
+    state: storedLayoutState(displayed), focusedId,
     windowSidebars: structuredClone(windowSidebars),
     named, sidebars: sidebarChoices(),
   };

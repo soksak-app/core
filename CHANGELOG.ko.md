@@ -5,6 +5,7 @@
 ## 미배포
 
 - F262-6a: view bridge가 `runtime.project(listener)`를 served한다. listener는 plugin host의 마지막 project를 바로 받고 host에 call을 보내지 않으며, 이는 `runtime.theme`과 같다. project message를 `runtime.native.on`으로 구독한 plugin host page는 host에 거부되었다.
+- F262-4a: 레이아웃 쓰기는 쓰기 경로(add space, saved layout, recreate 또는 library replacement)를 밝히며, origin 멤버 없이 저장하는 뷰 탭은 탭, plugin, 경로와 함께 응용 프로그램 로그에 기록된다.
 - F262-5: 창이 닫힌 뒤 도착한 plugin host의 navigation state나 message는 `project window is closed`로 보고되지 않는다.
 - F262-3: 두 host 모두 프로젝트 설정 파일을 현재 번호 있는 형태로 쓴다. settings 쓰기는 입구에서 파일을 migration하고 `format` member를 저장하며, diagnostics fixture도 현재 형태를 쓴다.
 - F262: 프로젝트 검사는 프로젝트 설정 파일을 현재의 번호 있는 형태로 읽고, 새 space의 tab은 저장된 layout이 가졌다가 버린 뒤에야 origin을 잃는다. 그래서 추가한 space의 첫 tab이 `has no origin`으로 표시에 실패하지 않는다.

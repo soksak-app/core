@@ -198,6 +198,27 @@ export function storedOriginMember(tabId) {
   return loaded.get(tabId);
 }
 
+// The writing paths of a layout write: the operation that stores the layout (docs/spec/projects.md#tab-origin).
+const WRITING_PATHS = ["add space", "saved layout", "recreate", "library replacement"];
+
+/**
+ * The error records of a layout write: one record for each view tab of the state that the write stores without an origin member. The
+ * write names its writing path; a read names none (null) and records nothing. The stored tab keeps no member, so the next layout read
+ * refuses it (docs/spec/projects.md#tab-origin).
+ */
+export function missingOriginRecords(state, path) {
+  if (path === null) return [];
+  if (!WRITING_PATHS.includes(path)) throw new TypeError(`unknown layout writing path: ${String(path)}`);
+  const records = [];
+  for (const card of state.cards) {
+    // default: a card without tabs has no view tab to record.
+    for (const tab of card.data?.tabs ?? []) {
+      if (storedOriginMember(tab.id) === null) records.push(`${path} stores tab ${tab.id} of plugin ${tab.plugin} without an origin member`);
+    }
+  }
+  return records;
+}
+
 // The tab ids of the last stored layout state. A tab that a stored layout held and that the next one does not hold has left the layout.
 let storedIds = new Set();
 

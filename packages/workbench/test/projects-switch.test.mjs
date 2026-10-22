@@ -79,12 +79,15 @@ const projects = await import("../projects.js");
  * The drawing of a clear erases the plane and runs the screen drawing it received (show). drawing is true during that drawing.
  */
 const plane = { layout: null, events: [], gate: Promise.resolve(), rejected: null, drawing: false };
+// The writing path that each layout save names (docs/spec/projects.md#tab-origin).
+const saves = [];
 plane.hold = () => {
   plane.gate = new Promise((resolve) => { plane.release = resolve; });
 };
 projects.onSwitch({
   check: (layout) => { if (layout === plane.rejected) throw new Error("fixture layout cannot be opened"); },
-  save: () => {
+  save: (path) => {
+    saves.push(path);
     if (plane.layout === null) throw new Error("the plane has no layout to save");
     return plane.layout;
   },
@@ -392,3 +395,13 @@ test("closing a tab removes its session file after the layout write, and the sta
   assert.deepEqual(puts, [["tab-a", null]], "closing a tab left its session file");
   await projects.flush();
 });
+
+test("each layout save names its writing path: add space for a new space of the shown project", async () => {
+  saves.length = 0;
+  await projects.initialise(store);
+  await projects.activate(PROJECT.id);
+  projects.addSpace(PROJECT.spaces[0].layout);
+  assert.equal(saves.at(-1), "add space");
+  assert.ok(saves.every((path) => typeof path === "string"), "a save names its writing path");
+});
+

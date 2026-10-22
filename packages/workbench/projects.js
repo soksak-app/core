@@ -146,7 +146,7 @@ export function begin(snapshot) {
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
   listener.load(layout);
-  opened.spaces.find((s) => s.id === opened.activeSpaceId).layout = listener.save();
+  opened.spaces.find((s) => s.id === opened.activeSpaceId).layout = listener.save("recreate");
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
@@ -235,7 +235,7 @@ async function readProjects() {
   const listed = new Set(snapshot.projects.map((p) => p.id));
   const removedProjects = projects.some((p) => !listed.has(p.id));
   // The cleanup below keeps only the tabs of the stored layouts. If the plane of the remaining active project has tabs that are not stored yet, they are stored first so that their surfaces remain too. The removed project is not stored.
-  if (removedProjects && listed.has(activeProjectId)) await keep();
+  if (removedProjects && listed.has(activeProjectId)) await keep("saved layout");
   // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   const previous = new Map(projects.map((p) => [p.id, p]));
@@ -264,11 +264,11 @@ async function readProjects() {
   return ended;
 }
 
-export function keep() {
+export function keep(path) {
   const project = active();
   if (!project || !listener || browsing) return writing;
   const before = projectTabs(project);
-  project.spaces.find((s) => s.id === project.activeSpaceId).layout = listener.save();
+  project.spaces.find((s) => s.id === project.activeSpaceId).layout = listener.save(path);
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
@@ -288,7 +288,7 @@ function activateHere(id) {
 
 async function showProject(id) {
   if (id === activeProjectId && !browsing && owned.has(id)) { await selectProject(id); return; }
-  await keep();
+  await keep("library replacement");
   await refresh();
   const project = projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
@@ -332,7 +332,7 @@ async function activateInTurn(id) {
   checkProject(project);
   // Activating the project drawn on the first screen has no previous project, so the window position is not stored.
   const resumed = begun === id;
-  await keep();
+  await keep("library replacement");
   if (!resumed) await saveGeometry();
   const folder = await windows.folder(project.root);
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
@@ -374,7 +374,7 @@ export async function close(id) {
   const asked = id === activeProjectId && !browsing ? await listener.settleTabs() : await windows.askRemoveProject(id, operation());
   if (!asked) return false;
   // The cleanup below keeps the tabs of the stored layouts. If the plane of the active project has tabs that are not stored yet, they are stored first so that their surfaces remain too.
-  await keep();
+  await keep("saved layout");
   await windows.releaseProject(id, operation());
   owned.delete(id);
   await store.remove(id);
@@ -391,20 +391,20 @@ export async function close(id) {
 export const rename = (id, title) => store.patch(id, { title });
 export const move = (id, delta) => store.move(id, delta);
 
-function restore() {
+function restore(path) {
   const p = active();
   listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout);
   changed();
-  keep();
+  keep(path);
 }
 
 export function addSpace(layout) {
   const project = active();
-  keep();
+  keep("add space");
   const space = { id: issueId("space"), title: `SPACE${++project.named}`, layout };
   project.spaces.push(space);
   project.activeSpaceId = space.id;
-  restore();
+  restore("add space");
   return space;
 }
 
@@ -415,9 +415,9 @@ export function activateSpace(id) {
   if (!space) throw new Error(`Unknown space: ${id}`);
   // If the plane cannot open the layout, it fails before the active space is changed.
   checkSpace(project, space.id);
-  keep();
+  keep("saved layout");
   project.activeSpaceId = id;
-  restore();
+  restore("saved layout");
 }
 
 export function closeSpace(id) {
@@ -429,17 +429,17 @@ export function closeSpace(id) {
   const rest = project.spaces.filter((s) => s.id !== id);
   const next = id === project.activeSpaceId ? rest[Math.min(at, rest.length - 1)] : null;
   if (next) checkSpace(project, next.id);
-  keep();
+  keep("saved layout");
   project.spaces.splice(at, 1);
   if (next) project.activeSpaceId = next.id;
-  restore();
+  restore("saved layout");
   // The tabs of the closed space are in no layout, so their sidecar sessions end.
   retainSidecarSessions(layoutSurfaces()).catch(failed);
 }
 
 export function renameSpace(id, title) {
   active().spaces.find((s) => s.id === id).title = title;
-  keep();
+  keep("saved layout");
 }
 
 export async function saveGeometry() {
@@ -456,7 +456,7 @@ export async function saveGeometry() {
  */
 export async function flush() {
   if (!tabSessions) throw new Error("projects.flush: the projects are not initialised");
-  await keep();
+  await keep("saved layout");
   await flushSettings();
   await saveGeometry();
   await tabSessions.flush();

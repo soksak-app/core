@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F262-6a: The view bridge serves `runtime.project(listener)`, which gives the listener the last project of the plugin host at once and makes no call to the host, as `runtime.theme` does. A plugin host page that subscribed the project message through `runtime.native.on` was refused by the host.
+- F262-4a: A layout write names its writing path (add space, saved layout, recreate or library replacement), and each view tab that it stores without an origin member is recorded in the application log with its tab, plugin and path.
 - F262-5: A navigation state or message of a plugin host that arrives after its window closed is not reported as `project window is closed`.
 - F262-3: The project settings file is written in the current numbered form by both hosts: a settings write migrates the file at its entry and stores the `format` member, and the diagnostics fixture writes the current form too.
 - F262: The projects check reads the project settings file in its current numbered form, and a tab of a new space keeps its origin until a stored layout has held it and dropped it, so the first tab of an added space no longer fails to present with `has no origin`.

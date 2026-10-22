@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recordOrigin, releasedNonViewOrigin, restoreOrigin, reportDirectory, storedLayoutState, tabOrigin, viewRefusal } from "../tab-reports.js";
+import * as tabReports from "../tab-reports.js";
 import { recordStoredOrigins } from "../stored-layout.js";
 
 const isView = (plugin) => plugin === "view-plugin";
@@ -99,3 +100,13 @@ test("a view tab whose origin is recorded in this session is not refused when a 
   assert.equal(viewRefusal("origin-in-session"), null, "a tab with a recorded origin was refused by a layout without its member");
   assert.deepEqual(tabOrigin("origin-in-session"), { directory: null });
 });
+
+test("a layout write that holds a view tab without an origin member names the tab, its plugin and the writing path", () => {
+  restoreOrigin({ id: "origin-missing", plugin: "view-plugin" }, isView("view-plugin"));
+  const state = { cards: [{ id: "card-missing", data: { tabs: [{ id: "origin-missing", plugin: "view-plugin" }] } }] };
+  assert.equal(typeof tabReports.missingOriginRecords, "function", "the layout write has no record of a view tab without an origin member");
+  assert.deepEqual(tabReports.missingOriginRecords(state, "saved layout"), ["saved layout stores tab origin-missing of plugin view-plugin without an origin member"]);
+  assert.deepEqual(tabReports.missingOriginRecords(state, null), [], "a read that names no writing path records nothing");
+  assert.throws(() => tabReports.missingOriginRecords(state, "elsewhere"), /unknown layout writing path: elsewhere/);
+});
+
