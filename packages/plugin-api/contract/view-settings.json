@@ -1,0 +1,277 @@
+{
+  "surface": "packages/plugin-api/view.js#createViewBridge runtime.settings runtime.textSize",
+  "description": "Ordered steps of the settings and text size calls of a view page: a read step calls runtime.settings.read or runtime.textSize.read and the answer is the reply, a subscribe step calls the on of settings or textSize with a named listener (listener null calls it without a listener), and an event step delivers a host event {event, data} to the listeners of its name. Each step lists the messages the page posts, the listener calls in order as {listener, data}, the result (a read gives its value, a subscribe gives function, and null when it applies), and the text of the error the step raises. The page is sok://probe/. settings has no key argument: runtime.settings.read returns the values of the plugin, and each host change is delivered to every listener of settings.",
+  "cases": [
+    {
+      "id": "view.settings.read-returns-the-host-values",
+      "steps": [
+        {
+          "read": "settings",
+          "answer": {
+            "result": {
+              "mode": "compact"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.settings.read",
+                "params": null
+              }
+            ],
+            "delivered": [],
+            "result": {
+              "mode": "compact"
+            },
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.textSize.read-returns-the-host-scale",
+      "steps": [
+        {
+          "read": "textSize",
+          "answer": {
+            "result": 1.25
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.textSize.read",
+                "params": null
+              }
+            ],
+            "delivered": [],
+            "result": 1.25,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.settings.on-delivers-each-host-change",
+      "steps": [
+        {
+          "subscribe": {
+            "kind": "settings",
+            "listener": "a"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.settings.on",
+                "params": null
+              }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "event": {
+            "event": "settings",
+            "data": {
+              "mode": "comfortable"
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "a",
+                "data": {
+                  "mode": "comfortable"
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.textSize.on-delivers-each-host-change",
+      "steps": [
+        {
+          "subscribe": {
+            "kind": "textSize",
+            "listener": "a"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.textSize.on",
+                "params": null
+              }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "event": {
+            "event": "textSize",
+            "data": 1.5
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "a",
+                "data": 1.5
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.settings.on-refuses-a-missing-listener",
+      "steps": [
+        {
+          "subscribe": {
+            "kind": "settings",
+            "listener": null
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": "settings requires a listener"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.settings.refused-subscription-is-removed",
+      "steps": [
+        {
+          "subscribe": {
+            "kind": "settings",
+            "listener": "a"
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "settings subscription refused"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.settings.on",
+                "params": null
+              }
+            ],
+            "delivered": [],
+            "result": null,
+            "throws": "settings subscription refused"
+          }
+        },
+        {
+          "event": {
+            "event": "settings",
+            "data": {
+              "mode": "ignored"
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.settings.listeners-share-one-subscription",
+      "steps": [
+        {
+          "subscribe": {
+            "kind": "settings",
+            "listener": "a"
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "runtime.settings.on",
+                "params": null
+              }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "subscribe": {
+            "kind": "settings",
+            "listener": "b"
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "event": {
+            "event": "settings",
+            "data": {
+              "mode": "shared"
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "a",
+                "data": {
+                  "mode": "shared"
+                }
+              },
+              {
+                "listener": "b",
+                "data": {
+                  "mode": "shared"
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    }
+  ]
+}
