@@ -2,6 +2,8 @@
 // its result and elapsed time, while the benchmark output is kept. The Go and Cargo toolchains are replaced by fakes on PATH. The fake
 // `go test -c -o <file>` writes a test binary that lists two benchmarks and runs the one named by `-test.bench`; the fake `cargo bench`
 // runs the second bench target for longer than its limit. The benchmark of the first target prints its measurement.
+// The limit is a parameter of the fixture, not a product bound: the first target ends at once and the second sleeps five times the
+// limit, so a loaded machine that delays the start of the first target by seconds does not reach the limit.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -22,7 +24,7 @@ case "$1" in
     cat > "$out" <<'BINARY'
 #!/bin/sh
 case "$1" in -test.list*) printf 'TestAlpha\\nBenchmarkEventLogEmit\\nBenchmarkNativePull\\n'; exit 0 ;; esac
-case "$*" in *NativePull*) sleep 8 ;; esac
+case "$*" in *NativePull*) sleep 30 ;; esac
 printf 'BenchmarkEventLogEmit-10  1  120 ns/op\\n'
 printf 'PASS\\n'
 BINARY
@@ -32,7 +34,7 @@ exit 1
 `);
   writeFileSync(join(directory, 'cargo'), `#!/bin/sh
 case "$*" in
-  *event_native_benchmark*) sleep 8 ;;
+  *event_native_benchmark*) sleep 30 ;;
   *) echo "event log mean 120 ns" ;;
 esac
 exit 0
@@ -45,28 +47,28 @@ exit 0
 function make(directory, target) {
   return spawnSync('make', target, {
     cwd: root, encoding: 'utf8', timeout: 90000,
-    env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '2' },
+    env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}`, BENCH_TIMEOUT: '6' },
   });
 }
 
 test('make benchmark-go names each benchmark when it starts, keeps its output, and kills a benchmark at its limit', (t) => {
   const directory = toolchain(t);
   const result = make(directory, ['benchmark-go']);
-  assert.match(result.stdout, /^RUN  BenchmarkEventLogEmit \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  BenchmarkEventLogEmit \(1 running, limit 6\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS BenchmarkEventLogEmit \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^BenchmarkEventLogEmit-10 {2}1 {2}120 ns\/op$/m, 'the measurement of the benchmark is not shown');
-  assert.match(result.stdout, /^RUN  BenchmarkNativePull \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^TIME BenchmarkNativePull \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  BenchmarkNativePull \(1 running, limit 6\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^TIME BenchmarkNativePull \d+\.\d{3}s exceeded 6\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
 });
 
 test('make benchmark-rust names each bench target when it starts, and kills a target at its limit', (t) => {
   const directory = toolchain(t);
   const result = make(directory, ['benchmark-rust']);
-  assert.match(result.stdout, /^RUN  event_log_benchmark \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  event_log_benchmark \(1 running, limit 6\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS event_log_benchmark \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^event log mean 120 ns$/m, 'the measurement of the bench target is not shown');
-  assert.match(result.stdout, /^RUN  event_native_benchmark \(1 running, limit 2\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^TIME event_native_benchmark \d+\.\d{3}s exceeded 2\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^RUN  event_native_benchmark \(1 running, limit 6\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^TIME event_native_benchmark \d+\.\d{3}s exceeded 6\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
 });

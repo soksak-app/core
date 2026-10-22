@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F257-2: The benchmark runner test gives its fixtures a limit of 6 s and lets the fixture that runs over it sleep 30 s, so a fixture that ends at once is not stopped by a loaded machine. Red: the push check at load 105 failed with `TIME event_log_benchmark 2.012s exceeded 2.000s and was killed`. Green: the test passes.
 - F212.12-1-10-5: The module graph rule of a view page reads the imports with es-module-lexer (`es-module-lexer/js`, a dependency of `@soksak/plugin-api`), so the text of a string literal is not an import. The rule is the node-only export `./view-modules`, and the index no longer re-exports it, because a view page loads the index. The spec counts five entries of the view import map. Red: the test `a string literal of a minified vendor bundle that reads as an import is not an import` failed with `ui/vendor/libraries.js: import : tags5.moduleKeyword,` before the change. Green: that test passes, the view tests pass 152 of 152, and the plugin-api tests pass 795 of 795.
 - F260: The writing commands of `sok` read and write `process.lock` in the form of the host (`{"pid", "boot"}`), so a running application's lock is refused with its pid instead of `invalid process lock`; a lock in another form is refused with its content named and kept. The form is defined in `docs/spec/endpoint.md`, and the case table `docs/spec/cases/process-lock.json` is replayed by the Go and Rust tests.
 
