@@ -16,10 +16,10 @@ test("a page whose module graph imports only the view import map entries passes"
 test("a module that imports a specifier outside the view import map is an error that names the module and the specifier", () => {
   const files = {
     "ui/view.js": 'import { mount } from "./render.js";\n',
-    "ui/render.js": 'import { screenHash } from "@soksak/plugin-api/screen-hash";\n',
+    "ui/render.js": 'import { records } from "@soksak/plugin-api/records-check";\n',
   };
   assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), [
-    "ui/render.js: import @soksak/plugin-api/screen-hash is not in the view import map",
+    "ui/render.js: import @soksak/plugin-api/records-check is not in the view import map",
   ]);
 });
 
@@ -35,4 +35,11 @@ test("a dynamic import of an unmapped specifier is an error, and a comment that 
   assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), [
     "ui/view.js: import fixture-module is not in the view import map",
   ]);
+});
+
+test("a view page that imports the screen hash module of plugin-api passes, because the view map serves it", () => {
+  const files = {
+    "ui/view.js": 'import { screenHash } from "@soksak/plugin-api/screen-hash";\n',
+  };
+  assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), []);
 });

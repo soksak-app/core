@@ -62,18 +62,20 @@ export const PAGE_IMPORTS = Object.freeze({
 
 /**
  * The imports of the import map of a view page. A view is served from the core root (docs/spec/plugin-processes.md, rule 4),
- * so its import map names the core targets at sok://core, and it has no entry for runtime/ or the workbench.
+ * so its import map names the core targets at sok://core, and it has no entry for runtime/ or the workbench. Its plugin-api entries
+ * are the browser modules that plugin-api exports for pages: view and screen-hash (the export list of package.json, checked by a test).
  */
 export const VIEW_IMPORTS = Object.freeze({
   "soksak": `sok://core/${modulePath("soksak", "dist/index.js")}`,
   "@soksak/plugin-api": `sok://core/${modulePath("@soksak/plugin-api", "index.js")}`,
   "@soksak/plugin-api/view": `sok://core/${modulePath("@soksak/plugin-api", "view.js")}`,
+  "@soksak/plugin-api/screen-hash": `sok://core/${modulePath("@soksak/plugin-api", "screen-hash.js")}`,
   "@soksak/shared/": "sok://core/shared/",
 });
 
 /** The entry files of the view import closure, by package name (docs/spec/plugin-processes.md, rule 4). */
 const VIEW_CLOSURE_ENTRIES = Object.freeze({
-  "@soksak/plugin-api": Object.freeze(["index.js", "view.js"]),
+  "@soksak/plugin-api": Object.freeze(["index.js", "view.js", "screen-hash.js"]),
   "soksak": Object.freeze(["dist/index.js"]),
 });
 

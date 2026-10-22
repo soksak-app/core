@@ -63,11 +63,12 @@ function walkViewImports(root, entries, listed) {
   return { files: [...reached].sort(), problems };
 }
 
-test("the view import map has exactly the four entries of rule 4", () => {
+test("the view import map has exactly the five entries of rule 4", () => {
   assert.deepEqual(VIEW_IMPORTS, {
     "soksak": "sok://core/modules/soksak/dist/index.js",
     "@soksak/plugin-api": "sok://core/modules/@soksak/plugin-api/index.js",
     "@soksak/plugin-api/view": "sok://core/modules/@soksak/plugin-api/view.js",
+    "@soksak/plugin-api/screen-hash": "sok://core/modules/@soksak/plugin-api/screen-hash.js",
     "@soksak/shared/": "sok://core/shared/",
   });
   assert.equal(Object.isFrozen(VIEW_IMPORTS), true);
@@ -131,4 +132,13 @@ test("a shared module import through the prefix of the view import map is served
   assert.equal(servedByMap("@soksak/shared/colors.js"), true);
   assert.equal(servedByMap("@soksak/plugin-api/page"), false);
   assert.equal(servedByMap("@soksak/runtime"), false);
+});
+
+test("the view map's plugin-api entries are the browser exports of the package, derived from its export list", () => {
+  const packageExports = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).exports;
+  const exported = Object.keys(packageExports).filter((key) => key !== "." && !key.endsWith("-check") && key !== "./package.json")
+    .map((key) => `@soksak/plugin-api${key.slice(1)}`);
+  const mapped = Object.keys(VIEW_IMPORTS).filter((key) => key.startsWith("@soksak/plugin-api/")).sort();
+  assert.deepEqual(mapped, ["@soksak/plugin-api/screen-hash", "@soksak/plugin-api/view"]);
+  assert.ok(mapped.every((key) => exported.includes(key)), `every mapped entry is an export of the package: ${mapped}`);
 });

@@ -412,7 +412,7 @@
     },
     {
       "term": "view import map",
-      "definition": "The import map of a view page, with the four entries `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view` and `@soksak/shared/`, which map to their `sok://core` addresses.",
+      "definition": "The import map of a view page, with the five entries `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, `@soksak/plugin-api/screen-hash` and `@soksak/shared/`, which map to their `sok://core` addresses.",
       "rejected": [],
       "allowed": []
     },
