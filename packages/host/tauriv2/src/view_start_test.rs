@@ -4,22 +4,21 @@
 use serde_json::json;
 
 use super::surface_start_script;
-use crate::surfaces::{SurfaceProject, ViewStart, view_origin_directory};
+use crate::surfaces::{ViewStart, view_origin_directory};
 
 // contract: view.start-values.first-script
 #[test]
 fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() {
-    let start = ViewStart {
-        params: Some(json!({"path": "a.md"})),
-        origin: Some(json!({"directory": "/work/one"})),
-        project: Some(SurfaceProject {
-            root: "/work/one".to_string(),
-        }),
-        declarations: Some(json!({"commands": []})),
-    };
+    let start: ViewStart = serde_json::from_value(json!({
+        "params": {"path": "a.md"},
+        "origin": {"directory": "/work/one"},
+        "project": {"id": "prj-one", "root": "/work/one"},
+        "declarations": {"commands": []},
+    }))
+    .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"root":"/work/one"}),"declarations":Object.freeze({"commands":[]})});"##,
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]})});"##,
         "the script sets the frozen start values"
     );
 }

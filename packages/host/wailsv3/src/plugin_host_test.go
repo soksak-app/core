@@ -455,6 +455,7 @@ func TestPluginHostConfigurationAddsTheStartValuesScript(t *testing.T) {
 		t.Fatalf("host plugins: %v", err)
 	}
 	s := hostTestSurfaces(config)
+	s.shown = "prj-one"
 	s.root = "/work/one"
 	s.createPluginHosts(unsafe.Pointer(new(int)), plugins)
 	var start []string
@@ -466,7 +467,7 @@ func TestPluginHostConfigurationAddsTheStartValuesScript(t *testing.T) {
 	if len(start) != 1 {
 		t.Fatalf("added scripts: %v, want one start values script that sets window.sokHost", fake.scripts)
 	}
-	if !strings.Contains(start[0], `project: Object.freeze({"root":"/work/one"})`) || !strings.Contains(start[0], "declarations: {") ||
+	if !strings.Contains(start[0], `project: Object.freeze({"id":"prj-one","root":"/work/one"})`) || !strings.Contains(start[0], "declarations: {") ||
 		strings.Contains(start[0], "surface") {
 		t.Fatalf("start values script %q, want the project of the window and the exposes, and no surface", start[0])
 	}

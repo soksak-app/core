@@ -271,6 +271,21 @@ test("surface registrations are checked against the declarations and the surface
   assert.equal(made.list().status.find((entry) => entry.name === "probe.lines").registered, false);
 });
 
+// contract: plugin-host.channel.call-served-set
+test("a dom request of a plugin host entry is refused as failed while the host page has no exposure-request subscription", async () => {
+  const made = coreRegistry(fakeHost(() => ({ result: null })));
+  made.configure({ surfacePlugin: () => null, registrationChanged: () => {} });
+  const forget = keepHostCommands("probe", { run: async () => null, receive: () => {}, close: () => {} });
+  try {
+    made.hostRegistered({ plugin: "probe", kind: "dom", name: "probe.lines" });
+    const reply = await made.handle({ method: "dom.rect", params: { name: "probe.lines" } });
+    assert.equal(reply.error.code, EXPOSURE_ERRORS.failed);
+    assert.equal(reply.error.message, "plugin host probe has no exposure-request subscription");
+  } finally {
+    forget();
+  }
+});
+
 test("a plugin host answers only a request without surface for a name that no surface registered", async () => {
   const forwarded = [];
   const made = coreRegistry(fakeHost(({ surface, method }) => {

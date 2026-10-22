@@ -1107,7 +1107,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
     let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
     let theme = crate::documents::theme_script(&theme);
     // The project that the window shows when the plugin host is created; a later change is posted as the event project.
-    let root = crate::plugin_host_channel::shown_project_root(window)?;
+    let project = crate::plugin_host_channel::shown_project(window)?;
     let channel = crate::documents::view_channel()?;
     for plugin in wanted {
         let folder = crate::installed::plugin_folder(&config, &plugin.id)?;
@@ -1117,7 +1117,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             .to_string();
         let host_plugin = plugin.id.clone();
         let theme = theme.clone();
-        let start_script = crate::plugin_host::host_start_script(root.as_deref(), &plugin.exposes);
+        let start_script = crate::plugin_host::host_start_script(project.as_ref(), &plugin.exposes);
         let host_window = window.clone();
         data.plugin_host_channels.register(&plugin.id, plugin.state);
         let view = crate::plugin_host::HostView {

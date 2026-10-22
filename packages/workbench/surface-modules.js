@@ -179,7 +179,7 @@ export function viewStartValues(surface, project) {
     // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
     params: surface.params ?? null,
     origin: tabOrigin(surface.surfaceId),
-    project: project === null ? null : { root: project.root },
+    project: project === null ? null : { id: project.id, root: project.root },
     declarations: surface.declarations,
   };
 }

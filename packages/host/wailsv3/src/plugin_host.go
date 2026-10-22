@@ -621,22 +621,27 @@ func hostExposes(plugin string, data []byte) (json.RawMessage, error) {
 }
 
 // hostStartScript returns the document-start script that sets window.sokHost to the frozen project of the window and the exposes of
-// the plugin. The host has no surface and no origin (docs/spec/plugin-host.md#configuration).
-func hostStartScript(root string, exposes json.RawMessage) (string, error) {
-	project := "null"
-	if root != "" {
-		text, err := json.Marshal(root)
+// the plugin. project is nil in a window that shows no project. The host has no surface and no origin
+// (docs/spec/plugin-host.md#configuration).
+func hostStartScript(project *SurfaceProject, exposes json.RawMessage) (string, error) {
+	value := "null"
+	if project != nil {
+		id, err := json.Marshal(project.ID)
 		if err != nil {
 			return "", fmt.Errorf("plugin host project cannot be serialized: %w", err)
 		}
-		project = `Object.freeze({"root":` + string(text) + `})`
+		root, err := json.Marshal(project.Root)
+		if err != nil {
+			return "", fmt.Errorf("plugin host project cannot be serialized: %w", err)
+		}
+		value = `Object.freeze({"id":` + string(id) + `,"root":` + string(root) + `})`
 	}
-	return "window.sokHost = Object.freeze({project: " + project + ", declarations: " + string(exposes) + "});", nil
+	return "window.sokHost = Object.freeze({project: " + value + ", declarations: " + string(exposes) + "});", nil
 }
 
 // addHostStartScript adds the start values script of a plugin host with the project that the window shows.
 func (s *Surfaces) addHostStartScript(document unsafe.Pointer, exposes json.RawMessage) error {
-	script, err := hostStartScript(s.ProjectRoot(), exposes)
+	script, err := hostStartScript(s.shownProjectValue(), exposes)
 	if err != nil {
 		return err
 	}

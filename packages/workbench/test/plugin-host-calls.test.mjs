@@ -56,7 +56,7 @@ mock.module("@soksak/plugin-api", { namedExports: {
 const emit = (name, event) => { for (const listener of [...(listeners.get(name) ?? [])]) listener(event); };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-const { listenPluginHostCalls, hostCommandsOf, keepHostCommands } = await import("../plugin-host.js");
+const { listenPluginHostCalls, hostCommandsOf, keepHostCommands, forwardHostExposure } = await import("../plugin-host.js");
 const session = "plugin:probe:project-a:fixture-sidecar";
 
 const registered = [];
@@ -211,7 +211,7 @@ test("a served command call registers the command and a request of the main page
 
 test("an unserved call is refused and registers nothing", async () => {
   const pluginHost = listen();
-  for (const command of ["runtime.native.call", "tab.state.read", "state.read", "runtime.clipboard.read"]) {
+  for (const command of ["tab.state.read", "state.read", "runtime.clipboard.read", "runtime.native.off"]) {
     const count = registered.length;
     emit("plugin-host-call", { plugin: "probe", id: 3, command, params: {} });
     await tick();
@@ -358,6 +358,50 @@ test("a declared sidecar whose sidecar.json the page does not hold refuses every
   assert.equal(calls.some((call, index) => index >= count && call.name === "pluginHostSidecarSend"), false);
   assert.deepEqual(calls.at(-1).arg.error, { code: -32000, message: "plugin host probe: sidecar fixture-sidecar declares no message form" });
   pluginHost.close();
+});
+
+// contract: plugin-host.channel.call-served-set
+test("runtime.native.on subscribes the host to exposure-request, and another native event is refused", async () => {
+  const pluginHost = listen();
+  const count = calls.length;
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 30, command: "runtime.native.on", params: { name: "exposure-request" } });
+    await tick();
+    assert.deepEqual(calls.slice(count), [{ name: "pluginHostReply", arg: { plugin: "probe", id: 30, result: null } }]);
+    emit("plugin-host-call", { plugin: "probe", id: 31, command: "runtime.native.on", params: { name: "document-state" } });
+    await tick();
+    assert.equal(calls.at(-1).arg.error.code, -32000);
+    assert.equal(calls.at(-1).arg.error.message, "native event document-state is not served to a plugin host");
+  } finally {
+    emit("plugin-host-ended", { plugin: "probe" });
+    calls.splice(count);
+    pluginHost.close();
+  }
+});
+
+// contract: plugin-host.channel.call-served-set
+test("a dom request of a host-registered entry reaches the host page as exposure-request and is answered by its exposureReply", async () => {
+  const pluginHost = listen();
+  const start = calls.length;
+  try {
+    const refused = await forwardHostExposure("probe", "dom.rect", { name: "probe.canvas" }).then(() => null, (error) => error.message);
+    assert.equal(refused, "plugin host probe has no exposure-request subscription");
+    emit("plugin-host-call", { plugin: "probe", id: 32, command: "runtime.native.on", params: { name: "exposure-request" } });
+    await tick();
+    const posted = calls.length;
+    const answer = forwardHostExposure("probe", "dom.rect", { name: "probe.canvas" });
+    await tick();
+    const event = calls.slice(posted).find((call) => call.name === "pluginHostEvent");
+    assert.deepEqual(event, { name: "pluginHostEvent", arg: { plugin: "probe", event: "exposure-request", data: { id: event.arg.data.id, method: "dom.rect", params: { name: "probe.canvas" } } } });
+    emit("plugin-host-call", { plugin: "probe", id: 33, command: "runtime.native.call", params: { name: "exposureReply", payload: { id: event.arg.data.id, result: { x: 1 } } } });
+    await tick();
+    assert.deepEqual(await answer, { result: { x: 1 } });
+    assert.equal(calls.at(-1).arg.result, null);
+  } finally {
+    emit("plugin-host-ended", { plugin: "probe" });
+    calls.splice(start);
+    pluginHost.close();
+  }
 });
 
 test("a failure of a subscribed plugin session is posted to its host page as the failure event", async () => {

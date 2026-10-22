@@ -159,12 +159,14 @@ type pluginHostOverflow struct {
 func (e pluginHostOverflow) Error() string { return e.reason }
 
 // servedPluginHostCall reports whether the channel of a plugin host serves the call command. The served calls are the
-// registration calls of exposure, the sidecar calls of the plugin's declared sidecars, the project data calls, the error,
-// command and log calls (docs/spec/plugin-host.md#channel); the host answers the state calls itself.
+// registration calls of exposure, the exposure-request subscription and its reply, the sidecar calls of the plugin's declared
+// sidecars, the project data calls, the error, command and log calls (docs/spec/plugin-host.md#channel); the host answers the
+// state calls itself.
 func servedPluginHostCall(command string) bool {
 	switch command {
-	case "runtime.command.register", "page.exposure.register", "runtime.sidecar.send", "runtime.sidecar.on", "runtime.sidecar.onFailure",
-		"runtime.data.get", "runtime.data.set", "runtime.error", "runtime.command", "runtime.log":
+	case "runtime.command.register", "page.exposure.register", "runtime.native.on", "runtime.native.call", "runtime.sidecar.send",
+		"runtime.sidecar.on", "runtime.sidecar.onFailure", "runtime.data.get", "runtime.data.set", "runtime.error", "runtime.command",
+		"runtime.log":
 		return true
 	}
 	return false
@@ -441,11 +443,11 @@ func (c *pluginHostChannels) plugins() []string {
 }
 
 // postProjectToPluginHosts posts the project that the window shows to each plugin host with a ready document, as the event project
-// with {root} or null (docs/spec/plugin-host.md#configuration). It runs after the project of the window changed.
+// with {id, root} or null (docs/spec/plugin-host.md#configuration). It runs after the project of the window changed.
 func (s *Surfaces) postProjectToPluginHosts() {
 	var data any
-	if root := s.ProjectRoot(); root != "" {
-		data = map[string]any{"root": root}
+	if project := s.shownProjectValue(); project != nil {
+		data = map[string]any{"id": project.ID, "root": project.Root}
 	}
 	for _, plugin := range s.pluginHostChannels.plugins() {
 		if _, err := s.sendToPluginHost(plugin, map[string]any{"event": "project", "data": data}); err != nil {

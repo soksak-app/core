@@ -43,9 +43,10 @@ pub(crate) struct Surface {
     start: Option<ViewStart>,
 }
 
-/// The root of the project that the window shows (docs/spec/plugins.md#tab-reports).
+/// The project that the window shows, as the id and the canonical root of the project (docs/spec/plugins.md#tab-reports).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct SurfaceProject {
+    pub(crate) id: String,
     pub(crate) root: String,
 }
 
@@ -114,14 +115,17 @@ fn is_local_absolute_path(path: &str) -> bool {
 
 /// Checks the start values of the view of the surface (docs/spec/native-surfaces.md#view-surfaces).
 fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
-    if start
-        .project
-        .as_ref()
-        .is_some_and(|project| project.root.is_empty())
-    {
-        return Err(format!(
-            "surface {surface:?}: view start project root is empty"
-        ));
+    if let Some(project) = &start.project {
+        if project.id.is_empty() {
+            return Err(format!(
+                "surface {surface:?}: view start project id is empty"
+            ));
+        }
+        if project.root.is_empty() {
+            return Err(format!(
+                "surface {surface:?}: view start project root is empty"
+            ));
+        }
     }
     if start
         .declarations

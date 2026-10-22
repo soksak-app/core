@@ -447,9 +447,12 @@ fn the_enable_of_the_plugin_clears_the_stop_and_reloads_every_window_once() {
 #[test]
 fn the_start_values_script_of_a_plugin_host_holds_the_project_and_the_exposes_and_no_surface() {
     let exposes = json!({"status": [{"name": "probe.value"}]});
+    let project: crate::surfaces::SurfaceProject =
+        serde_json::from_value(json!({"id": "prj-one", "root": "/work/one"}))
+            .expect("the project has its form");
     assert_eq!(
-        plugin_host::host_start_script(Some("/work/one"), &exposes),
-        r#"window.sokHost = Object.freeze({project: Object.freeze({"root":"/work/one"}), declarations: {"status":[{"name":"probe.value"}]}});"#
+        plugin_host::host_start_script(Some(&project), &exposes),
+        r#"window.sokHost = Object.freeze({project: Object.freeze({"id":"prj-one","root":"/work/one"}), declarations: {"status":[{"name":"probe.value"}]}});"#
     );
     assert_eq!(
         plugin_host::host_start_script(None, &json!({})),

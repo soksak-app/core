@@ -108,7 +108,7 @@ fn the_host_forwards_the_project_data_calls_to_the_main_page() {
 fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() {
     let channels = host_channels(true);
     for command in [
-        "runtime.native.call",
+        "runtime.native.off",
         "tab.state.read",
         "runtime.clipboard.read",
         "runtime.links.open",
@@ -130,6 +130,8 @@ fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() 
     for (id, command) in [
         (5, "page.exposure.register"),
         (6, "runtime.command.register"),
+        (7, "runtime.native.on"),
+        (8, "runtime.native.call"),
     ] {
         let message =
             format!(r#"{{"id": {id}, "command": "{command}", "params": {{"name": "probe.x"}}}}"#);
@@ -143,7 +145,12 @@ fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() 
     }
     assert_eq!(
         channels.open_calls("probe"),
-        ["page.exposure.register", "runtime.command.register"]
+        [
+            "page.exposure.register",
+            "runtime.command.register",
+            "runtime.native.on",
+            "runtime.native.call",
+        ]
     );
     // A cancel goes to the main page; the call stays open until the main page answers it, as for a view.
     assert_eq!(
@@ -154,7 +161,14 @@ fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() 
         ))
     );
     channels.answer_call("probe", 5);
-    assert_eq!(channels.open_calls("probe"), ["runtime.command.register"]);
+    assert_eq!(
+        channels.open_calls("probe"),
+        [
+            "runtime.command.register",
+            "runtime.native.on",
+            "runtime.native.call"
+        ]
+    );
     for message in [
         r#"{"command": "x"}"#,
         r#"{"id": 9, "command": ""}"#,
@@ -763,17 +777,20 @@ fn a_native_view_post_is_a_main_thread_task() {
 }
 
 // contract: plugin-host.project.post
-// A change of the project that the window shows is posted to each plugin host with a ready document as the event project with {root} or
-// null; a host without a ready document is skipped (docs/spec/plugin-host.md#configuration).
+// A change of the project that the window shows is posted to each plugin host with a ready document as the event project with {id, root}
+// or null; a host without a ready document is skipped (docs/spec/plugin-host.md#configuration).
 #[test]
 fn a_project_change_posts_the_project_event_to_each_host_with_a_ready_document() {
     let plugins = vec!["probe".to_string(), "other".to_string()];
     let ready = |plugin: &str| plugin == "probe";
     let mut posted = vec![];
+    let project: crate::surfaces::SurfaceProject =
+        serde_json::from_value(json!({"id": "prj-two", "root": "/work/two"}))
+            .expect("the project has its form");
     let failed = crate::plugin_host_channel::post_project_via(
         &plugins,
         ready,
-        Some("/work/two"),
+        Some(&project),
         |plugin, message| {
             posted.push((plugin.to_string(), message.clone()));
             Ok(())
@@ -784,7 +801,7 @@ fn a_project_change_posts_the_project_event_to_each_host_with_a_ready_document()
         posted,
         vec![(
             "probe".to_string(),
-            serde_json::json!({"sok": 1, "event": "project", "data": {"root": "/work/two"}})
+            serde_json::json!({"sok": 1, "event": "project", "data": {"id": "prj-two", "root": "/work/two"}})
         )]
     );
     posted.clear();

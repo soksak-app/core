@@ -130,11 +130,19 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
     };
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
-        "surfaces": [view(serde_json::json!({"project": {"root": ""}}))],
+        "surfaces": [view(serde_json::json!({"project": {"id": "prj-one", "root": ""}}))],
     }));
     assert_eq!(
         check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
         r#"surface "tab-1": view start project root is empty"#
+    );
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0,
+        "surfaces": [view(serde_json::json!({"project": {"id": "", "root": "/work/one"}}))],
+    }));
+    assert_eq!(
+        check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+        r#"surface "tab-1": view start project id is empty"#
     );
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0,
@@ -157,7 +165,7 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
         "id": "tab-1", "module": "surface.js", "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page",
         "composition": {"kind": "hybrid", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"project": {"root": "/work/one"}},
+        "start": {"project": {"id": "prj-one", "root": "/work/one"}},
     });
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0, "surfaces": [hybrid],

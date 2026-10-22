@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 
 use crate::platform::Handle;
 use crate::sidecars::RestartRecord;
+use crate::surfaces::SurfaceProject;
 
 /// One enabled installed plugin whose manifest declares host, with its id, its page and its declared state, which is
 /// None when the declaration names no state.
@@ -72,10 +73,14 @@ pub fn host_exposes(plugin: &str, manifest: &Value) -> Result<Value, String> {
 }
 
 /// Returns the document-start script that sets window.sokHost to the frozen project of the window and the exposes of the plugin,
-/// with no surface (docs/spec/plugin-host.md#configuration). root is None in a window that shows no project.
-pub fn host_start_script(root: Option<&str>, exposes: &Value) -> String {
-    let project = match root {
-        Some(root) => format!("Object.freeze({{\"root\":{}}})", json!(root)),
+/// with no surface (docs/spec/plugin-host.md#configuration). project is None in a window that shows no project.
+pub fn host_start_script(project: Option<&SurfaceProject>, exposes: &Value) -> String {
+    let project = match project {
+        Some(project) => format!(
+            "Object.freeze({{\"id\":{},\"root\":{}}})",
+            json!(project.id),
+            json!(project.root)
+        ),
         None => "null".to_string(),
     };
     format!("window.sokHost = Object.freeze({{project: {project}, declarations: {exposes}}});")

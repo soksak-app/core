@@ -80,7 +80,7 @@ func TestPluginHostChannelRelaysAReplyToTheMainPage(t *testing.T) {
 func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 	fake := &channelPlatform{}
 	s, events := channelSurfaces(t, fake, true)
-	for _, command := range []string{"runtime.native.call", "runtime.sidecar.close", "tab.state.read", "runtime.clipboard.read", "runtime.links.open"} {
+	for _, command := range []string{"runtime.native.off", "runtime.sidecar.close", "tab.state.read", "runtime.clipboard.read", "runtime.links.open"} {
 		if err := s.pluginHostMessage("probe", hostMessage(`{"id": 4, "command": "`+command+`", "params": {"name": "x"}}`)); err != nil {
 			t.Fatalf("unserved call %s: %v", command, err)
 		}
@@ -95,6 +95,8 @@ func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 	for _, message := range []string{
 		`{"id": 5, "command": "page.exposure.register", "params": {"name": "probe.x"}}`,
 		`{"id": 6, "command": "runtime.command.register", "params": {"name": "probe.x"}}`,
+		`{"id": 7, "command": "runtime.native.on", "params": {"name": "probe.x"}}`,
+		`{"id": 8, "command": "runtime.native.call", "params": {"name": "probe.x"}}`,
 	} {
 		if err := s.pluginHostMessage("probe", hostMessage(message)); err != nil {
 			t.Fatalf("served call %s: %v", message, err)
@@ -103,11 +105,13 @@ func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 	want := []hostEvent{
 		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(5), "command": "page.exposure.register", "params": json.RawMessage(`{"name": "probe.x"}`)}},
 		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(6), "command": "runtime.command.register", "params": json.RawMessage(`{"name": "probe.x"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(7), "command": "runtime.native.on", "params": json.RawMessage(`{"name": "probe.x"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(8), "command": "runtime.native.call", "params": json.RawMessage(`{"name": "probe.x"}`)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
 	}
-	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"page.exposure.register", "runtime.command.register"}) {
+	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"page.exposure.register", "runtime.command.register", "runtime.native.on", "runtime.native.call"}) {
 		t.Fatalf("open calls %v, want the forwarded calls", calls)
 	}
 	// A cancel goes to the main page, which ends the pending call; the host keeps the call open until the reply of the main
@@ -121,7 +125,7 @@ func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", ID: 5, Result: json.RawMessage(`null`)}); err != nil {
 		t.Fatalf("answer: %v", err)
 	}
-	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"runtime.command.register"}) {
+	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"runtime.command.register", "runtime.native.on", "runtime.native.call"}) {
 		t.Fatalf("open calls after the answer %v", calls)
 	}
 	// A call without an integer id, with an empty command, or a cancel that names a command is refused.
@@ -664,7 +668,7 @@ func TestViewPostsRunOnTheUIThread(t *testing.T) {
 
 // contract: plugin-host.project.post
 // A change of the project that the window shows is sent to each plugin host with a ready document as the event project, with the
-// root of the project or null, as the theme is sent (docs/spec/plugin-host.md#configuration).
+// id and the root of the project or null, as the theme is sent (docs/spec/plugin-host.md#configuration).
 func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
 	fake := &channelPlatform{}
 	s, _ := channelSurfaces(t, fake, false)
@@ -672,12 +676,14 @@ func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
 		t.Fatalf("ready: %v", err)
 	}
 	fake.posted = nil
+	s.shown = "prj-two"
 	s.root = "/work/two"
 	s.postProjectToPluginHosts()
-	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"event":"project"`) || !strings.Contains(fake.posted[0], `"data":{"root":"/work/two"}`) {
-		t.Fatalf("posted %v, want one project event with the root /work/two", fake.posted)
+	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"event":"project"`) || !strings.Contains(fake.posted[0], `"data":{"id":"prj-two","root":"/work/two"}`) {
+		t.Fatalf("posted %v, want one project event with the id prj-two and the root /work/two", fake.posted)
 	}
 	fake.posted = nil
+	s.shown = ""
 	s.root = ""
 	s.postProjectToPluginHosts()
 	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"data":null`) || !strings.Contains(fake.posted[0], `"event":"project"`) {

@@ -310,10 +310,10 @@ test("the start values of a view carry its params, origin, project and declarati
   reportDirectory("tab-with-directory", "/work/one");
   recordOrigin("tab-of-directory", "tab-with-directory");
   const surface = { surfaceId: "tab-of-directory", params: { path: "a.md" }, declarations: { commands: [] } };
-  assert.deepEqual(viewStartValues(surface, { root: "/work/one" }), {
+  assert.deepEqual(viewStartValues(surface, { id: "prj-one", root: "/work/one" }), {
     params: { path: "a.md" },
     origin: { directory: "/work/one" },
-    project: { root: "/work/one" },
+    project: { id: "prj-one", root: "/work/one" },
     declarations: { commands: [] },
   });
   recordOrigin("tab-without-directory", null);

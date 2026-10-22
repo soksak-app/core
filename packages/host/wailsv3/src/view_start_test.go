@@ -24,11 +24,9 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 		host:      &Host{configDir: "/config"},
 	}
 	native := unsafe.Pointer(new(int))
-	start := ViewStart{
-		Params:       json.RawMessage(`{"path":"a.md"}`),
-		Origin:       json.RawMessage(`{"directory":"/work/one"}`),
-		Project:      &SurfaceProject{Root: "/work/one"},
-		Declarations: json.RawMessage(`{"commands":[]}`),
+	var start ViewStart
+	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]}}`), &start); err != nil {
+		t.Fatalf("start values: %v", err)
 	}
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
@@ -38,7 +36,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	if len(fake.created) != 1 {
 		t.Fatalf("views created: %d, want one", len(fake.created))
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"root":"/work/one"}),"declarations":Object.freeze({"commands":[]})});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]})});`
 	scripts := fake.scripts[fake.created[0]]
 	if len(scripts) != 2 {
 		t.Fatalf("user scripts of the view: %q, want the theme script and the start values script", scripts)
@@ -76,10 +74,14 @@ func TestSurfaceStartScriptCarriesAbsentValuesAsNull(t *testing.T) {
 func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 	entries := []Surface{{
 		ID: "probe", Plugin: "probe", Composition: SurfaceComposition{Kind: "view", Page: "ui/page.html"},
-		Start: &ViewStart{Project: &SurfaceProject{Root: ""}},
+		Start: &ViewStart{Project: &SurfaceProject{ID: "prj-one", Root: ""}},
 	}}
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start project root is empty` {
 		t.Fatalf("empty project root: %v", err)
+	}
+	entries[0].Start = &ViewStart{Project: &SurfaceProject{Root: "/work/one"}}
+	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start project id is empty` {
+		t.Fatalf("empty project id: %v", err)
 	}
 	entries[0].Start = &ViewStart{Origin: json.RawMessage(`{"directory":""}`)}
 	if _, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: entries}, map[string]SurfaceComposition{}, map[string]string{}); err == nil || err.Error() != `surface "probe": view start origin directory is empty` {

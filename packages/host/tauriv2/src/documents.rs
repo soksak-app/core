@@ -2409,8 +2409,9 @@ pub fn surface_start_script(surface: &str, start: &ViewStart) -> Result<String, 
     let project = start.project.as_ref().map_or_else(
         || "null".to_string(),
         |project| {
+            let id = Value::String(project.id.clone());
             let root = Value::String(project.root.clone());
-            format!("Object.freeze({{\"root\":{root}}})")
+            format!("Object.freeze({{\"id\":{id},\"root\":{root}}})")
         },
     );
     let declarations = start

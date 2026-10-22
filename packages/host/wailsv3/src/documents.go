@@ -446,11 +446,15 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 	}
 	project := "null"
 	if start.Project != nil {
+		id, err := json.Marshal(start.Project.ID)
+		if err != nil {
+			return "", fmt.Errorf("view start project cannot be serialized: %w", err)
+		}
 		root, err := json.Marshal(start.Project.Root)
 		if err != nil {
 			return "", fmt.Errorf("view start project cannot be serialized: %w", err)
 		}
-		project = `Object.freeze({"root":` + string(root) + "})"
+		project = `Object.freeze({"id":` + string(id) + `,"root":` + string(root) + "})"
 	}
 	declarations := "{}"
 	if start.Declarations != nil {

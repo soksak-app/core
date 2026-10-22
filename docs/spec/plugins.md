@@ -187,7 +187,7 @@ The `system` policy is a system notification. The host posts it through the oper
 
 `tab.directory(path)` records the surface's working directory, an absolute path, and `tab.directory(null)` removes it; any other value throws. The workbench does not read the filesystem for it and does not save it. When `+` or a split creates a tab, the new surface's `origin.directory` is the directory that the active tab of the card that was added to or split recorded at that moment, or `null`.
 
-`project` is `{root}` with the canonical `root` of the project that the surface's window shows when the surface mounts ([projects](projects.md#project-identity)), or `null` in a window without a project. A surface that starts in a working directory uses `origin.directory` when it is not `null`, otherwise `project.root`, otherwise the account's home directory.
+`project` is `{id, root}` with the project `id` and the canonical `root` of the project that the surface's window shows when the surface mounts ([projects](projects.md#project-identity)), or `null` in a window without a project. A surface that starts in a working directory uses `origin.directory` when it is not `null`, otherwise `project.root`, otherwise the account's home directory.
 
 ## Memory saver
 

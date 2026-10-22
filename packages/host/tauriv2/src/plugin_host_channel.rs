@@ -25,6 +25,7 @@ use crate::plugin_host::{
     Failure, HostState, PluginHostRestarts, PluginHostStates, PluginHosts, state_call,
 };
 use crate::sidecars::{RESTART_LIMIT, RESTART_WINDOW};
+use crate::surfaces::SurfaceProject;
 use crate::view_lifecycle::is_queue_full;
 use crate::windows::{emit_window, window_data};
 
@@ -85,12 +86,15 @@ struct NavigationState {
 }
 
 /// Returns true when the channel forwards the call command to the main page: the registration calls of exposure, the
-/// sidecar calls, the project data calls, and the error, command and log calls (docs/spec/plugin-host.md#channel).
+/// exposure-request subscription and its reply, the sidecar calls, the project data calls, and the error, command and log
+/// calls (docs/spec/plugin-host.md#channel).
 pub fn forwarded_call(command: &str) -> bool {
     matches!(
         command,
         "runtime.command.register"
             | "page.exposure.register"
+            | "runtime.native.on"
+            | "runtime.native.call"
             | "runtime.sidecar.send"
             | "runtime.sidecar.on"
             | "runtime.sidecar.onFailure"
@@ -744,8 +748,8 @@ fn post(window: &Window, plugin: &str, message: &Value) -> Result<(), String> {
     }
 }
 
-/// Returns the root of the project that the window shows, or None when it shows none (docs/spec/plugin-host.md#configuration).
-pub(crate) fn shown_project_root(window: &Window) -> Result<Option<String>, String> {
+/// Returns the id and the root of the project that the window shows, or None when it shows none (docs/spec/plugin-host.md#configuration).
+pub(crate) fn shown_project(window: &Window) -> Result<Option<SurfaceProject>, String> {
     let data = window_data(window)?;
     let shown = data
         .shown
@@ -757,26 +761,30 @@ pub(crate) fn shown_project_root(window: &Window) -> Result<Option<String>, Stri
     if shown.is_empty() {
         return Ok(None);
     }
-    Ok(data
+    let root = data
         .projects
         .lock()
         // default: a lock that a panicking thread poisoned still holds the project roots, which this read only copies; the panic
         // hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .get(&shown)
-        .cloned())
+        .cloned();
+    Ok(root.map(|root| SurfaceProject { id: shown, root }))
 }
 
-/// Posts the event project with the root of the shown project, or null, to each plugin of plugins that is ready, and returns the
-/// failures of the posts. dispatch(plugin, message) posts the message to the host of plugin. A host without a ready document is
-/// skipped, because the project of its window reaches it with its ready message (docs/spec/plugin-host.md#configuration).
+/// Posts the event project with the id and the root of the shown project, or null, to each plugin of plugins that is ready, and
+/// returns the failures of the posts. dispatch(plugin, message) posts the message to the host of plugin. A host without a ready
+/// document is skipped, because the project of its window reaches it with its ready message (docs/spec/plugin-host.md#configuration).
 pub(crate) fn post_project_via(
     plugins: &[String],
     ready: impl Fn(&str) -> bool,
-    root: Option<&str>,
+    project: Option<&SurfaceProject>,
     mut dispatch: impl FnMut(&str, &Value) -> Result<(), String>,
 ) -> Vec<String> {
-    let data = root.map_or(Value::Null, |root| json!({ "root": root }));
+    let data = project.map_or(
+        Value::Null,
+        |project| json!({ "id": project.id, "root": project.root }),
+    );
     let mut failures = vec![];
     for plugin in plugins {
         if !ready(plugin) {
@@ -793,13 +801,13 @@ pub(crate) fn post_project_via(
 /// Posts the project that the window shows to each plugin host with a ready document, as the event project. It runs after the
 /// project of the window changed, as the theme does (docs/spec/plugin-host.md#configuration).
 pub(crate) fn post_project_to_plugin_hosts(window: &Window) -> Result<(), String> {
-    let root = shown_project_root(window)?;
+    let project = shown_project(window)?;
     let data = window_data(window)?;
     let plugins = data.plugin_host_channels.plugins();
     for failure in post_project_via(
         &plugins,
         |plugin| data.plugin_host_channels.ready_document(plugin).is_some(),
-        root.as_deref(),
+        project.as_ref(),
         |plugin, message| post(window, plugin, message),
     ) {
         log_error("plugin host channel", failure);

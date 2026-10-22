@@ -94,7 +94,7 @@ export function createSurfaceContext({
     // The working directory that the active tab of the card that created this tab recorded at that time, or null when it recorded none.
     origin: Object.freeze({ directory: origin.directory }),
     // The canonical root of the project shown in the surface window. It is null in a window without a project.
-    project: project === null ? null : Object.freeze({ root: project.root }),
+    project: project === null ? null : Object.freeze({ id: project.id, root: project.root }),
     // Core icons (docs/spec/plugins.md#icons): the stroke SVG string of a name on a 24-unit grid. A name that does not exist fails.
     icon,
     runtime: Object.freeze({

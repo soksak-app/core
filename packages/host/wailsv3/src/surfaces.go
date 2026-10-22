@@ -49,9 +49,10 @@ type Surface struct {
 	Start *ViewStart `json:"start,omitempty"`
 }
 
-// SurfaceProject is the root of the project that the window shows, or the window shows no project
+// SurfaceProject is the id and the canonical root of the project that the window shows, or nil when the window shows no project
 // (docs/spec/plugins.md#tab-reports).
 type SurfaceProject struct {
+	ID   string `json:"id"`
 	Root string `json:"root"`
 }
 
@@ -70,6 +71,9 @@ type ViewStart struct {
 func validateViewStart(surface string, start *ViewStart) error {
 	if start.Params != nil && !json.Valid(start.Params) {
 		return fmt.Errorf("surface %q: view start params are not JSON", surface)
+	}
+	if start.Project != nil && start.Project.ID == "" {
+		return fmt.Errorf("surface %q: view start project id is empty", surface)
 	}
 	if start.Project != nil && start.Project.Root == "" {
 		return fmt.Errorf("surface %q: view start project root is empty", surface)
@@ -402,6 +406,16 @@ func (s *Surfaces) shownProject() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.shown
+}
+
+// shownProjectValue returns the id and the root of the project that this window shows, or nil when it shows none.
+func (s *Surfaces) shownProjectValue() *SurfaceProject {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.shown == "" {
+		return nil
+	}
+	return &SurfaceProject{ID: s.shown, Root: s.root}
 }
 
 // SidecarSend passes a message that a surface page of this window sent to a sidecar.

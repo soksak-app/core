@@ -81,11 +81,11 @@ test("surface context offers the core icons and requires them", () => {
     /surface context requires icon\(name\)/);
 });
 
-test("surface context carries the window's project root or null", () => {
+test("surface context carries the window's project id and root or null", () => {
   const root = { appendChild() {} };
   const runtime = { exposure: { command() {} }, sidecar() {}, command() {}, emit() {}, native: {} };
-  const context = createSurfaceContext({ origin: ORIGIN, closing: CLOSING, root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON, project: { root: "/work/app" } });
-  assert.deepEqual(context.project, { root: "/work/app" });
+  const context = createSurfaceContext({ origin: ORIGIN, closing: CLOSING, root, surfaceId: "tab-1", runtime, tab: TAB, icon: ICON, project: { id: "prj-app", root: "/work/app" } });
+  assert.deepEqual(context.project, { id: "prj-app", root: "/work/app" });
   assert.equal(Object.isFrozen(context.project), true);
   assert.equal(createSurfaceContext({ origin: ORIGIN, closing: CLOSING, root, surfaceId: "tab-2", runtime, tab: TAB, icon: ICON }).project, null);
 });

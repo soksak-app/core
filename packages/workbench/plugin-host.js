@@ -62,7 +62,73 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
 export const servedPluginHostCall = (command) => command === "runtime.command.register" || command === "page.exposure.register"
   || command === "runtime.sidecar.send" || command === "runtime.sidecar.on" || command === "runtime.sidecar.onFailure"
   || command === "runtime.data.get" || command === "runtime.data.set" || command === "runtime.error"
-  || command === "runtime.command" || command === "runtime.log";
+  || command === "runtime.command" || command === "runtime.log" || command === "runtime.native.on" || command === "runtime.native.call";
+
+/**
+ * The exposure requests of the host pages (docs/spec/plugin-host.md#channel). A host page subscribes to exposure-request with
+ * runtime.native.on; a dom request of an entry that the host registered is delivered to it as the message event exposure-request
+ * and is answered by runtime.native.call exposureReply (docs/spec/exposure.md#relay).
+ */
+const exposureSubscribers = new Set();
+const exposureReplies = new Map();
+let nextExposureId = 0;
+// The wait of a host for the answer to an exposure request, in milliseconds (docs/spec/exposure.md#relay). A timer is the only bound
+// of the wait: the host page sends no event when it stops answering.
+const EXPOSURE_REPLY_TIMEOUT = 10000;
+
+/** Removes the exposure subscription of plugin and ends each of its open exposure requests with an error (plugin-host-ended). */
+function forgetExposure(plugin) {
+  exposureSubscribers.delete(plugin);
+  for (const [id, pending] of [...exposureReplies]) {
+    if (pending.plugin !== plugin) continue;
+    exposureReplies.delete(id);
+    pending.resolve({ error: { code: FAILED_COMMAND, message: `plugin host ${plugin} ended before it answered` } });
+  }
+}
+
+/**
+ * Forwards one dom request of an entry that the host of plugin registered to its host page and resolves with the reply
+ * {result} or {error: {code, message}} that the page sends. It rejects when the page has no exposure-request subscription.
+ */
+export function forwardHostExposure(plugin, method, params) {
+  if (!exposureSubscribers.has(plugin)) return Promise.reject(new Error(`plugin host ${plugin} has no exposure-request subscription`));
+  const id = ++nextExposureId;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      exposureReplies.delete(id);
+      reject(new Error(`plugin host ${plugin} did not answer ${method} within ${EXPOSURE_REPLY_TIMEOUT} ms`));
+    }, EXPOSURE_REPLY_TIMEOUT);
+    exposureReplies.set(id, {
+      plugin,
+      resolve: (reply) => { clearTimeout(timer); resolve(reply); },
+    });
+    bridge.call("pluginHostEvent", { plugin, event: "exposure-request", data: { id, method, params } }).catch((error) => {
+      clearTimeout(timer);
+      exposureReplies.delete(id);
+      // default: a rejection that is not an Error is reported by its text.
+      reject(new Error(String(error?.message ?? error)));
+    });
+  });
+}
+
+/** Delivers the page's reply to an exposure request of plugin, which must be open for that plugin. */
+function answerExposure(plugin, payload) {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload) || !Number.isInteger(payload.id)) {
+    throw new TypeError("plugin host call runtime.native.call exposureReply requires an integer id");
+  }
+  const pending = exposureReplies.get(payload.id);
+  if (pending === undefined || pending.plugin !== plugin) {
+    throw new Error(`plugin host ${plugin} answered no open exposure request ${payload.id}`);
+  }
+  exposureReplies.delete(payload.id);
+  if (payload.error !== undefined) {
+    pending.resolve({ error: payload.error });
+    return null;
+  }
+  if (!Object.hasOwn(payload, "result")) throw new TypeError("plugin host call runtime.native.call exposureReply requires a result or an error");
+  pending.resolve({ result: payload.result });
+  return null;
+}
 
 // The levels of a record of a plugin, in the order the view call runtime.log names them (docs/spec/plugin-host.md#log-call).
 const PLUGIN_LOG_LEVELS = ["error", "warn", "info", "debug", "trace"];
@@ -270,6 +336,16 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
         pluginLog(plugin)[params.level](params.event, params.fields, params.cids === undefined ? undefined : { cids: params.cids });
         return { result: null };
       }
+      if (event.command === "runtime.native.on") {
+        // The only native event of a host page is exposure-request; every other event name is refused (docs/spec/plugin-host.md#channel).
+        if (params.name !== "exposure-request") throw new TypeError(`native event ${params.name} is not served to a plugin host`);
+        exposureSubscribers.add(plugin);
+        return { result: null };
+      }
+      if (event.command === "runtime.native.call") {
+        if (params.name !== "exposureReply") throw new TypeError(`plugin host call ${event.command} ${params.name} is not served`);
+        return { result: answerExposure(plugin, params.payload) };
+      }
       if (event.command.startsWith("runtime.sidecar.")) return await answerSidecar(event, params);
       if (event.command.startsWith("runtime.data.")) return await answerData(event, params);
       if (event.command === "runtime.command.register") {
@@ -314,6 +390,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
     const commands = hostCommandsOf(event.plugin);
     layers.delete(event.plugin);
     forgetSessions(event.plugin);
+    forgetExposure(event.plugin);
     // The host closes the plugin sessions that this window owns (docs/plans/plugin-host-routes.md rule 7).
     bridge.call("pluginHostSidecarClose", { plugin: event.plugin }).catch((error) => report(error));
     commands?.close();

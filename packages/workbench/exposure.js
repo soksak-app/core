@@ -8,7 +8,7 @@
 // In a browser runtime without a host, the registry also works inside this document. Then there is no path that
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
-import { hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
+import { forwardHostExposure, hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
 import { SNAPSHOT_REQUEST_COMMAND, createPluginRuntime } from "@soksak/plugin-api";
 import { pluginRecords } from "./plugin-records.js";
 import { timed, trace } from "./performance.js";
@@ -120,6 +120,12 @@ export function createRegistry({ call = null, report = null } = {}) {
     const commands = hostCommandsOf(plugin);
     if (commands === null) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `plugin host ${plugin} has no channel`);
     try {
+      if (method.startsWith("dom.")) {
+        // The dom request reaches the host page as exposure-request, which answers it (docs/spec/plugin-host.md#channel).
+        const reply = await forwardHostExposure(plugin, method, params);
+        if (reply.error !== undefined) throw new ExposureError(reply.error.code, reply.error.message);
+        return reply.result;
+      }
       // default: a command request without params runs the command with null, the value of no params.
       if (method === "command.run") return await commands.run(params.name, params.params ?? null);
       if (method === "status.get") {
