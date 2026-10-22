@@ -217,12 +217,20 @@ export function createViewBridge({ handler, report }) {
       channel.send({ sok: 1, reply: request.id, error: { code: INVALID_PARAMS, message: "declared-ui.snapshot.request requires a status name" } });
       return;
     }
-    // default: a status without a value is not an error of the pull; the reply says that the source has none yet.
+    // A status with no pushed value is not an error of the pull: the reply says that the source has none yet, with seq 0 and value null
+    // (docs/spec/declared-ui.md, pull). Any other error of the store answers the request with its error and is reported.
+    if (!snapshots.has(status)) {
+      channel.send({ sok: 1, reply: request.id, result: { seq: 0, value: null } });
+      return;
+    }
     let value;
     try {
       value = snapshots.pull(status);
-    } catch {
-      value = { seq: 0, value: null };
+    } catch (error) {
+      const text = String(error?.message ?? error);
+      report({ where: `declared-ui.snapshot.request ${status}`, text });
+      channel.send({ sok: 1, reply: request.id, error: { code: FAILED_COMMAND, message: text } });
+      return;
     }
     channel.send({ sok: 1, reply: request.id, result: value });
   };

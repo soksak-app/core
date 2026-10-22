@@ -124,6 +124,13 @@ export function createSnapshotSender({ plugin, send, onMessage, report }) {
     transmit(status, state);
   }
 
+  /** Whether the status has a pushed value. A status that was never pushed has none, so its pull has no value to return. */
+  function has(status) {
+    checkStatus(status);
+    const state = states.get(status);
+    return state !== undefined && state.value !== undefined;
+  }
+
   /** Returns the latest value of a status and its seq, for the pull of load time. A status with no value is refused. */
   function pull(status) {
     checkStatus(status);
@@ -154,7 +161,7 @@ export function createSnapshotSender({ plugin, send, onMessage, report }) {
     stopReceiving();
   }
 
-  return { push, pull, peerLost, close };
+  return { push, pull, has, peerLost, close };
 }
 
 /**
