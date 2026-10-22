@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { runTests } from "../test-runner.mjs";
@@ -182,4 +185,24 @@ test("a process that outlives its test process is ended at that exit, and the fa
   assert.equal(result.status, "fail", result.detail);
   assert.match(result.detail, /^left running after exit: pid \d+ /, result.detail);
   assert.ok(result.elapsedMs < 15000, `the process ran ${result.elapsedMs} ms, to its limit instead of its exit`);
+});
+
+test("a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop", async () => {
+  // The runner reads the process table with `ps` at the limit. This `ps` takes 5 seconds, as a read under load can, so a runner that
+  // reads the table before it stops the group runs the test for about 7 seconds in all.
+  const directory = mkdtempSync(join(tmpdir(), "soksak-runner-ps-"));
+  const ps = join(directory, "ps");
+  writeFileSync(ps, "#!/bin/sh\nsleep 5\nexec /bin/ps \"$@\"\n");
+  chmodSync(ps, 0o755);
+  const saved = process.env.PATH;
+  process.env.PATH = `${directory}:${saved}`;
+  try {
+    const { results } = await run([node("slow", sleeping(60000), { timeoutMs: 2000 })], { concurrency: 1 });
+    const result = results.get("slow");
+    assert.equal(result.status, "timeout", result.detail);
+    assert.ok(result.elapsedMs < 6000, `the test ran ${result.elapsedMs} ms against its limit of 2000 ms while the process table was read`);
+  } finally {
+    process.env.PATH = saved;
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

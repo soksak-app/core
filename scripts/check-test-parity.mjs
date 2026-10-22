@@ -245,6 +245,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F257-1",
+    implementation: [{ file: "scripts/test-runner.mjs", symbol: "function runOne" }],
+    tests: [{ file: "scripts/test/test-runner.test.mjs", id: "a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop" }],
+    expected: "At its limit the runner stops the test process group with SIGSTOP before it lists the leftovers, takes the elapsed time of the timeout at that stop, and then kills the group, so a slow process-table read does not let the test run past its limit.",
+    levels: ["unit"],
+  },
+  {
     id: "F257",
     implementation: [{ file: "scripts/test-command.mjs", symbol: "export function runCommand" }],
     tests: [

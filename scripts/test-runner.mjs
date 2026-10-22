@@ -50,6 +50,14 @@ function leftoverNames(pgid, leader) {
   return members.map((member) => `pid ${member.pid} ${commands.get(member.pid) ?? '(ended while it was named)'}`);
 }
 
+/**
+ * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
+ * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
+ */
+function stopGroup(pgid) {
+  try { process.kill(-pgid, 'SIGSTOP'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+}
+
 /** Ends every process of the group of a test. A group that no longer exists has nothing to end. */
 function killGroup(pgid) {
   try { process.kill(-pgid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
@@ -70,15 +78,22 @@ function runOne(item, limitMs, env, outputPath) {
       detached: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let timedOut = false;
+    let timedOutElapsedMs = 0;
     let timeoutLeftovers = [];
     let exitLeftovers = [];
+    // At the limit the group is stopped first, and the elapsed time is taken at that stop, so a slow listing of the leftovers does not
+    // move the time of the timeout. The order is: stop, list, kill.
     const timer = setTimeout(() => {
       timedOut = true;
+      timedOutElapsedMs = performance.now() - started;
+      stopGroup(child.pid);
       timeoutLeftovers = leftoverNames(child.pid, child.pid);
       killGroup(child.pid);
     }, limitMs);
+    // The exit path uses the same order as the limit: stop, list, kill.
     child.once('exit', () => {
       if (timedOut) return;
+      stopGroup(child.pid);
       exitLeftovers = leftoverNames(child.pid, null);
       if (exitLeftovers.length > 0) killGroup(child.pid);
     });
@@ -99,7 +114,7 @@ function runOne(item, limitMs, env, outputPath) {
       const output = Buffer.concat(chunks).toString('utf8');
       if (timedOut) {
         const left = timeoutLeftovers.length > 0 ? `; left running: ${timeoutLeftovers.join('; ')}` : '';
-        resolve({ status: 'timeout', elapsedMs, output, detail: `exceeded ${seconds(limitMs)}s and was killed${left}` });
+        resolve({ status: 'timeout', elapsedMs: timedOutElapsedMs, output, detail: `exceeded ${seconds(limitMs)}s and was killed${left}` });
       } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });
       else if (code === 0) resolve({ status: 'pass', elapsedMs, output, detail: '' });
       else resolve({ status: 'fail', elapsedMs, output, detail: code === null ? `signal ${signal}` : `exit ${code}` });
