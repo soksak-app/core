@@ -8,7 +8,11 @@ import { join } from "node:path";
 import test from "node:test";
 import { registryManifestErrors } from "../check-registry-manifests.mjs";
 
-const good = { id: "probe", name: "Probe", description: "Fixture plugin.", sections: [{ id: "probe.list", name: "List", module: "ui/list.js" }] };
+const good = {
+  id: "probe", name: "Probe", description: "Fixture plugin.", host: { page: "ui/host.html" },
+  exposes: { status: [{ name: "probe.list", description: "Fixture status.", schema: { type: "object" } }] },
+  sections: [{ id: "probe.list", name: "List", status: "probe.list" }],
+};
 
 /** A plugin release with manifest at its root, as `sok plugin pack` writes it. */
 function release(t, manifest) {
