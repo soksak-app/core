@@ -647,3 +647,39 @@ test("a plugin state registers entries in the page that answer before surfaces a
   stop();
   made.plugin("probe").clear();
 });
+
+test("a status watch that fails for a reason other than the closed surface reports the error", async () => {
+  const reported = [];
+  const host = fakeHost(({ method }) => (method === "status.next"
+    ? { error: { code: EXPOSURE_ERRORS.failed, message: "reader crashed" } } : { result: null }));
+  const made = coreRegistry(host, (error) => reported.push(error.message));
+  made.configure({ surfacePlugin: () => "probe" });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  await made.handle({ method: "status.watch", params: { name: "probe.lines" } });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reported, ["status probe.lines watch failed: reader crashed"], "the failed watch was not reported");
+});
+
+test("a plugin host status reply without seq and value is refused instead of read as an empty value", async () => {
+  const plugins = { "tab-a": "probe" };
+  const made = coreRegistry(fakeHost());
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null });
+  const replies = [null, { value: ["a"] }, { seq: -1, value: ["a"] }, { seq: 2 }];
+  const forget = keepHostCommands("probe", {
+    run: async (command) => {
+      if (command !== "declared-ui.snapshot.request") return { ran: true };
+      return replies.shift();
+    },
+    receive: () => {},
+    close: () => {},
+  });
+  try {
+    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines" });
+    for (let index = 0; index < 4; index += 1) {
+      const reply = await made.handle({ method: "status.get", params: { name: "probe.lines" } });
+      assert.equal(reply.error?.code, EXPOSURE_ERRORS.failed, `reply ${index} was not refused: ${JSON.stringify(reply)}`);
+    }
+  } finally {
+    forget();
+  }
+});

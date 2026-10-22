@@ -119,7 +119,11 @@ export function createRegistry({ call = null, report = null } = {}) {
       if (method === "command.run") return await commands.run(params.name, params.params ?? null);
       if (method === "status.get") {
         const reply = await commands.run(SNAPSHOT_REQUEST_COMMAND, { status: params.name });
-        return { value: reply?.value, version: reply?.seq };
+        // The snapshot reply is {seq, value} (docs/spec/plugin-host.md#declared-ui-snapshots); any other reply is refused.
+        if (typeof reply !== "object" || reply === null || !Number.isInteger(reply.seq) || reply.seq < 0 || !("value" in reply)) {
+          throw new ExposureError(EXPOSURE_ERRORS.failed, `plugin host ${plugin} answered status ${params.name} without {seq, value}`);
+        }
+        return { value: reply.value, version: reply.seq };
       }
     } catch (error) {
       if (error instanceof ExposureError) throw error;
@@ -172,7 +176,15 @@ export function createRegistry({ call = null, report = null } = {}) {
       let answer;
       try {
         answer = await forward(watch.surface, "status.next", { name, version: watch.version });
-      } catch {
+      } catch (error) {
+        // The host fails a pending status.next with 1003 when its surface closes; that ends the watch as stated.
+        // Any other failure is reported and also ends the watch, so it is not retried silently.
+        if (error?.code === EXPOSURE_ERRORS.gone) {
+          trace("surface.watch", { phase: "ended", reason: "surface closed", name, surface: watch.surface });
+        } else {
+          // default: a failure that is not an Error carries its value as the text.
+          report(new Error(`status ${name} watch failed: ${error?.message ?? error}`, { cause: error }));
+        }
         break;
       }
       if (following.get(key) !== watch || answer?.closed) break;
