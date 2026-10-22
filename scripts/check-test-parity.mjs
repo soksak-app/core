@@ -187,8 +187,25 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F258-1",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/manifest.go", symbol: "func ValidateManifest" },
+      { file: "packages/sok/tauriv2/src/manifest.rs", symbol: "pub fn validate_manifest" },
+      { file: "packages/plugin-api/index.js", symbol: "function sortedEntries" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/wailsv3/tests/manifest_cases_test.go", id: "TestPluginPackReplaysTheManifestCases" },
+      { file: "packages/sok/wailsv3/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheRefusedManifestCases" },
+      { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_pack_replays_the_manifest_cases" },
+      { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_refused_manifest_cases_of_the_probe" },
+    ],
+    expected: "The reader and both sok implementations give every case of packages/plugin-api/contract/manifest-validation.json the same result: a refused manifest fails with the reader's text, members are read in sorted key order, and a schema type that is not a type name is refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F258",
-    implementation: [{ file: "packages/sok/wailsv3/src/install.go", symbol: "func checkPluginSchemas" }],
+    implementation: [{ file: "packages/sok/wailsv3/src/manifest.go", symbol: "func ValidateManifest" }],
     tests: [
       { file: "packages/sok/wailsv3/tests/release_test.go", id: "TestPluginPackRefusesASchemaOutsideTheSubset" },
       { file: "packages/sok/wailsv3/tests/plugins_test.go", id: "TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset" },
