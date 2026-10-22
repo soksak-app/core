@@ -35,6 +35,7 @@
     "view.js",
     "view-start.js",
     "view-check.js",
+    "view-modules.js",
     "exposure-check.js",
     "engines-check.js",
     "core-exposure.json",
