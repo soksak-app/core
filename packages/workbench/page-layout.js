@@ -35,7 +35,8 @@ export function createErrorDisplay({ document, changed }) {
  *   showError  function of createErrorDisplay
  */
 export function reportUncaught(target, showError) {
-  target.addEventListener("error", (e) => showError(e.message, ` @ ${e.filename}:${e.lineno}`));
+  // default: an error event without a source file (a dispatched error or a cross-origin script) has no location, so the detail adds none.
+  target.addEventListener("error", (e) => showError(e.message, e.filename ? ` @ ${e.filename}:${e.lineno}` : ""));
   target.addEventListener("unhandledrejection", (e) => {
     // default: a rejection value that is not an Error has no stack.
     const stack = e.reason instanceof Error && e.reason.stack ? `\n${e.reason.stack}` : "";
