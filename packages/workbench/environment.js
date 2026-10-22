@@ -5,7 +5,7 @@
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
 import { declarePluginSidecars } from "./plugin-host.js";
-import { declareProjectData, registerState } from "./plugin-states.js";
+import { declareProjectData } from "./plugin-data.js";
 import { registerPlugin, registerSection } from "./registry.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
@@ -102,26 +102,11 @@ export function installEnvironment(environmentDocument, installedDocument) {
         }),
       });
     }
-    // A section module is loaded from the path of its plugin, like a surface module.
     // default: sections is an optional field of plugin.json; without it there are no sections.
-    for (const section of manifest.sections ?? []) {
-      // A section with status is drawn from a declared UI status and has no module (docs/spec/declared-ui.md).
-      if (section.module === undefined) {
-        registerSection({ ...section, module: undefined });
-        continue;
-      }
-      const module = typeof section.module === "string" ? `/${modulePath(name, section.module)}`
-        : Object.fromEntries(Object.entries(section.module).map(([mode, path]) => [mode, `/${modulePath(name, path)}`]));
-      registerSection({ ...section, module });
-    }
+    for (const section of manifest.sections ?? []) registerSection(section);
     if (exposes) exposure.declare(manifest.id, exposes);
     // default: data is an optional field of plugin.json; without it the plugin declares no project data.
     declareProjectData(manifest.id, manifest.data ?? {});
-    if (manifest.state) {
-      registerState({ plugin: manifest.id, module: `/${modulePath(name, manifest.state.module)}`,
-        // default: data is an optional field of plugin.json; without it the value is empty.
-        sidecars: manifestSidecars(manifest, pluginNames), data: manifest.data ?? {} });
-    }
   }
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
   units = manifests.map(({ manifest, version }) => ({

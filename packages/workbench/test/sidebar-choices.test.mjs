@@ -15,9 +15,8 @@ const { registerSection } = await import("../registry.js");
 const sections = await import("../sidebar-sections.js");
 
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const empty = `data:text/javascript,${encodeURIComponent("export function mount() { return { dispose() {} }; }")}`;
-registerSection({ id: "probe.one", name: "하나", module: empty });
-registerSection({ id: "probe.two", name: "둘", module: empty });
+registerSection({ id: "probe.one", name: "하나", status: "probe.one" });
+registerSection({ id: "probe.two", name: "둘", status: "probe.two" });
 
 test("the selected tab and folded sections are reported for saving and restored from a saved space", () => {
   const tabs = document.createElement("div");

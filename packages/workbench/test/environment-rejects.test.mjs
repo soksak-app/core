@@ -10,7 +10,7 @@ const environmentFile = {
   sidebars: { sets: [], links: [] },
 };
 const installed = { plugins: [{ id: "side", package: "@fixture/side", version: "0.0.1",
-  manifest: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", module: "ui/list.js" }] } }] };
+  manifest: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", status: "side.list" }], host: { page: "ui/host.html" }, exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] } } }] };
 
 const { installEnvironment } = await import("../environment.js");
 const registry = await import("../registry.js");

@@ -11,7 +11,9 @@ const files = {
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["sections.tree"], layout: "list" }],
       card: { left: "main", top: "main" }, window: { right: "main" } } },
   sections: { id: "sections", name: "Sections", description: "Fixture sections.",
-    sections: [{ id: "sections.tree", name: "Tree", module: {horizontal:"ui/tree-horizontal.js",vertical:"ui/tree-vertical.js"} }],
+    host: { page: "ui/host.html" },
+    exposes: { status: [{ name: "sections.tree", description: "Fixture status.", schema: { type: "object" } }] },
+    sections: [{ id: "sections.tree", name: "Tree", status: "sections.tree" }],
     sidebars: { sets: [{ id: "tree", title: "Tree", sections: ["sections.tree"], layout: "tabs" }],
       window: { left: "tree" } } },
 };
@@ -25,7 +27,7 @@ test("an environment without sidebar overrides supplies normalized plugin defaul
   const { defaults } = await import("../settings.js");
   installEnvironment(structuredClone(files["/environment.json"]), structuredClone(installed));
   const {section}=await import("../registry.js");
-  assert.deepEqual(section("sections.tree").module,{horizontal:"/modules/@fixture/sections/ui/tree-horizontal.js",vertical:"/modules/@fixture/sections/ui/tree-vertical.js"});
+  assert.equal(section("sections.tree").status, "sections.tree");
   assert.deepEqual(defaults.sets, [
     { id: "fixture.main", title: "Main", sections: ["sections.tree"], layout: "list" },
     { id: "sections.tree", title: "Tree", sections: ["sections.tree"], layout: "tabs" },

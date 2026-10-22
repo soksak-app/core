@@ -82,7 +82,7 @@ const MANIFESTS = {
   probe: { id: "probe", name: "Probe", description: "검사용 표면.", mark: "P", icon: "<path/>",
     surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     extends: { language: { version: "1.0.0", schema: { type: "object" }, modules: { "@scope/library": "ui/vendor/library.js" } } } },
-  alpha: { id: "alpha", name: "Alpha", description: "검사용 섹션.", sections: [{ id: "alpha.list", name: "List", module: "ui/list.js" }] },
+  alpha: { id: "alpha", name: "Alpha", description: "검사용 섹션.", sections: [{ id: "alpha.list", name: "List", status: "alpha.list" }], host: { page: "ui/host.html" }, exposes: { status: [{ name: "alpha.list", description: "검사용 상태.", schema: { type: "object" } }] } },
 };
 
 const DIAGNOSTICS = {

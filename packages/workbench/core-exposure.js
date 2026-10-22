@@ -9,7 +9,7 @@ import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
 import { log, reloadPage, report } from "./host.js";
-import { pluginHostData } from "./plugin-states.js";
+import { pluginHostData } from "./plugin-data.js";
 import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";

@@ -44,13 +44,13 @@ mock.module("../host.js", {
     report: () => {},
   },
 });
-/* The order in which the project that the window showed was reported to the state module. */
-const shownStates = [];
-let stateOptions = null;
-mock.module("../plugin-states.js", {
+/* The order in which the project that the window showed was reported to the project data. */
+const shownData = [];
+let dataOptions = null;
+mock.module("../plugin-data.js", {
   namedExports: {
-    configureStates: (values) => { stateOptions = values; },
-    showStates: async (project) => { shownStates.push(project?.id ?? null); },
+    configureData: (values) => { dataOptions = values; },
+    showData: async (project) => { shownData.push(project?.id ?? null); },
   },
 });
 /* The project that the first screen chose for the settings. */
@@ -143,15 +143,15 @@ test("plugin states follow the shown project and project data is patched under p
   const patches = [];
   await projects.initialise({ ...store, patch: async (id, patch) => { patches.push([id, patch]); } });
   await projects.browse();
-  shownStates.length = 0;
+  shownData.length = 0;
   await projects.activate(PROJECT.id);
   await projects.browse();
   await projects.activate(PROJECT.id);
-  assert.deepEqual(shownStates, [PROJECT.id, null, PROJECT.id]);
-  assert.deepEqual(stateOptions.data.get(PROJECT.id, "probe"), {});
-  await stateOptions.data.set(PROJECT.id, "probe", "marks", ["a"]);
+  assert.deepEqual(shownData, [PROJECT.id, null, PROJECT.id]);
+  assert.deepEqual(dataOptions.data.get(PROJECT.id, "probe"), {});
+  await dataOptions.data.set(PROJECT.id, "probe", "marks", ["a"]);
   assert.deepEqual(patches.at(-1), [PROJECT.id, { plugins: { probe: { marks: ["a"] } } }]);
-  assert.deepEqual(stateOptions.data.get(PROJECT.id, "probe"), { marks: ["a"] });
+  assert.deepEqual(dataOptions.data.get(PROJECT.id, "probe"), { marks: ["a"] });
   await projects.flush();
 });
 
@@ -266,11 +266,11 @@ test("the start document draws the window's project before the store connects an
   assert.deepEqual(begunSettings, [project.id], "the first screen did not apply the project's settings");
   const patches = [];
   openRequests.length = 0;
-  shownStates.length = 0;
+  shownData.length = 0;
   await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async (id, patch) => { patches.push([id, Object.keys(patch)]); } });
   windows.state = state;
   assert.deepEqual(openRequests, [project.id], "the activation did not open the project's window");
-  assert.deepEqual(shownStates, [project.id]);
+  assert.deepEqual(shownData, [project.id]);
   assert.deepEqual(patches, [[project.id, ["lastOpened"]]], "the activation saved more than the open time");
   assert.equal(projects.active().id, project.id);
   await projects.flush();

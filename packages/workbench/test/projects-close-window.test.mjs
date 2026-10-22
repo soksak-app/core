@@ -41,8 +41,8 @@ mock.module("../host.js", {
   namedExports: { log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null, documents: null,
     report: () => {} },
 });
-mock.module("../plugin-states.js", {
-  namedExports: { configureStates: () => {}, showStates: async () => {} },
+mock.module("../plugin-data.js", {
+  namedExports: { configureData: () => {}, showData: async () => {} },
 });
 mock.module("../page-log.js", {
   namedExports: { flushEvents: async () => { events.push("logflush"); }, emitEvent: () => {} },

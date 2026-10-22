@@ -45,46 +45,26 @@ function unmount(entry) {
 }
 
 /**
- * Context that a section module receives. In addition to card and surface, it provides status(name, fn), which follows the status of the plugin that owns the section,
- * and bind(el, name, params, options), which connects an element to the command of that plugin.
+ * The bind function of a declared section: it connects a control to a command of the section's plugin or of the core
+ * (docs/spec/declared-ui.md). A section uses only the names of its own plugin and of the core.
  */
-function sectionContext(entry, context) {
+function sectionBind(entry) {
   const owner = entry.section.id.slice(0, entry.section.id.indexOf("."));
-  // A section uses only the names of its own plugin and of the core (docs/spec/plugins.md#sections).
   const own = (name) => {
     if (!name.startsWith(`${owner}.`) && !name.startsWith("core.")) {
       throw new Error(`section ${entry.section.id} cannot use ${name}`);
     }
   };
-  return {
-    card: context.card,
-    surface: context.surface,
-    orientation: context.orientation,
-    // Core icon. Same as icon of the surface context (docs/spec/plugins.md#icons).
-    icon,
-    status(name, fn) {
-      own(name);
-      const stop = name.startsWith("core.") ? registry.observeCore(name, fn) : registry.observe(name, context.surface, fn, { exact: context.window === true });
-      entry.observing.push(stop);
-      return () => {
-        const at = entry.observing.indexOf(stop);
-        if (at >= 0) entry.observing.splice(at, 1);
-        stop();
-      };
-    },
-    bind(el, name, params, options) {
-      own(name);
-      el.dataset.expose = "core.sidebar.section.control";
-      return bind(el, name, params, options);
-    },
+  return (el, name, params, options) => {
+    own(name);
+    el.dataset.expose = "core.sidebar.section.control";
+    return bind(el, name, params, options);
   };
 }
 
 function mount(entry, record) {
   if (entry.mount) return;
-  const mountOnce = entry.mount = entry.section.status !== undefined
-    ? mountDeclared(entry, record)
-    : mountModule(entry, record.context);
+  const mountOnce = entry.mount = mountDeclared(entry, record);
   mountOnce.then(() => {
     if (entry.mount !== mountOnce) return;
     entry.mounted = true;
@@ -96,23 +76,10 @@ function mount(entry, record) {
   });
 }
 
-/** Imports the module of a module section and mounts it into the body (docs/spec/plugins.md#sections). */
-function mountModule(entry, context) {
-  const path = typeof entry.section.module === "string" ? entry.section.module : entry.section.module[context.orientation];
-  return import(path).then(async (module) => {
-    if (typeof module.mount !== "function") throw new TypeError(`section ${entry.section.id} module has no mount()`);
-    const result = await module.mount(entry.body, sectionContext(entry, context));
-    if (!result || typeof result.dispose !== "function") {
-      throw new TypeError(`section ${entry.section.id} mount() must return { dispose() }`);
-    }
-    return result;
-  });
-}
-
 /**
  * Draws a declared section from its status (docs/spec/declared-ui.md, sidebar section form and status mapping). The body draws
- * the accepted value through declared-ui.js, and a rejection shows in the body through the display path. The registration of a
- * state module does not serve, so the source is chosen among the surfaces that the registry holds for the status. The snapshot
+ * the accepted value through declared-ui.js, and a rejection shows in the body through the display path. The source is chosen
+ * among the surfaces that the registry holds for the status. The snapshot
  * channel and the pull come from the view transport of the main page (createDeclaredSource of declared-source.js).
  */
 function mountDeclared(entry, record) {
@@ -121,12 +88,12 @@ function mountDeclared(entry, record) {
   // and the pull name the status inside the plugin (docs/spec/declared-ui.md, status mapping).
   const statusId = entry.section.status;
   const status = statusId.slice(owner.length + 1);
-  const context = sectionContext(entry, record.context);
+  const bindControl = sectionBind(entry);
   const transport = createDeclaredSource({ plugin: owner, status });
   const declared = createDeclaredSection({
     statusId,
     body: entry.body,
-    options: { declared: (name) => registry.declared("command", name), hasIcon, bind: context.bind },
+    options: { declared: (name) => registry.declared("command", name), hasIcon, bind: bindControl },
     expanded: (source, request) => transport.expanded(source, request),
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
@@ -174,15 +141,13 @@ function sweep() {
 }
 
 /**
- * Applies the selected tab and the collapse to the elements and the mounts. At a change of orientation a module section remounts,
- * because its module can be chosen by orientation. A declared section keeps its accepted value and its source, because no declared
- * value depends on orientation (docs/spec/declared-ui.md).
+ * Applies the selected tab and the collapse to the elements and the mounts. A declared section keeps its accepted value and its
+ * source across a change of orientation, because no declared value depends on orientation (docs/spec/declared-ui.md).
  */
-function apply(record, orientationChanged = false) {
+function apply(record) {
   const choice = choiceOf(record.sidebar);
   for (const entry of record.entries) {
     const id = entry.section.id;
-    if (orientationChanged && !entry.declared) unmount(entry);
     if (record.layout === "tabs") {
       const selected = choice.tab === id;
       entry.tab.setAttribute("aria-selected", String(selected));
@@ -199,7 +164,7 @@ function apply(record, orientationChanged = false) {
 }
 
 /**
- * Draws the set set of sidebar sidebar in container. context is {card, surface}, which the section modules receive.
+ * Draws the set set of sidebar sidebar in container. context is {card, surface, orientation, window, plugin, side} of the sidebar.
  * If the set, layout, section list and context are the same, the elements and mounts are kept.
  */
 export function drawSet(container, sidebar, set, context) {
@@ -214,7 +179,6 @@ export function drawSet(container, sidebar, set, context) {
   // The orientation is not part of the key: a change of orientation keeps the elements, and a declared section keeps its value and source.
   const key = JSON.stringify([sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.surface, context.window === true]);
   let record = drawn.get(container);
-  let orientationChanged = false;
   if (record?.key !== key) {
     if (record) clearSet(container);
     record = { container, sidebar, key, set: set.id, layout: set.layout, context, entries: [] };
@@ -245,7 +209,7 @@ export function drawSet(container, sidebar, set, context) {
         mount: null, mounted: false, error: null, declared: null, observing: [] };
       entry.body.className = "set__body";
       // The body of a declared section lays its root elements by the orientation of the sidebar (docs/spec/declared-ui.md).
-      if (section.status !== undefined) entry.body.dataset.declared = "";
+      entry.body.dataset.declared = "";
       if (context.surface) entry.body.dataset.surface = context.surface;
       if (context.window) entry.body.dataset.windowSidebar = "";
       // The content that a section drew is exposed as text of core.sidebars, so a change of the content is notified.
@@ -277,11 +241,10 @@ export function drawSet(container, sidebar, set, context) {
     }
     notify();
   } else if (container.dataset.orientation !== context.orientation) {
-    orientationChanged = true;
     container.dataset.orientation = context.orientation;
   }
   record.context = context;
-  apply(record, orientationChanged);
+  apply(record);
 }
 
 function recordsOf(sidebar, section) {
@@ -356,7 +319,7 @@ export function sidebarsState() {
           return {
           id: entry.section.id, name: entry.section.name,
           folded: record.layout === "list" && choice.folded.has(entry.section.id),
-          // A declared section reports its accepted value and its rejection; a module section its mount state and mount error.
+          // A declared section reports its accepted value and its rejection.
           mounted: declared ? declared.mounted : entry.mounted,
           error: declared ? declared.error : entry.error,
           text: entry.body.textContent,

@@ -5,7 +5,7 @@ import { beginSettings, selectProject, value, flushSettings } from "./settings.j
 import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
-import { configureStates, showStates } from "./plugin-states.js";
+import { configureData, showData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
@@ -92,7 +92,7 @@ async function emptyToLibrary() {
 export function browse() {
   return inTurn(async () => {
     await flush();
-    await showStates(null);
+    await showData(null);
     await emptyToLibrary();
     await selectProject(null);
     changed();
@@ -153,7 +153,7 @@ export function begin(snapshot) {
 /** Starts the project list of the window over storage; unloadOf(plugin) returns the surface.unload declaration of a plugin. */
 export async function initialise(storage, unloadOf) {
   store = storage;
-  configureStates({
+  configureData({
     sidecar: windowSidecar,
     // default: the data of a project that stored no plugin data is empty.
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
@@ -251,7 +251,7 @@ async function readProjects() {
     history.replaceState(null, "", location.pathname);
     savedLayout = "";
     await selectProject(null);
-    await showStates(null);
+    await showData(null);
     await emptyToLibrary();
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
@@ -298,7 +298,7 @@ async function showProject(id) {
   activeProjectId = id;
   browsing = false;
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
-  await showStates({ id, root: project.root });
+  await showData({ id, root: project.root });
   changed();
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);

@@ -69,7 +69,7 @@
     "plane.js",
     "picker-layer.js",
     "projects.js",
-    "plugin-states.js",
+    "plugin-data.js",
     "registry.js",
     "event-classes.js",
     "log-batch.js",
