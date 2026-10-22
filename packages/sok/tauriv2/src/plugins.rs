@@ -709,7 +709,8 @@ impl DependencyPlan<'_> {
         };
         let manifest = parse_manifest(&file, &data)?;
         install::check_plugin_id(id, &manifest).map_err(|error| format!("{file}: {error}"))?;
-        install::check_plugin_schemas(id, &manifest).map_err(|error| format!("{file}: {error}"))?;
+        crate::manifest::validate_manifest(&manifest)
+            .map_err(|error| format!("{file}: {error}"))?;
         let dependencies = manifest_dependencies_of(&file, &manifest)?;
         let (providers, _) =
             install::classify_dependencies(self.index, id, &version, &dependencies)?;

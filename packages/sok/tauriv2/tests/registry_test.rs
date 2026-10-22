@@ -63,7 +63,7 @@ fn registry_tree() -> Registry {
             ),
             (
                 "plugin.json",
-                r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
+                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
             ),
             ("ui/b.js", "b"),
         ],
@@ -248,7 +248,7 @@ fn dependency_tree(plugins: Plugins) -> (Folder, Folder) {
         let package = json!({"name": format!("@scope/plugin-{id}"), "version": "1.0.0",
             "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]})
         .to_string();
-        let manifest = json!({"id": id, "dependencies": dependencies}).to_string();
+        let manifest = json!({"id": id, "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": dependencies}).to_string();
         write_tree(
             source.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],

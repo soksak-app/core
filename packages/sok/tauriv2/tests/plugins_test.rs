@@ -92,7 +92,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
                 ("package.json", &package),
                 (
                     "plugin.json",
-                    r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
+                    r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": {"@scope/sidecar-worker": "^0.1.0"}}"#,
                 ),
                 ("ui/b.js", &content),
             ],
@@ -223,7 +223,10 @@ fn unsafe_release(path: &Path) -> String {
                 "package.json",
                 r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
             ),
-            ("plugin.json", r#"{"id": "probe"}"#),
+            (
+                "plugin.json",
+                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}"#,
+            ),
             ("../escape.txt", "outside"),
         ] {
             let mut header = tar::Header::new_gnu();
@@ -605,7 +608,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
         let package = json!({"name": format!("@scope/plugin-{}", item.id), "version": item.version,
             "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]})
         .to_string();
-        let manifest = json!({"id": item.id, "dependencies": dependencies}).to_string();
+        let manifest = json!({"id": item.id, "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": dependencies}).to_string();
         write_tree(
             dir.path(),
             &[("package.json", &package), ("plugin.json", &manifest)],
@@ -990,7 +993,10 @@ fn mismatched_index() -> Registry {
                 "package.json",
                 r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
             ),
-            ("plugin.json", r#"{"id": "other"}"#),
+            (
+                "plugin.json",
+                r#"{"id": "other", "name": "Other", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}"#,
+            ),
         ],
     );
     let result = run_json(&["plugin", "pack", dir.text(), releases.text()]);
@@ -1040,7 +1046,10 @@ fn read_installed_refuses_a_plugin_whose_plugin_id_differs() {
                 "plugins/probe/0.2.0/package.json",
                 r#"{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}"#,
             ),
-            ("plugins/probe/0.2.0/plugin.json", r#"{"id": "other"}"#),
+            (
+                "plugins/probe/0.2.0/plugin.json",
+                r#"{"id": "other", "name": "Other", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}}"#,
+            ),
         ],
     );
     let error = soksak_sok::plugins::read_installed(config.path()).expect_err("plugin id");
@@ -1080,7 +1089,7 @@ fn plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset() {
             ),
             (
                 "plugins/probe/0.2.0/plugin.json",
-                r#"{"id": "probe", "surface": {"params": {"type": "object", "required": ["path"]}}}"#,
+                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "required": ["path"]}}}"#,
             ),
         ],
     );

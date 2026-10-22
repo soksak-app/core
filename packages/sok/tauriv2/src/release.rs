@@ -255,28 +255,6 @@ fn check_release_files(listed: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Refuses the manifest fields that the reader removed: the state module and the module of a section. The error names the plugin
-/// and the field, as plugin-api validateManifest does (docs/spec/plugins.md, docs/spec/declared-ui.md).
-fn check_removed_fields(id: &str, manifest: &Value) -> Result<(), String> {
-    if manifest.get("state").is_some() {
-        return Err(format!(
-            "plugin {id}: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)"
-        ));
-    }
-    for section in manifest["sections"].as_array().into_iter().flatten() {
-        if section.get("module").is_some() {
-            let what = match section["id"].as_str() {
-                Some(section_id) => format!("section {section_id} module"),
-                None => "section module".to_string(),
-            };
-            return Err(format!(
-                "plugin {id}: {what} is removed; a section takes status (docs/spec/declared-ui.md)"
-            ));
-        }
-    }
-    Ok(())
-}
-
 /// The modules that plugin.json loads and their names: the surface module and the page of a view composition.
 fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     let mut modules = vec![];
@@ -327,18 +305,9 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
     let pkg = read_json_file(dir, "package.json")?;
     install::validate_package_json(&pkg)?;
     let manifest = read_json_file(dir, "plugin.json")?;
-    if !manifest.is_object() {
-        return Err("plugin.json: expected an object".into());
-    }
-    let Some(id) = manifest["id"]
-        .as_str()
-        .filter(|id| install::is_identifier(id))
-    else {
-        return Err("plugin.json: id must be a lowercase identifier".into());
-    };
-    install::manifest_dependencies(&manifest)?;
-    check_removed_fields(id, &manifest)?;
-    install::check_plugin_schemas(id, &manifest)?;
+    crate::manifest::validate_manifest(&manifest)?;
+    // default: validate_manifest accepted the id, so it is text.
+    let id = manifest["id"].as_str().unwrap_or_default();
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
     let mut listed = listed_files(object)?;
     check_release_files(&listed)?;
