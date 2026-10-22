@@ -19,7 +19,7 @@ import (
 //go:embed migrations/installed.json migrations/settings.json migrations/projects.json
 var migrationFS embed.FS
 
-// definitionSource is the source that the definitions are read from. UseDefinitionsForTest replaces it.
+// definitionSource is the source that the definitions are read from. A test replaces it to break the definitions.
 var definitionSource fs.FS = migrationFS
 
 // migrationDefinition is one step of the chain of one stored file: the file it migrates, the format it comes from and
@@ -111,13 +111,6 @@ func formatOf(file string) (int, error) {
 		return 0, fmt.Errorf("the migration definitions hold no chain for %s", file)
 	}
 	return chain.current(), nil
-}
-
-// UseDefinitionsForTest replaces the source of the definitions with fsys and returns the function that restores the embedded definitions.
-func UseDefinitionsForTest(fsys fs.FS) func() {
-	saved := definitionSource
-	definitionSource = fsys
-	return func() { definitionSource = saved }
 }
 
 // MigrationChainsForTest exposes the parsed chains for the owning tests: the chain of each file as the steps the engine
