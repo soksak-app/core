@@ -655,7 +655,6 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "waitSurfaceCompositionDeclared" },
       { file: "packages/workbench/surface-modules.js", symbol: "waitSurfaceCompositionDeclared" },
-      { file: "packages/plugin-api/surface-composition.js", symbol: "boundaryToken" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },

@@ -465,7 +465,7 @@ const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
   if (composition.kind === "dom") {
-    throw new Error(`${where} composition: kind dom is removed; the composition takes kind view or hybrid`);
+    throw new Error(`${where} composition: kind dom is removed; the composition takes kind view`);
   }
   if (composition.kind === "view") {
     only(`${where} composition`, composition, ["kind", "page", "regions", "overlays"]);
@@ -483,16 +483,11 @@ function checkComposition(where, composition, sidecars) {
     checkRegions(where, composition.regions ?? [], composition.overlays ?? [], sidecars);
     return;
   }
-  if (composition.kind !== "hybrid") throw new Error(`${where}: composition kind must be hybrid or view`);
-  only(`${where} composition`, composition, ["kind", "regions", "overlays"]);
-  if (!Array.isArray(composition.regions) || composition.regions.length === 0) {
-    throw new Error(`${where}: hybrid composition requires regions`);
-  }
-  if (!Array.isArray(composition.overlays)) throw new Error(`${where}: hybrid composition requires overlays`);
-  checkRegions(where, composition.regions, composition.overlays, sidecars);
+  if (composition.kind === "hybrid") throw new Error(`${where} composition: kind hybrid is removed; the composition takes kind view`);
+  throw new Error(`${where} composition: composition kind must be view`);
 }
 
-/** Validates the regions and overlays of a hybrid or view composition; the names of both are unique. */
+/** Validates the regions and overlays of a view composition; the names of both are unique. */
 function checkRegions(where, regions, overlays, sidecars) {
   const names = new Set();
   for (const region of regions) {
@@ -747,15 +742,8 @@ export function validateManifest(manifest) {
       !(manifest.exposes?.commands ?? []).some((command) => command.name === surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
-    // A view surface has no module: its page is declared in the composition (docs/spec/plugins.md#view-surfaces).
-    const view = isObject(surface.composition) && surface.composition.kind === "view";
-    if (view && surface.module !== undefined) throw new Error(`${where}: surface module is refused beside a view composition`);
-    if (!view) {
-      if (!isText(surface.module)) throw new Error(`${where}: surface requires a module`);
-      if (surface.module.startsWith("/") || surface.module.split("/").includes("..") || !surface.module.endsWith(".js")) {
-        throw new Error(`${where}: surface module must be a JavaScript path inside the package`);
-      }
-    }
+    // The surface module is removed: a surface is a view, and its page is declared in the composition (docs/spec/plugins.md#view-surfaces).
+    if (surface.module !== undefined) throw new Error(`${where}: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)`);
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);
     checkComposition(`${where} surface`, surface.composition, manifestSidecars(manifest));
     // surface.unload is absent (the tabs are never unloaded, undeclared) or {format, maxBytes} (docs/spec/plugins.md#memory-saver).

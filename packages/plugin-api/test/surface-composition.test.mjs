@@ -100,30 +100,9 @@ function runtime({ documentAttach, imageAttach, place } = {}) {
   };
 }
 
-test("DOM composition does not declare or place a native surface", async () => {
-  const { window } = new JSDOM("<body><main></main></body>", { url: "https://example.test/" });
-  const calls = [];
-  const composition = await createSurfaceCompositionController(
-    {
-      composition: {
-        declare: () => { calls.push("declare"); return Promise.resolve(); },
-        place: () => { calls.push("place"); return Promise.resolve(); },
-      },
-      surfaces: { report: () => {} },
-    },
-    { kind: "dom" },
-    { regions: {}, overlays: {} },
-    window,
-    window.document.querySelector("main"),
-  );
-  await composition.update(() => {});
-  await composition.dispose();
-  assert.deepEqual(calls, []);
-  window.close();
-});
-
 const declaration = {
-  kind: "hybrid",
+  kind: "view",
+  page: "ui/page.html",
   regions: [
     { name: "page", kind: "document", input: "native" },
     { name: "image", kind: "image", input: "dom", sidecar: "renderer" },
@@ -139,7 +118,7 @@ test("creation attaches declared regions and submits one complete ordered snapsh
     overlays: { badge: f.badge, toolbar: f.toolbar },
   }, f.window);
 
-  assert.equal(composition.kind, "hybrid");
+  assert.equal(composition.kind, "view");
   assert.deepEqual(r.documentCalls, [["attach", "page"]]);
   assert.deepEqual(r.imageCalls, [["attach", "image", "renderer"]]);
   assert.deepEqual(r.placements, [{
@@ -153,61 +132,9 @@ test("creation attaches declared regions and submits one complete ordered snapsh
       { name: "badge", left: 690, top: 30, right: 90, bottom: 550, visible: true },
     ],
   }]);
-  assert.equal(f.window.document.documentElement.dataset.surfaceComposition, "hybrid");
-  assert.equal(f.page.style.getPropertyValue("opacity"), "0");
-  assert.equal(f.page.style.getPropertyPriority("opacity"), "important");
-  assert.equal(f.image.style.getPropertyValue("pointer-events"), "auto");
-  assert.equal(f.image.style.getPropertyPriority("pointer-events"), "important");
-  assert.equal(f.toolbar.style.getPropertyValue("pointer-events"), "auto");
-  assert.equal(f.toolbar.style.getPropertyValue("contain"), "paint");
-  assert.equal(f.toolbar.style.getPropertyPriority("contain"), "important");
-  assert.equal(f.window.document.getElementById("native-parent").style.getPropertyValue("background-color"), "transparent");
-  assert.equal(f.window.document.getElementById("native-parent").style.getPropertyPriority("background-color"), "important");
-  assert.equal(f.window.document.getElementById("overlay-parent").style.getPropertyValue("background-color"), "");
+  assert.equal(f.window.document.documentElement.dataset.surfaceComposition, "view");
   assert.equal(Object.hasOwn(composition.region("page"), "focus"), false);
   assert.equal(Object.hasOwn(composition.region("image"), "load"), false);
-});
-
-test("the hybrid paint boundary restores native-anchor and ancestor transparency", async () => {
-  const f = fixture();
-  const r = runtime();
-  await createSurfaceCompositionController(r.page, declaration, {
-    regions: { page: f.page, image: f.image },
-    overlays: { toolbar: f.toolbar, badge: f.badge },
-  }, f.window);
-  const parent = f.window.document.getElementById("native-parent");
-  f.page.style.setProperty("opacity", "1", "important");
-  parent.style.setProperty("background-color", "white", "important");
-  f.window.document.documentElement.removeAttribute("data-soksak-native-ancestor");
-  await settle();
-
-  assert.equal(f.page.style.getPropertyValue("opacity"), "0");
-  assert.equal(f.page.style.getPropertyPriority("opacity"), "important");
-  assert.equal(parent.style.getPropertyValue("background-color"), "transparent");
-  assert.equal(parent.style.getPropertyPriority("background-color"), "important");
-  assert.match(f.window.document.documentElement.getAttribute("data-soksak-native-ancestor"), /^composition-/);
-});
-
-test("multiple hybrid surfaces share one document paint-boundary token without an observer loop", { timeout: 10_000 }, async () => {
-  const f = fixture();
-  const r = runtime();
-  const first = await createSurfaceCompositionController(r.page, declaration, {
-    regions: { page: f.page, image: f.image },
-    overlays: { toolbar: f.toolbar, badge: f.badge },
-  }, f.window);
-  const second = await createSurfaceCompositionController(r.page, declaration, {
-    regions: { page: f.page, image: f.image },
-    overlays: { toolbar: f.toolbar, badge: f.badge },
-  }, f.window);
-  f.page.style.setProperty("opacity", "1", "important");
-  // An observer loop never yields to the check phase, so settle() does not resolve and the per-test limit ends the test.
-  await settle();
-  assert.equal(f.page.style.getPropertyValue("opacity"), "0");
-  await second.dispose();
-  assert.match(f.page.getAttribute("data-soksak-native-anchor"), /^composition-/);
-  assert.equal(f.page.style.getPropertyValue("opacity"), "0");
-  await first.dispose();
-  assert.equal(f.page.hasAttribute("data-soksak-native-anchor"), false);
 });
 
 test("an observed overlay change submits every region and overlay through composition.place", async () => {
@@ -418,10 +345,6 @@ test("declaration keys and document ownership are validated before attachment", 
   await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
     regions: { page: f.page, image: foreign }, overlays: { toolbar: f.toolbar, badge: f.badge },
   }, f.window), /must be an element in this document/);
-  f.page.append(f.toolbar);
-  await assert.rejects(createSurfaceCompositionController(r.page, declaration, {
-    regions: { page: f.page, image: f.image }, overlays: { toolbar: f.toolbar, badge: f.badge },
-  }, f.window), /overlays and native anchors cannot contain each other/);
   assert.deepEqual(r.documentCalls, []);
   assert.deepEqual(r.imageCalls, []);
 });
@@ -460,23 +383,20 @@ test("a shadow-root composition scopes the marker and measures from its viewport
   overlay.getBoundingClientRect = () => ({ left: 120, top: 80, right: 180, bottom: 100, width: 60, height: 20 });
   const r = runtime();
   const composition = await createSurfaceCompositionController(r.page, {
-    kind: "hybrid",
+    kind: "view",
+    page: "ui/page.html",
     regions: [{ name: "page", kind: "document", input: "native" }],
     overlays: ["overlay"],
   }, { regions: { page }, overlays: { overlay } }, window, slot);
 
   assert.equal(window.document.documentElement.dataset.surfaceComposition, undefined);
-  assert.equal(slot.dataset.surfaceComposition, "hybrid");
+  assert.equal(slot.dataset.surfaceComposition, "view");
   assert.equal(window.document.body.style.getPropertyValue("background-color"), "");
   assert.deepEqual(r.placements[0].regions, [{ name: "page", left: 10, top: 20, right: 90, bottom: 180, visible: true }]);
   assert.deepEqual(r.placements[0].overlays, [{ name: "overlay", left: 20, top: 30, right: 320, bottom: 250, visible: true }]);
   // The observation starts at the next animation frame.
   for (const frame of frames.splice(0)) frame();
   assert(observed.includes(slot), "the surface slot is observed for size changes");
-  assert.equal(host.style.getPropertyValue("background-color"), "transparent");
-  assert.equal(host.style.getPropertyPriority("background-color"), "important");
-  assert.equal(card.style.getPropertyValue("background-color"), "transparent");
-  assert.equal(plane.style.getPropertyValue("background-color"), "transparent");
   await composition.update(() => {});
 });
 

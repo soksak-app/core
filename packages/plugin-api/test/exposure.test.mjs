@@ -20,7 +20,7 @@ const exposes = () => ({
 
 const page = {
   id: "probe", name: "Probe", description: "검사용 플러그인.", mark: "p", icon: "<path/>",
-  surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+  surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
 };
 
 test("exposes with the three kinds are accepted in a manifest and in a core file", () => {
@@ -350,7 +350,7 @@ test("the installed plugin document lists plugins with their manifests and diagn
 
 // The sidecar facts of an installed plugin are the message form and the host read operations of each sidecar dependency (docs/spec/sidecars.md#messages).
 test("the installed plugin document validates the sidecar facts of each sidecar dependency", () => {
-  const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
+  const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, host: { page: "ui/host.html" },
     dependencies: { "@fixture/sidecar-probe": "^0.1.0" }, hostOperations: { "@fixture/sidecar-probe": ["list"] } };
   const facts = { message: { form: "json-object", operationField: "operation" }, hostReadOperations: ["list"] };
   const plugin = { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest };

@@ -23,123 +23,6 @@ function restoreDataset(root, previous) {
   else root.dataset.surfaceComposition = previous;
 }
 
-let paintBoundaryId = 0;
-const documentBoundaryTokens = new WeakMap();
-
-function boundaryToken(document) {
-  let token = documentBoundaryTokens.get(document);
-  if (!token) {
-    token = `composition-${++paintBoundaryId}`;
-    documentBoundaryTokens.set(document, token);
-  }
-  return token;
-}
-
-function installHybridPaintBoundary(regionElements, overlayElements, view, viewport = null) {
-  for (const region of regionElements) {
-    for (const overlay of overlayElements) {
-      if (region.contains(overlay) || overlay.contains(region)) {
-        throw new Error("composition overlays and native anchors cannot contain each other");
-      }
-    }
-  }
-
-  const token = boundaryToken(view.document);
-  const attributes = new Map();
-  const properties = new Map();
-  const rememberAttribute = (element, name) => {
-    let saved = attributes.get(element);
-    if (!saved) attributes.set(element, saved = new Map());
-    if (!saved.has(name)) saved.set(name, element.getAttribute(name));
-  };
-  const rememberProperty = (element, name) => {
-    let saved = properties.get(element);
-    if (!saved) properties.set(element, saved = new Map());
-    if (!saved.has(name)) {
-      saved.set(name, {
-        value: element.style.getPropertyValue(name),
-        priority: element.style.getPropertyPriority(name),
-      });
-    }
-  };
-  const setAttribute = (element, name) => {
-    rememberAttribute(element, name);
-    if (element.getAttribute(name) !== token) element.setAttribute(name, token);
-  };
-  const setProperty = (element, name, value) => {
-    rememberProperty(element, name);
-    if (element.style.getPropertyValue(name) !== value || element.style.getPropertyPriority(name) !== "important") {
-      element.style.setProperty(name, value, "important");
-    }
-  };
-  const ancestors = new Set();
-  for (const region of regionElements) {
-    for (let node = region.parentElement; node; node = node.parentElement) ancestors.add(node);
-    const root = region.getRootNode();
-    if (root?.host) ancestors.add(root.host);
-  }
-  if (viewport) {
-    for (let node = viewport; node; node = node.parentElement) {
-      ancestors.add(node);
-      // plane is an explicit app-DOM paint boundary. Its ancestors paint the window background,
-      // so they must not be made transparent globally.
-      if (node.classList?.contains("plane")) break;
-    }
-  }
-  const enforce = () => {
-    for (const region of regionElements) {
-      setAttribute(region, "data-soksak-native-anchor");
-      setProperty(region, "opacity", "0");
-      setProperty(region, "pointer-events", "auto");
-    }
-    for (const ancestor of ancestors) {
-      setAttribute(ancestor, "data-soksak-native-ancestor");
-      setProperty(ancestor, "background-color", "transparent");
-      setProperty(ancestor, "background-image", "none");
-      setProperty(ancestor, "box-shadow", "none");
-    }
-    for (const overlay of overlayElements) {
-      setProperty(overlay, "pointer-events", "auto");
-      setProperty(overlay, "contain", "paint");
-    }
-  };
-  enforce();
-  const observers = [];
-  const observe = (target) => {
-    if (!target) return;
-    const observer = new view.MutationObserver(enforce);
-    observer.observe(target, {
-    attributes: true,
-    attributeFilter: [
-      "style", "data-soksak-native-anchor", "data-soksak-native-ancestor",
-    ],
-    subtree: true,
-    });
-    observers.push(observer);
-  };
-  // default: a surface without regions observes the whole document.
-  observe(regionElements.length ? regionElements[0].getRootNode() : view.document.documentElement);
-  if (viewport) observe(viewport);
-  return {
-    enforce,
-    restore() {
-      for (const observer of observers) observer.disconnect();
-      for (const [element, saved] of properties) {
-        for (const [name, previous] of saved) {
-          if (previous.value === "") element.style.removeProperty(name);
-          else element.style.setProperty(name, previous.value, previous.priority);
-        }
-      }
-      for (const [element, saved] of attributes) {
-        for (const [name, previous] of saved) {
-          if (previous === null) element.removeAttribute(name);
-          else element.setAttribute(name, previous);
-        }
-      }
-    },
-  };
-}
-
 /**
  * Creates the surface composition from the validated declaration and the runtime port. Only page.js calls this internal function.
  * It is a separate module so that the full snapshot and the failure cleanup can be verified without a browser.
@@ -152,33 +35,13 @@ export async function createSurfaceCompositionController(
   viewport = null,
 ) {
   if (!declaration) throw new Error("this page has no surface composition declaration");
-  // A view declares its regions and overlays as a hybrid composition does; the composition of a view runs in the view document.
-  const native = declaration.kind === "hybrid" || declaration.kind === "view";
-  const declaredRegions = native ? declaration.regions : [];
-  const declaredOverlays = native ? declaration.overlays : [];
+  // The regions and overlays of a view are declared in its composition; the composition of a view runs in the view document.
+  const declaredRegions = declaration.regions ?? [];
+  const declaredOverlays = declaration.overlays ?? [];
   sameNames(Object.keys(regions), declaredRegions.map((region) => region.name), "composition regions");
   sameNames(Object.keys(overlays), declaredOverlays, "composition overlays");
   for (const [name, element] of Object.entries({ ...regions, ...overlays })) {
     inThisDocument(element, name, view);
-  }
-
-  // A DOM surface has no native plane to declare or place. Calling the host composition API here
-  // creates a lifecycle race: a DOM module can be mounted before the first native surface sync,
-  // and can keep issuing frames after the surface is removed.
-  // A hybrid surface uses the controller below, and a DOM surface only needs
-  // the lifecycle handle for the module.
-  if (declaration.kind === "dom") {
-    let active = true;
-    return Object.freeze({
-      kind: "dom",
-      update(change) {
-        if (typeof change !== "function") return Promise.reject(new Error("composition.update requires a function"));
-        if (!active) return Promise.reject(new Error("surface composition is inactive"));
-        change();
-        return Promise.resolve();
-      },
-      dispose() { active = false; return Promise.resolve(); },
-    });
   }
 
   const viewportOf = () => typeof viewport === "function" ? viewport() : viewport;
@@ -187,7 +50,6 @@ export async function createSurfaceCompositionController(
   const root = compositionRoot;
   const previousComposition = root.dataset.surfaceComposition;
   root.dataset.surfaceComposition = declaration.kind;
-  let paintBoundary = null;
   const internal = new Map();
   let active = true;
   let observer = null;
@@ -222,7 +84,6 @@ export async function createSurfaceCompositionController(
     if (observeFrame !== null) view.cancelAnimationFrame(observeFrame);
     await pending;
     const results = await Promise.allSettled([...internal.values()].map(({ handle }) => handle.detach()));
-    paintBoundary?.restore();
     restoreDataset(root, previousComposition);
     const failures = results.filter((result) => result.status === "rejected");
     // default: the thrown value may not be an Error, so without message the value itself is written.
@@ -235,9 +96,6 @@ export async function createSurfaceCompositionController(
   };
 
   try {
-    if (declaration.kind === "hybrid") {
-      paintBoundary = installHybridPaintBoundary(Object.values(regions), Object.values(overlays), view, viewportOf());
-    }
     for (const declared of declaredRegions) {
       const element = regions[declared.name];
       const handle = declared.kind === "document"
@@ -269,7 +127,6 @@ export async function createSurfaceCompositionController(
       return { name, ...insets, visible };
     };
     const snapshot = () => {
-      paintBoundary?.enforce();
       const regionSnapshot = [...internal.values()]
         .map(({ declared, element }) => measured(declared.name, element));
       const overlaySnapshot = declaredOverlays

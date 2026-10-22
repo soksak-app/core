@@ -4,7 +4,7 @@ import { checkSidebarReferences, normalizeSidebarDefaults, validateManifest, val
 
 const manifests = () => [
   { id: "pane", name: "Pane", description: "Content fixture.", mark: "p", icon: "<path/>",
-    surface: { module: "ui/pane.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+    surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     exposes: { status: [{ name: "pane.info", description: "Fixture status.", schema: { type: "object" } }] },
     sections: [{ id: "pane.info", name: "Info", status: "pane.info" }],
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["pane.info", "tree.list"], layout: "list" }],

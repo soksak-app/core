@@ -7,7 +7,7 @@ import {
 
 const card = {
   id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
-  surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
+  surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, dependencies: { "@scope/sidecar-worker": "^1.2.0" },
   settings: { "cursor.shape": { type: "enum", label: "커서 모양", default: "block", values: ["block", "beam"] } },
 };
 const side = {
@@ -47,9 +47,9 @@ test("a manifest with a page surface or with sections only is accepted", () => {
   assert.equal(validateManifest(address("https://example.com/start")).settings.home.default, "https://example.com/start");
   assert.deepEqual(validateManifest(card).settings["cursor.shape"].values, ["block", "beam"]);
   const background = { sidecar: "@scope/sidecar-worker", operation: "open" };
-  assert.equal(validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, background }).background.operation, "open");
+  assert.equal(validateManifest({ ...card, surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, background }).background.operation, "open");
   const withSettings = { ...background, settings: { shape: "cursor.shape" } };
-  assert.deepEqual(validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, background: withSettings }).background.settings, { shape: "cursor.shape" });
+  assert.deepEqual(validateManifest({ ...card, surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, background: withSettings }).background.settings, { shape: "cursor.shape" });
 });
 
 test("a manifest is rejected for each invalid field", () => {
@@ -59,15 +59,15 @@ test("a manifest is rejected for each invalid field", () => {
     [{ ...card, name: "" }, /name is required/],
     [{ ...card, extra: 1 }, /unknown field extra/],
     [{ ...card, surface: { url: "https://a" } }, /unknown field url/],
-    [{ ...card, surface: { url: "https://a", module: "b.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /unknown field url/],
-    [{ ...card, surface: {} }, /surface requires a module/],
-    [{ ...card, surface: { module: "ui/probe.js" } }, /surface requires a composition/],
+    [{ ...card, surface: { url: "https://a", composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /unknown field url/],
+    [{ ...card, surface: {} }, /surface requires a composition/],
+    [{ ...card, surface: { module: "ui/probe.js" } }, /surface module is removed/],
     [{ ...card, home: "https://example.com" }, /unknown field home/],
     [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "file:///etc" } } }, /address default/],
     [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "https:///" } } }, /address default/],
     [{ ...card, settings: { home: { label: "홈 주소", type: "address", default: "", maxLength: 9 } } }, /unknown field maxLength/],
-    [{ ...card, surface: { module: "../x.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /inside the package/],
-    [{ ...card, surface: { module: "/x.js", composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /inside the package/],
+    [{ ...card, surface: { module: "../x.js", composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /surface module is removed/],
+    [{ ...card, surface: { module: "../x.js", composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }, /surface module is removed/],
     [{ ...card, mark: undefined }, /mark is required/],
     [{ ...card, icon: undefined }, /icon is required/],
     [{ ...side, sections: [{ id: "other.list", name: "x" }] }, /must be side.<name>/],
@@ -111,16 +111,16 @@ test("surface composition declarations are complete and fail closed", () => {
     name: "view", kind: "image", sidecar: "@scope/sidecar-worker", input: "dom",
   };
   const hybrid = (regions = [documentRegion], overlays = []) => ({
-    ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", regions, overlays } },
+    ...card, surface: { composition: { kind: "view", page: "ui/page.html", regions, overlays } },
   });
-  assert.equal(validateManifest(hybrid()).surface.composition.kind, "hybrid");
+  assert.equal(validateManifest(hybrid()).surface.composition.kind, "view");
   assert.equal(validateManifest(hybrid([imageRegion])).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
 
   const cases = [
-    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /kind must be hybrid or view/],
+    [{ ...card, surface: { ...card.surface, composition: { kind: "other" } } }, /composition kind must be view/],
     [{ ...card, surface: { ...card.surface, composition: { kind: "dom" } } }, /kind dom is removed/],
-    [hybrid([]), /requires regions/],
-    [{ ...hybrid(), surface: { ...hybrid().surface, composition: { kind: "hybrid", regions: [documentRegion] } } }, /requires overlays/],
+    [{ ...card, surface: { ...card.surface, composition: { kind: "hybrid", regions: [documentRegion], overlays: [] } } }, /kind hybrid is removed/],
+    [hybrid([]), /regions must be a non-empty array/],
     [hybrid([{ ...documentRegion, input: "dom" }]), /document input must be native/],
     [hybrid([{ ...imageRegion, input: "native" }]), /image input must be dom/],
     [hybrid([{ ...imageRegion, sidecar: "@scope/sidecar-other" }]), /sidecar must be declared/],
@@ -143,7 +143,7 @@ test("a view composition declares its page and no module", () => {
   assert.equal(validateManifest(view({ kind: "view", page: "ui/page.html", regions: [imageRegion] })).surface.composition.regions[0].sidecar, "@scope/sidecar-worker");
   assert.equal(validateManifest(view({ kind: "view", page: "ui/page.html", overlays: [] })).surface.composition.overlays.length, 0);
   const cases = [
-    [view({ kind: "view", page: "ui/page.html" }, { module: "ui/probe.js" }), /surface module is refused beside a view composition/],
+    [view({ kind: "view", page: "ui/page.html" }, { module: "ui/probe.js" }), /surface module is removed/],
     [view({ kind: "view" }), /view composition requires page/],
     [view({ kind: "view", page: "/ui/page.html" }), /page must be a path inside the plugin release that ends in .html/],
     [view({ kind: "view", page: "../page.html" }), /page must be a path inside the plugin release that ends in .html/],
@@ -155,8 +155,7 @@ test("a view composition declares its page and no module", () => {
     [view({ kind: "view", page: "ui/page.html", regions: [{ ...documentRegion, input: "dom" }] }), /document input must be native/],
     [view({ kind: "view", page: "ui/page.html", overlays: "menu" }), /overlays must be an array/],
     [view({ kind: "view", page: "ui/page.html", module: "ui/x.js" }), /unknown field module/],
-    [{ ...card, surface: { module: "ui/probe.js", composition: { kind: "hybrid", page: "ui/page.html", regions: [documentRegion], overlays: [] } } }, /unknown field page/],
-    [{ ...card, surface: { composition: { kind: "hybrid", regions: [documentRegion], overlays: [] } } }, /surface requires a module/],
+    [{ ...card, surface: { composition: { kind: "view", page: "ui/page.html", regions: [documentRegion], overlays: [] }, module: "ui/probe.js" } }, /surface module is removed/],
   ];
   for (const [manifest, message] of cases) assert.throws(() => validateManifest(manifest), message);
 });
@@ -535,8 +534,8 @@ test("a plugin release refuses a file whose path has a .binary segment", () => {
 // The dom composition kind is removed: the reader refuses it with an error that names the plugin and the manifest field.
 test("a dom composition is refused with the plugin and the manifest field", () => {
   assert.throws(
-    () => validateManifest({ ...card, surface: { module: "ui/probe.js", composition: { kind: "dom" } } }),
-    { message: `plugin ${card.id} surface composition: kind dom is removed; the composition takes kind view or hybrid` },
+    () => validateManifest({ ...card, surface: { composition: { kind: "dom" } } }),
+    { message: `plugin ${card.id} surface composition: kind dom is removed; the composition takes kind view` },
   );
 });
 
@@ -572,5 +571,19 @@ test("a module section and a state module are refused with the plugin and the fi
   assert.throws(
     () => validateManifest({ ...statusSide, state: { module: "state/side.js" } }),
     { message: "plugin side: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)" },
+  );
+});
+
+// The hybrid composition and the surface module are removed: a surface is a view, and the reader refuses each removed form with
+// an error that names the plugin and the field.
+test("a hybrid composition and a surface module are refused with the plugin and the field", () => {
+  const view = { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] };
+  assert.throws(
+    () => validateManifest({ ...card, surface: { module: "ui/probe.js", composition: view } }),
+    { message: "plugin probe: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)" },
+  );
+  assert.throws(
+    () => validateManifest({ ...card, surface: { composition: { kind: "hybrid", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } } }),
+    { message: "plugin probe surface composition: kind hybrid is removed; the composition takes kind view" },
   );
 });
