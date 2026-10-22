@@ -508,8 +508,16 @@ func ApplyPluginEventClasses(log *EventLog, configDir string) {
 	}
 }
 
-// RegisterViewImportMap sets the view import map of the application from view-imports.json of the bundled frontend. Red step:
-// the file is not read yet.
+// viewImportsFile is the view import map of the bundled frontend. The staging tool writes it from VIEW_IMPORTS of
+// @soksak/plugin-api (VIEW_IMPORTS_FILE), so the host holds no copy of the map.
+const viewImportsFile = "view-imports.json"
+
+// RegisterViewImportMap sets the view import map of the application from view-imports.json of the bundled frontend. The native
+// view handler inserts the map into each view page (docs/spec/plugin-processes.md, rule 4). A missing file is an error.
 func RegisterViewImportMap(system platform.CoreRootHost, frontend fs.FS) error {
-	return nil
+	data, err := fs.ReadFile(frontend, viewImportsFile)
+	if err != nil {
+		return fmt.Errorf("%s: the view import map is missing from the bundled frontend: %w", viewImportsFile, err)
+	}
+	return system.SetViewImportMap(string(data))
 }

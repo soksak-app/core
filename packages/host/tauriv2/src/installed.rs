@@ -533,8 +533,17 @@ pub fn apply_plugin_event_classes(log: &crate::event_log::EventLog, config_dir: 
     }
 }
 
-/// Sets the view import map of the application from view-imports.json of the bundled frontend. Red step: the file is not read yet.
+/// The file of the bundled frontend that holds the view import map. The staging tool writes it from VIEW_IMPORTS of
+/// @soksak/plugin-api (VIEW_IMPORTS_FILE), so the host holds no copy of the map.
+const VIEW_IMPORTS_FILE: &str = "view-imports.json";
+
+/// Sets the view import map of the application from view-imports.json of the bundled frontend. The native view handler inserts the
+/// map into each view page (docs/spec/plugin-processes.md, rule 4). A missing file is an error.
 pub fn register_view_import_map(platform: &dyn CoreRootHost, frontend: CoreFrontend) -> Result<(), String> {
-    let _ = (platform, frontend);
-    Ok(())
+    let data = (*frontend)(VIEW_IMPORTS_FILE).ok_or_else(|| {
+        format!("{VIEW_IMPORTS_FILE}: the view import map is missing from the bundled frontend")
+    })?;
+    let text = String::from_utf8(data)
+        .map_err(|error| format!("{VIEW_IMPORTS_FILE}: the view import map is not UTF-8: {error}"))?;
+    platform.set_view_import_map(&text)
 }

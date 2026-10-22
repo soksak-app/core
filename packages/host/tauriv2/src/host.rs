@@ -420,6 +420,16 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                             .map(|bytes| bytes.into_owned())
                     }),
                 )?;
+                // The view import map is inserted into each view page, so the application does not start when the platform cannot set it.
+                let view_import_frontend = std::sync::Arc::clone(&core_frontend);
+                installed::register_view_import_map(
+                    platform::current()?,
+                    std::sync::Arc::new(move |name: &str| {
+                        view_import_frontend
+                            .get(&tauri::utils::assets::AssetKey::from(name))
+                            .map(|bytes| bytes.into_owned())
+                    }),
+                )?;
                 app.manage(workspace::Workspace::new(directory.clone()));
                 // A stall of the main thread is recorded without a window check (docs/spec/logging.md, stalls). The
                 // watch runs until the process ends.

@@ -11,6 +11,7 @@
 //   <output>/runtime/                 runtime directory of environment.json
 //   <output>/environment.json         environment.json of the application
 //   <output>/core-root.json           the core targets of the view import map, computed from the staged files by viewCoreTargets
+//   <output>/view-imports.json        the JSON text of VIEW_IMPORTS, which each host passes to the native view handler
 //   <output>/diagnostics.js           observe.js of the workbench (page diagnostic methods) with --diagnostics,
 //   otherwise release-diagnostics.js (an empty module). Diagnostic code
 //   goes only into diagnostic builds
@@ -31,7 +32,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { STAGED } from "./staged.js";
 import {
-  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets,
+  CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, VIEW_IMPORTS, VIEW_IMPORTS_FILE, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets,
 } from "@soksak/plugin-api";
 
 const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]";
@@ -153,6 +154,8 @@ const coreTargets = viewCoreTargets((name, file) => {
   return existsSync(path) ? readFileSync(path, "utf8") : undefined;
 });
 writeFileSync(join(target, CORE_ROOT_FILE), `${JSON.stringify(coreTargets)}\n`);
+// The view import map is the JSON text of VIEW_IMPORTS, which each host passes to the native view handler as the text it inserts.
+writeFileSync(join(target, VIEW_IMPORTS_FILE), JSON.stringify({ imports: VIEW_IMPORTS }));
 
 let plugins = [];
 if (installedDirectory) {
