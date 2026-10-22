@@ -735,3 +735,15 @@ func TestClosingWindowDisposesEveryPluginHostItHolds(t *testing.T) {
 		t.Fatalf("the window still records %d plugin hosts after its close", len(s.pluginHosts))
 	}
 }
+
+// contract: plugin-host.channel.late-state-of-closed-window-is-not-an-error
+func TestLateStateOfAClosedHostCreatesNoChannel(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, false)
+	// The close of the window unregisters the channel of its host; a state that arrives later records nothing.
+	s.pluginHostChannels.unregister("probe")
+	s.pluginHostState("probe", pluginHostNavigationState(true, 1))
+	if _, ok := s.pluginHostChannels.channel("probe"); ok {
+		t.Fatalf("a late state created a channel of a closed host")
+	}
+}

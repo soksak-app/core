@@ -893,6 +893,7 @@ fn invalid_json_closes_connection() {
 | `plugin-host.change-disposes` | plugin을 remove하거나 disable하는 `pluginsRun` operation 뒤 host는 모든 window에서 그 plugin의 plugin host web view를 닫는다; host web view가 없는 plugin의 disposal은 아무것도 닫지 않는다. | both |
 | `plugin-host.reload-disposes` | window의 main page의 시작(reload의 start document)은 그 window의 모든 plugin host web view를 닫고, 다음 ready가 다시 만든다. | both |
 | `plugin-host.close-disposes` | window의 close는 그 window의 모든 plugin host web view를 닫는다. | both |
+| `plugin-host.channel.late-state-of-closed-window-is-not-an-error` | 창이 닫힌 뒤에 도착한 plugin host의 navigation state는 기록이 없어서 오류로 보고되지 않는다. | both |
 | `plugin-host.channel.reply-null-result` | host 페이지의 reply `{reply: id, result: null}`는 `plugin-host-reply {plugin, id, result: null}`로 메인 page에 간다. 값이 없는 명령은 null result로 답하며, host는 그 null을 result로 보존한다. | both |
 | `plugin-host.channel.end-of-closed-window-is-not-an-error` | 창이 닫힌 plugin host 프로세스의 종료는 창의 기록이 함께 사라지므로 오류를 쓰지 않는다. 열린 창의 현재 host 종료는 `plugin <id>: the host process ended`를 쓰고, 현재가 아닌 host의 종료는 아무것도 쓰지 않는다. | both |
 | `plugin-host.channel.reply` | host 페이지의 reply `{reply: id, result}` 또는 `{reply: id, error: {code, message}}`는 surface 없이 event `plugin-host-reply {plugin, id, result}` 또는 `plugin-host-reply {plugin, id, error}`로 main page에 간다. result와 error를 둘 다 가지거나 둘 다 가지지 않은 reply, 정수 code나 message가 없는 error, 정수가 아닌 id는 거부되고 어느 페이지에도 중계되지 않는다. | both |

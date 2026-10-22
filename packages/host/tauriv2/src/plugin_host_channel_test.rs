@@ -6,7 +6,7 @@ use crate::documents::ViewReplyError;
 use crate::plugin_host::{HostState, PluginHostStates, PluginHosts};
 use crate::plugin_host_channel::{
     PluginHostChannels, PluginHostEvent, PluginHostReply, PluginHostRequest, Received, end_host,
-    ended_event, event_message, host_end_report, reply_message, request_message,
+    ended_event, event_message, host_end_report, late_state_error, reply_message, request_message,
 };
 use crate::view_lifecycle::is_queue_full;
 
@@ -840,5 +840,22 @@ fn the_end_of_a_host_whose_window_is_closed_is_not_reported() {
         host_end_report(&open, "probe", 8),
         None,
         "the end of a host that is not the current one is not reported"
+    );
+}
+
+// contract: plugin-host.channel.late-state-of-closed-window-is-not-an-error
+#[test]
+fn a_navigation_state_that_arrives_after_its_window_closed_is_not_reported() {
+    let closed: Result<std::sync::Arc<crate::windows::WindowData>, String> =
+        Err("project window is closed".to_string());
+    assert_eq!(
+        late_state_error(&closed, "probe", r#"{"loading": false, "navigations": 1}"#),
+        None,
+        "the late state of a closed window is not a failure"
+    );
+    let open = Ok(std::sync::Arc::new(crate::windows::WindowData::default()));
+    assert!(
+        late_state_error(&open, "probe", r#"{"loading": false}"#).is_some(),
+        "a state without navigations of an open window is still refused"
     );
 }

@@ -784,18 +784,32 @@ pub(crate) fn clear_enabled_stop(
 
 /// Records the navigation state of the host of plugin. A failure is written to the application log.
 pub(crate) fn state(window: &Window, plugin: &str, state: &str) {
-    let result =
-        window_data(window).and_then(|data| data.plugin_host_channels.state(plugin, state));
-    if let Err(error) = result {
+    if let Some(error) = late_state_error(&window_data(window), plugin, state) {
         log_error("plugin host channel", error);
     }
+}
+
+/// Returns the error of a navigation state of the host of plugin that reached the channel, or None when none. A state that arrives after
+/// its window was closed (its records are gone) is a late report of the close, not a failure (docs/spec/plugin-host.md#channel).
+pub(crate) fn late_state_error(
+    data: &Result<std::sync::Arc<crate::windows::WindowData>, String>,
+    plugin: &str,
+    state: &str,
+) -> Option<String> {
+    // default: a window whose records are gone was closed, so its late state is not reported.
+    let data = data.as_ref().ok()?;
+    data.plugin_host_channels.state(plugin, state).err()
 }
 
 /// Dispatches one message of the sok-view handler of the host webview handle of plugin. A failure is written to the
 /// application log, and a queue overflow closes the host (docs/spec/plugin-host.md#channel).
 pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str) {
-    let received =
-        window_data(window).and_then(|data| data.plugin_host_channels.receive(plugin, value));
+    // A message that arrives after its window was closed is a late report of the close, not a failure: the window's records are gone,
+    // so there is no channel to receive it (docs/spec/plugin-host.md#channel).
+    let Ok(data) = window_data(window) else {
+        return;
+    };
+    let received = data.plugin_host_channels.receive(plugin, value);
     let result = match received {
         Ok(Received::Emit(name, payload)) => {
             emit_window(window, name, payload).map_err(|error| error.to_string())
