@@ -1247,6 +1247,10 @@
   - [ ] F212.10 — P0: plugin 이전. 각 plugin 저장소의 항목이고, release 전에 자기 view를 잰다.
   - [ ] F212.11 — P0: plugin 표면의 페이지 mount, parking, `dom` 구성, section과 state module의 페이지 mount를 지운다.
   - [ ] F212.12 — P0: view 창 검사. 기능마다 항목 하나: 표시, 입력과 포커스, 끌기, 재시작.
+    - [ ] F212.12-1 — P0: view 표시 창 검사: surface가 view인 설치된 plugin마다 두 host에서 card로 열리고, 그 view가 녹화(`diagnostics.capture.start/stop`)에서 첫 내용 frame에 이르고, `core.surfaces`가 구성 `view`를 보고하고, view 문서의 audit(`core.page.audit`)이 연결 안 된 요소를 보고하지 않는다. `e2e/` 아래 추적 검사이며, Red는 view가 놓이지 않는 host build에서의 검사다.
+    - [ ] F212.12-2 — P0: view 입력과 focus 창 검사: native 키 입력이 focus된 view에 닿아 그 선언 명령을 실행하고, view에서 누른 `shortcuts.json`의 workbench 단축키가 workbench 명령을 실행하며, focus가 main page와 view 사이를 잃지 않고 오가고, Escape가 view 위의 menu를 닫는다(F212.6a의 통과값). native 입력만 쓰고 창을 활성화하지 않는다.
+    - [ ] F212.12-3 — P0: view 끌기 창 검사: view가 있는 card 끌기와 구분선 끌기를 녹화해 통과값 (viii)를 잰다. native frame과 card 경계 차이는 frame마다 2 pt 이하, 내용 frame 간격은 33 ms 이하, 내용 크기 불일치는 gesture 끝 뒤 2 frame 안에 끝난다. F212.7c의 측정이다.
+    - [ ] F212.12-4 — P0: view 재시작 창 검사: 진단 고장 주입이 view의 web content 프로세스를 끝내면, host가 재시작 한도 안에서 다시 띄우고, view가 tab 상태를 복원하며, 300초 안의 네 번째 실패는 card에 오류를 보이며 멈추고, surface를 다시 열면 멈춤이 풀린다.
   - [ ] F212.13 — P0: 승인을 받아 돌리는 view의 입력기 activation 검사.
   - [ ] F212.14 — P0: 모든 plugin view를 통과값으로 마지막에 잰다.
   - [ ] F212.15 — P0: core release.
