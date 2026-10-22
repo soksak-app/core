@@ -13,6 +13,7 @@ const EXPECTED_IDS = [
   "expose.status.refuses-undeclared-and-duplicate",
   "expose.dom.act-rect-and-refusals",
   "expose.dispose.ends-registrations-and-requests",
+  "expose.dispose.refuses-a-registration-after-dispose",
 ];
 
 // Lets every pending promise of the registration and reply chain settle before a step reports its output.

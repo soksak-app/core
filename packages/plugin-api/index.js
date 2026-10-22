@@ -1728,9 +1728,15 @@ export function createExpose(port, load) {
   let loaded = null;
   // The remover of the request listener that the port returns. Dispose calls it, so no request is answered after dispose.
   let stopRequests = null;
+  // Set by dispose. A disposed exposure registers nothing, so a request listener is never added after dispose.
+  let disposed = false;
   const ready = () => {
+    // A registration or a binding after dispose is refused with an explicit error.
+    if (disposed) return Promise.reject(new Error("exposure is disposed"));
     // default: concurrent requests share the same manifest loading Promise.
     entries ??= Promise.resolve().then(load).then(async (declarations) => {
+      // A dispose that ran while the declarations were loading ends the exposure before its request listener is added.
+      if (disposed) throw new Error("exposure is disposed");
       // The manifest file holds an array of bundles. The request path needs the canonical declaration map that
       // registry and exposureEntries use.
       const declared = declarations instanceof Map ? declarations : declarationMap(declarations);
@@ -1795,6 +1801,7 @@ export function createExpose(port, load) {
       element.dataset.expose = name;
     }),
     dispose: async () => {
+      disposed = true;
       binder.dispose();
       // default: stopRequests is null when the page never became ready, so no request listener was added.
       stopRequests?.();

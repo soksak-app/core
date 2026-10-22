@@ -228,6 +228,65 @@
           }
         }
       ]
+    },
+    {
+      "id": "expose.dispose.refuses-a-registration-after-dispose",
+      "initial": 3,
+      "declarations": {
+        "status": [
+          {
+            "name": "demo.count",
+            "description": "The count of the demo.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "dispose": true,
+          "output": {
+            "registered": [
+              {
+                "kind": "unregister"
+              }
+            ],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "status": {
+            "name": "demo.count"
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": "exposure is disposed"
+          }
+        },
+        {
+          "request": {
+            "id": 1,
+            "method": "status.get",
+            "params": {
+              "name": "demo.count"
+            }
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
     }
   ]
 }
