@@ -999,6 +999,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
         id: 7,
         command: "probe.run".to_string(),
         params: Some(json!({"a": 1})),
+        cids: Vec::new(),
     };
     assert_eq!(
         view_request_message(&request),
@@ -1010,6 +1011,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
         id: 7,
         command: "probe.run".to_string(),
         params: None,
+        cids: Vec::new(),
     };
     assert_eq!(
         view_request_message(&no_params),
@@ -1021,6 +1023,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
         id: 0,
         command: "probe.run".to_string(),
         params: None,
+        cids: Vec::new(),
     };
     assert_eq!(
         view_request_message(&no_id),
@@ -1031,10 +1034,46 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
         id: 8,
         command: String::new(),
         params: None,
+        cids: Vec::new(),
     };
     assert_eq!(
         view_request_message(&unnamed),
         Err("view request 8 has an empty command".to_string())
+    );
+}
+
+// contract: view.command.request
+#[test]
+fn view_request_message_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
+    use soksak_host_tauriv2::documents::{ViewRequest, view_request_message};
+    let caused: ViewRequest = serde_json::from_str(
+        r#"{"surface":"probe-surface","id":7,"command":"probe.run","params":{"a":1},"cids":["p1700000000000.7"]}"#,
+    )
+    .expect("a request with cids parses");
+    assert_eq!(
+        view_request_message(&caused),
+        Ok(
+            json!({"sok": 1, "id": 7, "command": "probe.run", "params": {"a": 1}, "cids": ["p1700000000000.7"]})
+        ),
+        "a request carries the cids of its cause"
+    );
+    let uncaused: ViewRequest = serde_json::from_str(
+        r#"{"surface":"probe-surface","id":7,"command":"probe.run","params":{"a":1}}"#,
+    )
+    .expect("a request without cids parses");
+    assert_eq!(
+        view_request_message(&uncaused),
+        Ok(json!({"sok": 1, "id": 7, "command": "probe.run", "params": {"a": 1}})),
+        "a request without a cause has no cids member"
+    );
+    let invalid: ViewRequest = serde_json::from_str(
+        r#"{"surface":"probe-surface","id":8,"command":"probe.run","params":{},"cids":["p1.7\"x"]}"#,
+    )
+    .expect("a request with an invalid cid parses");
+    assert_eq!(
+        view_request_message(&invalid),
+        Err("view request 8 cids must be non-empty strings without a quote, a backslash or a control character".to_string()),
+        "a cid that a line cannot hold is refused"
     );
 }
 

@@ -2066,7 +2066,8 @@ pub struct ViewEventRequest {
     pub data: Option<Value>,
 }
 
-/// A command request that the main page sends to the view of surface: the command, its id and its params (docs/spec/native-surfaces.md#view-surfaces).
+/// A command request that the main page sends to the view of surface: the command, its id, its params and the correlation identifiers
+/// of its cause, which are empty when the cause has none (docs/spec/native-surfaces.md#view-surfaces).
 #[derive(Deserialize)]
 pub struct ViewRequest {
     pub surface: String,
@@ -2074,10 +2075,13 @@ pub struct ViewRequest {
     pub command: String,
     #[serde(default, deserialize_with = "present")]
     pub params: Option<Value>,
+    #[serde(default)]
+    pub cids: Vec<String>,
 }
 
-/// Returns the host message of a command request: {"sok", "id", "command", "params"}. A request has an id and a command, and a
-/// request without params carries null.
+/// Returns the host message of a command request: {"sok", "id", "command", "params"}, with the member "cids" when the request has
+/// cids. A request has an id and a command, and a request without params carries null. A cids list that a log line cannot hold is
+/// refused (docs/spec/logging.md#correlation).
 pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
     if request.id == 0 {
         return Err("view request has no id".to_string());
@@ -2085,12 +2089,32 @@ pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
     if request.command.is_empty() {
         return Err(format!("view request {} has an empty command", request.id));
     }
-    Ok(json!({
+    if !valid_cause_cids(&request.cids) {
+        return Err(format!(
+            "view request {} cids must be non-empty strings without a quote, a backslash or a control character",
+            request.id
+        ));
+    }
+    let mut message = json!({
         "sok": 1,
         "id": request.id,
         "command": request.command,
         "params": request.params,
-    }))
+    });
+    if !request.cids.is_empty() {
+        message["cids"] = json!(request.cids);
+    }
+    Ok(message)
+}
+
+/// Reports whether every identifier is a non-empty string without a quote, a backslash or a control character, which a log line holds.
+fn valid_cause_cids(cids: &[String]) -> bool {
+    cids.iter().all(|cid| {
+        !cid.is_empty()
+            && !cid
+                .chars()
+                .any(|c| c == '"' || c == '\\' || c < ' ' || c == '\u{7f}')
+    })
 }
 
 /// Returns the theme message of a view: {"sok", "event": "theme", "data": theme}, as every event carries its value in data.
