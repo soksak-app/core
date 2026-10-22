@@ -208,3 +208,15 @@ test("the text of a console call is cut at 8192 bytes while it is serialized, an
   assert.ok(reads.count < 8192, `${reads.count} elements were read`);
   assert.deepEqual(short, { text: "short" });
 });
+
+test("a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]", async () => {
+  calls.length = 0;
+  const target = { error() {}, warn() {}, info() {}, log() {}, debug() {} };
+  captureConsole(target);
+  const cyclic = {};
+  cyclic.self = cyclic;
+  target.log("state", cyclic);
+  await settled();
+  // The reason is the message of the TypeError that the bounded serializer throws for a cycle.
+  assert.deepEqual(events().map((event) => event.fields.text), ['state {"unserializable":"Converting circular structure to JSON"}']);
+});

@@ -135,9 +135,10 @@ function consoleText(args) {
         ({ text: part, truncated: cut } = boundedJson(arg, room));
         // default: JSON has no text for undefined and for a function; the value is written as String shows it.
         if (part === undefined) ({ text: part, truncated: cut } = cutBytes(String(arg), room));
-      } catch {
-        // default: a value that JSON cannot serialize (a cycle, a BigInt) is written as String shows it.
-        ({ text: part, truncated: cut } = cutBytes(String(arg), room));
+      } catch (error) {
+        // A value that JSON cannot serialize (a cycle, a BigInt) is recorded as a marker with the reason of the failure.
+        // String would write [object Object] for it, which hides the value.
+        ({ text: part, truncated: cut } = cutBytes(JSON.stringify({ unserializable: error?.message ?? String(error) }), room));
       }
     }
     parts.push(part);
