@@ -176,30 +176,59 @@ function statusOf(test, language, runs) {
 }
 
 /**
- * Compares the contract cases with the declarations and the run results of each host.
- * hosts: [{ name, language, tests, errors, runs }] — runs maps the test name to its result for each configuration.
+ * Compares the declarations of each host with the contract cases, without run results: parse errors, tests without a case,
+ * undefined cases, and cases outside the host scope. Returns the errors and, per host, the set of cases its tests declare.
+ * hosts: [{ name, language, tests, errors }].
  */
-export function auditHostContract(cases, hosts) {
+export function auditDeclarations(cases, hosts) {
   const errors = [];
-  const covered = new Map(hosts.map((host) => [host.name, new Set()]));
+  const declared = new Map(hosts.map((host) => [host.name, new Set()]));
   for (const host of hosts) {
     errors.push(...host.errors.map((error) => `${host.name}: ${error}`));
-    if (host.runs.every((owners) => [...owners.values()].every((named) => named.size === 0))) errors.push(`${host.name}: the test run reported zero tests`);
-    if (host.language === 'rust') errors.push(...duplicateLeaves(host.items ?? []).map((error) => `${host.name}: ${error}`));
     for (const test of host.tests) {
       const where = `${host.name}: ${test.file}:${test.line} ${test.name}`;
       if (test.cases.length === 0) {
         errors.push(`${where} declares no contract case`);
         continue;
       }
-      const status = statusOf(test, host.language, host.runs);
-      if (status !== 'pass') errors.push(`${where} (${test.cases.join(', ')}) ${status === 'not run' ? 'did not run' : `reported ${status}`}`);
       for (const id of test.cases) {
         const contract = cases.get(id);
         if (!contract) errors.push(`${where} declares undefined contract case ${id}`);
         else if (!contract.hosts.includes(host.name)) errors.push(`${where} declares ${id}, which the specification limits to ${contract.hosts.join(', ')}`);
-        else if (status === 'pass') covered.get(host.name).add(id);
+        else declared.get(host.name).add(id);
       }
+    }
+  }
+  return { errors, declared };
+}
+
+/** The errors of each contract case that a host in its scope has no test declaring. `declared` is the result of auditDeclarations. */
+export function uncoveredCases(cases, declared) {
+  const errors = [];
+  for (const [id, contract] of cases) {
+    for (const name of contract.hosts) {
+      if (!declared.get(name)?.has(id)) errors.push(`${name} declares no test for contract case ${id}`);
+    }
+  }
+  return errors;
+}
+
+/**
+ * Compares the contract cases with the declarations and the run results of each host.
+ * hosts: [{ name, language, tests, errors, runs }] — runs maps the test name to its result for each configuration.
+ */
+export function auditHostContract(cases, hosts) {
+  const { errors, declared } = auditDeclarations(cases, hosts);
+  const covered = new Map(hosts.map((host) => [host.name, new Set()]));
+  for (const host of hosts) {
+    if (host.runs.every((owners) => [...owners.values()].every((named) => named.size === 0))) errors.push(`${host.name}: the test run reported zero tests`);
+    if (host.language === 'rust') errors.push(...duplicateLeaves(host.items ?? []).map((error) => `${host.name}: ${error}`));
+    for (const test of host.tests) {
+      if (test.cases.length === 0) continue;
+      const where = `${host.name}: ${test.file}:${test.line} ${test.name}`;
+      const status = statusOf(test, host.language, host.runs);
+      if (status !== 'pass') errors.push(`${where} (${test.cases.join(', ')}) ${status === 'not run' ? 'did not run' : `reported ${status}`}`);
+      if (status === 'pass') for (const id of test.cases) if (declared.get(host.name).has(id)) covered.get(host.name).add(id);
     }
   }
   for (const [id, contract] of cases) {
@@ -249,14 +278,46 @@ const RUST_RUNS = [
   { id: 'tauriv2-sok-dev-tests', packageName: 'soksak-sok-tauriv2', features: 'diagnostics,dev' },
 ];
 
+/** The declarations of the test sources of one host, read without running them. */
+function parseHostSources(name) {
+  const { language, files } = HOST_SOURCES[name];
+  const tests = [];
+  const errors = [];
+  for (const file of files()) {
+    const parsed = parseDeclarations(readFileSync(join(ROOT, file), 'utf8'), language, file, language === 'rust' ? crateOwnerOf(file) : ownerOfFile(file));
+    tests.push(...parsed.tests);
+    errors.push(...parsed.errors);
+  }
+  return { language, tests, errors };
+}
+
+/** The static check: the declarations of both hosts agree with the contract cases. It runs no test. */
+function checkDeclarations(cases) {
+  const hosts = HOSTS.map((name) => ({ name, ...parseHostSources(name) }));
+  const { errors, declared } = auditDeclarations(cases, hosts);
+  errors.push(...uncoveredCases(cases, declared));
+  for (const host of hosts) {
+    const required = [...cases.values()].filter((contract) => contract.hosts.includes(host.name)).length;
+    process.stdout.write(`${host.name}: ${declared.get(host.name).size} of ${required} contract cases declared; ${host.tests.length} tests\n`);
+  }
+  if (errors.length > 0) {
+    process.stderr.write(`Host contract declarations failed: ${errors.length} issue(s)\n${errors.map((error) => `- ${error}`).join('\n')}\n`);
+    return 1;
+  }
+  process.stdout.write(`Host contract declarations passed: ${cases.size} contract cases\n`);
+  return 0;
+}
+
 async function main(argv) {
   // The Go link flags start with a dash, so they are given as --go-ldflags=<flags>.
   const { values } = parseArgs({
     args: argv, strict: true,
-    options: { 'go-ldflags': { type: 'string' }, run: { type: 'string' }, only: { type: 'string' } },
+    options: { 'go-ldflags': { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
   });
-  if (!values['go-ldflags']) throw new Error('usage: check-host-contract.mjs --go-ldflags=<flags> [--run <text>] [--only <text>]');
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
+  // --static checks only the declarations, so it needs no Go link flags and builds nothing.
+  if (values.static) return checkDeclarations(cases);
+  if (!values['go-ldflags']) throw new Error('usage: check-host-contract.mjs --go-ldflags=<flags> [--run <text>] [--only <text>] | --static');
   const write = (line) => process.stdout.write(`${line}\n`);
   const concurrency = Math.max(2, cpus().length - 2);
   const buildDir = mkdtempSync(join(tmpdir(), 'host-contract-'));
@@ -288,14 +349,8 @@ async function main(argv) {
   const { results } = await runTests({ tests: items, concurrency, defaultTimeoutMs: TEST_TIMEOUT_MS, write });
   const hosts = [];
   for (const name of HOSTS) {
-    const { language, files } = HOST_SOURCES[name];
-    const tests = [];
-    const errors = found[name].flatMap((entry) => entry.failures);
-    for (const file of files()) {
-      const parsed = parseDeclarations(readFileSync(join(ROOT, file), 'utf8'), language, file, language === 'rust' ? crateOwnerOf(file) : ownerOfFile(file));
-      tests.push(...parsed.tests);
-      errors.push(...parsed.errors);
-    }
+    const { language, tests, errors: sourceErrors } = parseHostSources(name);
+    const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors];
     const own = found[name].flatMap((entry) => entry.tests);
     for (const item of own) {
       if (results.get(item.name).status === 'timeout') errors.push(`${item.name} exceeded its limit of ${TEST_TIMEOUT_MS / 1000}s`);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { auditHostContract, parseContractCases, groupResults, parseDeclarations } from '../check-host-contract.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, groupResults, parseDeclarations, uncoveredCases } from '../check-host-contract.mjs';
 
 const SPEC = `# Hosts
 
@@ -40,6 +40,8 @@ fn shared() {}
 `;
 
 const GO_OWNER = 'packages/host/wailsv3/tests';
+/** A host of the static audit: the declarations of its test sources, without run results. */
+const staticHost = (name, language, parsed) => ({ name, language, tests: parsed.tests, errors: parsed.errors });
 
 /** The run map of one run: owner to the result of each test name of that owner. */
 const owners = (owner, entries) => new Map([[owner, new Map(entries)]]);
@@ -175,4 +177,28 @@ test('a contract declaration accepts only test and feature attributes', () => {
     ['a.rs:2 attribute #[should_panic] is not allowed on a contract test']);
   assert.deepEqual(parseDeclarations('#[ignore]\n// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'a.rs').errors,
     ['a.rs:1 attribute #[ignore] is not allowed on a contract test']);
+});
+
+test('the static audit fails a marker that names an undefined case, a case outside its scope, or no case, without running tests', () => {
+  const cases = parseContractCases(SPEC);
+  const undefinedCase = parseDeclarations('// contract: area.missing\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
+  const outsideScope = parseDeclarations('// contract: area.wails-only\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
+  const noCase = parseDeclarations('// contract:\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
+  const undefinedErrors = auditDeclarations(cases, [staticHost('tauriv2', 'rust', undefinedCase)]).errors;
+  assert.ok(undefinedErrors.some((error) => error.includes('declares undefined contract case area.missing')), undefinedErrors.join('\n'));
+  const scopeErrors = auditDeclarations(cases, [staticHost('tauriv2', 'rust', outsideScope)]).errors;
+  assert.ok(scopeErrors.some((error) => error.includes('declares area.wails-only, which the specification limits to wailsv3')), scopeErrors.join('\n'));
+  const emptyErrors = auditDeclarations(cases, [staticHost('tauriv2', 'rust', noCase)]).errors;
+  assert.ok(emptyErrors.some((error) => error.includes('declares no contract case')), emptyErrors.join('\n'));
+});
+
+test('the static audit reports each case of a host scope that no test declares', () => {
+  const cases = parseContractCases(SPEC);
+  const wails = parseDeclarations(GO, 'go', `${GO_OWNER}/wails_test.go`);
+  const tauri = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
+  const { declared } = auditDeclarations(cases, [staticHost('wailsv3', 'go', wails), staticHost('tauriv2', 'rust', tauri)]);
+  assert.deepEqual(uncoveredCases(cases, declared), []);
+  const missing = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
+  const partial = auditDeclarations(cases, [staticHost('wailsv3', 'go', parseDeclarations('package tests\n', 'go', 'w_test.go')), staticHost('tauriv2', 'rust', missing)]);
+  assert.deepEqual(uncoveredCases(cases, partial.declared), ['wailsv3 declares no test for contract case area.shared', 'wailsv3 declares no test for contract case area.wails-only']);
 });

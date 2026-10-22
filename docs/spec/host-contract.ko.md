@@ -35,6 +35,8 @@ fn invalid_json_closes_connection() {
 
 소유자 규칙: 선언된 테스트는 자기 소유자의 항목에서만 결과를 얻는다. Go 테스트의 소유자는 패키지 디렉터리이고, Rust 테스트의 소유자는 크레이트 디렉터리(파일 위쪽에서 가장 가까운 `Cargo.toml`이 있는 폴더)다. 결과는 실행, 소유자, 테스트 이름으로 묶으며, 호스트의 결과가 sok 선언에 쓰이거나 그 반대가 되지 않는다. Rust 선언은 이름이 같은 잎 이름을 가진 테스트 하나와 일치한다.
 
+`node scripts/check-host-contract.mjs --static`은 `make push-check`에서 실행되며, 빌드하거나 시험을 실행하지 않고 선언만 검사한다. 시험이 사례를 선언하지 않거나, 정의되지 않은 사례나 호스트 범위 밖의 사례를 선언하거나, 구문 오류가 있거나, 호스트 범위의 사례를 선언한 시험이 없으면 실패한다. 따라서 정의되지 않은 사례를 적은 표시는 push 관문에서 실패한다.
+
 범위 열은 `both`이거나, 한 호스트에만 있는 동작이면 `<host> only: <이유>`다. 검사는 두 호스트가 모두 구현한 유일한 플랫폼인 macOS에서 실행한다. Windows와 Linux 진입점은 `not implemented` 오류를 반환하며 사례가 없다. 검사의 단위 테스트(`scripts/test/check-host-contract.test.mjs`)는 각 실패를 주입하며 `pnpm test`에서 실행된다.
 
 ## 애플리케이션 메뉴

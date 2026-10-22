@@ -29,7 +29,8 @@ push-check:
 	@$(MAKE) --no-print-directory commits-check RANGE="$(or $(RANGE),origin/main..HEAD)"
 	@$(MAKE) --no-print-directory docs-check boundaries platforms hosts-check exposure-check parity-check host-parity-check migrations-check
 	@$(MAKE) --no-print-directory rust-format-check go-format-check rust-clippy-check
-	@node scripts/gate-tests.mjs scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs scripts/test/package-bins.test.mjs
+	@node scripts/check-host-contract.mjs --static
+	@node scripts/gate-tests.mjs scripts/test/census.test.mjs scripts/test/fallbacks.test.mjs scripts/test/comment-language.test.mjs scripts/test/event-classes.test.mjs scripts/test/package-bins.test.mjs scripts/test/check-host-contract.test.mjs
 
 # Builds release and checks that the staged frontend and the release executables hold no diagnostic code.
 release-check: wailsv3-build-release tauriv2-build-release registry-manifest-check
