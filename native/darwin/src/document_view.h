@@ -45,6 +45,11 @@ typedef void (*sp_view_message)(void *context, const char *json);
 void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context);
 
+// The cause of the last creation of a document region or plugin host web view that returned NULL on the main thread, as a UTF-8
+// string that names the failed step and the native error text. It is "" when the last creation did not fail, and the next
+// creation clears it.
+const char *sp_document_last_error(void);
+
 // Creates the plugin host web view of plugin hidden in the window itself (docs/spec/plugin-host.md). directory is the
 // absolute path where the persistent data store keeps site data, and it is created if missing; documents with the same
 // directory use the same store. folder and plugin name the installed folder and the id of the plugin whose host the web

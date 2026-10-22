@@ -956,6 +956,20 @@ static NSMutableSet<NSString *> *endingStores(void) {
     return ending;
 }
 
+// The cause of the last failed creation of a web view on the main thread (sp_document_last_error).
+static NSString *documentFailure;
+
+// Keeps the cause until the next creation replaces it; a nil cause clears it.
+static void setDocumentFailure(NSString *cause) {
+    [documentFailure release];
+    documentFailure = [cause copy];
+}
+
+const char *sp_document_last_error(void) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    return documentFailure ? documentFailure.UTF8String : "";
+}
+
 static NSString *storeDirectory(const char *path) {
     NSString *directory = [NSFileManager.defaultManager stringWithFileSystemRepresentation:path length:strlen(path)];
     return directory.absolutePath ? directory : nil;
@@ -963,16 +977,30 @@ static NSString *storeDirectory(const char *path) {
 
 static WKWebsiteDataStore *storeForDirectory(const char *path) {
     NSString *directory = storeDirectory(path);
-    if (!directory || [endingStores() containsObject:directory]) return nil;
+    if (!directory) {
+        setDocumentFailure([NSString stringWithFormat:@"the data store directory %s is not an absolute path", path]);
+        return nil;
+    }
+    if ([endingStores() containsObject:directory]) {
+        setDocumentFailure([NSString stringWithFormat:@"the data store %@ is ending", directory]);
+        return nil;
+    }
     WKWebsiteDataStore *store = dataStores()[directory];
     if (store) return store;
-    if (![NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil]) {
+    NSError *error = nil;
+    if (![NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:&error]) {
+        setDocumentFailure([NSString stringWithFormat:@"cannot create the data store directory %@: %@", directory,
+            error.localizedDescription ?: @"unknown error"]);
         return nil;
     }
     _WKWebsiteDataStoreConfiguration *configuration = [[[_WKWebsiteDataStoreConfiguration alloc]
         initWithDirectory:[NSURL fileURLWithPath:directory isDirectory:YES]] autorelease];
     store = [[[WKWebsiteDataStore alloc] _initWithConfiguration:configuration] autorelease];
-    if (store) dataStores()[directory] = store;
+    if (!store) {
+        setDocumentFailure([NSString stringWithFormat:@"the data store %@ cannot be initialized", directory]);
+        return nil;
+    }
+    dataStores()[directory] = store;
     return store;
 }
 
@@ -1002,7 +1030,10 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     WKWebsiteDataStore *store = storeForDirectory(directory);
     if (!store) return nil;
     NSString *applicationName = safariApplicationName();
-    if (!applicationName) return nil;
+    if (!applicationName) {
+        setDocumentFailure(@"the version of /Applications/Safari.app cannot be read");
+        return nil;
+    }
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.applicationNameForUserAgent = applicationName;
     configuration.websiteDataStore = store;
@@ -1058,6 +1089,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     sp_document_changed changed, void *context) {
     bool isView = channel != NULL;
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    setDocumentFailure(nil);
     NSView *surface = (NSView *)surfaceHandle;
     if (!surface || !directory || !changed || !surface.window) return NULL;
     if (isView && !(folder && plugin)) return NULL;
@@ -1100,6 +1132,7 @@ void *sp_plugin_host_create(void *windowHandle, const char *directory, const cha
     const char *channel, sp_document_changed changed, void *context) {
     NSCAssert(NSThread.isMainThread, @"the plugin host belongs to the main thread");
     NSWindow *window = (NSWindow *)windowHandle;
+    setDocumentFailure(nil);
     // The host web view is the view configuration of a view: it has the channel script and the plugin (docs/spec/plugin-host.md).
     if (!window || !window.contentView || !directory || !changed || !channel || !folder || !plugin) return NULL;
     NSString *channelSource = [NSString stringWithUTF8String:channel];

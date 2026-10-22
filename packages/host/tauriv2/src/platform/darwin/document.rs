@@ -29,6 +29,7 @@ unsafe extern "C" {
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
+    fn sp_document_last_error() -> *const c_char;
     fn sp_core_root_set_resolver(resolver: CoreRoot, context: *mut c_void);
     fn malloc(size: usize) -> *mut c_void;
     fn strdup(text: *const c_char) -> *mut c_char;
@@ -163,11 +164,23 @@ pub fn create(
     };
     if document.is_null() {
         drop(unsafe { Box::from_raw(receiver) });
-        return Err("cannot create a document view in this surface".into());
+        return Err(creation_error(
+            "cannot create a document view in this surface",
+        ));
     }
     let handle = document as Handle;
     RECEIVERS.with(|all| all.borrow_mut().insert(handle, receiver));
     Ok(handle)
+}
+
+/// The message of a native creation that returned no handle. It states the native cause when the native layer gives one.
+fn creation_error(message: &str) -> String {
+    let cause = unsafe { CStr::from_ptr(sp_document_last_error()) }.to_string_lossy();
+    if cause.is_empty() {
+        message.into()
+    } else {
+        format!("{message}: {cause}")
+    }
 }
 
 /// Creates the plugin host webview of a plugin hidden in the window itself with the view configuration
@@ -198,7 +211,9 @@ pub fn create_plugin_host(
     };
     if host.is_null() {
         drop(unsafe { Box::from_raw(receiver) });
-        return Err("cannot create a plugin host webview in this window".into());
+        return Err(creation_error(
+            "cannot create a plugin host webview in this window",
+        ));
     }
     let handle = host as Handle;
     RECEIVERS.with(|all| all.borrow_mut().insert(handle, receiver));

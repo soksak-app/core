@@ -97,6 +97,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"runtime/cgo"
 	"unsafe"
 
@@ -213,10 +214,18 @@ func (implementation) CreateDocument(surface unsafe.Pointer, directory, folder, 
 	document := C.documentCreate(surface, name, folderText, id, channelText, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
-		return nil, errors.New("cannot create a document view in this surface")
+		return nil, creationError("cannot create a document view in this surface", C.GoString(C.sp_document_last_error()))
 	}
 	documents[document] = receiver
 	return document, nil
+}
+
+// creationError is the error of a native creation that returned no handle. It states the native cause when the native layer gives one.
+func creationError(message, cause string) error {
+	if cause == "" {
+		return errors.New(message)
+	}
+	return fmt.Errorf("%s: %s", message, cause)
 }
 
 // CreatePluginHost creates the plugin host web view of a plugin hidden in the window itself with the view configuration
@@ -234,7 +243,7 @@ func (implementation) CreatePluginHost(window unsafe.Pointer, directory, folder,
 	document := C.pluginHostCreate(window, name, folderText, id, channelText, C.uintptr_t(receiver))
 	if document == nil {
 		receiver.Delete()
-		return nil, errors.New("cannot create a plugin host web view in this window")
+		return nil, creationError("cannot create a plugin host web view in this window", C.GoString(C.sp_document_last_error()))
 	}
 	documents[document] = receiver
 	return document, nil
