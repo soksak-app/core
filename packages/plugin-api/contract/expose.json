@@ -1,0 +1,146 @@
+{
+  "surface": "packages/plugin-api/index.js#createExpose",
+  "description": "Ordered steps of the exposure registration of a surface page: the status and dom registrations the page makes, the requests the host forwards (status.get, status.watch, status.next, status.unwatch, dom.act, dom.rect), and the replies the page sends. A step is one of status (register a status with a read and a subscribe function), dom (register a dom name for the element that the selector finds), request (a host request {id, method, params}), or set (the status value changes and its subscribers are called with it). Each step lists what it produces: registered is the port registrations in order, replies is the replies sent in order, effects is the clicks the page elements received in order, result is the value of the step's registration, and throws is the text of the error the step raises, or null. The declarations are the bundle that load returns. Each reply is {id, payload} with payload {result} or {error: {code, message}}.",
+  "cases": [
+    {
+      "id": "expose.status.get-watch-and-next-in-order",
+      "initial": 3,
+      "declarations": {
+        "status": [{ "name": "demo.count", "description": "The count of the demo.", "schema": { "type": "integer" } }]
+      },
+      "steps": [
+        {
+          "status": { "name": "demo.count" },
+          "output": { "registered": [{ "kind": "status", "name": "demo.count" }], "replies": [], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 1, "method": "status.get", "params": { "name": "demo.count" } },
+          "output": { "registered": [], "replies": [{ "id": 1, "payload": { "result": 3 } }], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 2, "method": "status.watch", "params": { "name": "demo.count" } },
+          "output": { "registered": [], "replies": [{ "id": 2, "payload": { "result": null } }], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 3, "method": "status.next", "params": { "name": "demo.count", "version": 0 } },
+          "output": { "registered": [], "replies": [{ "id": 3, "payload": { "result": { "version": 1, "value": 3 } } }], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 4, "method": "status.next", "params": { "name": "demo.count", "version": 1 } },
+          "output": { "registered": [], "replies": [], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "set": 4,
+          "output": { "registered": [], "replies": [{ "id": 4, "payload": { "result": { "version": 2, "value": 4 } } }], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 5, "method": "status.unwatch", "params": { "name": "demo.count" } },
+          "output": { "registered": [], "replies": [{ "id": 5, "payload": { "result": null } }], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 6, "method": "status.next", "params": { "name": "demo.count", "version": 2 } },
+          "output": { "registered": [], "replies": [{ "id": 6, "payload": { "result": { "closed": true } } }], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 7, "method": "status.get", "params": { "name": "demo.absent" } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 7, "payload": { "error": { "code": 1001, "message": "unknown status demo.absent" } } }]
+          }
+        },
+        {
+          "request": { "id": 8, "method": "status.foo", "params": { "name": "demo.count" } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 8, "payload": { "error": { "code": -32601, "message": "unknown method status.foo" } } }]
+          }
+        }
+      ]
+    },
+    {
+      "id": "expose.status.refuses-undeclared-and-duplicate",
+      "initial": 1,
+      "declarations": {
+        "status": [{ "name": "demo.count", "description": "The count of the demo.", "schema": { "type": "integer" } }]
+      },
+      "steps": [
+        {
+          "status": { "name": "demo.absent" },
+          "output": { "registered": [], "replies": [], "effects": [], "result": null, "throws": "status demo.absent is not declared" }
+        },
+        {
+          "status": { "name": "demo.count" },
+          "output": { "registered": [{ "kind": "status", "name": "demo.count" }], "replies": [], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "status": { "name": "demo.count" },
+          "output": { "registered": [], "replies": [], "effects": [], "result": null, "throws": "status demo.count is already registered" }
+        }
+      ]
+    },
+    {
+      "id": "expose.dom.act-rect-and-refusals",
+      "markup": "<button id='save'>Save</button>",
+      "rects": { "save": { "left": 10, "top": 20, "width": 100, "height": 30 } },
+      "declarations": {
+        "dom": [{ "name": "demo.save", "description": "The save button of the demo." }]
+      },
+      "steps": [
+        {
+          "dom": { "name": "demo.save", "selector": "#save" },
+          "output": { "registered": [{ "kind": "dom", "name": "demo.save" }], "replies": [], "effects": [], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 1, "method": "dom.act", "params": { "name": "demo.save", "action": "click" } },
+          "output": { "registered": [], "replies": [{ "id": 1, "payload": { "result": null } }], "effects": ["click save"], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 2, "method": "dom.rect", "params": { "name": "demo.save" } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 2, "payload": { "result": { "x": 10, "y": 20, "width": 100, "height": 30 } } }]
+          }
+        },
+        {
+          "request": { "id": 3, "method": "dom.rect", "params": { "name": "demo.save", "index": 1 } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 3, "payload": { "error": { "code": 1002, "message": "dom demo.save has no element at index 1" } } }]
+          }
+        },
+        {
+          "request": { "id": 4, "method": "dom.act", "params": { "name": "demo.save", "address": "row-1", "action": "click" } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 4, "payload": { "error": { "code": -32602, "message": "dom demo.save takes no address" } } }]
+          }
+        },
+        {
+          "request": { "id": 5, "method": "dom.act", "params": { "name": "demo.save", "action": "tap" } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 5, "payload": { "error": { "code": -32602, "message": "unknown action tap" } } }]
+          }
+        },
+        {
+          "request": { "id": 6, "method": "dom.act", "params": { "name": "demo.save", "action": "click", "index": -1 } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 6, "payload": { "error": { "code": -32602, "message": "index must be a non-negative integer" } } }]
+          }
+        },
+        {
+          "dom": { "name": "demo.save", "selector": "#save" },
+          "output": { "registered": [], "replies": [], "effects": [], "result": null, "throws": "dom demo.save is already registered" }
+        },
+        {
+          "request": { "id": 7, "method": "dom.hover", "params": { "name": "demo.save" } },
+          "output": {
+            "registered": [], "effects": [], "result": null, "throws": null,
+            "replies": [{ "id": 7, "payload": { "error": { "code": -32601, "message": "unknown method dom.hover" } } }]
+          }
+        }
+      ]
+    }
+  ]
+}

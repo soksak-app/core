@@ -51,7 +51,8 @@
     "contract/clipboard.json",
     "contract/view-bridge.json",
     "contract/interactive.json",
-    "contract/declared-ui-snapshot.json"
+    "contract/declared-ui-snapshot.json",
+    "contract/expose.json"
   ],
   "bin": {
     "soksak-exposure": "./exposure-check.js",
