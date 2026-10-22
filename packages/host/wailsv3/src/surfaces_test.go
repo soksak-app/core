@@ -454,6 +454,10 @@ func TestViewCallCarriesTheCidsOfItsCause(t *testing.T) {
 	if _, _, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":10,"command":"demo.run","params":null,"cids":["p1.7\"x"]}`)); err == nil || err.Error() != "probe-surface: view call 10 cids must be non-empty strings without a quote, a backslash or a control character" {
 		t.Fatalf("call request with an invalid cid: %v, want the cids refusal", err)
 	}
+	// A null cids member is not the absent member: the spec defines only an omitted list, so null is refused like any other non-list.
+	if _, _, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":11,"command":"demo.run","params":null,"cids":null}`)); err == nil || err.Error() != "probe-surface: view call 11 cids must be non-empty strings without a quote, a backslash or a control character" {
+		t.Fatalf("call request with null cids: %v, want the cids refusal", err)
+	}
 }
 
 // contract: view.call.forward

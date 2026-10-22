@@ -2114,17 +2114,18 @@ pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
     Ok(message)
 }
 
-/// Returns the cids member of a view message: none for an absent or null member, otherwise the list, whose identifiers must all be
-/// non-empty strings without a quote, a backslash or a control character (docs/spec/logging.md#correlation).
+/// Returns the cids member of a view message: none for an absent member, otherwise the list, whose identifiers must all be
+/// non-empty strings without a quote, a backslash or a control character (docs/spec/logging.md#correlation). A null member is
+/// refused like any other non-list, because the spec defines only an omitted list.
 fn cause_cids_of(value: Option<&Value>) -> Result<Vec<String>, String> {
     const REFUSAL: &str =
         "cids must be non-empty strings without a quote, a backslash or a control character";
-    match value {
-        None | Some(Value::Null) => Ok(Vec::new()),
-        Some(value) => serde_json::from_value::<Vec<String>>(value.clone())
-            .ok()
-            .filter(|cids| valid_cause_cids(cids))
-            .ok_or_else(|| REFUSAL.to_string()),
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    match serde_json::from_value::<Vec<String>>(value.clone()) {
+        Ok(cids) if valid_cause_cids(&cids) => Ok(cids),
+        Ok(_) | Err(_) => Err(REFUSAL.to_string()),
     }
 }
 

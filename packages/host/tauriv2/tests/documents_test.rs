@@ -874,6 +874,15 @@ fn view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
         Err("probe-surface: view call 9 cids must be non-empty strings without a quote, a backslash or a control character".to_string()),
         "a cid that a line cannot hold is refused"
     );
+    // A null cids member is not the absent member: the spec defines only an omitted list, so null is refused like any other non-list.
+    assert_eq!(
+        channels.call(
+            "probe-surface",
+            r#"{"message":{"sok":1,"id":11,"command":"demo.run","params":null,"cids":null}}"#
+        ),
+        Err("probe-surface: view call 11 cids must be non-empty strings without a quote, a backslash or a control character".to_string()),
+        "a null cids member is refused"
+    );
 }
 
 // contract: view.declared-ui.snapshot

@@ -1786,12 +1786,17 @@ func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
 	return s.postView(req.Surface, message)
 }
 
-// causeCidsOf returns the list of the cids member of a view message: none for an absent or null member, otherwise the list, which every
+// causeCidsOf returns the list of the cids member of a view message: none for an absent member, otherwise the list, which every
 // identifier of must be a non-empty string without a quote, a backslash or a control character (docs/spec/logging.md#correlation).
+// A null member is refused like any other non-list, because the spec defines only an omitted list.
 func causeCidsOf(raw json.RawMessage) ([]string, error) {
 	const refusal = "cids must be non-empty strings without a quote, a backslash or a control character"
-	if len(raw) == 0 || string(raw) == "null" {
+	if len(raw) == 0 {
 		return nil, nil
+	}
+	// json.Unmarshal stores null into a slice as nil without an error, so null is refused before the decode.
+	if string(raw) == "null" {
+		return nil, errors.New(refusal)
 	}
 	var cids []string
 	if err := json.Unmarshal(raw, &cids); err != nil {
