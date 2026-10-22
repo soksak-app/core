@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/surface-composition.js#createSurfaceCompositionController via packages/plugin-api/view.js#createViewBridge composition",
-  "description": "Ordered steps of the composition of a view page: creating the composition of its declared regions and overlays, the document calls of a document region, the region state, onState and history values, the region refusals, and the disposal. The view page is sok://probe/ with the element rectangles of the elements field, and the viewport is 800 by 600 CSS pixels. A step is one of create (composition.create over the named elements), do (a call of the composition or of a region of the composition), listen (a region onState listener, named listener), or event (a host document-state event). answers are the host answers to the calls that the step posts, in the order of the posted calls; each answer is {result} or {error: {code, message}}, and noop in args is a change function that changes nothing. Each step lists what it produces: posted is the messages the page posted during the step in order, delivered is the listener calls in order as {listener, state}, settled tells whether the call finished, result is the value of the call (create gives the kind of the composition, and a region gives its name), throws is the text of the error or null, state is the state of region doc after the step or null without a composition, and history is the history value of region doc or null before its attach reply.",
+  "description": "Ordered steps of the composition of a view page: creating the composition of its declared regions and overlays, the document calls of a document region, the region state, onState and history values, the region refusals, and the disposal. The view page is sok://probe/ with the element rectangles of the elements field, and the viewport is 800 by 600 CSS pixels. A step is one of create (composition.create over the named elements), do (a call of the composition or of a region of the composition), listen (a region listener, named listener: onState by default, onMessage with kind message), event (a host document-state event, a document-message event with message, or a document-stream message with handle), or close (the close of the stream subscription at index subscription). A do step whose args contain listener:<name> passes a listener that records each message under that name. answers are the host answers to the calls that the step posts, in the order of the posted calls; each answer is {result} or {error: {code, message}}, and noop in args is a change function that changes nothing. Each step lists what it produces: posted is the messages the page posted during the step in order, delivered is the listener calls in order as {listener, state}, settled tells whether the call finished, result is the value of the call (create gives the kind of the composition, and a region gives its name), throws is the text of the error or null, state is the state of region doc after the step or null without a composition, and history is the history value of region doc or null before its attach reply.",
   "elements": {
     "doc": { "left": 10, "top": 20, "width": 300, "height": 200 },
     "tip": { "left": 320, "top": 20, "width": 400, "height": 400 }
@@ -369,6 +369,645 @@
           "output": { "posted": [], "delivered": [], "settled": true, "result": null, "throws": null, "state": "ready", "history": false }
         }
       ]
+    },
+
+    {
+      "id": "view.composition.message-listener-receives-document-messages",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": false
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "listen": {
+            "region": "doc",
+            "listener": "m",
+            "kind": "message"
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": "function",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "event": {
+            "document": "doc",
+            "message": {
+              "type": "ready"
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "m",
+                "message": {
+                  "type": "ready"
+                }
+              }
+            ],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "event": {
+            "document": "other",
+            "message": {
+              "type": "ignored"
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.composition.stream-subscribe-and-close",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": false
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "do": {
+            "region": "doc",
+            "call": "subscribe",
+            "args": [
+              "elements",
+              "listener:e"
+            ]
+          },
+          "answers": [
+            {
+              "result": 7
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 7,
+                "command": "document.subscribe",
+                "params": {
+                  "name": "doc",
+                  "stream": "elements"
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": {
+              "stream": "elements",
+              "handle": 7
+            },
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "event": {
+            "document": "doc",
+            "handle": 7,
+            "message": {
+              "rows": 1
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "e",
+                "message": {
+                  "rows": 1
+                }
+              }
+            ],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "event": {
+            "document": "doc",
+            "handle": 8,
+            "message": {
+              "rows": 2
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "close": {
+            "subscription": 0
+          },
+          "answers": [
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 8,
+                "command": "document.unsubscribe",
+                "params": {
+                  "name": "doc",
+                  "handle": 7
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        },
+        {
+          "event": {
+            "document": "doc",
+            "handle": 7,
+            "message": {
+              "rows": 3
+            }
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": null,
+            "history": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.composition.reload-and-restored-state",
+      "steps": [
+        {
+          "create": {
+            "regions": [
+              "doc"
+            ],
+            "overlays": [
+              "tip"
+            ]
+          },
+          "answers": [
+            {
+              "result": {
+                "kind": "view",
+                "regions": [
+                  {
+                    "name": "doc",
+                    "kind": "document",
+                    "input": "native"
+                  }
+                ],
+                "overlays": [
+                  "tip"
+                ]
+              }
+            },
+            {
+              "result": {
+                "history": true
+              }
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            },
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "composition.declaration",
+                "params": null
+              },
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "document.attach",
+                "params": {
+                  "name": "doc"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 3,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-state"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 4,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-message"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 5,
+                "command": "runtime.native.on",
+                "params": {
+                  "name": "document-stream"
+                }
+              },
+              {
+                "sok": 1,
+                "id": 6,
+                "command": "composition.place",
+                "params": {
+                  "regions": [
+                    {
+                      "name": "doc",
+                      "left": 10,
+                      "top": 20,
+                      "right": 490,
+                      "bottom": 380,
+                      "visible": true
+                    }
+                  ],
+                  "overlays": [
+                    {
+                      "name": "tip",
+                      "left": 320,
+                      "top": 20,
+                      "right": 80,
+                      "bottom": 180,
+                      "visible": true
+                    }
+                  ]
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": "view",
+            "throws": null,
+            "state": null,
+            "history": true
+          }
+        },
+        {
+          "event": {
+            "document": "doc",
+            "state": "ready"
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": "ready",
+            "history": true
+          }
+        },
+        {
+          "listen": {
+            "region": "doc",
+            "listener": "s"
+          },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "settled": true,
+            "result": "function",
+            "throws": null,
+            "state": "ready",
+            "history": true
+          }
+        },
+        {
+          "do": {
+            "region": "doc",
+            "call": "reload",
+            "args": []
+          },
+          "answers": [
+            {
+              "result": null
+            }
+          ],
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 7,
+                "command": "document.go",
+                "params": {
+                  "name": "doc",
+                  "action": "reload"
+                }
+              }
+            ],
+            "delivered": [],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": "ready",
+            "history": true
+          }
+        },
+        {
+          "event": {
+            "document": "doc",
+            "state": "loading"
+          },
+          "output": {
+            "posted": [],
+            "delivered": [
+              {
+                "listener": "s",
+                "state": "loading"
+              }
+            ],
+            "settled": true,
+            "result": null,
+            "throws": null,
+            "state": "loading",
+            "history": true
+          }
+        }
+      ]
     }
+
   ]
 }

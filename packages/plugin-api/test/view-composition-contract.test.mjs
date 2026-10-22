@@ -15,6 +15,9 @@ const EXPECTED_IDS = [
   "view.composition.history-of-the-attach-reply",
   "view.composition.update-and-region-refusals",
   "view.composition.dispose-detaches-the-region",
+  "view.composition.message-listener-receives-document-messages",
+  "view.composition.stream-subscribe-and-close",
+  "view.composition.reload-and-restored-state",
 ];
 
 // Lets every pending promise of the call layer settle before a step reports its output.
@@ -71,6 +74,16 @@ async function runCase(testCase) {
       await settle();
     };
 
+    // A listener argument records each message under its name; noop is a change function that changes nothing.
+    const mapArg = (arg) => {
+      if (arg === "noop") return () => {};
+      if (typeof arg === "string" && arg.startsWith("listener:")) {
+        const listener = arg.slice("listener:".length);
+        return (message) => delivered.push({ listener, message });
+      }
+      return arg;
+    };
+    const subscriptions = [];
     const outputs = [];
     for (const step of testCase.steps) {
       queue = [...(step.answers ?? [])];
@@ -96,20 +109,34 @@ async function runCase(testCase) {
             return created.kind;
           }));
         } else if ("do" in step && "region" in step.do) {
-          track(Promise.resolve().then(() => controller.region(step.do.region)[step.do.call](...step.do.args)));
+          track(Promise.resolve().then(() => controller.region(step.do.region)[step.do.call](...step.do.args.map(mapArg))).then((value) => {
+            // A subscription is kept by its index for a close step; its output is the stream and the handle of the host reply.
+            if (typeof value?.close !== "function") return value;
+            subscriptions.push(value);
+            return { stream: value.stream, handle: value.handle };
+          }));
         } else if ("do" in step && "composition" in step.do) {
-          const args = step.do.args.map((arg) => (arg === "noop" ? () => {} : arg));
+          const args = step.do.args.map(mapArg);
           track(Promise.resolve().then(() => {
             const value = controller[step.do.composition](...args);
             return typeof value?.name === "string" ? value.name : value;
           }));
         } else if ("listen" in step) {
-          const { region, listener } = step.listen;
-          const remove = controller.region(region).onState((state) => delivered.push({ listener, state }));
+          const { region, listener, kind = "state" } = step.listen;
+          const target = controller.region(region);
+          const remove = kind === "message"
+            ? target.onMessage((message) => delivered.push({ listener, message }))
+            : target.onState((state) => delivered.push({ listener, state }));
           track(Promise.resolve(typeof remove === "function" ? "function" : null));
         } else if ("event" in step) {
-          host({ sok: 1, event: "document-state", data: { document: step.event.document, state: step.event.state } });
+          // A document-state event has state, a document-message event has message, and a document-stream event has handle.
+          const { document, state, message, handle } = step.event;
+          if ("handle" in step.event) host({ sok: 1, event: "document-stream", data: { document, handle, message } });
+          else if ("message" in step.event) host({ sok: 1, event: "document-message", data: { document, message } });
+          else host({ sok: 1, event: "document-state", data: { document, state } });
           track(Promise.resolve(null));
+        } else if ("close" in step) {
+          track(Promise.resolve().then(() => subscriptions[step.close.subscription].close()));
         } else if ("dispose" in step) {
           track(controller.dispose());
         } else {
