@@ -14,6 +14,7 @@ const EXPECTED_IDS = [
   "expose.dom.act-rect-and-refusals",
   "expose.dispose.ends-registrations-and-requests",
   "expose.dispose.refuses-a-registration-after-dispose",
+  "expose.dispose.removes-bindings",
 ];
 
 // Lets every pending promise of the registration and reply chain settle before a step reports its output.
@@ -75,6 +76,16 @@ async function runCase(testCase) {
         } else if ("request" in step) {
           // A request after the listener is removed is not dispatched, so no reply is sent.
           request?.(step.request);
+        } else if ("command" in step) {
+          // The handler records each run in effects and echoes its parameters as the result.
+          result = await expose.command(step.command.name, (params) => {
+            effects.push(`run ${step.command.name} ${JSON.stringify(params)}`);
+            return params;
+          });
+        } else if ("bind" in step) {
+          await expose.bind(document.querySelector(step.bind.selector), step.bind.command, step.bind.params);
+        } else if ("click" in step) {
+          document.querySelector(step.click.selector).click();
         } else if ("dispose" in step) {
           await expose.dispose();
         } else if ("set" in step) {

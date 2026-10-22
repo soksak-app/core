@@ -287,6 +287,107 @@
           }
         }
       ]
+    },
+    {
+      "id": "expose.dispose.removes-bindings",
+      "markup": "<button id=\"save\">Save</button>",
+      "declarations": {
+        "commands": [
+          {
+            "name": "demo.save",
+            "description": "Saves the item.",
+            "params": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            "result": {
+              "type": "null"
+            }
+          }
+        ]
+      },
+      "steps": [
+        {
+          "command": {
+            "name": "demo.save"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "command",
+                "name": "demo.save"
+              }
+            ],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "bind": {
+            "selector": "#save",
+            "command": "demo.save",
+            "params": {
+              "id": "a"
+            }
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "click": {
+            "selector": "#save"
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [
+              "click save",
+              "run demo.save {\"id\":\"a\"}"
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "dispose": true,
+          "output": {
+            "registered": [
+              {
+                "kind": "unregister"
+              }
+            ],
+            "replies": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "click": {
+            "selector": "#save"
+          },
+          "output": {
+            "registered": [],
+            "replies": [],
+            "effects": [
+              "click save"
+            ],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
     }
   ]
 }
