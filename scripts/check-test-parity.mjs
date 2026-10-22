@@ -187,6 +187,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F248",
+    implementation: [
+      { file: "packages/plugin-api/binder.js", symbol: "export function createBinder" },
+      { file: "packages/plugin-api/surface-composition.js", symbol: "export async function createSurfaceCompositionController" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/create-binder-contract.test.mjs", id: "createBinder publishes ordered cases for its consumer contract" },
+      { file: "packages/plugin-api/test/view-composition-contract.test.mjs", id: "view composition contract publishes the required cases in order" },
+    ],
+    expected: "The binder cases bind a keydown event with its when predicate and failed callback, and the view composition cases replay the message listener, stream subscription with close, and reload of a document region, each against the implementation with the same outputs.",
+    levels: ["unit"],
+  },
+  {
     id: "F246",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "export function createViewBridge" },
