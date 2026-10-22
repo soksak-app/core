@@ -90,6 +90,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       outdated = await host.call("sidecarsOutdated");
     } catch (error) {
       outdated = [];
+      // default: an error that is not an Error carries its value as the text.
       failure = { kind: "state", message: String(error?.message ?? error) };
     } finally {
       changed();
@@ -114,6 +115,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       failure = state.index && typeof state.index.error === "string" ? { kind: "index", message: state.index.error } : null;
     } catch (error) {
       state = null;
+      // default: an error that is not an Error carries its value as the text.
       failure = { kind: "state", message: String(error?.message ?? error) };
     } finally {
       changed();
@@ -131,6 +133,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       await host.call("pluginsRun", { action, plugin }, { cids });
       operation = { action, plugin, state: "done", error: null };
     } catch (error) {
+      // default: an error that is not an Error carries its value as the text.
       operation = { action, plugin, state: "failed", error: String(error?.message ?? error) };
       throw error;
     } finally {
@@ -192,7 +195,9 @@ export function createPluginOperations({ host, loaded, changed }) {
       for (const id of entry.plugins) await runAction("install", id);
       return true;
     } catch (error) {
+      // default: an error that is not an Error carries its value as the text.
       log(`first run: the starter pack ${pack} was not installed: ${error?.message ?? error}`);
+      // default: an error that is not an Error carries its value as the text.
       show(`시작 플러그인 묶음 ${pack}을 설치하지 못했습니다 · ${error?.message ?? error}. 연결된 뒤 다시 시작하면 다시 설치합니다.`);
       return false;
     }

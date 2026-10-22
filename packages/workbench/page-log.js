@@ -138,6 +138,7 @@ function consoleText(args) {
       } catch (error) {
         // A value that JSON cannot serialize (a cycle, a BigInt) is recorded as a marker with the reason of the failure.
         // String would write [object Object] for it, which hides the value.
+        // default: an error that is not an Error carries its value as the text.
         ({ text: part, truncated: cut } = cutBytes(JSON.stringify({ unserializable: error?.message ?? String(error) }), room));
       }
     }
