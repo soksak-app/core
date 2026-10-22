@@ -6,7 +6,7 @@ import { appendFileSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
-import { groupMembers } from './test-command.mjs';
+import { groupMembers, runningMembers } from './test-command.mjs';
 
 /** The longest limit a test may have. A test that needs more is reported with its reason first. */
 export const MAX_TEST_TIMEOUT_MS = 600_000;
@@ -40,7 +40,7 @@ function validate(options) {
  * process it started keeps running (an open timer, a listener, a child) leaves that process in the group, so the group names it.
  */
 function leftoverNames(pgid, leader) {
-  const members = groupMembers(pgid).filter((member) => member.pid !== leader && !member.state.startsWith('Z'));
+  const members = runningMembers(pgid).filter((member) => member.pid !== leader);
   if (members.length === 0) return [];
   const commands = new Map();
   for (const line of execFileSync('ps', ['-A', '-o', 'pid=,command='], { encoding: 'utf8' }).split('\n')) {
@@ -50,17 +50,47 @@ function leftoverNames(pgid, leader) {
   return members.map((member) => `pid ${member.pid} ${commands.get(member.pid) ?? '(ended while it was named)'}`);
 }
 
+/** Sends a signal to the process group pgid. The default is the group signal of the system; a test passes its own sender. */
+const sendToGroup = (pgid, signal) => process.kill(-pgid, signal);
+
 /**
  * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
  * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
  */
-function stopGroup(pgid) {
-  try { process.kill(-pgid, 'SIGSTOP'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+/**
+ * Sends a signal to the group pgid. macOS refuses a group signal with EPERM when no member of the group can receive it, which is the case
+ * when only zombies remain; such a group has nothing to end, so the refusal is not an error. A refusal while a member runs is an error,
+ * and the error names the running members.
+ */
+function signalGroup(pgid, signal, send) {
+  try { send(pgid, signal); } catch (error) {
+    if (error.code === 'ESRCH') return;
+    if (error.code !== 'EPERM') throw error;
+    const running = runningMembers(pgid);
+    if (running.length === 0) return;
+    error.message = `${signal} to process group ${pgid}: ${error.message}; running: ${running.map((member) => `pid ${member.pid} ${member.state}`).join('; ')}`;
+    throw error;
+  }
+}
+
+export function stopGroup(pgid, send = sendToGroup) {
+  signalGroup(pgid, 'SIGSTOP', send);
 }
 
 /** Ends every process of the group of a test. A group that no longer exists has nothing to end. */
-function killGroup(pgid) {
-  try { process.kill(-pgid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+export function killGroup(pgid, send = sendToGroup) {
+  signalGroup(pgid, 'SIGKILL', send);
+}
+
+/**
+ * Ends the group of a test in the order stop, list, kill: the stop comes first, so no process of the group runs while the process table is
+ * read, which takes seconds under load. It returns the leftovers except `leader`.
+ */
+function endGroup(pgid, leader) {
+  stopGroup(pgid);
+  const leftovers = leftoverNames(pgid, leader);
+  killGroup(pgid);
+  return leftovers;
 }
 
 /**
@@ -81,21 +111,18 @@ function runOne(item, limitMs, env, outputPath) {
     let timedOutElapsedMs = 0;
     let timeoutLeftovers = [];
     let exitLeftovers = [];
+    // A failure to end the group is kept and reported in the result of the test.
+    let groupError = null;
     // At the limit the group is stopped first, and the elapsed time is taken at that stop, so a slow listing of the leftovers does not
-    // move the time of the timeout. The order is: stop, list, kill.
+    // move the time of the timeout.
     const timer = setTimeout(() => {
       timedOut = true;
       timedOutElapsedMs = performance.now() - started;
-      stopGroup(child.pid);
-      timeoutLeftovers = leftoverNames(child.pid, child.pid);
-      killGroup(child.pid);
+      try { timeoutLeftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
     }, limitMs);
-    // The exit path uses the same order as the limit: stop, list, kill.
     child.once('exit', () => {
       if (timedOut) return;
-      stopGroup(child.pid);
-      exitLeftovers = leftoverNames(child.pid, null);
-      if (exitLeftovers.length > 0) killGroup(child.pid);
+      try { exitLeftovers = endGroup(child.pid, null); } catch (error) { groupError = error; }
     });
     // A file of the run receives the output as it arrives, so a run that stops leaves the output of the test it stopped in.
     const keep = (chunk) => {
@@ -112,7 +139,9 @@ function runOne(item, limitMs, env, outputPath) {
       clearTimeout(timer);
       const elapsedMs = performance.now() - started;
       const output = Buffer.concat(chunks).toString('utf8');
-      if (timedOut) {
+      if (groupError) {
+        resolve({ status: 'fail', elapsedMs: timedOut ? timedOutElapsedMs : elapsedMs, output, detail: `could not end the process group: ${groupError.message}` });
+      } else if (timedOut) {
         const left = timeoutLeftovers.length > 0 ? `; left running: ${timeoutLeftovers.join('; ')}` : '';
         resolve({ status: 'timeout', elapsedMs: timedOutElapsedMs, output, detail: `exceeded ${seconds(limitMs)}s and was killed${left}` });
       } else if (exitLeftovers.length > 0) resolve({ status: 'fail', elapsedMs, output, detail: `left running after exit: ${exitLeftovers.join('; ')}` });

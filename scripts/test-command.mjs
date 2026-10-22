@@ -60,6 +60,11 @@ export function groupMembers(pgid) {
   return members;
 }
 
+/** The members that can still run: a zombie has ended and waits to be reaped. */
+export function runningMembers(pgid, members = groupMembers(pgid)) {
+  return members.filter((member) => !member.state.startsWith('Z'));
+}
+
 function signalGroup(pid, signal) {
   try {
     process.kill(-pid, signal);
@@ -88,7 +93,7 @@ async function cleanupGroup(pid, termAlreadySent = false) {
       // The rejection alone does not show absence. When the process table has no running member (none, or only zombies), the group has no process to end.
       const members = groupMembers(pid);
       record('verify', error, members);
-      return members.every((member) => member.state.startsWith('Z'));
+      return runningMembers(pid, members).length === 0;
     }
   };
   const signal = (name) => {

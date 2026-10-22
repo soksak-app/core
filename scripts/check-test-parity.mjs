@@ -300,6 +300,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F257-3",
+    implementation: [{ file: "scripts/test-runner.mjs", symbol: "function signalGroup" }],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with no running member ends without error" },
+      { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with a running member names it" },
+    ],
+    expected: "A group signal that macOS refuses with EPERM because only zombies remain ends without error, and a refusal while a member runs fails with the running members named, so the runner's exit and timeout paths do not throw on a group of zombies.",
+    levels: ["unit"],
+  },
+  {
     id: "F257-1",
     implementation: [{ file: "scripts/test-runner.mjs", symbol: "function runOne" }],
     tests: [{ file: "scripts/test/test-runner.test.mjs", id: "a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop" }],

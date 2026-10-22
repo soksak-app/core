@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F257-3: test runner는 group에 zombie만 남아 macOS가 group 신호를 EPERM으로 거부하면, exit 경로와 한도 경로 모두에서 오류 없이 group을 끝낸다. 실행 중인 member가 거부되면 그 member를 이름으로 밝혀 실패한다. group의 멈춤, 목록, 종료는 하나의 신호 helper와 실행 중 member 판정을 명령 감독기와 공유한다. Red: runner 시험 `a refused group signal with no running member ends without error`와 `a refused group signal with a running member names it`이 변경 전 논리에서 `kill EPERM`으로 실패한다. Green: runner 시험 파일 3개가 39개 중 39개를, native repeat 시험 파일이 2개 중 2개를 통과한다.
+
 - F257-2: benchmark runner 시험이 fixture에 6초 한도를 주고, 한도를 넘는 fixture는 30초를 잔다. 그래서 곧바로 끝나는 fixture가 부하 걸린 기계 때문에 멈추지 않는다. Red: load 105의 push check가 `TIME event_log_benchmark 2.012s exceeded 2.000s and was killed`로 실패했다. Green: 시험 통과.
 - F212.12-1-10-5: view page의 module graph 규칙은 import를 es-module-lexer(`es-module-lexer/js`, `@soksak/plugin-api`의 dependency)로 읽으므로, 문자열 리터럴의 텍스트는 import가 아니다. 규칙은 node 전용 export `./view-modules`이며, view page가 index를 불러오므로 index는 더 이상 이를 re-export하지 않는다. 명세는 view import map의 항목을 다섯 개로 센다. Red: `a string literal of a minified vendor bundle that reads as an import is not an import` 시험이 바꾸기 전에 `ui/vendor/libraries.js: import : tags5.moduleKeyword,`로 실패했다. Green: 그 시험이 통과하고, view 시험이 152개 중 152개를 통과하며, plugin-api 시험이 795개 중 795개를 통과한다.
 - F261: Tauri 테스트 `a_sidecar_receives_the_log_directory`가 반환하거나 실패할 때 자신의 sidecar를 멈춘다. 다른 sidecar 검사와 같은 drop guard를 사용하므로 sidecar 프로세스가 테스트 종료 후 남지 않는다. 호스트 코드는 변경하지 않았다. 애플리케이션은 종료 시 sidecar를 끝내며, 이 검사는 그렇게 하지 않았다.

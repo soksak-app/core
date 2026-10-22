@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
-import { runTests } from "../test-runner.mjs";
+import { killGroup, runTests, stopGroup } from "../test-runner.mjs";
 
 const node = (name, source, extra = {}) => ({ name, command: process.execPath, args: ["-e", source], timeoutMs: 5000, ...extra });
 const sleeping = (ms) => `setTimeout(() => {}, ${ms})`;
@@ -204,5 +205,24 @@ test("a test over its limit is stopped before the process table is read, and its
   } finally {
     process.env.PATH = saved;
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+// A group signal that the system refuses with EPERM, as macOS does for a group whose members have ended and remain as zombies.
+const refusedWithEperm = () => { const error = new Error("kill EPERM"); error.code = "EPERM"; throw error; };
+
+test("a refused group signal with no running member ends without error", () => {
+  // The leader has ended and no process of its group remains, so the group has no running member.
+  const { pid } = spawnSync(process.execPath, ["-e", ""]);
+  assert.doesNotThrow(() => stopGroup(pid, refusedWithEperm));
+  assert.doesNotThrow(() => killGroup(pid, refusedWithEperm));
+});
+
+test("a refused group signal with a running member names it", async () => {
+  const live = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+  try {
+    assert.throws(() => stopGroup(live.pid, refusedWithEperm), (error) => error.code === "EPERM" && new RegExp(`pid ${live.pid} `).test(error.message), "the refused signal does not name the running member");
+  } finally {
+    process.kill(-live.pid, "SIGKILL");
   }
 });
