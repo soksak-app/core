@@ -395,7 +395,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		system.CloseDocument(handle)
 		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
 	}
-	s.documents.registerView(surfaceID, plugin)
+	s.RegisterView(surfaceID, plugin)
 	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
 	return nil
 }
@@ -1463,8 +1463,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 // (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Surfaces) ViewMessage(surface, value string) error { return s.viewMessage(surface, value) }
 
-// RegisterView records the plugin of the view of surface. The creation of a view registers it; a caller that needs a registered
-// view without the native platform registers the view it names.
+// RegisterView records the plugin of the view of surface. The creation of a view calls it before the view can send a message.
 func (s *Surfaces) RegisterView(surface, plugin string) { s.documents.registerView(surface, plugin) }
 
 func (s *Surfaces) viewMessage(surface, value string) error {
@@ -1491,6 +1490,12 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		return err
 	}
 	if isReply {
+		// The reply that goes to the view is recorded at the debug level, with its identifier and outcome (docs/spec/logging.md).
+		outcome := "result"
+		if _, failed := reply["error"]; failed {
+			outcome = "error"
+		}
+		EmitHost(LevelDebug, "host.view.reply", map[string]any{"plugin": channel.plugin, "surface": surface, "id": reply["id"], "outcome": outcome})
 		s.emitToSurface(surface, "view-reply", reply)
 		return nil
 	}
@@ -1504,6 +1509,9 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		if id, ok := payload["id"].(uint64); ok {
 			if command, ok := payload["command"].(string); ok {
 				s.documents.trackViewCall(surface, id, command)
+				// The call that goes to the main page is recorded at the debug level, so a call without a reply shows as a record without
+				// its host.view.reply (docs/spec/logging.md).
+				EmitHost(LevelDebug, "host.view.call", map[string]any{"plugin": channel.plugin, "surface": surface, "id": id, "command": command})
 			}
 		}
 		s.emitToSurface(surface, "view-call", payload)

@@ -785,7 +785,16 @@ impl ViewChannels {
             .filter(|document| !document.is_empty())
     }
 
-    /// Dispatches one message of the sok-view handler of the view of surface, which is {"message": value} or {"error": reason}.
+    /// Records a reply that the host forwards to the view, at the debug level (docs/spec/logging.md).
+    fn record_view_reply(plugin: &str, surface: &str, id: u64, outcome: &str) {
+    emit_host(
+        Level::Debug,
+        "host.view.reply",
+        json!({"plugin": plugin, "surface": surface, "id": id, "outcome": outcome}),
+    );
+}
+
+/// Dispatches one message of the sok-view handler of the view of surface, which is {"message": value} or {"error": reason}.
     /// It returns Ok(true) when the message makes the view ready, and the reason that the host logs for any other failure.
     pub fn message(&self, surface: &str, value: &str) -> Result<bool, String> {
         let received: ViewReceived = serde_json::from_str(value)
@@ -862,12 +871,15 @@ impl ViewChannels {
             (None, None) => Err(format!(
                 "{surface}: view reply {id} has neither a result nor an error"
             )),
-            (Some(result), None) => Ok(Some(json!({
+            (Some(result), None) => {
+                Self::record_view_reply(&plugin, surface, id, "result");
+                Ok(Some(json!({
                 "surface": surface,
                 "plugin": plugin,
                 "id": id,
                 "result": result,
-            }))),
+            })))
+            }
             (None, Some(error)) => {
                 let code = error.get("code").and_then(Value::as_i64).ok_or_else(|| {
                     format!("{surface}: view reply {id} has an error without an integer code")
@@ -879,6 +891,7 @@ impl ViewChannels {
                     .ok_or_else(|| {
                         format!("{surface}: view reply {id} has an error without a message")
                     })?;
+                Self::record_view_reply(&plugin, surface, id, "error");
                 Ok(Some(json!({
                     "surface": surface,
                     "plugin": plugin,
@@ -955,6 +968,13 @@ impl ViewChannels {
         if !cids.is_empty() {
             payload["cids"] = json!(cids);
         }
+        // A call that goes to the main page is recorded at the debug level, so a call without its host.view.reply shows as a record
+        // without a reply (docs/spec/logging.md).
+        emit_host(
+            Level::Debug,
+            "host.view.call",
+            json!({"plugin": plugin, "surface": surface, "id": id, "command": command}),
+        );
         Ok(Some(payload))
     }
 

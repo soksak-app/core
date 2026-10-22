@@ -1044,6 +1044,30 @@
       },
       "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
     },
+    "host.view.call": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "id": "number",
+        "command": "string"
+      },
+      "description": "The host forwarded a call request of a view to the main page of its window (docs/spec/native-surfaces.md#view-surfaces, view call). A call with this record and no host.view.reply of the same plugin, surface and id has not been answered by the host."
+    },
+    "host.view.reply": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "id": "number",
+        "outcome": "string"
+      },
+      "description": "The host forwarded the reply of a view call to the view; outcome is result or error, and the id is the id of the call."
+    },
     "host.stall": {
       "layer": "host",
       "class": "lifecycle",
