@@ -80,6 +80,25 @@ fn the_host_forwards_the_sidecar_calls_to_the_main_page() {
     }
 }
 
+// contract: plugin-host.data.calls
+#[test]
+fn the_host_forwards_the_project_data_calls_to_the_main_page() {
+    let channels = host_channels(true);
+    for (id, command, params) in [
+        (13, "runtime.data.get", json!({"key": "note"})),
+        (14, "runtime.data.set", json!({"key": "note", "value": "new"})),
+    ] {
+        let message = format!(r#"{{"id": {id}, "command": "{command}", "params": {params}}}"#);
+        assert_eq!(
+            channels.receive("probe", &host_message(&message)),
+            Ok(Received::Emit(
+                "plugin-host-call",
+                json!({"plugin": "probe", "id": id, "command": command, "params": params})
+            ))
+        );
+    }
+}
+
 // contract: plugin-host.channel.call-served-set
 #[test]
 fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() {

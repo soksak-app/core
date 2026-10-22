@@ -76,8 +76,8 @@ struct NavigationState {
     loading: bool,
 }
 
-/// Returns true when the channel forwards the call command to the main page: the registration calls of exposure
-/// (docs/spec/plugin-host.md#channel).
+/// Returns true when the channel forwards the call command to the main page: the registration calls of exposure, the
+/// sidecar calls and the project data calls (docs/spec/plugin-host.md#channel).
 pub fn forwarded_call(command: &str) -> bool {
     matches!(
         command,
@@ -86,6 +86,8 @@ pub fn forwarded_call(command: &str) -> bool {
             | "runtime.sidecar.send"
             | "runtime.sidecar.on"
             | "runtime.sidecar.onFailure"
+            | "runtime.data.get"
+            | "runtime.data.set"
     )
 }
 

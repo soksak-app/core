@@ -160,6 +160,30 @@ func TestPluginHostChannelForwardsTheSidecarCalls(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.data.calls
+func TestPluginHostChannelForwardsTheProjectDataCalls(t *testing.T) {
+	fake := &channelPlatform{}
+	s, events := channelSurfaces(t, fake, true)
+	for _, message := range []string{
+		`{"id": 13, "command": "runtime.data.get", "params": {"key": "note"}}`,
+		`{"id": 14, "command": "runtime.data.set", "params": {"key": "note", "value": "new"}}`,
+	} {
+		if err := s.pluginHostMessage("probe", hostMessage(message)); err != nil {
+			t.Fatalf("served data call %s: %v", message, err)
+		}
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("a served data call was refused or answered by the host: %v", fake.posted)
+	}
+	want := []hostEvent{
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(13), "command": "runtime.data.get", "params": json.RawMessage(`{"key": "note"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(14), "command": "runtime.data.set", "params": json.RawMessage(`{"key": "note", "value": "new"}`)}},
+	}
+	if !reflect.DeepEqual(*events, want) {
+		t.Fatalf("events %v, want %v", *events, want)
+	}
+}
+
 // contract: plugin-host.channel.snapshot
 func TestPluginHostChannelRelaysADeclaredUISnapshot(t *testing.T) {
 	s, events := channelSurfaces(t, &channelPlatform{}, true)
