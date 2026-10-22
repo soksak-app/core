@@ -350,12 +350,15 @@ fn a_sidecar_receives_the_log_directory() {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let mut sidecars = create(
+    let mut created = create(
         &files(r#"{"executable":"echo","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
-    sidecars.stop_timeout = STALL;
+    created.stop_timeout = STALL;
+    // The application stops its sidecars when it exits (docs/spec/sidecars.md#messages), so the check stops them in drop,
+    // even when it fails.
+    let sidecars = Stopping(created);
     let (window, events) = owner("a", "/projects/a");
     sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap();
     events.recv_timeout(STALL).unwrap();
