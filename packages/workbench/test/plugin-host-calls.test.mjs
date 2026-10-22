@@ -31,13 +31,16 @@ mock.module("@soksak/plugin-api", { namedExports: {
   createOperationCids: () => () => { throw new Error("the plugin host calls start no operation"); },
   // The plugin host calls of this test carry no cids; a list here would be a test defect, so it is refused.
   causeCids: (cids) => { if (cids !== undefined) throw new Error("the plugin host calls of this test carry no cids"); return undefined; },
-  createCalls: ({ send, onMessage }) => {
+  createCalls: ({ send, onMessage, plugin, report }) => {
     let nextId = 0;
     const open = new Map();
+    // The open calls of the layer are reported as the calls report of createCalls does (docs/spec/plugin-processes.md).
+    const changed = () => report?.({ kind: "open-calls", plugin, count: open.size, oldestStartedAt: open.size ? 1 : null });
     onMessage((message) => {
       const call = open.get(message.id);
       if (!call) return;
       open.delete(message.id);
+      changed();
       if (message.error) call.reject(new Error(message.error.message));
       else call.resolve(message.result);
     });
@@ -45,6 +48,7 @@ mock.module("@soksak/plugin-api", { namedExports: {
       request: (command, params) => new Promise((resolve, reject) => {
         const id = ++nextId;
         open.set(id, { resolve, reject });
+        changed();
         send({ id, command, params });
       }),
       peerLost: (reason) => { for (const { reject } of open.values()) reject(new Error(reason)); open.clear(); },
@@ -56,7 +60,8 @@ mock.module("@soksak/plugin-api", { namedExports: {
 const emit = (name, event) => { for (const listener of [...(listeners.get(name) ?? [])]) listener(event); };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-const { listenPluginHostCalls, hostCommandsOf, keepHostCommands, forwardHostExposure, errorText } = await import("../plugin-host.js");
+const { listenPluginHostCalls, hostCommandsOf, keepHostCommands, forwardHostExposure, errorText, createHostCommands } = await import("../plugin-host.js");
+const { losses } = await import("../plugin-processes.js");
 const session = "plugin:probe:project-a:fixture-sidecar";
 
 const registered = [];
@@ -322,7 +327,7 @@ test("the served sidecar calls record a subscription and send the checked body t
   assert.deepEqual(calls.at(-1).arg, { plugin: "probe", id: 8, result: null });
   emit("plugin-host-call", { plugin: "probe", id: 9, command: "runtime.sidecar.send", params: { id: session, sidecar: "fixture-sidecar", body: { "operation": "list", "path": "a" }, cids: ["c1"] } });
   await tick();
-  assert.deepEqual(calls.at(-2), { name: "pluginHostSidecarSend", arg: { plugin: "probe", sidecar: "fixture-sidecar", id: session, body: '{"operation":"list","path":"a"}', cids: ["c1"] } });
+  assert.deepEqual(calls.at(-2), { name: "pluginHostSidecarSend", arg: { plugin: "probe", sidecar: "fixture-sidecar", id: session, body: { operation: "list", path: "a" }, cids: ["c1"] } });
   assert.deepEqual(calls.at(-1), { name: "pluginHostReply", arg: { plugin: "probe", id: 9, result: null } });
   pluginHost.close();
 });
@@ -433,6 +438,24 @@ test("a rejection that is an object of the host is reported with its message, co
   assert.equal(errorText({ code: 7 }), '{"code":7}');
 });
 
+// contract: plugin-host.channel.call-served-set
+test("the open calls of a plugin host are its plugin status, not an error record", async () => {
+  const { openCalls } = await import("../plugin-processes.js");
+  const commands = createHostCommands({ plugin: "probe", timeoutOf: () => undefined });
+  const errors = [];
+  // Calls of the earlier cases of this file may still be open, so the status is read as the difference that this call makes.
+  const open = () => openCalls().find((entry) => entry.plugin === "probe")?.count ?? 0;
+  const before = open();
+  const pending = commands.run("probe.send", {});
+  // The call is open: the status of the plugin counts it, and no record reaches the error display.
+  assert.equal(open(), before + 1);
+  assert.deepEqual(errors, []);
+  commands.receive({ id: 1, error: { code: -32000, message: "refused" } });
+  await assert.rejects(pending, /refused/);
+  assert.equal(open(), before, "the answered call still counts as open");
+  commands.close();
+});
+
 test("a failure of a subscribed plugin session is posted to its host page as the failure event", async () => {
   const pluginHost = listen();
   const start = calls.length;
@@ -442,7 +465,8 @@ test("a failure of a subscribed plugin session is posted to its host page as the
     const posted = calls.length;
     emit("sidecar-failure", { surface: session, sidecar: "fixture-sidecar", reason: "exited" });
     await tick();
-    assert.deepEqual(calls.slice(posted), [{ name: "pluginHostEvent", arg: { plugin: "probe", event: "failure", sidecar: "fixture-sidecar", id: session, reason: "exited" } }]);
+    // The event carries the data of the session event that the page listens to, as the host event {sok, event, data} requires.
+    assert.deepEqual(calls.slice(posted), [{ name: "pluginHostEvent", arg: { plugin: "probe", event: "sidecar.failure", data: { sidecar: "fixture-sidecar", id: session, reason: "exited" } } }]);
   } finally {
     // The end of the host removes its session subscriptions, and the calls of this case leave the record, which the later cases of this file assume.
     emit("plugin-host-ended", { plugin: "probe" });
@@ -463,10 +487,10 @@ test("a sidecar message of a plugin session reaches its host page only with a su
   await tick();
   emit("sidecar-message", { surface: session, sidecar: "fixture-sidecar", body: { n: 2 } });
   await tick();
-  assert.deepEqual(calls.at(-1), { name: "pluginHostEvent", arg: { plugin: "probe", event: "message", sidecar: "fixture-sidecar", id: session, body: { n: 2 } } });
+  assert.deepEqual(calls.at(-1), { name: "pluginHostEvent", arg: { plugin: "probe", event: "sidecar.message", data: { sidecar: "fixture-sidecar", id: session, body: { n: 2 } } } });
   emit("sidecar-failure", { surface: session, sidecar: "fixture-sidecar", reason: "exited" });
   await tick();
-  assert.equal(calls.some((call) => call.name === "pluginHostEvent" && call.arg.event === "failure"), false, "a failure with no failure subscription was posted");
+  assert.equal(calls.some((call) => call.name === "pluginHostEvent" && call.arg.event === "sidecar.failure"), false, "a failure with no failure subscription was posted");
   emit("plugin-host-ended", { plugin: "probe" });
   const after = calls.length;
   emit("sidecar-message", { surface: session, sidecar: "fixture-sidecar", body: { n: 3 } });

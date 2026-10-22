@@ -8,10 +8,9 @@ const message = { form: "json-object", operationField: "operation" };
 const sidecar = { executable: "build/worker", protocol: 1, message, hostReadOperations: ["list", "stat"] };
 const declared = ["list"];
 
-test("a declared read operation is forwarded as the re-serialized object", () => {
+test("a declared read operation is forwarded as the object that the page sent", () => {
   const body = { "operation": "list", "path": "a" };
-  assert.equal(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body }),
-    '{"operation":"list","path":"a"}');
+  assert.deepEqual(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body }), body);
 });
 
 test("an operation that the manifest does not declare is refused by name", () => {
@@ -37,7 +36,7 @@ test("a sidecar without a declared message form serves no operation", () => {
 test("a sidecar request body is the JSON object that the page sends, and the check returns its text", () => {
   // The files host page sends the body as an object, which is the json-object form of the sidecar (docs/spec/sidecars.md).
   const text = checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body: { operation: "list", path: "a" } });
-  assert.equal(text, '{"operation":"list","path":"a"}');
+  assert.deepEqual(text, { operation: "list", path: "a" });
 });
 
 test("a body that is not an object or has no string operation field is refused", () => {
@@ -52,6 +51,6 @@ test("a body that is not an object or has no string operation field is refused",
 
 test("the message form names the operation field, so a sidecar may use another name", () => {
   const sidecarDeclaration = { ...sidecar, message: { form: "json-object", operationField: "op" } };
-  assert.equal(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration, body: {"op":"list"} }),
-    '{"op":"list"}');
+  assert.deepEqual(checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration, body: {"op":"list"} }),
+    { op: "list" });
 });

@@ -25,8 +25,8 @@ test("the environment declares the sidecar facts of the installed document to th
   installEnvironment(structuredClone(environmentFile), structuredClone(installed));
   const [sidecar] = pluginSidecarsOf("probe");
   assert.deepEqual(sidecar, { name: SIDECAR, declared: ["list"], declaration: facts });
-  assert.equal(checkHostSidecarRequest({ plugin: "probe", sidecar: SIDECAR, declared: sidecar.declared, sidecarDeclaration: sidecar.declaration,
-    body: { operation: "list", path: "a" } }), '{"operation":"list","path":"a"}');
+  assert.deepEqual(checkHostSidecarRequest({ plugin: "probe", sidecar: SIDECAR, declared: sidecar.declared, sidecarDeclaration: sidecar.declaration,
+    body: { operation: "list", path: "a" } }), { operation: "list", path: "a" });
   assert.throws(() => checkHostSidecarRequest({ plugin: "probe", sidecar: SIDECAR, declared: sidecar.declared, sidecarDeclaration: sidecar.declaration,
     body: { operation: "write" } }), { message: "plugin host probe: operation write is not served" });
 });

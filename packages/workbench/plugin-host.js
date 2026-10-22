@@ -7,6 +7,7 @@
 import { host as bridge } from "@soksak/runtime";
 import { reportRecord } from "./page-log.js";
 import { createViewCommands } from "./view-commands.js";
+import { callReporter } from "./plugin-processes.js";
 import { runCommandCall } from "./command-route.js";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
@@ -35,8 +36,8 @@ export function pluginSessionOf(id) {
 /**
  * Checks a sidecar request of a plugin host on the main page (docs/plans/plugin-host-routes.md rule 8). declared lists the
  * operations that the plugin manifest declares for the sidecar (hostOperations); sidecarDeclaration is the validated
- * sidecar.json, whose message form the body takes and whose hostReadOperations allow the operation. Returns the body
- * re-serialized from the object, so the check and the sidecar read the same value; throws a named error otherwise.
+ * sidecar.json, whose message form the body takes and whose hostReadOperations allow the operation. Returns the object that
+ * the host call forwards to the sidecar as the body, in the json-object form; throws a named error otherwise.
  */
 export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sidecarDeclaration, body }) {
   const refuse = (reason) => new Error(`plugin host ${plugin}: ${reason}`);
@@ -50,7 +51,7 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
   // default: hostReadOperations is an optional field of sidecar.json; without it the sidecar allows no operation to a plugin host.
   const readable = sidecarDeclaration.hostReadOperations ?? [];
   if (!declared.includes(operation) || !readable.includes(operation)) throw refuse(`operation ${operation} is not served`);
-  return JSON.stringify(object);
+  return object;
 }
 
 /**
@@ -188,8 +189,10 @@ function routeSessionEvent(kind, event, sidecar, session, payload) {
     return;
   }
   const fields = kind === "message" ? { body: payload } : { reason: payload };
+  // The event is the sidecar event of the view channel (sidecar.message, sidecar.failure) with the session id in its data, which the
+  // page listens to by the id (view-bridge keyOf). The host posts it as the message {sok, event, data}, which requires the data.
   // default: a post that the host refuses is written at error with its reason.
-  bridge.call("pluginHostEvent", { plugin, event: kind, sidecar, id: session, ...fields }).catch((error) => {
+  bridge.call("pluginHostEvent", { plugin, event: `sidecar.${kind}`, data: { sidecar, id: session, ...fields } }).catch((error) => {
     // default: a rejection that is not an Error is reported by its text, so the record names the failure either way.
     reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: ${errorText(error)}`);
   });
@@ -234,15 +237,14 @@ export function hostCommandsOf(plugin) {
  * pluginHostRequest and resolves with the reply that arrives as the plugin-host-reply event of the plugin; receive(event)
  * takes such an event. close() ends every open call of the host with surface-closed.
  */
-export function createHostCommands({ plugin, timeoutOf, report }) {
-  if (typeof timeoutOf !== "function" || typeof report !== "function") {
-    throw new TypeError("createHostCommands requires the timeoutOf and report functions");
-  }
+export function createHostCommands({ plugin, timeoutOf }) {
+  if (typeof timeoutOf !== "function") throw new TypeError("createHostCommands requires the timeoutOf function");
   const commands = createViewCommands({
     plugin,
     post: (message) => bridge.call("pluginHostRequest", { plugin, id: message.id, command: message.command, params: message.params }),
     timeoutOf,
-    report,
+    // The call records of the host are the statuses of the plugin (open calls, losses), as the calls of a view are; none is an error.
+    report: callReporter(plugin),
   });
   return {
     run: commands.run,
@@ -321,7 +323,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
       // replies of the page return.
       let commands = hostCommandsOf(plugin);
       if (commands === null) {
-        commands = createHostCommands({ plugin, timeoutOf, report });
+        commands = createHostCommands({ plugin, timeoutOf });
         keepHostCommands(plugin, commands);
       }
       if (event.command === "runtime.error") {
