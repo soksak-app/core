@@ -52,10 +52,10 @@ pub fn start_stall_watch(options: StallWatchOptions) -> impl FnOnce() {
         let start = Instant::now();
         Arc::new(move || start.elapsed())
     });
-    // default: the host gives no wait, so the watch sleeps one beat on its thread.
     let wait: Wait = options
         .wait
         .clone()
+        // default: the host gives no wait, so the watch sleeps one beat on its thread.
         .unwrap_or_else(|| Arc::new(std::thread::sleep));
     let beat = Arc::new(AtomicU64::new(0));
     let stopped = Arc::new(AtomicBool::new(false));
