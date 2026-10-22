@@ -37,7 +37,10 @@ test("a body that is not an object or has no string operation field is refused",
   const check = (body) => () => checkHostSidecarRequest({ plugin: "probe", sidecar: "fixture-sidecar", declared, sidecarDeclaration: sidecar, body });
   assert.throws(check("[1]"), { message: "plugin host probe: body is not a JSON object" });
   assert.throws(check("null"), { message: "plugin host probe: body is not a JSON object" });
-  assert.throws(check("not json"), { message: "plugin host probe: body is not a JSON object" });
+  // A body that does not parse is refused with the parser message, which names the position of the failure.
+  let parseMessage = null;
+  try { JSON.parse("not json"); } catch (error) { parseMessage = error.message; }
+  assert.throws(check("not json"), { message: `plugin host probe: body is not a JSON object: ${parseMessage}` });
   assert.throws(check('{"path":"a"}'), { message: "plugin host probe: operation is missing or not a string" });
   assert.throws(check('{"operation":3}'), { message: "plugin host probe: operation is missing or not a string" });
 });

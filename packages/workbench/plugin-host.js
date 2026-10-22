@@ -45,8 +45,9 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
   let object;
   try {
     object = typeof body === "string" ? JSON.parse(body) : undefined;
-  } catch {
-    object = undefined;
+  } catch (error) {
+    // The parser message names the position of the failure, so it is kept in the refusal.
+    throw refuse(`body is not a JSON object: ${error.message}`);
   }
   if (typeof object !== "object" || object === null || Array.isArray(object)) throw refuse("body is not a JSON object");
   const operation = object[form.operationField];
