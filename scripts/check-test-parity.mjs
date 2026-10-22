@@ -2394,6 +2394,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F251",
+    implementation: [
+      { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
+      { file: "packages/workbench/view-events.js", symbol: "statusWatch" },
+      { file: "packages/plugin-api/view.js", symbol: "watchStatus" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.status.watch subscribes a core status or a status of the plugin and runtime.status.unwatch ends it" },
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.status.watch and runtime.status.unwatch refuse a status of another plugin and a name that is not text, and subscribe to nothing" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch pushes each value of its name as the status event and ends at unwatch" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch that the page refuses registers nothing and rejects with the refusal" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "a view watch of a status that the exposure does not declare is refused with its name" },
+      { file: "packages/plugin-api/test/view-status-contract.test.mjs", id: "view status contract publishes the required cases in order" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewStatusWatchIsForwardedAndStatusValueIsPosted" },
+      { file: "packages/host/tauriv2/tests/documents_test.rs", id: "view_status_watch_is_forwarded_and_a_status_value_is_posted" },
+    ],
+    expected: "A view watches a core status or a status of its plugin with runtime.status.watch and runtime.status.unwatch, receives each value as the view event status, and a name with another owner or an undeclared plugin status is refused and runs nothing; both hosts relay the calls and the event unchanged.",
+    levels: ["unit"],
+  },
+  {
     id: "F241",
     implementation: [{ file: "packages/workbench/view-calls.js", symbol: "case \"runtime.clipboard.persistPNG\"" }],
     tests: [
