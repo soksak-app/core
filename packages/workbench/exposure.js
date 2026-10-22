@@ -391,8 +391,9 @@ export function createRegistry({ call = null, report = null } = {}) {
 
     /** Registers a core status. subscribe(fn) returns a function that unsubscribes. */
     status: (name, read, subscribe) => core.status(name, read, subscribe),
-    command: (name, run) => core.command(name, async (params) => {
-      const result = await bounded(name, coreDeclared.get(declarationKey("command", name)), () => run(params));
+    // The handler receives the context of the request, {cids} with the correlation identifiers of its cause when the request has them.
+    command: (name, run) => core.command(name, async (params, context) => {
+      const result = await bounded(name, coreDeclared.get(declarationKey("command", name)), () => run(params, context));
       try {
         await options.settled();
       } catch (error) {

@@ -127,3 +127,12 @@ test("without a candidate or a plugin state no plugin is incompatible", async ()
   await unread.refresh();
   assert.deepEqual(unread.status().incompatible, []);
 });
+
+test("the release page of a command that carries the cids of its cause opens it with those cids", async () => {
+  const calls = [];
+  const host = { async call(name, params, options) { calls.push({ name, params, options }); return name === "appUpdateState" ? { version: "0.0.8", available } : null; } };
+  const update = createAppUpdate({ host, changed: () => {} });
+  await update.refresh();
+  await update.openRelease({ cids: ["p1700000000000.6"] });
+  assert.deepEqual(calls.at(-1), { name: "linkOpen", params: { url: "https://github.com/soksak-app/core/releases/tag/v0.0.9" }, options: { cids: ["p1700000000000.6"] } });
+});

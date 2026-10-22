@@ -293,8 +293,8 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     contributions: context.contributions,
     shortcuts: shortcutTable.shortcuts,
     emitEvent,
-    runCore: (name, params) => scoped.call(name, params),
-    runOwned: (name, params, owner) => registry.runOwned(name, params, owner),
+    runCore: (name, params, cids) => scoped.call(name, params, cids),
+    runOwned: (name, params, owner, cids) => registry.runOwned(name, params, owner, cids),
     runtime: {
       native: gate,
       sidecar: {

@@ -1,6 +1,6 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
-import { base64Of, bytesFrom } from "@soksak/plugin-api";
+import { base64Of, bytesFrom, causeCids } from "@soksak/plugin-api";
 import { runCommandCall } from "./command-route.js";
 
 /**
@@ -51,8 +51,10 @@ import { runCommandCall } from "./command-route.js";
  */
 export async function answerViewCall(event, options) {
   if (event === null || typeof event !== "object") throw new TypeError("view call event is not an object");
-  const { id, cancel, command, params } = event;
+  const { id, cancel, command, params, cids } = event;
   if (!Number.isInteger(id)) throw new TypeError("view call event has no integer id");
+  // The identifiers of the cause of the call; a list that a line cannot hold is refused before any command runs.
+  const carried = causeCids(cids);
   const { pending } = options;
   if (cancel === true) {
     // default: a cancel of a call that has no pending call ends nothing, because that call has already replied.
@@ -64,7 +66,14 @@ export async function answerViewCall(event, options) {
   const controller = new AbortController();
   pending.set(id, controller);
   try {
-    return await untilCancelled(run(command, params, options), controller.signal);
+    // A command of the plugin and a core command receive the identifiers of the call: the exposure registry takes them as the cids of
+    // its run, and a core command passes them on the host calls that it makes (docs/spec/native-surfaces.md#view-surfaces).
+    const withCause = {
+      ...options,
+      runOwned: (name, value, owner) => options.runOwned(name, value, owner, carried),
+      runCore: (name, value) => options.runCore(name, value, carried),
+    };
+    return await untilCancelled(run(command, params, withCause), controller.signal);
   } finally {
     pending.delete(id);
   }

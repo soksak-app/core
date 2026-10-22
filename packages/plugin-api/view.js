@@ -7,7 +7,8 @@
 // the view import map (rule 4). Its imports are the call layer, the snapshot channel, the plugin runtime and the composition
 // controller with its region handles, which import nothing else.
 
-import { createCalls } from "./calls.js";
+import { causeCids, createCalls } from "./calls.js";
+import { createOperationCids } from "./operation.js";
 import { createPluginRuntime } from "./plugin-runtime.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
@@ -114,6 +115,8 @@ export function createViewBridge({ handler, report }) {
   };
   // The prefix that the page adds to the event of a plugin record; the call carries the event without it.
   const prefix = `plugin.${plugin}.`;
+  // The identifiers of the operations that start in this view page (docs/spec/logging.md#operation-chains).
+  const nextOperationCids = createOperationCids();
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
     log: (level, event, fields, cids) => {
       calls.request("runtime.log", { level, event: event.slice(prefix.length), fields, ...(cids === undefined ? {} : { cids }) })
@@ -154,9 +157,18 @@ export function createViewBridge({ handler, report }) {
     error: (where, text) => calls.request("runtime.error", { where, text }).then(() => undefined),
     // The one route of a view to run a command that core or the view declares (docs/spec/native-surfaces.md#view-surfaces, input).
     // The call layer keeps the owner check of each name; the bridge adds no set of names.
-    command: (name, params = null) => {
+    // The options carry cids, the identifiers of the operation that the command belongs to; a command without them has none.
+    command: (name, params = null, { cids } = {}) => {
       if (typeof name !== "string" || name === "") throw new TypeError("runtime.command requires a non-empty name");
-      return calls.request(name, params);
+      return calls.request(name, params, { cids: causeCids(cids) });
+    },
+    // Starts an operation of this view (docs/spec/native-surfaces.md#view-surfaces): the identifier is assigned in the page's form,
+    // the first event is stored through runtime.log with it, and the list is returned for the calls that carry the operation out.
+    beginOperation: (event, fields = {}) => {
+      if (typeof event !== "string" || event === "") throw new TypeError("runtime.beginOperation requires an event name");
+      const cids = nextOperationCids();
+      log.info(event, fields, { cids });
+      return cids;
     },
     theme: (listener) => {
       if (typeof listener !== "function") throw new TypeError("runtime.theme requires a listener");

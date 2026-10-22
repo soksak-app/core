@@ -5,10 +5,13 @@
 // with it. The host calls that carry the operation out take the identifier as their options (`host.call(name, arg, {cids})`), so
 // the event `page.call` of the page and the event `host.binding.call` of the host carry it too, and the audit joins them.
 
+import { createOperationCids } from "@soksak/plugin-api";
+
 // The sink that stores an event with its identifiers. The log of the page installs it (page-log.js); this module imports no host,
 // so the modules that start operations load without the application host.
 let sink = null;
-let counter = 0;
+// The identifiers of the operations of this page (the form is in plugin-api operation.js).
+const nextOperationCids = createOperationCids();
 
 /** Installs the function that stores `(event, fields, cids)`. */
 export function installOperationSink(next) {
@@ -20,8 +23,7 @@ export function installOperationSink(next) {
  * identifiers to pass with the host calls of the operation. A page without the application host stores nothing.
  */
 export function beginOperation(event, fields) {
-  counter += 1;
-  const cids = [`p${Math.round(performance.timeOrigin)}.${counter}`];
+  const cids = nextOperationCids();
   // default: a page without the application host has no sink and stores nothing.
   sink?.(event, fields, cids);
   return cids;

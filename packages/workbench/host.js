@@ -255,12 +255,16 @@ export function surfaceContextRuntime(surface, declarations = {}) {
       on,
     },
     theme,
-    call(name, payload) {
+    call(name, payload, cids) {
       if (name.includes(".")) {
-        // default: a command without parameters omits the payload.
-        return registry.handle({ method: "command.run", params: { name, params: payload ?? {}, surface: surfaceId } })
+        // default: a command without parameters omits the payload. cids are the correlation identifiers of the cause of the command, and
+        // the request carries them only when there are some.
+        const params = { name, params: payload ?? {}, surface: surfaceId, ...(cids === undefined ? {} : { cids }) };
+        return registry.handle({ method: "command.run", params })
           .then((reply) => reply.error ? Promise.reject(new Error(reply.error.message)) : reply.result);
       }
+      // A call that names no command carries no identifiers, so identifiers given to it are refused rather than dropped.
+      if (cids !== undefined) throw new TypeError(`surface call ${name} takes no cids: only a command carries them`);
       return invoke(name, payload);
     },
     sidecar(name) {

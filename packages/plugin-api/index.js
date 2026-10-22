@@ -22,6 +22,7 @@ export { orderedSidecar } from "./sidecar-port.js";
 export { CLIPBOARD_TYPES, ClipboardError, base64Of, bytesFrom, createClipboardBridge, shellQuotePath } from "./clipboard.js";
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
+export { createOperationCids } from "./operation.js";
 export { causeCids, createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
 export { createSnapshotReceiver, createSnapshotSender, pullSnapshots, SNAPSHOT_EVENT, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 

@@ -77,12 +77,15 @@ export function createAppUpdate({ host, plugins = () => null, changed }) {
     }
   }
 
-  /** Opens the release page of the candidate in the default application of the person. */
-  async function openRelease() {
+  /**
+   * Opens the release page of the candidate in the default application of the person. cause holds the correlation identifiers of the
+   * command that opens it (`cids`), which the host call carries.
+   */
+  async function openRelease(cause = {}) {
     if (!host) throw new Error("the application update needs a native host");
     const url = status().available?.release;
     if (!url) throw new Error("the application update has no release page");
-    await host.call("linkOpen", { url });
+    await host.call("linkOpen", { url }, { cids: cause.cids });
   }
 
   /** The value of the core.app status. */

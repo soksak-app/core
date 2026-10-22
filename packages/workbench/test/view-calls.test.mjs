@@ -551,3 +551,33 @@ test("runtime.native.call of a composition or region host call is refused and ru
   }
   assert.deepEqual(ran.native, []);
 });
+
+test("a call that carries the cids of its cause hands them to the command of its plugin", async () => {
+  const { options } = fakes();
+  const seen = [];
+  const runOwned = async (name, params, owner, cids) => { seen.push({ name, owner, cids }); return { owned: true }; };
+  assert.deepEqual(await answerViewCall({ id: 4, command: "probe.run", params: null, cids: ["p1700000000000.4"] }, { ...options, runOwned }), { owned: true });
+  assert.deepEqual(seen, [{ name: "probe.run", owner: "probe", cids: ["p1700000000000.4"] }]);
+});
+
+test("a call without cids hands no cids to the command of its plugin", async () => {
+  const { options } = fakes();
+  const seen = [];
+  const runOwned = async (name, params, owner, cids) => { seen.push(cids); return null; };
+  await answerViewCall({ id: 5, command: "probe.run", params: null }, { ...options, runOwned });
+  assert.deepEqual(seen, [undefined]);
+});
+
+test("a call whose cids a line cannot hold is refused and runs nothing", async () => {
+  const { ran, options } = fakes();
+  await assert.rejects(answerViewCall({ id: 6, command: "probe.run", params: null, cids: ["p1.7\"x"] }, options), /cids must be an array of non-empty strings/);
+  assert.deepEqual(ran.owned, []);
+});
+
+test("a core command call that carries the cids of its cause hands them to runCore", async () => {
+  const { options } = fakes();
+  const seen = [];
+  const runCore = async (name, params, cids) => { seen.push({ name, cids }); return { core: true }; };
+  assert.deepEqual(await answerViewCall({ id: 7, command: "core.surface.open", params: {}, cids: ["p1700000000000.5"] }, { ...options, runCore }), { core: true });
+  assert.deepEqual(seen, [{ name: "core.surface.open", cids: ["p1700000000000.5"] }]);
+});
