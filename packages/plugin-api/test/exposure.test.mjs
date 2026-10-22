@@ -368,3 +368,16 @@ test("a dom request gives an index or an address, never both, and an address res
   assert.deepEqual(seen, [{ address: { key: "go" }, count: 1 }], "the resolver did not receive the address and the elements");
   assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });
+
+test("a command run hands the cids of its cause to the handler as its context, and refuses a list a line cannot hold", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const contexts = [];
+  entries.command("probe.send", (params, context) => { contexts.push(context); return null; });
+  await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "x" }, cids: ["p1700000000000.7"] }));
+  await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "y" } }));
+  assert.deepEqual(contexts, [{ cids: ["p1700000000000.7"] }, { cids: undefined }]);
+  const code = async (work) => (await replyPayload(work)).error?.code;
+  assert.equal(await code(() => entries.answer("command.run", { name: "probe.send", params: { data: "z" }, cids: ["p1.7\"x"] })),
+    EXPOSURE_ERRORS.invalidParams);
+  assert.equal(contexts.length, 2, "a refused list reaches no handler");
+});

@@ -11,6 +11,7 @@ const CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-commands.json
 const EXPECTED_IDS = [
   "view.commands.register-answers-and-refuses-unregistered",
   "view.commands.run-failure-and-empty-result",
+  "view.commands.run-passes-cids-to-handler",
 ];
 
 const RUNS = {
@@ -18,6 +19,8 @@ const RUNS = {
   fail: () => { throw new Error("save failed"); },
   none: () => undefined,
   text: "not a function",
+  // The context that the handler receives with the request: the cids of the request, and no key when the request has none.
+  context: (params, context) => structuredClone(context),
 };
 
 // Lets every pending promise of the call layer settle before a step reports its output.

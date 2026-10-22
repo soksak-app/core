@@ -18,6 +18,16 @@ import {
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
 } from "@soksak/plugin-api";
 
+/**
+ * The command.run request of a run. A surface and the cids of the cause are members only when given, so a request without them is the
+ * same request as before.
+ */
+const commandRequest = (name, params, surface, cids) => ({
+  name, params,
+  ...(surface === undefined ? {} : { surface }),
+  ...(cids === undefined ? {} : { cids }),
+});
+
 /** Elements of a core dom entry. They are found in the main document by the data-expose attribute. */
 const byAttribute = (name) => () => [...document.querySelectorAll(`[data-expose="${name}"]`)];
 
@@ -394,22 +404,21 @@ export function createRegistry({ call = null, report = null } = {}) {
     dom: (name, provide = byAttribute(name), resolve = undefined) => core.dom(name, provide, resolve),
 
     /**
-     * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command.
+     * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command. cids are the correlation identifiers of the operation that causes the run; a command of a view receives them (docs/spec/native-surfaces.md#view-surfaces).
      */
-    run: (name, params = {}, surface) => answer("command.run",
-      surface === undefined ? { name, params } : { name, params, surface }),
+    run: (name, params = {}, surface, cids) => answer("command.run", commandRequest(name, params, surface, cids)),
 
     /**
      * Returns the surface that a request of this document uses for the entry (see target): wanted when it registered the name, otherwise the preferred surface, or null when no surface registered. With exact, only wanted is accepted.
      */
     chosen: (kind, name, wanted, exact = false) => target(kind, name, wanted, exact),
 
-    runOwned(name, params, owner) {
-      if (pageOf("command", name)) return answer("command.run", { name, params });
+    runOwned(name, params, owner, cids) {
+      if (pageOf("command", name)) return answer("command.run", commandRequest(name, params, undefined, cids));
       const surface = target("command", name, owner, true);
       // default: the error sentence writes a missing owner (null) as none.
       if (surface === null) return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${owner ?? "none"} has not registered command ${name}`));
-      return answer("command.run", { name, params, surface });
+      return answer("command.run", commandRequest(name, params, surface, cids));
     },
 
     /**

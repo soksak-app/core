@@ -10,6 +10,7 @@
  * with their path inside the package. Runtime modules are placed in `runtime/`.
  */
 import { createBinder } from "./binder.js";
+import { causeCids } from "./calls.js";
 
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
 export { DOCUMENT_ACTIONS, DOCUMENT_NAME, observeRegionInsets, regionInsets } from "./document-region.js";
@@ -21,7 +22,7 @@ export { orderedSidecar } from "./sidecar-port.js";
 export { CLIPBOARD_TYPES, ClipboardError, base64Of, bytesFrom, createClipboardBridge, shellQuotePath } from "./clipboard.js";
 export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
-export { createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
+export { causeCids, createCalls, DEFAULT_CALL_TIMEOUT, ENDED_CALLS_KEPT, MAX_CALL_TIMEOUT, PEER_LOST_REASONS } from "./calls.js";
 export { createSnapshotReceiver, createSnapshotSender, pullSnapshots, SNAPSHOT_EVENT, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 
 export const ENVIRONMENT = "environment.json";
@@ -1670,8 +1671,16 @@ export function exposureEntries(declared) {
         if (!matchesSchema(found.declaration.params, input)) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `invalid params for ${name}`);
         }
+        // The cids of the cause of the request reach the handler as the member cids of its context, and none is dropped: an invalid
+        // list is refused here, also for a handler that ignores them (docs/spec/exposure.md, requests).
+        let cids;
+        try {
+          cids = causeCids(params.cids);
+        } catch (error) {
+          throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `${method} for ${name}: ${error.message}`);
+        }
         // default: an undefined result of a command without a result is not in JSON, so it is answered as null.
-        return (await run(input)) ?? null;
+        return (await run(input, { cids })) ?? null;
       }
       if (params.address !== undefined) {
         if (params.index !== undefined) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "a request gives index or address, not both");

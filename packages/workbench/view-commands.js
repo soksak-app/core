@@ -3,7 +3,7 @@
 // that the host delivers as view-reply. The call layer of plugin-api holds the open calls, their declared time limit and the late
 // replies, so the requests use the same rules as the calls of a plugin process (docs/spec/plugin-processes.md, rule 3).
 
-import { createCalls, DEFAULT_CALL_TIMEOUT } from "@soksak/plugin-api";
+import { causeCids, createCalls, DEFAULT_CALL_TIMEOUT } from "@soksak/plugin-api";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;
@@ -37,6 +37,7 @@ export function viewCommandsOf(surfaceId) {
  *
  * Returns {run, receive, close}. run(name, params) resolves with the result of the view, or rejects with its error. receive(event)
  * takes a view-reply event {surface, plugin, id, result} or {surface, plugin, id, error}. close() ends every open call with surface-closed.
+ * run(name, params, cids) carries the correlation identifiers of the cause of the request to the view, which passes them to the handler.
  */
 export function createViewCommands({ plugin, post, timeoutOf, report }) {
   if (typeof post !== "function" || typeof timeoutOf !== "function" || typeof report !== "function") {
@@ -60,9 +61,16 @@ export function createViewCommands({ plugin, post, timeoutOf, report }) {
     report,
   });
   return {
-    run(name, params) {
+    run(name, params, cids) {
+      // A list that a line cannot hold is refused before the request is sent, so the view never receives it.
+      let carried;
+      try {
+        carried = causeCids(cids);
+      } catch (error) {
+        return Promise.reject(error);
+      }
       // default: a command that declares no time limit waits for the default time limit of the call layer (docs/spec/exposure.md).
-      return calls.request(name, params, { timeout: timeoutOf(name) ?? DEFAULT_CALL_TIMEOUT });
+      return calls.request(name, params, { timeout: timeoutOf(name) ?? DEFAULT_CALL_TIMEOUT, cids: carried });
     },
     receive(event) {
       if (!deliver) throw new Error(`view command reply ${event.id} arrived after the surface closed`);

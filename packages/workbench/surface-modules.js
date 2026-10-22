@@ -322,7 +322,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
-        register: (name) => context.exposure.command(name, (params) => viewCommands.run(name, params)),
+        register: (name) => context.exposure.command(name, (params, cause) => viewCommands.run(name, params, cause.cids)),
       },
       exposure: {
         // A status or dom registration of the view: the registry validates the declaration and applies it, then the host

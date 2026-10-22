@@ -1,9 +1,9 @@
 // The call layer of a plugin process boundary (docs/spec/plugin-processes.md, rule 3). It runs over the send function and
 // the onMessage subscription of a transport, so the same code serves a view, a plugin host and a sidecar.
 //
-// Messages of the call envelope: a request is {id, command, params}; a reply is {id, result} or {id, error: {code, message}};
-// a cancel is {id, cancel: true}. The transport delivers each message to the subscription. send throws when the message
-// cannot be sent.
+// Messages of the call envelope: a request is {id, command, params}, and it carries the member cids when its cause has correlation
+// identifiers (causeCids); a reply is {id, result} or {id, error: {code, message}}; a cancel is {id, cancel: true}. The transport
+// delivers each message to the subscription. send throws when the message cannot be sent.
 //
 // report(event) receives each count and each change of the open calls:
 //   {kind: "timeout", plugin, command, timeout}      a call whose declared time limit passed
@@ -23,6 +23,21 @@ export const MAX_CALL_TIMEOUT = 600000;
 export const ENDED_CALLS_KEPT = 256;
 /** The reasons that end a call when its peer is lost. */
 export const PEER_LOST_REASONS = ["process-ended", "surface-closed", "sidecar-ended"];
+
+// A correlation identifier that a log line can hold (docs/spec/logging.md#correlation): non-empty, without a quote, a backslash or a control character.
+const CID = /^[^"\\\u0000-\u001f\u007f]+$/;
+
+/**
+ * Returns the correlation identifiers that a request carries for its cause: undefined for none (an omitted or an empty list), or the
+ * list. Throws a TypeError when the value is not a list of identifiers a line can hold.
+ */
+export function causeCids(cids) {
+  if (cids === undefined) return undefined;
+  if (!Array.isArray(cids) || !cids.every((cid) => typeof cid === "string" && CID.test(cid))) {
+    throw new TypeError("command cids must be an array of non-empty strings without a quote, a backslash or a control character");
+  }
+  return cids.length === 0 ? undefined : cids;
+}
 
 function callError(message, fields) {
   return Object.assign(new Error(message), fields);
@@ -115,8 +130,9 @@ export function createCalls({ plugin, send, onMessage, report }) {
    *
    *     timeout   the time limit of the command from its declaration, an integer from 1 to MAX_CALL_TIMEOUT. Default DEFAULT_CALL_TIMEOUT.
    *     signal    an AbortSignal. When it aborts, the cancel message is sent and the promise rejects with reason cancelled.
+   *     cids      the correlation identifiers of the cause of the request (causeCids); the envelope carries them when there are some.
    */
-  function request(command, params, { timeout = DEFAULT_CALL_TIMEOUT, signal } = {}) {
+  function request(command, params, { timeout = DEFAULT_CALL_TIMEOUT, signal, cids } = {}) {
     if (typeof command !== "string" || command === "") throw new TypeError("request requires a command name");
     if (!Number.isInteger(timeout) || timeout < 1 || timeout > MAX_CALL_TIMEOUT) {
       throw new RangeError(`timeout must be an integer from 1 to ${MAX_CALL_TIMEOUT} ms, got ${timeout}`);
@@ -136,7 +152,7 @@ export function createCalls({ plugin, send, onMessage, report }) {
         call.detach = () => signal.removeEventListener("abort", onAbort);
       }
       try {
-        send({ id, command, params });
+        send(cids === undefined ? { id, command, params } : { id, command, params, cids });
       } catch (error) {
         end(id);
         changed();

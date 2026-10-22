@@ -62,3 +62,27 @@ test("closing the surface rejects the open command runs and reports the peer los
   await assert.rejects(result, { message: "command probe.run ended: surface-closed" });
   assert.ok(reports.some((event) => event.kind === "peer-lost" && event.reason === "surface-closed"));
 });
+
+test("a command run that carries the cids of its cause posts them with the request", async () => {
+  const { commands, posted } = setup();
+  const result = commands.run("probe.run", null, ["p1700000000000.7"]);
+  await tick();
+  assert.deepEqual(posted[0].cids, ["p1700000000000.7"]);
+  commands.receive({ surface: "probe-surface", plugin: "probe", id: posted[0].id, result: null });
+  await result;
+});
+
+test("a command run without cids posts a request without the cids member", async () => {
+  const { commands, posted } = setup();
+  const result = commands.run("probe.run", null);
+  await tick();
+  assert.equal("cids" in posted[0], false);
+  commands.receive({ surface: "probe-surface", plugin: "probe", id: posted[0].id, result: null });
+  await result;
+});
+
+test("a command run rejects cids that a line cannot hold, and posts nothing", async () => {
+  const { commands, posted } = setup();
+  await assert.rejects(commands.run("probe.run", null, ["p1.7\"x"]), { name: "TypeError", message: "command cids must be an array of non-empty strings without a quote, a backslash or a control character" });
+  assert.equal(posted.length, 0);
+});

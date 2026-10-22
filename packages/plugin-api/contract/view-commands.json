@@ -80,6 +80,27 @@
           "output": { "posted": [{ "sok": 1, "reply": 2, "result": null }], "result": null, "throws": null }
         }
       ]
+    },
+    {
+      "id": "view.commands.run-passes-cids-to-handler",
+      "steps": [
+        {
+          "register": { "name": "demo.trace", "run": "context" },
+          "answer": { "result": null },
+          "output": {
+            "posted": [{ "sok": 1, "id": 1, "command": "runtime.command.register", "params": { "name": "demo.trace" } }],
+            "result": null, "throws": null
+          }
+        },
+        {
+          "request": { "id": 20, "command": "demo.trace", "params": {}, "cids": ["p1700000000000.7"] },
+          "output": { "posted": [{ "sok": 1, "reply": 20, "result": { "cids": ["p1700000000000.7"] } }], "result": null, "throws": null }
+        },
+        {
+          "request": { "id": 21, "command": "demo.trace", "params": {} },
+          "output": { "posted": [{ "sok": 1, "reply": 21, "result": {} }], "result": null, "throws": null }
+        }
+      ]
     }
   ]
 }

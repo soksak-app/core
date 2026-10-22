@@ -19,11 +19,11 @@ const UNREGISTERED_COMMAND = 1002;
 const FAILED_COMMAND = -32000;
 /** The code of a request whose parameters are invalid: EXPOSURE_ERRORS.invalidParams of index.js, which this module does not import. */
 const INVALID_PARAMS = -32602;
-/** Runs a command handler and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
-async function runCommand(run, params) {
+/** Runs a command handler with its params and its context and settles with the reply payload {result} or {error: {code, message}}, as the exposure relay expects. */
+async function runCommand(run, params, context) {
   try {
     // default: an undefined result of a command without a result is answered as null.
-    return { result: (await run(params)) ?? null };
+    return { result: (await run(params, context)) ?? null };
   } catch (error) {
     // default: a thrown value that is not an Error carries its value as the message.
     return { error: { code: FAILED_COMMAND, message: String(error?.message ?? error) } };
@@ -228,8 +228,10 @@ export function createViewBridge({ handler, report }) {
       return;
     }
     const run = handlers.get(request.command);
+    // The context of the handler holds the cids of the cause of the request, and no cids member when the request has none.
+    const context = request.cids === undefined ? {} : { cids: request.cids };
     const reply = run
-      ? runCommand(run, request.params)
+      ? runCommand(run, request.params, context)
       : Promise.resolve({ error: { code: UNREGISTERED_COMMAND, message: `view command ${request.command} is not registered` } });
     reply.then((payload) => channel.send({ sok: 1, reply: request.id, ...payload }));
   };
