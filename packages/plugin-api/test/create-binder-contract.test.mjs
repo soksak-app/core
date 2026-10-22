@@ -15,6 +15,7 @@ const EXPECTED_IDS = [
   "binder.run.runs-and-refuses",
   "binder.bind.keydown-when-selects-events",
   "binder.bind.reports-failed-keydown-run",
+  "binder.bind.function-params-are-read-at-each-run",
 ];
 
 function makeElement(document, elements, spec) {
@@ -65,7 +66,9 @@ export async function runCreateBinderCase(testCase) {
       } else if (step.bind) {
         const input = step.bind;
         const element = makeElement(document, elements, input);
-        binder.bind(element, input.command, input.params ?? {}, {
+        // paramsFromValue gives a params function that reads the value of the element at each run, as a bind of a field does.
+        const params = input.paramsFromValue ? (event) => ({ value: event.target.value }) : input.params ?? {};
+        binder.bind(element, input.command, params, {
           event: input.event,
           // A when of the contract is {key}: it selects the events whose key is that key.
           ...(input.when ? { when: (event) => event.key === input.when.key } : {}),

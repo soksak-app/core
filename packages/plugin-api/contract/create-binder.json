@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/binder.js#createBinder",
-  "description": "Ordered calls and events exercise the binder contract used by plugin pages. Each step observes command calls, change notifications, failures, element markings, audit results, or errors. A bind step names its event type with event (default click), and its when is {key}: the predicate accepts an event whose key equals key. A keydown event step carries key.",
+  "description": "Ordered calls and events exercise the binder contract used by plugin pages. Each step observes command calls, change notifications, failures, element markings, audit results, or errors. A bind step names its event type with event (default click), and its when is {key}: the predicate accepts an event whose key equals key. A keydown event step carries key. A bind step with paramsFromValue: true takes the params from the event: its value is the value of the element at each run, and the element then has no data-params.",
   "cases": [
     {
       "id": "binder.bind.runs-declared-command",
@@ -681,6 +681,86 @@
             "element": {
               "command": "fixture.save",
               "params": "{\"fail\":true}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "binder.bind.function-params-are-read-at-each-run",
+      "steps": [
+        {
+          "bind": {
+            "id": "fn",
+            "tag": "input",
+            "command": "fixture.set",
+            "paramsFromValue": true
+          },
+          "output": {
+            "calls": [],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "fn",
+            "type": "click",
+            "value": "first"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.set",
+                "params": {
+                  "value": "first"
+                },
+                "element": "fn"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
+            }
+          }
+        },
+        {
+          "event": {
+            "id": "fn",
+            "type": "click",
+            "value": "second"
+          },
+          "output": {
+            "calls": [
+              {
+                "name": "fixture.set",
+                "params": {
+                  "value": "first"
+                },
+                "element": "fn"
+              },
+              {
+                "name": "fixture.set",
+                "params": {
+                  "value": "second"
+                },
+                "element": "fn"
+              }
+            ],
+            "changed": 1,
+            "failed": [],
+            "result": null,
+            "error": null,
+            "element": {
+              "command": "fixture.set"
             }
           }
         }
