@@ -675,12 +675,16 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
             let natives = context.clone();
-            let closing = host.clone();
+            // The records of the window are removed below, before the main-thread step runs, so the step takes them now.
+            let closing = window_data(&host);
             log_failure(
                 "window close",
                 platform.enqueue_ui(Box::new(move || {
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
-                    dispose_plugin_hosts(&closing);
+                    match closing {
+                        Ok(data) => dispose_plugin_hosts_of(&data),
+                        Err(error) => log_error("plugin host", error),
+                    }
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
                     // content process remain.
                     let surfaces = std::mem::take(
@@ -1193,6 +1197,11 @@ pub(crate) fn dispose_plugin_hosts(window: &Window) {
         Ok(data) => data,
         Err(error) => return log_error("plugin host", error),
     };
+    dispose_plugin_hosts_of(&data);
+}
+
+/// Closes every plugin host webview of the window whose records are data.
+fn dispose_plugin_hosts_of(data: &WindowData) {
     let handles = data.plugin_hosts.take_all();
     // The main page is replaced or ends with the window, so its registrations of the hosts end with it.
     data.plugin_host_channels.unregister_all();

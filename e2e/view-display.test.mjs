@@ -85,9 +85,10 @@ for (const app of Object.values(APPS)) {
       assert.equal(now.composition, "view", `${view.plugin} reports composition ${now.composition}`);
       const doc = await s.get("core.surface.document", now.surface);
       assert.deepEqual(doc.unbound, [], `${view.plugin}: view document controls without a command or dom name`);
+      // The tab that core.card.add-tab returned is the surface that closes; the card may hold another surface of the same plugin.
       await s.run("core.tab.close", { tab });
-      await s.until("core.surfaces", (all) => !all.some((item) => item.plugin === view.plugin && item.visible),
-        `view ${view.plugin} did not close`);
+      await s.until("core.surfaces", (all) => !all.some((item) => item.surface === tab),
+        `view ${view.plugin} tab ${tab} did not close`);
     }
     assert.deepEqual((await s.get("core.page.audit")).unbound, [], "main document controls without a command or dom name");
   });
