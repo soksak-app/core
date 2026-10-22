@@ -1,5 +1,5 @@
-// Checks that checkViewPage accepts a view page whose one static import map equals VIEW_IMPORTS, and throws an error
-// that names the difference otherwise (docs/spec/plugins.md#view-surfaces).
+// Checks that checkViewPage accepts a view page that begins with a doctype and holds no import map, and throws an error that
+// names the reason otherwise. The host inserts the view import map into the page (docs/spec/plugin-processes.md, rule 4).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { VIEW_IMPORTS, checkViewPage } from "../index.js";
@@ -9,54 +9,26 @@ const page = (...head) =>
   `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>view</title>\n${head.join("\n")}\n</head>\n` +
   `<body>\n<script type="module" src="./app.js"></script>\n</body>\n</html>\n`;
 
-test("checkViewPage accepts a page whose one import map equals VIEW_IMPORTS", () => {
-  assert.equal(checkViewPage(page(importMap({ imports: VIEW_IMPORTS }))), undefined);
+test("checkViewPage accepts a page that begins with a doctype and holds no import map", () => {
+  assert.equal(checkViewPage(page()), undefined);
 });
 
-test("checkViewPage refuses a page with no import map", () => {
-  assert.throws(() => checkViewPage(page()), /expected one import map, found 0/);
+test("checkViewPage accepts a doctype written in any letter case", () => {
+  assert.equal(checkViewPage(`<!DOCTYPE HTML>\n<title>view</title>`), undefined);
 });
 
-test("checkViewPage refuses a page with two import maps", () => {
-  const map = importMap({ imports: VIEW_IMPORTS });
-  assert.throws(() => checkViewPage(page(map, map)), /expected one import map, found 2/);
+test("checkViewPage refuses a page without a doctype at its start", () => {
+  assert.throws(() => checkViewPage(`<title>view</title>`), { message: "view page has no doctype at its start" });
+  assert.throws(() => checkViewPage(`\n<!doctype html><title>view</title>`), { message: "view page has no doctype at its start" });
 });
 
-test("checkViewPage refuses an import map that is not JSON", () => {
-  assert.throws(() => checkViewPage(page(`<script type="importmap">{imports</script>`)), SyntaxError);
+test("checkViewPage refuses a page that holds an import map of its own, which would be a second map", () => {
+  assert.throws(() => checkViewPage(page(importMap({ imports: VIEW_IMPORTS }))), { message: "view page has an import map" });
+  assert.throws(() => checkViewPage(page(importMap({}))), { message: "view page has an import map" });
 });
 
-test("checkViewPage refuses an import map without an imports object", () => {
-  assert.throws(() => checkViewPage(page(importMap({}))), /view page import map: imports must be an object/);
-  assert.throws(() => checkViewPage(page(importMap(null))), /view page import map: expected an object/);
-});
-
-test("checkViewPage names an entry of VIEW_IMPORTS that the map lacks", () => {
-  const rest = { ...VIEW_IMPORTS };
-  delete rest.soksak;
-  assert.throws(
-    () => checkViewPage(page(importMap({ imports: rest }))),
-    /view page import map: missing entry "soksak"/,
-  );
-});
-
-test("checkViewPage names an entry that the map adds to VIEW_IMPORTS", () => {
-  const imports = { ...VIEW_IMPORTS, "@soksak/runtime": "/modules/@soksak/runtime/index.js" };
-  assert.throws(
-    () => checkViewPage(page(importMap({ imports }))),
-    /view page import map: unexpected entry "@soksak\/runtime"/,
-  );
-});
-
-test("checkViewPage names an entry whose target differs from VIEW_IMPORTS", () => {
-  const imports = { ...VIEW_IMPORTS, "@soksak/plugin-api/view": "sok://core/modules/@soksak/plugin-api/page.js" };
-  assert.throws(
-    () => checkViewPage(page(importMap({ imports }))),
-    /view page import map: entry "@soksak\/plugin-api\/view" is "sok:\/\/core\/modules\/@soksak\/plugin-api\/page\.js", want "sok:\/\/core\/modules\/@soksak\/plugin-api\/view\.js"/,
-  );
-});
-
-test("checkViewPage refuses a map with a scopes field, which could remap the imports", () => {
-  const scoped = { imports: VIEW_IMPORTS, scopes: { "sok://core/": { soksak: "sok://core/x.js" } } };
-  assert.throws(() => checkViewPage(page(importMap(scoped))), /view page import map: unexpected field "scopes"/);
+test("checkViewPage refuses an import map whose attributes are unquoted or in another order", () => {
+  assert.throws(() => checkViewPage(`<!doctype html><script src=x.js type=importmap></script>`), {
+    message: "view page has an import map",
+  });
 });

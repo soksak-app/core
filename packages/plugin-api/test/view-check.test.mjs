@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { VIEW_IMPORTS } from "../index.js";
 import { checkViewLiteral, VIEW_START_SHA256 } from "../view-check.js";
 
 const VECTORS = JSON.parse(readFileSync(fileURLToPath(new URL("../../../docs/spec/cases/log-contract/replay/screen-message.json", import.meta.url)), "utf8"));
@@ -14,7 +13,6 @@ function literal() {
   const vector = VECTORS.vectors[1];
   return {
     viewStartSha256: VIEW_START_SHA256,
-    viewImports: { ...VIEW_IMPORTS },
     screenMessage: { name: vector.name, message: structuredClone(vector.message), hash: vector.hash },
   };
 }
@@ -38,13 +36,11 @@ test("a literal whose view-start hash differs from the SDK constant fails", () =
   ]);
 });
 
-test("a changed VIEW_IMPORTS entry and an extra entry are each reported", () => {
+test("a literal that holds viewImports is reported, because the host inserts the view import map", () => {
   const plugin = literal();
-  plugin.viewImports["@soksak/shared/"] = "sok://elsewhere/shared/";
-  plugin.viewImports["@soksak/runtime"] = "sok://core/runtime.js";
+  plugin.viewImports = { soksak: "sok://core/modules/soksak/dist/index.js" };
   assert.deepEqual(checkViewLiteral(plugin, { vectors: VECTORS }), [
-    `viewImports "@soksak/shared/" is "sok://elsewhere/shared/", want "sok://core/shared/"`,
-    `viewImports has unexpected entry "@soksak/runtime"`,
+    `viewImports is not part of the literal: the host inserts the view import map (docs/spec/plugin-processes.md, rule 4)`,
   ]);
 });
 
