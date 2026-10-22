@@ -83,7 +83,8 @@ int main(void) { @autoreleasepool {
     check(main.pageZoom == 1, "logical surfaces do not change app DOM zoom");
     NSView *surface = (NSView *)surfaces[0];
     check(surface.layer.masksToBounds, "surface clips native descendants");
-    check(sp_surface_main_webview(surface) == main, "surface points to the owning app DOM");
+    // contract: view.composition.dom-removed
+    check(sp_surface_main_webview(surface) == NULL, "a surface without a view has no app DOM of its own; the hybrid composition is removed");
     NSView *plane = (NSView *)sp_surface_native_plane(surface);
     check(plane.superview == surface, "native plane belongs to its logical surface");
     NSView *coordinates = surface.superview;

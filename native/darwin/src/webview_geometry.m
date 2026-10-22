@@ -39,12 +39,11 @@ static NSView *domHit(WKWebView *web, NSView *from, NSPoint point) {
 
 @interface SPSurfaceHost : NSView
 @property(nonatomic, assign) WKWebView *webview;
-@property(nonatomic, retain) WKWebView *mainWebview;
 @property(retain) SPSurfaceNativePlane *nativePlane;
 @property(nonatomic, copy) NSArray<NSValue *> *domOverlays;
 @end
 
-// A Hybrid surface places native regions below the WebView. CSS transparency does not turn off the native opaque
+// A surface places native regions below its view WebView. CSS transparency does not turn off the native opaque
 // backing of WebKit, so every WebView above the native plane must use the same transparent backing rule.
 static void configureWebViewTransparency(WKWebView *view) {
     view.underPageBackgroundColor = NSColor.clearColor;
@@ -224,7 +223,6 @@ static void notifyScale(NSView *view) {
 }
 - (void)dealloc {
     sp_window_object_change(SP_WINDOW_OBJECT_SURFACE_HOST, -1);
-    [_mainWebview release];
     [_nativePlane release];
     [_domOverlays release];
     [super dealloc];
@@ -294,10 +292,8 @@ static void notifyScale(NSView *view) {
         NSRect rect = rectValue.rectValue;
         if (!NSPointInRect(point, rect)) continue;
         // A point inside a visible overlay never reaches the native plane. The DOM of a view draws its own overlays, so the
-        // input under them goes to the view web view. The app DOM of a hybrid surface has no view web view and keeps the input under its overlays.
-        NSView *dom = domHit(self.webview, self, point);
-        if (dom) return dom;
-        return domHit(self.mainWebview, self, point);
+        // input under them goes to the view web view. A surface without a view web view passes the input on.
+        return domHit(self.webview, self, point);
     }
     NSPoint nativePoint = [self.nativePlane convertPoint:point fromView:self];
     NSView *native = [self.nativePlane hitTest:nativePoint];
@@ -518,7 +514,6 @@ void *sp_surface_create(void *mainHandle) {
         return NULL;
     }
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
-    surface.mainWebview = main;
     surface.hidden = YES;
     [composition.coordinates addSubview:surface];
     return surface;
@@ -537,7 +532,7 @@ void *sp_surface_native_plane(void *handle) {
 
 void *sp_surface_main_webview(void *handle) {
     SPSurfaceHost *host = surfaceHost((NSView *)handle);
-    return host.mainWebview ?: host.webview;
+    return host.webview;
 }
 
 double sp_surface_scale(void *handle) {
@@ -731,33 +726,30 @@ bool sp_webview_collect_garbage(void *handle) {
     return true;
 }
 
-// The scripts of sp_webview_count_objects: the elements of the main document with the elements of every open shadow root in
-// it, nested ones too, because a surface draws in the open shadow root of its host; the documents of the page, which are the
-// document and its frames; and in the page content world the elements of the parked surface hosts, which the page diagnostic
-// module publishes. A page without that function fails the count with the error of the script.
+// The script of sp_webview_count_objects: the elements of the main document with the elements of every open shadow root in
+// it, nested ones too, because a surface draws in the open shadow root of its host; and the documents of the page, which are
+// the document and its frames.
 #define SP_COUNT_ELEMENTS @"(() => { const count = (root) => { let total = 0; for (const element of root.querySelectorAll('*')) " \
     @"total += 1 + (element.shadowRoot ? count(element.shadowRoot) : 0); return total; }; return count(document); })()"
 static NSString *const kCountObjectsScript = @"[" SP_COUNT_ELEMENTS @", 1 + window.frames.length]";
-static NSString *const kCountPageObjectsScript = @"[" SP_COUNT_ELEMENTS @", 1 + window.frames.length, window.__soksakParkedElements()]";
 
 void sp_webview_count_objects(void *handle, bool document, sp_page_objects_done done, void *context) {
     NSCAssert(NSThread.isMainThread, @"object count requests require the UI thread");
     WKWebView *view = (WKWebView *)handle;
     WKContentWorld *world = document ? [WKContentWorld worldWithName:@"soksak-document"] : WKContentWorld.pageWorld;
-    NSUInteger expected = document ? 2 : 3;
-    [view evaluateJavaScript:(document ? kCountObjectsScript : kCountPageObjectsScript) inFrame:nil inContentWorld:world completionHandler:^(id value, NSError *error) {
+    [view evaluateJavaScript:kCountObjectsScript inFrame:nil inContentWorld:world completionHandler:^(id value, NSError *error) {
         if (error) {
-            done(context, 0, 0, 0, error.localizedDescription.UTF8String);
+            done(context, 0, 0, error.localizedDescription.UTF8String);
             return;
         }
         NSArray *counts = [value isKindOfClass:NSArray.class] ? value : nil;
-        BOOL numbers = counts.count == expected;
-        for (NSUInteger index = 0; numbers && index < expected; index++) numbers = [counts[index] isKindOfClass:NSNumber.class];
+        BOOL numbers = counts.count == 2;
+        for (NSUInteger index = 0; numbers && index < 2; index++) numbers = [counts[index] isKindOfClass:NSNumber.class];
         if (!numbers) {
-            done(context, 0, 0, 0, "the page did not return the element, document and parked element counts");
+            done(context, 0, 0, "the page did not return the element and document counts");
             return;
         }
-        done(context, [counts[0] longValue], [counts[1] longValue], document ? 0 : [counts[2] longValue], NULL);
+        done(context, [counts[0] longValue], [counts[1] longValue], NULL);
     }];
 }
 

@@ -48,13 +48,10 @@ void sp_webview_log_process_end(void *webview, const char *kind);
 bool sp_webview_collect_garbage(void *webview);
 
 // For diagnostic builds: the number of elements of the main document of webview, with the elements of every open shadow
-// root in it, and the number of its documents (the
-// main document and its frames), evaluated in the page content world or, when document is true, in the content world
-// "soksak-document" of document regions. In the page content world parked is the number of elements of the parked surface
-// hosts, which window.__soksakParkedElements() of the workbench returns, because a parked host is outside the document;
-// a document world has no parked hosts and gives zero. done is called once on the main thread with error NULL and the
-// counts, or with a description of the failure and zero counts. The caller keeps context until done is called.
-typedef void (*sp_page_objects_done)(void *context, long elements, long documents, long parked, const char *error);
+// root in it, and the number of its documents (the main document and its frames), evaluated in the page content world or,
+// when document is true, in the content world "soksak-document" of document regions. done is called once on the main thread
+// with error NULL and the counts, or with a description of the failure and zero counts. The caller keeps context until done is called.
+typedef void (*sp_page_objects_done)(void *context, long elements, long documents, const char *error);
 void sp_webview_count_objects(void *webview, bool document, sp_page_objects_done done, void *context);
 // Sets the CSS pixel margins and visibility of the declared DOM overlay. values holds five values per item, in the order
 // left, top, right, bottom, visible.

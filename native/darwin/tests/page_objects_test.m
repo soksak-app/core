@@ -1,6 +1,6 @@
 // Checks the element and document counts that sp_webview_count_objects evaluates in a web view: the main page
 // world and the document world of a document region. A count follows the DOM when an element or a frame is added and
-// removed. The page world also counts the parked surface hosts through the function of the page.
+// removed.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
@@ -38,20 +38,18 @@ typedef struct {
     BOOL ok;
     long elements;
     long documents;
-    long parked;
 } Answer;
 
-static void counted(void *context, long elements, long documents, long parked, const char *error) {
+static void counted(void *context, long elements, long documents, const char *error) {
     Answer *answer = context;
     answer->answered = YES;
     answer->ok = error == NULL;
     answer->elements = elements;
     answer->documents = documents;
-    answer->parked = parked;
 }
 
 static Answer count(WKWebView *view, bool document) {
-    __block Answer answer = {NO, NO, -1, -1, -1};
+    __block Answer answer = {NO, NO, -1, -1};
     sp_webview_count_objects(view, document, counted, &answer);
     until(@"the count did not answer", ^BOOL { return answer.answered; });
     return answer;
@@ -84,21 +82,17 @@ int main(void) { @autoreleasepool {
     WKWebView *view = load(window.contentView,
         @"<!doctype html><title>loaded</title><body><p>a</p><p>b</p><iframe srcdoc='<p>frame</p>'></iframe></body>");
 
-    // contract: diagnostics.objects.counts-parked-elements
-    Answer missing = count(view, false);
-    check(missing.answered && !missing.ok, @"a page without the parked element function answers an error");
-    evaluate(view, @"window.__soksakParkedElements = () => 4; true");
-
     // contract: diagnostics.objects.counts-documents
-    // contract: diagnostics.objects.counts-parked-elements
+    // The page world counts the elements and documents of the page alone: a parked element function of the page is not read.
+    evaluate(view, @"window.__soksakParkedElements = () => { throw new Error('the parked count is removed'); }; true");
     Answer page = count(view, false);
-    check(page.ok && page.elements == 7 && page.documents == 2 && page.parked == 4,
-        [NSString stringWithFormat:@"the page world counts 7 elements, 2 documents and 4 parked elements (ok %d, elements %ld, documents %ld, parked %ld)",
-            page.ok, page.elements, page.documents, page.parked]);
+    check(page.ok && page.elements == 7 && page.documents == 2,
+        [NSString stringWithFormat:@"the page world counts 7 elements and 2 documents without reading a parked count (ok %d, elements %ld, documents %ld)",
+            page.ok, page.elements, page.documents]);
 
     // contract: diagnostics.objects.counts-documents
     Answer region = count(view, true);
-    check(region.ok && region.elements == 7 && region.documents == 2 && region.parked == 0,
+    check(region.ok && region.elements == 7 && region.documents == 2,
         [NSString stringWithFormat:@"the document world counts the same page (ok %d, elements %ld, documents %ld)",
             region.ok, region.elements, region.documents]);
 
