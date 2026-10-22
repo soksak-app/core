@@ -12,7 +12,8 @@
     "./package.json": "./package.json",
     "./records-check": "./records-check.js",
     "./events-check": "./events-check.js",
-    "./screen-hash": "./screen-hash.js"
+    "./screen-hash": "./screen-hash.js",
+    "./view-modules": "./view-modules.js"
   },
   "files": [
     "index.js",
@@ -78,5 +79,8 @@
   },
   "devDependencies": {
     "jsdom": "^30.0.1"
+  },
+  "dependencies": {
+    "es-module-lexer": "^3.0.4"
   }
 }

@@ -1,12 +1,11 @@
 // The module graph rule of a view page (docs/spec/plugins.md#view-surfaces): every module that the page loads imports bare
 // specifiers only from the view import map. The page check of view-check.js compares the map itself and does not read the modules,
 // so an import outside the map (which stops the whole graph before any module runs) passes that check.
+// The imports are read by es-module-lexer, which lexes code: a string literal or a comment of a minified bundle is not an import.
+// A regular expression reads the text of a string literal as an import (ui/vendor/libraries.js of the editor holds the text
+// "import export from" in a keyword list), so the rule does not use one.
+import { parse } from "es-module-lexer/js";
 import { VIEW_IMPORTS } from "./index.js";
-
-/** Removes block comments and line comments, so an import named in a comment is not read. A `//` after `:` is part of a URL. */
-function withoutComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
-}
 
 /** Reports whether a bare specifier is one of the import map entries: an exact key, or a key with a trailing slash as a prefix. */
 function isMapped(specifier) {
@@ -16,29 +15,32 @@ function isMapped(specifier) {
 /**
  * Returns the errors of the module graph of a view page, from the module entry. read(path) returns the text of a module of the
  * page, with paths relative to the page folder, or null when the module does not exist. Each static import, re-export and dynamic
- * import with a literal specifier is read: a relative one is followed, and a bare one must be in the view import map. An error
- * names the importing module and the specifier.
+ * import with a literal specifier is read: a relative one is followed, and a bare one must be in the view import map. A dynamic
+ * import whose specifier is not literal (a non-literal argument, or a template with a substitution) is not read. An error names
+ * the importing module and the specifier. A module whose imports the lexer rejects is an error that names the module.
  */
 export function checkViewModules(read, entry) {
   const errors = [];
   const seen = new Set();
   const pending = [entry];
-  // One pattern per form, each with one capture group, so every match names its specifier in group 1.
-  const patterns = [
-    /(?:import|export)\s[^'"`;]*?from\s*["']([^"']+)["']/g,
-    /import\s*\(\s*["']([^"']+)["']\s*\)/g,
-    /import\s*["']([^"']+)["']/g,
-  ];
   while (pending.length > 0) {
     const path = pending.shift();
     if (seen.has(path)) continue;
     seen.add(path);
     const text = read(path);
     if (text === null) continue;
-    const code = withoutComments(text);
-    const imports = patterns.flatMap((pattern) => [...code.matchAll(pattern)].map((match) => ({ index: match.index, specifier: match[1] })))
-      .sort((a, b) => a.index - b.index);
-    for (const { specifier } of imports) {
+    let imports;
+    try {
+      [imports] = parse(text, path);
+    } catch (error) {
+      errors.push(`${path}: the imports of the module cannot be read: ${error.message}`);
+      continue;
+    }
+    for (const entryImport of imports) {
+      // The specifier is undefined for an import.meta reference and for a dynamic import of a non-literal argument. A glob is a
+      // template with a substitution, so its specifier is not a literal.
+      if (entryImport.specifier === undefined || entryImport.specifier === null || entryImport.glob) continue;
+      const specifier = entryImport.specifier;
       if (specifier.startsWith("./") || specifier.startsWith("../")) {
         const target = resolveRelative(path, specifier);
         if (read(target) === null) errors.push(`${path}: module ${target} does not exist`);

@@ -188,6 +188,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F212.12-1-10-5",
+    implementation: [{ file: "packages/plugin-api/view-modules.js", symbol: "export function checkViewModules" }],
+    tests: [
+      { file: "packages/plugin-api/test/view-modules.test.mjs", id: "a string literal of a minified vendor bundle that reads as an import is not an import" },
+      { file: "packages/plugin-api/test/view-modules.test.mjs", id: "a module that imports a specifier outside the view import map is an error that names the module and the specifier" },
+    ],
+    expected: "The module graph rule of a view page reads only the code of each module with es-module-lexer, so a string literal of a bundle is not an import, and it still refuses an unmapped static, re-export or literal dynamic import.",
+    levels: ["unit"],
+  },
+  {
     id: "F260",
     implementation: [
       { file: "packages/sok/wailsv3/src/ownership.go", symbol: "func parseLockOwner" },

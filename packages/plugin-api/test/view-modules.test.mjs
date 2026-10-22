@@ -43,3 +43,32 @@ test("a view page that imports the screen hash module of plugin-api passes, beca
   };
   assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), []);
 });
+
+test("a string literal of a minified vendor bundle that reads as an import is not an import", () => {
+  // The text of the editor vendor bundle (ui/vendor/libraries.js): the keyword list of a highlighter holds the text "import export from"
+  // as a string literal, and the newline after the entry is a line break of the bundle.
+  const files = {
+    "ui/vendor/libraries.js": 'const keywords = {\n  "import export from": tags5.moduleKeyword,\n  "with debugger new": tags5.keyword,\n};\n',
+  };
+  assert.deepEqual(checkViewModules(reader(files), "ui/vendor/libraries.js"), []);
+});
+
+test("a re-export of a bare specifier outside the view import map is an error, and a re-export of a missing relative module too", () => {
+  const files = {
+    "ui/view.js": 'export { records } from "@soksak/plugin-api/records-check";\nexport * from "./missing.js";\n',
+  };
+  assert.deepEqual(checkViewModules(reader(files), "ui/view.js"), [
+    "ui/view.js: import @soksak/plugin-api/records-check is not in the view import map",
+    "ui/view.js: module ui/missing.js does not exist",
+  ]);
+});
+
+test("a dynamic import whose argument is not a literal is not read, and a module whose imports the lexer rejects is an error that names it", () => {
+  const files = {
+    "ui/view.js": "const m = await import(name);\nconst n = await import(`./locale/${lang}.js`);\nconst p = import.meta.url;\nimport './bad.js';\n",
+    "ui/bad.js": "import { = from \"x\";\n",
+  };
+  const errors = checkViewModules(reader(files), "ui/view.js");
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /^ui\/bad\.js: the imports of the module cannot be read: /);
+});

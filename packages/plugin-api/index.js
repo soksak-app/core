@@ -1834,6 +1834,3 @@ export function createExpose(port, load) {
     },
   };
 }
-
-// The module graph rule of a view page: each module of the page imports bare specifiers only from VIEW_IMPORTS (view-modules.js).
-export { checkViewModules } from "./view-modules.js";
