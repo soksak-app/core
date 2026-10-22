@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { validateManifest } from "../index.js";
 
-const TABLE = JSON.parse(readFileSync(new URL("../contract/manifest-validation.json", import.meta.url), "utf8"));
+const TABLE = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/manifest-validation.json", import.meta.url), "utf8"));
 
 for (const testCase of TABLE.cases) {
   test(`manifest validation ${testCase.id}`, () => {

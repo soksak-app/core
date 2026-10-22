@@ -34,7 +34,7 @@ Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<
 
 plugin 저장소는 한 core release의 `@soksak/plugin-api`로 빌드한다. 그 `engines.soksak`은 모든 core version이 만족하는 `*`, 그 release만 만족하는 그 `@soksak/plugin-api`의 `^<version>`, 또는 그 core release와 이후의 모든 release가 만족하는, 하한이 그 version을 넘지 않는 `>=<x.y.z>`이다. core가 어떤 release에서 더한 manifest 필드를 쓰는 plugin은 그 release로 `>=`를 선언한다. `@soksak/plugin-api`의 명령 `soksak-engines`가 plugin 저장소에서 이를 검사하고 `package.json: engines.soksak <range> must be *, ^<version> or >= a version up to <version>, the @soksak/plugin-api version`으로 실패한다. 각 plugin 저장소는 `make test`에서 이를 실행한다.
 
-`sok plugin pack`과 `sok plugin install`은 `plugin.json`을 reader(`@soksak/plugin-api`)의 `validateManifest`의 모든 규칙으로 reader의 순서대로 검사하고, reader가 거부하는 manifest를 reader의 오류 문구로 거부한다. pack은 그 문구로 실패하고, install은 `plugin.json`의 위치와 그 문구로 실패하며 아무것도 쓰지 않는다. reader는 각 객체의 member를 정렬된 키 순서로 검사하며, pack과 install도 그렇게 하므로, 거부되는 첫 member는 파일 안의 member 순서와 무관하게 같다. 사례표 `packages/plugin-api/contract/manifest-validation.json`이 manifest와 결과를 나열하며, reader와 두 `sok` 구현이 이를 재생하고, 한 구현이라도 다르면 그 사례가 실패한다.
+`sok plugin pack`과 `sok plugin install`은 `plugin.json`을 reader(`@soksak/plugin-api`)의 `validateManifest`의 모든 규칙으로 reader의 순서대로 검사하고, reader가 거부하는 manifest를 reader의 오류 문구로 거부한다. pack은 그 문구로 실패하고, install은 `plugin.json`의 위치와 그 문구로 실패하며 아무것도 쓰지 않는다. reader는 각 객체의 member를 정렬된 키 순서로 검사하며, pack과 install도 그렇게 하므로, 거부되는 첫 member는 파일 안의 member 순서와 무관하게 같다. 사례표 `docs/spec/cases/manifest-validation.json`이 manifest와 결과를 나열하며, reader와 두 `sok` 구현이 이를 재생하고, 한 구현이라도 다르면 그 사례가 실패한다.
 
 ## Sidecar release
 

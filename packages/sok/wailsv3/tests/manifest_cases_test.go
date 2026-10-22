@@ -20,11 +20,11 @@ type manifestCase struct {
 	PackageFiles []string        `json:"packageFiles"`
 }
 
-// manifestCases reads the case table of packages/plugin-api/contract.
+// manifestCases reads the case table of docs/spec/cases, which no package owns.
 func manifestCases(t *testing.T) []manifestCase {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "plugin-api", "contract", "manifest-validation.json"))
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "manifest-validation.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

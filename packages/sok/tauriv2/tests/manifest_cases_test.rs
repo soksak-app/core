@@ -1,4 +1,4 @@
-//! Replays every case of the manifest case table (packages/plugin-api/contract/manifest-validation.json, the table the
+//! Replays every case of the manifest case table (docs/spec/cases/manifest-validation.json, the table the
 //! page reader replays) through plugin pack and plugin install (docs/spec/installation.md#plugin-release).
 
 use std::path::Path;
@@ -52,7 +52,7 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
 fn cases() -> Vec<ManifestCase> {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../plugin-api/contract/manifest-validation.json"
+        "/../../../docs/spec/cases/manifest-validation.json"
     );
     let text = std::fs::read_to_string(path).expect("manifest case table");
     let table: Value = serde_json::from_str(&text).expect("manifest case table JSON");

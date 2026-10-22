@@ -200,7 +200,7 @@ const FEATURE_LINKS = [
       { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_pack_replays_the_manifest_cases" },
       { file: "packages/sok/tauriv2/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_refused_manifest_cases_of_the_probe" },
     ],
-    expected: "The reader and both sok implementations give every case of packages/plugin-api/contract/manifest-validation.json the same result: a refused manifest fails with the reader's text, members are read in sorted key order, and a schema type that is not a type name is refused.",
+    expected: "The reader and both sok implementations give every case of docs/spec/cases/manifest-validation.json the same result: a refused manifest fails with the reader's text, members are read in sorted key order, and a schema type that is not a type name is refused.",
     levels: ["unit"],
   },
   {
