@@ -157,7 +157,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
 /// The window registry and the project-owned windows of the application.
 #[derive(Default)]
 pub(crate) struct Windows {
-    pub(crate) quit: crate::quit::Quit,
+    pub(crate) quit: std::sync::Arc<crate::quit::Quit>,
     /// The command of the pending application update or relaunch, which the exit starts
     /// (docs/spec/installation.md#application-update, docs/spec/endpoint.md#diagnostic-builds).
     pub(crate) update: Mutex<Option<crate::app_update::PendingStart>>,

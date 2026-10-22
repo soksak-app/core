@@ -230,7 +230,8 @@ pub fn run(mut context: tauri::Context<tauri::Wry>, _background: &'static str) {
                 // that host.quit requests; the event loop runs it and ends after the ready windows saved and the sidecars
                 // stopped. When a save stalls, the next signal ends the process with the default action (docs/spec/hosts.md).
                 let quit = app.clone();
-                termination::on_termination(Box::new(move || quit.exit(0)))?;
+                let state = std::sync::Arc::clone(&app.state::<windows::Windows>().quit);
+                termination::on_termination(state, Box::new(move || quit.exit(0)))?;
                 let directory = config_directory(app)?;
                 exposure::start(app, &directory)?;
                 // The event log and the stderr file are opened after the endpoint holds the process lock, so no other run writes

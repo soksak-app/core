@@ -49,7 +49,7 @@ func TestTerminationSignalRequestsQuitOnceAndTheNextEndsTheProcess(t *testing.T)
 // terminate receives the termination signal twice. The first signal calls quit and the second signal ends the process.
 func terminate() {
 	quit := make(chan struct{})
-	if err := host.OnTermination(func() { close(quit) }); err != nil {
+	if err := host.OnTermination(&host.Quit{}, func() { close(quit) }); err != nil {
 		fmt.Println(err)
 		os.Exit(2)
 	}
@@ -100,7 +100,7 @@ func recordClosedOnSignal(t *testing.T, directory string) {
 	}
 	host.UseHostEventLog(log)
 	quit := make(chan struct{})
-	if err := host.OnTermination(func() { close(quit) }); err != nil {
+	if err := host.OnTermination(&host.Quit{}, func() { close(quit) }); err != nil {
 		t.Fatal(err)
 	}
 	self, err := os.FindProcess(os.Getpid())
@@ -127,4 +127,51 @@ func recordClosedOnSignal(t *testing.T, directory string) {
 		}
 	}
 	fmt.Println("log.closed: none")
+}
+
+// contract: termination.signal.begins-the-quit-state
+// The first termination signal begins the quit state before it requests the quit, so the end of a page process during that quit
+// writes no error line (docs/spec/hosts.md#process-lifecycle).
+func TestTerminationSignalBeginsTheQuitStateBeforeQuit(t *testing.T) {
+	if os.Getenv(terminationChild) != "" {
+		quitDuringSignal()
+		return
+	}
+	command := exec.Command(os.Args[0], "-test.run=^TestTerminationSignalBeginsTheQuitStateBeforeQuit$")
+	command.Env = append(os.Environ(), terminationChild+"=1")
+	output, err := command.Output()
+	var exit *exec.ExitError
+	if err == nil {
+		return
+	}
+	if !errors.As(err, &exit) {
+		t.Fatalf("child ended with %v, output %q", err, output)
+	}
+	t.Fatalf("child status %v, output %q", exit.Sys(), output)
+}
+
+// quitDuringSignal delivers the termination signal and then reports whether the end of a page process during that quit is written.
+func quitDuringSignal() {
+	var state host.Quit
+	quit := make(chan struct{})
+	if err := host.OnTermination(&state, func() { close(quit) }); err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	self, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	if err := self.Signal(syscall.SIGTERM); err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	<-quit
+	if place, text, reported := host.PageProcessEnded("main", state.Active()); reported {
+		fmt.Printf("the end of a page process during the quit is written: %s\n", host.ErrorLine(place, text))
+		os.Exit(3)
+	}
+	fmt.Println("quit requested")
+	os.Exit(0)
 }

@@ -66,7 +66,8 @@ func Run(assets fs.FS, options Options) error {
 	// The termination signals are received before the endpoint is created. A normal termination is
 	// requested after the application started. A normal termination closes the endpoint after the save of the ready windows finishes.
 	started := make(chan struct{})
-	if err := OnTermination(func() {
+	quit := &Quit{}
+	if err := OnTermination(quit, func() {
 		<-started
 		application.Get().Quit()
 	}); err != nil {
@@ -100,7 +101,7 @@ func Run(assets fs.FS, options Options) error {
 	if err != nil {
 		return fmt.Errorf("config directory: %w", err)
 	}
-	host, err := newHost(configDirectory)
+	host, err := newHost(configDirectory, quit)
 	if err != nil {
 		return err
 	}

@@ -48,7 +48,7 @@ const (
 
 // Host selects the native state of the calling window. Wails binds the public methods of Host to the page.
 type Host struct {
-	quit Quit
+	quit *Quit
 	// update is the command of an application update or a relaunch that the shutdown starts; h.mu guards it.
 	update     *pendingStart
 	removals   Removals
@@ -117,8 +117,8 @@ func nativeError(code int, err error) error {
 	return rpcError(code, "%v", err)
 }
 
-func newHost(directory string) (*Host, error) {
-	h := &Host{workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
+func newHost(directory string, quit *Quit) (*Host, error) {
+	h := &Host{quit: quit, workspace: NewWorkspace(directory), configDir: directory, windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{},
 		relay: NewRelay[relayTarget](), pluginHostStates: newPluginHostStates(),
 		pluginHostRestarts: newPluginHostRestarts()}
 	// apply applies an operation to the sidecars: a changed sidecar is replaced and a removed one stopped, so a page that

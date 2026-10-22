@@ -17,6 +17,8 @@ use signal_hook::consts::SIGTERM;
 use signal_hook::low_level::raise;
 use soksak_host_tauriv2::event_log;
 use soksak_host_tauriv2::event_record::use_host_event_log;
+use soksak_host_tauriv2::page_process::page_process_ended;
+use soksak_host_tauriv2::quit::Quit;
 use soksak_host_tauriv2::termination;
 
 /// The environment variable that says it is a child process.
@@ -66,9 +68,12 @@ fn a_termination_signal_requests_quit_once_and_the_next_ends_the_process() {
 /// Receives the termination signal twice. The first signal calls quit and the second signal ends the process.
 fn terminate() {
     let (quit, quitted) = mpsc::channel();
-    termination::on_termination(Box::new(move || {
-        let _ = quit.send(());
-    }))
+    termination::on_termination(
+        Arc::new(Quit::default()),
+        Box::new(move || {
+            let _ = quit.send(());
+        }),
+    )
     .unwrap();
     raise(SIGTERM).unwrap();
     quitted.recv().unwrap();
@@ -115,9 +120,12 @@ fn record_closed_on_signal() {
     let log = Arc::new(event_log::start_host(&directory).unwrap());
     use_host_event_log(Some(Arc::clone(&log)));
     let (quit, quitted) = mpsc::channel();
-    termination::on_termination(Box::new(move || {
-        let _ = quit.send(());
-    }))
+    termination::on_termination(
+        Arc::new(Quit::default()),
+        Box::new(move || {
+            let _ = quit.send(());
+        }),
+    )
     .unwrap();
     raise(SIGTERM).unwrap();
     quitted.recv().unwrap();
@@ -127,5 +135,57 @@ fn record_closed_on_signal() {
     match events.iter().find(|event| event["event"] == "log.closed") {
         Some(event) => println!("log.closed: {}", event["fields"]),
         None => println!("log.closed: none"),
+    }
+}
+
+const QUIT_CHILD: &str = "SOKSAK_TERMINATION_QUIT_CHILD";
+const QUIT_NAME: &str = "a_termination_signal_begins_the_quit_state_before_quit";
+
+// contract: termination.signal.begins-the-quit-state
+// The first termination signal begins the quit state before it requests the quit, so the end of a page process during that quit
+// writes no error line (docs/spec/hosts.md#process-lifecycle).
+#[test]
+fn a_termination_signal_begins_the_quit_state_before_quit() {
+    if std::env::var_os(QUIT_CHILD).is_some() {
+        return quit_during_signal();
+    }
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", QUIT_NAME, "--nocapture", "--test-threads=1"])
+        .env(QUIT_CHILD, "1")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut output = String::new();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut output)
+        .unwrap();
+    let status = child.wait().unwrap();
+    assert!(status.success(), "status {status}, output {output:?}");
+    assert!(output.contains("quit requested"), "output {output:?}");
+}
+
+/// Delivers the termination signal and then reports whether the end of a page process during that quit is written.
+fn quit_during_signal() {
+    let state = Arc::new(Quit::default());
+    let observed = Arc::clone(&state);
+    let (quit, quitted) = mpsc::channel();
+    termination::on_termination(
+        state,
+        Box::new(move || {
+            let _ = quit.send(());
+        }),
+    )
+    .unwrap();
+    raise(SIGTERM).unwrap();
+    quitted.recv().unwrap();
+    match page_process_ended("main", observed.active()) {
+        Some((place, text)) => {
+            println!("the end of a page process during the quit is written: {place}: {text}");
+            std::process::exit(3);
+        }
+        None => println!("quit requested"),
     }
 }

@@ -567,6 +567,7 @@ fn invalid_json_closes_connection() {
 | `host-calls.native.image-argument-lists` | surface 페이지의 요청 하나와 좌표 넷인 `ImageCaret` 호출과 요청 하나와 텍스트인 `ImageText` 호출은 각자의 인자 목록으로 해석되어 호출자 확인에 닿는다. | wailsv3 only: Wails page runtime은 surface 페이지 호출을 native bridge로 보내고 host가 그 인자 목록을 해석한다. Tauri surface 페이지는 메인 페이지의 명령을 부른다. |
 | `host-calls.decode.every-binding` | 모든 `Host` binding의 모든 인자는 binding이 다른 일보다 먼저 해석하는 raw JSON이므로 framework는 인자를 해석하지 않는다. | wailsv3 only: Go reflection은 실행 중에 binding을 나열한다. `make hosts-check`는 framework 객체가 아닌 모든 Tauri 명령 인자가 `Argument<T>`이기를 요구한다. |
 | `termination.signal.first-requests-quit-second-ends-process` | 첫 종료 신호는 종료를 요청하고 두 번째 신호는 프로세스를 끝낸다. | both |
+| `termination.signal.begins-the-quit-state` | 첫 종료 신호는 종료를 요청하기 전에 종료 상태를 시작한다. `host.quit`이 시작하는 상태와 같으므로, 그 종료 중의 WebContent process 종료는 오류 줄을 쓰지 않는다. | both |
 | `log.closed.signal-before-quit` | 첫 종료 신호는 quit을 요청하기 전에 원인 `signal`과 번호를 담은 `log.closed`를 저장하므로, quit의 flush가 실행될 때 기록이 로그에 있다. | both |
 | `log.closed.passes-every-gate` | writer는 class `lifecycle`을 끈 정책에서도 level `info`, class `lifecycle`의 `log.closed`를 저장한다. | both |
 | `window-close.surfaces.closes-regions-then-surface` | 창을 닫으면 논리 표면마다 id 순서로 그 문서 영역과 그림 영역을 닫은 뒤 표면을 닫고, 그 이름을 창의 문서 영역 목록과 그림 영역 목록에서 지운다. | both |
