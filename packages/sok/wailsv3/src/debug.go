@@ -45,6 +45,12 @@ func decodeValue(dec *json.Decoder) (any, error) {
 	}
 	delim, isDelim := token.(json.Delim)
 	if !isDelim {
+		// A number outside the range of float64 has no value that a reader can show, so the text is refused as the Rust host refuses it.
+		if number, isNumber := token.(json.Number); isNumber {
+			if _, err := number.Float64(); err != nil {
+				return nil, fmt.Errorf("number out of range: %s", number)
+			}
+		}
 		return token, nil
 	}
 	if delim == '[' {
@@ -174,7 +180,8 @@ func stringify(value any, present bool) string {
 	case json.Number:
 		f, err := v.Float64()
 		if err != nil {
-			return "undefined"
+			// parseJSON refuses such a number, so the text is the only form that is left; it never shows undefined for a number.
+			return v.String()
 		}
 		return jsNumber(f)
 	case string:

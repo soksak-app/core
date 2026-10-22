@@ -548,3 +548,7 @@ pub(crate) fn run_debug(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "debug_test.rs"]
+mod tests;
