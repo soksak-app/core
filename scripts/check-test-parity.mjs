@@ -198,6 +198,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F257",
+    implementation: [{ file: "scripts/test-command.mjs", symbol: "export function runCommand" }],
+    tests: [
+      { file: "scripts/test/test-command.test.mjs", id: "ends its own leader when every process-group signal is refused" },
+      { file: "scripts/test/test-command.test.mjs", id: "reports process-group signal failure without an unhandled timer error" },
+    ],
+    expected: "When a process-group signal is refused, the command runner ends its leader and finishes at the leader's close, so no child of the test process remains after the result, checked by the leader test and the signal-failure test.",
+    levels: ["unit"],
+  },
+  {
     id: "F255",
     implementation: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", symbol: "fn a_replaced_service_starts_after_the_end_of_its_process" }],
     tests: [{ file: "packages/host/tauriv2/tests/sidecars_transport_test.rs", id: "a_replaced_service_starts_after_the_end_of_its_process" }],
