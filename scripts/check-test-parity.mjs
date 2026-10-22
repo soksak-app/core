@@ -2246,6 +2246,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F242",
+    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "fields.cids === undefined ? undefined : { cids: fields.cids }" }],
+    tests: [
+      { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.log passes the cids of the record to the writer of the page" },
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin event carries the cids of its chain to the page writer" },
+    ],
+    expected: "The view call runtime.log passes cids to the log of the surface context, which validates them as the page log path does.",
+    levels: ["unit"],
+  },
+  {
     id: "F239",
     implementation: [{ file: "scripts/rust-tests.mjs", symbol: "testNames" }],
     tests: [{ file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit" }],

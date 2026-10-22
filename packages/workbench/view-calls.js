@@ -29,7 +29,8 @@ import { base64Of, bytesFrom } from "@soksak/plugin-api";
  *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
  *                   display of the page
  *                 log: the log levels of the page and enabled(level), as runtime.log of the surface context has; the level
- *                   gate of the page applies at delivery, and a gated record is counted there
+ *                   gate of the page applies at delivery, and a gated record is counted there; each level takes the cids of the record as
+ *                   the log options, as the page log path carries them
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
  *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
  *                 subscribe.native(name), subscribe.sidecarMessage(id), subscribe.sidecarFailure(id), subscribe.textSize(),
@@ -256,7 +257,8 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     }
     case "runtime.log": {
       // The page builds the fields before the send, and the level gate of the page applies at delivery: a gated record is
-      // counted by the gate of the event writer, and none is dropped silently.
+      // counted by the gate of the event writer, and none is dropped silently. cids is the optional list of the correlation
+      // identifiers of the chain that the record continues; the log of the surface context validates it as every log call does.
       const fields = objectOf(command, params);
       const send = runtime.log?.[fields.level];
       if (typeof send !== "function") {
