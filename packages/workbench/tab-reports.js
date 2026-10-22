@@ -192,9 +192,14 @@ export function storedOriginMember(tabId) {
   return loaded.get(tabId);
 }
 
+// The tab ids of the last stored layout state. A tab that a stored layout held and that the next one does not hold has left the layout.
+let storedIds = new Set();
+
 /**
- * The stored form of a layout state: each content-card tab carries its origin member, and the records of tabs that left the layout are
- * dropped. A closed tab keeps no origin, and an id is not reused, so dropping its record loses no value.
+ * The stored form of a layout state: each content-card tab carries its origin member, and the records of tabs that left the stored
+ * layout are dropped. The state is the displayed layout only, so a tab of another space, such as the first tab of a space that was added
+ * and not displayed yet, has no record in it; that record is kept until a stored layout held the tab and no longer does. A closed tab
+ * keeps no origin, and an id is not reused, so dropping its record loses no value.
  */
 export function storedLayoutState(state) {
   const ids = new Set();
@@ -210,8 +215,9 @@ export function storedLayoutState(state) {
     return { ...card, data: { ...card.data, tabs } };
   });
   for (const map of [origins, loaded, refusals]) {
-    for (const id of [...map.keys()]) if (!ids.has(id)) map.delete(id);
+    for (const id of [...map.keys()]) if (storedIds.has(id) && !ids.has(id)) map.delete(id);
   }
+  storedIds = ids;
   return { ...state, cards };
 }
 

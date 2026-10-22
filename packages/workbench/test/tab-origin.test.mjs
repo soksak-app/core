@@ -71,3 +71,15 @@ test("the layout read refuses each view tab once, returns its text, and never th
   assert.equal(viewRefusal("t-plain"), null);
   assert.deepEqual(tabOrigin("t-plain"), { directory: null });
 });
+
+test("storing the displayed layout keeps the origin of a tab of a space that is not displayed yet, and drops a tab that left", () => {
+  recordOrigin("origin-space-old", null);
+  storedLayoutState({ cards: [{ id: "c", data: { tabs: [{ id: "origin-space-old", plugin: "p" }] } }] });
+  // A new space records the origin of its first tab before the displayed layout is stored, as addSpace does.
+  recordOrigin("origin-space-new", null);
+  storedLayoutState({ cards: [{ id: "c", data: { tabs: [{ id: "origin-space-old", plugin: "p" }] } }] });
+  assert.deepEqual(tabOrigin("origin-space-new"), { directory: null }, "the origin of the new space's tab was dropped");
+  // A tab that the stored layout held and that the next stored layout does not hold leaves the map.
+  storedLayoutState({ cards: [{ id: "c", data: { tabs: [] } }] });
+  assert.throws(() => tabOrigin("origin-space-old"), /has no origin/);
+});
