@@ -66,7 +66,7 @@ test("the discovered files run through the runner, each in the folder of its pac
   delete process.env.NODE_TEST_CONTEXT;
   let results;
   try {
-    ({ results } = await runTests({ tests, concurrency: 2, defaultTimeoutMs: 30000, write: (line) => lines.push(line) }));
+    ({ results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: 30000 })), concurrency: 2, write: (line) => lines.push(line) }));
   } finally {
     if (context !== undefined) process.env.NODE_TEST_CONTEXT = context;
   }
@@ -85,7 +85,7 @@ test("the error of a failed test is kept when its file is killed at its limit be
   delete process.env.NODE_TEST_CONTEXT;
   let results;
   try {
-    ({ results } = await runTests({ tests, concurrency: 1, defaultTimeoutMs: 3000, write: () => {} }));
+    ({ results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: 3000 })), concurrency: 1, write: () => {} }));
   } finally {
     if (context !== undefined) process.env.NODE_TEST_CONTEXT = context;
   }

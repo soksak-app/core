@@ -17,12 +17,9 @@ const nowUs = () => Math.round((performance.timeOrigin + performance.now()) * 10
 
 function validate(options) {
   if (!options || typeof options !== 'object') throw new TypeError('options is required');
-  const { tests, concurrency, defaultTimeoutMs } = options;
+  const { tests, concurrency } = options;
   if (!Array.isArray(tests) || tests.length === 0) throw new TypeError('there are no tests to run');
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new TypeError('concurrency must be a positive integer');
-  if (!Number.isInteger(defaultTimeoutMs) || defaultTimeoutMs < 1 || defaultTimeoutMs > MAX_TEST_TIMEOUT_MS) {
-    throw new TypeError(`defaultTimeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
-  }
   if (typeof options.write !== 'function') throw new TypeError('write must be a function');
   const names = new Set();
   for (const item of tests) {
@@ -30,7 +27,9 @@ function validate(options) {
     if (names.has(item.name)) throw new TypeError(`the test ${item.name} is listed twice`);
     names.add(item.name);
     if (typeof item.command !== 'string' || !Array.isArray(item.args)) throw new TypeError(`${item.name}: command and args are required`);
-    if (item.timeoutMs !== undefined && (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS)) {
+    // Each test carries its own limit; the runner applies no run-wide default (AGENTS.md Verification).
+    if (item.timeoutMs === undefined) throw new TypeError(`test ${item.name} has no timeoutMs`);
+    if (!Number.isInteger(item.timeoutMs) || item.timeoutMs < 1 || item.timeoutMs > MAX_TEST_TIMEOUT_MS) {
       throw new TypeError(`${item.name}: timeoutMs must be an integer from 1 through ${MAX_TEST_TIMEOUT_MS}`);
     }
   }
@@ -119,7 +118,7 @@ function runOne(item, limitMs, env, outputPath) {
  */
 export async function runTests(options) {
   validate(options);
-  const { tests, concurrency, defaultTimeoutMs, write } = options;
+  const { tests, concurrency, write } = options;
   const heartbeatMs = options.heartbeatMs ?? 10_000;
   const slowCount = options.slowCount ?? 10;
   const begun = performance.now();
@@ -147,7 +146,7 @@ export async function runTests(options) {
         await options.beforeEach(item);
       }
       running.set(item.name, performance.now());
-      const limit = item.timeoutMs ?? defaultTimeoutMs;
+      const limit = item.timeoutMs;
       write(`RUN  ${item.name} (${running.size} running, limit ${seconds(limit)}s)`);
       let entry = null;
       if (run) {

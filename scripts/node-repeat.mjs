@@ -29,9 +29,9 @@ export async function runNodeRepeat({ file, name, count, timeoutMs, cwd, write }
       // A repeat started from a test sees NODE_TEST_CONTEXT, and node --test then skips the file; env removes the variable for the repeat.
       command: '/usr/bin/env',
       args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', '--experimental-test-module-mocks', '--test-reporter=tap', `--test-name-pattern=${name}`, `--test-timeout=${timeoutMs}`, file],
-      cwd,
+      cwd, timeoutMs,
     };
-    const { results } = await runTests({ tests: [item], concurrency: 1, defaultTimeoutMs: timeoutMs, write });
+    const { results } = await runTests({ tests: [item], concurrency: 1, write });
     const result = results.get(item.name);
     if (result.status !== 'pass') {
       write(`FAIL: ${file} ${name} run ${run} of ${count}; load ${loadavg().map((value) => value.toFixed(2)).join(' ')}`);

@@ -200,14 +200,14 @@ async function main(argv) {
   // The commands before the tests run one at a time, each with its elapsed time, and a failure ends the run.
   const prepare = before.filter((step) => tests.some((item) => item.cwd === step.cwd));
   if (prepare.length > 0) {
-    const built = await runTests({ tests: prepare, concurrency: 1, defaultTimeoutMs: 300_000, write });
+    const built = await runTests({ tests: prepare.map((step) => ({ ...step, timeoutMs: 300_000 })), concurrency: 1, write });
     if ([...built.results.values()].some((result) => result.status !== 'pass')) return 1;
   }
   const concurrency = count('concurrency');
   const run = newRun(ROOT);
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s; run ${run.id} keeps its output and manifest in ${run.folder}`);
   const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
-  const { results } = await runTests({ tests, concurrency, defaultTimeoutMs: limitMs, write, beforeEach, run });
+  const { results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: limitMs })), concurrency, write, beforeEach, run });
   const passed = [...results.values()].every((result) => result.status === 'pass');
   // The logs are audited also when a test failed, because a failed run is classified by its logs.
   const audited = auditAfterRun(scriptName, run, write);

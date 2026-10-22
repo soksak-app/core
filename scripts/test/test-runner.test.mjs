@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { runTests } from "../test-runner.mjs";
 
-const node = (name, source, extra = {}) => ({ name, command: process.execPath, args: ["-e", source], ...extra });
+const node = (name, source, extra = {}) => ({ name, command: process.execPath, args: ["-e", source], timeoutMs: 5000, ...extra });
 const sleeping = (ms) => `setTimeout(() => {}, ${ms})`;
 
 async function run(tests, options = {}) {
@@ -16,7 +16,7 @@ test("each test reports its start, its end and its elapsed time, and a failure c
   const { results, lines } = await run([
     node("a::passes", "process.exit(0)"),
     node("a::fails", "console.log('the detail'); process.exit(3)"),
-  ], { concurrency: 1, defaultTimeoutMs: 5000 });
+  ], { concurrency: 1 });
   assert.equal(results.get("a::passes").status, "pass");
   assert.equal(results.get("a::fails").status, "fail");
   assert.match(lines.find((line) => line.startsWith("RUN  a::passes")), /^RUN  a::passes \(1 running, limit 5\.000s\)$/);
@@ -29,7 +29,7 @@ test("a test over its own limit is killed and reported as a timeout without hold
   const { results, lines } = await run([
     node("slow", sleeping(60000), { timeoutMs: 300 }),
     node("quick", "process.exit(0)"),
-  ], { concurrency: 2, defaultTimeoutMs: 5000 });
+  ], { concurrency: 2 });
   assert.equal(results.get("slow").status, "timeout");
   assert.equal(results.get("quick").status, "pass");
   // The quick test starts while the hanging test is in flight; the running count of its RUN line shows it.
@@ -39,7 +39,7 @@ test("a test over its own limit is killed and reported as a timeout without hold
 
 test("the pool runs at most `concurrency` tests at once and runs them in parallel", async () => {
   const tests = ["a", "b", "c", "d"].map((name) => node(name, sleeping(300)));
-  const { lines } = await run(tests, { concurrency: 2, defaultTimeoutMs: 5000 });
+  const { lines } = await run(tests, { concurrency: 2 });
   const running = lines.filter((line) => line.startsWith("RUN  ")).map((line) => Number(/\((\d+) running/.exec(line)[1]));
   // The running counts of the RUN lines show the overlap; elapsed time depends on the machine load.
   assert.equal(Math.max(...running), 2);
@@ -47,7 +47,7 @@ test("the pool runs at most `concurrency` tests at once and runs them in paralle
 
 test("a heartbeat names the tests in flight with their running time", async () => {
   // The heartbeat timer is due at 50 ms and the limit timer at 1000 ms; timers of one loop run in the order they are due, so the heartbeat comes first.
-  const { lines } = await run([node("long", sleeping(60000), { timeoutMs: 1000 })], { concurrency: 1, defaultTimeoutMs: 5000 });
+  const { lines } = await run([node("long", sleeping(60000), { timeoutMs: 1000 })], { concurrency: 1 });
   const beat = lines.find((line) => line.startsWith("RUNNING 1 test"));
   assert.ok(beat, `no heartbeat: ${JSON.stringify(lines)}`);
   assert.match(beat, /long \d+\.\d{3}s/);
@@ -56,7 +56,7 @@ test("a heartbeat names the tests in flight with their running time", async () =
 test("the summary counts the results and lists the slowest tests, slowest first", async () => {
   const { lines, slowest, results } = await run([
     node("fast", sleeping(10)), node("middle", sleeping(150)), node("slowest", sleeping(300)),
-  ], { concurrency: 3, defaultTimeoutMs: 5000, slowCount: 2 });
+  ], { concurrency: 3, slowCount: 2 });
   // The order follows the measured elapsed times of the results, which depend on the machine load.
   const measured = [...results].sort(([, a], [, b]) => b.elapsedMs - a.elapsedMs).slice(0, 2).map(([name]) => name);
   assert.deepEqual(slowest.map((item) => item.name), measured);
@@ -66,9 +66,10 @@ test("the summary counts the results and lists the slowest tests, slowest first"
 });
 
 test("a limit above ten minutes, a missing limit and an empty list are refused", async () => {
-  await assert.rejects(runTests({ tests: [node("x", "0", { timeoutMs: 600001 })], concurrency: 1, defaultTimeoutMs: 1000, write() {} }), /600000/);
-  await assert.rejects(runTests({ tests: [node("x", "0")], concurrency: 1, write() {} }), /defaultTimeoutMs/);
-  await assert.rejects(runTests({ tests: [], concurrency: 1, defaultTimeoutMs: 1000, write() {} }), /no tests/);
+  await assert.rejects(runTests({ tests: [node("x", "0", { timeoutMs: 600001 })], concurrency: 1, write() {} }), /600000/);
+  // A test without its own limit is refused and named; the runner applies no run-wide limit.
+  await assert.rejects(runTests({ tests: [{ name: "x", command: process.execPath, args: ["-e", "0"] }], concurrency: 1, write() {} }), /test x has no timeoutMs/);
+  await assert.rejects(runTests({ tests: [], concurrency: 1, write() {} }), /no tests/);
 });
 
 test("a test starts only after the gate of the runner opened, and the wait is not part of its limit", async () => {
@@ -80,7 +81,7 @@ test("a test starts only after the gate of the runner opened, and the wait is no
   const waiting = new Promise((resolve) => { entered = resolve; });
   const run = runTests({
     tests: [{ name: "gated", command: process.execPath, args: ["-e", "setTimeout(() => {}, 150)"], timeoutMs: 3000 }],
-    concurrency: 1, defaultTimeoutMs: 3000, write: (line) => lines.push(line),
+    concurrency: 1, write: (line) => lines.push(line),
     beforeEach: async (item) => { calls.push(item.name); entered(); await gate; },
   });
   await waiting;
@@ -101,7 +102,7 @@ test("a run with a folder gives each test its identifier, stores the output of e
   const { results } = await run([
     node("a/passes.test.mjs", "console.log('seen ' + process.env.SOKSAK_RUN_ID + ' in ' + process.env.SOKSAK_RUN_FOLDER)"),
     node("a/fails.test.mjs", "console.error('the detail'); process.exit(3)"),
-  ], { concurrency: 1, defaultTimeoutMs: 5000, run: { id: "20261011T000000-1", folder } });
+  ], { concurrency: 1, run: { id: "20261011T000000-1", folder } });
   assert.equal(results.get("a/passes.test.mjs").status, "pass");
   assert.match(results.get("a/passes.test.mjs").output, new RegExp(`seen 20261011T000000-1 in ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   const manifest = JSON.parse(readFileSync(join(folder, "manifest.json"), "utf8"));
@@ -126,7 +127,7 @@ test("a manifest names a test that is still running, so a run that stops leaves 
   let during = null;
   // A heartbeat line names the test in flight, and the runner saves the manifest before it starts the test, so the manifest is read at the first heartbeat.
   const pending = runTests({
-    tests: [node("slow", sleeping(60000), { timeoutMs: 1500 })], concurrency: 1, defaultTimeoutMs: 5000,
+    tests: [node("slow", sleeping(60000), { timeoutMs: 1500 })], concurrency: 1,
     write: (line) => {
       lines.push(line);
       if (during === null && line.startsWith("RUNNING 1 test")) {

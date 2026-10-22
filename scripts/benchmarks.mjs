@@ -23,7 +23,7 @@ export function benchmarkNames(listing) {
 
 /** Runs one benchmark and prints its result line and its output, which is the measurement. Resolves with the exit status. */
 async function runOne(item, timeoutMs, write) {
-  const { results } = await runTests({ tests: [item], concurrency: 1, defaultTimeoutMs: timeoutMs, write });
+  const { results } = await runTests({ tests: [{ ...item, timeoutMs }], concurrency: 1, write });
   const result = results.get(item.name);
   if (result.status === 'pass') {
     for (const line of result.output.split('\n')) if (line !== '') write(line);

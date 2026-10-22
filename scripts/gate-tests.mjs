@@ -20,9 +20,9 @@ export async function runGateTests({ files, timeoutMs, write }) {
   if (files.length === 0) throw new Error('no test file is given');
   // The gate runs from the push hook, outside a test; NODE_TEST_CONTEXT of a test run would make node --test skip its files, so env removes it.
   const tests = files.map((file) => ({
-    name: file, command: '/usr/bin/env', args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', file], cwd: root,
+    name: file, command: '/usr/bin/env', args: ['-u', 'NODE_TEST_CONTEXT', process.execPath, '--test', file], cwd: root, timeoutMs,
   }));
-  const { results } = await runTests({ tests, concurrency: 1, defaultTimeoutMs: timeoutMs, write });
+  const { results } = await runTests({ tests, concurrency: 1, write });
   return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
 }
 

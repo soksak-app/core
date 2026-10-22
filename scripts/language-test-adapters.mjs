@@ -3,18 +3,10 @@ import { pathToFileURL } from 'node:url';
 import { runCommand } from './test-command.mjs';
 import { collectEvidence, persistEvidence } from './test-evidence.mjs';
 
-// Each limit only bounds a hang. The js-ts case runs the command supervisor file of 20 tests, which takes up to 11 s at
-// load averages of 35 to 67, so its limit equals the limit of the compiled languages.
-export const DEFAULT_TIMEOUT_MS = Object.freeze({
-  'js-ts': 30_000,
-  rust: 30_000,
-  go: 30_000,
-  'objective-c': 30_000,
-  shell: 30_000,
-  application: 60_000,
-});
+// The languages that a case may name. Each case declares its own timeoutMs in the manifest.
+export const SUPPORTED_LANGUAGES = Object.freeze(['js-ts', 'rust', 'go', 'objective-c', 'shell', 'application']);
 
-const supportedLanguages = new Set(Object.keys(DEFAULT_TIMEOUT_MS));
+const supportedLanguages = new Set(SUPPORTED_LANGUAGES);
 
 function invalid(message) {
   const error = new TypeError(message);
@@ -26,10 +18,10 @@ function requireString(value, name) {
   if (typeof value !== 'string' || value.length === 0) throw invalid(`${name} must be a non-empty string`);
 }
 
-function validateTimeout(timeoutMs, language) {
-  const value = timeoutMs ?? DEFAULT_TIMEOUT_MS[language];
-  if (!Number.isInteger(value) || value <= 0 || value > 600_000) throw invalid(`timeoutMs for ${language} must be an integer from 1 through 600000`);
-  return value;
+function validateTimeout(timeoutMs, id) {
+  if (timeoutMs === undefined) throw invalid(`case ${id} has no timeoutMs; each case declares its own limit`);
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 600_000) throw invalid(`case ${id}.timeoutMs must be an integer from 1 through 600000`);
+  return timeoutMs;
 }
 
 /** Finds explicit cases in the manifest. It neither infers a case nor drops one silently. */
@@ -56,7 +48,7 @@ export function discoverLanguageCases(manifest) {
       command: entry.command,
       args: entry.args,
       ...(entry.cwd === undefined ? {} : { cwd: entry.cwd }),
-      timeoutMs: validateTimeout(entry.timeoutMs, entry.language),
+      timeoutMs: validateTimeout(entry.timeoutMs, entry.id),
       expectedTests: entry.expectedTests,
       ...(entry.implementationFiles === undefined ? {} : { implementationFiles: entry.implementationFiles }),
       ...(entry.testFiles === undefined ? {} : { testFiles: entry.testFiles }),

@@ -21,7 +21,7 @@ export const BUILD_TIMEOUT_MS = 600_000;
  * flags; `buildDir` receives the test binaries. Returns `{tests, failures}`: `tests` are runner items with `testName` (the
  * name `go test -json` gives) and `failures` name the packages whose build failed.
  */
-export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency }) {
+export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs }) {
   mkdirSync(buildDir, { recursive: true });
   const tagArgs = tags ? ['-tags', tags] : [];
   const listed = await execFileAsync('go', ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns], { cwd, maxBuffer: 1 << 24 });
@@ -34,7 +34,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
     args: ['test', '-c', '-o', join(buildDir, `${id}-${index}.test`), ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), pkg.importPath],
     timeoutMs: BUILD_TIMEOUT_MS,
   }));
-  const built = builds.length === 0 ? { results: new Map() } : await runTests({ tests: builds, concurrency, defaultTimeoutMs: BUILD_TIMEOUT_MS, write });
+  const built = builds.length === 0 ? { results: new Map() } : await runTests({ tests: builds, concurrency, write });
   const tests = [];
   const failures = [];
   for (const [index, pkg] of packages.entries()) {
@@ -46,7 +46,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
     const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, maxBuffer: 1 << 24 });
     for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
       tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
-        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir });
+        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v'], cwd: pkg.dir, timeoutMs });
     }
   }
   return { tests, failures };
@@ -57,11 +57,11 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
  * executable lists its tests and every test runs as `<executable> --exact <name>` in the folder of its manifest. Returns the
  * same `{tests, failures}` as discoverGo; a test that is `#[ignore]` is listed and its result is `skip`.
  */
-export async function discoverRust({ packageName, features, cwd, env, id, write }) {
+export async function discoverRust({ packageName, features, cwd, env, id, write, timeoutMs }) {
   const build = await runTests({
     tests: [{ name: `build ${id}`, command: 'cargo', cwd, env, timeoutMs: BUILD_TIMEOUT_MS,
       args: ['test', '-p', packageName, ...(features ? ['--features', features] : []), '--no-run', '--message-format=json'] }],
-    concurrency: 1, defaultTimeoutMs: BUILD_TIMEOUT_MS, write: () => {},
+    concurrency: 1, write: () => {},
   });
   const result = build.results.get(`build ${id}`);
   write(`${result.status === 'pass' ? 'PASS' : 'FAIL'} build ${id} ${(result.elapsedMs / 1000).toFixed(3)}s`);
@@ -72,7 +72,7 @@ export async function discoverRust({ packageName, features, cwd, env, id, write 
     const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
     for (const line of listed.stdout.split('\n')) {
       const match = line.match(/^(.+): test$/);
-      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, command: executable, args: ['--exact', match[1]], cwd: dir, env });
+      if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, command: executable, args: ['--exact', match[1]], cwd: dir, env, timeoutMs });
     }
   }
   return { tests, failures: [] };

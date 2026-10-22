@@ -63,11 +63,11 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     const tests = listed.map((item) => ({
       name: occurrences.get(item.name) > 1 ? `${item.importPath} ${item.name}` : item.name,
       command: item.binary, args: ['-test.run', `^${item.name}$`, '-test.v', '-test.count=1'], cwd: item.cwd,
-      passedAs: item.name,
+      passedAs: item.name, timeoutMs,
     }));
     for (let run = 1; run <= count; run += 1) {
       write(`START ${pattern}: run ${run} of ${count}, ${tests.length} tests, each limited to ${timeoutMs / 1000}s`);
-      const { results } = await runTests({ tests, concurrency: 1, defaultTimeoutMs: timeoutMs, write });
+      const { results } = await runTests({ tests, concurrency: 1, write });
       const failed = tests.filter((item) => {
         const result = results.get(item.name);
         return result.status !== 'pass' || !passedTest(result.output, item.passedAs);

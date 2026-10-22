@@ -326,10 +326,10 @@ async function main(argv) {
   if (values.run === '') throw new Error('--run needs a text that the id of a run contains');
   // default: without --run every run builds, because every id contains the empty text.
   const runText = values.run ?? '';
-  const goDiscovery = Promise.all(GO_RUNS(values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency })));
+  const goDiscovery = Promise.all(GO_RUNS(values['go-ldflags']).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })));
   const rustDiscovery = (async () => {
     const found = [];
-    for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write }));
+    for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS }));
     return found;
   })();
   const [goFound, rustFound] = await Promise.all([goDiscovery, rustDiscovery]);
@@ -342,11 +342,11 @@ async function main(argv) {
     // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.
     if (items.length === 0) throw new Error(`no test name contains ${JSON.stringify(only)}`);
     write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s (scoped by ${JSON.stringify(only)}; no contract audit)`);
-    const scoped = await runTests({ tests: items, concurrency, defaultTimeoutMs: TEST_TIMEOUT_MS, write });
+    const scoped = await runTests({ tests: items, concurrency, write });
     return [...scoped.results.values()].every((result) => result.status === 'pass') ? 0 : 1;
   }
   write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s`);
-  const { results } = await runTests({ tests: items, concurrency, defaultTimeoutMs: TEST_TIMEOUT_MS, write });
+  const { results } = await runTests({ tests: items, concurrency, write });
   const hosts = [];
   for (const name of HOSTS) {
     const { language, tests, errors: sourceErrors } = parseHostSources(name);

@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULT_TIMEOUT_MS, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
+import { SUPPORTED_LANGUAGES, discoverLanguageCases, parseLanguageResult, runLanguageCases } from '../language-test-adapters.mjs';
 
-const command = (source) => ({ command: process.execPath, args: ['-e', source] });
+const command = (source) => ({ command: process.execPath, args: ['-e', source], timeoutMs: 30_000 });
 
-test('discovers all supported language cases with explicit default limits', () => {
-  const cases = discoverLanguageCases({ cases: Object.entries(DEFAULT_TIMEOUT_MS).filter(([language]) => language !== 'application').map(([language]) => ({ id: language, language, ...command('process.exit(0)') })) });
+test('discovers all supported language cases, each with its own explicit limit', () => {
+  const cases = discoverLanguageCases({ cases: SUPPORTED_LANGUAGES.filter((language) => language !== 'application').map((language) => ({ id: language, language, ...command('process.exit(0)') })) });
   assert.deepEqual(cases.map(({ language, timeoutMs }) => [language, timeoutMs]), [
     ['js-ts', 30_000], ['rust', 30_000], ['go', 30_000], ['objective-c', 30_000], ['shell', 30_000],
   ]);
+});
+
+test('refuses a case without its own limit and names the case', () => {
+  assert.throws(() => discoverLanguageCases({ cases: [{ id: 'no-limit', language: 'rust', command: process.execPath, args: ['-e', 'process.exit(0)'] }] }), /case no-limit has no timeoutMs/);
 });
 
 test('rejects empty, duplicate, unsupported, skipped, and invalid cases', () => {
@@ -66,7 +70,7 @@ test('the node case counts its tests when the reporter writes colors', { timeout
     // A fixture of three tests: the count is the subject, so the check does not run the repository's own suites again.
     const fixture = 'scripts/test/fixtures/node-color-count.mjs';
     const cases = discoverLanguageCases({ cases: [{
-      id: 'js-color-count', language: 'js-ts', command: 'node', args: ['--test', '--test-reporter=tap', fixture], expectedTests: 3,
+      id: 'js-color-count', language: 'js-ts', command: 'node', args: ['--test', '--test-reporter=tap', fixture], timeoutMs: 30_000, expectedTests: 3,
       implementationFiles: [fixture], testFiles: [fixture], dependencyFiles: ['package.json'], buildFlags: ['node --test'],
     }] });
     const result = await runLanguageCases(cases);

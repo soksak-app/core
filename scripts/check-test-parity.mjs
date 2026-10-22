@@ -2312,9 +2312,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F207",
-    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "export const DEFAULT_TIMEOUT_MS" }],
-    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "discovers all supported language cases with explicit default limits" }],
-    expected: "Each language case has a limit that only bounds a hang.",
+    implementation: [{ file: "scripts/language-test-adapters.mjs", symbol: "export const SUPPORTED_LANGUAGES" }],
+    tests: [{ file: "scripts/test/test-language-test-adapters.test.mjs", id: "discovers all supported language cases, each with its own explicit limit" }],
+    expected: "Each language case declares its own limit, and a case without one is refused.",
     levels: ["unit"],
   },
   {

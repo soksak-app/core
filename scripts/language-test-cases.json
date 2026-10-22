@@ -4,6 +4,7 @@
     {
       "id": "js-command-supervisor",
       "language": "js-ts",
+      "timeoutMs": 30000,
       "command": "node",
       "args": ["--test", "--test-reporter=tap", "scripts/test/test-command.test.mjs"],
       "expectedTests": 20,
@@ -15,6 +16,7 @@
     {
       "id": "rust-sok-registry",
       "language": "rust",
+      "timeoutMs": 30000,
       "command": "cargo",
       "args": ["test", "-p", "soksak-sok-tauriv2", "--test", "registry_test"],
       "expectedTests": 5,
@@ -26,6 +28,7 @@
     {
       "id": "go-sok-registry",
       "language": "go",
+      "timeoutMs": 30000,
       "command": "go",
       "args": ["test", "-json", "-run", "^TestRegistryBuild", "./packages/sok/wailsv3/tests"],
       "expectedTests": 5,
@@ -37,6 +40,7 @@
     {
       "id": "objc-appearance",
       "language": "objective-c",
+      "timeoutMs": 30000,
       "command": "./native/darwin/build/appearance_test",
       "args": [],
       "expectedTests": 6,
@@ -48,6 +52,7 @@
     {
       "id": "shell-build-environment",
       "language": "shell",
+      "timeoutMs": 30000,
       "command": "sh",
       "args": ["scripts/test/check-build-environment.sh"],
       "expectedTests": 4,

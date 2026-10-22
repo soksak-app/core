@@ -87,7 +87,7 @@ export async function runRustTests({ manifest, package: pkg, features, test, cou
   });
   for (let run = 1; run <= count; run += 1) {
     write(`START ${pkg}: run ${run} of ${count}, ${tests.length} tests, each limited to ${timeoutMs / 1000}s`);
-    const { results } = await runTests({ tests, concurrency: 1, defaultTimeoutMs: timeoutMs, write });
+    const { results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs })), concurrency: 1, write });
     const failed = [...results].filter(([, result]) => result.status !== 'pass' || !/\b1 passed\b/.test(result.output));
     for (const [name, result] of failed) {
       if (result.status === 'pass') write(`FAIL ${name} reports no passed test`);

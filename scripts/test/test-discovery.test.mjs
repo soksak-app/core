@@ -19,11 +19,11 @@ test("a Go package lists its tests and each test runs in the folder of its packa
     'func TestSkips(t *testing.T) { t.Skip("on purpose") }', "",
   ].join("\n"));
   const lines = [];
-  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write: (l) => lines.push(l), concurrency: 2 });
+  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write: (l) => lines.push(l), concurrency: 2, timeoutMs: 20000 });
   assert.deepEqual(failures, []);
   assert.deepEqual(tests.map((item) => item.testName).sort(), ["TestFails", "TestPasses", "TestSkips"]);
   assert.ok(lines.some((line) => /^PASS build go fixture /.test(line)), `no build line: ${JSON.stringify(lines)}`);
-  const { results } = await runTests({ tests, concurrency: 2, defaultTimeoutMs: 20000, write() {} });
+  const { results } = await runTests({ tests, concurrency: 2, write() {} });
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(), [["TestFails", "fail"], ["TestPasses", "pass"], ["TestSkips", "skip"]]);
 });
 
@@ -31,7 +31,7 @@ test("a Go package that does not build is a failure that names the package", asy
   const root = folder();
   writeFileSync(join(root, "go.mod"), "module broken\n\ngo 1.21\n");
   writeFileSync(join(root, "a_test.go"), "package broken\n\nfunc TestX( {\n");
-  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write() {}, concurrency: 1 });
+  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "go", write() {}, concurrency: 1, timeoutMs: 20000 });
   assert.deepEqual(tests, []);
   assert.deepEqual(failures, ["go: the build of broken failed"]);
 });
@@ -49,11 +49,11 @@ test("a Rust package lists its tests, each test runs by itself, and an ignored t
   ].join("\n"));
   const env = { CARGO_TARGET_DIR: join(root, "target"), CARGO_INCREMENTAL: "0" };
   const lines = [];
-  const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, env, id: "rs", write: (l) => lines.push(l) });
+  const { tests, failures } = await discoverRust({ packageName: "fixture", cwd: root, env, id: "rs", write: (l) => lines.push(l), timeoutMs: 20000 });
   assert.deepEqual(failures, []);
   assert.deepEqual(tests.map((item) => item.testName).sort(), ["fails", "passes", "skipped"]);
   assert.ok(lines.some((line) => /^PASS build rs \d+\.\d{3}s$/.test(line)));
-  const { results } = await runTests({ tests, concurrency: 3, defaultTimeoutMs: 20000, write() {} });
+  const { results } = await runTests({ tests, concurrency: 3, write() {} });
   assert.deepEqual(tests.map((item) => [item.testName, auditStatus(results.get(item.name))]).sort(),
     [["fails", "fail"], ["passes", "pass"], ["skipped", "skip"]]);
 });

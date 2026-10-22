@@ -22,7 +22,7 @@ export function nativeTests(dir, list) {
 
 /** Runs the tests one at a time and returns the exit status: 0 when every test passed. */
 export async function runNativeTests({ dir, list, timeoutMs = TEST_TIMEOUT_MS, write }) {
-  const { results } = await runTests({ tests: nativeTests(dir, list), concurrency: 1, defaultTimeoutMs: timeoutMs, write });
+  const { results } = await runTests({ tests: nativeTests(dir, list).map((item) => ({ ...item, timeoutMs })), concurrency: 1, write });
   return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
 }
 
