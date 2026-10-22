@@ -1,6 +1,6 @@
 // The errors and unhandled rejections of the document of a surface or a modal. Nothing reads the console of such a
 // document, so each is written to the application log when it occurs (docs/spec/diagnostics.md#forms). The main page
-// writes its own start errors with the same texts (`packages/workbench/page-start-errors.js`); that module imports
+// writes its own start errors with the same texts (the page-start error module of the workbench); that module imports
 // nothing so that it works when another module fails to load, and this one is loaded with the page API.
 
 /** The text of an error event: its message with the file and line, or the address of a module that did not load. */

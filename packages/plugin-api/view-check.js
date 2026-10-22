@@ -5,10 +5,11 @@
 // first difference it finds in each group. The check holds VIEW_START_SHA256 as a constant, so an edit of view-start.js
 // fails here until the constant and every plugin literal are updated together.
 //
-//   soksak-view-check <literal.json> [screen-message vectors.json]
+//   soksak-view-check <literal.json> <screen-message vectors.json>
 //
 // The literal is JSON: {"viewStartSha256": "<64 hex>", "viewImports": {<four entries>}, "screenMessage": {"name", "message", "hash"}}.
-// The vectors default to docs/spec/cases/log-contract/replay/screen-message.json of the core checkout.
+// The vectors are the caller's input: the screen-message vectors of the core release that the plugin pins (the vector file of
+// docs/spec/cases/log-contract/replay/screen-message.json in the core checkout). The package holds no path into a checkout.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
@@ -19,7 +20,6 @@ import { VIEW_IMPORTS } from "./index.js";
 export const VIEW_START_SHA256 = "aa1abb18bed83828bf9a14e7ade439ef5ae19528321feca8b846193e833775d5";
 
 const VIEW_START = new URL("./view-start.js", import.meta.url);
-const DEFAULT_VECTORS = new URL("../../docs/spec/cases/log-contract/replay/screen-message.json", import.meta.url);
 
 const shown = (value) => (value === undefined ? "undefined" : JSON.stringify(value));
 
@@ -29,13 +29,14 @@ export function fileSha256(path) {
 }
 
 /**
- * The differences between a plugin literal and the SDK, one message each. `scriptSha` and `vectors` are injected by the
- * tests; the CLI reads them from the checkout.
+ * The differences between a plugin literal and the SDK, one message each. `vectors` is the screen-message vector file that the
+ * caller gives, and `scriptSha` is the SHA-256 of view-start.js, which defaults to the file of the package.
  */
 export function checkViewLiteral(literal, {
   scriptSha = fileSha256(VIEW_START),
-  vectors = JSON.parse(readFileSync(DEFAULT_VECTORS, "utf8")),
+  vectors,
 } = {}) {
+  if (vectors === undefined) throw new Error("checkViewLiteral needs the screen-message vectors; the caller gives them");
   const errors = [];
   if (scriptSha !== VIEW_START_SHA256) {
     errors.push(`view-start.js is ${scriptSha}, the check holds ${VIEW_START_SHA256}; update the constant and every plugin literal`);
@@ -64,13 +65,12 @@ export function checkViewLiteral(literal, {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [literalPath, vectorsPath] = process.argv.slice(2);
-  if (!literalPath) {
-    console.error("usage: soksak-view-check <literal.json> [screen-message vectors.json]");
+  if (!literalPath || !vectorsPath) {
+    console.error("usage: soksak-view-check <literal.json> <screen-message vectors.json>");
     process.exit(2);
   }
   const literal = JSON.parse(readFileSync(literalPath, "utf8"));
-  const options = vectorsPath ? { vectors: JSON.parse(readFileSync(vectorsPath, "utf8")) } : {};
-  const errors = checkViewLiteral(literal, options);
+  const errors = checkViewLiteral(literal, { vectors: JSON.parse(readFileSync(vectorsPath, "utf8")) });
   if (errors.length) {
     console.error(errors.join("\n"));
     process.exitCode = 1;
