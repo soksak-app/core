@@ -106,6 +106,37 @@ export function createViewBridge({ handler, report }) {
     });
   };
   const subscribe = (name) => calls.request("runtime.native.on", { name });
+  // The status watches of the view: one page subscription per name, and each listener of the name receives the value of the status.
+  // A refused watch removes its listeners and records the refusal as an error line of the view; the stop function ends the watch when
+  // no listener of the name remains (docs/spec/native-surfaces.md#view-surfaces, view events).
+  const watchStatus = (name, listener) => {
+    if (typeof name !== "string" || name === "") throw new TypeError("runtime.status.watch requires a non-empty name");
+    if (typeof listener !== "function") throw new TypeError("runtime.status.watch requires a listener");
+    const key = `status:${name}`;
+    if (!listeners.has(key)) listeners.set(key, new Set());
+    listeners.get(key).add(listener);
+    if (!subscriptions.has(key)) {
+      const pending = calls.request("runtime.status.watch", { name });
+      subscriptions.set(key, pending);
+      pending.catch((error) => {
+        if (subscriptions.get(key) !== pending) return;
+        subscriptions.delete(key);
+        listeners.delete(key);
+        recordError(`status ${name}`)(error);
+      });
+    }
+    let watching = true;
+    return () => {
+      if (!watching) return;
+      watching = false;
+      const set = listeners.get(key);
+      set?.delete(listener);
+      if (set && set.size > 0) return;
+      listeners.delete(key);
+      subscriptions.delete(key);
+      calls.request("runtime.status.unwatch", { name }).catch(recordError(`status ${name}`));
+    };
+  };
   // Records the refusal of a call that the view makes on its own as an error line of the view at the place where.
   const recordError = (where) => (error) => {
     // default: a refusal that is not an Error carries its value as the text.
@@ -139,6 +170,11 @@ export function createViewBridge({ handler, report }) {
         // default: cids is optional; without it the send carries no correlation identifiers.
         send: (id, body, cids = []) => calls.request("runtime.sidecar.send", { id, sidecar: name, body, cids }),
       };
+    },
+    // The value of a status of the plugin or of core (docs/spec/native-surfaces.md#view-surfaces, view events): watch(name, listener)
+    // returns the function that ends the watch of the listener.
+    status: {
+      watch: watchStatus,
     },
     // The scale of the surface and the settings of the plugin: read reads the current value, and on registers one listener
     // under the one subscription of its key, which the page registers once (docs/spec/native-surfaces.md#view-surfaces).
@@ -185,6 +221,7 @@ export function createViewBridge({ handler, report }) {
       return message.event;
     }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;
+    if (message.event === "status") return `status:${message.data?.name}`;
     return `native:${message.event}`;
   };
   // The command handlers of the view by command name, registered through commands.register.
@@ -250,7 +287,9 @@ export function createViewBridge({ handler, report }) {
   const dispatch = (message) => {
     if (message.event === "theme") lastTheme = message.data;
     // default: an event that no listener has has no listener to pass it to, so it is passed to none.
-    for (const listener of [...(listeners.get(keyOf(message)) ?? [])]) listener(message.data);
+    // A status value reaches its listeners as the value, without the name that keys the event.
+    const data = message.event === "status" ? message.data.value : message.data;
+    for (const listener of [...(listeners.get(keyOf(message)) ?? [])]) listener(data);
   };
   // A call message carries the sok marker, which the host reads as a call request of the view (docs/spec/native-surfaces.md#view-surfaces).
   const calls = createCalls({

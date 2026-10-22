@@ -1,0 +1,158 @@
+{
+  "surface": "packages/plugin-api/view.js#createViewBridge runtime.status",
+  "description": "Ordered steps of the status watch of a view page: a watch step calls runtime.status.watch with a name and a named listener and its answer is the stop function, a stop step calls the stop function of a listener, and an event step delivers a host event {event, data} to the listeners of its name. A step lists the messages the page posts, the listener calls in order as {listener, data}, the result (a watch gives function, a stop gives null), and the text of the error the step raises. A step may reply to a posted call by its id with replies, which maps each call id to its reply payload. The page is sok://probe/. The page sends each value of a watched status as the event status with data {name, value}, and the listener of the watch receives the value only. A refused watch removes its listener and writes its refusal as a runtime.error call of the view.",
+  "cases": [
+    {
+      "id": "view.status.watch-posts-the-name-and-returns-a-stop",
+      "steps": [
+        {
+          "watch": { "name": "core.grid", "listener": "a" },
+          "replies": { "1": { "result": null } },
+          "output": {
+            "posted": [
+              { "sok": 1, "id": 1, "command": "runtime.status.watch", "params": { "name": "core.grid" } }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.status.delivers-each-value-of-its-name",
+      "steps": [
+        {
+          "watch": { "name": "core.grid", "listener": "a" },
+          "replies": { "1": { "result": null } },
+          "output": {
+            "posted": [
+              { "sok": 1, "id": 1, "command": "runtime.status.watch", "params": { "name": "core.grid" } }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "event": { "event": "status", "data": { "name": "core.grid", "value": { "tabs": 2 } } },
+          "output": {
+            "posted": [],
+            "delivered": [ { "listener": "a", "data": { "tabs": 2 } } ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "event": { "event": "status", "data": { "name": "core.grid", "value": { "tabs": 3 } } },
+          "output": {
+            "posted": [],
+            "delivered": [ { "listener": "a", "data": { "tabs": 3 } } ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "event": { "event": "status", "data": { "name": "probe.count", "value": 9 } },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.status.unwatch-ends-the-watch",
+      "steps": [
+        {
+          "watch": { "name": "core.grid", "listener": "a" },
+          "replies": { "1": { "result": null } },
+          "output": {
+            "posted": [
+              { "sok": 1, "id": 1, "command": "runtime.status.watch", "params": { "name": "core.grid" } }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "stop": "a",
+          "replies": { "2": { "result": null } },
+          "output": {
+            "posted": [
+              { "sok": 1, "id": 2, "command": "runtime.status.unwatch", "params": { "name": "core.grid" } }
+            ],
+            "delivered": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "event": { "event": "status", "data": { "name": "core.grid", "value": { "tabs": 4 } } },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.status.refused-name-removes-the-listener",
+      "steps": [
+        {
+          "watch": { "name": "probe.count", "listener": "a" },
+          "replies": {
+            "1": { "error": { "code": -32000, "message": "status probe.count is not declared" } },
+            "2": { "result": null }
+          },
+          "output": {
+            "posted": [
+              { "sok": 1, "id": 1, "command": "runtime.status.watch", "params": { "name": "probe.count" } },
+              { "sok": 1, "id": 2, "command": "runtime.error", "params": { "where": "status probe.count", "text": "status probe.count is not declared" } }
+            ],
+            "delivered": [],
+            "result": "function",
+            "throws": null
+          }
+        },
+        {
+          "event": { "event": "status", "data": { "name": "probe.count", "value": 1 } },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.status.watch-refuses-a-missing-name-and-listener",
+      "steps": [
+        {
+          "watch": { "name": "", "listener": "a" },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": "runtime.status.watch requires a non-empty name"
+          }
+        },
+        {
+          "watch": { "name": "core.grid", "listener": null },
+          "output": {
+            "posted": [],
+            "delivered": [],
+            "result": null,
+            "throws": "runtime.status.watch requires a listener"
+          }
+        }
+      ]
+    }
+  ]
+}
