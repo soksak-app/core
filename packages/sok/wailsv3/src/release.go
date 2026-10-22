@@ -199,6 +199,27 @@ func checkReleaseFiles(listed []string) error {
 	return nil
 }
 
+// checkRemovedFields refuses the manifest fields that the reader removed: the state module and the module of a section. The error
+// names the plugin and the field, as plugin-api validateManifest does (docs/spec/plugins.md, docs/spec/declared-ui.md).
+func checkRemovedFields(id string, manifest map[string]any) error {
+	if _, ok := manifest["state"]; ok {
+		return fmt.Errorf("plugin %s: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)", id)
+	}
+	if sections, ok := manifest["sections"].([]any); ok {
+		for _, raw := range sections {
+			section, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, ok := section["module"]; ok {
+				sectionID, _ := text(section["id"])
+				return fmt.Errorf("plugin %s: section %s module is removed; a section takes status (docs/spec/declared-ui.md)", id, sectionID)
+			}
+		}
+	}
+	return nil
+}
+
 // manifestModules are the modules that plugin.json loads and their names: the surface module, the page of a view
 // composition, the module of each section, and the state.
 func manifestModules(manifest map[string]any) [][2]string {
@@ -213,27 +234,6 @@ func manifestModules(manifest map[string]any) [][2]string {
 		if composition, ok := surface["composition"].(map[string]any); ok && composition["kind"] == "view" {
 			add("view page", composition["page"])
 		}
-	}
-	if sections, ok := manifest["sections"].([]any); ok {
-		for _, raw := range sections {
-			section, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			what := "section module"
-			if id, ok := section["id"].(string); ok {
-				what = "section " + id + " module"
-			}
-			if orientations, ok := section["module"].(map[string]any); ok {
-				add(what, orientations["horizontal"])
-				add(what, orientations["vertical"])
-			} else {
-				add(what, section["module"])
-			}
-		}
-	}
-	if state, ok := manifest["state"].(map[string]any); ok {
-		add("state module", state["module"])
 	}
 	return modules
 }
@@ -288,6 +288,9 @@ func runPack(dir, out string, diagnostics bool, stdout io.Writer) error {
 		return fmt.Errorf("plugin.json: id must be a lowercase identifier")
 	}
 	if _, err := ManifestDependencies(manifest); err != nil {
+		return err
+	}
+	if err := checkRemovedFields(id, manifest); err != nil {
 		return err
 	}
 	listed := listedFiles(pkg)

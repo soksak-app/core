@@ -255,8 +255,26 @@ fn check_release_files(listed: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// The modules that plugin.json loads and their names: the surface module, the page of a view composition, the module of each
-/// section, and the state.
+/// Refuses the manifest fields that the reader removed: the state module and the module of a section. The error names the plugin
+/// and the field, as plugin-api validateManifest does (docs/spec/plugins.md, docs/spec/declared-ui.md).
+fn check_removed_fields(id: &str, manifest: &Value) -> Result<(), String> {
+    if manifest.get("state").is_some() {
+        return Err(format!(
+            "plugin {id}: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)"
+        ));
+    }
+    for section in manifest["sections"].as_array().into_iter().flatten() {
+        if section.get("module").is_some() {
+            let section_id = section["id"].as_str().unwrap_or_default();
+            return Err(format!(
+                "plugin {id}: section {section_id} module is removed; a section takes status (docs/spec/declared-ui.md)"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The modules that plugin.json loads and their names: the surface module and the page of a view composition.
 fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     let mut modules = vec![];
     let mut add = |what: String, value: &Value| {
@@ -271,19 +289,6 @@ fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
             &manifest["surface"]["composition"]["page"],
         );
     }
-    for section in manifest["sections"].as_array().into_iter().flatten() {
-        let what = match section["id"].as_str() {
-            Some(id) => format!("section {id} module"),
-            None => "section module".to_string(),
-        };
-        if section["module"].is_object() {
-            add(what.clone(), &section["module"]["horizontal"]);
-            add(what, &section["module"]["vertical"]);
-        } else {
-            add(what, &section["module"]);
-        }
-    }
-    add("state module".into(), &manifest["state"]["module"]);
     modules
 }
 
@@ -329,6 +334,7 @@ fn run_pack(dir: &str, out: &str, diagnostics: bool, stdout: &mut dyn Write) -> 
         return Err("plugin.json: id must be a lowercase identifier".into());
     };
     install::manifest_dependencies(&manifest)?;
+    check_removed_fields(id, &manifest)?;
     let object = pkg.as_object().ok_or("package.json: expected an object")?;
     let mut listed = listed_files(object)?;
     check_release_files(&listed)?;

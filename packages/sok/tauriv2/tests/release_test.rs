@@ -462,6 +462,27 @@ fn plugin_pack_adds_diagnostic_declarations_only_with_the_flag() {
     );
 }
 
+// contract: cli.pack.refuses-removed-fields
+#[test]
+fn plugin_pack_refuses_removed_manifest_fields() {
+    for (manifest, want) in [
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
+            "plugin probe: section probe.list module is removed; a section takes status (docs/spec/declared-ui.md)",
+        ),
+        (
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}"#,
+            "plugin probe: state is removed; a plugin keeps project data through its host (docs/spec/plugins.md#project-data)",
+        ),
+    ] {
+        let dir = plugin_tree();
+        write_tree(dir.path(), &[("plugin.json", manifest)]);
+        let out = Folder::new("release");
+        let (code, _, stderr) = run(&["plugin", "pack", text(dir.path()), text(out.path())]);
+        assert_eq!((code, stderr), (1, format!("sok: {want}\n")));
+    }
+}
+
 // contract: cli.pack.rejects-unlisted-modules
 #[test]
 fn plugin_pack_rejects_a_module_that_files_does_not_list() {
@@ -469,14 +490,6 @@ fn plugin_pack_rejects_a_module_that_files_does_not_list() {
         (
             r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "page/probe.js"}}"#,
             "plugin.json: surface module page/probe.js must be listed in files",
-        ),
-        (
-            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "sections": [{"id": "probe.list", "module": {"horizontal": "ui/b.js", "vertical": "side/v.js"}}]}"#,
-            "plugin.json: section probe.list module side/v.js must be listed in files",
-        ),
-        (
-            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "state": {"module": "state.js"}}"#,
-            "plugin.json: state module state.js must be listed in files",
         ),
     ] {
         let dir = plugin_tree();
@@ -490,7 +503,7 @@ fn plugin_pack_rejects_a_module_that_files_does_not_list() {
         dir.path(),
         &[(
             "plugin.json",
-            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "ui/b.js"}, "sections": [{"id": "probe.list", "module": "ui/a/run.sh"}]}"#,
+            r#"{"id": "probe", "dependencies": {"@scope/sidecar-worker": "^0.1.0"}, "surface": {"module": "ui/b.js"}}"#,
         )],
     );
     let out = Folder::new("release");
