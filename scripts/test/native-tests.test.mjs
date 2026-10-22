@@ -34,7 +34,7 @@ test("the native tests run one at a time, each with its start and end, and a fai
   const lines = [];
   const code = await runNativeTests({ dir, list: ["ok_test", "bad_test"], timeoutMs: 20000, write: (line) => lines.push(line) });
   assert.equal(code, 1);
-  const marks = lines.filter((line) => /^(RUN|PASS|FAIL|TIME)/.test(line)).map((line) => line.replace(/ [0-9.]+s.*$/, "").replace(/ \(\d+ running\)$/, ""));
+  const marks = lines.filter((line) => /^(RUN|PASS|FAIL|TIME)/.test(line)).map((line) => line.replace(/ \(\d+ running, limit [0-9.]+s\)$/, "").replace(/ [0-9.]+s.*$/, ""));
   assert.deepEqual(marks, ["RUN  ok_test", "PASS ok_test", "RUN  bad_test", "FAIL bad_test"]);
   assert.ok(lines.includes("  broken"), "the output of the failed test follows its line");
 });
