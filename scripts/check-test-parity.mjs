@@ -3052,7 +3052,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/page-log.js", symbol: "export function eventEnabled" },
     ],
     tests: [
-      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin asks whether a level is stored and builds the fields of an event only then" },
+      { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin has no level query: each record builds its fields, and a page without a host builds none" },
       { file: "packages/plugin-api/test/surface.test.mjs", id: "a plugin trace builds its fields only while the trace is on" },
       { file: "packages/workbench/test/plugin-records.test.mjs", id: "the trace of a plugin builds no object while the trace is off" },
     ],
