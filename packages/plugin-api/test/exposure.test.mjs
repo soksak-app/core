@@ -383,3 +383,16 @@ test("a command run hands the cids of its cause to the handler as its context, a
     EXPOSURE_ERRORS.invalidParams);
   assert.equal(contexts.length, 2, "a refused list reaches no handler");
 });
+
+test("a dom request refuses an index that is not a non-negative integer instead of reading it as the first element", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const input = element();
+  entries.dom("probe.input", () => [input]);
+  const code = async (work) => (await replyPayload(work)).error?.code;
+  // null is a value of the wrong type. It is refused with -32602 for dom.rect and dom.act alike.
+  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: null })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("dom.act", { name: "probe.input", index: null, action: "click" })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: "0" })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(await code(() => entries.answer("dom.rect", { name: "probe.input", index: -1 })), EXPOSURE_ERRORS.invalidParams);
+  assert.equal(input.clicks ?? 0, 0, "a refused dom.act does not reach the element");
+});

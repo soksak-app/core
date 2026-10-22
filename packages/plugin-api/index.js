@@ -1668,8 +1668,8 @@ export function exposureEntries(declared) {
       if (!found.declaration.many && list.length > 1) {
         throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has ${list.length} elements`);
       }
-      // default: index of dom.rect and dom.act is an optional field; without it, the first element is used.
-      const index = params.index ?? 0;
+      // An absent index is the first element. A present index of another type, including null, is refused by the check below.
+      const index = params.index === undefined ? 0 : params.index;
       if (!Number.isInteger(index) || index < 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "index must be a non-negative integer");
       const element = list[index];
       if (!element) throw new ExposureError(EXPOSURE_ERRORS.unregistered, `dom ${name} has no element at index ${index}`);
