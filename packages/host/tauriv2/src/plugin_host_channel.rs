@@ -748,6 +748,8 @@ pub(crate) fn shown_project_root(window: &Window) -> Result<Option<String>, Stri
     let shown = data
         .shown
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the shown project, which this read only copies; the panic
+        // hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
     if shown.is_empty() {
@@ -756,6 +758,8 @@ pub(crate) fn shown_project_root(window: &Window) -> Result<Option<String>, Stri
     Ok(data
         .projects
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the project roots, which this read only copies; the panic
+        // hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .get(&shown)
         .cloned())

@@ -36,6 +36,8 @@ func sidecarSessionSurfaces(t *testing.T) *Surfaces {
 		root:     "/fixture/root",
 		sidecars: c,
 		titles:   &titleRecord{},
+		// A window holds the channel state of its plugin hosts from its creation, so a project change reaches it as an event.
+		pluginHostChannels: newPluginHostChannels(),
 	}
 }
 
