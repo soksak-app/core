@@ -4,7 +4,7 @@
 
 plugin host는 plugin의 프로세스로, 창에 붙는 platform web view에서 그 plugin의 선언 status를 제공한다. plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 [선언 status](declared-ui.ko.md#선언된-status)를 제공해야 할 때만 존재하며, 고른 선언 status 출처가 host일 때마다(활성 탭의 view가 첫째, plugin host가 둘째) 그 status를 제공한다. sidecar는 한 domain의 native 기능을 가지므로 host가 그 status들의 DOM 없는 presentation을 갖고, sidecar는 그 데이터를 준다. sidecar나 상태 모듈은 선언 status 출처가 아니다.
 
-plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않는다. 상태 모듈은 workbench가 가져오는 plugin 코드다([plugins](plugins.ko.md#플러그인-상태)).
+plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않으며, workbench는 plugin 코드를 가져오지 않는다.
 
 ## Declaration
 

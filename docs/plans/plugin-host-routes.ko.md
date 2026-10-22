@@ -44,7 +44,7 @@ F229는 플러그인 호스트가 매니페스트에 선언된 사이드카에 �
 - `docs/spec/declared-ui.md`에 플러그인 호스트의 선언된 섹션이 호스트 페이지가 민 스냅샷을 그린다고 적는다.
 - `docs/spec/host-contract.md` 837행(`plugin-host.channel.call-served-set`)은 1번의 제공 집합을 나열한다. `pluginHostSidecarSend`와 세 `runtime.sidecar` 호출의 계약 사례를 두 호스트에 추가한다.
 - `docs/spec/declared-ui.md`와 `docs/spec/plugins.md`: 브리지는 `runtime.sidecar(name)`이며, 뷰 브리지는 `sidecar` 매개변수와 `send`를 얻고, 구독은 첫 송신보다 먼저 온다. `packages/plugin-api/view.js`가 그 변경을 나열한다. 그 테스트도 함께 바뀐다.
-- `docs/spec/plugin-host.md` 5행은 호스트 논리가 옮겨 갈 수 있는 곳으로 상태 모듈을 더한다(오늘은 명명하지 않는다). 7행은 플러그인 코드가 아니라 플러그인 호스트 코드가 워크벤치 페이지에서 돌지 않는다고 적는다(상태 모듈은 워크벤치가 가져오는 플러그인 코드다, [plugins](../spec/plugins.ko.md#플러그인-상태)). 59행은 사이드카 송신 금지를 8번 규칙이 제공하는 작업과 7번 규칙의 세션 종료로 바꾼다. 그 밖의 작업은 제공되지 않는다.
+- `docs/spec/plugin-host.md` 5행은 호스트 논리가 옮겨 갈 수 있는 곳으로 상태 모듈을 더한다(오늘은 명명하지 않는다). 7행은 플러그인 코드가 아니라 플러그인 호스트 코드가 워크벤치 페이지에서 돌지 않는다고 적는다(상태 모듈은 워크벤치가 가져오는 플러그인 코드다, plugins, 상태 모듈은 F212.11이 제거한다). 59행은 사이드카 송신 금지를 8번 규칙이 제공하는 작업과 7번 규칙의 세션 종료로 바꾼다. 그 밖의 작업은 제공되지 않는다.
 - `docs/spec/plugins.md` 58행은 플러그인 호스트를 선언된 사이드카의 사용자로 적고, 그 경우 `surface`, `state` 또는 `host`를 요구한다.
 - `docs/spec/declared-ui.md` 145행은 상태 모듈 등록을 제외하는 이유를 더한다(오늘은 이유가 없다). 상태 등록은 스냅샷 프로토콜이 없는 읽기와 구독 항목이며, 선언된 스냅샷 프로토콜의 송신자는 뷰와 플러그인 호스트 둘뿐이다.
 - `docs/spec/sidecars.md`는 2번 규칙의 플러그인 세션 식별자와 7번 규칙의 닫기를 닫기 규칙 아래에 적고, `sidecar session <id> is reserved for a plugin host` 거절은 `sidecarSend`의 표면 호출자에게 돌려주며, 플러그인 호스트의 실패는 6번 규칙의 공유 사이드카 기록에 든다고 적는다. 71행은 바뀌지 않는다(15차가 14차의 창 불러오기 해제를 철회한다). 180행은 `closed` 행의 "응답 없음"을 응답으로 바꾼다. 8번 규칙의 읽기 범위는 호스트 페이지가 승인된 범위로 적는다.

@@ -4,7 +4,7 @@
 
 A plugin host is a process of a plugin, with a platform web view attached to the window, that serves the declared statuses of its plugin. It exists only when a [declared status](declared-ui.md#declared-status) of a sidebar section must be served while no view of the plugin is open, and it serves its declared statuses whenever it is their chosen declared status source: the view of the active tab first, the plugin host second. It holds the DOM-free presentation of those statuses, because a sidecar holds the native functionality of one domain, and the sidecar supplies their data. A sidecar or a state module is not a declared status source.
 
-Plugin code does not run on the workbench page, and the main page never runs the code of a plugin host: the host page is a separate web view on the `sok://<plugin id>` origin, like the view of a view surface ([plugin processes](plugin-processes.md) rule 1). The native hosts and the workbench implement this specification; [feature status](../features.md) records its implementation. Plugin host code does not run on the workbench page; a state module is plugin code that the workbench imports ([plugins](plugins.md#plugin-state)).
+Plugin code does not run on the workbench page, and the main page never runs the code of a plugin host: the host page is a separate web view on the `sok://<plugin id>` origin, like the view of a view surface ([plugin processes](plugin-processes.md) rule 1). The native hosts and the workbench implement this specification; [feature status](../features.md) records its implementation. Plugin host code does not run on the workbench page, and the workbench imports no plugin code.
 
 ## Declaration
 
