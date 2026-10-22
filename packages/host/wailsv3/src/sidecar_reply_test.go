@@ -60,6 +60,18 @@ func TestAnOpenRequestAtAHostStopGetsAnErrorRecord(t *testing.T) {
 	}
 }
 
+// The error text of a failed request that is longer than the bound of the event is cut, and the record says so with truncated: true.
+func TestASidecarErrorTextCutAtTheBoundIsMarked(t *testing.T) {
+	isolateTraceRecords(t)
+	c := &Sidecars{}
+	c.requests.add("probe-sidecar", "probe-surface", []string{"req-1"}, monotonicNanos())
+	c.failRequests("probe-sidecar", strings.Repeat("x", 2*CallTextBytes))
+	got := bufferedTraces(t, "host.sidecar.reply")
+	if len(got) != 1 || got[0]["truncated"] != true {
+		t.Fatalf("host.sidecar.reply records: %v, want one record with truncated true", got)
+	}
+}
+
 // contract: sidecars.start.refuses-zero-hello-timeout
 // A Sidecars value that was not built by NewSidecars has no hello timeout. A zero timeout would fail every persistent service at once,
 // so the start of a persistent service refuses the value with a named error before it spawns anything.

@@ -812,7 +812,8 @@
         "bytes": "number",
         "ok": "boolean",
         "micros?": "number",
-        "error?": "string"
+        "error?": "string",
+        "truncated?": "boolean"
       },
       "description": "A message of a sidecar that names the correlation identifiers of a request or states an error, or the failure of a sidecar that ends the requests it did not answer."
     },

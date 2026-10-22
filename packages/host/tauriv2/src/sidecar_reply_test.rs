@@ -61,3 +61,24 @@ fn an_open_request_at_a_host_stop_gets_an_error_record() {
     assert_eq!(written[0]["surface"], "probe-surface");
     assert_eq!(written[0]["ok"], false);
 }
+
+// The error text of a failed request that is longer than the bound of the event is cut, and the record says so with truncated: true.
+#[test]
+fn a_sidecar_error_text_cut_at_the_bound_is_marked() {
+    let long = "x".repeat(2 * crate::bounds::CALL_TEXT_BYTES);
+    crate::sidecars::record_request_failures(
+        "cut-probe-sidecar",
+        &long,
+        vec![("probe-surface".to_string(), vec!["req-1".to_string()])],
+    );
+    let written: Vec<_> = buffered_fields("host.sidecar.reply")
+        .into_iter()
+        .filter(|fields| fields["name"] == "cut-probe-sidecar")
+        .collect();
+    assert_eq!(
+        written.len(),
+        1,
+        "one record is written for the cut failure"
+    );
+    assert_eq!(written[0]["truncated"], true);
+}

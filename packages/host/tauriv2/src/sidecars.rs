@@ -3728,11 +3728,14 @@ fn record_reply<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, event: &Event) {
     let mut level = crate::event_log::Level::Info;
     if let Some(failure) = failure {
         level = crate::event_log::Level::Warn;
-        let (text, _) = crate::bounds::cut_text(
+        let (text, cut) = crate::bounds::cut_text(
             &format!("{INTERNAL_CODE}: {failure}"),
             crate::bounds::CALL_TEXT_BYTES,
         );
         fields["error"] = text.into();
+        if cut {
+            fields["truncated"] = true.into();
+        }
     }
     if cids.is_empty() {
         crate::event_record::emit_host(level, "host.sidecar.reply", fields);
@@ -3760,16 +3763,20 @@ pub(crate) fn record_request_failures(
     reason: &str,
     surfaces: Vec<(String, Vec<String>)>,
 ) {
-    let (text, _) = crate::bounds::cut_text(
+    let (text, cut) = crate::bounds::cut_text(
         &format!("{INTERNAL_CODE}: {reason}"),
         crate::bounds::CALL_TEXT_BYTES,
     );
     for (surface, cids) in surfaces {
+        let mut fields = serde_json::json!({"name": sidecar, "surface": surface, "bytes": 0, "ok": false, "error": text});
+        if cut {
+            fields["truncated"] = true.into();
+        }
         crate::event_record::emit_host_cids(
             crate::event_log::Level::Warn,
             "host.sidecar.reply",
             &cids,
-            serde_json::json!({"name": sidecar, "surface": surface, "bytes": 0, "ok": false, "error": text}),
+            fields,
         );
     }
 }
