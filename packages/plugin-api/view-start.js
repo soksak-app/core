@@ -44,6 +44,23 @@
     deliver(data);
   });
 
+  // A failure of the page before its first call is reported through the handler, the only channel before the page runs: a script that
+  // fails to load (a module graph with an import that does not resolve), an uncaught error and an unhandled rejection. The host writes
+  // each view.error to the application log (docs/spec/native-surfaces.md#view-surfaces). The capture listener also receives the error
+  // events of the resources of the page, so each of them is reported with its element.
+  const reportFailure = (reason) => handler.postMessage({ event: "view.error", plugin, reason });
+  window.addEventListener("error", (event) => {
+    if (event instanceof window.ErrorEvent) {
+      reportFailure(`uncaught error: ${event.message}`);
+      return;
+    }
+    const target = event.target;
+    reportFailure(`${target.localName} ${target.src ?? target.href ?? ""} failed to load`.replace(/ +/g, " ").trim());
+  }, true);
+  window.addEventListener("unhandledrejection", (event) => {
+    reportFailure(`unhandled rejection: ${String(event.reason?.message ?? event.reason)}`);
+  });
+
   handler.postMessage({ event: "view.ready", plugin, document: crypto.randomUUID() });
 
   window.sokView = Object.freeze({

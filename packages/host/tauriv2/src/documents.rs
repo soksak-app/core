@@ -818,7 +818,18 @@ impl ViewChannels {
                 }
                 Ok(true)
             }
-            "view.error" => Err(event.reason),
+            "view.error" => {
+                if is_queue_full(&event.reason) {
+                    return Err(event.reason);
+                }
+                if event.reason.is_empty() {
+                    return Err(format!("{surface}: view.error has no reason"));
+                }
+                // A failure of the page before its first call is written on the error display path of the view, with its plugin
+                // and surface (docs/spec/native-surfaces.md#view-surfaces). The view continues, so the message is accepted.
+                log_error(&format!("view {plugin} {surface}"), &event.reason);
+                Ok(false)
+            }
             other => Err(format!("{surface}: view event {other:?} is unknown")),
         }
     }

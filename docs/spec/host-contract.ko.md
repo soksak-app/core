@@ -205,7 +205,8 @@ fn invalid_json_closes_connection() {
 | `view.channel.state-numeric-refused` | `loading`이 숫자인 view 상태는 `<surface>: view state is not JSON`과 decoder의 type 오류로 거부되며, ready 문서의 기록은 남는다. | both |
 | `view.channel.ui-thread` | view 문서에 대한 각 native post(theme, reply, request, event)는 view 문서 조회와 함께 UI thread의 작업 하나로 실행되어 다른 thread에서 실행되지 않는다. | both |
 | `view.channel.post-before-ready` | ready 문서가 기록되지 않은 view로의 post는 `<surface> has no ready document`로 거부되며, 아무것도 보내지 않는다. | both |
-| `view.channel.queue-full` | view의 `view.error` message는 그 이유를 `error: view channel: <reason>`으로 application log에 쓰고, 다른 frame에서 온 view의 `{"error": reason}` message도 같은 형식으로 이유를 쓴다. | both |
+| `view.channel.queue-full` | queue overflow 이유의 `view.error` message는 그 이유를 `error: view channel: <reason>`으로 application log에 쓰고, 다른 frame에서 온 view의 `{"error": reason}` message도 같은 형식으로 이유를 쓴다. | both |
+| `view.error.display` | 다른 이유의 `view.error` message는 `error: view <plugin> <surface>: <reason>`으로 오류 표시 경로에 한 번 쓰이고 view는 계속된다. 이유가 빈 `view.error`는 거부한다. | both |
 | `view.restart.limit` | process가 끝했거나 message queue가 넘친 view는 300초 안에 네 번째 failure까지 닫히고 다시 만들어지며, surface마다 sliding window로 센다: 새 failure보다 300초 이전인 failure은 세지 않는다. 네 번째 failure가 restart를 멈추고, 멈춘 surface는 view를 만들지 않으며, surface를 제거하면 그 failure 기록을 지운다. | both |
 | `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, responsive: false}`를 메인 page에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 `responsive: true`를 보낸다. 두 알림 모두 view의 call을 끝내지 않는다. | both |
 | `view.process.events` | view를 만들면 `host.trace.view.process-request {plugin, surface}`를 쓰고, 그 view의 첫 ready message는 `host.trace.view.process-ready {plugin, surface}`를 쓴다. | both |

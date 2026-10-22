@@ -1392,7 +1392,7 @@ func (d *Documents) setReadyDocument(surface, document string) bool {
 // viewReceived handles one message of the sok-view handler of the view handle of surface and writes its failure to the application log.
 // It runs on the UI thread.
 func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, value string) {
-	err := s.viewMessage(surface, value)
+	err := s.ViewMessage(surface, value)
 	if err == nil {
 		return
 	}
@@ -1458,6 +1458,15 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 // viewMessage dispatches one message of the sok-view handler of the view of surface. The message is {"message": value} for a message
 // of the view and {"error": reason} for a message from another frame. It returns the reason that the host writes to the application
 // log, or nil when the message needs no log line.
+// ViewMessage delivers one message of the sok-view handler of the view of surface, as the native handler does, and returns its failure.
+// A message that the host accepts returns nil, and a failure of the page that is written to the error display path returns nil too
+// (docs/spec/native-surfaces.md#view-surfaces).
+func (s *Surfaces) ViewMessage(surface, value string) error { return s.viewMessage(surface, value) }
+
+// RegisterView records the plugin of the view of surface. The creation of a view registers it; a caller that needs a registered
+// view without the native platform registers the view it names.
+func (s *Surfaces) RegisterView(surface, plugin string) { s.documents.registerView(surface, plugin) }
+
 func (s *Surfaces) viewMessage(surface, value string) error {
 	var received struct {
 		Message json.RawMessage `json:"message"`
@@ -1534,7 +1543,13 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		if strings.HasPrefix(event.Reason, viewQueueFullPrefix) {
 			return viewOverflow{reason: event.Reason}
 		}
-		return errors.New(event.Reason)
+		if event.Reason == "" {
+			return fmt.Errorf("%s: view.error has no reason", surface)
+		}
+		// A failure of the page before its first call is written on the error display path of the view, with its plugin and surface
+		// (docs/spec/native-surfaces.md#view-surfaces). The view continues, so the message is accepted.
+		LogError(fmt.Sprintf("view %s %s", channel.plugin, surface), event.Reason)
+		return nil
 	}
 	return fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
 }
