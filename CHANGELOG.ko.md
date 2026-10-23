@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-26: shutdown check의 결함을 기록한다. terminal 준비는 notification이 있는데도 status를 polling하며 실행 중 application error를 감사하지 않는다. 수정과 owning 검증은 대기 중이다.
+
 - F244-2-1: hidden DOM tab memory benchmark, Make target, fixture-only test와 parity lane을 제거한다. 이 benchmark는 view-only surface contract가 제거한 module mount를 사용하여 현재 application을 측정하지 못했다. historical 측정과 native memory check는 유지한다.
 
 - F212.12-2-2-2: 현재 창의 terminal focus 검사는 layout을 교체하지 않고 native pointer 전달, text input region과 first responder를 기록한다. 숨겨진 view와 누락된 terminal focus binding을 재현했으며 native 표시 수정과 terminal P66을 넣은 두 diagnostic host에서 통과했다. Native typing과 공개 전달은 아직 검증하지 않았다.
