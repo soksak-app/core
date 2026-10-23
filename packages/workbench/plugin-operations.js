@@ -174,34 +174,59 @@ export function createPluginOperations({ host, loaded, changed }) {
   }
 
   /**
-   * On the first run, installs the plugins of the starter pack in the order of the pack and returns true (first run in
-   * docs/spec/installation.md). The caller reloads the page so it loads the installed plugins. If there is no registry, it first sets the
-   * default registry of the environment (defaultRegistry). If neither exists, it records this, notifies with show so a window without plugins
-   * states the reason, and returns false. The application starts without a network: a registry that cannot be set or read, a missing pack
-   * and a failed installation are recorded and shown the same way, and the next start, still a first run, installs the pack.
+   * Starts a durable starter job on the first run or resumes its saved plugin list after an interrupted install. A completed job is not
+   * enforced again, so later user removals remain unchanged. The caller reloads the page only when this call installed a plugin.
    */
   async function installStarter(pack, defaultRegistry, log, show) {
-    if (!host || pack === null || !state?.firstRun) return false;
+    if (!host) return false;
+    let job = state?.starter ?? null;
+    if (job?.state === "complete") return false;
+    if (!job && (pack === null || !state?.firstRun)) return false;
     try {
-      if (state.registry === null && defaultRegistry !== null) {
+      if (!job && state.registry === null && defaultRegistry !== null) {
         await useRegistry(defaultRegistry);
         if (state === null) throw new Error(failure.message);
       }
-      if (state.registry === null) {
+      if (!job && state.registry === null) {
         log(`first run: no registry is set; the starter pack ${pack} was not installed`);
         show(`플러그인 레지스트리가 없어 시작 플러그인 묶음 ${pack}을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`);
         return false;
       }
       if (typeof state.index?.error === "string") throw new Error(state.index.error);
-      const entry = state.index.packs.find((item) => item.name === pack);
-      if (!entry) throw new Error(`the registry has no pack ${pack}`);
-      for (const id of entry.plugins) await runAction("install", id);
-      return true;
+      if (!job) {
+        const entry = state.index.packs.find((item) => item.name === pack);
+        if (!entry) throw new Error(`the registry has no pack ${pack}`);
+        job = { format: 1, state: "pending", pack, registry: state.registry, plugins: [...entry.plugins] };
+        await host.call("pluginsStarter", { state: "pending", pack: job.pack, registry: job.registry, plugins: job.plugins });
+        await refresh();
+        if (state === null) throw new Error(failure.message);
+        job = state.starter;
+      } else {
+        if (job.state !== "pending") throw new Error(`starter job has unknown state ${String(job.state)}`);
+        if (state.registry !== job.registry) {
+          throw new Error(`starter job registry ${job.registry} differs from current registry ${state.registry}`);
+        }
+      }
+      if (!job || job.state !== "pending") throw new Error("starter job was not recorded as pending");
+      let installedAny = false;
+      for (const id of job.plugins) {
+        if (state.installed?.plugins?.[id]) continue;
+        await runAction("install", id);
+        installedAny = true;
+        if (state === null) throw new Error(failure.message);
+        if (!state.installed?.plugins?.[id]) throw new Error(`starter plugin ${id} was not recorded as installed`);
+      }
+      await host.call("pluginsStarter", { state: "complete", pack: job.pack, registry: job.registry, plugins: job.plugins });
+      await refresh();
+      if (state === null) throw new Error(failure.message);
+      if (state.starter?.state !== "complete") throw new Error("starter job was not recorded as complete");
+      return installedAny;
     } catch (error) {
       // default: an error that is not an Error carries its value as the text.
-      log(`first run: the starter pack ${pack} was not installed: ${error?.message ?? error}`);
+      const failedPack = job?.pack ?? pack;
+      log(`first run: the starter pack ${failedPack} was not installed: ${error?.message ?? error}`);
       // default: an error that is not an Error carries its value as the text.
-      show(`시작 플러그인 묶음 ${pack}을 설치하지 못했습니다 · ${error?.message ?? error}. 연결된 뒤 다시 시작하면 다시 설치합니다.`);
+      show(`시작 플러그인 묶음 ${failedPack}을 설치하지 못했습니다 · ${error?.message ?? error}. 연결된 뒤 다시 시작하면 다시 설치합니다.`);
       return false;
     }
   }

@@ -169,18 +169,36 @@ function starterHost({ registry = "file:///registry/index.json", index, firstRun
   const calls = [];
   let first = firstRun;
   let current = registry;
+  const installed = {};
+  let starter = null;
   return {
     calls,
     async call(method, params) {
       calls.push([method, params ?? null]);
-      if (method === "pluginsRun") { first = false; return null; }
+      if (method === "pluginsRun") {
+        installed[params.plugin] = { version: "1.0.0", enabled: true, sidecars: {} };
+        first = false;
+        return null;
+      }
+      if (method === "pluginsStarter") {
+        const { state: nextState, ...job } = params;
+        if (nextState === "pending" && starter === null) starter = { format: 1, state: nextState, ...job };
+        else if (nextState === "complete" && starter?.state === "pending" &&
+          starter.pack === job.pack && starter.registry === job.registry &&
+          JSON.stringify(starter.plugins) === JSON.stringify(job.plugins)) {
+          starter = { ...starter, state: "complete" };
+        } else throw new Error("starter job does not match current state");
+        return structuredClone(starter);
+      }
       if (method === "pluginsUseRegistry") {
         // A registry that cannot be fetched is not set.
         if (useRegistry !== null) throw new Error(useRegistry);
         current = params.index;
         return { index: current };
       }
-      return { registry: current, index: current === null ? null : index, installed: { format: 2, plugins: {}, sidecars: {} }, firstRun: first };
+      return { registry: current, index: current === null ? null : index,
+        installed: { format: 2, plugins: structuredClone(installed), sidecars: {} }, firstRun: first,
+        starter: starter && structuredClone(starter) };
     },
   };
 }
@@ -246,9 +264,79 @@ test("the first run sets the default registry of the environment before it insta
   assert.equal(await operations.installStarter("starter", registry, () => assert.fail("nothing to log"), () => assert.fail("nothing to show")), true);
   assert.deepEqual(host.calls.filter(([method]) => method !== "pluginsState"), [
     ["pluginsUseRegistry", { index: registry }],
+    ["pluginsStarter", { state: "pending", pack: "starter", registry,
+      plugins: ["alpha", "beta"] }],
     ["pluginsRun", { action: "install", plugin: "alpha" }],
     ["pluginsRun", { action: "install", plugin: "beta" }],
+    ["pluginsStarter", { state: "complete", pack: "starter", registry,
+      plugins: ["alpha", "beta"] }],
   ]);
+});
+
+test("a pending starter job resumes missing plugins after restart and stops enforcing after completion", async () => {
+  const calls = [];
+  const installed = {};
+  let firstRun = true;
+  let starter = null;
+  let rejectBeta = true;
+  const host = {
+    async call(method, params) {
+      calls.push([method, params ?? null]);
+      if (method === "pluginsState") {
+        return {
+          registry: "file:///registry/index.json",
+          index: starterIndex,
+          installed: { format: 3, plugins: structuredClone(installed), sidecars: {} },
+          firstRun,
+          starter: starter && structuredClone(starter),
+        };
+      }
+      if (method === "pluginsStarter") {
+        const { state: nextState, ...job } = params;
+        if (nextState === "pending" && starter === null) starter = { format: 1, state: nextState, ...job };
+        else if (nextState === "complete" && starter?.state === "pending" &&
+          starter.pack === job.pack && starter.registry === job.registry &&
+          JSON.stringify(starter.plugins) === JSON.stringify(job.plugins)) {
+          starter = { ...starter, state: "complete" };
+        } else throw new Error("starter job does not match current state");
+        return structuredClone(starter);
+      }
+      if (method === "pluginsRun") {
+        assert.equal(starter?.state, "pending", "the job must be durable before the first plugin install");
+        if (params.plugin === "beta" && rejectBeta) {
+          rejectBeta = false;
+          throw new Error("beta install failed once");
+        }
+        installed[params.plugin] = { version: "1.0.0", enabled: true, sidecars: {} };
+        firstRun = false;
+        return null;
+      }
+      throw new Error(`unexpected host method ${method}`);
+    },
+  };
+  const makeOperations = () => createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  const first = makeOperations();
+  await first.refresh();
+  assert.equal(await first.installStarter("starter", null, () => {}, () => {}), false);
+  assert.equal(starter.state, "pending", "a failed plugin install must leave its job pending");
+  assert.deepEqual(Object.keys(installed), ["alpha"]);
+
+  const restarted = makeOperations();
+  await restarted.refresh();
+  assert.equal(restarted.state().firstRun, false, "the successful first plugin has created installed state");
+  assert.equal(await restarted.installStarter("starter", null, () => {}, () => {}), true,
+    "the pending starter job must resume although this is no longer the first run");
+  assert.deepEqual(calls.filter(([method]) => method === "pluginsRun").map(([, params]) => params.plugin),
+    ["alpha", "beta", "beta"], "restart must install only the plugin missing from the pending job");
+  assert.equal(starter.state, "complete");
+
+  delete installed.beta;
+  const afterUserRemoval = makeOperations();
+  await afterUserRemoval.refresh();
+  assert.equal(await afterUserRemoval.installStarter("starter", null, () => {}, () => {}), false,
+    "a completed job must not reinstall a plugin that the user later removed");
+  assert.deepEqual(calls.filter(([method]) => method === "pluginsRun").map(([, params]) => params.plugin),
+    ["alpha", "beta", "beta"]);
 });
 
 test("setting the registry runs pluginsUseRegistry and reads the state again", async () => {
