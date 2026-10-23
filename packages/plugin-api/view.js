@@ -12,6 +12,8 @@ import { createOperationCids } from "./operation.js";
 import { createPluginRuntime } from "./plugin-runtime.js";
 import { createSnapshotSender, SNAPSHOT_ACK_EVENT, SNAPSHOT_REQUEST_COMMAND } from "./snapshots.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
+import { createExpose } from "./index.js";
+import { observeSurfaceDocument, surfaceDocumentEntry } from "./surface-document.js";
 
 const PLUGIN = /^[a-z][a-z0-9-]*$/;
 /** The code of a command that the view did not register: EXPOSURE_ERRORS.unregistered of index.js, which this module does not import. */
@@ -82,6 +84,7 @@ export function createViewBridge({ handler, report }) {
   const channel = createViewChannel({ handler });
   let onCall = null;
   let onAcknowledgement = null;
+  let onCoreExposure = null;
   // The listeners of the view by key (see keyOf), and the last theme that the host sent. A key has one subscription call on the
   // page, made by its first listener; a theme has none, because the host sends it.
   const listeners = new Map();
@@ -296,6 +299,11 @@ export function createViewBridge({ handler, report }) {
     reply.then((payload) => channel.send({ sok: 1, reply: request.id, ...payload }));
   };
   const dispatch = (message) => {
+    if (message.event === "exposure-request" && surfaceDocumentEntry(message.data?.params?.name)) {
+      if (!onCoreExposure) throw new Error(`view ${plugin} has no core document exposure handler`);
+      onCoreExposure(message.data);
+      return;
+    }
     if (message.event === "theme") lastTheme = message.data;
     if (message.event === "project") lastProject = message.data;
     // A status value reaches its listeners as the value, without the name that keys the event.
@@ -407,5 +415,30 @@ export function createViewBridge({ handler, report }) {
       return createSurfaceCompositionController(port, declaration, { regions, overlays }, window);
     },
   };
+  // A plugin host uses this bridge too but has no surface start values. Only a surface document owns these entries.
+  if (window.sokSurface !== undefined) {
+    const view = window;
+    const state = observeSurfaceDocument(view);
+    const expose = createExpose({
+      register: exposure.register,
+      reply: exposure.reply,
+      report: (text) => runtime.error("core surface entries", text),
+      onRequest: async (answer) => {
+        onCoreExposure = answer;
+        // One native subscription is shared with plugin listeners; dispatch above reserves the core document requests.
+        const stop = await runtime.native.on("exposure-request", () => {});
+        return () => { onCoreExposure = null; stop(); };
+      },
+    }, () => view.sokSurface.declarations);
+    Promise.all([
+      expose.status("core.surface.document", state.document.read, state.document.subscribe),
+      expose.status("core.surface.input", state.input.read, state.input.subscribe),
+      expose.command("core.surface.hit", state.hit),
+    ]).catch(recordError("core surface entries"));
+    view.addEventListener("pagehide", () => {
+      state.dispose();
+      expose.dispose().catch(recordError("core surface entries"));
+    }, { once: true });
+  }
   return { calls, snapshots, runtime, commands, exposure, contributions, composition };
 }

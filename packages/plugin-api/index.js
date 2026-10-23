@@ -13,6 +13,7 @@ import { createBinder } from "./binder.js";
 import { causeCids } from "./calls.js";
 
 export { INTERACTIVE, commandOf, createBinder, valueOf } from "./binder.js";
+export { surfaceDocumentEntry } from "./surface-document.js";
 export { DOCUMENT_ACTIONS, DOCUMENT_NAME, observeRegionInsets, regionInsets } from "./document-region.js";
 export { IMAGE_NAME } from "./image-region.js";
 export { createPluginRuntime, LOG_LEVELS } from "./plugin-runtime.js";
@@ -41,9 +42,6 @@ export const INSTALLED_PLUGINS = "installed-plugins.json";
 export const CORE_ROOT_FILE = "core-root.json";
 /** The view import map of the staged frontend, written by the staging tool as the JSON text of VIEW_IMPORTS; each host passes the text to the view handler (docs/spec/plugin-processes.md, rule 4). */
 export const VIEW_IMPORTS_FILE = "view-imports.json";
-
-/** The name prefix of the core entries that the surface document registers. The main document registers the other core entries. */
-export const SURFACE_CORE = "core.surface.";
 
 /** Returns a path inside the package as a path relative to the document root. */
 export const modulePath = (name, path) => `modules/${name}/${path}`;

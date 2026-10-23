@@ -121,7 +121,9 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 
 ### 표면 문서
 
-`@soksak/plugin-api/page`는 모든 플러그인 표면 페이지에 다음 코어 항목을 등록하므로 플러그인이 구현하지 않는다. 코어는 이 항목을 `exposure.json`에 선언한다. 표면 페이지가 등록하는 코어 이름은 이 항목뿐이다.
+core view bridge는 surface start values가 있는 실제 view document에 다음 항목을 등록한다. plugin host에는 surface start values가 없으므로 등록하지 않는다. plugin은 이를 구현하지 않는다. core는 선언을 surface start values와 함께 전달하고 `exposure.json`에 선언한다. surface page가 등록하는 core 항목은 이 세 이름뿐이며 `core.surface.menu`는 main document의 명령이다. core document 요청은 bridge가 한 번 답하며 plugin exposure listener로 전달하지 않는다. main-page placeholder는 view의 document나 input 상태를 보고하지 않는다.
+
+document audit는 open shadow tree를 포함하여 그 document의 모든 shared binder가 실제 연결한 항목을 집계하며, 각 binder의 `audit(root)`는 자기 binding 범위를 유지한다. binder를 dispose하면 document audit에서도 그 연결을 제거한다. document read는 현재 open shadow tree를 순회하고, document·viewport·관찰 중인 DOM·binding 변경은 watcher에 알린다. 발견한 shadow root는 각각 관찰한다. 기존 host에 binding 변경이나 관찰 중인 DOM 변경 없이 만든 unbound shadow root는 mutation notification을 만들지 않지만, 다음 document read에는 포함된다. page exit는 input listener, observer, binding subscription, exposure watch를 해제한다.
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
@@ -219,7 +221,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 
 네이티브 포인터 주입은 창과 버튼별로 누름을 받은 뷰를 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 일치하는 누름 없는 끌기·뗌, 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 
-workbench 페이지와 카드 요소는 앱 DOM 문서를 공유하고, view 표면은 자기 문서를 가진다. `dom.rect` 사각형은 이미 앱 문서 좌표를 사용하며 `document` 원점은 `{x: 0, y: 0}`이다. 이 원점에 표면 위치를 더하지 않는다. 네이티브 모달은 별도 문서이므로 사각형은 모달 내부 좌표를 유지하고 `document` 원점은 실제 모달 프레임 원점이다. 클라이언트는 보고된 문서 원점을 정확히 한 번 더하며 표면 종류나 카드 위치에 따라 보정하지 않는다.
+workbench page와 card 요소는 app DOM document를 공유하고 view surface는 자기 document를 가진다. main registry는 선택된 surface가 답할 때 view 내부 `dom.rect`에 현재 applied view 원점을 한 번 더한다. view의 native page zoom은 1이고 CSS sizing은 이미 element rectangle에 반영되므로 text-size나 capture scale을 곱하지 않는다. 반환된 rectangle은 app-document 좌표이고 `document` 원점은 `{x: 0, y: 0}`이다. applied frame이 없으면 surface 식별자를 담아 실패하며 zero origin으로 대체하지 않는다. hidden 또는 zero-size view도 자기 applied origin을 사용한다. native modal은 별도 document이므로 rectangle은 modal-local 좌표를 유지하고 `document` 원점은 실제 modal frame 원점이다. client는 보고된 document origin을 정확히 한 번 더하며 surface kind나 card placement에 따라 보정하지 않는다.
 
 호스트는 `input.pointer`와 `input.key`를 네이티브 이벤트로 전달하며 페이지는 신뢰 이벤트를 받는다. `activate: true`인 `move`를 제외하면 애플리케이션을 활성화하지 않는다. macOS에서는 다음과 같다.
 

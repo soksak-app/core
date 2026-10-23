@@ -1,13 +1,12 @@
 import { LOG_LEVELS, createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
 import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime } from "./host.js";
-import { markViewSurface, registry, viewOwns } from "./exposure.js";
+import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
-import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, originHistory, tabOrigin,
@@ -196,7 +195,8 @@ export function viewStartValues(surface, project) {
     params: surface.params ?? null,
     origin: originOf(surface),
     project: project === null ? null : { id: project.id, root: project.root },
-    declarations: surface.declarations,
+    declarations: Object.fromEntries(["status", "commands", "dom"].map((kind) =>
+      [kind, [...registry.surfaceDeclarations()[kind], ...(surface.declarations[kind] ?? [])]])),
   };
 }
 
@@ -252,8 +252,8 @@ function answerViewCalls(surface, scoped, page, context, closing) {
   const pending = new Map();
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
-    // A view is forwarded the exposure requests it owns; a core surface entry is answered by the surface document alone.
-    native: (name, listener) => gate.on(name, name === "exposure-request" ? (event) => { if (viewOwns(event)) listener(event); } : listener),
+    // All exposure requests belong to the actual view document, including its core entries.
+    native: (name, listener) => gate.on(name, listener),
     // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
     sidecar: {
       on: (id, listener) => page.sidecar().on(id, listener),
@@ -284,8 +284,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
   const forgetCommands = keepViewCommands(surface.surfaceId, viewCommands);
   // The exposure of the view. A forwarded exposure request of the view reaches the view through its exposure-request subscription and is
   // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the page does not
-  // forward it again (docs/spec/exposure.md#relay). The mark is set here and not through the surface port, which the page registers for
-  // the core surface entries of the same surface (registerSurfaceExposure).
+  // forward it again (docs/spec/exposure.md#relay). The mark is set here and not through a main-page placeholder.
   const unmarkView = markViewSurface(surface.surfaceId);
   // The mark ends at the dispose of the mount, which is synchronous. The listener registrations below settle later, so their teardown
   // is not the end of the mark: a mount of the same surface that follows the dispose marks it again.
@@ -557,10 +556,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         // Does not start the registration of a surface that was removed while waiting for approval.
         if (entry.disposed) return null;
         entry.authorized = true;
-        // Starts the registrations of the core and the plugin after the same native approval.
-        entry.exposure = registerSurfaceExposure({ root: shadow, expose: context.exposure, view,
-          declarations: registry.surfaceDeclarations() });
-        await entry.exposure.ready;
+        // The native view registers its own core document entries after its page starts.
         diagnostics = await pluginDiagnostics(surface.pluginId);
         // The tab state of a declaring surface is read after it opens, which the page does after the first plane.
         if (surface.unload) await tabStatesReady();

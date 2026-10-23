@@ -121,7 +121,9 @@ A page registers under a key that identifies it, the owner key of the registrati
 
 ### Surface documents
 
-`@soksak/plugin-api/page` registers these core entries in every plugin surface page, so plugins do not implement them. Core declares them in `exposure.json`. They are the only core names that surface pages register.
+The core view bridge registers these entries in the actual view document when its surface start values are present; a plugin host has no surface start values and registers none. Plugins do not implement them. Core passes their declarations with the surface start values and declares them in `exposure.json`. These three names are the only core entries that surface pages register; `core.surface.menu` belongs to the main document. A request for a core document entry is answered once by the bridge and is not delivered to plugin exposure listeners. The main-page surface placeholder reports no document or input state for the view.
+
+The document audit includes the actual connections of every shared binder in that document, including open shadow trees, while each binder's `audit(root)` retains its own binding scope. Disposing a binder removes its connections from the document audit. Document reads traverse the current open shadow trees; document, viewport, observed DOM and binding changes notify watchers. Each discovered shadow root is observed separately. Creating an unbound shadow root on an existing host without a binding change or an observed DOM change supplies no mutation notification; the next document read still includes it. Page exit releases the input listeners, observers, binding subscriptions and exposure watches.
 
 | Kind | Name | Meaning |
 | --- | --- | --- |
@@ -219,7 +221,7 @@ A request gives either `index` or `address`, never both. `index` is a non-negati
 
 Native pointer injection retains the pressed view separately for each window and button. Drag and release go to that view even when the pointer crosses another view; release receipt waits for the pressed document. A drag or release without a matching press, a second press while that button is held, or a removed pressed view returns an explicit input rejection. Scroll and button-free movement continue to use the current pointer position.
 
-The workbench page and its card elements share the application DOM document; a view surface has its own document. Their `dom.rect` rectangles already use application-document coordinates and their `document` origin is `{x: 0, y: 0}`. Surface placement must not be added to this origin. A native modal has its own document: its rectangles remain modal-local and its `document` origin is the actual modal frame origin. Clients add the reported document origin exactly once; they must not compensate for surface kind or card placement.
+The workbench page and its card elements share the application DOM document; a view surface has its own document. The main registry converts a view's local `dom.rect` by adding the current applied view origin once when the selected surface answers. It adds no text-size or capture scale: the view's native page zoom is 1 and CSS sizing is already reflected in the element rectangle. The returned rectangles use application-document coordinates and their `document` origin is `{x: 0, y: 0}`. A missing applied frame fails with the surface identifier instead of substituting a zero origin; a hidden or zero-size view still uses its applied origin. A native modal has its own document: its rectangles remain modal-local and its `document` origin is the actual modal frame origin. Clients add the reported document origin exactly once; they must not compensate for surface kind or card placement.
 
 The host delivers `input.pointer` and `input.key` as native events, and the page receives trusted events. The application is not activated, except for `move` with `activate: true`. On macOS:
 

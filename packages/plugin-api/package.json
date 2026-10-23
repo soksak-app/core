@@ -18,6 +18,7 @@
   "files": [
     "index.js",
     "binder.js",
+    "surface-document.js",
     "document-errors.js",
     "document-region.js",
     "image-region.js",
