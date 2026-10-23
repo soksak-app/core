@@ -57,12 +57,13 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
   // The test does not load surface modules. The placeholder joins the slot of its tab, and the mounted surface of the valid tab is only recorded.
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
-    mountSurface: () => Promise.resolve(),
+    mountSurface: (slot, surface) => { mountedSurfaces.push(surface); return Promise.resolve(); },
     disposeSurface: () => Promise.resolve(), focusSurface: () => true,
     placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),
   } });
   // The card holds a tab whose stored params do not match the declaration, and a tab whose params match it.
   const mismatched = { path: 5 };
+  const mountedSurfaces = [];
   t.mock.module("../environment.js", { exports: {
     environment: () => ({ workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
@@ -72,11 +73,13 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
       ] }],
     } } }),
     pluginUnits: () => [{ id: pluginId, name: "Fixture", version, description: "검사용 표면.", surface: true, sections: [] }],
+    pluginDiagnostics: async () => null,
   } });
   registerPlugin({
     id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
     params: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
+    opens: ["txt"],
+    surface: (surfaceId) => ({ composition: { kind: "view", page: "ui/index.html" }, surfaceId, pluginId,
       declarations: {}, sidecars: [] }),
   });
 
@@ -112,6 +115,18 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     drawHeld();
     assert.ok(errorCalls.some((call) => call.kind === "hide" && call.where === where), "closing the surface did not withdraw its error");
     assert.equal(errorCalls.filter((call) => call.kind === "show").length, 1, "withdrawing the error wrote it again");
+
+    const { viewStartValues } = await import("../surface-modules.js?view-file-open-params");
+    const opened = plane.openFile("sample.txt");
+    assert.equal(opened.tab, plane.currentGrid().card("main").data.activeId);
+    assert.deepEqual(plane.currentGrid().card("main").data.tabs.find(({ id }) => id === opened.tab).params, { path: "sample.txt" });
+    assert.notEqual(held, null, "opening the file did not schedule a layout draw");
+    drawHeld();
+    const surface = mountedSurfaces.find(({ surfaceId }) => surfaceId === opened.tab);
+    assert.ok(surface, "core.file.open did not produce a mounted view surface");
+    assert.deepEqual(surface.params, { path: "sample.txt" }, "the mounted surface did not receive the tab params");
+    assert.deepEqual(viewStartValues(surface, { id: "prj-open", root: "/work/project" }).params, { path: "sample.txt" },
+      "the producer start values did not preserve the file-open path");
   } finally {
     dom.window.close();
   }

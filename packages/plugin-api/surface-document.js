@@ -13,6 +13,19 @@ const INPUT_KEPT = 32;
 export function observeSurfaceDocument(view) {
   const document = view.document;
   const root = document.documentElement;
+  if (!view.sokSurface || !Object.hasOwn(view.sokSurface, "params")) {
+    throw new TypeError("window.sokSurface.params is missing");
+  }
+  const sourceParams = view.sokSurface.params;
+  if (sourceParams !== null && (typeof sourceParams !== "object" || Array.isArray(sourceParams))) {
+    throw new TypeError("window.sokSurface.params must be an object or null");
+  }
+  let params;
+  try {
+    params = sourceParams === null ? null : JSON.parse(JSON.stringify(sourceParams));
+  } catch (error) {
+    throw new TypeError(`window.sokSurface.params is not JSON serializable: ${error.message}`, { cause: error });
+  }
   const events = [];
   const documentListeners = new Set();
   const inputListeners = new Set();
@@ -32,6 +45,7 @@ export function observeSurfaceDocument(view) {
     const style = view.getComputedStyle(root);
     return {
       url: view.location.href, timeOrigin: view.performance.timeOrigin, readyState: document.readyState,
+      params,
       themed: Boolean(style.getPropertyValue("--bg") || (style.colorScheme && style.colorScheme !== "normal")),
       scale: view.devicePixelRatio,
       // default: the body may not exist yet; its absent scroll extent is zero.

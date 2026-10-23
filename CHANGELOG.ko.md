@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.10-core-1: `core.surface.document`가 실제 view page에 주입된 params의 불변 snapshot을 보고한다. Observer는 명시적 `null`을 보존하며, 누락·잘못된 값·JSON 직렬화 불가 값은 필드명을 포함해 거부한다. 소유 bridge 검사는 8/8, workbench `core.file.open` producer 검사는 1/1 통과한다. Fresh host readback은 남아 있다.
+
 - F212.12-2-2-4-2: Capture callback record는 기록한 정확한 상대 frame 파일명을 담고, frame을 기록하지 않았으면 `null`을 담는다. Native Red는 cached, idle, blank callback과 JSONL 연결에서 실패했고, 파일명과 실제 파일 존재를 확인하는 `capture_metadata_test`가 통과한다. `make docs-check`가 통과한다.
 
 - F212.12-2-2-4-3: Window-check session은 모든 cleanup과 application error audit가 성공한 뒤에만 소유 recording을 제거한다. Check, capture stop, artifact 검증 또는 audit가 실패하거나 추적하지 않은 leftover가 있으면 capture 증거를 보존하며, caller가 capture 오류를 잡더라도 검사를 실패시킨다. 소유 session-cleanup 및 recording test가 11/11로 통과하고 `make docs-check`가 통과한다.

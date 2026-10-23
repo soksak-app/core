@@ -15,7 +15,7 @@ const declarations = {
   dom: [],
 };
 
-function setup(t, { surface = true } = {}) {
+function setup(t, { surface = true, params = { path: "sample.txt" } } = {}) {
   const dom = new JSDOM("<!doctype html><body><button data-expose=probe.button>Press</button></body>",
     { url: "soksak://probe/ui/view.html", runScripts: "outside-only" });
   const view = dom.window;
@@ -29,7 +29,7 @@ function setup(t, { surface = true } = {}) {
   } };
   view.webkit = { messageHandlers: { "sok-view": handler } };
   view.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
-  if (surface) view.sokSurface = { surface: "probe-tab", declarations };
+  if (surface) view.sokSurface = { surface: "probe-tab", params, declarations };
   view.sokTheme = { scheme: "dark", tokens: { "--bg": "rgb(1, 2, 3)" } };
   view.document.documentElement.style.colorScheme = "dark";
   const viewport = new view.EventTarget();
@@ -65,10 +65,12 @@ function setup(t, { surface = true } = {}) {
 
 test("the bridge registers the actual view document without plugin exposure setup", { timeout: 5000 }, async (t) => {
   const { view, registrations, request } = setup(t);
+  view.sokSurface.params.path = "mutated.txt";
   await turn();
   assert.deepEqual(registrations(), coreNames, "the view bridge registered no common document entries");
   const state = await request("status.get", "core.surface.document");
   assert.equal(state.url, "soksak://probe/ui/view.html");
+  assert.deepEqual(state.params, { path: "sample.txt" }, "the status must preserve the params present when the view bridge started");
   assert.equal(state.timeOrigin, view.performance.timeOrigin);
   assert.equal(state.themed, true);
   assert.deepEqual(state.viewport, { width: 400.5, height: 200.5 });
@@ -77,6 +79,29 @@ test("the bridge registers the actual view document without plugin exposure setu
   view.document.elementFromPoint = (x, y) => x === 20 && y === 30 ? view.document.body : null;
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 20, y: 30 } }), true);
   assert.equal(await request("command.run", "core.surface.hit", { params: { x: 0, y: 0 } }), false);
+});
+
+test("the document status preserves null view start params", { timeout: 5000 }, async (t) => {
+  const { request } = setup(t, { params: null });
+  await turn();
+  const state = await request("status.get", "core.surface.document");
+  assert.equal(state.params, null, "the status must preserve a declared null params value");
+});
+
+test("the document observer rejects missing or malformed view start params", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<!doctype html><body></body>", { url: "soksak://probe/ui/view.html" });
+  const view = dom.window;
+  const viewport = new view.EventTarget();
+  Object.assign(viewport, { width: 400, height: 200 });
+  Object.defineProperty(view, "visualViewport", { value: viewport });
+  t.after(() => view.close());
+  view.sokSurface = {};
+  assert.throws(() => observeSurfaceDocument(view), /window\.sokSurface\.params is missing/);
+  view.sokSurface.params = "sample.txt";
+  assert.throws(() => observeSurfaceDocument(view), /window\.sokSurface\.params must be an object or null/);
+  view.sokSurface.params = {};
+  view.sokSurface.params.self = view.sokSurface.params;
+  assert.throws(() => observeSurfaceDocument(view), /window\.sokSurface\.params is not JSON serializable/);
 });
 
 test("view input records its actual document events and core requests have one owner", { timeout: 5000 }, async (t) => {
@@ -155,6 +180,7 @@ test("document watchers observe delegated shadow controls and mutations and clos
 
 test("disposing document observation releases input, mutation and binding notifications", { timeout: 5000 }, async (t) => {
   const { view } = setup(t, { surface: false });
+  view.sokSurface = { params: null };
   const state = observeSurfaceDocument(view);
   let documents = 0;
   let inputs = 0;

@@ -127,7 +127,7 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 | 종류 | 이름 | 의미 |
 | --- | --- | --- |
-| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, 표면 내용의 크기인 `body`(표면 요소의 상자에 그 밖으로 넘치거나 스크롤되는 내용을 더한 크기)와 표면 요소의 보이는 상자 크기인 `viewport`(모두 CSS 픽셀이며, 내용이 들어맞지 않을 때만 `body`가 `viewport`보다 크다), 루트 요소의 계산된 `filter`, 조작 요소의 audit(`core.page.audit`와 같은 형식) |
+| status | `core.surface.document` | `{url, timeOrigin, readyState, themed, scale, body, viewport, filter, unbound, params}`: 문서 주소, 시간 원점, 준비 상태, 첫 테마 적용 여부, 기기 픽셀 비율, 표면 내용의 크기인 `body`(표면 요소의 상자에 그 밖으로 넘치거나 스크롤되는 내용을 더한 크기)와 표면 요소의 보이는 상자 크기인 `viewport`(모두 CSS 픽셀이며, 내용이 들어맞지 않을 때만 `body`가 `viewport`보다 크다), 루트 요소의 계산된 `filter`, 조작 요소의 audit(`core.page.audit`와 같은 형식), view bridge 시작 시 읽은 정확한 `window.sokSurface.params` 값의 snapshot인 `params`(`null` 포함). 값이 없거나 object 또는 null이 아니면 관측 시작을 거부하고 필드명을 보고함 |
 | status | `core.surface.input` | 문서의 최근 입력 이벤트 32개(신뢰 여부 포함)를 순서대로 담는다. `pointerdown`, `pointerup`, `pointermove`, `click`, `wheel`, `keydown`에 대한 `{sequence, type, trusted, x, y, key, modifiers}`. `modifiers`는 이벤트가 담은 수정 키(`shift`, `alt`, `control`, `command`)의 목록이다. `sequence`는 1부터 기록한 이벤트마다 1씩 증가한다 |
 | command | `core.surface.hit` | CSS 픽셀 단위 `{x, y}`. 그 점에 문서의 요소가 있으면 `true`를 반환한다 |
 
