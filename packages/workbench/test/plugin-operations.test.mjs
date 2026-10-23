@@ -27,14 +27,33 @@ const state = {
   },
 };
 
+test("plugin rows report loaded surface compositions before any tab is open", { timeout: 5000 }, () => {
+  const units = [
+    { ...loaded[0], surface: { composition: { kind: "view", page: "ui/page.html" } } },
+    loaded[1],
+  ];
+  const compositions = (rows) => rows.map(({ id, composition }) => ({ id, composition }));
+  assert.deepEqual(compositions(pluginRows(units, state)), [
+    { id: "db", composition: null },
+    { id: "fresh", composition: null },
+    { id: "notes", composition: null },
+    { id: "off", composition: null },
+    { id: "term", composition: "view" },
+  ], "the plugin status omits the surface kind of a view without a tab");
+  assert.deepEqual(compositions(pluginRows(units, null)), [
+    { id: "notes", composition: null },
+    { id: "term", composition: "view" },
+  ], "a window without a native host must report the same loaded declaration");
+});
+
 test("plugin rows join loaded, installed and registry plugins by id with their states", () => {
   assert.deepEqual(pluginRows(loaded, state), [
-    { id: "db", name: "DB", description: "DB 설명.", state: "available", installed: null, latest: "2.0.0", sidecars: [] },
-    { id: "fresh", name: "fresh", description: "", state: "reload", installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
-    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", installed: null, latest: null, sidecars: [] },
-    { id: "notes", name: "노트", description: "노트 목록.", state: "reload", installed: { version: "1.1.0", enabled: true }, latest: null, sidecars: [] },
-    { id: "off", name: "Off", description: "Off 설명.", state: "disabled", installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", sidecars: [] },
-    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", sidecars: [] },
+    { id: "db", name: "DB", description: "DB 설명.", state: "available", composition: null, installed: null, latest: "2.0.0", sidecars: [] },
+    { id: "fresh", name: "fresh", description: "", state: "reload", composition: null, installed: { version: "0.1.0", enabled: true }, latest: null, sidecars: [] },
+    { id: "gone", name: "지운 것", description: "지운 플러그인.", state: "reload", composition: null, installed: null, latest: null, sidecars: [] },
+    { id: "notes", name: "노트", description: "노트 목록.", state: "reload", composition: null, installed: { version: "1.1.0", enabled: true }, latest: null, sidecars: [] },
+    { id: "off", name: "Off", description: "Off 설명.", state: "disabled", composition: null, installed: { version: "1.0.0", enabled: false }, latest: "1.0.0", sidecars: [] },
+    { id: "term", name: "터미널", description: "터미널 표면.", state: "loaded", composition: null, installed: { version: "0.1.0", enabled: true }, latest: "0.10.0", sidecars: [] },
   ]);
 });
 

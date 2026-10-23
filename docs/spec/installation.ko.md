@@ -195,7 +195,7 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 |---|---|
 | `registry` | Registry index URL 또는 `null` |
 | `error` | Registry index 오류 또는 plugin 상태 오류, 또는 `null` |
-| `plugins` | 카드마다 id 순서로 `{id, name, description, state, installed, latest, sidecars}`. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열한 철회되지 않은 가장 새 버전 또는 `null`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이며 모르는 `range`와 `version`은 `null`이다 |
+| `plugins` | 카드마다 id 순서로 `{id, name, description, state, composition, installed, latest, sidecars}`. `composition`은 이 창에 로드한 manifest의 surface composition kind이며 surface 선언을 로드하지 않았으면 `null`이다. 열린 tab의 유무와 무관하다. `installed`는 `{version, enabled}` 또는 `null`, `latest`는 registry index가 나열한 철회되지 않은 가장 새 버전 또는 `null`, `sidecars`는 이름 순서의 `{name, range, version}` 목록이며 모르는 `range`와 `version`은 `null`이다 |
 | `operation` | 첫 작업 전에는 `null`, 그 뒤에는 마지막 작업의 `{action, plugin, state, error}`. `state`는 `running`, `done`, `failed`이고, `error`는 실패한 작업의 message 또는 `null`이다 |
 | `reload` | 상태가 `reload`인 plugin이 있으면 `true` |
 | `updates` | registry index가 더 새 철회되지 않은 version을 나열하는 설치 plugin을 id 순으로: `{id, installed, latest}` |

@@ -818,7 +818,7 @@
       },
       {
         "name": "core.plugins",
-        "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or reload), installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, and the installed plugins whose registry index lists a newer version.",
+        "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available or reload), the loaded surface composition kind or null without a loaded surface declaration, installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, and the installed plugins whose registry index lists a newer version.",
         "schema": {
           "type": "object",
           "properties": {
@@ -856,6 +856,10 @@
                       "available",
                       "reload"
                     ]
+                  },
+                  "composition": {
+                    "type": ["string", "null"],
+                    "enum": ["view", null]
                   },
                   "installed": {
                     "type": [

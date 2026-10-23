@@ -195,7 +195,7 @@ While `updates` is not empty, the plugin screen shows an update list above the c
 |---|---|
 | `registry` | The registry index URL, or `null` |
 | `error` | The registry index error or the plugin state error, or `null` |
-| `plugins` | One entry per card, sorted by id: `{id, name, description, state, installed, latest, sidecars}`; `installed` is `{version, enabled}` or `null`, `latest` is the newest version that the registry index lists and that is not revoked, or `null`, and `sidecars` lists `{name, range, version}` sorted by name, where `range` and `version` are `null` when unknown |
+| `plugins` | One entry per card, sorted by id: `{id, name, description, state, composition, installed, latest, sidecars}`; `composition` is the surface composition kind of the manifest loaded in this window, or `null` when no surface declaration is loaded; it does not depend on whether a tab is open. `installed` is `{version, enabled}` or `null`, `latest` is the newest version that the registry index lists and that is not revoked, or `null`, and `sidecars` lists `{name, range, version}` sorted by name, where `range` and `version` are `null` when unknown |
 | `operation` | `null` before the first operation, then `{action, plugin, state, error}` of the latest one: `state` is `running`, `done` or `failed`, and `error` is the message of a failed operation or `null` |
 | `reload` | `true` when a plugin has the state `reload` |
 | `updates` | The installed plugins for which the registry index lists a newer version that is not revoked, sorted by id: `{id, installed, latest}` |

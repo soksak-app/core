@@ -4,6 +4,7 @@
 
 import { beginOperation } from "./operations.js";
 import { compareVersions } from "./version-range.js";
+import { compositionKindOf } from "./surface-composition-kind.js";
 
 export const PLUGIN_ACTIONS = ["install", "update", "remove", "enable", "disable"];
 
@@ -29,7 +30,7 @@ export function hasUpdate(row) {
 }
 
 /**
- * Builds the list rows in id order. loaded is the plugins that the window loaded, {id, name, description, version, sidecars};
+ * Builds the list rows in id order. loaded holds the manifests of the plugins that the window loaded;
  * state is the result of pluginsState of the host, and null if there is no host.
  */
 export function pluginRows(loaded, state) {
@@ -37,6 +38,7 @@ export function pluginRows(loaded, state) {
   if (!state) {
     return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)).map((unit) => ({
       id: unit.id, name: unit.name, description: unit.description, state: "loaded", installed: null, latest: null,
+      composition: compositionKindOf(unit.surface),
       sidecars: sidecarsOf(null, null, unit, null),
     }));
   }
@@ -64,6 +66,7 @@ export function pluginRows(loaded, state) {
     const about = unit ?? entry ?? { name: id, description: "" };
     return {
       id, name: about.name, description: about.description, state: status,
+      composition: compositionKindOf(unit?.surface),
       installed: record ? { version: record.version, enabled: record.enabled } : null, latest,
       // A plugin that exists only in installed.json also has sidecars in that entry.
       sidecars: sidecarsOf(record, entry, unit, state),

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-20: The `core.plugins` status reports the surface `composition` of each loaded plugin, independently of open tabs, so window checks can find views that have no card. The owning Red assertion now passes with all 22 plugin-operation and composition-kind tests.
+
 - F262-8: An origin ends only when its tab leaves the stored layout of its own space. The display of another space no longer drops the origins of the tabs of the spaces that are not displayed, which caused the refusal `tab X has no origin`.
 - F262-7: The presentation refusal of a view tab without an origin names the tab, its plugin, its space and project, the path that created the tab, and whether this session recorded its origin. Each tab creation site names its path.
 - F212.12-2-1: A view accepts the first mouse down of an inactive window, so the press reaches the page of the view and the view becomes the first responder. Before, AppKit consumed that press for the activation of the window, so a click on a view card gave the view no keyboard focus. A document region keeps the refusal. Red: `view_focus_test` failed both the page press and the first responder assertions on the unchanged source; Green after the change, three consecutive runs.
