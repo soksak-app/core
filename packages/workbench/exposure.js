@@ -33,7 +33,7 @@ const byAttribute = (name) => () => [...document.querySelectorAll(`[data-expose=
 
 const ownerOf = (name) => name.slice(0, name.indexOf("."));
 
-/** Whether the name is registered by a surface document: a plugin name or core.surface.*. */
+/** Whether the name is registered by a surface document: a plugin name or one of the three core document entries. */
 const surfaceName = (name) => ownerOf(name) !== "core" || surfaceDocumentEntry(name);
 
 /** The key of one watch. A watch that names a surface and a watch that does not are different. */
