@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-21: The view display checker enumerates installed enabled views, measures the returned tab's applied rectangle with the capture content offset, and rejects acceptance without an explicit plugin content case. The original three owning Red assertions and the missing-case Red pass. Actual per-plugin first-content acceptance remains incomplete in F212.12-1-22.
+
 - F244-2-2: Remove the obsolete Makefile description of the deleted DOM memory benchmark.
 
 - F240-7: Align completed review and producer-contract statuses with their recorded evidence, keep inactive CI and window gates waiting, and refresh the open-reference index from owning checklists. Pending release and measurement requirements remain open.

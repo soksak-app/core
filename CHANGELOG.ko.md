@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1-21: View display 검사기는 설치되고 활성화된 view를 열거하고 capture content offset을 적용하여 반환 tab의 applied rectangle을 측정하며 명시적 plugin content case 없는 acceptance를 거부한다. 기존 소유 Red assertion 세 개와 missing-case Red가 통과한다. 실제 plugin별 first-content acceptance는 F212.12-1-22에서 미완료다.
+
 - F244-2-2: 삭제된 DOM memory benchmark의 오래된 Makefile 설명을 제거한다.
 
 - F240-7: 완료된 review와 producer-contract status를 기록된 증거에 맞추고, active work가 없는 CI와 window gate를 waiting으로 두며, owning checklist에서 open-reference index를 갱신한다. 대기 중인 release와 measurement 요구는 열린 상태를 유지한다.

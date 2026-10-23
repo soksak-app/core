@@ -74,6 +74,10 @@ node scripts/test-command.mjs --id inventory --timeout-ms 10000 -- node scripts/
 
 ## 창 검사
 
+View 표시 검사는 `core.plugins`에서 열린 tab이 없는 plugin도 포함하여 설치되고 활성화된 view plugin을 열거한다. `core.card.add-tab`이 반환한 tab으로 surface를 식별하고 해당 document를 검사하며 capture content offset과 scale을 적용해 그 surface의 applied rectangle만 측정한다. 영역 안의 색 차이는 빈 영역 검사이며 해당 plugin의 첫 content frame을 증명하지 않는다.
+
+View display acceptance는 설치된 각 view plugin의 명시적 content case를 요구한다. Case가 없으면 plugin과 실제로 연 tab을 밝히며 실패한다. Applied surface 영역의 colour variation은 영역 관찰만 제공하고 first content를 입증하지 않는다. 따라서 missing content case를 거부하는 것은 acceptance 기준을 낮추지 않고 false pass를 제거한다.
+
 현재 layout의 terminal click을 관측하려면 `SOKSAK_CONFIG_ROOT=<root> pnpm -F @soksak/e2e verify:terminal-focus-current`를 실행한다. 검사는 보이는 terminal view가 있어야 하며, 두 application을 활성화하지 않고 native click을 기록하고, 보이는 view document와 새 trusted pointer event 및 해당 native first responder를 요구한다. Layout을 보존하고 모든 기록 frame의 decoding, recording limit 미도달, 최대 33 ms의 frame gap을 확인한다. 이 검사는 문자를 입력하지 않으며 문자 입력은 activation tier에서 확인한다. 실패한 recording을 진단용으로 보존하려면 `SOKSAK_KEEP_FAILURE_CAPTURE=1`을 설정한다.
 
 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 정하는 시험 실행기 아래에서 각 검사는 애플리케이션의 event log에 시작과 끝을 표시하고(`diagnostics.test.mark`, [시험 표시](../spec/logging.ko.md#시험-표시)) 표시마다 위치 `(boot, seq)`를 실행 폴더의 `marks.jsonl`에 덧붙인다. `SOKSAK_RUN_ID`가 없으면 검사는 아무것도 표시하지 않는다. `pnpm verify:windows`와 `pnpm verify:activation`(실행기를 거치는 활성화 등급이며, `pnpm -F @soksak/e2e verify:activation`은 같은 파일을 실행 없이, 감사 없이 실행한다)은 표시가 가리키는 설정 폴더의 모든 event 파일에 대한 실행 로그 감사(`node scripts/audit-run.mjs <실행 폴더>`, [검사](../spec/logging.ko.md#검사))로 끝나며, finding이 있으면 실행이 실패한다. 감사는 실행 폴더에 시험마다 로그 범위로 낸 판정 `judgment.json`도 쓴다.
