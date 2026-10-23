@@ -12,6 +12,8 @@
 
 - F212.12-2-2-4-4: Window-check recording 소유권이 canonical filesystem identity를 비교해 동등한 frame path 표기도 추적하고 성공 session 뒤 제거한다. 소유 테스트는 변경 전 finalizer에서 실패하고 수정 뒤 통과한다. Recording 및 session-cleanup 테스트 12/12가 통과한다.
 
+- F212.12-2-2-4-5: Tracked recording, failed-stop record, 남은 folder가 canonical filesystem identity를 사용한다. Finalization은 아직 존재하는 folder만 resolve하므로 path alias가 stop 실패를 숨기지 않고 이미 제거된 folder도 `ENOENT`를 일으키지 않는다. 소유 recording 및 session-cleanup test 14/14가 통과한다.
+
 - F212.10-editor-2: Contributor 연결이 없어도 provider page는 자기 선언 shared module만 불러올 수 있다. 다른 page는 계속 enabled provider에 대한 호환 item이 있어야 한다. Go와 Rust 소유 Red 검사는 shared file이 없는 결과를 반환했으며 수정 후 같은 검사와 기존 grant 사례가 통과한다.
 
 - F212.16-13: Tauri application entry가 현재 host scheme과 일치하도록 `soksak://core/start.json`을 import한다. 소유 검사는 이전 `sok:` import에서 실패한 뒤 canonical address만 해석해 통과한다. Tauri package test는 18/18로 통과하고 재빌드한 0.0.20 window는 `ready:true`를 보고한다.

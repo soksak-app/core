@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,7 +10,7 @@ import { drag, finishSession, Session } from "../app.mjs";
  * A connection that imitates a host with one recording. stop takes the recording and then fails when stopFails is set.
  * Without a recording, it rejects with `no capture is running` like the host.
  */
-function fakeClient(directory, { stopFails = false, missingCallbackStatus = false } = {}) {
+function fakeClient(directory, { stopFails = false, missingCallbackStatus = false, framePath = (path) => path } = {}) {
   const requests = [];
   let running = null;
   const captures = join(directory, "logs", "captures");
@@ -25,15 +25,16 @@ function fakeClient(directory, { stopFails = false, missingCallbackStatus = fals
       if (method === "diagnostics.capture.start") {
         running = join(captures, `capture-${requests.length}`);
         mkdirSync(running);
-        return { frames: running };
+        return { frames: framePath(running) };
       }
       if (method === "diagnostics.capture.stop") {
         if (!running) throw new Error("no capture is running");
-        const frames = running;
+        const frames = framePath(running);
+        const storedFrames = running;
         running = null;
         if (stopFails) throw new Error("layout trace failed");
         const callbackStatus = join(frames, "callback-status.jsonl");
-        if (!missingCallbackStatus) writeFileSync(callbackStatus, "{\"sequence\":1,\"status\":0,\"displayTime\":\"123\"}\n");
+        if (!missingCallbackStatus) writeFileSync(join(storedFrames, "callback-status.jsonl"), "{\"sequence\":1,\"status\":0,\"displayTime\":\"123\"}\n");
         return { frames, callbackStatus, count: 2, limited: false, longestGap: 16 };
       }
       throw new Error(`unexpected ${method}`);
@@ -107,6 +108,33 @@ test("a tracked recording is finalized when its frame path has an equivalent fil
   assert.equal(existsSync(frames), false, "the tracked recording was not removed after successful finalization");
 });
 
+test("a failed stop remains failed when its frame path uses an equivalent filesystem spelling", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-failed-path-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const framePath = (path) => `${path.slice(0, path.lastIndexOf("/"))}/./${path.slice(path.lastIndexOf("/") + 1)}`;
+  const client = fakeClient(directory, { stopFails: true, framePath });
+  const s = newSession(directory, client);
+  const recording = await s.record();
+  await assert.rejects(recording.stop(), /layout trace failed/);
+
+  await assert.rejects(cleanUp(s), /1 recording failed: .*layout trace failed/);
+  assert.equal(existsSync(recording.frames), true, "the failed recording was removed during finalization");
+});
+
+test("finalization tolerates a tracked recording folder already removed", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-removed-path-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory);
+  const s = newSession(directory, client);
+  const frames = join(directory, "logs", "captures", "already-removed");
+  mkdirSync(frames);
+  s.trackRecording(frames);
+  rmSync(frames, { recursive: true, force: true });
+
+  await cleanUp(s);
+  assert.equal(existsSync(frames), false);
+});
+
 test("a recording stop requires its callback status artifact", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -137,7 +165,7 @@ test("a captured drag remains available when the session fails", async (t) => {
   const result = await drag({ diagnostic() {} }, s,
     { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, { capture: true });
   assert.equal(result.frameDir, frames);
-  assert.equal(s.recordings.has(frames), true, "the drag capture was not registered with the session");
+  assert.equal(s.recordings.has(realpathSync(frames)), true, "the drag capture was not registered with the session");
   await finishSession({ name: "failed drag", passed: false, diagnostic() {} }, s, () => {});
   assert.equal(existsSync(frames), true, "the failed drag capture was removed before session finalization");
 });

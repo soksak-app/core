@@ -290,9 +290,9 @@ export async function finishSession(t, session, close) {
     // recording left by an otherwise successful check is itself a failure; preserve it for the same reason.
     const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
       .map((name) => join(session.app.configDir, "logs", "captures", name));
-    const trackedRecordingPaths = new Set([...session.recordings].map((folder) => realpathSync(folder)));
-    const untracked = left.filter((folder) => !trackedRecordingPaths.has(realpathSync(folder)));
-    const failedRecordings = left.filter((folder) => session.failedRecordings.has(folder));
+    const remaining = left.map((folder) => ({ folder, identity: realpathSync(folder) }));
+    const untracked = remaining.filter(({ identity }) => !session.recordings.has(identity)).map(({ folder }) => folder);
+    const failedRecordings = remaining.filter(({ identity }) => session.failedRecordings.has(identity));
     if (left.length && (!t.passed || failures.length || untracked.length || failedRecordings.length)) {
       if (untracked.length && t.passed && failures.length === 0) {
         const error = new Error(`${session.app.name}: the check left ${untracked.length} untracked recording${untracked.length === 1 ? "" : "s"}: ` +
@@ -301,7 +301,7 @@ export async function finishSession(t, session, close) {
         t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
       }
       if (failedRecordings.length && t.passed && failures.length === 0) {
-        const details = failedRecordings.map((folder) => `${folder}: ${session.failedRecordings.get(folder)}`);
+        const details = failedRecordings.map(({ folder, identity }) => `${folder}: ${session.failedRecordings.get(identity)}`);
         const error = new Error(`${session.app.name}: ${failedRecordings.length} recording${failedRecordings.length === 1 ? "" : "s"} failed: ` +
           `${details.join(", ")}; the recordings were preserved`);
         failures.push(error);
@@ -395,7 +395,7 @@ export class Session {
   /** Registers a capture folder so the session removes it only after the whole check succeeds. */
   trackRecording(frames) {
     if (typeof frames !== "string" || frames === "") throw new Error("trackRecording requires a frame folder");
-    this.recordings.add(frames);
+    this.recordings.add(realpathSync(frames));
     return frames;
   }
 
@@ -554,7 +554,7 @@ export class Session {
       try {
         if (!sent) await this.request("diagnostics.capture.stop", { after: 0 });
       } catch (error) {
-        this.failedRecordings.set(frames, error);
+        this.failedRecordings.set(realpathSync(frames), error);
         throw error;
       }
     });
@@ -567,7 +567,7 @@ export class Session {
           requireCallbackStatusArtifact(result, frames);
           return result;
         }).catch((error) => {
-          this.failedRecordings.set(frames, error);
+          this.failedRecordings.set(realpathSync(frames), error);
           throw error;
         });
       },
