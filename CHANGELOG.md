@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.16-4: The process-label helper now reports control read/write failures and exits nonzero when its control byte is missing. Its owning check reproduced EOF being accepted as successful exit, then passed with interrupted system calls retried, an injected invalid write descriptor rejected, bounded child cleanup, and normal label measurements.
+
 - F212.16-3: A tracked native measurement compares a bare helper with the same executable in a disposable `LSUIElement` bundle. `_RegisterApplication` alone leaves the default LaunchServices label; setting `_kLSDisplayNameKey` after check-in gives both helpers the exact `soksak://sidecar/vt` label in LaunchServices and `NSRunningApplication.localizedName`, while preserving the executable basename. The bare helper has no bundle identifier and remains `BackgroundOnly`; neither case changes the frontmost PID, and both helpers exit. This confirms the private registration path can label a bare sidecar process without changing its executable path. Activity Monitor-specific rendering and production adoption remain unverified.
 
 - F212.16-2: The native process-label measurement now fails on subprocess errors, missing process records, failed OS process queries and incorrect override labels. Its WebKit worker releases all views before exit, and the parent verifies that every WebContent process exits. A disposable helper confirms that `NSProcessInfo.processName` returns the requested sidecar label while `proc_name` and the executable path remain the helper's names and LaunchServices registers no entry for its PID. The owning test passes without activating the application.

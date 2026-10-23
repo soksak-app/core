@@ -2,6 +2,8 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
+#import <errno.h>
+#import <signal.h>
 #import <stdio.h>
 #import <stdlib.h>
 #import <string.h>
@@ -11,6 +13,33 @@
 #import "support/temporary_folder.h"
 
 static int failures;
+
+static int waitForControlByte(const char *helperName) {
+    char controlByte = 0;
+    ssize_t count;
+    do {
+        count = read(STDIN_FILENO, &controlByte, sizeof(controlByte));
+    } while (count < 0 && errno == EINTR);
+    if (count == 1) return 0;
+    if (count == 0) {
+        fprintf(stderr, "HELPER_ERROR %s control input reached EOF before handshake\n", helperName);
+    } else {
+        fprintf(stderr, "HELPER_ERROR %s control read failed: %s\n", helperName, strerror(errno));
+    }
+    return 1;
+}
+
+static BOOL writeControlByte(int descriptor, const char *helperName) {
+    const char controlByte = 'x';
+    ssize_t count;
+    do {
+        count = write(descriptor, &controlByte, sizeof(controlByte));
+    } while (count < 0 && errno == EINTR);
+    if (count == 1) return YES;
+    fprintf(stderr, "CONTROL_ERROR %s write failed: %s\n", helperName,
+        count == 0 ? "no data written" : strerror(errno));
+    return NO;
+}
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
@@ -323,9 +352,7 @@ static int runSidecarProcessNameHelper(void) {
             NSProcessInfo.processInfo.processName.UTF8String,
             NSProcessInfo.processInfo.arguments.firstObject.UTF8String);
         fflush(stdout);
-        char done = 0;
-        (void)read(STDIN_FILENO, &done, sizeof(done));
-        return 0;
+        return waitForControlByte("process-name helper");
 }
 
 static int runRegisteredSidecarDisplayNameHelper(void) {
@@ -360,9 +387,7 @@ static int runRegisteredSidecarDisplayNameHelper(void) {
         NSBundle.mainBundle.bundleURL.path.UTF8String);
     fflush(stdout);
     CFRelease(copiedName);
-    char done = 0;
-    (void)read(STDIN_FILENO, &done, sizeof(done));
-    return 0;
+    return waitForControlByte("registered display-name helper") ? 6 : 0;
 }
 
 static BOOL runWebKitWorkerAndCheckCleanup(void) {
@@ -493,8 +518,13 @@ static BOOL measureSidecarProcessNameSetter(void) {
         reportedProcessName.UTF8String ?: "<unavailable>", reportedProcessPath.UTF8String ?: "<unavailable>");
     fflush(stdout);
 
-    [controlPipe.fileHandleForWriting writeData:[NSData dataWithBytes:"x" length:1]];
-    [controlPipe.fileHandleForWriting closeFile];
+    BOOL sentControl = writeControlByte(controlPipe.fileHandleForWriting.fileDescriptor, "process-name helper");
+    check(sentControl, @"process-name helper control handshake writes one byte");
+    @try {
+        [controlPipe.fileHandleForWriting closeFile];
+    } @catch (NSException *exception) {
+        check(NO, [NSString stringWithFormat:@"process-name helper control pipe closes: %@", exception.reason]);
+    }
     BOOL helperExited = until(^BOOL { return !task.isRunning; }, 5);
     if (!helperExited) {
         [task terminate];
@@ -505,6 +535,34 @@ static BOOL measureSidecarProcessNameSetter(void) {
     BOOL exited = until(^BOOL { return !processExited(pid); }, 5);
     check(exited, [NSString stringWithFormat:@"process-name helper %d is gone within 5000ms", pid]);
     [processOutput release];
+    return failures == 0;
+}
+
+static BOOL registeredHelperRejectsControlEOF(void) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = NSBundle.mainBundle.executableURL;
+    task.arguments = @[@"--registered-sidecar-display-name-helper"];
+    task.standardInput = [NSFileHandle fileHandleWithNullDevice];
+    task.standardOutput = [NSFileHandle fileHandleWithNullDevice];
+    task.standardError = [NSFileHandle fileHandleWithNullDevice];
+    NSError *launchError = nil;
+    check([task launchAndReturnError:&launchError],
+        [NSString stringWithFormat:@"control EOF helper launches: %@", launchError]);
+    if (!task.isRunning) return NO;
+    pid_t pid = task.processIdentifier;
+    BOOL exited = until(^BOOL { return !task.isRunning; }, 5);
+    if (!exited) {
+        [task terminate];
+        [task waitUntilExit];
+    }
+    check(exited, @"registered helper reports control EOF within 5000ms");
+    check(exited && task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus != 0,
+        [NSString stringWithFormat:@"registered helper rejects control EOF with nonzero exit (got %d)",
+            task.terminationStatus]);
+    check(until(^BOOL { return !processExited(pid); }, 5),
+        [NSString stringWithFormat:@"control EOF helper process %d is gone within 5000ms", pid]);
+    check(!writeControlByte(-1, "injected invalid descriptor"),
+        @"control writer rejects and reports an invalid descriptor");
     return failures == 0;
 }
 
@@ -595,8 +653,13 @@ static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *c
     fflush(stdout);
 
     if (task.isRunning) {
-        [controlPipe.fileHandleForWriting writeData:[NSData dataWithBytes:"x" length:1]];
-        [controlPipe.fileHandleForWriting closeFile];
+        BOOL sentControl = writeControlByte(controlPipe.fileHandleForWriting.fileDescriptor, caseName.UTF8String);
+        check(sentControl, [NSString stringWithFormat:@"%@ helper control handshake writes one byte", caseName]);
+        @try {
+            [controlPipe.fileHandleForWriting closeFile];
+        } @catch (NSException *exception) {
+            check(NO, [NSString stringWithFormat:@"%@ helper control pipe closes: %@", caseName, exception.reason]);
+        }
     }
     BOOL exited = until(^BOOL { return !task.isRunning; }, 5);
     if (!exited) {
@@ -662,8 +725,10 @@ int main(int argc, const char **argv) { @autoreleasepool {
     if (argc == 2 && strcmp(argv[1], "--registered-sidecar-display-name-helper") == 0) {
         return runRegisteredSidecarDisplayNameHelper();
     }
+    check(signal(SIGPIPE, SIG_IGN) != SIG_ERR, @"ignore SIGPIPE so failed helper handshakes report EPIPE");
     BOOL sidecarMeasured = measureSidecarProcessNameSetter();
+    BOOL controlFailureMeasured = registeredHelperRejectsControlEOF();
     BOOL registrationMeasured = measureRegisteredDisplayNameCases();
     BOOL webKitMeasured = runWebKitWorkerAndCheckCleanup();
-    return sidecarMeasured && registrationMeasured && webKitMeasured ? 0 : 1;
+    return sidecarMeasured && controlFailureMeasured && registrationMeasured && webKitMeasured ? 0 : 1;
 } }

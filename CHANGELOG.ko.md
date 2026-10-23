@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.16-4: Process-label helper는 control read/write 오류를 보고하고 control byte가 없으면 nonzero로 종료한다. 소유 검사는 EOF를 성공적인 종료로 처리하는 결함을 재현한 뒤, interrupted system call 재시도, 잘못된 write descriptor 거부, 제한 시간 내 child 정리 및 정상 label 측정을 포함해 통과했다.
+
 - F212.16-3: Tracked native 측정은 bare helper와 동일한 executable을 임시 `LSUIElement` bundle 안에서 실행한 경우를 비교한다. `_RegisterApplication`만 호출하면 기본 LaunchServices label이 남지만 check-in 후 `_kLSDisplayNameKey`를 설정하면 두 helper 모두 LaunchServices와 `NSRunningApplication.localizedName`에 정확한 `soksak://sidecar/vt` label을 설정하면서 executable basename을 유지한다. Bare helper에는 bundle identifier가 없고 `BackgroundOnly`로 남는다. 두 경우 모두 frontmost PID를 바꾸지 않고 helper가 종료된다. private 등록 경로로 executable path를 바꾸지 않고 bare sidecar process에 label을 설정할 수 있음을 확인했다. Activity Monitor 전용 표시와 production 적용은 아직 확인하지 않았다.
 
 - F212.16-2: Native process-label 측정은 subprocess 오류, process record 누락, OS process query 실패, 잘못된 override label에서 실패한다. WebKit worker는 종료 전에 모든 view를 해제하고 parent는 각 WebContent process가 종료되는지 확인한다. 분리된 helper는 `NSProcessInfo.processName`이 요청한 sidecar label을 반환하지만 `proc_name`과 executable path는 helper 이름을 유지하고 LaunchServices는 해당 PID를 등록하지 않음을 확인한다. 소유 검사는 application을 활성화하지 않고 통과한다.
