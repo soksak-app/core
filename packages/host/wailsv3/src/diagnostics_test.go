@@ -2,7 +2,10 @@
 
 package host
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 type fakeCaptureStatus struct {
 	limited bool
@@ -15,8 +18,16 @@ func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 // contract: diagnostics.capture-stop.payload-reports-frame-limit
 func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{limited: true, gap: 42.5}, "/tmp/frames", 600, nil)
-	if payload["frames"] != "/tmp/frames" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
+	if payload["frames"] != "/tmp/frames" || payload["callbackStatus"] != "/tmp/frames/callback-status.jsonl" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
 		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+// contract: diagnostics.capture-stop.payload-reports-callback-status
+func TestCaptureStopPayloadNamesCallbackStatusArtifact(t *testing.T) {
+	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil)
+	if payload["callbackStatus"] != filepath.Join("/tmp/frames", "callback-status.jsonl") {
+		t.Fatalf("callback status path = %#v", payload["callbackStatus"])
 	}
 }
 

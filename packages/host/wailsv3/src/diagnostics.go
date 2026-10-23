@@ -212,11 +212,12 @@ type captureStatus interface {
 
 func captureStopPayload(c captureStatus, directory string, count int, records [][5]float64) map[string]any {
 	return map[string]any{
-		"frames":     directory,
-		"count":      count,
-		"limited":    c.Limited(),
-		"longestGap": c.LongestGap(),
-		"layouts":    layoutTrace(records),
+		"frames":         directory,
+		"callbackStatus": filepath.Join(directory, "callback-status.jsonl"),
+		"count":          count,
+		"limited":        c.Limited(),
+		"longestGap":     c.LongestGap(),
+		"layouts":        layoutTrace(records),
 	}
 }
 

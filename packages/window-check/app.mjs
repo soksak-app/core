@@ -532,7 +532,10 @@ export class Session {
       stop: (options = {}) => {
         if (sent) return Promise.reject(new Error(`the stop was already sent for the recording ${frames}`));
         sent = true;
-        return this.request("diagnostics.capture.stop", options);
+        return this.request("diagnostics.capture.stop", options).then((result) => {
+          requireCallbackStatusArtifact(result, frames);
+          return result;
+        });
       },
     };
   }
@@ -915,6 +918,14 @@ const GAP = 100;
 
 const paced = ({ took, asked }) => took <= asked * MARGIN && took >= asked / MARGIN;
 
+function requireCallbackStatusArtifact(result, frames) {
+  const expected = join(frames, "callback-status.jsonl");
+  if (result.callbackStatus !== expected || !existsSync(expected)) {
+    throw new Error(`capture stop callback status artifact is missing or has the wrong path: expected ${expected}, got ${result.callbackStatus}`);
+  }
+  return expected;
+}
+
 /**
  * The owner name of the other window that covers the window. It is stated as the reason why the measurement is skipped
  * because the window is covered.
@@ -951,6 +962,7 @@ async function dragOnce(s, plan, capture) {
   // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });
+  const callbackStatus = requireCallbackStatusArtifact(stopped, result.frames);
   if (stopped.limited) {
     throw new Error("the recording reached its finite frame limit before the gesture completed");
   }
@@ -960,5 +972,5 @@ async function dragOnce(s, plan, capture) {
     throw new Error(`the recording has a ${stopped.longestGap.toFixed(0)}ms gap between frames; ` +
       `frames longer than ${GAP}ms apart were not recorded, so this run did not measure the whole gesture`);
   }
-  return { ...result, displayed, count: stopped.count, longestGap: stopped.longestGap, frameDir: stopped.frames };
+  return { ...result, callbackStatus, displayed, count: stopped.count, longestGap: stopped.longestGap, frameDir: stopped.frames };
 }

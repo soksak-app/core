@@ -218,7 +218,17 @@ fn the_stop_payload_reports_a_normal_frame_limit() {
     let payload = stop_payload(Path::new("/tmp/frames"), 600, true, 42.5, &[]);
     assert_eq!(
         payload,
-        serde_json::json!({"frames": "/tmp/frames", "count": 600, "limited": true, "longestGap": 42.5, "layouts": []})
+        serde_json::json!({"frames": "/tmp/frames", "callbackStatus": "/tmp/frames/callback-status.jsonl", "count": 600, "limited": true, "longestGap": 42.5, "layouts": []})
+    );
+}
+
+// contract: diagnostics.capture-stop.payload-reports-callback-status
+#[test]
+fn the_stop_payload_names_the_callback_status_artifact() {
+    let payload = stop_payload(Path::new("/tmp/frames"), 3, false, 0.0, &[]);
+    assert_eq!(
+        payload["callbackStatus"],
+        "/tmp/frames/callback-status.jsonl"
     );
 }
 
