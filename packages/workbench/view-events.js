@@ -34,18 +34,23 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
   const registered = new Map();
   // Set by close: an event that arrives after the surface closed is canceled without a host send.
   let closed = false;
+  let delivery = Promise.resolve();
   const forward = (event, data) => {
-    if (closed || closing?.aborted) {
-      cancel(event);
-      return;
-    }
-    push(event, data).then(undefined, (error) => {
+    delivery = delivery.then(async () => {
       if (closed || closing?.aborted) {
         cancel(event);
         return;
       }
-      // default: a refusal that is not an Error carries its value as the text.
-      report(`view event ${event}: ${error?.message ?? error}`);
+      try {
+        await push(event, data);
+      } catch (error) {
+        if (closed || closing?.aborted) {
+          cancel(event);
+          return;
+        }
+        // default: a refusal that is not an Error carries its value as the text.
+        report(`view event ${event}: ${error?.message ?? error}`);
+      }
     });
   };
   // A registrar returns a promise of the off function, the one form that every registrar gives (docs/spec/native-surfaces.md#view-surfaces).

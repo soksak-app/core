@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-2-2-5: Native key callbacks reached the host in order, but concurrent view event pushes could overtake one another before reaching the terminal input queue. The workbench now serializes event delivery for each view. The unchanged owning test failed when it held the first push and observed the second start; the same test passes with both pushes settling in order. Live push failures remain reported.
+
 - F212.17: Ending a view could leave pending call replies and sidecar events attempting delivery after the host removed its document. The workbench now aborts pending call waits, discards results that settle after closure, and records canceled call replies and refused event deliveries. The owning Red reproduced both `no ready document` errors and a stale reply attempt; Green verifies both cancellation records, no post-close send, and no application error. The live-view refusal check still reports its error.
 
 - F212.13-1-1: The diagnostic input reference serialized its `focused` state as the JSON number `1`, so the two-host keyboard check failed before sending native keys. A native test of the raw JSON reply failed on the unchanged serializer even though an NSNumber equality assertion passed. The snapshot now boxes the result explicitly as `@YES` or `@NO`; the same owning assertion passes, and `input_reference_test` passes on macOS 26.6.2 arm64. The approved two-host keyboard check remains under F212.12-2-2-4.

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2-5: Native key callback은 host에 순서대로 도착하지만 concurrent view event push가 terminal input queue에 도달하기 전에 서로 앞설 수 있었다. Workbench는 view별 event 전달을 직렬화한다. 첫 push를 대기시키는 기존 owning test는 두 번째 push가 먼저 시작되어 실패했으며, 같은 테스트가 두 push의 순서가 유지된 채 완료됨을 확인한다. Live push 오류는 계속 보고한다.
+
 - F212.17: View 종료 후에도 pending call reply와 sidecar event가 host에서 문서를 제거한 뒤 전달을 시도할 수 있었다. Workbench는 pending call 대기를 abort하고 종료 뒤 완료된 결과를 버리며, 취소한 call reply와 거부된 event 전달을 기록한다. 소유 Red는 두 `no ready document` 오류와 오래된 reply 시도를 재현했다. Green은 두 취소 기록, 종료 후 전송 없음, application 오류 없음을 확인한다. Live-view 거부 검사는 계속 오류를 보고한다.
 
 - F212.13-1-1: Diagnostic input reference가 `focused` state를 JSON number `1`로 직렬화해 두 host keyboard check가 native key를 보내기 전에 실패했다. Raw JSON reply를 검사하는 native test는 기존 serializer에서 실패했으며 NSNumber equality assertion은 통과했다. Snapshot은 결과를 `@YES` 또는 `@NO`로 명시적으로 boxing하며 같은 소유 assertion과 macOS 26.6.2 arm64 `input_reference_test`가 통과한다. 승인된 두 host keyboard check는 F212.12-2-2-4에서 계속한다.

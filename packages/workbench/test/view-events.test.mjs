@@ -30,6 +30,39 @@ function fakes() {
   return { listeners, off, pushed, failures, native, sidecar, textSize, settings, push };
 }
 
+test("a later view event waits for the earlier event delivery", async () => {
+  const listeners = new Map();
+  const started = [];
+  const delivered = [];
+  let releaseFirst;
+  const firstDelivery = new Promise((resolve) => { releaseFirst = resolve; });
+  const native = (name, listener) => {
+    listeners.set(name, listener);
+    return Promise.resolve(() => {});
+  };
+  const subs = createViewSubscriptions({
+    native,
+    sidecar: null,
+    push: async (event, data) => {
+      started.push(data.id);
+      if (data.id === 1) await firstDelivery;
+      delivered.push(data.id);
+    },
+    report: () => {},
+  });
+  await subs.native("input");
+  listeners.get("input")({ id: 1 });
+  listeners.get("input")({ id: 2 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(started, [1], "the second delivery must remain queued while the first is pending");
+  releaseFirst();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(started, [1, 2]);
+  assert.deepEqual(delivered, [1, 2]);
+  await subs.close();
+});
+
 test("a native subscription is registered once and pushes each event of its name with its data", async () => {
   const { listeners, native, pushed, push } = fakes();
   const subs = createViewSubscriptions({ native, sidecar: null, push, report: () => {} });
