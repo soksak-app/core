@@ -205,6 +205,7 @@ NATIVE_TESTS = observe_test \
   webview_focus_test \
   webview_geometry_test \
   webview_process_test \
+  process_label_test \
   webview_process_end_test \
   webview_responsiveness_test \
   document_view_test \

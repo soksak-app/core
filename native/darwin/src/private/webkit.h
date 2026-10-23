@@ -2,6 +2,11 @@
 // List and conditions of use: docs/operations/private-native-apis.md
 #import <WebKit/WebKit.h>
 
+@interface WKWebViewConfiguration (SPPrivateProcessDisplayName)
+// WKWebViewConfigurationPrivate.h: test-only comparison for F212.16.
+- (void)_setProcessDisplayName:(NSString *)displayName API_AVAILABLE(macos(11.0));
+@end
+
 // _WKInspector.h
 @protocol SPInspector <NSObject>
 - (void)connect;
