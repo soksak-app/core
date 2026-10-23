@@ -642,7 +642,10 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
       },
     });
     const state = context.status.subscribe(onState);
+    let resolveCompositionDisposed;
+    const compositionDisposed = new Promise((resolve) => { resolveCompositionDisposed = resolve; });
     entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
+      compositionDisposed, resolveCompositionDisposed,
       mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
@@ -677,7 +680,7 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
         } else if (entry.compositionDeclared) {
           context.status.report("error", error);
           for (const listener of mountListeners) listener(surface.surfaceId, error);
-          await releaseFailedMount(entry).catch((releaseError) => {
+          await releaseFailedMount(entry, { present: true, value: error }).catch((releaseError) => {
             dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after listener registration failure: ${releaseError?.message ?? releaseError}` }));
           });
         }
@@ -722,14 +725,14 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
           if (entry.disposed) return null;
           context.status.report("error", error);
           for (const listener of mountListeners) listener(surface.surfaceId, error);
-          await releaseFailedMount(entry).catch((releaseError) => {
+          await releaseFailedMount(entry, { present: true, value: error }).catch((releaseError) => {
             dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after a failed mount: ${releaseError.message}` }));
           });
           throw error;
         });
       registered();
     } catch (error) {
-      await releaseFailedMount(entry).catch((releaseError) => {
+      await releaseFailedMount(entry, { present: true, value: error }).catch((releaseError) => {
         dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after a failed mount: ${releaseError.message}` }));
       });
       throw error;
@@ -755,15 +758,32 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
  * fails to mount declares nothing, so the wait also ends with that mount error.
  */
 export async function waitSurfaceCompositionDeclared(surfaceId) {
+  let entry = mounted.get(surfaceId);
+  if (entry && !entry.disposed && entry.ready) {
+    await waitForCompositionEntry(entry);
+    return;
+  }
   const pending = mounting.get(surfaceId);
   if (pending) {
     const outcome = await pending;
     if (!outcome.ok) throw outcome.error;
   }
   if (placeholders.has(surfaceId)) return;
-  const entry = mounted.get(surfaceId);
+  entry = mounted.get(surfaceId);
   if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
-  await Promise.race([entry.composition, entry.ready.then(() => entry.composition)]);
+  await waitForCompositionEntry(entry);
+}
+
+async function waitForCompositionEntry(entry) {
+  const result = await Promise.race([
+    entry.composition,
+    entry.ready.then(() => entry.composition),
+    entry.compositionDisposed,
+  ]);
+  if (result?.disposed) {
+    if (result.failure?.present) throw result.failure.value;
+    throw new Error(`surface ${entry.surfaceId} was disposed before declaring composition`);
+  }
 }
 
 export function suspendSurface(surfaceId) {
@@ -776,8 +796,9 @@ export function suspendSurface(surfaceId) {
  * mounted surfaces, so the next mount of the surface starts a new mount instead of returning this failed one. The approval of the
  * surface stays, because the host still holds the surface, and the tab reports and the error stay for the display.
  */
-async function releaseFailedMount(entry) {
+async function releaseFailedMount(entry, failure) {
   entry.disposed = true;
+  if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure });
   entry.closing.abort();
   if (entry.exposure) entry.exposure.dispose();
   await entry.context.exposure.dispose();
@@ -800,6 +821,7 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
   if (released) entry.lifetime.released = true;
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
+  if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure: null });
   entry.closing.abort();
   entry.disposing = (async () => {
     // It does not wait for approval here. A removed tab must not keep a layout commit alive only because
