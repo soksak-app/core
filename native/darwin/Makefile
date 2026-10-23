@@ -173,6 +173,9 @@ $(BUILD)/capture_metadata_test: src/capture.m
 
 $(BUILD)/capture_resize_test: src/capture.m
 
+$(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Metal -framework Network $(MINIMUM) -o $@
+
 # The native tests in the order they run: executables of the build folder, with an argument after a comma. They run one at a time
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
@@ -249,6 +252,7 @@ NATIVE_TESTS = observe_test \
   capture_pressure_test \
   capture_storage_test \
   capture_metadata_test \
+  capture_presentation_test \
   capture_resize_test \
   capture_frame_test \
   dock_menu_test \

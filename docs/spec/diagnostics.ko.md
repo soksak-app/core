@@ -25,6 +25,8 @@
 
 `<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다. 응답 정지 sample은 애플리케이션이 아니라 창 검사 harness가 쓴다. 응답하지 않는 host는 자신을 sample할 수 없기 때문이며, harness는 이어서 `diagnostics.stall.dump`를 보내 host가 파일 경로를 event로 저장하게 한다.
 
+ScreenCaptureKit frame event의 `displayTime`은 WindowServer가 해당 capture frame을 표시한 mach absolute time이다. Capture callback이 실행된 시각이 아니며 모든 display refresh를 보고하지도 않는다. `minimumFrameInterval`은 수신 update 간격을 제한할 수 있는 희망 최소 간격이며 그 cadence로 update를 보장하지 않는다. 따라서 capture trace만으로 capture sample 누락과 애플리케이션의 실제 pixel presentation 간격이 길어진 경우를 구분할 수 없다. Presentation 비교는 표시된 drawable을 보고하는 문서화된 신호를 사용하고 캡처된 pixel을 정확한 drawable identity와 연결해야 한다. Rendering callback이나 refresh notification만으로 해당 pixel의 표시를 입증할 수 없다. ScreenCaptureKit은 바뀌지 않은 pixel ID를 여러 complete sample에서 다시 보고할 수 있다. 새 drawable을 뜻하는 값은 아니므로 각 sample과 display time을 보존한다. 고유 ID가 빠지면 비교는 불완전하다. ScreenCaptureKit의 캡처 frame 표시 시각과 drawable 표시 시각은 별도 API 관측값이다. 각 source의 cadence를 변환해 비교하고 signed offset을 기록하되, 일치하는 pixel의 timestamp가 같거나 앞뒤 순서가 정해졌다고 가정하지 않는다.
+
 표준 오류에는 계약의 어떤 writer도 쓰지 않는 것만 남는다. Wails 프레임워크는 page가 파일을 요청할 때마다 `[AssetFileServerFS] Handling request` 줄을 level `info`로 쓰며, 이 줄이 실패를 뜻하지 않는 2.0 MB를 파일에 채웠다. 그래서 Wails host는 프레임워크 logger의 level을 `warn`(`FrameworkLogLevel`)으로 정한다. 요청 줄은 빠지고 프레임워크의 warning과 error는 남는다. 의미 있는 요청은 `host.binding.call`, `page.call`, host의 `error` 기록이 밝힌다. Tauri host는 표준 오류에 그런 줄을 쓰지 않으므로 level을 정하지 않는다.
 
 ## 형태
