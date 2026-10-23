@@ -8,7 +8,7 @@
 #   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
 #   make test             runs the checks for input injection, mouse button observation, window state, window button layout,
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
-#                         webview focus, document region, image region, release of a closed window, and window object count.
+#                         webview focus, view focus, document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
 #   make test-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
 #                         registered run), the web inspector check, the OS event queue click and key check of the document region,
@@ -220,6 +220,7 @@ NATIVE_TESTS = observe_test \
   document_core_root_test \
   document_view_load_test \
   view_channel_test \
+  view_focus_test \
   plugin_host_view_test \
   document_binary_test \
   document_typing_test \

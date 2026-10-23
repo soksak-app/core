@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F262-7: The presentation refusal of a view tab without an origin names the tab, its plugin, its space and project, the path that created the tab, and whether this session recorded its origin. Each tab creation site names its path.
+- F212.12-2-1: A view accepts the first mouse down of an inactive window, so the press reaches the page of the view and the view becomes the first responder. Before, AppKit consumed that press for the activation of the window, so a click on a view card gave the view no keyboard focus. A document region keeps the refusal. Red: `view_focus_test` failed both the page press and the first responder assertions on the unchanged source; Green after the change, three consecutive runs.
 - F262-6a: The view bridge serves `runtime.project(listener)`, which gives the listener the last project of the plugin host at once and makes no call to the host, as `runtime.theme` does. A plugin host page that subscribed the project message through `runtime.native.on` was refused by the host.
 - F262-4a: A layout write names its writing path (add space, saved layout, recreate or library replacement), and each view tab that it stores without an origin member is recorded in the application log with its tab, plugin and path.
 - F262-5: A navigation state or message of a plugin host that arrives after its window closed is not reported as `project window is closed`.

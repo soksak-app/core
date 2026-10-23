@@ -285,6 +285,10 @@ static BOOL isBinaryIdentifier(NSString *text) {
 @property(copy) NSString *plugin;
 // The bytes that the plugin documents of the region store under binary ids (docs/spec/native-surfaces.md#document-regions).
 @property(retain) SPBinaryStore *binaries;
+// Whether the view takes the first mouse down of an inactive window. WKWebView refuses it, so AppKit consumes that press for
+// the activation of the window and it reaches neither the page nor the first responder. A view takes it, so the press reaches the page and
+// the view takes the keyboard focus (docs/spec/native-surfaces.md#view-surfaces). A document region keeps the refusal.
+@property BOOL acceptsFirstMouseClick;
 - (void)reportMessage:(NSDictionary *)value;
 - (void)reportViewMessage:(WKScriptMessage *)message;
 @property void *context;
@@ -721,6 +725,10 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
         json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
     }
     self.message(self.messageContext, json.UTF8String);
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+    return self.acceptsFirstMouseClick;
 }
 
 - (void)reportViewMessage:(WKScriptMessage *)message {
@@ -1251,6 +1259,7 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     }
     if (isView) {
         // A view draws its declared overlays in its own DOM, so it is placed below the plane that the overlay mask cuts.
+        view.acceptsFirstMouseClick = YES;
         if (!sp_surface_place_view(surface, view)) {
             webviewInputUnregister(view);
             [view release];

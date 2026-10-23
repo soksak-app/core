@@ -5,6 +5,7 @@
 ## 미배포
 
 - F262-7: origin이 없는 뷰 탭의 표시 거부는 탭, plugin, space와 project, 탭을 만든 경로, 이 세션이 origin을 기록했는지를 밝힌다. 탭 생성 지점마다 경로를 밝힌다.
+- F212.12-2-1: view는 비활성 창의 첫 마우스 누름을 받는다. 그 누름이 페이지와 first responder에 닿아 view가 키보드 focus를 가진다. 이전에는 AppKit이 창 활성화를 위해 그 누름을 소비해 view card 클릭이 view에 키보드 focus를 주지 않았다. 문서 영역은 거부를 유지한다. Red: `view_focus_test`가 변경 전 소스에서 페이지 누름과 first responder 검사를 모두 실패했고, 변경 뒤 세 번 연속 통과했다.
 - F262-6a: view bridge가 `runtime.project(listener)`를 served한다. listener는 plugin host의 마지막 project를 바로 받고 host에 call을 보내지 않으며, 이는 `runtime.theme`과 같다. project message를 `runtime.native.on`으로 구독한 plugin host page는 host에 거부되었다.
 - F262-4a: 레이아웃 쓰기는 쓰기 경로(add space, saved layout, recreate 또는 library replacement)를 밝히며, origin 멤버 없이 저장하는 뷰 탭은 탭, plugin, 경로와 함께 응용 프로그램 로그에 기록된다.
 - F262-5: 창이 닫힌 뒤 도착한 plugin host의 navigation state나 message는 `project window is closed`로 보고되지 않는다.
