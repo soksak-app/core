@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.13-1-1: The diagnostic input reference serialized its `focused` state as the JSON number `1`, so the two-host keyboard check failed before sending native keys. A native test of the raw JSON reply failed on the unchanged serializer even though an NSNumber equality assertion passed. The snapshot now boxes the result explicitly as `@YES` or `@NO`; the same owning assertion passes, and `input_reference_test` passes on macOS 26.6.2 arm64. The approved two-host keyboard check remains under F212.12-2-2-4.
+
 - F212.12-1-21: The view display checker enumerates installed enabled views, measures the returned tab's applied rectangle with the capture content offset, and rejects acceptance without an explicit plugin content case. The original three owning Red assertions and the missing-case Red pass. Actual per-plugin first-content acceptance remains incomplete in F212.12-1-22.
 
 - F244-2-2: Remove the obsolete Makefile description of the deleted DOM memory benchmark.

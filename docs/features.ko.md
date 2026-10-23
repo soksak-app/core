@@ -1352,8 +1352,8 @@
         - [~] F212.12-2-2-4 — P0: 두 host에서 terminal click 후 native 문자 입력을 검증한다. Gesture 전체를 기록하고 같은 native key를 F212.13-1의 같은 창에 있는 독립 AppKit reference와 비교하는 activation-tier 검사를 준비한다. Terminal은 입력한 command를 한 번 실행해야 하며 검사는 input source와 원래 전면 application을 복원해야 한다. Activation 승인 후 실행한다.
     - [ ] F212.12-3 — P0: view 끌기 창 검사: view가 있는 card 끌기와 구분선 끌기를 녹화해 통과값 (viii)를 잰다. native frame과 card 경계 차이는 frame마다 2 pt 이하, 내용 frame 간격은 33 ms 이하, 내용 크기 불일치는 gesture 끝 뒤 2 frame 안에 끝난다. F212.7c의 측정이다.
     - [ ] F212.12-4 — P0: view 재시작 창 검사: 진단 고장 주입이 view의 web content 프로세스를 끝내면, host가 재시작 한도 안에서 다시 띄우고, view가 tab 상태를 복원하며, 300초 안의 네 번째 실패는 card에 오류를 보이며 멈추고, surface를 다시 열면 멈춤이 풀린다.
-  - [~] F212.13 — P0: 승인을 받아 돌리는 view의 입력기 activation 검사.
-    - [~] F212.13-1-1 — P0: 승인된 양 host keyboard activation check가 native key를 보내기 전에 실패했다. `diagnostics.input.reference`가 숫자 `focused: 1`로 답했지만 endpoint contract는 JSON boolean을 요구하고 check는 `true`를 strict하게 단언한다. 현재 구현에서 실패하는 serialized reply 소유 native test를 추가한 뒤 단언을 완화하지 않고 공개 boolean serialization을 수정한다. 소유 test가 통과하면 두 host를 다시 빌드하고 동일하게 승인된 typing target을 다시 실행한다.
+  - [ ] F212.13 — P0: 승인을 받아 돌리는 view의 입력기 activation 검사.
+    - [o] F212.13-1-1 — P0: 두 host의 diagnostic keyboard check가 `focused`를 숫자 1로 직렬화해 JSON boolean endpoint contract와 다르므로 native key를 전달하기 전에 실패한다. Red: 새 소유 native assertion `the serialized focus state is a JSON boolean`은 변경 전 serializer에서 실패했으며, 기존 `isEqual:@YES` assertion은 JSON number와 boolean을 구분하지 못해 통과했다. Green: serializer가 `@YES` 또는 `@NO`를 명시적으로 사용하고, macOS 26.6.2 arm64에서 같은 assertion과 `input_reference_test`가 통과한다(6.858 s). 연결된 F212.12-2-2-4 검사에서 두 host를 다시 빌드하고 같은 keyboard target을 재실행한다.
     - [o] F212.13-1 — P0: activation check는 동일 application window의 독립적인 AppKit text view와 native key를 비교할 수 없다. activation 실행 전에 명시적인 lifetime, 관측하는 document completion, native/host contract check를 갖춘 diagnostic input reference를 추가한다. 구현: diagnostic `open/read/focus/wait/close`는 같은 window의 일반 `NSTextView`, public first-responder 준비와 notification 기반 completion을 사용한다. Red: 구현 전 endpoint declaration test가 실패했고, focus action 전 native focus assertion이 실패했으며, window release 전에 대기한 matching change는 해당 lifetime 수정 전 SIGSEGV를 일으켰다. macOS Green: close 없는 release를 포함한 소유 native test와 Go 및 Rust host test 각각 3개가 통과한다. 두 host의 diagnostics 없는 compile과 diagnostic test build가 성공한다. Documentation, boundaries, exposure, parity, events, static host contract check가 통과한다. activation이나 input-method 결과는 기록하지 않으며 아직 미배포다.
   - [ ] F212.14 — P0: 모든 plugin view를 통과값으로 마지막에 잰다.
   - [ ] F212.15 — P0: core release.
@@ -2286,7 +2286,7 @@
       - F212.12-4 (owner: core): P0: view 재시작 창 검사: 진단 고장 주입이 view의 web content 프로세스를 끝내면, host가 재시작 한도 안에서 다시 띄우고, view가 tab 상태를 복원하며, 300초 안의 네 번째 실패는 card에 오류를 보이며 멈추고, surface를 다시 열면 멈춤이 풀린...
       - F212.13 (owner: core): P0: 승인을 받아 돌리는 view의 입력기 activation 검사.
       - F212.13-1 (owner: core): P0: Activation 창 검사에는 같은 application window의 독립 AppKit text-view control이 없어 선언된 입력기 비교를 endpoint로 실행할 수 없다. 생성, document 읽기, 정리를 제공하는 diagnostic 전용 reference-c...
-      - F212.13-1-1 (owner: core): P0: 승인된 두 host keyboard check가 native key 전달 전에 실패했다. Reference의 `focused` 직렬화 값이 JSON boolean 대신 숫자 1이다.
+      - F212.13-1-1 (owner: core): P0: Serializer correction의 소유 native test가 통과했고 승인된 두 host keyboard 검증은 F212.12-2-2-4에서 계속한다.
       - F212.14 (owner: core): P0: 모든 plugin view를 통과값으로 마지막에 잰다.
       - F212.15 (owner: core): P0: core release.
       - F238-c-11 (owner: core): P1: core `main` 소유. `packages/plugin-api/view-check.js`(bin `soksak-view-check`)는 plugin literal의 view-start hash, `VIEW_IMPORTS` 네 값, screen-message vector를 같은...

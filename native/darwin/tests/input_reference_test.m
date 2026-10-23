@@ -10,18 +10,20 @@ static void check(BOOL condition, NSString *message) {
 @interface SPReferenceReply : NSObject
 @property(retain) NSDictionary *value;
 @property(copy) NSString *failure;
+@property(copy) NSString *json;
 @property NSUInteger count;
 @end
 @implementation SPReferenceReply
-- (void)dealloc { [_value release]; [_failure release]; [super dealloc]; }
+- (void)dealloc { [_value release]; [_failure release]; [_json release]; [super dealloc]; }
 @end
 static void replied(void *context, const char *value, const char *failure) {
     SPReferenceReply *reply = context;
     reply.count++;
     if (failure) reply.failure = @(failure);
     if (value) {
+        reply.json = @(value);
         NSError *error = nil;
-        reply.value = [NSJSONSerialization JSONObjectWithData:[@(value) dataUsingEncoding:NSUTF8StringEncoding] options:0 error:&error];
+        reply.value = [NSJSONSerialization JSONObjectWithData:[reply.json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:&error];
         check(error == nil, [NSString stringWithFormat:@"reply is valid JSON: %@", error]);
     }
 }
@@ -71,7 +73,9 @@ int main(void) { @autoreleasepool {
     check([request(window, "wait", NULL).failure containsString:@"document"], @"wait rejects a missing document");
     check([request(window, "read", "unexpected").failure containsString:@"document"], @"read rejects an extra document");
     check(request(window, "focus", NULL).failure == nil, @"focus selects the ordinary text view without activation");
-    check([request(window, "read", NULL).value[@"focused"] isEqual:@YES] && !NSApp.active && !window.keyWindow, @"read reports focus without activating the application");
+    SPReferenceReply *focused = request(window, "read", NULL);
+    check([focused.value[@"focused"] isEqual:@YES] && !NSApp.active && !window.keyWindow, @"read reports focus without activating the application");
+    check([focused.json containsString:@"\"focused\":true"], @"the serialized focus state is a JSON boolean");
     SPReferenceReply *waiting = request(window, "wait", "done");
     check(waiting.count == 0, @"wait remains pending before the expected document");
     [view setString:@"done"];

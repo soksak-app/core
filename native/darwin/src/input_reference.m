@@ -48,7 +48,7 @@ static void reply(sp_input_reference_done done, void *context, NSDictionary *val
     return @{ @"open": @YES, @"document": self.view.string,
         @"selected": rangeValue(self.view.selectedRange),
         @"marked": self.view.hasMarkedText ? rangeValue(self.view.markedRange) : NSNull.null,
-        @"focused": @(self.window.firstResponder == self.view),
+        @"focused": self.window.firstResponder == self.view ? @YES : @NO,
         @"frame": @{ @"x": @(rect.origin.x), @"y": @(y), @"w": @(rect.size.width), @"h": @(rect.size.height) } };
 }
 - (void)finish:(NSString *)failure {
