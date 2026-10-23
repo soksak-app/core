@@ -20,7 +20,7 @@ const SKIP_FILES = new Set(["package.json", "plugin.json", "sidecar.json"]);
 const SOURCE = /\.(js|mjs|cjs|ts|tsx|html|css|json|go|rs|m|h|toml)$/;
 // The base of an @soksak/ name: the scope and the first segment. A subpath is not part of the base.
 const SOKSAK_NAME = /@soksak\/[a-z0-9][a-z0-9-]*/g;
-// The import-map prefix that core serves to view pages (`sok://core/shared/`, docs/spec/plugins.md). It is a core name
+// The import-map prefix that core serves to view pages (`soksak://core/shared/`, docs/spec/plugins.md). It is a core name
 // without a package.json.
 const CORE_SERVED = ["@soksak/shared"];
 

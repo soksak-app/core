@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F212.16-13: Tauri application entry가 현재 host scheme과 일치하도록 `soksak://core/start.json`을 import한다. 소유 검사는 이전 `sok:` import에서 실패한 뒤 canonical address만 해석해 통과한다. Tauri package test는 18/18로 통과하고 재빌드한 0.0.20 window는 `ready:true`를 보고한다.
+
+- F212.16-9 및 F212.16-10: VT 0.0.12와 Files 0.0.8은 각 sidecar display name을 선언하고 core identity API를 정적으로 link해 runtime 초기화 전에 LaunchServices 이름을 설정한다. 소유 startup, identity, cleanup, record 및 release build 검사가 통과한다. Artifact는 local build 상태이며 publish하지 않았고 사용자 설치는 F212.16-14와 F212.16-15에 남아 있다.
+
 - F212.16-6: Core는 각 sidecar release가 정확한 `displayName`을 선언하도록 요구하고 current manifest를 검증한 뒤 transient 및 persistent child process에 `SOKSAK_SIDECAR_DISPLAY_NAME`으로 전달한다. Red: 변경 전 plugin API와 host 검사는 필드를 거부하거나 전달하지 못했고 release validator는 필드가 없는 manifest를 허용했다. Green: plugin API, Wails/Tauri reader와 두 launch 경로, Go/Rust release validator가 소유 검사를 통과했다. Sidecar process가 자기 repository에서 native API를 호출하는 작업은 F212.16-9와 F212.16-10에 남아 있다.
 
 - F212.16-7: Core는 Darwin 전용 private Git package `@soksak/native-process-identity-darwin@0.0.20`을 통해 `soksak_process_set_display_name`을 제공한다. Package는 static library, public C header, relocatable pkg-config metadata를 빌드한다. Red: 변경 전 구현에서 owning API test가 symbol 부재로 실패한다. Green: 동일 test가 주입한 registration/set 오류, process ASN 누락, 잘못된 URI와 readback 불일치를 명시적으로 거부하고 성공 경로를 통과한다. 별도 packed-package 설치 후 relocated pkg-config 경로로 static consumer를 compile하고 실행한다. 비활성화 process-label 측정은 public API를 사용해 LaunchServices와 `NSRunningApplication.localizedName`에서 bare 및 bundled helper의 정확한 이름을 독립 확인하며 두 helper는 executable path를 유지하고 종료한다. Package는 publish하지 않았다. Sidecar startup 적용은 F212.16-9와 F212.16-10에 남아 있다.
