@@ -9,8 +9,8 @@ use std::sync::{Mutex, PoisonError};
 
 use serde_json::{Value, json};
 
-/// The response of the request that ended a recording. It holds the frame folder and the number of frames, whether the
-/// recording reached the limit, and the longest interval between frames.
+/// The response of the request that ended a recording. It holds the frame folder, callback status artifact, number of frames,
+/// whether the recording reached the limit, and the longest interval between frames.
 pub fn stop_payload(
     directory: &Path,
     count: i32,
@@ -18,7 +18,8 @@ pub fn stop_payload(
     longest_gap: f64,
     layouts: &[[f64; 5]],
 ) -> Value {
-    json!({"frames": directory.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
+    let callback_status = directory.join("callback-status.jsonl");
+    json!({"frames": directory.to_string_lossy(), "callbackStatus": callback_status.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
 }
 
 /// Converts the placement transaction record into {ticket, begun, presented, committed}. A stage that did not happen is

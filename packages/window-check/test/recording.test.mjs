@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,7 +10,7 @@ import { Session } from "../app.mjs";
  * A connection that imitates a host with one recording. stop takes the recording and then fails when stopFails is set.
  * Without a recording, it rejects with `no capture is running` like the host.
  */
-function fakeClient(directory, { stopFails = false } = {}) {
+function fakeClient(directory, { stopFails = false, missingCallbackStatus = false } = {}) {
   const requests = [];
   let running = null;
   return {
@@ -24,9 +24,12 @@ function fakeClient(directory, { stopFails = false } = {}) {
       }
       if (method === "diagnostics.capture.stop") {
         if (!running) throw new Error("no capture is running");
+        const frames = running;
         running = null;
         if (stopFails) throw new Error("layout trace failed");
-        return { count: 2, limited: false, longestGap: 16 };
+        const callbackStatus = join(frames, "callback-status.jsonl");
+        if (!missingCallbackStatus) writeFileSync(callbackStatus, "{\"sequence\":1,\"status\":0,\"displayTime\":\"123\"}\n");
+        return { frames, callbackStatus, count: 2, limited: false, longestGap: 16 };
       }
       throw new Error(`unexpected ${method}`);
     },
@@ -69,8 +72,19 @@ test("a stopped recording is removed by the cleanup without another stop", async
   const recording = await s.record();
   const stopped = await recording.stop({ after: 7 });
   assert.equal(stopped.count, 2);
+  assert.equal(stopped.callbackStatus, join(recording.frames, "callback-status.jsonl"));
   await assert.rejects(recording.stop({ after: 8 }), /stop was already sent/);
   await cleanUp(s);
   assert.equal(stops(client).length, 1);
   assert.equal(existsSync(recording.frames), false, "the recording folder stayed");
+});
+
+test("a recording stop requires its callback status artifact", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory, { missingCallbackStatus: true });
+  const s = new Session(app, client);
+  const recording = await s.record();
+  await assert.rejects(recording.stop(), /callback status artifact is missing or has the wrong path/);
+  await cleanUp(s);
 });

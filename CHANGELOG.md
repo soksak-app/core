@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-2-2-4-1: A recording gap did not show whether ScreenCaptureKit omitted a callback or delivered a non-complete frame. Red: the unchanged host stop payloads omitted the callback artifact path and the window-check consumer accepted a stop without the file; malformed JSON data also escaped the native writer as an Objective-C exception. The recorder now writes callback status and exact display time to a bounded JSONL artifact and reports overflow and encode/write failures through the capture error. Both host stop payloads expose its path, and the consumer requires the artifact. The native sequence verifies ordering, missing metadata, exact times, encode/write failures and overflow; Wails, Tauri, consumer and documentation checks pass.
+
 - F212.12-2-2-5: Native key callbacks reached the host in order, but concurrent view event pushes could overtake one another before reaching the terminal input queue. The workbench now serializes event delivery for each view. The unchanged owning test failed when it held the first push and observed the second start; the same test passes with both pushes settling in order. Live push failures remain reported.
 
 - F212.17: Ending a view could leave pending call replies and sidecar events attempting delivery after the host removed its document. The workbench now aborts pending call waits, discards results that settle after closure, and records canceled call replies and refused event deliveries. The owning Red reproduced both `no ready document` errors and a stale reply attempt; Green verifies both cancellation records, no post-close send, and no application error. The live-view refusal check still reports its error.

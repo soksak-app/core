@@ -40,6 +40,9 @@ static const long kCapturePending = 64;
 // Reaching the limit is reported as an incomplete recording. Frames are not dropped without notice and
 // then accepted as a pass.
 static const int kCaptureMaxFrames = 600;
+// ScreenCaptureKit can deliver idle and incomplete callbacks between recorded images. Keep a bounded timeline so a display-time gap
+// can be classified; a full timeline is a capture failure rather than silently omitted evidence.
+static const int kCaptureMaxCallbackStatusRecords = 4096;
 static bool captureLimitReached;
 // Frames presented before the capture request do not belong to the measured gesture.
 // ScreenCaptureKit can deliver one cached frame when the stream starts.
@@ -56,6 +59,8 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
 // Receives frames and writes them to files. The frames are delivered as messages, so a receiver object is required.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
+@property (nonatomic, retain) NSMutableArray<NSDictionary *> *callbackStatusTrace;
+@property (nonatomic) BOOL callbackStatusTraceOverflowed;
 @property (nonatomic) int written;
 @property (nonatomic) int idle;
 // The count of incomplete frames per status. The index is an SCFrameStatus value.
@@ -70,6 +75,7 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
 @property (nonatomic) double slowestWrite;
 @property (nonatomic) uint64_t lastShown;
 @property (nonatomic) uint64_t longestGap;
+- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime;
 @end
 
 // frameInfo reads the value of key from the information dictionary attached to a frame. It is NULL if the dictionary
@@ -124,6 +130,37 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
 
 @implementation SPCapture
 
+- (instancetype)init {
+    self = [super init];
+    if (self) _callbackStatusTrace = [[NSMutableArray alloc] init];
+    return self;
+}
+
+- (void)dealloc {
+    [_callbackStatusTrace release];
+    [_directory release];
+    [super dealloc];
+}
+
+- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime {
+    if (self.callbackStatusTrace.count >= kCaptureMaxCallbackStatusRecords) {
+        if (!self.callbackStatusTraceOverflowed) {
+            self.callbackStatusTraceOverflowed = YES;
+            setCaptureError([NSString stringWithFormat:@"capture callback status trace capacity exceeded (%d records)",
+                kCaptureMaxCallbackStatusRecords]);
+        }
+        return NO;
+    }
+    id statusValue = hasStatus ? @((int)status) : [NSNull null];
+    id timeValue = hasDisplayTime ? [NSString stringWithFormat:@"%llu", (unsigned long long)shown] : [NSNull null];
+    [self.callbackStatusTrace addObject:@{
+        @"sequence": @(self.callbackStatusTrace.count + 1),
+        @"status": statusValue,
+        @"displayTime": timeValue,
+    }];
+    return YES;
+}
+
 - (void)stream:(SCStream*)stream
     didOutputSampleBuffer:(CMSampleBufferRef)sample
                    ofType:(SCStreamOutputType)type {
@@ -146,7 +183,11 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     // marked idle and have no image. Counting them makes it possible to state why there are 0 frames.
     // A frame without a status cannot be known to be complete, so the recording fails.
     SCFrameStatus status = SCFrameStatusComplete;
-    if (!frameStatus(sample, &status)) {
+    BOOL hasStatus = frameStatus(sample, &status);
+    uint64_t shown = 0;
+    BOOL hasDisplayTime = displayTime(sample, &shown);
+    if (![self recordCallbackStatus:status hasStatus:hasStatus displayTime:shown hasDisplayTime:hasDisplayTime]) return;
+    if (!hasStatus) {
         if (!hasCaptureError()) setCaptureError([NSString stringWithFormat:@"frame %d has no status", self.queued + 1]);
         return;
     }
@@ -164,8 +205,7 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         setCaptureError([NSString stringWithFormat:@"frame %d has no image buffer", number]);
         return;
     }
-    uint64_t shown = 0;
-    if (!displayTime(sample, &shown)) {
+    if (!hasDisplayTime) {
         setCaptureError([NSString stringWithFormat:@"frame %d has no display time", number]);
         return;
     }
@@ -351,6 +391,45 @@ static void reportCaptureStreamFailure(SCStream *stream, NSString *message) {
 
 static bool hasCaptureError(void) {
     @synchronized([SPCapture class]) { return captureError != nil; }
+}
+
+static NSString *const kCaptureCallbackStatusFile = @"callback-status.jsonl";
+
+static bool writeCaptureCallbackStatusTrace(SPCapture *sink) {
+    NSMutableData *contents = [NSMutableData data];
+    NSUInteger recordNumber = 0;
+    for (NSDictionary *record in sink.callbackStatusTrace) {
+        recordNumber++;
+        NSError *error = nil;
+        NSData *line = nil;
+        NSString *encodingFailure = nil;
+        @try {
+            line = [NSJSONSerialization dataWithJSONObject:record options:0 error:&error];
+        } @catch (NSException *exception) {
+            encodingFailure = exception.reason ?: exception.name;
+        }
+        if (line == nil) {
+            NSString *reason = encodingFailure ?: error.localizedDescription ?: @"no encoding error was provided";
+            NSString *message = [NSString stringWithFormat:@"capture callback status trace could not encode record %lu: %@",
+                (unsigned long)recordNumber, reason];
+            setCaptureError(message);
+            sp_log_error("capture callback status", message.UTF8String);
+            return false;
+        }
+        [contents appendData:line];
+        [contents appendBytes:"\n" length:1];
+    }
+    NSString *path = [sink.directory stringByAppendingPathComponent:kCaptureCallbackStatusFile];
+    NSError *error = nil;
+    if (![contents writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        NSString *reason = error.localizedDescription ?: @"no write error was provided";
+        NSString *message = [NSString stringWithFormat:@"capture callback status trace could not write %@: %@",
+            path, reason];
+        setCaptureError(message);
+        sp_log_error("capture callback status", message.UTF8String);
+        return false;
+    }
+    return true;
 }
 
 const char *sp_capture_error(void) {
@@ -560,6 +639,8 @@ bool sp_capture_start(const char* directory, char **errorOut) {
     captureSink.rejected = 0;
     captureSink.idle = 0;
     captureSink.complete = 0;
+    captureSink.callbackStatusTraceOverflowed = NO;
+    [captureSink.callbackStatusTrace removeAllObjects];
     captureSink.slowestWrite = 0;
     captureSink.lastShown = 0;
     captureSink.longestGap = 0;
@@ -698,6 +779,9 @@ int sp_capture_stop(double after) {
     dispatch_sync(captureQueue, ^{});
     // Counts after all copied frames have been written.
     dispatch_sync(captureWriter, ^{});
+    if (!writeCaptureCallbackStatusTrace(captureSink) && !hasCaptureError()) {
+        setCaptureError(@"capture callback status trace failed without a reason");
+    }
     @synchronized([SPCapture class]) { captureStream = nil; }
     dispatch_release(captureQueue);
     dispatch_release(stopped);

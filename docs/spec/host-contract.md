@@ -117,6 +117,7 @@ Items:
 | `diagnostics.input-reference.validates-document` | Input reference actions accept a document string only for wait, including an empty string, and reject missing or invalid values. | both |
 | `diagnostics.input-reference.rejects-nul` | Native input reference adapters reject NUL in actions or documents and complete once with an error. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | The capture stop payload of a limited capture reports frames, count, limited true, and the longest gap. | both |
+| `diagnostics.capture-stop.payload-reports-callback-status` | The capture stop payload reports the path of the bounded callback status and exact display-time JSONL artifact inside the recording directory. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | The capture stop payload of a capture below its limit reports limited false. | both |
 | `diagnostics.capture-stop.payload-reports-layout-timeline` | The capture stop payload always reports a `layouts` array, also when no layout transaction was recorded. | both |
 | `diagnostics.capture-stop.payload-preserves-layout-stages` | Each `layouts` entry keeps the recorded ticket, begun, requested, presented and committed values. | both |

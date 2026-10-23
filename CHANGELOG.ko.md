@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2-4-1: 녹화 gap만으로 ScreenCaptureKit callback 누락과 non-complete frame 전달을 구분할 수 없었다. Red: 변경 전 host stop payload에 callback artifact 경로가 없었고 window-check consumer가 파일 없는 stop 응답을 받아들였다. 잘못된 JSON 값도 native writer에서 Objective-C exception으로 노출됐다. Recorder는 callback status와 정확한 display time을 제한된 JSONL artifact로 기록하고 overflow 및 encode/write 실패를 capture error로 보고한다. 두 host stop payload는 경로를 반환하고 consumer는 artifact를 요구한다. 소유 native sequence는 순서, metadata 누락, 정확한 시각, encode/write 실패와 overflow를 검증한다. Wails, Tauri, consumer 및 문서 검사가 통과한다.
+
 - F212.12-2-2-5: Native key callback은 host에 순서대로 도착하지만 concurrent view event push가 terminal input queue에 도달하기 전에 서로 앞설 수 있었다. Workbench는 view별 event 전달을 직렬화한다. 첫 push를 대기시키는 기존 owning test는 두 번째 push가 먼저 시작되어 실패했으며, 같은 테스트가 두 push의 순서가 유지된 채 완료됨을 확인한다. Live push 오류는 계속 보고한다.
 
 - F212.17: View 종료 후에도 pending call reply와 sidecar event가 host에서 문서를 제거한 뒤 전달을 시도할 수 있었다. Workbench는 pending call 대기를 abort하고 종료 뒤 완료된 결과를 버리며, 취소한 call reply와 거부된 event 전달을 기록한다. 소유 Red는 두 `no ready document` 오류와 오래된 reply 시도를 재현했다. Green은 두 취소 기록, 종료 후 전송 없음, application 오류 없음을 확인한다. Live-view 거부 검사는 계속 오류를 보고한다.
