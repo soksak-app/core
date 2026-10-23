@@ -19,6 +19,10 @@ Version은 숫자 부분으로 된 `x.y.z`이며 앞자리 0을 쓰지 않고, �
 
 `latest`, `**`, pre-release 접미사 같은 다른 형식은 거부한다.
 
+## Core release identity
+
+`@soksak/plugin-api`의 version은 plugin을 빌드할 때 사용한 core manifest 및 설치 contract를 식별한다. 공개한 contract를 바꾸면 새 core version을 사용하며, 개발 checkout은 다른 contract에 immutable public release의 version을 재사용하지 않는다. Checkout은 다음 release candidate를 게시 전에 선언할 수 있지만, tag와 asset을 게시하기 전까지 candidate는 public release가 아니다. Plugin의 `engines.soksak` 범위가 이 core version으로 설치 대상을 고르므로, 하나의 version은 하나의 공개 contract를 식별한다.
+
 ## Plugin release
 
 Plugin release는 `sok plugin pack`이 쓰는, plugin 파일을 담은 파일 `<id>-<version>.tgz`다. 그 `package.json`은 다음을 선언한다.

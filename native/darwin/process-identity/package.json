@@ -1,6 +1,6 @@
 {
   "name": "@soksak/native-process-identity-darwin",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "private": true,
   "description": "Static macOS process display identity API for native sidecars.",
   "files": [

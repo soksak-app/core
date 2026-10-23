@@ -282,7 +282,7 @@ verify: prepare docs-check exposure-check parity-check host-parity-check
 # feature diagnostics). While the declared release version is 0.0.x, release is a diagnostic build too, so a defect on a
 # user's machine is recorded when it appears (AGENTS.md); a later version series builds release without diagnostics.
 COMMA := ,
-# The declared release version is the RELEASE constant of scripts/check-versions.mjs.
+# The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
 .PHONY: native-darwin registry install-plugins browser-frontend browser-example frontend-wailsv3 frontend-tauriv2 native-test host-contract-check rust-format-check rust-clippy-check go-format-check \
         tauriv2 tauriv2-release tauriv2-build tauriv2-build-release \

@@ -35,7 +35,7 @@ $(LIBDIR)/pkgconfig/soksak-process-identity.pc: Makefile | $(LIBDIR)/pkgconfig
 	  'includedir=$${prefix}/include' \
 	  'Name: soksak-process-identity' \
 	  'Description: macOS process display identity' \
-	  'Version: 0.0.20' \
+	  'Version: 0.0.21' \
 	  'Cflags: -I$${includedir} $(MINIMUM)' \
 	  'Libs: -L$${libdir} -lsoksak-process-identity $(FRAMEWORKS)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi

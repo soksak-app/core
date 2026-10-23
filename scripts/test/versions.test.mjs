@@ -1,10 +1,25 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { auditVersions, cargoPackageVersion, RELEASE, workspaceManifests } from "../check-versions.mjs";
+import { auditVersions, cargoPackageVersion, LATEST_PUBLISHED, RELEASE, workspaceManifests } from "../check-versions.mjs";
 
-test("every declared workspace version is the release version", { timeout: 10000 }, () => {
+test("the development contract has a distinct identity from the latest published release", { timeout: 1000 }, () => {
+  assert.equal(RELEASE, "0.0.21");
+  assert.equal(LATEST_PUBLISHED, "0.0.20");
+  assert.notEqual(RELEASE, LATEST_PUBLISHED);
+});
+
+test("every declared workspace version is the release candidate", { timeout: 10000 }, () => {
   assert.deepEqual(auditVersions(workspaceManifests()), []);
+});
+
+test("workspace Cargo.lock package versions match the release candidate", { timeout: 1000 }, () => {
+  const lock = readFileSync(new URL("../../Cargo.lock", import.meta.url), "utf8");
+  for (const name of ["soksak-host-tauriv2", "soksak-sok-tauriv2", "soksak-tauriv2"]) {
+    const version = lock.match(new RegExp(`\\[\\[package\\]\\]\\nname = "${name}"\\nversion = "([^"]+)"`))?.[1];
+    assert.equal(version, RELEASE, `Cargo.lock package ${name}`);
+  }
 });
 
 test("version audit rejects a JSON manifest, a Cargo package and a Go core version with another version", { timeout: 1000 }, () => {

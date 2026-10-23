@@ -19,6 +19,10 @@ A version is `x.y.z` with numeric parts and no leading zeros; versions compare b
 
 Other forms, such as `latest`, `**` or pre-release suffixes, are rejected.
 
+## Core release identity
+
+The version of `@soksak/plugin-api` identifies the core manifest and installation contract used to build a plugin. A change to a released contract uses a new core version; a development checkout does not reuse the version of an immutable published release for a different contract. The checkout may declare the next release candidate before publication, but the candidate is not a published release until its tag and assets are published. Plugin `engines.soksak` ranges select against this core version, so one version identifies one released contract.
+
 ## Plugin release
 
 A plugin release is the file `<id>-<version>.tgz` of the plugin's files that `sok plugin pack` writes. Its `package.json` declares:

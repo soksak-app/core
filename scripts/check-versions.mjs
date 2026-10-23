@@ -1,4 +1,4 @@
-// Checks that the versions declared by the workspace manifests equal the current release version.
+// Checks that the versions declared by the workspace manifests equal the current release candidate.
 //
 // Reads the top-level "version" of package.json, plugin.json, sidecar.json, and tauri.conf.json tracked by Git, the [package] version of
 // Cargo.toml, the `const CoreVersion` declared by version.go of a Go package without a manifest,
@@ -12,7 +12,8 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const RELEASE = "0.0.20";
+export const RELEASE = "0.0.21";
+export const LATEST_PUBLISHED = "0.0.20";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const JSON_MANIFESTS = new Set(["package.json", "plugin.json", "sidecar.json", "tauri.conf.json"]);
 
