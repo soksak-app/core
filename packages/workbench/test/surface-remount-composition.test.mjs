@@ -397,3 +397,64 @@ test("a listener failure after readiness reports an error and releases the view"
     dom.window.close();
   }
 });
+
+test("disposing a surface ends its already-waiting composition declaration", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  let beginDeclaration;
+  let finishDeclaration;
+  const declarationStarted = new Promise((resolve) => { beginDeclaration = resolve; });
+  const declaration = new Promise((resolve) => { finishDeclaration = resolve; });
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: (name) => {
+        if (name === "compositionDeclare") {
+          beginDeclaration();
+          return declaration;
+        }
+        return Promise.resolve(null);
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?composition-wait-dispose");
+  const id = "fixture-composition-wait-dispose";
+  recordOrigin(id, null, "test fixture");
+  registerPlugin({ id, surface: () => null });
+  const slot = document.querySelector("#slot");
+  slot.dataset.nativeSurfaceId = id;
+  const surface = {
+    module: null, surfaceId: id, pluginId: id,
+    declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" },
+  };
+
+  try {
+    authorizeSurface(id);
+    const mount = mountSurface(slot, surface);
+    await declarationStarted;
+    let waitOutcome;
+    const wait = waitSurfaceCompositionDeclared(id).then(
+      () => { waitOutcome = { status: "fulfilled" }; },
+      (error) => { waitOutcome = { status: "rejected", error }; },
+    );
+    await disposeSurface(id);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(waitOutcome?.status, "rejected", "dispose did not end the existing composition wait");
+    assert.match(waitOutcome.error.message, new RegExp(`surface ${id} was disposed before declaring composition`));
+
+    finishDeclaration(null);
+    await Promise.allSettled([mount, wait]);
+  } finally {
+    finishDeclaration(null);
+    await disposeSurface(id);
+    dom.window.close();
+  }
+});
