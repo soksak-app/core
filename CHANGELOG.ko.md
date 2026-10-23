@@ -2286,3 +2286,6 @@
 - F238-c-27-6: sidecar-send producer command literal을 구현과 일치하게 수정하고 ordered case 전반에서 정확한 open-call count 전이 및 미결 호출 0개를 검사한다. 집중 producer gate가 10/10 통과한다.
 - F238-c-27-7: 모든 host-event 입력에 `sok: 1`을 기록하고 wire envelope를 그대로 전달하며 marker가 빠진 계약 복사본을 거부한다. 집중 producer gate가 10/10 통과한다.
 - F238-c-27-8: 미등록 host-event 이름과 sidecar subscription kind를 거부하고 두 subscription kind를 모두 요구하며 인식되지 않은 step에서 route runner가 실패하도록 한다. 집중 producer gate가 10/10 통과한다.
+- F212.16-12: plugin-api host-operations test fixture에 필수 sidecar
+  display name을 추가한다. Red: package suite가 `displayName` 없는
+  fixture를 거부했다. Green: 소유 테스트가 5/5로 통과한다.

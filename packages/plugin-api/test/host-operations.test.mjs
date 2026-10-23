@@ -14,7 +14,7 @@ const plugin = {
   hostOperations: { "fixture-sidecar": ["list", "stat"] },
 };
 const sidecar = {
-  executable: "build/worker", protocol: 1,
+  executable: "build/worker", displayName: "soksak://sidecar/fixture", protocol: 1,
   message: { form: "json-object", operationField: "operation" },
   hostReadOperations: ["list", "stat"],
 };

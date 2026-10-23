@@ -2284,3 +2284,6 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - F238-c-27-6: Correct the sidecar-send producer command literal and assert exact open-call count transitions and zero pending calls across the ordered cases. The focused producer gate passes 10/10.
 - F238-c-27-7: Publish `sok: 1` in every host-event input and pass the wire envelope unchanged; reject contract copies that omit the marker. The focused producer gate passes 10/10.
 - F238-c-27-8: Reject unknown host-event names and sidecar subscription kinds, require both subscription kinds, and make route runners fail on unrecognized steps. The focused producer gate passes 10/10.
+- F212.16-12: Add the required sidecar display name to the plugin-api
+  host-operations test fixture. Red: the package suite rejected the
+  fixture without `displayName`. Green: the owning test passes 5/5.
