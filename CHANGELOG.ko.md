@@ -11,6 +11,9 @@
 - F212.12-1-20: `core.plugins` status가 열린 tab과 무관하게 로드한 각 plugin의 surface `composition`을 보고하여 window check가 카드가 없는 view도 찾을 수 있다. 소유 Red assertion과 plugin-operation 및 composition-kind 테스트 22개가 모두 통과한다.
 
 - F262-8: origin은 탭이 자기 space의 저장된 배치에서 떠날 때만 끝난다. 다른 space의 표시는 표시되지 않은 space 탭들의 origin을 더 이상 버리지 않는다. 이것이 `tab X has no origin` 거부의 원인이었다.
+
+- F244-2: `make declared-ui-benchmark`가 모든 branch를 펼친 16 level 이내의 node 5000개 tree와 command item 1000개 list를 별도의 supervised process에서 측정하며, 허용 bound 2000 ms와 500 ms를 유지한다. 각 JSON 측정은 전체 그리기와 binding 수, 경과 시간, 결과, package와 runtime version, platform 및 load를 기록한다. 잘못된 시간 측정, 누락된 그리기나 binding 및 bound 초과는 실패다. benchmark test 10개의 Red와 Green을 기록했고 기존 전체 크기 그리기 test 2개도 통과한다. workbench 0.0.20을 darwin arm64 25.6.0, Node 26.11.1, jsdom 30.0.1 및 load average 10.99에서 측정한 결과는 tree 327.2 ms, list 81.0 ms다. 문서, parity 및 boundary 검사가 통과한다.
+
 - F262-7: origin이 없는 뷰 탭의 표시 거부는 탭, plugin, space와 project, 탭을 만든 경로, 이 세션이 origin을 기록했는지를 밝힌다. 탭 생성 지점마다 경로를 밝힌다.
 - F212.12-2-1: view는 비활성 창의 첫 마우스 누름을 받는다. 그 누름이 페이지와 first responder에 닿아 view가 키보드 focus를 가진다. 이전에는 AppKit이 창 활성화를 위해 그 누름을 소비해 view card 클릭이 view에 키보드 focus를 주지 않았다. 문서 영역은 거부를 유지한다. Red: `view_focus_test`가 변경 전 소스에서 페이지 누름과 first responder 검사를 모두 실패했고, 변경 뒤 세 번 연속 통과했다.
 - F262-6a: view bridge가 `runtime.project(listener)`를 served한다. listener는 plugin host의 마지막 project를 바로 받고 host에 call을 보내지 않으며, 이는 `runtime.theme`과 같다. project message를 `runtime.native.on`으로 구독한 plugin host page는 host에 거부되었다.

@@ -94,6 +94,12 @@ Each limit is chosen by this document. Its reason is the work that the main page
 
 Each limit is checked on receipt. Every length of a key, a text field or a parameter counts code points. The serialized value counts UTF-8 bytes. A value that exceeds a limit is rejected, never truncated.
 
+## Drawing benchmark
+
+The dedicated workbench benchmark measures one validation and draw of a fully expanded tree with 5000 nodes within 16 levels and a list with 1000 command items. Acceptance bounds are 2000 ms for the tree and 500 ms for the list. The measured interval includes `validateValue`, expanded-state construction and `drawValue` into jsdom, including binding attributes and calls to a no-op binder. It excludes fixture creation, module loading, completeness checks, layout, paint and attachment of command listeners. Unit tests judge complete drawing without asserting elapsed time.
+
+Each case runs in a separate process with a 30000 ms hang limit. A partial draw, a missing binding call, an invalid clock reading or an elapsed time above the acceptance bound fails the benchmark. Each measurement records the element count, binding count, elapsed milliseconds, bound, outcome, package version, Node and jsdom versions, OS and CPU details, and load averages. The command and supervisor are documented in [example verification](../operations/examples.md#declared-ui-benchmark).
+
 ## Icons
 
 The `icon` field takes a name of the core icon table. A name that the table does not contain is rejected. A plugin cannot supply icon markup.
