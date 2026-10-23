@@ -286,25 +286,42 @@ export async function finishSession(t, session, close) {
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
-    // The end of the test is marked after the cleanups and the error audit, so the range of the test in the log holds the
-    // records they cause. The result is fail when the body, a cleanup or the audit failed.
+    // A failed check keeps every recording that its cleanups left so the frames remain available for diagnosis. A
+    // recording left by an otherwise successful check is itself a failure; preserve it for the same reason.
+    const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
+      .map((name) => join(session.app.configDir, "logs", "captures", name));
+    const untracked = left.filter((folder) => !session.recordings.has(folder));
+    const failedRecordings = left.filter((folder) => session.failedRecordings.has(folder));
+    if (left.length && (!t.passed || failures.length || untracked.length || failedRecordings.length)) {
+      if (untracked.length && t.passed && failures.length === 0) {
+        const error = new Error(`${session.app.name}: the check left ${untracked.length} untracked recording${untracked.length === 1 ? "" : "s"}: ` +
+          `${untracked.join(", ")}; the recordings were preserved`);
+        failures.push(error);
+        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+      }
+      if (failedRecordings.length && t.passed && failures.length === 0) {
+        const details = failedRecordings.map((folder) => `${folder}: ${session.failedRecordings.get(folder)}`);
+        const error = new Error(`${session.app.name}: ${failedRecordings.length} recording${failedRecordings.length === 1 ? "" : "s"} failed: ` +
+          `${details.join(", ")}; the recordings were preserved`);
+        failures.push(error);
+        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+      }
+      for (const folder of left) t.diagnostic(`kept recording: ${folder}`);
+    } else {
+      for (const folder of left) {
+        try {
+          rmSync(folder, { recursive: true, force: true });
+        } catch (error) {
+          failures.push(error);
+          t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
+        }
+      }
+    }
+    // The end of the test is marked after the cleanups, error audit and recording check, so the range in the log holds
+    // every record they cause. The result is fail when the body, a cleanup, the audit or recording check failed.
     try {
       await session.markTest("end", t.name, t.passed && failures.length === 0 ? "pass" : "fail");
     } catch (error) {
-      failures.push(error);
-      t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
-    }
-    // The cleanup of a check removes the recordings that the check started. A new recording folder that remains after
-    // the cleanup fails the check and is removed so that the next check starts from the same state.
-    // SOKSAK_KEEP_FAILURE_CAPTURE keeps the recording of a failed check, so only its name is reported.
-    const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
-      .map((name) => join(session.app.configDir, "logs", "captures", name));
-    if (left.length && process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
-      for (const folder of left) t.diagnostic(`kept recording: ${folder}`);
-    } else if (left.length) {
-      for (const folder of left) rmSync(folder, { recursive: true, force: true });
-      const error = new Error(`${session.app.name}: the check left ${left.length} recording${left.length === 1 ? "" : "s"}: ` +
-        `${left.join(", ")}; a check removes the recordings it starts in its cleanup`);
       failures.push(error);
       t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
     }
@@ -322,6 +339,8 @@ export class Session {
     this.client = client;
     this.window = "main";
     this.cleanups = [];
+    this.recordings = new Set();
+    this.failedRecordings = new Map();
     // The location of the application log that the check starts reading and the format of the errors that the check
     // declares it causes. finishSession uses them.
     this.expectedErrors = [];
@@ -372,6 +391,13 @@ export class Session {
     this.cleanups.push(fn);
   }
 
+  /** Registers a capture folder so the session removes it only after the whole check succeeds. */
+  trackRecording(frames) {
+    if (typeof frames !== "string" || frames === "") throw new Error("trackRecording requires a frame folder");
+    this.recordings.add(frames);
+    return frames;
+  }
+
   /**
    * The format of the error lines that this check causes on purpose and that are written to the application log. Those
    * errors are not a failure of the check.
@@ -403,6 +429,8 @@ export class Session {
   on(window) {
     const other = new Session(this.app, this.client);
     other.cleanups = this.cleanups;
+    other.recordings = this.recordings;
+    other.failedRecordings = this.failedRecordings;
     other.expectedErrors = this.expectedErrors;
     other.testName = this.testName;
     other.presses = this.presses;
@@ -514,17 +542,19 @@ export class Session {
 
   /**
    * Starts a recording. The returned stop sends diagnostics.capture.stop once and returns its result or error. When
-   * stop fails, the host may already have ended the recording, so a second stop is not sent. The cleanup of the session
-   * sends stop only if none was sent, and removes the recording folder (docs/operations/examples.md).
+   * stop fails, the host may already have ended the recording, so a second stop is not sent. The cleanup sends stop only
+   * if none was sent. finishSession removes the folder only after every cleanup and the error audit succeed.
    */
   async record(params = {}) {
     const { frames } = await this.request("diagnostics.capture.start", params);
     let sent = false;
+    this.trackRecording(frames);
     this.cleanup(async () => {
       try {
         if (!sent) await this.request("diagnostics.capture.stop", { after: 0 });
-      } finally {
-        rmSync(frames, { recursive: true, force: true });
+      } catch (error) {
+        this.failedRecordings.set(frames, error);
+        throw error;
       }
     });
     return {
@@ -535,6 +565,9 @@ export class Session {
         return this.request("diagnostics.capture.stop", options).then((result) => {
           requireCallbackStatusArtifact(result, frames);
           return result;
+        }).catch((error) => {
+          this.failedRecordings.set(frames, error);
+          throw error;
         });
       },
     };
@@ -889,7 +922,7 @@ if (TRACE === undefined) throw new Error(`SOKSAK_PERFORMANCE_TRACE must be unset
 
 /**
  * Runs a boundary drag with the host clock. With capture, it records the window and returns the frame folder. The
- * recording is removed with remove() when the check ends, whether it passed or not.
+ * recording is removed when the check passes and kept when the check fails.
  *
  * Fails when the drag does not run at the requested rate (after one retry). A pass of a slow drag is not a pass.
  */
@@ -956,9 +989,7 @@ async function dragOnce(s, plan, capture) {
   const ms = Math.max(1, Math.round(plan.ms / 16)) * 16 * 2 * plan.times;
   const result = await s.request("diagnostics.drag", { ...plan, capture }, { timeout: REQUEST + ms * 4 });
   if (!capture) return result;
-  if (!process.env.SOKSAK_KEEP_FAILURE_CAPTURE) {
-    s.cleanup(() => rmSync(result.frames, { recursive: true, force: true }));
-  }
+  s.trackRecording(result.frames);
   // Records until the time when the last screen of the drag is displayed.
   const { displayed } = await s.presented();
   const stopped = await s.request("diagnostics.capture.stop", { after: displayed });

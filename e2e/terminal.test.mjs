@@ -924,7 +924,6 @@ for (const app of Object.values(APPS)) {
       assert.ok(edgeWidths.some(({ left, right }) => Math.min(left, right) <= 110),
         `set ${set}: no card beside the dragged divider reached the 96pt minimum card edge plus 12pt gap; ` +
         `edges=${JSON.stringify(edgeWidths)}`);
-      if (!process.env.SOKSAK_KEEP_FAILURE_CAPTURE) rmSync(result.frameDir, { recursive: true, force: true });
       const beforeHide = await s.get("host.window");
       for (const terminal of terminals) {
         const state = await s.get("terminal.session", terminal.surface);

@@ -107,7 +107,7 @@ test("a record event of level error fails the check as the line of the text form
 // A recording that the check started must be removed when the check ends. A recording folder that remains fails the
 // check and is removed for the next check (AGENTS.md, docs/features.md F83). A folder that existed before the check
 // started is not of that check.
-test("a recording folder that the check left fails the check and is removed", { timeout: 30000 }, (t) => {
+test("a recording folder that the check left fails the check and is preserved", { timeout: 30000 }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), "soksak-session-recording-"));
   t.after(() => rmSync(dir, { recursive: true }));
   t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
@@ -122,7 +122,7 @@ import { finishSession, recordingFolders } from ${JSON.stringify(app)};
 test("probe body passes", async (t) => {
   const configDir = ${JSON.stringify(dir)};
   const session = { app: { name: "probe", configDir }, cleanups: [], eventStart: {}, expectedErrors: [], markTest: async () => null,
-    recordingsBefore: recordingFolders(configDir) };
+    recordingsBefore: recordingFolders(configDir), recordings: new Set(), failedRecordings: new Map() };
   mkdirSync(join(configDir, "logs", "captures", "left"));
   writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");
   t.after(() => finishSession(t, session, () => {}));
@@ -132,6 +132,55 @@ test("probe body passes", async (t) => {
   const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stdout, /probe: the check left 1 recording: .*captures\/left/);
-  assert.deepEqual(readdirSync(join(dir, "logs", "captures")), ["earlier"]);
+  assert.match(result.stdout, /untracked recording: .*captures\/left/);
+  assert.match(result.stdout, /kept recording: .*captures\/left/);
+  assert.deepEqual(readdirSync(join(dir, "logs", "captures")), ["earlier", "left"]);
+});
+
+test("a failed check preserves its capture without an opt-in", { timeout: 30000 }, (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "soksak-session-failed-recording-"));
+  t.after(() => rmSync(dir, { recursive: true }));
+  t.after(() => rmSync(`${dir}.event-offsets`, { force: true }));
+  mkdirSync(join(dir, "logs"));
+  writeEventLog(dir, { before: [OPEN], during: [] });
+  const file = join(dir, "probe.test.mjs");
+  writeFileSync(file, `import test from "node:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { Session, finishSession, recordingFolders } from ${JSON.stringify(app)};
+test("probe body fails", async (t) => {
+  const configDir = ${JSON.stringify(dir)};
+  const captures = join(configDir, "logs", "captures");
+  mkdirSync(captures, { recursive: true });
+  let activeFrames;
+  const client = { endpoint: { pid: process.pid }, request: async (method) => {
+    if (method === "diagnostics.capture.start") {
+      activeFrames = join(captures, "capture-1");
+      mkdirSync(activeFrames);
+      return { frames: activeFrames };
+    }
+    if (method === "diagnostics.capture.stop") return { frames: activeFrames };
+    throw new Error("unexpected request " + method);
+  } };
+  const session = new Session({ name: "probe", configDir }, client);
+  session.eventStart = {};
+  session.expectedErrors = [];
+  session.markTest = async () => null;
+  session.recordingsBefore = recordingFolders(configDir);
+  const recording = await session.record();
+  writeFileSync(join(recording.frames, "frame-0001.bgra"), "capture evidence");
+  mkdirSync(join(captures, "failed"), { recursive: true });
+  writeFileSync(join(captures, "failed", "frame-0001.bgra"), "capture evidence");
+  t.after(() => finishSession(t, session, () => {}));
+  throw new Error("probe body failed");
+});
+`);
+  const { NODE_TEST_CONTEXT, SOKSAK_KEEP_FAILURE_CAPTURE, ...environment } = process.env;
+  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /probe body failed/);
+  assert.deepEqual(readdirSync(join(dir, "logs", "captures")).sort(), ["capture-1", "failed"]);
+  assert.match(result.stdout, /kept recording: .*captures\/capture-1/);
+  assert.match(result.stdout, /kept recording: .*captures\/failed/);
 });

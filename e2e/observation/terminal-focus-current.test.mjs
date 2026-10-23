@@ -1,7 +1,6 @@
 // Observes terminal click delivery without replacing the current tabs or activating the application.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rmSync } from "node:fs";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 
@@ -27,20 +26,15 @@ for (const app of Object.values(APPS)) {
     s.cleanup(async () => {
       if (tracing) await s.run("terminal.pointer.trace", { action: "stop" }, surface);
     });
-    const recording = await s.request("diagnostics.capture.start", {});
+    const recording = await s.record();
     let stopped = false;
     s.cleanup(async () => {
-      try {
-        if (!stopped) await s.request("diagnostics.capture.stop", { after: 0 });
-      } finally {
-        if (!t.passed && process.env.SOKSAK_KEEP_FAILURE_CAPTURE) t.diagnostic(`kept recording: ${recording.frames}`);
-        else rmSync(recording.frames, { recursive: true, force: true });
-      }
+      if (!stopped) await recording.stop({ after: 0 });
     });
     await s.click(point.x, point.y);
     const { displayed } = await s.presented();
     stopped = true;
-    const captured = await s.request("diagnostics.capture.stop", { after: displayed + 100 });
+    const captured = await recording.stop({ after: displayed + 100 });
     const decoded = frames(recording.frames).map(readFrame);
     assert.equal(decoded.length, captured.count, "every captured frame must decode");
     assert.ok(decoded.length >= 2, "the recording must cover the whole click");
