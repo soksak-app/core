@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.16-6: Sidecar release는 `sidecar.json`에 검증된 `displayName`을 필수로 선언한다. Host declaration과 standard-input/persistent child 실행은 executable, transport, display name을 같은 lock snapshot에서 사용한다. Host는 상속된 `SOKSAK_SIDECAR_DISPLAY_NAME`을 선언된 이름으로 교체한다. `sok sidecar release`와 installed-manifest reader는 누락되거나 잘못된 이름을 manifest path와 함께 거부한다. Plugin API, Wails, Tauri, release validator 소유 테스트가 통과했다.
+
 - F212.12-2-2-5: Native key callback은 host에 순서대로 도착하지만 concurrent view event push가 terminal input queue에 도달하기 전에 서로 앞설 수 있었다. Workbench는 view별 event 전달을 직렬화한다. 첫 push를 대기시키는 기존 owning test는 두 번째 push가 먼저 시작되어 실패했으며, 같은 테스트가 두 push의 순서가 유지된 채 완료됨을 확인한다. Live push 오류는 계속 보고한다.
 
 - F212.16-4: Process-label helper는 control read/write 오류를 보고하고 control byte가 없으면 nonzero로 종료한다. 소유 검사는 EOF를 성공적인 종료로 처리하는 결함을 재현한 뒤, interrupted system call 재시도, 잘못된 write descriptor 거부, 제한 시간 내 child 정리 및 정상 label 측정을 포함해 통과했다.

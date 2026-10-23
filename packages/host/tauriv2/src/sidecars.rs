@@ -890,6 +890,7 @@ struct Core<O> {
 struct Declarations {
     /// The sidecar and the path of its executable.
     declared: HashMap<String, PathBuf>,
+    display_names: HashMap<String, String>,
     /// The version that installed.json records for each declared sidecar.
     versions: HashMap<String, String>,
     persistent: HashMap<String, bool>,
@@ -914,7 +915,7 @@ impl<O> Core<O> {
     }
 
     /// The executable and the persistence of the declared sidecar name.
-    fn declaration(&self, name: &str) -> Option<(PathBuf, bool)> {
+    fn declaration(&self, name: &str) -> Option<(PathBuf, bool, String)> {
         let declarations = self
             .declarations
             .read()
@@ -922,8 +923,21 @@ impl<O> Core<O> {
             // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         let program = declarations.declared.get(name)?.clone();
-        Some((program, declarations.persistent[name]))
+        Some((
+            program,
+            declarations.persistent[name],
+            declarations.display_names[name].clone(),
+        ))
     }
+}
+
+fn valid_sidecar_display_name(value: &str) -> bool {
+    let Some(component) = value.strip_prefix("soksak://sidecar/") else {
+        return false;
+    };
+    let mut bytes = component.bytes();
+    matches!(bytes.next(), Some(b'a'..=b'z'))
+        && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 /// Manages the sidecar processes and the surface-owning windows of one application.
@@ -1112,6 +1126,8 @@ impl<O: Owner> Sidecars<O> {
         #[derive(Deserialize)]
         struct Sidecar {
             executable: String,
+            #[serde(rename = "displayName")]
+            display_name: Option<serde_json::Value>,
             protocol: u64,
             #[serde(default)]
             transport: Option<String>,
@@ -1126,6 +1142,21 @@ impl<O: Owner> Sidecars<O> {
                 return Err(format!(
                     "{path}: protocol {} is not supported",
                     sidecar.protocol
+                ));
+            }
+            let display_name = sidecar
+                .display_name
+                .ok_or_else(|| format!("{path}: displayName is required"))?
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!(
+                        "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
+                    )
+                })?;
+            if !valid_sidecar_display_name(&display_name) {
+                return Err(format!(
+                    "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
                 ));
             }
             let is_persistent = match sidecar.transport.as_deref() {
@@ -1153,6 +1184,7 @@ impl<O: Owner> Sidecars<O> {
             }
             next.declared
                 .insert(name.clone(), item.folder.join(executable));
+            next.display_names.insert(name.clone(), display_name);
             next.versions.insert(name.clone(), item.version.clone());
             next.persistent.insert(name.clone(), is_persistent);
             next.dependents.insert(name, item.dependents.clone());
@@ -1167,7 +1199,10 @@ impl<O: Owner> Sidecars<O> {
         let changed = current
             .declared
             .iter()
-            .filter(|(name, program)| next.declared.get(*name) != Some(*program))
+            .filter(|(name, program)| {
+                next.declared.get(*name) != Some(*program)
+                    || next.display_names.get(*name) != current.display_names.get(*name)
+            })
             .map(|(name, _)| name.clone())
             .collect();
         *current = next;
@@ -1413,7 +1448,7 @@ impl<O: Owner> Sidecars<O> {
             let persistent = self
                 .core
                 .declaration(name)
-                .is_some_and(|(_, persistent)| persistent);
+                .is_some_and(|(_, persistent, _)| persistent);
             if !persistent {
                 owner.deliver_failure(Failure {
                     sidecar: name.to_string(),
@@ -1514,7 +1549,7 @@ impl<O: Owner> Sidecars<O> {
                 // default: a sidecar that did not declare persistent runs for each window.
                 self.core
                     .declaration(name)
-                    .is_some_and(|(_, persistent)| persistent)
+                    .is_some_and(|(_, persistent, _)| persistent)
                     && process
                         .persistent
                         .as_ref()
@@ -1883,7 +1918,7 @@ impl<O: Owner> Sidecars<O> {
                     return Err("sidecars are stopped".into());
                 }
                 if !state.running.contains_key(&name) {
-                    let (program, _) = self
+                    let (program, _, _) = self
                         .core
                         .declaration(&name)
                         .ok_or_else(|| format!("sidecar {name} is not declared"))?;
@@ -2378,15 +2413,16 @@ impl<O: Owner> Core<O> {
     /// process of the window. The write and read threads are returned so that they are started after the registration.
     /// lost is the revival that runs the start of a persistent service, or None.
     fn start(core: &Arc<Self>, name: &str, lost: Option<&Revival>) -> Result<Started, String> {
-        let (program, persistent) = core
+        let (program, persistent, display_name) = core
             .declaration(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
         // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
-            return Self::start_persistent(core, name, &program, lost);
+            return Self::start_persistent(core, name, &program, &display_name, lost);
         }
         let mut threads: Vec<Thread> = Vec::new();
         let mut command = Command::new(&program);
+        command.env("SOKSAK_SIDECAR_DISPLAY_NAME", &display_name);
         // The host has the folder `logs` of its configuration directory, where a sidecar writes its event file
         // (docs/spec/sidecars.md#log).
         command
@@ -2514,6 +2550,7 @@ impl<O: Owner> Core<O> {
         core: &Arc<Self>,
         name: &str,
         program: &Path,
+        display_name: &str,
         lost: Option<&Revival>,
     ) -> Result<Started, String> {
         #[derive(Deserialize)]
@@ -2550,7 +2587,7 @@ impl<O: Owner> Core<O> {
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not
                     // a fallback transport.
-                    return Self::start_persistent(core, name, program, lost);
+                    return Self::start_persistent(core, name, program, display_name, lost);
                 }
                 endpoint
             }
@@ -2571,6 +2608,7 @@ impl<O: Owner> Core<O> {
                 .map_err(|error| format!("sidecar {name}: service log: {error}"))?;
                 let mut command = Command::new(program);
                 command
+                    .env("SOKSAK_SIDECAR_DISPLAY_NAME", display_name)
                     .arg("--service-dir")
                     .arg(&service_dir)
                     .arg("--log-dir")
@@ -3170,7 +3208,7 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
     if let Err(reason) = &outcome
         && refused_connect(reason, name)
     {
-        let program = core.declaration(name).map(|(program, _)| program);
+        let program = core.declaration(name).map(|(program, _, _)| program);
         let endpoint = program
             .as_deref()
             .and_then(|program| program.file_name())

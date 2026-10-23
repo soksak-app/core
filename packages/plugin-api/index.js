@@ -863,7 +863,10 @@ function validateEventsPath(where, events) {
 
 export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
-  only("sidecar.json", sidecar, ["executable", "protocol", "helpers", "transport", "events", "replay", "message", "hostReadOperations"]);
+  only("sidecar.json", sidecar, ["executable", "displayName", "protocol", "helpers", "transport", "events", "replay", "message", "hostReadOperations"]);
+  if (typeof sidecar.displayName !== "string" || !/^soksak:\/\/sidecar\/[a-z][a-z0-9-]*$/.test(sidecar.displayName)) {
+    throw new Error("sidecar.json: displayName must be soksak://sidecar/ followed by one lowercase identifier");
+  }
   // The message form that a plugin host's body takes; the host parses the body in this form (docs/spec/sidecars.md#messages).
   if (sidecar.message !== undefined) checkSidecarMessage("sidecar.json", sidecar.message);
   if (sidecar.hostReadOperations !== undefined) checkHostReadOperations("sidecar.json", sidecar.hostReadOperations);

@@ -47,7 +47,7 @@ func installedFixture(t *testing.T) string {
 		"plugins/term/0.1.0/diagnostics.json":                           "{\n  \"module\": \"ui/d.js\",\n  \"exposes\": {}\n}\n",
 		"plugins/alpha/1.0.0/plugin.json":                               `{"id": "alpha"}`,
 		"plugins/off/1.0.0/plugin.json":                                 `{"id": "off"}`,
-		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1}`,
+		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe"}`,
 	})
 	return config
 }
@@ -72,7 +72,7 @@ func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 func TestInstalledPluginsDocumentDeclaresTheMessageFormAndHostOperationsOfEachSidecar(t *testing.T) {
 	config := installedFixture(t)
 	writeInstalled(t, config, map[string]string{
-		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}`,
+		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe", "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}`,
 	})
 	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"term","package":"@scope/plugin-term","version":"0.1.0","manifest":{"id":"term","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"hostReadOperations":["list"],"message":{"form":"json-object","operationField":"operation"}}}}]}`
 	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
@@ -242,7 +242,7 @@ func TestInstalledSidecarsResolveTheInstalledVersionFolders(t *testing.T) {
 	}
 	folder := filepath.Join(config, "sidecars/scope-sidecar-worker/0.1.2/darwin-arm64")
 	if len(declarations) != 1 || declarations[0].Name != "@scope/sidecar-worker" || declarations[0].Folder != folder ||
-		string(declarations[0].Data) != `{"executable": "build/worker", "protocol": 1}` {
+		string(declarations[0].Data) != `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe"}` {
 		t.Fatalf("declarations %+v", declarations)
 	}
 	if !reflect.DeepEqual(declarations[0].Dependents, []string{"term"}) {

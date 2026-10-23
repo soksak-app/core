@@ -159,7 +159,7 @@ fn every_pending_reply_scenario() {
     std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let sidecars = create(
-        &files(r#"{"executable":"echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -318,7 +318,7 @@ fn order_is_correct_when_stop_flushes_buffered_messages() {
     std::fs::set_permissions(&echo_program, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let sidecars = create(
-        &files(r#"{"executable":"echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();

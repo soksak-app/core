@@ -78,7 +78,7 @@ fn registry_tree() -> Registry {
             ),
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 1}"#,
+                r#"{"executable": "build/worker", "displayName":"soksak://sidecar/probe","protocol": 1}"#,
             ),
             ("build/worker*", "binary 0.1.0"),
         ],
@@ -279,7 +279,7 @@ fn dependency_tree(plugins: Plugins) -> (Folder, Folder) {
             ),
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 1}"#,
+                r#"{"executable": "build/worker", "displayName":"soksak://sidecar/probe","protocol": 1}"#,
             ),
             ("build/worker*", "binary 0.1.0"),
         ],

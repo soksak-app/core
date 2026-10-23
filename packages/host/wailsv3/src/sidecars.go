@@ -148,6 +148,7 @@ type Sidecars struct {
 	// the executable outside c.mu, so it is separate from c.mu.
 	declarations sync.RWMutex
 	declared     map[string]string
+	displayNames map[string]string
 	// versions holds the version that installed.json records for each declared sidecar.
 	versions   map[string]string
 	persistent map[string]bool
@@ -352,6 +353,7 @@ type OutdatedSidecar struct {
 func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
 	c := &Sidecars{
 		declared:        map[string]string{},
+		displayNames:    map[string]string{},
 		versions:        map[string]string{},
 		persistent:      map[string]bool{},
 		running:         map[string]*sidecar{},
@@ -434,6 +436,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 	c.declarations.Lock()
 	defer c.declarations.Unlock()
 	declared := map[string]string{}
+	displayNames := map[string]string{}
 	versions := map[string]string{}
 	persistent := map[string]bool{}
 	basenames := map[string]string{}
@@ -442,9 +445,10 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 		name := item.Name
 		file := filepath.Join(item.Folder, "sidecar.json")
 		var sidecar struct {
-			Executable string `json:"executable"`
-			Protocol   int    `json:"protocol"`
-			Transport  string `json:"transport"`
+			Executable  string  `json:"executable"`
+			DisplayName *string `json:"displayName"`
+			Protocol    int     `json:"protocol"`
+			Transport   string  `json:"transport"`
 		}
 		if err := json.Unmarshal(item.Data, &sidecar); err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
@@ -456,6 +460,10 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 		if sidecar.Protocol != 1 {
 			return nil, fmt.Errorf("%s: protocol must be 1", file)
 		}
+		if sidecar.DisplayName == nil || !validSidecarDisplayName(*sidecar.DisplayName) {
+			return nil, fmt.Errorf("%s: displayName must be soksak://sidecar/ followed by one lowercase identifier", file)
+		}
+		displayNames[name] = *sidecar.DisplayName
 		if sidecar.Transport != "" && sidecar.Transport != "persistent" {
 			return nil, fmt.Errorf("%s: transport %s is not supported", file, sidecar.Transport)
 		}
@@ -476,20 +484,46 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 	}
 	changed := []string{}
 	for name, program := range c.declared {
-		if declared[name] != program {
+		if declared[name] != program || displayNames[name] != c.displayNames[name] {
 			changed = append(changed, name)
 		}
 	}
-	c.declared, c.versions, c.persistent, c.basenames, c.dependents = declared, versions, persistent, basenames, dependents
+	c.declared, c.displayNames, c.versions, c.persistent, c.basenames, c.dependents = declared, displayNames, versions, persistent, basenames, dependents
 	return changed, nil
 }
 
+func validSidecarDisplayName(value string) bool {
+	if !strings.HasPrefix(value, "soksak://sidecar/") {
+		return false
+	}
+	component := strings.TrimPrefix(value, "soksak://sidecar/")
+	if len(component) == 0 || component[0] < 'a' || component[0] > 'z' {
+		return false
+	}
+	for _, char := range component[1:] {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func setDisplayNameEnvironment(cmd *exec.Cmd, displayName string) {
+	const variable = "SOKSAK_SIDECAR_DISPLAY_NAME="
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, variable) {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	cmd.Env = append(cmd.Env, variable+displayName)
+}
+
 // declaration returns the executable and the persistence of the declared sidecar name. It can be called independently of c.mu.
-func (c *Sidecars) declaration(name string) (program string, persistent, ok bool) {
+func (c *Sidecars) declaration(name string) (program, displayName string, persistent, ok bool) {
 	c.declarations.RLock()
 	defer c.declarations.RUnlock()
 	program, ok = c.declared[name]
-	return program, c.persistent[name], ok
+	return program, c.displayNames[name], c.persistent[name], ok
 }
 
 // Send passes body that came from the surface surface of the owner window to the sidecar name.
@@ -565,7 +599,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 	if c.stopped {
 		return fmt.Errorf("sidecars are stopped")
 	}
-	if _, _, ok := c.declaration(name); !ok {
+	if _, _, _, ok := c.declaration(name); !ok {
 		return fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
 	if other, ok := c.owners[surface]; ok && other != owner {
@@ -573,7 +607,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 	}
 	if c.restartRefused(name, surface) {
 		// default: the declaration was read above, so only its transport decides the report of the refusal.
-		if _, persistent, _ := c.declaration(name); persistent {
+		if _, _, persistent, _ := c.declaration(name); persistent {
 			refusalNotice = true
 		} else {
 			refusal = &SidecarFailure{Sidecar: name, Surface: surface, Reason: "restart limit"}
@@ -1070,7 +1104,7 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 			return total, errors.New("sidecars are stopped")
 		}
 		if _, running := c.running[name]; !running {
-			program, _, ok := c.declaration(name)
+			program, _, _, ok := c.declaration(name)
 			if !ok {
 				c.mu.Unlock()
 				return total, fmt.Errorf("sidecar %s is not declared by any plugin", name)
@@ -1266,12 +1300,12 @@ func (c *Sidecars) process(name string, lost *revival) (process *sidecar, starte
 // launch starts the sidecar name; lost is the revival that runs the start of a persistent service, or nil. Call it without the lock; it does
 // not register.
 func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
-	program, persistent, ok := c.declaration(name)
+	program, displayName, persistent, ok := c.declaration(name)
 	if !ok {
 		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
 	if persistent {
-		return c.processPersistent(name, lost)
+		return c.processPersistent(name, program, displayName, lost)
 	}
 	// A host with a configuration directory has the folder `logs`, where a sidecar writes its event file (docs/spec/sidecars.md#log).
 	arguments := []string{}
@@ -1279,6 +1313,7 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		arguments = append(arguments, "--log-dir", filepath.Join(c.configDir, "logs"))
 	}
 	cmd := exec.Command(program, arguments...)
+	setDisplayNameEnvironment(cmd, displayName)
 	// The host reads the standard error line by line and writes each line as a record (docs/spec/sidecars.md#log).
 	cmd.Stderr = &recordWriter{layer: "sidecar", where: name}
 	stdin, err := cmd.StdinPipe()
@@ -1353,15 +1388,11 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, limit time.Duration) (
 // processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
 // it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
 // there (docs/spec/persistent-services.md#service-transport).
-func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, error) {
+func (c *Sidecars) processPersistent(name, program, displayName string, lost *revival) (*sidecar, error) {
 	// A zero HelloTimeout is a value that NewSidecars never gives. It would fail the hello of every service at once, so the start refuses it
 	// before anything is spawned.
 	if c.HelloTimeout <= 0 {
 		return nil, fmt.Errorf("sidecar %s: HelloTimeout is not set; build Sidecars with NewSidecars", name)
-	}
-	program, _, ok := c.declaration(name)
-	if !ok {
-		return nil, fmt.Errorf("sidecar %s is not declared by any plugin", name)
 	}
 	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
 	current, err := platform.Current()
@@ -1392,6 +1423,7 @@ func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, erro
 			}
 		}
 		cmd = exec.Command(program, "--service-dir", serviceDir, "--log-dir", filepath.Join(c.configDir, "logs"))
+		setDisplayNameEnvironment(cmd, displayName)
 		// A persistent service belongs to the lifetime of the configuration
 		// directory and not of this application process. A new session is started so that the recovery service does not
 		// end together with the application when it exits abnormally.
@@ -1458,7 +1490,7 @@ func (c *Sidecars) processPersistent(name string, lost *revival) (*sidecar, erro
 		}
 		// This endpoint was left by a service that ended abnormally. Only this record, which was confirmed to be stale, is removed,
 		// and the common single creation path is entered.
-		return c.processPersistent(name, lost)
+		return c.processPersistent(name, program, displayName, lost)
 	}
 	if endpoint.Protocol != 1 {
 		return nil, fmt.Errorf("sidecar %s: service protocol %d is not supported", name, endpoint.Protocol)
@@ -2064,7 +2096,7 @@ func (c *Sidecars) revivePersistent(name, loss string) {
 	// and tries once more (V5-106). The contract of the send path is unchanged: the
 	// live-unreachable report of a cold send does not change the endpoint.
 	if failure != nil && refusedConnect(failure, name) {
-		if program, _, ok := c.declaration(name); ok {
+		if program, _, _, ok := c.declaration(name); ok {
 			endpoint := filepath.Join(c.configDir, "services", filepath.Base(program), "endpoint.json")
 			if err := os.Remove(endpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
 				LogError("sidecar "+name, fmt.Sprintf("remove refused endpoint: %v", err))
@@ -2208,7 +2240,7 @@ func (c *Sidecars) dependsOn(plugin, name string) bool {
 func (c *Sidecars) Declared(name string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, _, ok := c.declaration(name)
+	_, _, _, ok := c.declaration(name)
 	return ok
 }
 

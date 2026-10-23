@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.16-6: Sidecar releases now require a validated `displayName` in `sidecar.json`; host declarations and both standard-input and persistent child launches use one locked snapshot of the executable, transport and display name. Hosts replace an inherited `SOKSAK_SIDECAR_DISPLAY_NAME` value with the declared name. `sok sidecar release` and installed-manifest readers reject missing or invalid names with the manifest path. Plugin API, Wails, Tauri, and release-validator owning tests pass.
+
 - F212.12-2-2-5: Native key callbacks reached the host in order, but concurrent view event pushes could overtake one another before reaching the terminal input queue. The workbench now serializes event delivery for each view. The unchanged owning test failed when it held the first push and observed the second start; the same test passes with both pushes settling in order. Live push failures remain reported.
 
 - F212.16-4: The process-label helper now reports control read/write failures and exits nonzero when its control byte is missing. Its owning check reproduced EOF being accepted as successful exit, then passed with interrupted system calls retried, an injected invalid write descriptor rejected, bounded child cleanup, and normal label measurements.

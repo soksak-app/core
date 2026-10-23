@@ -88,6 +88,92 @@ const ECHO: &str = "@fixture/sidecar-echo";
 /// The upper limit that ends a stalled check. Success is decided by the received event and not by this time.
 const STALL: Duration = Duration::from_secs(120);
 
+#[test]
+fn sidecar_process_receives_its_declared_display_name() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let display_name_path = executable_directory.path().join("display-name");
+    let program = executable_directory.path().join("echo");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\nprintf '%s' \"$SOKSAK_SIDECAR_DISPLAY_NAME\" > '{}'\nread request\nprintf '%s\\n' '{{\"surface\":\"s1\",\"body\":\"ok\"}}'\nexec cat\n",
+            display_name_path.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fixture =
+        files(r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("display-name", "/projects/display-name");
+    sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();
+    let event = events.recv_timeout(STALL).unwrap();
+    assert_eq!(event.surface, "s1");
+    assert_eq!(
+        std::fs::read_to_string(&display_name_path).unwrap(),
+        "soksak://sidecar/probe"
+    );
+    sidecars.stop();
+}
+
+#[test]
+fn sidecar_declaration_requires_one_display_name_component() {
+    for display_name in [
+        None,
+        Some(""),
+        Some("soksak://sidecar/"),
+        Some("sok://sidecar/probe"),
+        Some("soksak://plugin/probe"),
+        Some("soksak://sidecar/probe/child"),
+        Some("soksak://sidecar/Probe"),
+    ] {
+        let manifest = if let Some(display_name) = display_name {
+            format!(r#"{{"executable":"echo","protocol":1,"displayName":"{display_name}"}}"#)
+        } else {
+            r#"{"executable":"echo","protocol":1}"#.to_string()
+        };
+        let executable_directory = folder::Folder::new();
+        let config_directory = folder::Folder::new();
+        let fixture = files(&manifest);
+        let error = Sidecars::<FakeOwner>::new(
+            &declare(&fixture, executable_directory.path()),
+            config_directory.path().to_path_buf(),
+        )
+        .err()
+        .unwrap_or_else(|| panic!("accepted display name {display_name:?}"));
+        assert!(
+            error.contains("sidecar.json"),
+            "error omitted manifest path: {error}"
+        );
+        assert!(
+            error.contains("displayName"),
+            "error omitted field: {error}"
+        );
+    }
+    let non_string = files(r#"{"executable":"echo","protocol":1,"displayName":1}"#);
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let error = Sidecars::<FakeOwner>::new(
+        &declare(&non_string, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .err()
+    .expect("accepted a non-string display name");
+    assert!(
+        error.contains("sidecar.json"),
+        "error omitted manifest path: {error}"
+    );
+    assert!(
+        error.contains("displayName"),
+        "error omitted field: {error}"
+    );
+}
+
 // contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one
 #[test]
 fn concurrent_hosts_share_an_authenticated_service_endpoint() {
@@ -157,7 +243,9 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let first = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -273,7 +361,9 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let first = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -386,7 +476,9 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
         .unwrap();
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -436,7 +528,9 @@ fn persistent_transport_rejects_a_failed_hello() {
         .unwrap();
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -492,7 +586,9 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     )
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -560,7 +656,9 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     )
     .unwrap();
     let original = std::fs::read(&endpoint_path).unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -642,7 +740,9 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
         writeln!(stream, "{}", shutdown_reply).unwrap();
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -723,7 +823,9 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
         }
         released.recv().unwrap();
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -809,7 +911,9 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -891,7 +995,9 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -951,7 +1057,9 @@ fn persistent_retain_after_stop_sends_nothing() {
         serde_json::to_vec(&endpoint).unwrap(),
     )
     .unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::<FakeOwner>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -973,7 +1081,9 @@ fn persistent_retain_after_stop_sends_nothing() {
 fn persistent_retain_skips_a_service_without_endpoint() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::<FakeOwner>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1046,7 +1156,9 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
         }
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1120,7 +1232,9 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
         drop(listener);
     });
 
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1205,7 +1319,9 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
         // When the host closes the connection, the read ends with EOF.
         std::io::copy(&mut reader, &mut std::io::sink()).unwrap();
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1303,11 +1419,11 @@ fn persistent_start_does_not_delay_other_sidecars() {
     let fixture: Files = vec![
         (
             ECHO,
-            r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#.to_string(),
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_string(),
         ),
         (
             "@fixture/sidecar-fast",
-            r#"{"executable":"fast","protocol":1}"#.to_string(),
+            r#"{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}"#.to_string(),
         ),
     ];
     let mut sidecars = Sidecars::new(
@@ -1401,7 +1517,9 @@ fn persistent_start_fails_when_hello_is_not_answered() {
         reader.read_line(&mut hello).unwrap();
         let _ = released.recv();
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1436,7 +1554,9 @@ fn persistent_start_fails_when_the_service_prints_no_endpoint() {
     std::fs::write(&service, "#!/bin/sh\nsleep 2\nwhile :; do sleep 1; done\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = folder::Folder::new();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1470,7 +1590,9 @@ fn persistent_service_writes_its_standard_error_to_its_log() {
     std::fs::write(&service, "#!/bin/sh\necho service line >&2\nexit 0\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = folder::Folder::new();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1522,7 +1644,9 @@ fn persistent_service_starts_in_a_new_session() {
     )
     .unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1600,7 +1724,9 @@ fn persistent_start_fails_when_the_service_log_cannot_open() {
     let config_directory = folder::Folder::new();
     // If logs is a file, the log directory cannot be created.
     std::fs::write(config_directory.path().join("logs"), "").unwrap();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1625,7 +1751,9 @@ fn persistent_start_fails_when_the_service_exits_before_its_endpoint() {
     std::fs::write(&service, "#!/bin/sh\nexit 0\n").unwrap();
     std::fs::set_permissions(&service, std::fs::Permissions::from_mode(0o755)).unwrap();
     let config_directory = folder::Folder::new();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -1707,7 +1835,9 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
                 line.clear();
             }
         });
-        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let fixture = files(
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+        );
         let mut declarations = declare(&fixture, executable_directory.path());
         declarations[0].version = "0.0.7".to_string();
         let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
@@ -1950,7 +2080,9 @@ fn serve_replace_service(
 }
 
 fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sidecars<FakeOwner> {
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let mut declarations = declare(&fixture, executable_directory);
     declarations[0].version = "0.0.7".to_string();
     Sidecars::new(&declarations, config_directory.to_path_buf()).unwrap()
@@ -2139,7 +2271,9 @@ fn the_hello_carries_the_configuration_directory_as_client() {
             line.clear();
         }
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let declarations = declare(&fixture, executable_directory.path());
     let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
     let (owner, events) = owner("client", "/projects/client");
@@ -2382,7 +2516,9 @@ fn persistent_connections_are_recorded_as_events() {
         let writer = records::start_writer(Path::new(&config));
         soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
         records::wait_for_first_sample(Path::new(&config), &writer);
-        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let fixture = files(
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+        );
         let sidecars = Sidecars::new(
             &declare(&fixture, executable_directory.path()),
             config_directory.path().to_path_buf(),
@@ -2494,7 +2630,9 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         });
         let writer = records::start_writer(Path::new(&config));
         soksak_host_tauriv2::performance::command(serde_json::json!({"action": "on"})).unwrap();
-        let fixture = files(r#"{"executable":"service","protocol":1,"transport":"persistent"}"#);
+        let fixture = files(
+            r#"{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+        );
         let sidecars = Sidecars::new(
             &declare(&fixture, executable_directory.path()),
             config_directory.path().to_path_buf(),
@@ -2634,7 +2772,9 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
         .unwrap();
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
         let config_directory = folder::Folder::new();
-        let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+        let fixture = files(
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+        );
         let mut declarations = declare(&fixture, executable_directory.path());
         declarations[0].dependents = vec!["plugin-a".to_string()];
         let clock = RestartClock::new();
@@ -2812,7 +2952,9 @@ fn persistent_protocol_violations_stop_the_restarts() {
             std::io::copy(&mut reader, &mut std::io::sink()).unwrap();
         }
     });
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let clock = RestartClock::new();
     let clock_of_sidecars = clock.clone();
     let sidecars = Sidecars::new(
@@ -2923,7 +3065,9 @@ fn persistent_retain_keeps_a_session_first_sent_during_the_start() {
     let (started_sent, started) = channel::<String>();
     let (ack_sent, ack) = channel::<()>();
     let (started_sent, ack) = (Mutex::new(started_sent), Mutex::new(ack));
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -2963,7 +3107,9 @@ fn plugin_host_close_closes_only_the_callers_sessions_of_the_plugin() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service = fixture_service(config_directory.path(), "plugin-close.sock");
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
@@ -3010,7 +3156,9 @@ fn persistent_close_owned_closes_only_the_selected_surfaces() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service = fixture_service(config_directory.path(), "close-owned.sock");
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),

@@ -91,7 +91,8 @@ fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),
-        data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+        data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_vec(),
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     }];

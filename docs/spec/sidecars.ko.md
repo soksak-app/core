@@ -13,6 +13,7 @@
 | 필드 | 의미 |
 | --- | --- |
 | `executable` | 빌드된 실행 파일의 sidecar 안 경로 |
+| `displayName` | 필수 프로세스 표시 이름으로 형식은 `soksak://sidecar/<id>`이며 `<id>`는 소문자 식별자 한 요소다. 호스트는 이 값을 `SOKSAK_SIDECAR_DISPLAY_NAME`으로 자식에게 전달하고 사이드카는 자신의 운영체제 프로세스 identity에 적용한다. package dependency 이름과 실행 파일 경로와는 별개다. |
 | `protocol` | 메시지 형식 버전. 현재 버전은 `1` |
 | `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `name`(헬퍼 `package.json`의 `name`)과 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
 | `events` | 선택 필드. sidecar의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
@@ -20,11 +21,13 @@
 
 플러그인은 페이지가 사용하는 사이드카를 version 범위와 함께 `plugin.json`의 `dependencies`로 선언한다([플러그인](plugins.ko.md#pluginjson)). 설치는 각 사이드카의 release를 설정 디렉터리에 푼다.
 
+`sidecar.json`은 사용자 데이터가 아니라 버전이 지정된 release의 manifest다. 다른 사이드카 release를 설치하면 그 버전 패키지를 별도 설치 경로에 풀고 설치 선언을 그 패키지로 갱신한다. 필수 manifest 필드를 추가한 release는 package와 의존 plugin의 버전 범위를 함께 갱신하며, 설치가 이전 manifest를 새 manifest로 교체한다. 현재 reader는 `displayName`이 없는 이전 manifest를 파일 경로와 누락 필드를 표시해 거부한다. 이름을 추정하거나 두 manifest 형식을 함께 읽지 않는다. `protocol`은 wire message protocol이며 manifest 버전을 나타내지 않는다.
+
 호스트는 설치된 플러그인에서 사이드카를 찾는다([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)).
 
 1. `plugins/installed.json`이 켜진 플러그인과 그 기록된 폴더, 각 사이드카와 그 기록된 폴더를 나열한다.
 2. 각 플러그인 폴더의 `plugin.json`이 그 사이드카를 나열한다.
-3. 각 사이드카 폴더의 `sidecar.json`이 그 사이드카의 `executable` 경로와 `protocol`을 지정한다.
+3. 각 사이드카 폴더의 `sidecar.json`이 그 사이드카의 `executable` 경로, `protocol`, 필수 `displayName`을 지정한다.
 
 호스트는 plugin 작업마다 사이드카를 다시 선언하며([변경 적용](installation.ko.md#변경-적용)), 폴더가 바뀐 사이드카를 교체한다. 호스트는 그 폴더 안의 `executable`을 실행한다. `installed.json`이나 `sidecar.json`이 없거나 틀렸거나, `executable`이 sidecar 안의 경로가 아니거나, `protocol`이 `1`이 아니면 시작 시 실패한다. 페이지가 사이드카에 처음 요청을 보내면 사이드카를 시작한다. 어떤 플러그인도 선언하지 않은 사이드카에 대한 요청은 `sidecar <name> is not declared by any plugin`으로 실패하고, 호스트가 사이드카를 종료한 뒤의 요청도 실패한다.
 

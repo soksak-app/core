@@ -45,7 +45,7 @@ func (o *harnessOwner) Emit(name string, data ...any) {
 // harnessDeclarations is the declaration of one persistent sidecar installed in folder.
 func harnessDeclarations(folder string) []SidecarDeclaration {
 	return []SidecarDeclaration{{Name: "fixture-service", Folder: folder,
-		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}
+		Data: []byte(`{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`)}}
 }
 
 func writeHarnessEndpoint(t *testing.T, directory, socket string) {
@@ -1271,7 +1271,7 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		t.Fatal(err)
 	}
 	declarations := append(harnessDeclarations(folder), SidecarDeclaration{Name: "fixture-fast", Folder: folder,
-		Data: []byte(`{"executable":"fast","protocol":1}`)})
+		Data: []byte(`{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}`)})
 	sidecars, err := NewSidecars(declarations, root)
 	if err != nil {
 		t.Fatal(err)
@@ -2183,7 +2183,7 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	}()
 
 	sidecars, err := NewSidecars([]SidecarDeclaration{{Name: eventsService, Folder: t.TempDir(),
-		Data: []byte(`{"executable":"service","protocol":1,"transport":"persistent"}`)}}, root)
+		Data: []byte(`{"executable":"service","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}`)}}, root)
 	if err != nil {
 		t.Fatal(err)
 	}
