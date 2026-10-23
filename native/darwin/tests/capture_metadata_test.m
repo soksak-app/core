@@ -13,6 +13,29 @@ static kern_return_t failedTimebase(mach_timebase_info_data_t *timebase) {
     (void)timebase;
     return KERN_FAILURE;
 }
+static CVReturn injectedLockResult = kCVReturnSuccess;
+static CVReturn injectedUnlockResult = kCVReturnSuccess;
+static int injectedLockCalls;
+static int injectedUnlockCalls;
+static int injectedBaseAddressCalls;
+static CVPixelBufferLockFlags injectedLockFlags;
+static CVPixelBufferLockFlags injectedUnlockFlags;
+static CVReturn injectedLock(CVPixelBufferRef buffer, CVPixelBufferLockFlags flags) {
+    (void)buffer;
+    injectedLockCalls++;
+    injectedLockFlags = flags;
+    return injectedLockResult;
+}
+static CVReturn injectedUnlock(CVPixelBufferRef buffer, CVPixelBufferLockFlags flags) {
+    injectedUnlockCalls++;
+    injectedUnlockFlags = flags;
+    CVReturn actual = CVPixelBufferUnlockBaseAddress(buffer, flags);
+    return actual == kCVReturnSuccess ? injectedUnlockResult : actual;
+}
+static void *countingBaseAddress(CVPixelBufferRef buffer) {
+    injectedBaseAddressCalls++;
+    return CVPixelBufferGetBaseAddress(buffer);
+}
 
 static void check(BOOL ok, NSString *label) {
     fprintf(stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
@@ -103,6 +126,40 @@ int main(void) { @autoreleasepool {
 
     NSString *error = record(sample(YES, complete(nil)), &used);
     check(error.length == 0 && used.written == 1, [NSString stringWithFormat:@"a complete frame with every field is written (%@)", error]);
+
+    CVReturn (*originalLock)(CVPixelBufferRef, CVPixelBufferLockFlags) = captureLockBaseAddress;
+    CVReturn (*originalUnlock)(CVPixelBufferRef, CVPixelBufferLockFlags) = captureUnlockBaseAddress;
+    void *(*originalBaseAddress)(CVPixelBufferRef) = captureGetBaseAddress;
+    captureLockBaseAddress = injectedLock;
+    captureUnlockBaseAddress = injectedUnlock;
+    captureGetBaseAddress = countingBaseAddress;
+    injectedLockResult = kCVReturnError;
+    injectedUnlockResult = kCVReturnSuccess;
+    injectedLockCalls = injectedUnlockCalls = injectedBaseAddressCalls = 0;
+    error = record(sample(YES, complete(nil)), &used);
+    long pendingAfterLockFailure = dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW);
+    if (pendingAfterLockFailure == 0) dispatch_semaphore_signal(capturePending);
+    check([error containsString:@"pixel buffer lock failed"] && [error containsString:@"-6660"]
+        && injectedLockCalls == 1 && injectedLockFlags == kCVPixelBufferLock_ReadOnly
+        && injectedUnlockCalls == 0 && injectedBaseAddressCalls == 0 && used.queued == 0 && used.written == 0
+        && pendingAfterLockFailure == 0,
+        @"a failed pixel-buffer lock rejects the frame before base access or unlock and releases writer capacity");
+
+    injectedLockResult = kCVReturnSuccess;
+    injectedUnlockResult = kCVReturnError;
+    injectedLockCalls = injectedUnlockCalls = injectedBaseAddressCalls = 0;
+    error = record(sample(YES, complete(nil)), &used);
+    pendingAfterLockFailure = dispatch_semaphore_wait(capturePending, DISPATCH_TIME_NOW);
+    if (pendingAfterLockFailure == 0) dispatch_semaphore_signal(capturePending);
+    check([error containsString:@"pixel buffer unlock failed"] && [error containsString:@"-6660"]
+        && injectedLockCalls == 1 && injectedLockFlags == kCVPixelBufferLock_ReadOnly
+        && injectedUnlockCalls == 1 && injectedUnlockFlags == kCVPixelBufferLock_ReadOnly
+        && injectedBaseAddressCalls == 1 && used.queued == 0 && used.written == 0
+        && pendingAfterLockFailure == 0,
+        @"a failed pixel-buffer unlock rejects the copied frame and releases writer capacity");
+    captureLockBaseAddress = originalLock;
+    captureUnlockBaseAddress = originalUnlock;
+    captureGetBaseAddress = originalBaseAddress;
 
     NSDictionary *names = @{SCStreamFrameInfoStatus: @"status", SCStreamFrameInfoDisplayTime: @"display time",
         SCStreamFrameInfoContentRect: @"content rectangle", SCStreamFrameInfoContentScale: @"content scale",

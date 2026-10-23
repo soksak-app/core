@@ -57,6 +57,9 @@ static bool captureUpdating;
 static void followWindowSize(size_t width, size_t height, size_t needWidth, size_t needHeight);
 static uint64_t (*captureRawClock)(void) = mach_absolute_time;
 static kern_return_t (*captureReadTimebase)(mach_timebase_info_data_t *) = mach_timebase_info;
+static CVReturn (*captureLockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockFlags) = CVPixelBufferLockBaseAddress;
+static CVReturn (*captureUnlockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockFlags) = CVPixelBufferUnlockBaseAddress;
+static void *(*captureGetBaseAddress)(CVPixelBufferRef) = CVPixelBufferGetBaseAddress;
 
 // Receives frames and writes them to files. The frames are delivered as messages, so a receiver object is required.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
@@ -131,6 +134,13 @@ static BOOL frameStatus(CMSampleBufferRef sample, SCFrameStatus *status) {
 static void reportCaptureFileFailure(int number, NSString *operation, NSString *path, int error) {
     NSString *message = [NSString stringWithFormat:@"frame %d was not written: %@ %@: %s",
         number, operation, path, strerror(error)];
+    setCaptureError(message);
+    sp_log_error("capture", message.UTF8String);
+}
+
+static void reportPixelBufferFailure(int number, NSString *operation, CVReturn result) {
+    NSString *message = [NSString stringWithFormat:@"frame %d pixel buffer %@ failed: CVReturn %d",
+        number, operation, result];
     setCaptureError(message);
     sp_log_error("capture", message.UTF8String);
 }
@@ -297,16 +307,20 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         setCaptureError([NSString stringWithFormat:@"capture pending writer capacity exceeded (%ld frames)", kCapturePending]);
         return;
     }
-    CVPixelBufferLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+    CVReturn lockResult = captureLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+    if (lockResult != kCVReturnSuccess) {
+        reportPixelBufferFailure(number, @"lock", lockResult);
+        dispatch_semaphore_signal(capturePending);
+        return;
+    }
     size_t width = CVPixelBufferGetWidth(buffer);
     size_t height = CVPixelBufferGetHeight(buffer);
     size_t stride = CVPixelBufferGetBytesPerRow(buffer);
-    const uint8_t* base = (const uint8_t*)CVPixelBufferGetBaseAddress(buffer);
+    const uint8_t* base = (const uint8_t*)captureGetBaseAddress(buffer);
     if (base == NULL) {
-        setCaptureError([NSString stringWithFormat:@"frame %d has no pixel buffer", self.queued + 1]);
-        CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
-        dispatch_semaphore_signal(capturePending);
-        return;
+        NSString *message = [NSString stringWithFormat:@"frame %d has no pixel buffer", number];
+        setCaptureError(message);
+        sp_log_error("capture", message.UTF8String);
     }
     // Measuring a window whose size changes requires the drawn area, the scale, and the display time of each frame.
     mach_timebase_info_data_t timebase;
@@ -316,13 +330,23 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         contentScale, scaleFactor,
         (double)shown * timebase.numer / timebase.denom / 1e6 };
     size_t size = sizeof(head) + sizeof(info) + stride * height;
-    uint8_t *copy = malloc(size);
+    uint8_t *copy = base == NULL ? NULL : malloc(size);
     if (copy != NULL) {
         memcpy(copy, head, sizeof(head));
         memcpy(copy + sizeof(head), info, sizeof(info));
         memcpy(copy + sizeof(head) + sizeof(info), base, stride * height);
     }
-    CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+    CVReturn unlockResult = captureUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+    if (unlockResult != kCVReturnSuccess) {
+        reportPixelBufferFailure(number, @"unlock", unlockResult);
+        free(copy);
+        dispatch_semaphore_signal(capturePending);
+        return;
+    }
+    if (base == NULL) {
+        dispatch_semaphore_signal(capturePending);
+        return;
+    }
     if (copy == NULL) {
         NSString *message = [NSString stringWithFormat:@"frame %d could not be copied: %s", self.queued + 1, strerror(errno)];
         setCaptureError(message);
