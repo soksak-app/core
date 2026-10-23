@@ -6,6 +6,8 @@
 
 - F212.12-2-2-4-7: Capture가 Core Video pixel-buffer lock/unlock 반환값을 확인한다. Lock 실패는 frame과 `CVReturn`을 기록하고 base-address 접근 및 unlock을 하지 않으며 pending-writer permit을 반환한다. Unlock 실패는 결과를 기록하고 복사한 frame을 해제·거부한 뒤 writer에 제출하지 않고 permit을 반환한다. 소유 `capture_metadata_test`는 변경 전 unchecked 경로에서 두 실패를 재현하고 수정 후 통과하며, macOS 26.6.2 arm64에서 `make docs-check`가 통과한다.
 
+- F212.10-core-2: Workbench는 plane slot에서 compositor record까지 tab의 전체 surface descriptor를 보존해 view start values에 저장 params를 담는다. Dormant tab은 저장 params를 사용하고 placeholder slot은 surface descriptor를 제거한다. Owning Red는 `core.file.open`의 `start.params === null`에서 실패했고, 같은 검사는 이제 active host DTO, dormant 값, 명시적 null, 중복 wire params 부재를 확인한다. Workbench/compositor/view test 33/33, `make docs-check` 통과. 재빌드한 Wails/Tauri 문서 readback은 남아 있다.
+
 - F212.10-core-1: `core.surface.document`가 실제 view page에 주입된 params의 불변 snapshot을 보고한다. Observer는 명시적 `null`을 보존하며, 누락·잘못된 값·JSON 직렬화 불가 값은 필드명을 포함해 거부한다. 소유 bridge 검사는 8/8 통과한다. Workbench `core.file.open` 검사는 fake mount를 사용해 1/1 통과하며, runtime host DTO는 검증하지 않는다. Fresh Wails/Tauri readback에서 저장된 editor/HWP 경로는 확인했지만 실제 두 page의 값은 `params:null`이었다. Notification watch에서도 document path가 null로 남았다. 첫 값 손실 지점은 확인되지 않았고 F212.10-core-2에서 host dispatch 전 runtime DTO를 기록한다.
 
 - F212.12-2-2-4-2: Capture callback record는 기록한 정확한 상대 frame 파일명을 담고, frame을 기록하지 않았으면 `null`을 담는다. Native Red는 cached, idle, blank callback과 JSONL 연결에서 실패했고, 파일명과 실제 파일 존재를 확인하는 `capture_metadata_test`가 통과한다. `make docs-check`가 통과한다.

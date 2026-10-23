@@ -21,6 +21,7 @@ async function fixture(name) {
   let width = 200;
   slot.getBoundingClientRect = () => ({ left: 20, top: 25, width, height: 100 });
   const compositor = await import(`../compositor.js?paint-clip-${name}`);
+  compositor.setSlotSurface(slot, { surfaceId: "surface", pluginId: "probe", composition: { kind: "dom" } });
   const requests = [];
   // When unsent is true, the next commit has no reply, as if it were the same as the previous request and was not sent to the host (same as host.js).
   const state = { unsent: false };

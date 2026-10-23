@@ -59,6 +59,8 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     mountedSurface: () => null,
     mountSurface: (slot, surface) => { mountedSurfaces.push(surface); return Promise.resolve(); },
     disposeSurface: () => Promise.resolve(), focusSurface: () => true,
+    surfaceForTab: (tab) => ({ composition: { kind: "view", page: "ui/index.html" }, surfaceId: tab.id,
+      pluginId: tab.plugin, params: tab.params ?? null, declarations: {}, sidecars: [] }),
     placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),
   } });
   // The card holds a tab whose stored params do not match the declaration, and a tab whose params match it.

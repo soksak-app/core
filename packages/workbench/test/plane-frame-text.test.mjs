@@ -31,6 +31,8 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     mountedSurface: () => null,
     mountSurface: () => Promise.resolve(), disposeSurface: () => Promise.resolve(),
     placePluginPlaceholder: () => {},
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, params: tab.params ?? null, declarations: {}, sidecars: [] }),
   } });
   t.mock.module("../environment.js", { exports: {
     environment: () => ({ workspace: { focus: "main", grid: {

@@ -200,6 +200,18 @@ export function viewStartValues(surface, project) {
   };
 }
 
+/** Builds the canonical surface descriptor from the tab, including its stored start parameters. */
+export function surfaceForTab(tab) {
+  return { ...plugin(tab.plugin).surface(tab.id), surfaceId: tab.id, pluginId: tab.plugin, params: tab.params ?? null };
+}
+
+/** Adds the document-start values to each view using the descriptor supplied by its slot or stored tab. */
+export function surfacePlacementsForHost(surfaces, project) {
+  return surfaces.map((entry) => entry.surface.composition?.kind === "view" && native
+    ? { ...entry, start: viewStartValues(entry.surface, project) }
+    : entry);
+}
+
 /**
  * context.tab.state of a surface whose plugin declares surface.unload as {format, maxBytes} (docs/spec/plugins.md#memory-saver).
  * isDisposed tells whether the surface of this context was disposed; a write after it is refused and reported once.

@@ -5,7 +5,6 @@
 //
 // This module does not know the structure of the plane. The plane writes the position and content of a surface
 // into data attributes of the slot element, and this module reads those attributes to measure and report.
-import { plugin } from "./registry.js";
 import { native, surfaces as app } from "./host.js";
 import { chromeRow, drawnFrameText } from "./frame-text.js";
 
@@ -42,6 +41,28 @@ let aheadRecord = null;
 let aheadSeq = -1;
 let aheadComplete = false;
 const drawn = new Map();
+const slotSurfaces = new WeakMap();
+
+/** Associates the complete declaration and start values with the DOM slot for this render. */
+export function setSlotSurface(slot, surface) {
+  if (!slot || slot.dataset.nativeSurfaceId !== surface?.surfaceId || slot.dataset.nativePlugin !== surface?.pluginId) {
+    throw new TypeError(`surface descriptor does not match slot ${slot?.dataset.nativeSurfaceId ?? "none"}`);
+  }
+  slotSurfaces.set(slot, surface);
+}
+
+/** Removes the descriptor when a slot becomes a placeholder rather than a surface. */
+export function clearSlotSurface(slot) {
+  slotSurfaces.delete(slot);
+}
+
+function slotSurface(slot) {
+  const surface = slotSurfaces.get(slot);
+  if (!surface || slot.dataset.nativeSurfaceId !== surface.surfaceId || slot.dataset.nativePlugin !== surface.pluginId) {
+    throw new Error(`surface slot ${slot.dataset.nativeSurfaceId} has no current descriptor`);
+  }
+  return surface;
+}
 
 /** Element of the card that owns the slot: the ancestor that has the data-card-id the plane wrote. */
 const cardEl = (slot) => slot.closest("[data-card-id]");
@@ -179,6 +200,7 @@ export function publish() {
       dim: slot.dataset.nativeDim === "true",
       visible: effectiveVisible(slot),
       frame,
+      surface: slotSurface(slot),
     });
   }
   return deliver(mine, snapshot, chromeRow(drawnFrameText()));
@@ -229,6 +251,7 @@ export function publishAhead(rects, seated, titlebar) {
       // the commit. A surface whose position was measured stays visible at its new seat, so the surface that is
       // visible on screen receives input meanwhile. Only a surface whose seat cannot be measured is hidden.
       visible: measurable,
+      surface: slotSurface(slot),
       frame: measurable ? {
         x: card.x + inset.left,
         y: card.y + inset.top,
@@ -263,7 +286,7 @@ function commit(mine, snapshot, final, titlebar) {
       bands: s.bands ?? null,
       // The plugin decides what a surface shows. If the host branched by kind, the host would have to change
       // every time a plugin is added.
-      surface: plugin(s.plugin).surface(s.id),
+      surface: s.surface,
     };
     // No simulation element is created for a surface that the host draws natively. If both were created, the
     // DOM copy would remain below the native view.

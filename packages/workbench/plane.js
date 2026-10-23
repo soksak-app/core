@@ -19,13 +19,13 @@ import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { chooseOpener } from "./file-open.js";
-import { standIn } from "./compositor.js";
+import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
-import { mountSurface, mountedSurface, placePluginPlaceholder } from "./surface-modules.js";
+import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
@@ -375,6 +375,7 @@ function updateCard(el, card, rect) {
     pluginUnits().find((unit) => unit.id === shown.plugin).version, plugin(shown.plugin).params, shown.params) : null;
   if (!hasPlugin(shown.plugin) || paramsProblem) {
     // The tab of a plugin that is not loaded is a placeholder and not a surface. The surface mark is cleared so the compositor does not treat it as a surface.
+    clearSlotSurface(slot);
     for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
     placePluginPlaceholder(slot, shown.id, pluginPlaceholder(shown, paramsProblem));
     slot.dataset.surfaceStatus = "ready";
@@ -392,7 +393,8 @@ function updateCard(el, card, rect) {
   slot.dataset.nativeTitle = shown.title;
   slot.dataset.nativeDim = String(dimmed(card.id));
   // default: a tab opened without parameters mounts with params null.
-  const surface = { ...plugin(shown.plugin).surface(shown.id), params: shown.params ?? null };
+  const surface = surfaceForTab(shown);
+  setSlotSurface(slot, surface);
   mountSurface(slot, surface, {
     onState: (state) => {
       slot.dataset.surfaceStatus = state.phase;

@@ -46,7 +46,7 @@ import {
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, onSurfaceMounted, placeSurfaces, viewStartValues, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { authorizeSurface, disposeSurfacesExcept, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from "./tab-reports.js";
@@ -169,7 +169,7 @@ function dormant(shown) {
     out.push({
       id: tab.id, plugin: tab.plugin, layer: 0,
       declared: NOWHERE, applied: NOWHERE, visible: false, dim: false,
-      surface: registry.plugin(tab.plugin).surface(tab.id),
+      surface: surfaceForTab(tab),
     });
   };
   // Tabs of the current plane. Those that are not the active tab are collected here.
@@ -254,9 +254,7 @@ onCommit((record) => {
   const refusedViews = new Set(all.filter((entry) => entry.surface.composition?.kind === "view"
     && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
   for (const id of refusedViews) ids.add(id);
-  const placed = all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)).map((entry) => (entry.surface.composition?.kind === "view"
-    ? { ...entry, start: viewStartValues(entry.surface, projects.active()) }
-    : entry));
+  const placed = surfacePlacementsForHost(all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)), projects.active());
   return placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: placed })).then((answer) => {
     for (const surface of record.surfaces) if (!refusedViews.has(surface.id)) authorizeSurface(surface.id);
     return answer;

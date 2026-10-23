@@ -17,7 +17,8 @@ test("a layout published before drawing waits for the host's placement answer", 
   slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
   const { registerPlugin } = await import("../registry.js");
   registerPlugin({ id: "probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
-  const { onCommit, placementPending, publishAhead } = await import("../compositor.js");
+  const { onCommit, placementPending, publishAhead, setSlotSurface } = await import("../compositor.js");
+  setSlotSurface(slot, { surfaceId: "surface", pluginId: "probe", composition: { kind: "dom" } });
   let answer, prepared;
   onCommit((record) => new Promise((resolve) => {
     prepared = record;
@@ -73,9 +74,10 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
   const { registerPlugin } = await import("../registry.js");
   registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const slot = document.querySelector("[data-native-surface]");
+  const compositor = await import("../compositor.js?fullscreen-sibling");
+  compositor.setSlotSurface(slot, { surfaceId: "hidden-surface", pluginId: "fullscreen-probe", composition: { kind: "dom" } });
   let width = 100, height = 100;
   slot.getBoundingClientRect = () => ({left:0,top:0,width,height});
-  const compositor = await import("../compositor.js?fullscreen-sibling");
   let record;
   compositor.onCommit((value) => { record = value; return value.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })); });
   try {
