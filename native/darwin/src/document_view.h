@@ -36,11 +36,11 @@ typedef void (*sp_view_message)(void *context, const char *json);
 // site data, and it is created if missing. Documents with the same directory use the same store. folder and plugin
 // name
 // the installed
-// folder and the id of the plugin whose surface owns the region; sok://<plugin>/<path> serves <path> from that folder,
+// folder and the id of the plugin whose surface owns the region; soksak://<plugin>/<path> serves <path> from that folder,
 // and NULL folder serves nothing. channel is NULL for a document region, which receives no core root grant
 // (docs/spec/plugin-processes.md, rule 4). A non-NULL channel is the text of the view channel script of a view
 // configuration: the script runs at document start in the page world, the sok-view handler is registered, and the
-// configuration may request sok://core/<path> from the core root resolver (sp_core_root_set_resolver). A view needs
+// configuration may request soksak://core/<path> from the core root resolver (sp_core_root_set_resolver). A view needs
 // folder and plugin. Returns NULL if the webview cannot be created.
 void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *channel,
     sp_document_changed changed, void *context);
@@ -58,9 +58,9 @@ void sp_document_fail_creation_for_test(const char *cause);
 // Creates the plugin host web view of plugin hidden in the window itself (docs/spec/plugin-host.md). directory is the
 // absolute path where the persistent data store keeps site data, and it is created if missing; documents with the same
 // directory use the same store. folder and plugin name the installed folder and the id of the plugin whose host the web
-// view runs, so sok://<plugin>/<path> serves <path> from that folder and the configuration carries the view
+// view runs, so soksak://<plugin>/<path> serves <path> from that folder and the configuration carries the view
 // configuration: the view channel script channel runs at document start in the page world, the sok-view handler is
-// registered, and the configuration may request sok://core/<path> from the core root resolver
+// registered, and the configuration may request soksak://core/<path> from the core root resolver
 // (sp_core_root_set_resolver). changed receives the state JSON of the web view. The web view holds a zero frame, is
 // hidden, draws nothing, takes no hit testing, receives no input, and never becomes the first responder. Returns NULL
 // if the webview cannot be created.
@@ -138,7 +138,7 @@ bool sp_document_stream_ack(void *document, unsigned long long seq);
 // The caller keeps context while the document lives.
 void sp_document_set_event(void *document, sp_document_event event, void *context);
 
-// Opens an http, https, file or sok address. Refuses another address and returns false.
+// Opens an http, https, file or soksak address. Refuses another address and returns false.
 bool sp_document_load(void *document, const char *url);
 
 // action: 0 back, 1 forward, 2 reload, 3 stop, 4 the session history entry offset entries away from the current

@@ -9,8 +9,8 @@ use tauri::{AppHandle, Manager};
 use crate::application_log::log_error;
 
 /// The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses). A custom
-/// scheme handler, which knows the requesting webview, answers the start document at sok://core/start.json.
-pub const SCHEME: &str = "sok";
+/// scheme handler, which knows the requesting webview, answers the start document at soksak://core/start.json.
+pub const SCHEME: &str = "soksak";
 
 /// The owner of core documents in sok addresses.
 pub const CORE: &str = "core";

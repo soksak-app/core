@@ -27,7 +27,7 @@ static NSWindow *window;
 // The served page: the doctype, the import map that the host inserts after the doctype, then the document with its module in
 // body. The module imports the bare specifier core-m, which the map names.
 static NSString *const insertedPage = @"<!doctype html>"
-    "<script type=importmap>{\"imports\": {\"core-m\": \"sok://core/m.js\"}}</script>"
+    "<script type=importmap>{\"imports\": {\"core-m\": \"soksak://core/m.js\"}}</script>"
     "<html><head><meta charset=utf-8><title>probe</title></head><body>"
     "<script type=module>"
     "const post = (value) => window.webkit.messageHandlers.probe.postMessage(value);"
@@ -57,15 +57,15 @@ static NSString *const insertedPage = @"<!doctype html>"
     NSString *type = @"text/plain";
     NSString *body = @"not found";
     NSMutableDictionary *fields = [NSMutableDictionary dictionary];
-    if ([url.scheme isEqualToString:@"sok"] && [url.host isEqualToString:@"probe"] && [url.path isEqualToString:@"/index.html"]) {
+    if ([url.scheme isEqualToString:@"soksak"] && [url.host isEqualToString:@"probe"] && [url.path isEqualToString:@"/index.html"]) {
         status = 200;
         type = @"text/html";
         body = insertedPage;
-    } else if ([url.scheme isEqualToString:@"sok"] && [url.host isEqualToString:@"core"] && [url.path isEqualToString:@"/m.js"]) {
+    } else if ([url.scheme isEqualToString:@"soksak"] && [url.host isEqualToString:@"core"] && [url.path isEqualToString:@"/m.js"]) {
         status = 200;
         type = @"text/javascript";
         body = @"export default 42;\n";
-        fields[@"Access-Control-Allow-Origin"] = @"sok://probe";
+        fields[@"Access-Control-Allow-Origin"] = @"soksak://probe";
     }
     fields[@"Content-Type"] = type;
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:status
@@ -97,11 +97,11 @@ int main(void) { @autoreleasepool {
     ProbeMessageHandler *messages = [[[ProbeMessageHandler alloc] init] autorelease];
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
-    [configuration setURLSchemeHandler:scheme forURLScheme:@"sok"];
+    [configuration setURLSchemeHandler:scheme forURLScheme:@"soksak"];
     [configuration.userContentController addScriptMessageHandler:messages name:@"probe"];
     WKWebView *web = [[[WKWebView alloc] initWithFrame:window.contentView.bounds configuration:configuration] autorelease];
     [window.contentView addSubview:web];
-    [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/index.html"]]];
+    [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"soksak://probe/index.html"]]];
     until(@"the inserted-map page posts its result", ^BOOL{ return probeResult != nil; });
 
     BOOL imported = [probeResult[@"imported"] boolValue];
@@ -109,7 +109,7 @@ int main(void) { @autoreleasepool {
     NSString *error = probeResult[@"error"] ?: @"none";
     printf("OBSERVED inserted map: imported=%s value=%s error=%s\n", imported ? "YES" : "NO", value.UTF8String, error.UTF8String);
     check(imported && [value isEqualToString:@"42"],
-        @"inserted map after the doctype: the bare specifier core-m resolves through the map to sok://core/m.js and yields 42");
+        @"inserted map after the doctype: the bare specifier core-m resolves through the map to soksak://core/m.js and yields 42");
 
     [configuration.userContentController removeScriptMessageHandlerForName:@"probe"];
     [web removeFromSuperview];

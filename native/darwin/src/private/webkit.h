@@ -3,7 +3,7 @@
 #import <WebKit/WebKit.h>
 
 @interface WKWebViewConfiguration (SPPrivateProcessDisplayName)
-// WKWebViewConfigurationPrivate.h: test-only comparison for F212.16.
+// WKWebViewConfigurationPrivate.h: sets the operating-system label of a plugin WebContent process.
 - (void)_setProcessDisplayName:(NSString *)displayName API_AVAILABLE(macos(11.0));
 @end
 

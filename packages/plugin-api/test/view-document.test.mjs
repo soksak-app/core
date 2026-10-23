@@ -17,7 +17,7 @@ const declarations = {
 
 function setup(t, { surface = true } = {}) {
   const dom = new JSDOM("<!doctype html><body><button data-expose=probe.button>Press</button></body>",
-    { url: "sok://probe/ui/view.html", runScripts: "outside-only" });
+    { url: "soksak://probe/ui/view.html", runScripts: "outside-only" });
   const view = dom.window;
   const posted = [];
   const host = (data) => view.dispatchEvent(new view.MessageEvent("message", { data, source: view }));
@@ -68,7 +68,7 @@ test("the bridge registers the actual view document without plugin exposure setu
   await turn();
   assert.deepEqual(registrations(), coreNames, "the view bridge registered no common document entries");
   const state = await request("status.get", "core.surface.document");
-  assert.equal(state.url, "sok://probe/ui/view.html");
+  assert.equal(state.url, "soksak://probe/ui/view.html");
   assert.equal(state.timeOrigin, view.performance.timeOrigin);
   assert.equal(state.themed, true);
   assert.deepEqual(state.viewport, { width: 400.5, height: 200.5 });

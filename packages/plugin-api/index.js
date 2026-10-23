@@ -62,15 +62,15 @@ export const PAGE_IMPORTS = Object.freeze({
 
 /**
  * The imports of the import map of a view page. A view is served from the core root (docs/spec/plugin-processes.md, rule 4),
- * so its import map names the core targets at sok://core, and it has no entry for runtime/ or the workbench. Its plugin-api entries
+ * so its import map names the core targets at soksak://core, and it has no entry for runtime/ or the workbench. Its plugin-api entries
  * are the browser modules that plugin-api exports for pages: view and screen-hash (the export list of package.json, checked by a test).
  */
 export const VIEW_IMPORTS = Object.freeze({
-  "soksak": `sok://core/${modulePath("soksak", "dist/index.js")}`,
-  "@soksak/plugin-api": `sok://core/${modulePath("@soksak/plugin-api", "index.js")}`,
-  "@soksak/plugin-api/view": `sok://core/${modulePath("@soksak/plugin-api", "view.js")}`,
-  "@soksak/plugin-api/screen-hash": `sok://core/${modulePath("@soksak/plugin-api", "screen-hash.js")}`,
-  "@soksak/shared/": "sok://core/shared/",
+  "soksak": `soksak://core/${modulePath("soksak", "dist/index.js")}`,
+  "@soksak/plugin-api": `soksak://core/${modulePath("@soksak/plugin-api", "index.js")}`,
+  "@soksak/plugin-api/view": `soksak://core/${modulePath("@soksak/plugin-api", "view.js")}`,
+  "@soksak/plugin-api/screen-hash": `soksak://core/${modulePath("@soksak/plugin-api", "screen-hash.js")}`,
+  "@soksak/shared/": "soksak://core/shared/",
 });
 
 /** The entry files of the view import closure, by package name (docs/spec/plugin-processes.md, rule 4). */
@@ -1390,12 +1390,12 @@ export function pagePackage(pathname) {
 }
 
 /**
- * Returns the plugin of a page location, or null for a page that is not a plugin page. A `sok://<host>` page belongs to the
+ * Returns the plugin of a page location, or null for a page that is not a plugin page. A `soksak://<host>` page belongs to the
  * plugin whose id is its host, and its manifest is on its own origin. A staged page of the main origin belongs to the package
- * named by its module path. A sok host that is not a plugin id, or `core`, throws.
+ * named by its module path. A soksak host that is not a plugin id, or `core`, throws.
  */
 export function pagePlugin(location) {
-  if (location.protocol === "sok:") {
+  if (location.protocol === "soksak:") {
     // core is the reserved host of the core root, so it names no plugin.
     if (!ID.test(location.host) || location.host === "core") {
       throw new Error(`${location.href}: host ${location.host} is not a plugin id`);
@@ -1408,7 +1408,7 @@ export function pagePlugin(location) {
 
 /**
  * Returns the plugin id of a page location and its validated plugin.json, or null for a page that is not a plugin page.
- * `read(path)` returns the parsed JSON of a path on the origin of the page. A sok page takes the id of its host, which its
+ * `read(path)` returns the parsed JSON of a path on the origin of the page. A soksak page takes the id of its host, which its
  * plugin.json must carry. A staged page takes the id of the installed plugin whose package is its module name
  * (`installed-plugins.json`); a missing entry throws.
  */

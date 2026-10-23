@@ -102,9 +102,9 @@ int main(void) { @autoreleasepool {
         sp_document_place(document, 0, 0, 0, 0, true);
 
         check(!sp_document_post(document, "{\"ping\":1}"), @"a document that is not a plugin document has no message channel");
-        check(sp_document_load(document, "sok://probe/ui/app/index.html"), @"a region loads a sok address");
+        check(sp_document_load(document, "soksak://probe/ui/app/index.html"), @"a region loads a sok address");
         until(@"the plugin page module runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
-        check([latest[@"title"] isEqual:@"ready sok://probe"],
+        check([latest[@"title"] isEqual:@"ready soksak://probe"],
             [NSString stringWithFormat:@"the plugin document has the origin of its plugin: %@", latest[@"title"]]);
 
         check(sp_document_post(document, "{\"ping\":7}"), @"the page posts a message to a plugin document");
@@ -132,12 +132,12 @@ int main(void) { @autoreleasepool {
                 [NSString stringWithFormat:@"the %@ reply arrives as %@: %@", reply[0], reply[1], messages[index + 1]]);
         }
 
-        // The URL parser resolves the dot segments, so the last address requests sok://probe/secret.html. A refused request is
+        // The URL parser resolves the dot segments, so the last address requests soksak://probe/secret.html. A refused request is
         // logged once as an error with its URL (docs/spec/native-surfaces.md#document-regions).
         NSDictionary<NSString *, NSString *> *refused = @{
-            @"sok://other/ui/app/index.html": @"sok://other/ui/app/index.html",
-            @"sok://probe/ui/app/missing.html": @"sok://probe/ui/app/missing.html",
-            @"sok://probe/ui/../../secret.html": @"sok://probe/secret.html",
+            @"soksak://other/ui/app/index.html": @"soksak://other/ui/app/index.html",
+            @"soksak://probe/ui/app/missing.html": @"soksak://probe/ui/app/missing.html",
+            @"soksak://probe/ui/../../secret.html": @"soksak://probe/secret.html",
         };
         for (NSString *address in refused) {
             NSString *url = refused[address];

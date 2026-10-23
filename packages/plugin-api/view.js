@@ -1,4 +1,4 @@
-// The view side of the view channel (docs/spec/plugin-processes.md, rule 4). A view page runs on sok://<plugin id>. The
+// The view side of the view channel (docs/spec/plugin-processes.md, rule 4). A view page runs on soksak://<plugin id>. The
 // injected document-start script (view-start.js) posts the ready message, checks each host message, and keeps the host
 // messages until a listener attaches; this module reads them through window.sokView.attach and sends through the handler
 // of the view (the sok-view webkit message handler in the application).
@@ -33,10 +33,10 @@ async function runCommand(run, params, context) {
   }
 }
 
-/** The plugin id of the view: the host of the sok:// origin of the page. */
+/** The plugin id of the view: the host of the soksak:// origin of the page. */
 function pluginOfView() {
   const plugin = window.location.host;
-  if (!PLUGIN.test(plugin)) throw new Error(`view channel requires a view page on sok://<plugin id>, got ${window.location.href}`);
+  if (!PLUGIN.test(plugin)) throw new Error(`view channel requires a view page on soksak://<plugin id>, got ${window.location.href}`);
   return plugin;
 }
 

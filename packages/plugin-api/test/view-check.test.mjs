@@ -38,7 +38,7 @@ test("a literal whose view-start hash differs from the SDK constant fails", () =
 
 test("a literal that holds viewImports is reported, because the host inserts the view import map", () => {
   const plugin = literal();
-  plugin.viewImports = { soksak: "sok://core/modules/soksak/dist/index.js" };
+  plugin.viewImports = { soksak: "soksak://core/modules/soksak/dist/index.js" };
   assert.deepEqual(checkViewLiteral(plugin, { vectors: VECTORS }), [
     `viewImports is not part of the literal: the host inserts the view import map (docs/spec/plugin-processes.md, rule 4)`,
   ]);

@@ -10,9 +10,15 @@
 #import <unistd.h>
 #import "private/launch_services.h"
 #import "private/webkit.h"
+#import "document_view.h"
 #import "support/temporary_folder.h"
+#import "support/view_import_map.h"
+#import "webview_geometry.h"
 
 static int failures;
+static NSString *pluginViewState;
+static NSString *pluginViewStateFailure;
+static NSString *secondPluginViewState;
 
 static int waitForControlByte(const char *helperName) {
     char controlByte = 0;
@@ -44,6 +50,16 @@ static BOOL writeControlByte(int descriptor, const char *helperName) {
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
+}
+
+static void pluginStateChanged(void *context, const char *state) {
+    NSString **target = context ? context : &pluginViewState;
+    [*target release];
+    *target = [[NSString alloc] initWithUTF8String:state];
+    if (!*target && target == &pluginViewState) {
+        [pluginViewStateFailure release];
+        pluginViewStateFailure = [@"plugin state is not valid UTF-8" copy];
+    }
 }
 
 static NSString *configuredValue(NSString *key, NSString *fallback) {
@@ -235,7 +251,6 @@ static NSString *processListing(pid_t pid, NSString **displayName, NSString **fa
 static pid_t measure(NSWindow *window, SPProcessLabelScheme *handler,
     NSString *caseName, NSString *address, NSString *displayName) {
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
-    [configuration setURLSchemeHandler:handler forURLScheme:@"sok"];
     [configuration setURLSchemeHandler:handler forURLScheme:@"soksak"];
     if (displayName) [configuration _setProcessDisplayName:displayName];
     WKWebView *view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 640, 240) configuration:configuration];
@@ -313,6 +328,145 @@ static pid_t measure(NSWindow *window, SPProcessLabelScheme *handler,
     return pid;
 }
 
+static pid_t measureCorePluginViewLabel(NSWindow *window) {
+    NSString *root = temporaryFolder(@"soksak-plugin-label-");
+    NSString *folder = [root stringByAppendingPathComponent:@"probe"];
+    NSString *store = [root stringByAppendingPathComponent:@"store"];
+    NSString *page = [folder stringByAppendingPathComponent:@"page.html"];
+    NSError *failure = nil;
+    BOOL created = [[NSFileManager defaultManager] createDirectoryAtPath:folder withIntermediateDirectories:YES
+        attributes:nil error:&failure];
+    check(created, [NSString stringWithFormat:@"plugin fixture directory is created: %@", failure]);
+    if (!created) return 0;
+    NSString *html = @"<!doctype html><html><head><meta charset='utf-8'></head><body>plugin label</body></html>";
+    failure = nil;
+    BOOL written = [html writeToFile:page atomically:YES encoding:NSUTF8StringEncoding error:&failure];
+    check(written,
+        [NSString stringWithFormat:@"plugin fixture page is written: %@", failure]);
+    if (!written) return 0;
+    sp_view_import_map_set(viewImportMapFixture().UTF8String);
+    WKWebView *main = [[WKWebView alloc] initWithFrame:window.contentView.bounds];
+    [window.contentView addSubview:main];
+    void *surface = sp_surface_create((__bridge void *)main);
+    check(surface != NULL, @"core creates the plugin surface host");
+    void *document = surface ? sp_document_create(surface, store.fileSystemRepresentation,
+        folder.fileSystemRepresentation, "probe", "window.sokView = 1;", pluginStateChanged, NULL) : NULL;
+    check(document != NULL, [NSString stringWithFormat:@"core creates the plugin view: %s", sp_document_last_error()]);
+    if (!document) {
+        if (surface) sp_surface_close(surface);
+        [main removeFromSuperview];
+        [main release];
+        return 0;
+    }
+    WKWebView *view = (__bridge WKWebView *)document;
+    [pluginViewState release];
+    pluginViewState = nil;
+    [pluginViewStateFailure release];
+    pluginViewStateFailure = nil;
+    check(sp_document_load(document, "soksak://probe/page.html"), @"core plugin view accepts its canonical isolated origin");
+    BOOL pageLoaded = until(^BOOL {
+        NSData *stateData = [pluginViewState dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *parseError = nil;
+        NSDictionary *state = stateData ? [NSJSONSerialization JSONObjectWithData:stateData options:0 error:&parseError] : nil;
+        if (stateData && !state && !pluginViewStateFailure) {
+            pluginViewStateFailure = [(parseError.localizedDescription ?: @"plugin state JSON is absent or not an object") copy];
+        }
+        return [state[@"url"] isEqual:@"soksak://probe/page.html"] && ![state[@"loading"] boolValue];
+    }, 15);
+    check(pageLoaded, [NSString stringWithFormat:@"core plugin page reaches loaded state within 15000ms (got %@)", pluginViewState]);
+    check(pluginViewStateFailure == nil, [NSString stringWithFormat:@"core plugin state JSON is valid: %@", pluginViewStateFailure]);
+    SPJavaScriptResult *evaluation = [[SPJavaScriptResult alloc] init];
+    [view evaluateJavaScript:@"location.href" completionHandler:^(id result, NSError *error) {
+        if ([result isKindOfClass:NSString.class]) evaluation.url = result;
+        if (error) evaluation.failure = error.localizedDescription;
+        evaluation.completed = YES;
+    }];
+    BOOL evaluated = until(^BOOL { return evaluation.completed; }, 15);
+    check(evaluated, @"core plugin page completes its URL query within 15000ms");
+    check(evaluation.failure == nil, [NSString stringWithFormat:@"core plugin page URL query succeeds: %@", evaluation.failure]);
+    check([evaluation.url isEqualToString:@"soksak://probe/page.html"],
+        [NSString stringWithFormat:@"process display label preserves plugin origin (got %@)", evaluation.url]);
+    pid_t pid = view._webProcessIdentifier;
+    check(pid > 0, [NSString stringWithFormat:@"core plugin view has WebContent process %d", pid]);
+
+    NSString *secondFolder = [root stringByAppendingPathComponent:@"other"];
+    NSString *secondStore = [root stringByAppendingPathComponent:@"other-store"];
+    NSString *secondPage = [secondFolder stringByAppendingPathComponent:@"page.html"];
+    failure = nil;
+    BOOL secondCreated = [[NSFileManager defaultManager] createDirectoryAtPath:secondFolder
+        withIntermediateDirectories:YES attributes:nil error:&failure];
+    check(secondCreated, [NSString stringWithFormat:@"second plugin fixture directory is created: %@", failure]);
+    failure = nil;
+    BOOL secondWritten = secondCreated && [html writeToFile:secondPage atomically:YES
+        encoding:NSUTF8StringEncoding error:&failure];
+    check(secondWritten, [NSString stringWithFormat:@"second plugin fixture page is written: %@", failure]);
+    void *secondDocument = secondWritten ? sp_document_create(surface, secondStore.fileSystemRepresentation,
+        secondFolder.fileSystemRepresentation, "other", "window.sokView = 1;", pluginStateChanged,
+        &secondPluginViewState) : NULL;
+    check(secondDocument != NULL, [NSString stringWithFormat:@"core creates a second plugin view: %s", sp_document_last_error()]);
+    if (secondDocument) {
+        [secondPluginViewState release];
+        secondPluginViewState = nil;
+        check(sp_document_load(secondDocument, "soksak://other/page.html"),
+            @"second core plugin view accepts its canonical isolated origin");
+        __block NSString *secondStateFailure = nil;
+        BOOL secondLoaded = until(^BOOL {
+            NSData *stateData = [secondPluginViewState dataUsingEncoding:NSUTF8StringEncoding];
+            NSError *parseError = nil;
+            NSDictionary *state = stateData ? [NSJSONSerialization JSONObjectWithData:stateData options:0 error:&parseError] : nil;
+            if (stateData && !state && !secondStateFailure) {
+                secondStateFailure = [(parseError.localizedDescription ?: @"second plugin state JSON is absent or not an object") copy];
+            }
+            return [state[@"url"] isEqual:@"soksak://other/page.html"] && ![state[@"loading"] boolValue];
+        }, 15);
+        check(secondLoaded, [NSString stringWithFormat:@"second plugin page reaches loaded state within 15000ms (got %@)",
+            secondPluginViewState]);
+        check(secondStateFailure == nil, [NSString stringWithFormat:@"second plugin state JSON is valid: %@", secondStateFailure]);
+        [secondStateFailure release];
+        pid_t secondPid = ((__bridge WKWebView *)secondDocument)._webProcessIdentifier;
+        check(secondPid > 0 && secondPid != pid,
+            [NSString stringWithFormat:@"distinct plugin identifiers use distinct WebContent processes (%d, %d)", pid, secondPid]);
+        if (secondPid > 0) {
+            printf("CORE_PLUGIN_PID %d\n", secondPid);
+            printf("MEASURE case=core-plugin-view-other requested=soksak://other/page.html loaded=soksak://other/page.html override=soksak://plugin/other webContentPid=%d\n",
+                secondPid);
+            fflush(stdout);
+        }
+        NSString *secondName = nil;
+        NSString *secondListingFailure = nil;
+        NSString *secondListing = secondPid > 0 ? processListing(secondPid, &secondName, &secondListingFailure) : nil;
+        check(secondListing != nil, [NSString stringWithFormat:@"second plugin LaunchServices lookup succeeds: %@",
+            secondListingFailure]);
+        if (secondListing) check([secondName isEqualToString:@"soksak://plugin/other"],
+            [NSString stringWithFormat:@"second plugin process label is soksak://plugin/other (got %@)", secondName]);
+        sp_document_close(secondDocument);
+        [secondPluginViewState release];
+        secondPluginViewState = nil;
+    }
+
+    NSString *launchServicesName = nil;
+    NSString *listingFailure = nil;
+    NSString *listing = pid > 0 ? processListing(pid, &launchServicesName, &listingFailure) : nil;
+    check(listing != nil, [NSString stringWithFormat:@"core plugin LaunchServices lookup succeeds: %@", listingFailure]);
+    if (listing) {
+        check([launchServicesName isEqualToString:@"soksak://plugin/probe"],
+            [NSString stringWithFormat:@"core plugin process label is soksak://plugin/probe (got %@)", launchServicesName]);
+    }
+    printf("MEASURE case=core-plugin-view requested=soksak://probe/page.html loaded=%s override=soksak://plugin/probe webContentPid=%d\n",
+        evaluation.url.UTF8String ?: "<unavailable>", pid);
+    fflush(stdout);
+    sp_document_close(document);
+    sp_surface_close(surface);
+    [main removeFromSuperview];
+    [main release];
+    [evaluation release];
+    [pluginViewState release];
+    pluginViewState = nil;
+    [pluginViewStateFailure release];
+    pluginViewStateFailure = nil;
+    return pid;
+}
+
 static BOOL processExited(pid_t pid) {
     if (pid <= 0) return YES;
     char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
@@ -331,17 +485,19 @@ static int runWebKitCases(void) {
     SPProcessLabelScheme *handler = [[SPProcessLabelScheme alloc] init];
     [window orderBack:nil];
 
-    NSString *originURL = configuredValue(@"SOKSAK_PROCESS_LABEL_ORIGIN_URL", @"sok://sample/page");
+    NSString *originURL = configuredValue(@"SOKSAK_PROCESS_LABEL_ORIGIN_URL", @"soksak://sample/page");
     NSString *displayURL = configuredValue(@"SOKSAK_PROCESS_LABEL_DISPLAY_URL", @"soksak://plugin/sample");
     NSString *displayName = configuredValue(@"SOKSAK_PROCESS_LABEL_PLUGIN", @"soksak://plugin/sample");
     measure(window, handler, @"legacy-origin", originURL, nil);
     measure(window, handler, @"requested-display-path", displayURL, nil);
     measure(window, handler, @"explicit-display-name", originURL, displayName);
+    pid_t corePluginPid = measureCorePluginViewLabel(window);
 
     [window close];
     [window release];
     [handler release];
     check(!NSApp.isActive, @"the measurement does not activate the application");
+    if (corePluginPid > 0) printf("CORE_PLUGIN_PID %d\n", corePluginPid);
     return failures ? 1 : 0;
 }
 
@@ -444,7 +600,7 @@ static BOOL runWebKitWorkerAndCheckCleanup(void) {
         options:0 error:nil];
     NSArray<NSTextCheckingResult *> *matches = [regex matchesInString:output options:0
         range:NSMakeRange(0, output.length)];
-    check(matches.count == 3, [NSString stringWithFormat:@"the worker reports all three WebContent PIDs (got %lu)",
+    check(matches.count == 5, [NSString stringWithFormat:@"the worker reports all five WebContent PIDs (got %lu)",
         (unsigned long)matches.count]);
     for (NSTextCheckingResult *match in matches) {
         pid_t pid = (pid_t)[[output substringWithRange:[match rangeAtIndex:1]] intValue];

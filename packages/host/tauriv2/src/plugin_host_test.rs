@@ -124,7 +124,7 @@ fn the_host_creates_the_host_webview_of_a_plugin_that_declares_host_and_loads_it
         )],
         "the creation receives the data directory, the folder, the plugin and the channel script of the view configuration"
     );
-    assert_eq!(fake.loaded, vec!["sok://probe/ui/host.html".to_string()]);
+    assert_eq!(fake.loaded, vec!["soksak://probe/ui/host.html".to_string()]);
     assert!(
         fake.closed.is_empty(),
         "a created host webview is not closed"

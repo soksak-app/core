@@ -1,5 +1,5 @@
 // Runs the published view settings and text size cases (packages/plugin-api/contract/view-settings.json) against the
-// runtime.settings and runtime.textSize calls of createViewBridge over a jsdom window on sok://probe/. Each step reads a value,
+// runtime.settings and runtime.textSize calls of createViewBridge over a jsdom window on soksak://probe/. Each step reads a value,
 // subscribes a listener, delivers a host event, removes a listener, or refuses a subscription, and the runner compares the posted
 // calls, the listener calls, the results and the errors of each step with the published output.
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ const settle = async () => {
 };
 
 async function runCase(testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   const delivered = [];
   const pending = new Map();

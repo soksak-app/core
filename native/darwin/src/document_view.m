@@ -41,7 +41,7 @@ static NSString *const kMessageMessage = @"soksakDocumentMessage";
 // that JSON.stringify makes from a forwarded value holds the value that the page posted. The article of a type name is
 // "an" when the name starts with A, E, I or O, which covers the type names that JSON refuses (Uint8Array takes "a").
 static NSString *const kMessageScript = @"(() => {"
-    "if (location.protocol !== 'sok:') return;"
+    "if (location.protocol !== 'soksak:') return;"
     "const refusal = (value, ancestors) => {"
     "if (value === null || typeof value === 'string' || typeof value === 'boolean') return '';"
     "if (typeof value === 'number') return Number.isFinite(value) ? '' : 'the message holds a number that is not finite, which is not JSON';"
@@ -281,7 +281,7 @@ static BOOL isBinaryIdentifier(NSString *text) {
 // The receiver of the responsiveness notices of a view (docs/spec/plugin-processes.md, rule 6). A region has none.
 @property sp_view_responsiveness viewResponsiveness;
 @property void *viewResponsivenessContext;
-// The id of the plugin whose surface owns the region; its plugin documents have the origin sok://<plugin>.
+// The id of the plugin whose surface owns the region; its plugin documents have the origin soksak://<plugin>.
 @property(copy) NSString *plugin;
 // The bytes that the plugin documents of the region store under binary ids (docs/spec/native-surfaces.md#document-regions).
 @property(retain) SPBinaryStore *binaries;
@@ -354,7 +354,7 @@ static BOOL isBinaryIdentifier(NSString *text) {
 @end
 
 // The scheme of application documents inside webviews (docs/spec/native-host.md#application-addresses).
-static NSString *const kApplicationScheme = @"sok";
+static NSString *const kApplicationScheme = @"soksak";
 
 // The content type of a plugin file from its extension (docs/spec/native-surfaces.md#document-regions).
 static NSString *pluginContentType(NSString *path) {
@@ -375,7 +375,7 @@ static NSString *pluginContentType(NSString *path) {
 static sp_core_root_resolver coreRootResolver;
 static void *coreRootContext;
 
-// The host of the core root in a sok address of a view (docs/spec/native-surfaces.md#document-regions).
+// The host of the core root in a soksak address of a view (docs/spec/native-surfaces.md#document-regions).
 static NSString *const kCoreHost = @"core";
 
 // The view import map of the application: the JSON text that sp_view_import_map_set sets. The main thread reads and writes it.
@@ -417,13 +417,13 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
     return [NSString stringWithFormat:@"%@<script type=\"importmap\">%@</script>%@", declaration, map, rest];
 }
 
-// Serves sok://<plugin>/<path> from the folder of the region's plugin.
+// Serves soksak://<plugin>/<path> from the folder of the region's plugin.
 @interface SPPluginScheme : NSObject <WKURLSchemeHandler>
 @property(copy) NSString *root;
 @property(copy) NSString *plugin;
 // The binary store of the region that owns the scheme.
 @property(retain) SPBinaryStore *binaries;
-// Whether the region is a view, which may request the core root at sok://core/<path>.
+// Whether the region is a view, which may request the core root at soksak://core/<path>.
 @property BOOL allowsCoreRoot;
 // The path of the page that the view loaded last. The served page at this path receives the view import map.
 @property(copy) NSString *viewPage;
@@ -524,7 +524,7 @@ static NSString *insertViewPage(NSString *html, NSString *map, NSString **reason
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:@{
         @"Content-Type": contentType,
         @"Content-Length": @(data.length).stringValue,
-        @"Access-Control-Allow-Origin": [NSString stringWithFormat:@"sok://%@", self.plugin],
+        @"Access-Control-Allow-Origin": [NSString stringWithFormat:@"soksak://%@", self.plugin],
     }] autorelease];
     [task didReceiveResponse:response];
     [task didReceiveData:data];
@@ -1191,6 +1191,9 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     if (folder && plugin) {
         scheme.root = [NSString stringWithUTF8String:folder];
         scheme.plugin = [NSString stringWithUTF8String:plugin];
+    }
+    if (isView && scheme.plugin.length > 0) {
+        [configuration _setProcessDisplayName:[NSString stringWithFormat:@"soksak://plugin/%@", scheme.plugin]];
     }
     [configuration setURLSchemeHandler:scheme forURLScheme:kApplicationScheme];
     WKContentWorld *world = [WKContentWorld worldWithName:kDocumentWorld];

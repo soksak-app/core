@@ -273,7 +273,7 @@ func TestCoreRootResolverReportsAGrantedFileThatIsMissing(t *testing.T) {
 }
 
 // viewImportsText is the view import map that staging writes to view-imports.json, which the tests give the bundled frontend.
-const viewImportsText = `{"imports":{"soksak":"sok://core/modules/soksak/dist/index.js"}}`
+const viewImportsText = `{"imports":{"soksak":"soksak://core/modules/soksak/dist/index.js"}}`
 
 // contract: document.view-import-map.native
 func TestViewImportMapIsSetFromTheStagedFile(t *testing.T) {

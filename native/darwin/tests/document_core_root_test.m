@@ -1,7 +1,7 @@
-// Checks the core root of a view (docs/spec/plugin-processes.md, rule 4): a view configuration requests sok://core/<path>
+// Checks the core root of a view (docs/spec/plugin-processes.md, rule 4): a view configuration requests soksak://core/<path>
 // from the core root resolver of the application and imports the files that the resolver serves, each with the header
 // Access-Control-Allow-Origin of its plugin; a refused path fails with no such header; and a document region receives no
-// core root grant, so its requests to sok://core fail without calling the resolver.
+// core root grant, so its requests to soksak://core fail without calling the resolver.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
@@ -60,17 +60,17 @@ static void writeFile(NSString *root, NSString *path, NSString *text) {
 static NSString *const probePage = @"<!doctype html><meta charset=utf-8><title>loading</title>"
     "<script type=module>"
     "const steps = {};"
-    "steps.granted = await import('sok://core/modules/probe/m.js').then((m) => String(m.default), () => 'fail');"
-    "steps.refused = await import('sok://core/modules/other/secret.js').then(() => 'imported', () => 'fail');"
-    "steps.served = await fetch('sok://core/modules/probe/m.js').then((r) => String(r.status), () => 'fail');"
-    "steps.refusedFetch = await fetch('sok://core/modules/other/secret.js').then((r) => String(r.status), () => 'fail');"
+    "steps.granted = await import('soksak://core/modules/probe/m.js').then((m) => String(m.default), () => 'fail');"
+    "steps.refused = await import('soksak://core/modules/other/secret.js').then(() => 'imported', () => 'fail');"
+    "steps.served = await fetch('soksak://core/modules/probe/m.js').then((r) => String(r.status), () => 'fail');"
+    "steps.refusedFetch = await fetch('soksak://core/modules/other/secret.js').then((r) => String(r.status), () => 'fail');"
     "document.title = JSON.stringify(steps);"
     "</script>";
 
 // Loads the probe page in a document of the given kind and returns its steps once the page has written them.
 static NSDictionary *runPage(void *document) {
     latest = nil;
-    check(sp_document_load(document, "sok://probe/ui/core/probe.html"), @"the probe page starts a load");
+    check(sp_document_load(document, "soksak://probe/ui/core/probe.html"), @"the probe page starts a load");
     until(@"the probe page writes its steps", ^BOOL{ return [latest[@"title"] hasPrefix:@"{"]; });
     return [NSJSONSerialization JSONObjectWithData:[latest[@"title"] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
 }

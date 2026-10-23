@@ -125,7 +125,7 @@ int main(void) { @autoreleasepool {
         sp_document_place(view, 0, 0, 0, 0, true);
         check(hasChannelScript((WKWebView *)view), @"the view configuration runs the channel script at document start");
         latest = nil;
-        check(sp_document_load(view, "sok://probe/ui/page.html"), @"the view loads the page of its plugin");
+        check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
         until(@"the view page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
         check(viewStates.count > 0, @"the view reports its navigation state");
         BOOL everyLoadingIsBoolean = YES;
@@ -173,7 +173,7 @@ int main(void) { @autoreleasepool {
         check(!hasChannelScript((WKWebView *)region), @"the region configuration has no channel script");
         sp_document_place(region, 0, 0, 0, 0, true);
         latest = nil;
-        check(sp_document_load(region, "sok://probe/ui/page.html"), @"the region loads the page of its plugin");
+        check(sp_document_load(region, "soksak://probe/ui/page.html"), @"the region loads the page of its plugin");
         until(@"the region page reports its handler", ^BOOL{ return [latest[@"title"] hasPrefix:@"handler"]; });
         check([latest[@"title"] isEqual:@"handler undefined"],
             [NSString stringWithFormat:@"the region page has no sok-view handler: %@", latest[@"title"]]);
@@ -191,7 +191,7 @@ int main(void) { @autoreleasepool {
         sp_document_add_user_script(themed, themeScript.UTF8String);
         sp_document_place(themed, 0, 0, 0, 0, true);
         latest = nil;
-        check(sp_document_load(themed, "sok://probe/ui/theme.html"), @"the themed view loads its page");
+        check(sp_document_load(themed, "soksak://probe/ui/theme.html"), @"the themed view loads its page");
         until(@"the theme page reports the scheme of its first script", ^BOOL{ return [latest[@"title"] hasPrefix:@"theme"]; });
         check([latest[@"title"] isEqual:@"theme dark"],
             [NSString stringWithFormat:@"the first page script reads the theme from window.sokTheme: %@", latest[@"title"]]);

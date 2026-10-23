@@ -44,7 +44,7 @@
     },
     {
       "term": "plugin document",
-      "definition": "A document of a plugin that a document region shows at sok://<plugin id>/<path>.",
+      "definition": "A document of a plugin that a document region shows at soksak://<plugin id>/<path>.",
       "rejected": [
         "package document",
         "soksak-package"
@@ -248,7 +248,7 @@
     },
     {
       "term": "view",
-      "definition": "A separate web view of a plugin on its sok://<plugin id> origin, with one view per tab, that runs plugin code the declared UI vocabulary cannot express (free DOM, text input with an input method, a canvas or editor, or a document region or image region).",
+      "definition": "A separate web view of a plugin on its soksak://<plugin id> origin, with one view per tab, that runs plugin code the declared UI vocabulary cannot express (free DOM, text input with an input method, a canvas or editor, or a document region or image region).",
       "rejected": [],
       "allowed": []
     },
@@ -398,7 +398,7 @@
     },
     {
       "term": "core root",
-      "definition": "The reserved host `core` on the sok:// scheme, which serves the view import map targets, the shared modules and the modules of granted items to views, and which no plugin id can use.",
+      "definition": "The reserved host `core` on the soksak:// scheme, which serves the view import map targets, the shared modules and the modules of granted items to views, and which no plugin id can use.",
       "rejected": [
         "reserved module root"
       ],
@@ -412,7 +412,7 @@
     },
     {
       "term": "view import map",
-      "definition": "The import map of a view page, with the five entries `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, `@soksak/plugin-api/screen-hash` and `@soksak/shared/`, which map to their `sok://core` addresses.",
+      "definition": "The import map of a view page, with the five entries `soksak`, `@soksak/plugin-api`, `@soksak/plugin-api/view`, `@soksak/plugin-api/screen-hash` and `@soksak/shared/`, which map to their `soksak://core` addresses.",
       "rejected": [],
       "allowed": []
     },

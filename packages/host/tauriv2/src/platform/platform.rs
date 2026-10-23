@@ -271,7 +271,7 @@ pub type CoreRootResolver =
 
 /// Registers the core root resolver of the application.
 pub trait CoreRootHost {
-    /// Receives the resolver. The native scheme of each view calls it on the main thread for each request of sok://core/<path>,
+    /// Receives the resolver. The native scheme of each view calls it on the main thread for each request of soksak://core/<path>,
     /// and the view receives the file with the header Access-Control-Allow-Origin of its plugin when the resolver serves it.
     fn set_core_root(&self, resolve: CoreRootResolver) -> Result<(), String>;
     /// Sets the view import map of the application to the JSON text of the staged view-imports.json. The native view handler
@@ -396,7 +396,7 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// which the persistent data store keeps the site data. changed receives the state JSON ({url, title, loading,
     /// progress, canGoBack, canGoForward, error, scroll, navigations}) on the main thread. Call it on the main thread.
     /// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region
-    /// serves sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the
+    /// serves soksak://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). view is true for the
     /// web view configuration of a view surface, which is the only configuration that serves the core root
     /// (docs/spec/native-surfaces.md#view-surfaces).
     fn create_document(

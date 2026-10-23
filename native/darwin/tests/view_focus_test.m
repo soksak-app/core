@@ -102,7 +102,7 @@ int main(void) { @autoreleasepool {
     sp_document_frame(view, frame);
     check(frame[4] == 1, @"a later presentation restores the wanted view");
     latest = nil;
-    check(sp_document_load(view, "sok://probe/ui/page.html"), @"the view loads the page of its plugin");
+    check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
     if (!waitFor(^BOOL { return [latest[@"title"] isEqual:@"ready"]; })) {
         fprintf(stderr, "FAIL: the view page did not load within 10 seconds\n");
         return 1;

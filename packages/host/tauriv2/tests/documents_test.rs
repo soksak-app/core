@@ -532,7 +532,7 @@ fn document_interaction_state_must_not_be_empty() {
 // contract: view.create-loads-page
 #[test]
 fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
-    // The view is created with the channel script, and the page is loaded from sok://<plugin>/<page> right after creation.
+    // The view is created with the channel script, and the page is loaded from soksak://<plugin>/<page> right after creation.
     let created = std::cell::RefCell::new(Vec::new());
     let loaded = std::cell::RefCell::new(Vec::new());
     let closed = std::cell::RefCell::new(Vec::new());
@@ -562,7 +562,7 @@ fn a_view_surface_creates_a_view_configuration_and_loads_its_page() {
     );
     assert_eq!(
         *loaded.borrow(),
-        vec![(7, "sok://probe/ui/page.html".to_string())],
+        vec![(7, "soksak://probe/ui/page.html".to_string())],
         "the view loads its page at creation"
     );
     assert!(closed.borrow().is_empty(), "a loaded view is not closed");
@@ -572,7 +572,7 @@ const READY: &str = r#"{"message":{"event":"view.ready","plugin":"probe","docume
 
 // The document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state): loading is a JSON
 // boolean, and navigations counts the navigations that the view has started.
-const NATIVE_VIEW_STATE: &str = r#"{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":"","navigations":1}"#;
+const NATIVE_VIEW_STATE: &str = r#"{"url":"soksak://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":"","navigations":1}"#;
 
 // contract: view.channel.progress-keeps-ready
 // The view reports the progress of its load after its ready message: the navigation is the same, so the ready record stays.

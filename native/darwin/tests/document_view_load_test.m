@@ -1,5 +1,5 @@
 // Checks that a view configuration (docs/spec/native-surfaces.md#view-surfaces) loads the page of its plugin: the host creates the view
-// with isView set and the folder and the plugin of the surface, then loads sok://<plugin>/<page>, and the page runs its script.
+// with isView set and the folder and the plugin of the surface, then loads soksak://<plugin>/<page>, and the page runs its script.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
@@ -68,9 +68,9 @@ int main(void) { @autoreleasepool {
         check(view != NULL, @"a view configuration is created with the folder and the plugin of its surface");
         sp_document_place(view, 0, 0, 0, 0, true);
         latest = nil;
-        check(sp_document_load(view, "sok://probe/ui/page.html"), @"the view loads the page of its plugin");
+        check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
         until(@"the view page runs its script", ^BOOL{ return [latest[@"title"] hasPrefix:@"loaded"]; });
-        check([latest[@"title"] isEqual:@"loaded sok://probe"],
+        check([latest[@"title"] isEqual:@"loaded soksak://probe"],
             [NSString stringWithFormat:@"the page of the view runs with the origin of its plugin: %@", latest[@"title"]]);
         check([latest[@"error"] isEqual:NSNull.null], @"loading the view page reports no error");
         sp_document_close(view);

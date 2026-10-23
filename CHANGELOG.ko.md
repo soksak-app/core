@@ -4,6 +4,9 @@
 
 ## 미배포
 
+- F212.16-5: Plugin view URL은 canonical `soksak://<plugin id>` origin을 사용하고, core가 만든 각 plugin WebContent process에는 별도 LaunchServices label `soksak://plugin/<plugin id>`을 설정한다. 소유 native 검사는 이전 handler에서 canonical origin load가 실패하는 Red 뒤, 격리된 두 plugin view의 정확한 label과 서로 다른 PID를 확인하는 Green을 통과했다. 다섯 WebContent process가 모두 종료됨도 확인했다. 현재 registry plugin runtime은 application-origin web storage가 아닌 tab/project API로 application state를 저장하며, 외부 HTTP(S) 문서 origin은 바뀌지 않는다. macOS 26.6.2 arm64에서 소유 `process_label_test`가 통과한다.
+
+
 - F212.12-2-2-5: Native key callback은 host에 순서대로 도착하지만 concurrent view event push가 terminal input queue에 도달하기 전에 서로 앞설 수 있었다. Workbench는 view별 event 전달을 직렬화한다. 첫 push를 대기시키는 기존 owning test는 두 번째 push가 먼저 시작되어 실패했으며, 같은 테스트가 두 push의 순서가 유지된 채 완료됨을 확인한다. Live push 오류는 계속 보고한다.
 
 - F212.16-4: Process-label helper는 control read/write 오류를 보고하고 control byte가 없으면 nonzero로 종료한다. 소유 검사는 EOF를 성공적인 종료로 처리하는 결함을 재현한 뒤, interrupted system call 재시도, 잘못된 write descriptor 거부, 제한 시간 내 child 정리 및 정상 label 측정을 포함해 통과했다.

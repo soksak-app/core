@@ -1,5 +1,5 @@
 // Checks the binary store of a document region (docs/spec/native-surfaces.md#document-regions): a plugin page uploads bytes
-// by POST to sok://<plugin>/.binary and downloads them by GET to sok://<plugin>/.binary/<id>, the host refuses an upload
+// by POST to soksak://<plugin>/.binary and downloads them by GET to soksak://<plugin>/.binary/<id>, the host refuses an upload
 // over 16 MiB, a page over 64 MiB, an upload for another plugin's origin and an id that is not stored, a download releases
 // its id, a native take returns the bytes and releases the id, closing the region releases every id it holds, and the
 // upload body reader reads a streamed body, refuses one over the limit after one chunk past it, reports a read failure,
@@ -148,7 +148,7 @@ static const size_t kMiB = 1024 * 1024;
 @end
 
 static NSURLRequest *uploadRequest(NSInputStream *stream) {
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/.binary"]];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"soksak://probe/.binary"]];
     request.HTTPMethod = @"POST";
     request.HTTPBodyStream = stream;
     return request;
@@ -164,7 +164,7 @@ static void checkUploadBodies(void) {
 
     // An HTTPBody is returned as the object that the request holds, without a copy.
     NSData *fixed = [NSData dataWithBytes:"abc" length:3];
-    NSMutableURLRequest *plain = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/.binary"]];
+    NSMutableURLRequest *plain = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"soksak://probe/.binary"]];
     plain.HTTPBody = fixed;
     NSData *body = sp_document_upload_body(plain, limit, &error);
     check(body == fixed && error == nil, @"an HTTPBody is returned without a copy");
@@ -192,7 +192,7 @@ static void checkUploadBodies(void) {
     check(body == nil && [error.localizedDescription containsString:@"injected read failure"],
         [NSString stringWithFormat:@"a stream that fails mid-read reports its error: %@", error.localizedDescription ?: @"no error"]);
 
-    NSURLRequest *empty = [NSURLRequest requestWithURL:[NSURL URLWithString:@"sok://probe/.binary"]];
+    NSURLRequest *empty = [NSURLRequest requestWithURL:[NSURL URLWithString:@"soksak://probe/.binary"]];
     error = nil;
     body = sp_document_upload_body(empty, limit, &error);
     check(body == nil && [error.localizedDescription isEqualToString:@"the upload has no body that WebKit delivers as HTTPBody or HTTPBodyStream"],
@@ -216,10 +216,10 @@ int main(void) { @autoreleasepool {
         "const pattern = (size) => { const bytes = new Uint8Array(size); for (let i = 0; i < size; i++) bytes[i] = i & 255; return bytes; };"
         "const matches = (bytes) => { for (let i = 0; i < bytes.length; i++) if (bytes[i] !== (i & 255)) return false; return true; };"
         "const upload = async (size) => {"
-        "const response = await fetch('sok://probe/.binary', { method: 'POST', body: pattern(size), headers: { 'Content-Type': 'application/x-test' } });"
+        "const response = await fetch('soksak://probe/.binary', { method: 'POST', body: pattern(size), headers: { 'Content-Type': 'application/x-test' } });"
         "return { status: response.status, body: await response.json() }; };"
         "const download = async (id) => {"
-        "const response = await fetch(`sok://probe/.binary/${id}`);"
+        "const response = await fetch(`soksak://probe/.binary/${id}`);"
         "const bytes = new Uint8Array(await response.arrayBuffer());"
         "return { status: response.status, type: response.headers.get('Content-Type'), length: response.headers.get('Content-Length'), size: bytes.length, equal: matches(bytes) }; };"
         "addEventListener('message', async (event) => {"
@@ -230,7 +230,7 @@ int main(void) { @autoreleasepool {
         "if (command.run === 'upload') result = await upload(command.size);"
         "else if (command.run === 'download') result = await download(command.id);"
         "else if (command.run === 'upload-other') {"
-        "try { const response = await fetch('sok://other/.binary', { method: 'POST', body: pattern(1) }); result = { refused: false, status: response.status }; }"
+        "try { const response = await fetch('soksak://other/.binary', { method: 'POST', body: pattern(1) }); result = { refused: false, status: response.status }; }"
         "catch (error) { result = { refused: true }; }"
         "} else result = { error: 'unknown command ' + command.run };"
         "} catch (error) { result = { error: String(error) }; }"
@@ -254,7 +254,7 @@ int main(void) { @autoreleasepool {
         check(document != NULL, @"a document region is created with the folder of its plugin");
         sp_document_set_message(document, message, NULL);
         sp_document_place(document, 0, 0, 0, 0, true);
-        check(sp_document_load(document, "sok://probe/ui/binary/index.html"), @"a region loads the binary page");
+        check(sp_document_load(document, "soksak://probe/ui/binary/index.html"), @"a region loads the binary page");
         until(@"the binary page runs", ^BOOL{ return [latest[@"title"] hasPrefix:@"ready"]; });
 
         // A 1 MiB upload returns its id and length, and the download returns the same bytes once.

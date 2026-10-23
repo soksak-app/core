@@ -300,8 +300,8 @@ test("runtime.contributions returns the connected items of the point with their 
   const result = await answerViewCall({ id: 1, command: "runtime.contributions", params: { point: "language" } }, options)
     .catch((error) => error);
   assert.deepEqual(result, [
-    { plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/@scope/plugin-one/ui/one.js" },
-    { plugin: "two", index: 1, item: { name: "two" }, module: "sok://core/modules/@scope/plugin-two/ui/two.js" },
+    { plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/@scope/plugin-one/ui/one.js" },
+    { plugin: "two", index: 1, item: { name: "two" }, module: "soksak://core/modules/@scope/plugin-two/ui/two.js" },
   ]);
   await assert.rejects(answerViewCall({ id: 2, command: "runtime.contributions", params: { point: "format" } }, options),
     /extension point format is not declared by probe/);

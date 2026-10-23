@@ -1,5 +1,5 @@
 // Runs the published view command cases (packages/plugin-api/contract/view-commands.json) against the commands of createViewBridge
-// over a jsdom window on sok://probe/. Each step registers a command or delivers a host request, and compares the messages the page
+// over a jsdom window on soksak://probe/. Each step registers a command or delivers a host request, and compares the messages the page
 // posted, the result and the error with the published output.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -29,7 +29,7 @@ const settle = async () => {
 };
 
 async function runCase(testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   // The view module reads the global window, which Node does not define; the test defines it for the case only.
   Object.defineProperty(globalThis, "window", { value: dom.window, configurable: true, writable: true });

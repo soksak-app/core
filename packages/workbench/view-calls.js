@@ -99,7 +99,7 @@ function untilCancelled(promise, signal) {
 const ERROR_PLACE = /^(?!.*: )[^\u0000-\u001f\u007f]+$/;
 
 // The core root of a view, from which it imports the module of a contribution item (docs/spec/plugin-processes.md, rule 4).
-const CORE_ROOT = "sok://core";
+const CORE_ROOT = "soksak://core";
 
 /**
  * The rows of the shortcut table that hold while a view has keyboard focus (docs/spec/native-surfaces.md#view-surfaces): a row of

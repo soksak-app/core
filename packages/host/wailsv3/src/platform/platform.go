@@ -258,7 +258,7 @@ type CoreRootResolver func(plugin, urlPath string) (data []byte, contentType str
 
 // CoreRootHost registers the core root resolver of the application.
 type CoreRootHost interface {
-	// SetCoreRoot receives the resolver. The native scheme of each view calls it on the UI thread for each request of sok://core/<path>,
+	// SetCoreRoot receives the resolver. The native scheme of each view calls it on the UI thread for each request of soksak://core/<path>,
 	// and the view receives the file with the header Access-Control-Allow-Origin of its plugin when found is true.
 	SetCoreRoot(resolve CoreRootResolver) error
 	// SetViewImportMap sets the view import map of the application to the JSON text of the staged view-imports.json. The native view
@@ -376,7 +376,7 @@ type Platform interface {
 	// data store keeps the site data. changed receives the state JSON ({url, title, loading, progress, canGoBack, canGoForward,
 	// error, scroll}) on the UI thread.
 	// folder and plugin are the installed folder and the id of the plugin whose surface owns the region; the region serves
-	// sok://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
+	// soksak://<plugin>/<path> from folder (docs/spec/native-surfaces.md#document-regions). channel is empty for a document region.
 	// A view surface passes the text of the view channel script, and its configuration is the only one that serves the core
 	// root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
 	CreateDocument(surface unsafe.Pointer, directory, folder, plugin, channel string, changed func(state string)) (unsafe.Pointer, error)

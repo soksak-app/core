@@ -306,7 +306,7 @@ pub struct HostView<'a> {
 }
 
 /// Creates the plugin host webview of view.plugin with the view configuration
-/// (docs/spec/native-surfaces.md#view-surfaces) and loads sok://<plugin>/<page> into it. A failed step closes the
+/// (docs/spec/native-surfaces.md#view-surfaces) and loads soksak://<plugin>/<page> into it. A failed step closes the
 /// webview and reports the reason.
 pub fn create_host(
     channel: &str,
@@ -316,7 +316,7 @@ pub fn create_host(
     close: impl FnOnce(Handle) -> Result<(), String>,
 ) -> Result<Handle, String> {
     let handle = create(channel, &view)?;
-    let address = format!("sok://{}/{}", view.plugin, view.page);
+    let address = format!("soksak://{}/{}", view.plugin, view.page);
     let reason = match load(handle, &address) {
         Ok(true) => return Ok(handle),
         Ok(false) => format!("plugin host of {} cannot load {address}", view.plugin),

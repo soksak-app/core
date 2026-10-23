@@ -349,7 +349,7 @@ func (s *Surfaces) attachDocument(viewID uint64, req DocumentRequest) error {
 // cannot collide with a region, and the view closes with the other documents of its surface.
 const viewRegionName = ""
 
-// attachView creates the view web view of a view surface with the view configuration (isView) and loads sok://<plugin>/<page> into it.
+// attachView creates the view web view of a view surface with the view configuration (isView) and loads soksak://<plugin>/<page> into it.
 // The view state is not reported by this step. It runs on the UI thread.
 func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string, start ViewStart) error {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
@@ -383,9 +383,9 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	if err == nil {
 		err = s.addStartScript(handle, surfaceID, start)
 	}
-	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
+	if err == nil && !system.LoadDocument(handle, "soksak://"+plugin+"/"+page) {
 		system.CloseDocument(handle)
-		err = fmt.Errorf("view of surface %q cannot load sok://%s/%s", surfaceID, plugin, page)
+		err = fmt.Errorf("view of surface %q cannot load soksak://%s/%s", surfaceID, plugin, page)
 	}
 	if err != nil {
 		s.documents.Remove(key)

@@ -1,5 +1,5 @@
 // Runs the published view composition cases (packages/plugin-api/contract/view-composition.json) against the composition of
-// createViewBridge over a jsdom window on sok://probe/. The host answers each call the page posts, in the order of the posted calls,
+// createViewBridge over a jsdom window on soksak://probe/. The host answers each call the page posts, in the order of the posted calls,
 // and the test compares the posted calls, the listener calls, the results, the errors and the region state and history of each step.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -30,7 +30,7 @@ const settle = async () => {
 };
 
 async function runCase(testCase) {
-  const view = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" }).window;
+  const view = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" }).window;
   // The view module reads the global window, which Node does not define; the test defines it for the case only.
   Object.defineProperty(globalThis, "window", { value: view, configurable: true, writable: true });
   try {

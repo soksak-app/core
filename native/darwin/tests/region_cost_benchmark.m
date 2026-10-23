@@ -103,7 +103,7 @@ static NSString *const kScrollScript = @"(() => {"
     "post();"
     "})();";
 static NSString *const kMessageScript = @"(() => {"
-    "if (location.protocol !== 'sok:') return;"
+    "if (location.protocol !== 'soksak:') return;"
     "addEventListener('message', (event) => {"
     "if (event.source !== window) return;"
     "let text;"
@@ -446,7 +446,7 @@ static WKWebViewConfiguration *plainConfiguration(const Variant *variant, WKWebs
     }
     if (variant->scheme) {
         FailingSchemeHandler *handler = [[[FailingSchemeHandler alloc] init] autorelease];
-        [configuration setURLSchemeHandler:handler forURLScheme:@"sok"];
+        [configuration setURLSchemeHandler:handler forURLScheme:@"soksak"];
     }
     if (variant->scripts) {
         WKContentWorld *world = [WKContentWorld worldWithName:kDocumentWorld];

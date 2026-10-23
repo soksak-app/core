@@ -1,5 +1,5 @@
 // Runs the published view native cases (packages/plugin-api/contract/view-native.json) against the runtime.native calls and the
-// exposure calls of createViewBridge over a jsdom window on sok://probe/.
+// exposure calls of createViewBridge over a jsdom window on soksak://probe/.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -20,7 +20,7 @@ const settle = async () => {
 };
 
 async function runCase(testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   const delivered = [];
   const pending = new Map();

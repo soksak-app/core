@@ -4,7 +4,7 @@
 
 A plugin host is a process of a plugin, with a platform web view attached to the window, that serves the declared statuses of its plugin. It exists only when a [declared status](declared-ui.md#declared-status) of a sidebar section must be served while no view of the plugin is open, and it serves its declared statuses whenever it is their chosen declared status source: the view of the active tab first, the plugin host second. It holds the DOM-free presentation of those statuses, because a sidecar holds the native functionality of one domain, and the sidecar supplies their data. A sidecar or a state module is not a declared status source.
 
-Plugin code does not run on the workbench page, and the main page never runs the code of a plugin host: the host page is a separate web view on the `sok://<plugin id>` origin, like the view of a view surface ([plugin processes](plugin-processes.md) rule 1). The native hosts and the workbench implement this specification; [feature status](../features.md) records its implementation. Plugin host code does not run on the workbench page, and the workbench imports no plugin code.
+Plugin code does not run on the workbench page, and the main page never runs the code of a plugin host: the host page is a separate web view on the `soksak://<plugin id>` origin, like the view of a view surface ([plugin processes](plugin-processes.md) rule 1). The native hosts and the workbench implement this specification; [feature status](../features.md) records its implementation. Plugin host code does not run on the workbench page, and the workbench imports no plugin code.
 
 ## Declaration
 
@@ -31,14 +31,14 @@ The `host` declaration requires nothing beyond the requirement of a plugin to de
 The host creates one plugin host web view per plugin per window, with the configuration of a [view](native-surfaces.md#view-surfaces):
 
 - `isView` set, so that the configuration dispatches the `core` scheme to the core root resolver;
-- the plugin id of the plugin, which sets the `sok://<plugin id>` origin of the page and the `Access-Control-Allow-Origin` of its core root responses;
+- the plugin id of the plugin, which sets the `soksak://<plugin id>` origin of the page and the `Access-Control-Allow-Origin` of its core root responses;
 - the document-start user script with the text of `packages/plugin-api/view-start.js`, the [view channel](native-surfaces.md#view-surfaces) script;
 - the document-start user script with the theme tokens;
 - the document-start user script of the plugin start values, which sets `window.sokHost` to the frozen `{project, declarations}` of the plugin host. The host builds the values itself: `project` is the frozen `{id, root}` of the project that the window shows when the host creates the plugin host, with the project id and its canonical root, or `null` in a window that shows none, and `declarations` are the `exposes` of the plugin manifest, or `{}` when the manifest declares none; an `exposes` that is not an object is refused. The host has no surface and no origin. The script is added before the page loads, and the host adds it again when it creates the plugin host again. A later change of the project that the window shows is sent to each plugin host with a ready document as the message event `project` with `data` `{id, root}` or `null`, as the theme is sent, and is not sent to a host without a ready document;
 - the script message handler `sok-view`;
 - the persistent website data store of the plugin, keyed by the plugin id.
 
-The host loads `sok://<plugin id>/<page>` from the folder that `plugins/installed.json` records for the plugin, as it loads the page of a view. The page declares the [view import map](plugins.md#view-surfaces) of four entries and passes `checkViewPage`; it imports the [view bridge](plugins.md#view-surfaces) and calls `createViewChannel()` over the `sok-view` handler.
+The host loads `soksak://<plugin id>/<page>` from the folder that `plugins/installed.json` records for the plugin, as it loads the page of a view. The page declares the [view import map](plugins.md#view-surfaces) of four entries and passes `checkViewPage`; it imports the [view bridge](plugins.md#view-surfaces) and calls `createViewChannel()` over the `sok-view` handler.
 
 The web view is attached to the window, not to a surface host. It is not a surface: it holds no `SurfaceHost`, no surface frame, no regions, and no presentation wait. The host places it hidden and shows nothing: the web view holds a zero frame, is submitted as invisible, draws nothing on the screen, takes no hit testing, and never becomes the first responder. The host page receives no input and registers no shortcut table. `host.hit` never reports it.
 

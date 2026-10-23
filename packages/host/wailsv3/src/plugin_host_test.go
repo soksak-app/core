@@ -121,7 +121,7 @@ func TestPluginHostPageReadyCreatesHiddenHostAndLoadsPage(t *testing.T) {
 	if created.plugin != "probe" || created.channel == "" || created.folder == "" || created.directory == "" {
 		t.Fatalf("created host web view: %+v, want the view configuration of probe in its folder and data directory with the channel script", created)
 	}
-	if want := []string{"sok://probe/ui/host.html"}; len(fake.loaded) != 1 || fake.loaded[0] != want[0] {
+	if want := []string{"soksak://probe/ui/host.html"}; len(fake.loaded) != 1 || fake.loaded[0] != want[0] {
 		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)
 	}
 	if len(fake.scripts) != 2 {

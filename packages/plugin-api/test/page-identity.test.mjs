@@ -1,5 +1,5 @@
-// Checks that a page finds its plugin and the plugin id from its location: a sok page from its host, a staged page from its
-// path. A sok page takes the id of its host and its plugin.json must carry that id; a staged page takes the id of the installed
+// Checks that a page finds its plugin and the plugin id from its location: a soksak page from its host, a staged page from its
+// path. A soksak page takes the id of its host and its plugin.json must carry that id; a staged page takes the id of the installed
 // plugin whose package is its module name. Any other location has no plugin, and an invalid location is refused with an error
 // that names the location.
 import assert from "node:assert/strict";
@@ -18,9 +18,9 @@ const reader = (files) => async (path) => {
 // probe-id is the plugin id, probe-name is its package, and the staged module of the package is under modules/probe-name.
 const installed = { plugins: [{ id: "probe-id", package: "probe-name", version: "0.1.0", manifest: manifest("probe-id") }] };
 
-test("pagePlugin of a sok page is its host and the manifest on its own origin", () => {
-  assert.deepEqual(pagePlugin(locationOf("sok://probe/ui/index.html")), { host: "probe", manifest: "/plugin.json" });
-  assert.deepEqual(pagePlugin(locationOf("sok://plugin-probe/")), { host: "plugin-probe", manifest: "/plugin.json" });
+test("pagePlugin of a soksak page is its host and the manifest on its own origin", () => {
+  assert.deepEqual(pagePlugin(locationOf("soksak://probe/ui/index.html")), { host: "probe", manifest: "/plugin.json" });
+  assert.deepEqual(pagePlugin(locationOf("soksak://plugin-probe/")), { host: "plugin-probe", manifest: "/plugin.json" });
 });
 
 test("pagePlugin of a staged page is its package and the manifest of its module", () => {
@@ -30,27 +30,27 @@ test("pagePlugin of a staged page is its package and the manifest of its module"
     { package: "@scope/plugin-probe", manifest: "/modules/@scope/plugin-probe/plugin.json" });
 });
 
-test("a page that is neither a sok page nor a staged page has no plugin", async () => {
+test("a page that is neither a soksak page nor a staged page has no plugin", async () => {
   assert.equal(pagePlugin(locationOf("https://example.test/overlay.html")), null);
   assert.equal(await pageIdentity(locationOf("https://example.test/overlay.html"), reader({})), null);
 });
 
-test("a sok page whose host is not a plugin id is refused with the location", () => {
-  assert.throws(() => pagePlugin(locationOf("sok://Probe_1/ui/index.html")), /sok:\/\/Probe_1\/ui\/index\.html: host Probe_1/);
+test("a soksak page whose host is not a plugin id is refused with the location", () => {
+  assert.throws(() => pagePlugin(locationOf("soksak://Probe_1/ui/index.html")), /soksak:\/\/Probe_1\/ui\/index\.html: host Probe_1/);
 });
 
-test("a sok page of the core root is refused, because core is not a plugin id", () => {
-  assert.throws(() => pagePlugin(locationOf("sok://core/ui/index.html")), /sok:\/\/core\/ui\/index\.html.*core/);
+test("a soksak page of the core root is refused, because core is not a plugin id", () => {
+  assert.throws(() => pagePlugin(locationOf("soksak://core/ui/index.html")), /soksak:\/\/core\/ui\/index\.html.*core/);
 });
 
-test("a sok page has the id of its host when its plugin.json carries that id", async () => {
-  const identity = await pageIdentity(locationOf("sok://probe-id/ui/index.html"), reader({ "/plugin.json": manifest("probe-id") }));
+test("a soksak page has the id of its host when its plugin.json carries that id", async () => {
+  const identity = await pageIdentity(locationOf("soksak://probe-id/ui/index.html"), reader({ "/plugin.json": manifest("probe-id") }));
   assert.equal(identity.id, "probe-id");
   assert.deepEqual(identity.manifest, manifest("probe-id"));
 });
 
-test("a sok page whose plugin.json id differs from its host fails with both ids", async () => {
-  await assert.rejects(pageIdentity(locationOf("sok://probe-id/ui/index.html"), reader({ "/plugin.json": manifest("probe-name") })),
+test("a soksak page whose plugin.json id differs from its host fails with both ids", async () => {
+  await assert.rejects(pageIdentity(locationOf("soksak://probe-id/ui/index.html"), reader({ "/plugin.json": manifest("probe-name") })),
     /^Error: plugin\.json id probe-name differs from the page plugin probe-id$/);
 });
 

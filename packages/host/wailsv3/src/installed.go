@@ -64,7 +64,7 @@ func enabledPlugins(configDir string) ([]installedPlugin, *sok.InstalledState, e
 }
 
 // PluginFolder returns the folder of the enabled installed plugin, which the document regions of its surfaces serve
-// at sok://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
+// at soksak://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
 func PluginFolder(configDir, plugin string) (string, error) {
 	plugins, _, err := enabledPlugins(configDir)
 	if err != nil {

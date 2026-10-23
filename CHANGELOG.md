@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.16-5: Plugin view URLs now use the canonical `soksak://<plugin id>` origin, while each core-created plugin WebContent process receives the separate LaunchServices label `soksak://plugin/<plugin id>`. The owning native test first failed to load the canonical origin against the old handler, then passed two isolated plugin views with exact labels and distinct PIDs; it also verified that all five WebContent processes exit. Current registry plugin runtime code stores application state through tab/project APIs rather than application-origin web storage, and external HTTP(S) document origins are unchanged. The owning `process_label_test` passes on macOS 26.6.2 arm64.
+
 - F212.12-2-2-5: Native key callbacks reached the host in order, but concurrent view event pushes could overtake one another before reaching the terminal input queue. The workbench now serializes event delivery for each view. The unchanged owning test failed when it held the first push and observed the second start; the same test passes with both pushes settling in order. Live push failures remain reported.
 
 - F212.16-4: The process-label helper now reports control read/write failures and exits nonzero when its control byte is missing. Its owning check reproduced EOF being accepted as successful exit, then passed with interrupted system calls retried, an injected invalid write descriptor rejected, bounded child cleanup, and normal label measurements.

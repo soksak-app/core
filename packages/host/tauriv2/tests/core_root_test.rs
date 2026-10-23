@@ -474,7 +474,7 @@ fn core_root_resolver_reports_a_granted_file_that_is_missing() {
 
 /// The view import map that staging writes to view-imports.json, which the tests give the bundled frontend.
 const VIEW_IMPORTS_TEXT: &str =
-    r#"{"imports":{"soksak":"sok://core/modules/soksak/dist/index.js"}}"#;
+    r#"{"imports":{"soksak":"soksak://core/modules/soksak/dist/index.js"}}"#;
 
 // contract: document.view-import-map.native
 #[test]

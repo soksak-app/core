@@ -7,7 +7,7 @@ import { JSDOM } from "jsdom";
 
 /** Loads the start script into a page of the plugin fixture-plugin and returns the window and the messages the handler received. */
 function startPage() {
-  const dom = new JSDOM("", { url: "sok://fixture-plugin/ui/index.html", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://fixture-plugin/ui/index.html", runScripts: "outside-only" });
   const posted = [];
   dom.window.webkit = { messageHandlers: { "sok-view": { postMessage: (message) => posted.push(structuredClone(message)) } } };
   dom.window.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
@@ -17,11 +17,11 @@ function startPage() {
 test("a script of the view page that fails to load is reported as one view.error that names the script", () => {
   const { window, posted } = startPage();
   const script = window.document.createElement("script");
-  script.src = "sok://fixture-plugin/ui/view.js";
+  script.src = "soksak://fixture-plugin/ui/view.js";
   window.document.head.appendChild(script);
   posted.splice(0);
   script.dispatchEvent(new window.Event("error"));
-  assert.deepEqual(posted, [{ event: "view.error", plugin: "fixture-plugin", reason: "script sok://fixture-plugin/ui/view.js failed to load" }]);
+  assert.deepEqual(posted, [{ event: "view.error", plugin: "fixture-plugin", reason: "script soksak://fixture-plugin/ui/view.js failed to load" }]);
 });
 
 test("an uncaught error of the view page is reported as one view.error with its message", () => {

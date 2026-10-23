@@ -1092,7 +1092,7 @@ pub const DECLARED_SNAPSHOT_MESSAGE: &str = "declared-ui.snapshot";
 /// '_' in an event name, so the relay name is not the message name; the main page listens to this name.
 pub const DECLARED_SNAPSHOT_WINDOW_EVENT: &str = "declared-ui-snapshot";
 
-/// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads sok://<plugin>/<page>
+/// Creates the view web view of a view surface, with the view configuration (`view` is true), and loads soksak://<plugin>/<page>
 /// into it. When the load does not succeed, the view is closed and the error is returned. create, load and close are the
 /// platform operations, and they run on the main thread.
 pub fn create_view(
@@ -1104,7 +1104,7 @@ pub fn create_view(
     page: &str,
 ) -> Result<Handle, String> {
     let handle = create(channel)?;
-    let address = format!("sok://{plugin}/{page}");
+    let address = format!("soksak://{plugin}/{page}");
     let reason = match load(handle, &address) {
         Ok(true) => return Ok(handle),
         Ok(false) => format!("view cannot load {address}"),

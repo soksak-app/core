@@ -1,5 +1,5 @@
 // Runs the published view snapshot pull cases (packages/plugin-api/contract/view-snapshot-pull.json) against createViewBridge over a
-// jsdom window on sok://probe/. Each step pushes a declared UI snapshot from the view or delivers a declared-ui.snapshot.request from
+// jsdom window on soksak://probe/. Each step pushes a declared UI snapshot from the view or delivers a declared-ui.snapshot.request from
 // the host, and the runner compares the posted messages of each step with the published output.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -22,7 +22,7 @@ const settle = async () => {
 };
 
 async function runCase(t, testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   // The view module reads the global window, which Node does not define; the test defines it for the case only.
   Object.defineProperty(globalThis, "window", { value: dom.window, configurable: true, writable: true });

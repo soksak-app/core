@@ -95,7 +95,7 @@ int main(void) { @autoreleasepool {
         check(view != NULL, @"a view configuration is created with the folder and the plugin of its surface");
         sp_document_place(view, 0, 0, 0, 0, true);
         latest = nil;
-        check(sp_document_load(view, "sok://probe/ui/page.html"), @"the view loads the page of its plugin");
+        check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
         until(@"the view page runs its script", ^BOOL{ return [latest[@"title"] hasPrefix:@"loaded"]; });
         check([latest[@"title"] isEqual:@"loaded 1"],
             [NSString stringWithFormat:@"the view page holds the import map of the application once: %@", latest[@"title"]]);

@@ -1,4 +1,4 @@
-// Checks the view channel over a jsdom window on sok://probe/. The injected document-start script (view-start.js) is loaded
+// Checks the view channel over a jsdom window on soksak://probe/. The injected document-start script (view-start.js) is loaded
 // into the window before any page code, as the application injects it; the view module reads it through window.sokView.
 // Nothing in the module uses a timer.
 import assert from "node:assert/strict";
@@ -18,7 +18,7 @@ const observeRejection = (promise) => { promise.catch(() => {}); return promise;
  * Creates a page on url with the sok-view handler, loads the injected script when script is true, and makes the page window the
  * global window of the view module for the test.
  */
-function setup(t, { url = "sok://probe/", script = true } = {}) {
+function setup(t, { url = "soksak://probe/", script = true } = {}) {
   const dom = new JSDOM("", { url, runScripts: "outside-only" });
   t.after(() => dom.window.close());
   const posted = [];
@@ -142,7 +142,7 @@ test("createViewChannel throws when the injected script is not loaded", (t) => {
   );
 });
 
-test("createViewBridge refuses a page that is not on sok://<plugin id>", (t) => {
+test("createViewBridge refuses a page that is not on soksak://<plugin id>", (t) => {
   setup(t, { url: "https://example.test/" });
   assert.throws(
     () => createViewBridge({ handler: { postMessage() {} }, report: () => {} }),
@@ -349,19 +349,19 @@ test("runtime.settings.read reads the settings of the plugin and runtime.setting
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
   const read = runtime.settings.read();
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.settings.read", params: null });
-  host({ sok: 1, id: 1, result: { home: "sok://core/start" } });
-  assert.deepEqual(await read, { home: "sok://core/start" });
+  host({ sok: 1, id: 1, result: { home: "soksak://core/start" } });
+  assert.deepEqual(await read, { home: "soksak://core/start" });
   const off = runtime.settings.on((values) => seen.push(values));
   assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.settings.on", params: null });
   host({ sok: 1, id: 2, result: null });
   await off;
   await runtime.settings.on(() => {});
   assert.equal(posted.filter((message) => message.command === "runtime.settings.on").length, 1);
-  host({ sok: 1, event: "settings", data: { home: "sok://core/start" } });
-  assert.deepEqual(seen, [{ home: "sok://core/start" }]);
+  host({ sok: 1, event: "settings", data: { home: "soksak://core/start" } });
+  assert.deepEqual(seen, [{ home: "soksak://core/start" }]);
   (await off)();
   host({ sok: 1, event: "settings", data: { home: "" } });
-  assert.deepEqual(seen, [{ home: "sok://core/start" }]);
+  assert.deepEqual(seen, [{ home: "soksak://core/start" }]);
 });
 
 test("runtime.error sends the error line of the view as the call runtime.error and resolves on the reply", async (t) => {
@@ -380,10 +380,10 @@ test("contributions(point) returns the connected items of the point, and fail(re
   assert.equal(typeof bridge.contributions, "function", "the view bridge has no contributions");
   const read = bridge.contributions("language");
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.contributions", params: { point: "language" } });
-  host({ sok: 1, id: 1, result: [{ plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/one.js" }] });
+  host({ sok: 1, id: 1, result: [{ plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/one.js" }] });
   const items = await read;
   assert.deepEqual(items.map(({ plugin, index, item, module }) => ({ plugin, index, item, module })),
-    [{ plugin: "one", index: 0, item: { name: "one" }, module: "sok://core/modules/one.js" }]);
+    [{ plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/one.js" }]);
   const failing = items[0].fail(new Error("extend is not a function"));
   assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.contributions.fail",
     params: { point: "language", plugin: "one", index: 0, reason: "extend is not a function" } });
@@ -663,13 +663,13 @@ function validateBridgeCases(cases) {
     .filter(({ action }) => action === "sidecar-subscribe").map(({ input }) => input.kind);
   assert.deepEqual(subscriptionKinds, ["message", "failure"], "view.bridge.sidecar-subscriptions subscription kinds");
   const refusal = cases.find(({ id }) => id === "view.bridge.refuses-unsupported-page");
-  assert.equal(refusal.steps[0].output.throws, "view channel requires a view page on sok://<plugin id>, got https://example.test/");
+  assert.equal(refusal.steps[0].output.throws, "view channel requires a view page on soksak://<plugin id>, got https://example.test/");
 }
 test("view bridge contract validation rejects empty, missing, and shortened cases", () => {
   assert.throws(() => validateBridgeCases([]), /must publish cases/);
   assert.throws(() => validateBridgeCases(BRIDGE_CONTRACT.cases.slice(1)), /all required bridge cases/);
   const shortened = structuredClone(BRIDGE_CONTRACT.cases);
-  shortened.find(({ id }) => id === "view.bridge.refuses-unsupported-page").steps[0].output.throws = "view channel requires a view page on sok://<plugin id>";
+  shortened.find(({ id }) => id === "view.bridge.refuses-unsupported-page").steps[0].output.throws = "view channel requires a view page on soksak://<plugin id>";
   assert.throws(() => validateBridgeCases(shortened), /strictly equal/);
   const missingMarker = structuredClone(BRIDGE_CONTRACT.cases);
   delete missingMarker.find(({ id }) => id === "view.bridge.events-delivered-in-order").steps[1].input.sok;
@@ -700,7 +700,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         return;
       }
       const create = item.steps.find(({ action }) => action === "create");
-      const { posted, host } = setup(subtest, { url: create?.input?.url ?? "sok://probe/" });
+      const { posted, host } = setup(subtest, { url: create?.input?.url ?? "soksak://probe/" });
       const reports = [];
       const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (event) => reports.push(event) });
       subtest.after(async () => {

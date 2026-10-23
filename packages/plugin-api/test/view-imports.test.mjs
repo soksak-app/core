@@ -65,11 +65,11 @@ function walkViewImports(root, entries, listed) {
 
 test("the view import map has exactly the five entries of rule 4", () => {
   assert.deepEqual(VIEW_IMPORTS, {
-    "soksak": "sok://core/modules/soksak/dist/index.js",
-    "@soksak/plugin-api": "sok://core/modules/@soksak/plugin-api/index.js",
-    "@soksak/plugin-api/view": "sok://core/modules/@soksak/plugin-api/view.js",
-    "@soksak/plugin-api/screen-hash": "sok://core/modules/@soksak/plugin-api/screen-hash.js",
-    "@soksak/shared/": "sok://core/shared/",
+    "soksak": "soksak://core/modules/soksak/dist/index.js",
+    "@soksak/plugin-api": "soksak://core/modules/@soksak/plugin-api/index.js",
+    "@soksak/plugin-api/view": "soksak://core/modules/@soksak/plugin-api/view.js",
+    "@soksak/plugin-api/screen-hash": "soksak://core/modules/@soksak/plugin-api/screen-hash.js",
+    "@soksak/shared/": "soksak://core/shared/",
   });
   assert.equal(Object.isFrozen(VIEW_IMPORTS), true);
 });

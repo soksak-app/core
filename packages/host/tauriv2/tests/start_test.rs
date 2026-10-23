@@ -52,12 +52,12 @@ fn start_requests_start_the_requesting_main_webview_only() {
     );
     let response = start::serve(start::CORE, "/index.html", "main", &mut start);
     assert_eq!(response.status(), 404);
-    assert_eq!(response.body(), b"sok://core/index.html not found\n");
+    assert_eq!(response.body(), b"soksak://core/index.html not found\n");
     assert_eq!(started, vec!["main".to_string(), "gone".to_string()]);
 }
 
 // contract: page.start.sok-core-owner
-/// Tauri serves the start document at sok://core/start.json (docs/spec/native-host.md#application-addresses); the
+/// Tauri serves the start document at soksak://core/start.json (docs/spec/native-host.md#application-addresses); the
 /// sok address of another owner answers not found without starting a window.
 #[test]
 fn start_document_is_served_at_the_core_owner_of_sok() {
@@ -70,6 +70,6 @@ fn start_document_is_served_at_the_core_owner_of_sok() {
     };
     let response = start::serve("probe", start::START_DOCUMENT_PATH, "main", &mut start);
     assert_eq!(response.status(), 404);
-    assert_eq!(response.body(), b"sok://probe/start.json not found\n");
+    assert_eq!(response.body(), b"soksak://probe/start.json not found\n");
     assert!(started.is_empty());
 }

@@ -1,5 +1,5 @@
 // Runs the published view status cases (packages/plugin-api/contract/view-status.json) against the runtime.status calls of
-// createViewBridge over a jsdom window on sok://probe/. Each step watches a status with a named listener, stops a listener,
+// createViewBridge over a jsdom window on soksak://probe/. Each step watches a status with a named listener, stops a listener,
 // or delivers a host event, and the runner compares the posted calls, the listener calls, the results and the errors of each
 // step with the published output.
 import assert from "node:assert/strict";
@@ -23,7 +23,7 @@ const settle = async () => {
 };
 
 async function runCase(testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   const delivered = [];
   const stops = new Map();

@@ -121,7 +121,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	if len(fake.created) != 1 || fake.created[0].channel != "channel-script" || fake.created[0].plugin != "probe" || fake.created[0].folder != "/plugins/probe" {
 		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder with the channel script", fake.created)
 	}
-	if want := []string{"sok://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {
+	if want := []string{"soksak://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {
 		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)
 	}
 	if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
@@ -274,7 +274,7 @@ func TestViewStateRefusesAStateWithoutNavigationsAndALowerCount(t *testing.T) {
 
 // nativeViewState is the document-state payload of a view as the native host sends it (docs/spec/native-surfaces.md, document-state):
 // loading is a JSON boolean, and navigations counts the navigations that the view has started.
-const nativeViewState = `{"url":"sok://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":"","navigations":1}`
+const nativeViewState = `{"url":"soksak://probe/ui/page.html","title":"probe","loading":false,"progress":1,"canGoBack":false,"canGoForward":false,"error":null,"scroll":{"x":0,"y":0},"history":{"entries":[],"index":-1},"link":"","navigations":1}`
 
 // contract: view.channel.state-boolean
 func TestViewStateAcceptsTheNativePayloadWithABooleanLoading(t *testing.T) {

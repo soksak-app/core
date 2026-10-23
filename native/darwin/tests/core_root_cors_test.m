@@ -1,4 +1,4 @@
-// Measures how WebKit treats a module import from a page at sok://probe to a module at sok://core (plugin-processes.md
+// Measures how WebKit treats a module import from a page at soksak://probe to a module at soksak://core (plugin-processes.md
 // rule 4). The test scheme handler is its own; it is not production code. Each case serves the module with one
 // Access-Control-Allow-Origin value, loads a page that imports the module, and records the page result and the request
 // headers that WebKit sends. The assertions state the observed behavior that the core root depends on.
@@ -36,13 +36,13 @@ static NSString *headerValue(NSDictionary *headers, NSString *name) {
 static NSString *const directPage = @"<!doctype html><meta charset=utf-8><title>probe</title>"
     "<script type=module>"
     "const post = (value) => window.webkit.messageHandlers.probe.postMessage(value);"
-    "import('sok://core/m.js').then((m) => post({ imported: true, value: m.default }),"
+    "import('soksak://core/m.js').then((m) => post({ imported: true, value: m.default }),"
     "(error) => post({ imported: false, error: String(error) }));"
     "</script>";
 
 // The import map maps the bare specifier core-m to the module, and the page imports the bare specifier.
 static NSString *const mapPage = @"<!doctype html><meta charset=utf-8><title>probe</title>"
-    "<script type=importmap>{\"imports\": {\"core-m\": \"sok://core/m.js\"}}</script>"
+    "<script type=importmap>{\"imports\": {\"core-m\": \"soksak://core/m.js\"}}</script>"
     "<script type=module>"
     "const post = (value) => window.webkit.messageHandlers.probe.postMessage(value);"
     "import('core-m').then((m) => post({ imported: true, value: m.default }),"
@@ -95,15 +95,15 @@ static NSString *const mapPage = @"<!doctype html><meta charset=utf-8><title>pro
     NSString *type = @"text/plain";
     NSString *body = @"not found";
     NSMutableDictionary *fields = [NSMutableDictionary dictionary];
-    if ([request.URL.scheme isEqualToString:@"sok"] && [host isEqualToString:@"probe"] && [path isEqualToString:@"/index.html"]) {
+    if ([request.URL.scheme isEqualToString:@"soksak"] && [host isEqualToString:@"probe"] && [path isEqualToString:@"/index.html"]) {
         status = 200;
         type = @"text/html";
         body = directPage;
-    } else if ([request.URL.scheme isEqualToString:@"sok"] && [host isEqualToString:@"probe"] && [path isEqualToString:@"/map.html"]) {
+    } else if ([request.URL.scheme isEqualToString:@"soksak"] && [host isEqualToString:@"probe"] && [path isEqualToString:@"/map.html"]) {
         status = 200;
         type = @"text/html";
         body = mapPage;
-    } else if ([request.URL.scheme isEqualToString:@"sok"] && [host isEqualToString:@"core"] && [path isEqualToString:@"/m.js"]) {
+    } else if ([request.URL.scheme isEqualToString:@"soksak"] && [host isEqualToString:@"core"] && [path isEqualToString:@"/m.js"]) {
         status = 200;
         type = @"text/javascript";
         body = @"export default 42;\n";
@@ -132,18 +132,18 @@ static BOOL runCase(NSString *label, NSString *corsValue, NSString *page) {
     ProbeMessageHandler *messages = [[[ProbeMessageHandler alloc] init] autorelease];
     WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
     configuration.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
-    [configuration setURLSchemeHandler:scheme forURLScheme:@"sok"];
+    [configuration setURLSchemeHandler:scheme forURLScheme:@"soksak"];
     [configuration.userContentController addScriptMessageHandler:messages name:@"probe"];
     WKWebView *web = [[[WKWebView alloc] initWithFrame:window.contentView.bounds configuration:configuration] autorelease];
     [window.contentView addSubview:web];
-    [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[@"sok://probe/" stringByAppendingString:page]]]];
+    [web loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[@"soksak://probe/" stringByAppendingString:page]]]];
     until([NSString stringWithFormat:@"the %@ page posts its result", label], ^BOOL{ return probeResult != nil; });
 
     NSString *moduleOrigin = nil;
     NSString *moduleHeaders = @"none";
     NSUInteger moduleRequests = 0;
     for (NSDictionary *request in scheme.requests) {
-        if (![request[@"url"] isEqualToString:@"sok://core/m.js"]) continue;
+        if (![request[@"url"] isEqualToString:@"soksak://core/m.js"]) continue;
         moduleRequests++;
         NSDictionary *headers = request[@"headers"];
         moduleOrigin = headerValue(headers, @"Origin");
@@ -177,8 +177,8 @@ int main(void) { @autoreleasepool {
     window.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     [window orderBack:nil];
 
-    BOOL allowed = runCase(@"case (a)", @"sok://probe", @"index.html");
-    check(allowed, @"case (a): the module from sok://core imports into a page of sok://probe when it sends Access-Control-Allow-Origin: sok://probe");
+    BOOL allowed = runCase(@"case (a)", @"soksak://probe", @"index.html");
+    check(allowed, @"case (a): the module from soksak://core imports into a page of soksak://probe when it sends Access-Control-Allow-Origin: soksak://probe");
 
     BOOL none = runCase(@"case (b)", nil, @"index.html");
     check(!none, @"case (b): the module import fails when the response has no Access-Control-Allow-Origin");
@@ -186,11 +186,11 @@ int main(void) { @autoreleasepool {
     // Case (c) has no assertion; the value is recorded because the specification states that WebKit accepts it.
     runCase(@"case (c)", @"*", @"index.html");
 
-    BOOL other = runCase(@"case (d)", @"sok://other", @"index.html");
-    check(!other, @"case (d): the module import fails when the response names another origin, sok://other");
+    BOOL other = runCase(@"case (d)", @"soksak://other", @"index.html");
+    check(!other, @"case (d): the module import fails when the response names another origin, soksak://other");
 
-    BOOL mapped = runCase(@"import map (a)", @"sok://probe", @"map.html");
-    check(mapped, @"import map under case (a): the bare specifier core-m maps to sok://core/m.js and imports into a page of sok://probe");
+    BOOL mapped = runCase(@"import map (a)", @"soksak://probe", @"map.html");
+    check(mapped, @"import map under case (a): the bare specifier core-m maps to soksak://core/m.js and imports into a page of soksak://probe");
 
     [probeResult release];
     probeResult = nil;

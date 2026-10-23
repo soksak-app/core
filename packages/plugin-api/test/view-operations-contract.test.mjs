@@ -1,5 +1,5 @@
 // Runs the published view operation cases (packages/plugin-api/contract/view-operations.json) against runtime.beginOperation,
-// runtime.sidecar(name).send and runtime.command of createViewBridge over a jsdom window on sok://probe/. Each step starts an
+// runtime.sidecar(name).send and runtime.command of createViewBridge over a jsdom window on soksak://probe/. Each step starts an
 // operation, sends with the identifiers of a stored operation, or runs a command with them, and compares the messages the page
 // posted, the result and the error with the published output.
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ const settle = async () => {
 const normalize = (value) => JSON.parse(JSON.stringify(value).replaceAll(`p${ORIGIN}.`, "p$ORIGIN."));
 
 async function runCase(testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   // The view module reads the global window, which Node does not define; the test defines it for the case only.
   Object.defineProperty(globalThis, "window", { value: dom.window, configurable: true, writable: true });

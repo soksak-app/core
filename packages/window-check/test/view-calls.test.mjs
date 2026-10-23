@@ -31,7 +31,7 @@ test("a reply matches its call only on the same page, plugin, surface and id", (
 
 test("records of other events are ignored and a call with an error reply is answered", () => {
   const events = [
-    record(1_000_000, "page.start", { url: "sok://fixture-plugin/ui/page.html" }),
+    record(1_000_000, "page.start", { url: "soksak://fixture-plugin/ui/page.html" }),
     call(1_100_000, 3, "runtime.log"),
     reply(1_200_000, 3, "error"),
   ];

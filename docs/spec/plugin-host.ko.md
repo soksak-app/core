@@ -4,7 +4,7 @@
 
 plugin host는 plugin의 프로세스로, 창에 붙는 platform web view에서 그 plugin의 선언 status를 제공한다. plugin의 view가 하나도 열려 있지 않은 동안 sidebar section의 [선언 status](declared-ui.ko.md#선언된-status)를 제공해야 할 때만 존재하며, 고른 선언 status 출처가 host일 때마다(활성 탭의 view가 첫째, plugin host가 둘째) 그 status를 제공한다. sidecar는 한 domain의 native 기능을 가지므로 host가 그 status들의 DOM 없는 presentation을 갖고, sidecar는 그 데이터를 준다. sidecar나 상태 모듈은 선언 status 출처가 아니다.
 
-plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `sok://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않으며, workbench는 plugin 코드를 가져오지 않는다.
+plugin 코드는 workbench 페이지에서 실행되지 않으며, main page는 plugin host의 코드를 실행하지 않는다. host 페이지는 view surface의 view처럼 `soksak://<plugin id>` origin의 별도 web view다([plugin processes](plugin-processes.md) rule 1). native host와 workbench가 이 명세를 구현하며, [feature status](../features.md)가 구현 상태를 기록한다. plugin host 코드는 workbench 페이지에서 실행되지 않으며, workbench는 plugin 코드를 가져오지 않는다.
 
 ## Declaration
 
@@ -31,14 +31,14 @@ manifest는 `plugin.json`의 `host` 아래에서 plugin host를 선언한다:
 host는 plugin당 창당 하나의 plugin host web view를, [view](native-surfaces.ko.md#view-표면)의 구성으로 만든다:
 
 - `isView`를 설정한다. 그래서 이 구성만 `core` scheme을 core root resolver로 보낸다.
-- plugin의 plugin id. 페이지의 `sok://<plugin id>` origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다.
+- plugin의 plugin id. 페이지의 `soksak://<plugin id>` origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다.
 - `packages/plugin-api/view-start.js`의 텍스트를 담은 document-start user script. [view channel](native-surfaces.ko.md#view-표면) 스크립트다.
 - theme 토큰을 담은 document-start user script.
 - plugin start 값의 document-start user script. `window.sokHost`를 plugin host의 동결된 `{project, declarations}`로 둔다. host가 값을 직접 만든다. `project`는 host가 plugin host를 만들 때 window가 보여 주는 project의 동결된 `{id, root}`(project id와 정규 root)이고, project를 보여 주지 않는 window에서는 `null`이다. `declarations`는 plugin manifest의 `exposes`이며, 선언이 없으면 `{}`이다. `exposes`가 객체가 아니면 거부한다. host에는 surface도 origin도 없다. script는 page를 불러오기 전에 추가하며, host가 plugin host를 다시 만들면 다시 추가한다. window가 보여 주는 project가 나중에 바뀌면, theme처럼 준비된 document가 있는 각 plugin host에 message event `project`를 `data`가 `{id, root}` 또는 `null`인 채로 보낸다. 준비된 document가 없는 host에는 보내지 않는다;
 - script message handler `sok-view`.
 - plugin id로 key되는 plugin의 persistent website data store.
 
-host는 `plugins/installed.json`이 그 plugin에 대해 기록한 폴더에서 `sok://<plugin id>/<page>`를 불러온다. view의 페이지를 불러오는 것과 같다. 페이지는 네 항목의 [view import map](plugins.ko.md#view-표면)을 선언하고 `checkViewPage`를 통과하며, [view bridge](plugins.ko.md#view-표면)를 import하고 `sok-view` handler로 `createViewChannel()`을 부른다.
+host는 `plugins/installed.json`이 그 plugin에 대해 기록한 폴더에서 `soksak://<plugin id>/<page>`를 불러온다. view의 페이지를 불러오는 것과 같다. 페이지는 네 항목의 [view import map](plugins.ko.md#view-표면)을 선언하고 `checkViewPage`를 통과하며, [view bridge](plugins.ko.md#view-표면)를 import하고 `sok-view` handler로 `createViewChannel()`을 부른다.
 
 web view는 surface host가 아니라 창에 붙는다. 그것은 surface가 아니다. `SurfaceHost`를, surface frame을, region을, presentation wait을 가지지 않는다. host는 그것을 숨겨 놓고 아무것도 보여주지 않는다. web view는 0 frame을 가지고, 보이지 않음으로 제출되고, 화면에 아무것도 그리지 않고, hit testing을 받지 않고, first responder가 되지 않는다. host 페이지는 입력을 받지 않고 shortcut table을 등록하지 않는다. `host.hit`은 그것을 보고하지 않는다.
 

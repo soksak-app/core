@@ -54,7 +54,7 @@ fn enabled_plugins(config_dir: &Path) -> Result<(Vec<InstalledPlugin>, Installed
 }
 
 /// The folder of the enabled installed plugin, which the document regions of its surfaces serve at
-/// sok://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
+/// soksak://<plugin>/ (docs/spec/native-surfaces.md#document-regions).
 pub fn plugin_folder(config_dir: &Path, plugin: &str) -> Result<PathBuf, String> {
     let (plugins, _) = enabled_plugins(config_dir)?;
     plugins

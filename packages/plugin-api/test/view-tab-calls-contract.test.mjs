@@ -1,5 +1,5 @@
 // Runs the published view tab call cases (packages/plugin-api/contract/view-tab-calls.json) against the call layer of createViewBridge
-// over a jsdom window on sok://probe/. Each case sends one tab call with its parameters, the host answers it with a reply or an error,
+// over a jsdom window on soksak://probe/. Each case sends one tab call with its parameters, the host answers it with a reply or an error,
 // and the runner compares the posted call, the result and the error of each step with the published output.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,7 +24,7 @@ const settle = async () => {
 };
 
 async function runCase(testCase) {
-  const dom = new JSDOM("", { url: "sok://probe/", runScripts: "outside-only" });
+  const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const posted = [];
   // The view module reads the global window, which Node does not define; the test defines it for the case only.
   Object.defineProperty(globalThis, "window", { value: dom.window, configurable: true, writable: true });

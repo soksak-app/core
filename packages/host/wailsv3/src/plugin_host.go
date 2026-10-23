@@ -156,7 +156,7 @@ func (s *Surfaces) createPluginHosts(window unsafe.Pointer, plugins []hostPlugin
 }
 
 // createPluginHost creates the plugin host web view of declared with the view configuration
-// (docs/spec/native-surfaces.md#view-surfaces) and loads sok://<plugin>/<page> into it. It runs on the UI thread.
+// (docs/spec/native-surfaces.md#view-surfaces) and loads soksak://<plugin>/<page> into it. It runs on the UI thread.
 func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, directory, folder string) error {
 	plugin, page := declared.id, declared.page
 	handle, err := system.CreatePluginHost(window, directory, folder, plugin, viewChannelScript, func(state string) {
@@ -181,8 +181,8 @@ func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, 
 	if err == nil {
 		err = s.addHostStartScript(handle, declared.exposes)
 	}
-	if err == nil && !system.LoadDocument(handle, "sok://"+plugin+"/"+page) {
-		err = fmt.Errorf("plugin host of %s cannot load sok://%s/%s", plugin, plugin, page)
+	if err == nil && !system.LoadDocument(handle, "soksak://"+plugin+"/"+page) {
+		err = fmt.Errorf("plugin host of %s cannot load soksak://%s/%s", plugin, plugin, page)
 	}
 	if err != nil {
 		s.pluginHostChannels.unregister(plugin)

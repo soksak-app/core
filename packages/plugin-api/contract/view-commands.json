@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/view.js#createViewBridge commands.register",
-  "description": "Ordered steps of command registration on a view page: a register step calls commands.register with a run function (run is echo, which returns its params, fail, which throws, none, which returns no value, or text, which is not a function) and then delivers the host answer (answer) to the declaration request that the step posted. A request step delivers a host request {id, command, params} for a command of the view. Each step lists what it produces: posted is the messages the page sends in order, result is the value of the register call, and throws is the text of the error the step raises, or null. The page is sok://probe/.",
+  "description": "Ordered steps of command registration on a view page: a register step calls commands.register with a run function (run is echo, which returns its params, fail, which throws, none, which returns no value, or text, which is not a function) and then delivers the host answer (answer) to the declaration request that the step posted. A request step delivers a host request {id, command, params} for a command of the view. Each step lists what it produces: posted is the messages the page sends in order, result is the value of the register call, and throws is the text of the error the step raises, or null. The page is soksak://probe/.",
   "cases": [
     {
       "id": "view.commands.register-answers-and-refuses-unregistered",
