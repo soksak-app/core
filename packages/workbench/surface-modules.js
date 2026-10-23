@@ -253,10 +253,40 @@ function tabState(surface, isDisposed) {
 
 /**
  * Answers the call requests and the cancels of the view of surface with the handlers of its context, and sends each reply to the view
- * (docs/spec/native-surfaces.md#view-surfaces). It resolves with the function that ends the answers. page is the runtime of the
- * surface, whose sidecar send ends with its place. closing is the signal of the mount, which removes the exposure port at its dispose.
+ * (docs/spec/native-surfaces.md#view-surfaces). It returns a cleanup function and adds listener registrations to registrations.
+ * page is the runtime of the surface, whose sidecar send ends with its place. closing is the signal of the mount, which removes the
+ * exposure port at its dispose.
  */
-function answerViewCalls(surface, scoped, page, context, closing) {
+function collectNativeListeners(registrations) {
+  let active = true;
+  let removed = false;
+  const offFunctions = [];
+  const release = (off) => {
+    try {
+      off();
+    } catch (error) {
+      dispatchEvent(new ErrorEvent("error", { message: `native listener cleanup: ${error?.message ?? error}` }));
+    }
+  };
+  const remove = () => {
+    if (removed) return;
+    removed = true;
+    active = false;
+    for (const off of offFunctions.splice(0).reverse()) release(off);
+  };
+  const ready = Promise.all(registrations.map((registration) => Promise.resolve(registration).then((off) => {
+    if (typeof off !== "function") throw new TypeError("native listener registration did not return a cleanup function");
+    if (active) offFunctions.push(off);
+    else release(off);
+  })));
+  const settled = ready.then(() => null, (error) => {
+    remove();
+    throw error;
+  });
+  return { settled, remove };
+}
+
+function answerViewCalls(surface, scoped, page, context, closing, registrations) {
   // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
   const { tab } = context;
   // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
@@ -424,6 +454,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} reply: ${error?.message ?? error}` }));
     });
   });
+  registrations.push(answering);
   const ending = scoped.native.on("view-process-ended", () => {
     documentRegions.released(surface.surfaceId);
     documentGeneration += 1;
@@ -434,6 +465,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       dispatchEvent(new ErrorEvent("error", { message: `view subscriptions restart: ${error.message}` }));
     });
   });
+  registrations.push(ending);
   closing.addEventListener("abort", () => {
     for (const controller of pending.values()) controller.abort();
   }, { once: true });
@@ -446,16 +478,17 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       dispatchEvent(new ErrorEvent("error", { message: `view command reply ${event?.id}: ${error?.message ?? error}` }));
     }
   });
+  registrations.push(replies);
   // The answers end with the view: the listeners are removed, the open command runs end, and each page subscription is ended.
-  return Promise.all([answering, replies, ending]).then(([offCall, offReply, offEnding]) => () => {
-    offCall();
-    offReply();
-    offEnding();
+  let closed = false;
+  return async () => {
+    if (closed) return;
+    closed = true;
     forgetCommands();
     unmarkView();
     viewCommands.close();
-    return subscriptions.close();
-  });
+    await subscriptions.close();
+  };
 }
 
 export function mountSurface(slot, surface, options = {}) {
@@ -610,28 +643,63 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
     });
     const state = context.status.subscribe(onState);
     entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
-      mounted: null, ready: null, authorized: false, disposed: false, surfaceId: surface.surfaceId,
+      mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false, surfaceId: surface.surfaceId,
       setViewport: (next) => { viewport = next; } };
     mounted.set(surface.surfaceId, entry);
     try {
       onState(context.status.read());
-      const answering = answerViewCalls(surface, scoped, page, context, closing.signal);
+      const registrations = [];
+      const closeView = answerViewCalls(surface, scoped, page, context, closing.signal, registrations);
       // A view that stopped its restarts shows its reason as the error of the surface (docs/spec/native-surfaces.md#view-surfaces).
       const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
+      registrations.push(stopping);
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
       const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
+      registrations.push(responding);
       // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
       const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
+      registrations.push(abandoning);
+      const listenerCollection = collectNativeListeners(registrations);
+      const listenerSetup = listenerCollection.settled.then(async () => {
+        let closed = false;
+        return async () => {
+          if (closed) return;
+          closed = true;
+          listenerCollection.remove();
+          await closeView();
+        };
+      }, async (error) => {
+        await closeView().catch((cleanupError) => {
+          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup after registration failure: ${cleanupError?.message ?? cleanupError}` }));
+        });
+        if (entry.disposed) {
+          dispatchEvent(new ErrorEvent("error", { message: `view listener registration after dispose: ${error?.message ?? error}` }));
+        } else if (entry.compositionDeclared) {
+          context.status.report("error", error);
+          for (const listener of mountListeners) listener(surface.surfaceId, error);
+          await releaseFailedMount(entry).catch((releaseError) => {
+            dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after listener registration failure: ${releaseError?.message ?? releaseError}` }));
+          });
+        }
+        return null;
+      });
+      const listenerFailure = listenerCollection.settled.then(
+        () => new Promise(() => {}),
+        (error) => Promise.reject(error),
+      );
       // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
       // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
       closing.signal.addEventListener("abort", () => {
-        answering.then((off) => off());
-        stopping.then((off) => off());
-        responding.then((off) => off());
-        abandoning.then((off) => off());
+        listenerCollection.remove();
+        closeView().catch((error) => {
+          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup: ${error?.message ?? error}` }));
+        });
+        listenerSetup.then((cleanup) => cleanup?.().catch((error) => {
+          dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup: ${error?.message ?? error}` }));
+        }), () => {});
         forgetView(surface.surfaceId);
       }, { once: true });
-      entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
+      const mountReadiness = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
         .then(async () => {
           // Does not start the registration of a surface that was removed while waiting for approval.
           if (entry.disposed) return null;
@@ -644,10 +712,12 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
           // The view declares its composition, which resolves the composition wait of the surface. The surface is ready from that
           // declaration, as a module surface is ready after its module mounts: a view has no module whose mount releases it.
           await page.composition.declare(surface.composition);
+          entry.compositionDeclared = true;
           context.status.report("ready");
           releaseSurfaceReady(context);
           return null;
         });
+      entry.mounted = Promise.race([mountReadiness, listenerFailure]);
       entry.ready = entry.mounted.catch(async (error) => {
           if (entry.disposed) return null;
           context.status.report("error", error);
