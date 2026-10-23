@@ -259,6 +259,7 @@ export function storedLayoutState(state) {
  * no origin, and an id is not reused, so dropping its record loses no value.
  */
 export function forgetTabsLeft(previousCards, nextCards) {
+  // default: a card without tabs keeps no tab.
   const kept = new Set(nextCards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id)));
   for (const card of previousCards) {
     // default: a card without tabs holds no tab that could leave.
