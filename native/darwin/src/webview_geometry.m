@@ -676,9 +676,9 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
         if ([coordinates isKindOfClass:SPSurfaceCoordinates.class]) {
             reconfigureSurfaceWebviews(coordinates);
         }
-        // A hidden surface can miss the frame/backing notifications while the window is restored. Before the surface is exposed, the
-        // logical geometry of every native region is applied again, so that a stale frame that depends on the scale is not visible.
-        notifyScale(host.nativePlane);
+        // A hidden surface can miss frame/backing notifications. Reapply the view and native regions after revealing the host;
+        // the view is a sibling of the native plane and may have been placed while the host was hidden.
+        notifyScale(host);
     }
 }
 

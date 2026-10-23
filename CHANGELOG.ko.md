@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2-1: 준비한 surface를 표시할 때 native region뿐 아니라 view의 표시 상태도 다시 적용한다. 이전에는 갱신이 native plane만 방문해, surface를 숨긴 동안 배치한 view가 계속 숨겨졌고 region은 표시되지만 mouse 입력은 view에 닿지 않았다. 소유 native 검사가 준비 순서를 재현하며, 표시·누름·focus 검사에서 실패한 뒤 수정 후 통과한다.
+
 - F212.12-1-20: `core.plugins` status가 열린 tab과 무관하게 로드한 각 plugin의 surface `composition`을 보고하여 window check가 카드가 없는 view도 찾을 수 있다. 소유 Red assertion과 plugin-operation 및 composition-kind 테스트 22개가 모두 통과한다.
 
 - F262-8: origin은 탭이 자기 space의 저장된 배치에서 떠날 때만 끝난다. 다른 space의 표시는 표시되지 않은 space 탭들의 origin을 더 이상 버리지 않는다. 이것이 `tab X has no origin` 거부의 원인이었다.

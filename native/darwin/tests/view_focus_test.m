@@ -76,14 +76,31 @@ int main(void) { @autoreleasepool {
     [window orderBack:nil];
     void *surface = sp_surface_create(main);
     webviewSetFrame(surface, 0, 0, 500, 400);
-    webviewSetSurfaceHidden(surface, false);
     NSString *store = [temporary stringByAppendingPathComponent:@"store"];
 
     WKWebView *view = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation,
         "probe", channelScript.UTF8String, changed, NULL);
     check(view != NULL, @"a view is created on the surface");
     if (!view) return 1;
+    // Both hosts place a wanted view while its surface is hidden for layout preparation, then reveal the surface at presentation.
     sp_document_place(view, 0, 0, 0, 0, true);
+    check(view.hidden, @"a view placed during preparation stays hidden with its surface");
+    webviewSetSurfaceHidden(surface, false);
+    double frame[5] = {0};
+    sp_document_frame(view, frame);
+    check(frame[4] == 1, @"revealing the surface reveals its wanted view");
+
+    // A later preparation must restore the view too, while an explicitly hidden view remains hidden.
+    webviewSetSurfaceHidden(surface, true);
+    sp_document_place(view, 0, 0, 0, 0, false);
+    webviewSetSurfaceHidden(surface, false);
+    sp_document_frame(view, frame);
+    check(frame[4] == 0, @"revealing the surface keeps an explicitly hidden view hidden");
+    webviewSetSurfaceHidden(surface, true);
+    sp_document_place(view, 0, 0, 0, 0, true);
+    webviewSetSurfaceHidden(surface, false);
+    sp_document_frame(view, frame);
+    check(frame[4] == 1, @"a later presentation restores the wanted view");
     latest = nil;
     check(sp_document_load(view, "sok://probe/ui/page.html"), @"the view loads the page of its plugin");
     if (!waitFor(^BOOL { return [latest[@"title"] isEqual:@"ready"]; })) {
