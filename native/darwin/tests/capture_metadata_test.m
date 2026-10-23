@@ -3,6 +3,17 @@
 #import "../src/capture.m"
 
 static int failures;
+static uint64_t controlledTimes[3];
+static int controlledTimeIndex;
+static uint64_t controlledRawClock(void) {
+    if (controlledTimeIndex >= 3) return 0;
+    return controlledTimes[controlledTimeIndex++];
+}
+static kern_return_t failedTimebase(mach_timebase_info_data_t *timebase) {
+    (void)timebase;
+    return KERN_FAILURE;
+}
+
 static void check(BOOL ok, NSString *label) {
     fprintf(stderr, "%s: %s\n", ok ? "PASS" : "FAIL", label.UTF8String);
     if (!ok) failures++;
@@ -108,6 +119,68 @@ int main(void) { @autoreleasepool {
     check([error containsString:@"has no image buffer"],
         [NSString stringWithFormat:@"a complete frame without an image buffer rejects the recording (%@)", error]);
 
+    beginSequence(&used);
+    NSMutableDictionary *measuredMetadata = [complete(nil) mutableCopy];
+    measuredMetadata[SCStreamFrameInfoDisplayTime] = @987654321;
+    CMSampleBufferRef measured = sample(YES, measuredMetadata);
+    [measuredMetadata release];
+    controlledTimes[0] = 100;
+    controlledTimes[1] = 200;
+    controlledTimes[2] = 250;
+    controlledTimeIndex = 0;
+    uint64_t (*originalClock)(void) = captureRawClock;
+    captureRawClock = controlledRawClock;
+    SCStream *testStream = (SCStream *)[NSObject new];
+    [used stream:testStream didOutputSampleBuffer:measured ofType:SCStreamOutputTypeScreen];
+    [testStream release];
+    captureRawClock = originalClock;
+    dispatch_sync(captureWriter, ^{});
+    CFRelease(measured);
+    NSDictionary *measuredCallback = used.callbackStatusTrace.firstObject;
+    mach_timebase_info_data_t measuredTimebase = {};
+    kern_return_t measuredTimebaseResult = mach_timebase_info(&measuredTimebase);
+    check(controlledTimeIndex == 3
+        && [measuredCallback[@"callbackTime"] isEqual:@"100"]
+        && [measuredCallback[@"writeStartTime"] isEqual:@"200"]
+        && [measuredCallback[@"writeCompleteTime"] isEqual:@"250"]
+        && [measuredCallback[@"machTimebaseNumerator"] unsignedIntValue] == measuredTimebase.numer
+        && [measuredCallback[@"machTimebaseDenominator"] unsignedIntValue] == measuredTimebase.denom
+        && measuredTimebaseResult == KERN_SUCCESS
+        && [measuredCallback[@"displayTime"] isEqual:@"987654321"]
+        && [measuredCallback[@"frame"] isEqual:@"frame-0001.bgra"],
+        @"the real delegate path records controlled raw arrival, processing bounds, the system timebase, display time and exact frame marker");
+    check(writeCaptureCallbackStatusTrace(used), @"the measured callback metadata is written as JSONL");
+    NSString *measuredTraceText = [NSString stringWithContentsOfFile:
+        [directory stringByAppendingPathComponent:kCaptureCallbackStatusFile] encoding:NSUTF8StringEncoding error:nil];
+    NSDictionary *measuredJSON = [NSJSONSerialization JSONObjectWithData:
+        [measuredTraceText dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    check([measuredJSON[@"callbackTime"] isEqual:@"100"]
+        && [measuredJSON[@"writeStartTime"] isEqual:@"200"]
+        && [measuredJSON[@"writeCompleteTime"] isEqual:@"250"]
+        && [measuredJSON[@"machTimebaseNumerator"] unsignedIntValue] == measuredTimebase.numer
+        && [measuredJSON[@"machTimebaseDenominator"] unsignedIntValue] == measuredTimebase.denom,
+        @"the callback artifact preserves the raw timing values and actual mach timebase");
+
+    beginSequence(&used);
+    controlledTimes[0] = 300;
+    controlledTimes[1] = 400;
+    controlledTimeIndex = 0;
+    originalClock = captureRawClock;
+    kern_return_t (*originalTimebaseReader)(mach_timebase_info_data_t *) = captureReadTimebase;
+    captureRawClock = controlledRawClock;
+    captureReadTimebase = failedTimebase;
+    CMSampleBufferRef noTimebaseFrame = sample(NO, @{SCStreamFrameInfoStatus: @(SCFrameStatusIdle),
+        SCStreamFrameInfoDisplayTime: @987654322});
+    testStream = (SCStream *)[NSObject new];
+    [used stream:testStream didOutputSampleBuffer:noTimebaseFrame ofType:SCStreamOutputTypeScreen];
+    [testStream release];
+    CFRelease(noTimebaseFrame);
+    captureRawClock = originalClock;
+    captureReadTimebase = originalTimebaseReader;
+    check(controlledTimeIndex == 2 && used.callbackStatusTrace.count == 0
+        && [[NSString stringWithUTF8String:sp_capture_error()] containsString:@"capture callback mach timebase failed"],
+        @"a timebase failure rejects the callback with an explicit capture error before writing an incomplete record");
+
     error = record(sample(NO, @{SCStreamFrameInfoStatus: @(SCFrameStatusIdle),
         SCStreamFrameInfoDisplayTime: @(mach_absolute_time())}), &used);
     check(error.length == 0 && used.idle == 1 && used.written == 0,
@@ -140,6 +213,22 @@ int main(void) { @autoreleasepool {
     if (hasTrace) {
         NSArray *trace = [used valueForKey:@"callbackStatusTrace"];
         check(trace.count == 5, [NSString stringWithFormat:@"the callback trace has all five entries (%lu)", (unsigned long)trace.count]);
+        BOOL hasTimingForEveryCallback = trace.count == 5;
+        for (NSDictionary *callback in trace) {
+            id callbackTime = callback[@"callbackTime"];
+            id writeStartTime = callback[@"writeStartTime"];
+            id writeCompleteTime = callback[@"writeCompleteTime"];
+            hasTimingForEveryCallback = hasTimingForEveryCallback
+                && [callbackTime isKindOfClass:[NSString class]]
+                && [writeStartTime isKindOfClass:[NSString class]]
+                && [writeCompleteTime isKindOfClass:[NSString class]]
+                && [callbackTime longLongValue] <= [writeStartTime longLongValue]
+                && [writeStartTime longLongValue] <= [writeCompleteTime longLongValue]
+                && [callback[@"machTimebaseNumerator"] unsignedIntValue] > 0
+                && [callback[@"machTimebaseDenominator"] unsignedIntValue] > 0;
+        }
+        check(hasTimingForEveryCallback,
+            @"every complete, idle, cached and blank callback records ordered raw timestamps and a timebase");
         if (trace.count == 5) {
             check([trace[0][@"status"] intValue] == SCFrameStatusComplete
                 && [trace[0][@"displayTime"] isEqual:@"1000000001"]
@@ -192,6 +281,7 @@ int main(void) { @autoreleasepool {
     check(used.callbackStatusTrace.count == 1
         && missingStatusRecord[@"status"] == [NSNull null]
         && [missingStatusRecord[@"displayTime"] isEqual:@"1025000002"]
+        && [missingStatusRecord[@"writeCompleteTime"] isKindOfClass:[NSString class]]
         && missingStatusRecord[@"frame"] == [NSNull null]
         && [NSString stringWithUTF8String:sp_capture_error()].length > 0,
         @"a callback without status records null status, exact display time and a capture error");

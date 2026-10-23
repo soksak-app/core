@@ -2265,6 +2265,16 @@
 
 2026-09-08 라이브러리 검증: `make verify` 통과. 테스트 310/310, 변이 142개 검출, 문서 검사, 빌드, 생성 산출물과 커밋된 파일 비교를 포함한다.
 
+- F212.12-2-2-4-6: ScreenCaptureKit delegate 진입 시각, 동기 sample 처리
+  시작·완료 시각을 각 callback의 display time 및 frame marker와 함께 기록한다.
+  raw delta를 해석할 실제 mach timebase를 포함하고 timebase를 읽지 못하면
+  capture를 명시적으로 실패시킨다. Native metadata test는 실제 delegate 경로,
+  제어한 raw timestamp, artifact 직렬화, complete/idle/error callback 경계와
+  timebase 실패를 검증한다. Callback lifecycle test 및 문서 검사가 macOS
+  26.6.2 arm64에서 통과한다. Terminal consumer는 decimal field 순서와 raw
+  presentation-to-arrival 및 processing delta를 보고한다. Activation 실행은
+  아직 하지 않았다.
+
 ## 2026-09-22
 
 - Tauri는 이제 메인 문서가 다시 로드를 시작할 때 네이티브 표면 문서와 이미지 정리를 동기적으로 마친다. 이로써 교체 표면 이미지 연결이 이전 네이티브 이미지 핸들 해제와 경합하지 않는다. 반복 분할과 래스터 복구 검사가 재빌드된 프로세스에서 통과한다.

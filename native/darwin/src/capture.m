@@ -55,6 +55,8 @@ static uint64_t captureStartedAt;
 static bool captureResizing;
 static bool captureUpdating;
 static void followWindowSize(size_t width, size_t height, size_t needWidth, size_t needHeight);
+static uint64_t (*captureRawClock)(void) = mach_absolute_time;
+static kern_return_t (*captureReadTimebase)(mach_timebase_info_data_t *) = mach_timebase_info;
 
 // Receives frames and writes them to files. The frames are delivered as messages, so a receiver object is required.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
@@ -75,7 +77,12 @@ static void followWindowSize(size_t width, size_t height, size_t needWidth, size
 @property (nonatomic) double slowestWrite;
 @property (nonatomic) uint64_t lastShown;
 @property (nonatomic) uint64_t longestGap;
-- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime;
+- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
+    hasDisplayTime:(BOOL)hasDisplayTime callbackTime:(uint64_t)callbackTime writeStartTime:(uint64_t)writeStartTime
+    timebase:(mach_timebase_info_data_t)timebase;
+- (void)write:(CMSampleBufferRef)sample callbackTime:(uint64_t)callbackTime;
+- (void)processSample:(CMSampleBufferRef)sample status:(SCFrameStatus)status hasStatus:(BOOL)hasStatus
+    displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime;
 @end
 
 // frameInfo reads the value of key from the information dictionary attached to a frame. It is NULL if the dictionary
@@ -142,7 +149,9 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     [super dealloc];
 }
 
-- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime {
+- (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
+    hasDisplayTime:(BOOL)hasDisplayTime callbackTime:(uint64_t)callbackTime writeStartTime:(uint64_t)writeStartTime
+    timebase:(mach_timebase_info_data_t)timebase {
     if (self.callbackStatusTrace.count >= kCaptureMaxCallbackStatusRecords) {
         if (!self.callbackStatusTraceOverflowed) {
             self.callbackStatusTraceOverflowed = YES;
@@ -157,6 +166,11 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
         @"sequence": @(self.callbackStatusTrace.count + 1),
         @"status": statusValue,
         @"displayTime": timeValue,
+        @"callbackTime": [NSString stringWithFormat:@"%llu", (unsigned long long)callbackTime],
+        @"writeStartTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writeStartTime],
+        @"machTimebaseNumerator": @(timebase.numer),
+        @"machTimebaseDenominator": @(timebase.denom),
+        @"writeCompleteTime": [NSNull null],
         @"frame": [NSNull null],
     }]];
     return YES;
@@ -165,8 +179,9 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
 - (void)stream:(SCStream*)stream
     didOutputSampleBuffer:(CMSampleBufferRef)sample
                    ofType:(SCStreamOutputType)type {
+    uint64_t callbackTime = captureRawClock();
     if (type != SCStreamOutputTypeScreen) return;
-    [self write:sample];
+    [self write:sample callbackTime:callbackTime];
     // A frame presented after the stop request means that the screen up to that time has been fully delivered, even
     // if it is idle.
     // A complete frame without a time is left as a recording error by write:, and the stop reports that error.
@@ -180,6 +195,19 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
 }
 
 - (void)write:(CMSampleBufferRef)sample {
+    [self write:sample callbackTime:captureRawClock()];
+}
+
+- (void)write:(CMSampleBufferRef)sample callbackTime:(uint64_t)callbackTime {
+    uint64_t writeStartTime = captureRawClock();
+    mach_timebase_info_data_t timebase = {};
+    kern_return_t timebaseResult = captureReadTimebase(&timebase);
+    if (timebaseResult != KERN_SUCCESS) {
+        NSString *message = [NSString stringWithFormat:@"capture callback mach timebase failed: %d", timebaseResult];
+        setCaptureError(message);
+        sp_log_error("capture callback", message.UTF8String);
+        return;
+    }
     // If the window is not redrawn, frames keep arriving at the fixed interval but are all
     // marked idle and have no image. Counting them makes it possible to state why there are 0 frames.
     // A frame without a status cannot be known to be complete, so the recording fails.
@@ -187,7 +215,18 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     BOOL hasStatus = frameStatus(sample, &status);
     uint64_t shown = 0;
     BOOL hasDisplayTime = displayTime(sample, &shown);
-    if (![self recordCallbackStatus:status hasStatus:hasStatus displayTime:shown hasDisplayTime:hasDisplayTime]) return;
+    if (![self recordCallbackStatus:status hasStatus:hasStatus displayTime:shown hasDisplayTime:hasDisplayTime
+        callbackTime:callbackTime writeStartTime:writeStartTime timebase:timebase]) return;
+    NSMutableDictionary *record = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
+    @try {
+        [self processSample:sample status:status hasStatus:hasStatus displayTime:shown hasDisplayTime:hasDisplayTime];
+    } @finally {
+        record[@"writeCompleteTime"] = [NSString stringWithFormat:@"%llu", (unsigned long long)captureRawClock()];
+    }
+}
+
+- (void)processSample:(CMSampleBufferRef)sample status:(SCFrameStatus)status hasStatus:(BOOL)hasStatus
+    displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime {
     if (!hasStatus) {
         if (!hasCaptureError()) setCaptureError([NSString stringWithFormat:@"frame %d has no status", self.queued + 1]);
         return;

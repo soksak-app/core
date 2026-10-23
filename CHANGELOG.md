@@ -2263,6 +2263,17 @@ The main-only presentation check allowed a Tauri view to commit at 562pt while i
 
 Library validation on 2026-09-08: `make verify` passed, including 310/310 tests, all 142 mutations detected, documentation checks, build, and comparison of generated artifacts with committed files.
 
+- F212.12-2-2-4-6: Record the ScreenCaptureKit delegate-entry time and
+  synchronous sample-processing start and completion beside each callback's
+  display time and frame marker. Include the actual mach timebase so raw
+  deltas are interpretable, and fail capture explicitly if the timebase cannot
+  be read. The native metadata test verifies the real delegate path, controlled
+  raw timestamps, artifact serialization, complete/idle/error callback bounds,
+  and timebase failure; the callback lifecycle test and documentation checks
+  pass on macOS 26.6.2 arm64. The terminal consumer validates ordered decimal
+  fields and reports raw presentation-to-arrival and processing deltas; its
+  activation run remains unrun.
+
 ## 2026-09-22
 
 - Tauri now completes native surface-document and image cleanup synchronously when the main document starts reloading. This prevents replacement surface image attachment from racing teardown of the previous native image handles; repeated split and raster recovery checks pass on a rebuilt process.
