@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.13-1: Diagnostic input reference methods expose an independent ordinary AppKit text view for same-window native keyboard comparison, with explicit focus setup, UTF-16 state and observed unmarked-document completion. Pending waits cancel once on close or window release; deferred checks cannot read a released window. Native focus and lifetime regressions pass after their Red failures, and three owning tests per host pass. No activation or input-method result is recorded.
+
 - F212.12-2-2-1: Revealing a prepared surface reapplies the visibility of its view as well as its native regions. A view placed while the surface was hidden previously stayed hidden because the refresh visited only the native plane, so the regions displayed while mouse input missed the view. The owning native test reproduces the preparation order and passes after failing its visibility, press and focus assertions.
 
 - F212.12-1-20: The `core.plugins` status reports the surface `composition` of each loaded plugin, independently of open tabs, so window checks can find views that have no card. The owning Red assertion now passes with all 22 plugin-operation and composition-kind tests.

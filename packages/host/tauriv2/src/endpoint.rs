@@ -82,6 +82,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.modal.held",
     "diagnostics.presentation.failure",
     "diagnostics.input.source",
+    "diagnostics.input.reference",
     "diagnostics.log.flush",
     "diagnostics.host.relaunch",
     "diagnostics.test.mark",
@@ -1411,3 +1412,12 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
 #[cfg(test)]
 #[path = "endpoint_lock_test.rs"]
 mod lock_test;
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod input_reference_declaration_test {
+    // contract: diagnostics.input-reference.declared
+    #[test]
+    fn input_reference_method_is_declared() {
+        assert!(super::declared("diagnostics.input.reference"));
+    }
+}

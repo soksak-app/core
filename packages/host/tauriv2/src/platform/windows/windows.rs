@@ -519,6 +519,16 @@ impl Platform for Windows {
         unsupported::layout_trace_stop()
     }
     #[cfg(feature = "diagnostics")]
+    fn input_reference(
+        &self,
+        _window: Handle,
+        _action: &str,
+        _document: Option<&str>,
+        done: Box<dyn Fn(Result<Value, String>)>,
+    ) {
+        done(unsupported::input_reference());
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<String, String> {
         unsupported::input_source()
     }

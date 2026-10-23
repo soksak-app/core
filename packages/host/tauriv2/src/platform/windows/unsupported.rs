@@ -757,3 +757,8 @@ pub fn is_named_file(_file: &std::fs::File, _path: &std::path::Path) -> Result<b
 pub fn write_private_file(_path: &std::path::Path, _data: &[u8]) -> Result<(), String> {
     missing("private file writing")
 }
+
+#[cfg(feature = "diagnostics")]
+pub fn input_reference() -> Result<serde_json::Value, String> {
+    Err("input reference is not implemented on windows".into())
+}

@@ -87,6 +87,12 @@ type Input struct {
 	Point func(phase int, x, y float64)
 }
 
+// InputReference is supplied only by diagnostic platform builds. It creates an ordinary text view for comparing native keyboard input.
+// Call it on the main thread. Completion runs once there, within five seconds for wait and immediately for other actions.
+type InputReference interface {
+	InputReference(window unsafe.Pointer, action string, document *string, done func(json.RawMessage, error))
+}
+
 // InputSources are the keyboard input source operations. Only the platform implementation of a diagnostic build (tag diagnostics) provides them, and
 // diagnostic code uses them by checking the value of Current() against this interface. Call both operations on the main thread.
 type InputSources interface {

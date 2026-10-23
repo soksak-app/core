@@ -127,6 +127,7 @@ pub(crate) fn call(
         }
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params),
+        "diagnostics.input.reference" => input_reference(window, &params),
         "diagnostics.log.flush" => crate::event_record::flush_records(TIMEOUT)
             .map(|()| Value::Null)
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
@@ -466,7 +467,58 @@ pub(crate) fn capture_windows(app: &tauri::AppHandle) -> Result<Vec<String>, Str
     Ok(paths)
 }
 
-/// Selects the input source select when it is given, and returns the currently selected keyboard input source.
+/// Validates input reference actions and their expected document.
+fn parse_input_reference(params: &Map<String, Value>) -> Result<(String, Option<String>), Failure> {
+    let action = params
+        .get("action")
+        .and_then(Value::as_str)
+        .filter(|value| matches!(*value, "open" | "read" | "focus" | "wait" | "close"))
+        .ok_or_else(|| {
+            Failure::params("input reference action must be open, read, focus, wait or close")
+        })?;
+    if action != "wait" {
+        if params.contains_key("document") {
+            return Err(Failure::params("input reference document is only for wait"));
+        }
+        return Ok((action.into(), None));
+    }
+    let document = params
+        .get("document")
+        .and_then(Value::as_str)
+        .ok_or_else(|| Failure::params("input reference wait requires a document string"))?;
+    Ok((action.into(), Some(document.into())))
+}
+
+fn input_reference(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+    let (action, document) = parse_input_reference(params)?;
+    let platform = platform::current().map_err(internal)?;
+    let native = platform.window_handle(window).map_err(internal)?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    on_main(window, move || {
+        platform.input_reference(
+            native,
+            &action,
+            document.as_deref(),
+            Box::new(move |result| {
+                if let Err(unsent) = tx.send(result) {
+                    log_error(
+                        "input reference",
+                        format!(
+                            "the reference answered after its reply ended: {:?}",
+                            unsent.0
+                        ),
+                    );
+                }
+            }),
+        );
+        Ok(())
+    })
+    .map_err(internal)?;
+    rx.recv()
+        .map_err(|_| internal("input reference ended without an answer"))?
+        .map_err(internal)
+}
+
 fn input_source(window: &Window, params: Map<String, Value>) -> Result<Value, Failure> {
     let select = match params.get("select") {
         None | Some(Value::Null) => None,
@@ -884,3 +936,7 @@ fn modal_held(window: &str) -> Result<Value, Failure> {
 #[cfg(test)]
 #[path = "diagnostics_lock_test.rs"]
 mod lock_test;
+
+#[cfg(test)]
+#[path = "diagnostics_input_reference_test.rs"]
+mod input_reference_test;

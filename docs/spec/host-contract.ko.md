@@ -115,6 +115,9 @@ fn invalid_json_closes_connection() {
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | both |
 | `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | both |
 | `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. Go 시험은 전체 경로를, Rust 시험은 이벤트를 읽는 부분까지를 다룬다. 창 조회에는 application handle이 필요하기 때문이다. | both |
+| `diagnostics.input-reference.declared` | Diagnostic endpoint는 같은 window의 input reference method를 선언한다. | both |
+| `diagnostics.input-reference.validates-document` | Input reference action은 wait에서만 빈 문자열을 포함한 document 문자열을 받으며 없거나 잘못된 값을 거부한다. | both |
+| `diagnostics.input-reference.rejects-nul` | Native input reference adapter는 action이나 document의 NUL을 거부하고 오류로 한 번 완료한다. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | 한도에 도달한 녹화의 중지 페이로드는 frames, count, limited true, 가장 긴 간격을 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-layout-timeline` | 녹화 중지 페이로드는 기록된 layout transaction이 없어도 항상 `layouts` 배열을 보고한다. | both |

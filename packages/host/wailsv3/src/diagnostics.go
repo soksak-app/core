@@ -49,6 +49,7 @@ func init() {
 	diagnosticMethods["diagnostics.modal.held"] = diagnosticModalHeld
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
+	diagnosticMethods["diagnostics.input.reference"] = diagnosticInputReference
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
 	diagnosticMethods["diagnostics.host.relaunch"] = diagnosticHostRelaunch
 	diagnosticMethods["diagnostics.test.mark"] = diagnosticTestMark
@@ -580,6 +581,56 @@ func diagnosticStallDump(e *Endpoint, _ *endpointConn, params json.RawMessage) (
 		return nil, err
 	}
 	return map[string]any{"boot": boot, "seq": seq}, nil
+}
+
+func parseInputReference(params json.RawMessage) (string, *string, error) {
+	var values map[string]json.RawMessage
+	if err := json.Unmarshal(params, &values); err != nil {
+		return "", nil, rpcError(codeInvalidParams, "input reference params must be an object")
+	}
+	var action string
+	if err := json.Unmarshal(values["action"], &action); err != nil || (action != "open" && action != "read" && action != "focus" && action != "wait" && action != "close") {
+		return "", nil, rpcError(codeInvalidParams, "input reference action must be open, read, focus, wait or close")
+	}
+	raw, hasDocument := values["document"]
+	if action != "wait" {
+		if hasDocument {
+			return "", nil, rpcError(codeInvalidParams, "input reference document is only for wait")
+		}
+		return action, nil, nil
+	}
+	var document *string
+	if !hasDocument || json.Unmarshal(raw, &document) != nil || document == nil {
+		return "", nil, rpcError(codeInvalidParams, "input reference wait requires a document string")
+	}
+	return action, document, nil
+}
+
+func diagnosticInputReference(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	action, document, err := parseInputReference(params)
+	if err != nil {
+		return nil, err
+	}
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	reference, ok := system.(platform.InputReference)
+	if !ok {
+		return nil, errors.New("input reference is not implemented on this platform")
+	}
+	type result struct {
+		value   json.RawMessage
+		failure error
+	}
+	answer := make(chan result, 1)
+	application.InvokeSync(func() {
+		reference.InputReference(s.window.NativeWindow(), action, document, func(value json.RawMessage, failure error) {
+			answer <- result{value, failure}
+		})
+	})
+	reply := <-answer
+	return reply.value, reply.failure
 }
 
 func diagnosticInputSource(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
