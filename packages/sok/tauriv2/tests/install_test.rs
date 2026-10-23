@@ -706,6 +706,7 @@ fn granted_items_list_the_modules_and_shared_targets_of_each_requester() {
                 "/modules/plugin-lib/ui/lib-list.js",
                 "/modules/plugin-view/ui/view-list.js",
                 "/shared/lib.panel/util.js",
+                "/shared/probe.bare/x.js",
                 "/shared/probe.list/format.js",
                 "/shared/probe.list/table.js",
             ],
@@ -724,6 +725,7 @@ fn granted_items_list_the_modules_and_shared_targets_of_each_requester() {
             vec![
                 "/modules/plugin-probe/ui/probe-panel.js",
                 "/shared/lib.panel/util.js",
+                "/shared/lib.panel2/m2.js",
                 "/shared/probe.list/format.js",
                 "/shared/probe.list/table.js",
             ],
@@ -737,6 +739,39 @@ fn granted_items_list_the_modules_and_shared_targets_of_each_requester() {
             "{requester}"
         );
     }
+}
+
+// contract: install.granted-items
+#[test]
+fn granted_provider_reads_its_own_shared_modules_without_contributors() {
+    let state = install::validate_installed(&parsed(
+        r#"{"format":3,"plugins":{"probe":{"version":"0.2.0","path":"plugins/probe/0.2.0","enabled":true,"sidecars":{}}},"sidecars":{}}"#,
+    ))
+    .unwrap();
+    let files = BTreeMap::from([(
+        "probe".to_string(),
+        install::PluginFiles {
+            package: "plugin-probe".to_string(),
+            manifest: parsed(GRANTED_PROBE),
+        },
+    )]);
+    assert_eq!(
+        install::granted_files(&state, &files, "probe").unwrap(),
+        vec![
+            "/shared/probe.bare/x.js",
+            "/shared/probe.list/format.js",
+            "/shared/probe.list/table.js"
+        ]
+    );
+    let state = install::validate_installed(&parsed(
+        r#"{"format":3,"plugins":{"probe":{"version":"0.2.0","path":"plugins/probe/0.2.0","enabled":true,"sidecars":{}},"view":{"version":"1.0.0","path":"plugins/view/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}"#,
+    ))
+    .unwrap();
+    let files = granted_files("view", r#"{"id":"view"}"#);
+    assert_eq!(
+        install::granted_files(&state, &files, "view").unwrap(),
+        Vec::<String>::new()
+    );
 }
 
 // contract: install.granted-items

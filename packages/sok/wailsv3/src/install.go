@@ -1438,8 +1438,8 @@ func grantedDeclarations(id string, files PluginFiles) (grantedPlugin, error) {
 
 // GrantedFiles returns the files that a view of the requester may read, in the core root form (docs/spec/installation.md):
 // `/modules/<package>/<module>` for the module of each granted item that another plugin contributes to a point of the
-// requester, and `/shared/<plugin id>.<point>/<specifier>.js` for each shared module of a point that has a granted item
-// of another plugin, whether the requester provides the point or contributes to it. An item is granted when its
+// requester, and `/shared/<plugin id>.<point>/<specifier>.js` for each shared module declared by the requester, plus
+// shared modules of another plugin when the requester contributes a compatible item. An item is granted when its
 // contributor and its provider are installed and the provider is enabled, the point declares a version, and the range
 // of the item contains that version. The requester must be installed; its own enabled state is not checked. Every
 // enabled plugin and the requester must have files, and each declaration that the rule reads must be well formed, or
@@ -1465,8 +1465,11 @@ func GrantedFiles(state *InstalledState, files map[string]PluginFiles, requester
 	}
 	paths := map[string]bool{}
 	self := plugins[requester]
-	// The requester provides the points. A granted item of another plugin adds its module and the shared modules of its point.
-	provided := map[string]bool{}
+	// A provider page may load only the shared modules declared by its own points.
+	for point, entry := range self.points {
+		addShared(paths, requester, point, entry)
+	}
+	// A granted item of another plugin adds its declared module to the requester's point.
 	for _, id := range sortedPluginIDs(state.Plugins) {
 		contributor, ok := plugins[id]
 		if !ok || id == requester {
@@ -1477,11 +1480,7 @@ func GrantedFiles(state *InstalledState, files map[string]PluginFiles, requester
 				continue
 			}
 			paths["/modules/"+contributor.pkg+"/"+item.module] = true
-			provided[item.point] = true
 		}
-	}
-	for point := range provided {
-		addShared(paths, requester, point, self.points[point])
 	}
 	// The requester contributes to the points of other plugins. Each point with a granted item adds its shared modules.
 	contributed := map[sharedPoint]grantedPoint{}

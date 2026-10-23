@@ -129,7 +129,7 @@ plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남�
 | --- | --- |
 | `/installed-plugins.json` | `{ "plugins": [{ id, package, version, manifest, sidecars?, diagnostics? }] }`: `installed.json`의 켜진 plugin을 id 순서로 담고, `manifest`는 설치된 `plugin.json`의 내용이다. `sidecars`는 plugin의 사이드카 의존마다 사이드카 이름 아래 그 사이드카 `sidecar.json`의 `message`와 `hostReadOperations` 필드를 담으며, 사이드카 의존이 없는 plugin에는 `sidecars`가 없다. 진단 build에서 `diagnostics`는 설치된 package가 `diagnostics.json`을 담을 때 그 내용이며, release build는 보내지 않는다. `installed.json`이 없으면 `{ "plugins": [] }`다. `installed.json`, `plugin.json`, `diagnostics.json`을 읽거나 검사할 수 없으면 문서는 `{ "error": "<message>" }`다 |
 | `/modules/<package>/<path>` | 켜진 설치 plugin의 package는 그 plugin의 기록된 `path` 안의 `<path>` 파일이다. 빈 segment, `.`, `..`가 있는 경로나 없는 파일은 찾을 수 없다. 다른 package는 애플리케이션 frontend에서 온다 |
-| `/shared/<plugin id>.<point>/<specifier>.js` | 켜진 설치 plugin `<plugin id>`의 `extends.<point>.modules`가 `<specifier>`에 대응한, 그 plugin의 기록된 `path` 안의 파일. `.js`로 끝나지 않는 경로, 켜진 plugin이 선언하지 않은 지점, 그 지점이 대응하지 않은 specifier, 없는 파일은 찾을 수 없다 |
+| `/shared/<plugin id>.<point>/<specifier>.js` | 켜진 설치 plugin `<plugin id>`의 `extends.<point>.modules`가 `<specifier>`에 대응한, 그 plugin의 기록된 `path` 안의 파일. 제공자는 연결된 contributor가 없어도 자신이 선언한 module을 읽을 수 있고, 다른 page는 item range가 provider point version을 포함해야 한다. `.js`로 끝나지 않는 경로, 켜진 plugin이 선언하지 않은 지점, 그 지점이 대응하지 않은 specifier, 없는 파일은 찾을 수 없다 |
 
 Workbench는 `/installed-plugins.json`을 JSON module로 가져와 각 plugin을 `manifest`로 등록하고, 문서에 `error`가 있으면 그 텍스트로 불러오기를 실패한다. Workbench가 거부한 manifest는 `installed plugin <id> <version> (<package>): <이유>`로 보고된다. Main page는 plugin을 등록하기 전에 오류 표시를 설치하고 창 버튼 영역을 비우므로, 거부된 manifest나 `error` 문서는 그 오류를 보이고 애플리케이션 로그에 쓴 채로 page 시작을 멈춘다. page는 준비를 보고하지 않으며, `host.window.reload`가 다시 시작한다.
 

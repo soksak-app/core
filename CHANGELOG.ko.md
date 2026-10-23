@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.10-editor-2: Contributor 연결이 없어도 provider page는 자기 선언 shared module만 불러올 수 있다. 다른 page는 계속 enabled provider에 대한 호환 item이 있어야 한다. Go와 Rust 소유 Red 검사는 shared file이 없는 결과를 반환했으며 수정 후 같은 검사와 기존 grant 사례가 통과한다.
+
 - F212.16-13: Tauri application entry가 현재 host scheme과 일치하도록 `soksak://core/start.json`을 import한다. 소유 검사는 이전 `sok:` import에서 실패한 뒤 canonical address만 해석해 통과한다. Tauri package test는 18/18로 통과하고 재빌드한 0.0.20 window는 `ready:true`를 보고한다.
 
 - F212.16-9 및 F212.16-10: VT 0.0.12와 Files 0.0.8은 각 sidecar display name을 선언하고 core identity API를 정적으로 link해 runtime 초기화 전에 LaunchServices 이름을 설정한다. 소유 startup, identity, cleanup, record 및 release build 검사가 통과한다. Artifact는 local build 상태이며 publish하지 않았고 사용자 설치는 F212.16-14와 F212.16-15에 남아 있다.

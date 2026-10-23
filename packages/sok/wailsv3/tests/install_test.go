@@ -485,11 +485,11 @@ func TestGrantedItemsListTheModulesAndSharedTargetsOfEachRequester(t *testing.T)
 	cases := map[string][]string{
 		// The items of view and lib to the points of probe with a granted range, and the shared targets of probe.list.
 		"probe": {"/modules/plugin-lib/ui/lib-list.js", "/modules/plugin-view/ui/view-list.js", "/shared/lib.panel/util.js",
-			"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
+			"/shared/probe.bare/x.js", "/shared/probe.list/format.js", "/shared/probe.list/table.js"},
 		// The shared targets of probe.list, to which view contributes a granted item.
 		"view": {"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
 		// The module of probe to the point panel of lib, the shared targets of panel and of list, to which lib contributes.
-		"lib": {"/modules/plugin-probe/ui/probe-panel.js", "/shared/lib.panel/util.js",
+		"lib": {"/modules/plugin-probe/ui/probe-panel.js", "/shared/lib.panel/util.js", "/shared/lib.panel2/m2.js",
 			"/shared/probe.list/format.js", "/shared/probe.list/table.js"},
 	}
 	for requester, want := range cases {
@@ -497,6 +497,31 @@ func TestGrantedItemsListTheModulesAndSharedTargetsOfEachRequester(t *testing.T)
 		if err != nil || strings.Join(got, "\n") != strings.Join(want, "\n") {
 			t.Fatalf("%s: granted %q, want %q (%v)", requester, got, want, err)
 		}
+	}
+}
+
+// contract: install.granted-items
+func TestGrantedProviderReadsItsOwnSharedModulesWithoutContributors(t *testing.T) {
+	state, err := sok.ValidateInstalled(decode(t, `{"format":3,"plugins":{"probe":{"version":"0.2.0","path":"plugins/probe/0.2.0","enabled":true,"sidecars":{}}},"sidecars":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]sok.PluginFiles{
+		"probe": {Package: "plugin-probe", Manifest: decode(t, grantedProbe)},
+	}
+	got, err := sok.GrantedFiles(state, files, "probe")
+	want := []string{"/shared/probe.bare/x.js", "/shared/probe.list/format.js", "/shared/probe.list/table.js"}
+	if err != nil || strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("provider shared modules: got %q, want %q (%v)", got, want, err)
+	}
+	state, err = sok.ValidateInstalled(decode(t, `{"format":3,"plugins":{"probe":{"version":"0.2.0","path":"plugins/probe/0.2.0","enabled":true,"sidecars":{}},"view":{"version":"1.0.0","path":"plugins/view/1.0.0","enabled":true,"sidecars":{}}},"sidecars":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = grantedFiles(t, "view", `{"id":"view"}`)
+	got, err = sok.GrantedFiles(state, files, "view")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("unconnected plugin can read provider modules: got %q (%v)", got, err)
 	}
 }
 

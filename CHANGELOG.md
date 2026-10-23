@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.10-editor-2: The provider page can now load only its own declared shared modules even when no contributor is connected. Other pages still require a compatible item for an enabled provider. The owning Go and Rust Red tests each returned no shared files; the same tests and the existing grant cases pass after the fix.
+
 - F212.16-13: Tauri's application entry now imports `soksak://core/start.json`, matching the current host scheme. The owning test failed against the old `sok:` import, then passed while resolving only the canonical address. The Tauri package tests pass 18/18, and a rebuilt 0.0.20 window reports `ready:true`.
 
 - F212.16-9 and F212.16-10: VT 0.0.12 and Files 0.0.8 now declare their exact sidecar display names, statically link the core identity API, and set the LaunchServices name before runtime initialization. Their owning startup, identity, cleanup, record and release-build checks pass. The artifacts are built locally but not published; user installation remains under F212.16-14 and F212.16-15.
