@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- F212.10-core-1: `core.surface.document` now reports an immutable snapshot of the params injected into the actual view page. The observer preserves explicit `null` and rejects missing, invalid or unserializable params with the field name. The owning bridge test passes 8/8, and the workbench `core.file.open` producer test passes 1/1. Fresh host readback is still pending.
+- F212.10-core-1: `core.surface.document` now reports an immutable snapshot of the params injected into the actual view page. The observer preserves explicit `null` and rejects missing, invalid or unserializable params with the field name. The owning bridge test passes 8/8. The workbench `core.file.open` test passes 1/1 using a fake mount; it does not verify the runtime host DTO. Fresh Wails and Tauri readback shows stored editor/HWP paths but `params:null` in both actual pages; notification watches confirm their document paths remain null. The first lost value is not located; F212.10-core-2 captures the runtime DTO before host dispatch.
 
 - F212.12-2-2-4-2: Capture callback records now identify the exact relative frame filename they emitted, or `null` when no frame was written. The native Red failed for cached, idle and blank callbacks and for the JSONL mapping; `capture_metadata_test` passes with exact filename and file-existence checks. `make docs-check` passes.
 
