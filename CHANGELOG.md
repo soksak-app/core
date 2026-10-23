@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1-21: The view display checker enumerates installed enabled views, measures the returned tab's applied rectangle with the capture content offset, and rejects acceptance without an explicit plugin content case. The original three owning Red assertions and the missing-case Red pass. Actual per-plugin first-content acceptance remains incomplete in F212.12-1-22.
+
 - F212.12-1-20: The `core.plugins` status reports the surface `composition` of each loaded plugin, independently of open tabs, so window checks can find views that have no card. The owning Red assertion now passes with all 22 plugin-operation and composition-kind tests.
 
 - F262-8: An origin ends only when its tab leaves the stored layout of its own space. The display of another space no longer drops the origins of the tabs of the spaces that are not displayed, which caused the refusal `tab X has no origin`.

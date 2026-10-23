@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1-21: View display 검사기는 설치되고 활성화된 view를 열거하고 capture content offset을 적용하여 반환 tab의 applied rectangle을 측정하며 명시적 plugin content case 없는 acceptance를 거부한다. 기존 소유 Red assertion 세 개와 missing-case Red가 통과한다. 실제 plugin별 first-content acceptance는 F212.12-1-22에서 미완료다.
+
 - F212.12-1-20: `core.plugins` status가 열린 tab과 무관하게 로드한 각 plugin의 surface `composition`을 보고하여 window check가 카드가 없는 view도 찾을 수 있다. 소유 Red assertion과 plugin-operation 및 composition-kind 테스트 22개가 모두 통과한다.
 
 - F262-8: origin은 탭이 자기 space의 저장된 배치에서 떠날 때만 끝난다. 다른 space의 표시는 표시되지 않은 space 탭들의 origin을 더 이상 버리지 않는다. 이것이 `tab X has no origin` 거부의 원인이었다.

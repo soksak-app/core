@@ -4,6 +4,8 @@
 
 ## Coverage and evidence
 
+View display acceptance enumerates installed enabled view plugins and identifies the actual opened tab. Each plugin requires an explicit content case that checks its declared readiness and expected captured pixels. A missing case fails with the plugin and tab identifiers. Colour variation alone does not prove plugin content; rejecting a missing case removes a false pass without lowering the acceptance criterion.
+
 The canonical work status is [features](../features.md). A source-file inventory is structural evidence only. It must not report feature parity or application correctness.
 
 Documentation checks require unique task identifiers and only waiting (`[ ]`), in-progress (`[~]`), complete (`[o]`), or temporarily bypassed (`[!]`) states. A `[!]` item records a nonempty cause and retry condition in both translations. Checklist identifiers, ordering, indentation, and states must match across translations. The text may be translated; the task state must not differ. The changelog and its translation must have the same sections, the same number of entries in each section, and, at each position, the same task identifiers and code spans.
