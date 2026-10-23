@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F212.10-core-3: Editor와 HWP 파일이 있는 disposable project를 닫고 host가 살아 있을 때 stderr를 읽는 Wails window 검사를 추가했다. 전체 fixture run 한 번은 `host.view.killed` 4개를 기록하고 새 `WebviewWindow #<id> not found` 경고 없이 통과했다. 검사 후 살아 있는 host stderr를 다시 읽어도 경고가 없었다. 한 번의 미재현이므로 항목은 계속 열려 있고 기존 경고의 원인은 미확인이다. 검사는 원래 frontmost baseline을 복원하고 dedicated host를 정상 종료한다.
+- F212.10-core-3: Editor와 HWP 파일이 있는 disposable project를 닫고 host가 살아 있을 때 stderr를 읽는 Wails window 검사를 추가했다. 전체 fixture run 한 번은 `host.view.killed` 4개를 기록하고 새 `WebviewWindow #<id> not found` 경고 없이 통과했다. 검사 후 살아 있는 host stderr를 다시 읽어도 경고가 없었다. 한 번의 미재현이므로 항목은 계속 열려 있고 기존 경고의 원인은 미확인이다. 하네스는 원래 frontmost baseline을 복원했고 dedicated host는 이후 정상 종료됐다.
 - F212.10-core-5: Wails close-check 준비에서 exposure가 없는 `phase: ready` editor surface와 `exposure settled failed: surface <id> is not mounted`를 관측했다. Editor 0.0.7 manifest와 `ui/view.js`는 성공한 content-hash run과 같았지만 실패 설정에는 Files 0.0.7이 없었고, 별도 전체 fixture에서 Files를 설치하자 editor와 HWP status가 등록됐다. 원인은 미확인이며 runtime correction으로 기록하지 않는다.
 
 - F212.12-2-2-4: 승인된 두 host 검사에서 reference와 terminal 입력은 통과했고 Wails capture도 기준을 충족했다. Tauri 입력도 reference text와 terminal output이 예상대로 나왔지만 연속 complete frame 간 terminal 녹화가 33 ms를 0.1167917 ms 초과했다. Callback trace에는 중간 frame과 writer rejection이 없었다. Mach timebase 125/3에서 display 차이는 794803 tick, arrival 차이는 797653 tick, 동기 처리 구간은 33066 및 45061 tick이다. 처리 완료 시각은 비동기 compression과 file write 전이므로 writer I/O는 측정하지 않는다. Raw capture와 실행 출력은 진단을 위해 보존했으며 원인은 정하지 않았다. Input method와 처음 foreground였던 application을 복원했다. Display cadence 조사는 F212.12-2-2-4-8에 연결한다.
