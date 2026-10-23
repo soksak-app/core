@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.10-core-6: parity audit의 F73.1과 F83을 현재 recording 및 cleanup 테스트에 연결한다. 변경 전 audit의 baseline snapshot은 더 이상 존재하지 않는 테스트 이름을 보고했으며, F83은 현재 보존 계약과 달리 남은 녹화 제거를 기대했다. 현재 inventory는 lane 99개, implementation file 668개, test file 913개다. Examples 절차의 수치를 실제 발견값으로 갱신한다. 수정된 연결과 수치로 같은 audit가 통과하고 owning recording test 14/14 및 `make docs-check`가 통과한다. 최초 실패 출력은 보존되지 않아 기록한 Red는 baseline snapshot 재현이다.
 - F212.10-core-4: `normal-shutdown`의 terminal 준비가 반복 status read와 `setImmediate` 대기 대신 visible terminal surface와 ready session의 제한 시간 있는 status notification을 기다린다. 변경 전 polling helper는 `client.watch`를 호출하지 않고 끝나 소유 단위 Red assertion에 실패했다. Green은 두 notification 이름, terminal surface, 15초 deadline, visible surface 도착 뒤 terminal input을 검증한다. 범위 테스트와 `make docs-check`가 통과했다. Application window check는 실행하지 않았다.
 - F212.10-core-3: Editor와 HWP 파일이 있는 disposable project를 닫고 host가 살아 있을 때 stderr를 읽는 Wails window 검사를 추가했다. 전체 fixture run 한 번은 `host.view.killed` 4개를 기록하고 새 `WebviewWindow #<id> not found` 경고 없이 통과했다. 검사 후 살아 있는 host stderr를 다시 읽어도 경고가 없었다. 한 번의 미재현이므로 항목은 계속 열려 있고 기존 경고의 원인은 미확인이다. 하네스는 원래 frontmost baseline을 복원했고 dedicated host는 이후 정상 종료됐다.
 - F212.10-core-5: Wails close-check 준비에서 exposure가 없는 `phase: ready` editor surface와 `exposure settled failed: surface <id> is not mounted`를 관측했다. Editor 0.0.7 manifest와 `ui/view.js`는 성공한 content-hash run과 같았지만 실패 설정에는 Files 0.0.7이 없었고, 별도 전체 fixture에서 Files를 설치하자 editor와 HWP status가 등록됐다. 원인은 미확인이며 runtime correction으로 기록하지 않는다.

@@ -4109,9 +4109,9 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/app.mjs", symbol: "export function recordingFolders" },
     ],
     tests: [
-      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "a recording folder that the check left fails the check and is removed" },
+      { file: "packages/window-check/test/session-cleanup.test.mjs", id: "a recording folder that the check left fails the check and is preserved" },
     ],
-    expected: "A window check that leaves a recording folder fails, and the harness removes the folder.",
+    expected: "A window check that leaves a recording folder fails and preserves it when the check or cleanup fails.",
     levels: ["unit"],
   },
   {
@@ -4155,10 +4155,10 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/app.mjs", symbol: "async record(params = {})" },
     ],
     tests: [
-      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails reports that stop's error and sends no second stop" },
+      { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose stop fails fails finalization, sends no second stop and preserves its folder" },
       { file: "e2e/window-first-frames.test.mjs", id: "a new window shows its complete first screen from its first frame" },
     ],
-    expected: "A window check sends one stop for each recording, keeps that stop's error, and leaves no recording folder.",
+    expected: "A window check sends one stop for each recording and keeps that stop's error; failed recordings remain available for diagnosis.",
     levels: ["unit", "application"],
   },
   {
