@@ -175,7 +175,9 @@ function originOf(surface) {
     return tabOrigin(surface.surfaceId);
   } catch (error) {
     const project = active();
+    // default: the refusal record names an absent project, space or plugin as none, because a window without them also refuses.
     const space = project?.spaces.find((s) => s.id === project.activeSpaceId) ?? null;
+    // default: as above, each absent member of the record is written as none.
     throw new TypeError(`${error.message}: plugin ${surface.pluginId ?? "none"}, space ${space?.id ?? "none"}, project ${project?.id ?? "none"}, ${originHistory(surface.surfaceId)}`);
   }
 }

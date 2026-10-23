@@ -155,6 +155,7 @@ export function recordOrigin(tabId, fromTabId, path) {
 
 /** The history of a tab id for the refusal of a missing origin: its creation path and whether this session recorded its origin. */
 export function originHistory(tabId) {
+  // default: a tab whose creation this session did not record is named so, which is the fact the record reports.
   return `created by ${createdBy.get(tabId) ?? "no recorded path"}, held by this session: ${everHeld.has(tabId) ? "yes" : "no"}`;
 }
 
