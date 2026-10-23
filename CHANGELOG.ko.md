@@ -2289,3 +2289,6 @@
 - F212.16-12: plugin-api host-operations test fixture에 필수 sidecar
   display name을 추가한다. Red: package suite가 `displayName` 없는
   fixture를 거부했다. Green: 소유 테스트가 5/5로 통과한다.
+- F212.16-11: canonical `soksak://` view origin에 맞게 refusal assertion을
+  수정한다. Red: focused test가 `sok://`를 기대했다. Green: plugin-api
+  package test가 809/809로 통과한다.

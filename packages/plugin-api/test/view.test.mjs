@@ -146,7 +146,7 @@ test("createViewBridge refuses a page that is not on soksak://<plugin id>", (t) 
   setup(t, { url: "https://example.test/" });
   assert.throws(
     () => createViewBridge({ handler: { postMessage() {} }, report: () => {} }),
-    /requires a view page on sok:\/\/<plugin id>/,
+    /requires a view page on soksak:\/\/<plugin id>/,
   );
 });
 

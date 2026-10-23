@@ -2287,3 +2287,6 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - F212.16-12: Add the required sidecar display name to the plugin-api
   host-operations test fixture. Red: the package suite rejected the
   fixture without `displayName`. Green: the owning test passes 5/5.
+- F212.16-11: Update the refusal assertion for the canonical `soksak://`
+  view origin. Red: the focused test expected `sok://`. Green: the plugin-api
+  package test passes 809/809.
