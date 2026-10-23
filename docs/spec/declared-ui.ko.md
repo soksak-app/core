@@ -94,6 +94,12 @@ push된 선언된 UI snapshot은 변경이 아니라 status의 전체 값을 싣
 
 각 한도는 받을 때 검사한다. 키, 텍스트 필드, 매개변수의 모든 길이는 코드 포인트를 센다. 직렬화한 값은 UTF-8 바이트를 센다. 한도를 넘는 값은 잘라내지 않고 거부한다.
 
+## 그리기 benchmark
+
+전용 workbench benchmark는 모든 branch를 펼친 16 level 이내의 node 5000개 tree와 command item 1000개 list를 각각 한 번 검증하고 그리는 시간을 측정한다. 허용 bound는 tree 2000 ms, list 500 ms다. 측정 구간은 `validateValue`, expanded-state 구성 및 jsdom 안의 `drawValue`를 포함하며, binding attribute와 no-op binder 호출도 포함한다. fixture 생성, module 로드, 완전성 검사, layout, paint 및 command listener 연결은 제외한다. 단위 test는 경과 시간을 판정하지 않고 전체 그리기를 검사한다.
+
+각 case는 30000 ms hang limit을 가진 별도 process에서 실행한다. 불완전한 그리기, 누락된 binding call, 잘못된 clock 값 또는 허용 bound를 넘는 경과 시간은 benchmark 실패다. 각 측정은 element 수, binding 수, 경과 밀리초, bound, 결과, package version, Node와 jsdom version, OS와 CPU 정보 및 load average를 기록한다. command와 supervisor는 [example 검증](../operations/examples.ko.md#declared-ui-benchmark)에 있다.
+
 ## 아이콘
 
 `icon` 필드는 core 아이콘 표의 이름을 받는다. 표에 없는 이름은 거부한다. plugin은 아이콘 마크업을 공급할 수 없다.
