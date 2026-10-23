@@ -730,6 +730,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// time) of each transaction. A stage that did not happen is NaN. Call it on the main thread.
     fn layout_trace_stop(&self) -> Result<Vec<[f64; 5]>, String>;
 
+    #[cfg(feature = "diagnostics")]
+    /// Creates or observes an ordinary text view for native keyboard comparison. Call on the main thread; completion runs once there.
+    fn input_reference(
+        &self,
+        window: Handle,
+        action: &str,
+        document: Option<&str>,
+        done: Box<dyn Fn(Result<Value, String>)>,
+    );
+
     // Input source
 
     #[cfg(feature = "diagnostics")]

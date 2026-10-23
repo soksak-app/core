@@ -42,6 +42,9 @@ mod image;
 #[path = "input.rs"]
 mod input;
 #[cfg(feature = "diagnostics")]
+#[path = "input_reference.rs"]
+mod input_reference;
+#[cfg(feature = "diagnostics")]
 #[path = "input_source.rs"]
 mod input_source;
 #[path = "layout.rs"]
@@ -664,6 +667,16 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn layout_trace_stop(&self) -> Result<Vec<[f64; 5]>, String> {
         capture::layout_trace_stop()
+    }
+    #[cfg(feature = "diagnostics")]
+    fn input_reference(
+        &self,
+        window: Handle,
+        action: &str,
+        document: Option<&str>,
+        done: Box<dyn Fn(Result<Value, String>)>,
+    ) {
+        input_reference::call(window, action, document, done);
     }
     #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<String, String> {

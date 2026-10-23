@@ -16,6 +16,8 @@
 
 - F212.12-1-23: 실제 view bridge가 main-page placeholder를 관찰하는 대신 document, input, hit exposure를 한 번 등록한다. Document audit은 실제 shared binder 연결과 open shadow root를 집계한다. View rectangle에 현재 applied origin을 한 번 더하고 surface menu는 main document가 소유한다. 소유 검사와 staging 검사가 통과하며 application 관찰과 release는 남아 있다.
 
+- F212.13-1: Diagnostic input reference method는 같은 window의 native keyboard 비교에 독립적인 일반 AppKit text view, 명시적인 focus 준비, UTF-16 state와 관측한 unmarked-document completion을 제공한다. 진행 중인 wait는 close나 window release에서 한 번 취소되며 deferred check는 해제된 window를 읽지 않는다. Native focus 및 lifetime 회귀는 Red 실패 후 통과하고 host별 소유 test 3개가 통과한다. activation이나 input-method 결과는 기록하지 않는다.
+
 - F212.12-2-2-1: 준비한 surface를 표시할 때 native region뿐 아니라 view의 표시 상태도 다시 적용한다. 이전에는 갱신이 native plane만 방문해, surface를 숨긴 동안 배치한 view가 계속 숨겨졌고 region은 표시되지만 mouse 입력은 view에 닿지 않았다. 소유 native 검사가 준비 순서를 재현하며, 표시·누름·focus 검사에서 실패한 뒤 수정 후 통과한다.
 
 - F212.12-1-20: `core.plugins` status가 열린 tab과 무관하게 로드한 각 plugin의 surface `composition`을 보고하여 window check가 카드가 없는 view도 찾을 수 있다. 소유 Red assertion과 plugin-operation 및 composition-kind 테스트 22개가 모두 통과한다.
