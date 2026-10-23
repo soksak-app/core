@@ -33,7 +33,7 @@ test("mounting a view surface imports no module and declares its view compositio
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view");
   const pluginId = "fixture-view";
   const surfaceId = "fixture-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -74,7 +74,7 @@ test("a view surface reports phase ready after its view declares its composition
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-ready");
   const pluginId = "fixture-ready-view";
   const surfaceId = "fixture-ready-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -127,7 +127,7 @@ test("a view call writes a debug receipt and a debug reply record with its id", 
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-records");
   const pluginId = "fixture-records-view";
   const surfaceId = "fixture-records-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -184,7 +184,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-text-size");
   const pluginId = "fixture-text-size-view";
   const surfaceId = "fixture-text-size-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -228,7 +228,7 @@ test("a view that stopped its restarts shows its reason as the error state of it
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-stop");
   const pluginId = "fixture-stopped-view";
   const surfaceId = "fixture-stopped-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -280,7 +280,7 @@ test("a view responsiveness notice is the state of its surface until the surface
   const { views } = await import("../plugin-processes.js");
   const pluginId = "fixture-responsive-view";
   const surfaceId = "fixture-responsive-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -308,7 +308,7 @@ test("the start values of a view carry its params, origin, project and declarati
   const { viewStartValues } = await import("../surface-modules.js?view-start");
   const { reportDirectory } = await import("../tab-reports.js");
   reportDirectory("tab-with-directory", "/work/one");
-  recordOrigin("tab-of-directory", "tab-with-directory");
+  recordOrigin("tab-of-directory", "tab-with-directory", "test fixture");
   const surface = { surfaceId: "tab-of-directory", params: { path: "a.md" }, declarations: { commands: [] } };
   assert.deepEqual(viewStartValues(surface, { id: "prj-one", root: "/work/one" }), {
     params: { path: "a.md" },
@@ -316,12 +316,26 @@ test("the start values of a view carry its params, origin, project and declarati
     project: { id: "prj-one", root: "/work/one" },
     declarations: { commands: [] },
   });
-  recordOrigin("tab-without-directory", null);
+  recordOrigin("tab-without-directory", null, "test fixture");
   assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {} }, null), {
     params: null,
     origin: { directory: null },
     project: null,
     declarations: {},
+  });
+});
+
+// A tab whose origin was pruned from the layout memory while it was out of the displayed layout is refused at its presentation. The
+// refusal names the tab, its plugin, space and project, the path that created it, and whether this session recorded its origin.
+test("a view whose origin is missing names the tab, its plugin, space, project, creation path and session history", async () => {
+  const { viewStartValues } = await import("../surface-modules.js?view-origin-record");
+  const { recordOrigin, storedLayoutState } = await import("../tab-reports.js");
+  recordOrigin("tab-pruned", null, "new tab");
+  storedLayoutState({ cards: [{ id: "card-pruned", data: { tabs: [{ id: "tab-pruned", plugin: "fixture-view" }] } }] });
+  storedLayoutState({ cards: [] });
+  assert.throws(() => viewStartValues({ surfaceId: "tab-pruned", pluginId: "fixture-view", declarations: {} }, null), (error) => {
+    assert.equal(error.message, "tab tab-pruned has no origin: plugin fixture-view, space none, project none, created by new tab, held by this session: yes");
+    return true;
   });
 });
 
@@ -358,7 +372,7 @@ test("a view registers its exposure through the page and its port consumes forwa
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-exp");
   const pluginId = "fixture-exp";
   const surfaceId = "fixture-exp-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registry.configure({ surfacePlugin: () => pluginId });
   registry.declare(pluginId, {
     status: [{ name: `${pluginId}.lines`, description: "Lines.", schema: { type: "array" } }],
@@ -418,7 +432,7 @@ test("a view watch of a status that the exposure does not declare is refused wit
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-status");
   const pluginId = "fixture-status";
   const surfaceId = "fixture-status-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registry.configure({ surfacePlugin: () => pluginId });
   registry.declare(pluginId, { status: [{ name: `${pluginId}.lines`, description: "Lines.", schema: { type: "array" } }], commands: [], dom: [] });
   registerPlugin({ id: pluginId, surface: () => null });
@@ -480,7 +494,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-sidecar");
   const pluginId = "fixture-view-sidecar";
   const surfaceId = "fixture-view-sidecar-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: ["fixture-sidecar"], composition };
@@ -538,7 +552,7 @@ test("the region calls of a view run the page operations of its surface", { time
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-region");
   const pluginId = "fixture-region";
   const surfaceId = "fixture-region-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -606,7 +620,7 @@ test("a view process end forgets the regions that its surface attached", { timeo
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-process-end");
   const pluginId = "fixture-region-end";
   const surfaceId = "fixture-region-process-end";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -657,7 +671,7 @@ test("a view surface mounted again after its dispose registers its port while th
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-remount");
   const pluginId = "fixture-view-remount";
   const surfaceId = "fixture-view-remount-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -710,7 +724,7 @@ test("a view reply the host refuses is reported through the page error path", { 
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-reply-report");
   const pluginId = "fixture-reply";
   const surfaceId = "fixture-reply-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registry.configure({ surfacePlugin: () => pluginId });
   registry.declare(pluginId, { status: [], commands: [], dom: [] });
   registerPlugin({ id: pluginId, surface: () => null });
@@ -761,7 +775,7 @@ test("a failed view mount releases its exposure port, and a retry mounts the sur
   const { dispatchSurfaceRequest } = await import("../exposure.js");
   const pluginId = "fixture-failed-view";
   const surfaceId = "fixture-failed-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -806,7 +820,7 @@ test("a view surface mounts with the core surface entries that exposure.json dec
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-core-exposure");
   const pluginId = "fixture-core-view";
   const surfaceId = "fixture-core-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
@@ -856,7 +870,7 @@ test("a view mount, its core registration and its command registration share one
   const surfaceId = "fixture-one-port-view-surface";
   const command = `${pluginId}.run`;
   const commands = [{ name: command, description: "Runs the fixture.", params: { type: "object" }, result: { type: "null" } }];
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registry.configure({ surfacePlugin: () => pluginId });
   registry.declare(pluginId, { status: [], dom: [], commands });
   registerPlugin({ id: pluginId, surface: () => null });

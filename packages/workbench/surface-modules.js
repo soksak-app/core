@@ -10,7 +10,7 @@ import { pluginDiagnostics } from "./environment.js";
 import { registerSurfaceExposure } from "./surface-exposure.js";
 import { onSettingsChange, pluginSettings } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
-import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, tabOrigin,
+import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, originHistory, tabOrigin,
   unloadTab, viewRefusal } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady } from "./projects.js";
@@ -167,6 +167,20 @@ function tabStates() {
 }
 
 /**
+ * The origin of a surface. A tab without one is named with its plugin, space, project and history, so the refusal shows where the tab
+ * was created (docs/spec/projects.md#tab-origin).
+ */
+function originOf(surface) {
+  try {
+    return tabOrigin(surface.surfaceId);
+  } catch (error) {
+    const project = active();
+    const space = project?.spaces.find((s) => s.id === project.activeSpaceId) ?? null;
+    throw new TypeError(`${error.message}: plugin ${surface.pluginId ?? "none"}, space ${space?.id ?? "none"}, project ${project?.id ?? "none"}, ${originHistory(surface.surfaceId)}`);
+  }
+}
+
+/**
  * The start values of the view of surface (docs/spec/native-surfaces.md#view-surfaces): the members of the surface context that
  * the page receives at start, which the host injects as window.sokSurface before the page of the view runs. project is the
  * project that the window shows, or null in a window without one.
@@ -178,7 +192,7 @@ export function viewStartValues(surface, project) {
   return {
     // default: a tab without parameters gives null, as tab.params does (docs/spec/plugins.md).
     params: surface.params ?? null,
-    origin: tabOrigin(surface.surfaceId),
+    origin: originOf(surface),
     project: project === null ? null : { id: project.id, root: project.root },
     declarations: surface.declarations,
   };
@@ -476,7 +490,7 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
         keep: (reason, on) => reportKeep(surface.surfaceId, reason, on),
         ...(surface.unload ? { state: tabState(surface, () => entry.disposed) } : {}),
         params: surface.params },
-      origin: tabOrigin(surface.surfaceId),
+      origin: originOf(surface),
       // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
       project: active() ? { root: active().root } : null,
       icon,

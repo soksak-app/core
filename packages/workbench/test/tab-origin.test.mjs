@@ -10,10 +10,10 @@ const isView = (plugin) => plugin === "view-plugin";
 
 test("a new tab stores the origin its source tab recorded at that moment", () => {
   reportDirectory("origin-src", "/tmp/project");
-  recordOrigin("origin-new", "origin-src");
+  recordOrigin("origin-new", "origin-src", "test fixture");
   reportDirectory("origin-src", "/tmp/elsewhere");
   assert.deepEqual(tabOrigin("origin-new"), { directory: "/tmp/project" });
-  recordOrigin("origin-none", null);
+  recordOrigin("origin-none", null, "test fixture");
   assert.deepEqual(tabOrigin("origin-none"), { directory: null });
 });
 
@@ -51,7 +51,7 @@ test("a view tab with a valid origin starts with it and is not refused", () => {
 });
 
 test("a stored layout gets the origin of each tab, writes no member for an absent loaded origin, and drops tabs that left", () => {
-  recordOrigin("origin-store", null);
+  recordOrigin("origin-store", null, "test fixture");
   const state = storedLayoutState({ cards: [{ id: "c", data: { activeId: "origin-store", tabs: [{ id: "origin-store", plugin: "p" }] } },
     { id: "side", data: null }] });
   assert.deepEqual(state.cards[0].data.tabs[0], { id: "origin-store", plugin: "p", origin: { directory: null } });
@@ -74,10 +74,10 @@ test("the layout read refuses each view tab once, returns its text, and never th
 });
 
 test("storing the displayed layout keeps the origin of a tab of a space that is not displayed yet, and drops a tab that left", () => {
-  recordOrigin("origin-space-old", null);
+  recordOrigin("origin-space-old", null, "test fixture");
   storedLayoutState({ cards: [{ id: "c", data: { tabs: [{ id: "origin-space-old", plugin: "p" }] } }] });
   // A new space records the origin of its first tab before the displayed layout is stored, as addSpace does.
-  recordOrigin("origin-space-new", null);
+  recordOrigin("origin-space-new", null, "test fixture");
   storedLayoutState({ cards: [{ id: "c", data: { tabs: [{ id: "origin-space-old", plugin: "p" }] } }] });
   assert.deepEqual(tabOrigin("origin-space-new"), { directory: null }, "the origin of the new space's tab was dropped");
   // A tab that the stored layout held and that the next stored layout does not hold leaves the map.
@@ -95,7 +95,7 @@ test("a view tab whose origin is refused and then restored with a valid origin i
 
 test("a view tab whose origin is recorded in this session is not refused when a layout without its member is applied", () => {
   // The first tab of an added space records its origin, and the layout of that space has no origin member until it is stored.
-  recordOrigin("origin-in-session", null);
+  recordOrigin("origin-in-session", null, "test fixture");
   restoreOrigin({ id: "origin-in-session", plugin: "view-plugin" }, true);
   assert.equal(viewRefusal("origin-in-session"), null, "a tab with a recorded origin was refused by a layout without its member");
   assert.deepEqual(tabOrigin("origin-in-session"), { directory: null });

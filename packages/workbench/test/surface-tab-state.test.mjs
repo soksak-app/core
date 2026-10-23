@@ -31,6 +31,6 @@ const MODULE = `data:text/javascript,${encodeURIComponent(`export function mount
 }`)}`;
 // The tab creation of the workbench records the origin of each tab (docs/spec/projects.md#tab-origin); a mount reads it, so the fixture records it.
 const surface = (surfaceId, pluginId = "fixture-unload", unload = UNLOAD) => {
-  reports.recordOrigin(surfaceId, null);
+  reports.recordOrigin(surfaceId, null, "test fixture");
   return { module: MODULE, surfaceId, pluginId, unload, composition: { kind: "dom" }, declarations: {}, sidecars: [] };
 };

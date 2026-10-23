@@ -47,7 +47,7 @@ test("a view call of a surface with surface.unload waits for the tab state store
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-tab-state");
   const pluginId = "fixture-tab-state-view";
   const surfaceId = "fixture-tab-state-view-surface";
-  recordOrigin(surfaceId, null);
+  recordOrigin(surfaceId, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const unload = { format: 2, maxBytes: 64 };

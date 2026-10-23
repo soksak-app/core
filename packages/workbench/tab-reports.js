@@ -9,6 +9,9 @@ const origins = new Map();
 const loaded = new Map();
 // The text of the refusal of a restored view tab whose origin fails the validator (docs/spec/native-surfaces.md#view-surfaces).
 const refusals = new Map();
+// The path that created each tab id, and the tab ids whose origin this session recorded: the history that the refusal of a missing origin names.
+const createdBy = new Map();
+const everHeld = new Set();
 const notices = new Map();
 const noticePolicies = new Map();
 const modified = new Set();
@@ -140,10 +143,19 @@ export const tabLabel = (tabId) => labels.get(tabId) ?? null;
 /**
  * The origin of a new tab: the directory that the source tab recorded at that moment. The caller passes null when there is no source
  * tab. A source tab that recorded no directory gives null, which is the value of the origin (docs/spec/projects.md#tab-origin).
+ * path names the operation that creates the tab (add space, card refill, new tab, split), for the refusal of a missing origin.
  */
-export function recordOrigin(tabId, fromTabId) {
+export function recordOrigin(tabId, fromTabId, path) {
+  if (typeof path !== "string" || path === "") throw new TypeError("recordOrigin requires the path that creates the tab");
   // default: no source tab, or no recorded directory, means a null origin directory.
   origins.set(tabId, Object.freeze({ directory: (fromTabId && directories.get(fromTabId)) ?? null }));
+  createdBy.set(tabId, path);
+  everHeld.add(tabId);
+}
+
+/** The history of a tab id for the refusal of a missing origin: its creation path and whether this session recorded its origin. */
+export function originHistory(tabId) {
+  return `created by ${createdBy.get(tabId) ?? "no recorded path"}, held by this session: ${everHeld.has(tabId) ? "yes" : "no"}`;
 }
 
 /** The reading rule of a non-view tab without an origin member: the released format-1 origin {directory: null} (docs/spec/projects.md#tab-origin). */
@@ -155,6 +167,9 @@ export const releasedNonViewOrigin = () => Object.freeze({ directory: null });
  * returned as its text; this function never throws (docs/spec/projects.md#tab-origin).
  */
 export function restoreOrigin(tab, viewTab) {
+  // A tab read from a stored layout has no creation path of this session; the stored layout is its record.
+  if (!createdBy.has(tab.id)) createdBy.set(tab.id, "stored layout");
+  everHeld.add(tab.id);
   // A tab whose origin this session recorded keeps it: a layout that is applied before it is stored has no origin member for it.
   if (origins.has(tab.id)) return null;
   const present = "origin" in tab;

@@ -142,11 +142,11 @@ const tabName = (t) => tabButtonData(t).name;
  * One new tab. The number is only a displayed name; ids.js issues the id. fromTabId is the source tab whose directory the new tab
  * records as its origin, or null when there is no source tab (docs/spec/projects.md#tab-origin).
  */
-function newTab(kind, params, fromTabId) {
+function newTab(kind, params, fromTabId, path) {
   if (fromTabId === undefined) throw new TypeError("newTab requires fromTabId, null when there is no source tab");
   const t = tab(kind, "", params);
   t.title = `${plugin(kind).mark} 탭 ${++named}`;
-  recordOrigin(t.id, fromTabId);
+  recordOrigin(t.id, fromTabId, path);
   return t;
 }
 
@@ -168,7 +168,7 @@ function initial() {
     // A tab of a new space has no source tab, so it records null (docs/spec/projects.md#tab-origin).
     const made = tabs.map((t) => {
       const opened = tab(t.plugin, t.title, null);
-      recordOrigin(opened.id, null);
+      recordOrigin(opened.id, null, "new space");
       return opened;
     });
     return { ...card, data: { tabs: made, activeId: made[0].id } };
@@ -518,7 +518,7 @@ async function closeTab(cardId, tabId) {
     if (grid.canClose(cardId)) grid.close(cardId);
     // default: as the comment above says, when no plugin is focused, a tab of the first registered plugin is opened.
     // The closed tab leaves no source tab, so the new tab records null, as the released workbench does (docs/spec/projects.md#tab-origin).
-    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null)];
+    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null, "card refill")];
   }
   if (!tabsOf(card).some((t) => t.id === card.data?.activeId)) {
     // default: a card with no tabs left has no active tab (null).
@@ -779,7 +779,7 @@ function addTab(cardId, plugin, params) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   // default: a card without an active tab has no tab to inherit.
-  const t = newTab(plugin, params, activeTab(card)?.id ?? null);
+  const t = newTab(plugin, params, activeTab(card)?.id ?? null, "new tab");
   card.data.tabs.push(t);
   card.data.activeId = t.id;
   focusedId = cardId;
@@ -797,7 +797,7 @@ function splitWith(cardId, side, plugin) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   // default: a card without an active tab has no tab to inherit.
-  const t = newTab(plugin, null, activeTab(card)?.id ?? null);
+  const t = newTab(plugin, null, activeTab(card)?.id ?? null, "split");
   // When there is no space, splitToward returns null. No tab was removed from the source card, so there is no state to
   // restore.
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });

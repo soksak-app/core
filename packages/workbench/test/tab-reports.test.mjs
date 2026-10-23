@@ -29,13 +29,13 @@ test("an invalid title throws and leaves the label unchanged", () => {
 
 test("a new tab's origin is the directory its source tab recorded at that moment", () => {
   reportDirectory("tab-c", "/tmp/project");
-  recordOrigin("tab-d", "tab-c");
+  recordOrigin("tab-d", "tab-c", "test fixture");
   reportDirectory("tab-c", "/tmp/elsewhere");
   assert.deepEqual(tabOrigin("tab-d"), { directory: "/tmp/project" });
   reportDirectory("tab-c", null);
-  recordOrigin("tab-e", "tab-c");
+  recordOrigin("tab-e", "tab-c", "test fixture");
   assert.deepEqual(tabOrigin("tab-e"), { directory: null });
-  recordOrigin("tab-f", undefined);
+  recordOrigin("tab-f", undefined, "test fixture");
   assert.deepEqual(tabOrigin("tab-f"), { directory: null });
   assert.throws(() => tabOrigin("tab-unknown"), /tab tab-unknown has no origin/, "a tab with no record throws, it reads no fallback");
   for (const invalid of ["relative", "", 3]) {

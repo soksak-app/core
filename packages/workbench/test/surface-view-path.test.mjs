@@ -73,7 +73,7 @@ test("a declaring view writes its tab state and reads it back, and refusals name
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = h.modules;
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-state-a";
-  recordOrigin(id, null);
+  recordOrigin(id, null, "test fixture");
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-unload", UNLOAD));
   await waitSurfaceCompositionDeclared(id);
@@ -97,7 +97,7 @@ test("a view whose plugin does not declare surface.unload has no tab state", { t
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = h.modules;
   const { recordOrigin } = await import("../tab-reports.js");
   const id = "view-state-plain";
-  recordOrigin(id, null);
+  recordOrigin(id, null, "test fixture");
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -112,7 +112,7 @@ test("the tab reports of a view set its title, its modified mark and its error",
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = h.modules;
   const reports = await import("../tab-reports.js");
   const id = "view-report-a";
-  reports.recordOrigin(id, null);
+  reports.recordOrigin(id, null, "test fixture");
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -131,7 +131,7 @@ test("the composition of a view places nothing while a place that leaves the vie
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, placeSurfaces } = h.modules;
   const reports = await import("../tab-reports.js");
   const id = "view-place-a";
-  reports.recordOrigin(id, null);
+  reports.recordOrigin(id, null, "test fixture");
   authorizeSurface(id);
   await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await waitSurfaceCompositionDeclared(id);
@@ -151,7 +151,7 @@ test("a view declares its composition only after the host authorizes its surface
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = h.modules;
   const reports = await import("../tab-reports.js");
   const id = "view-auth-a";
-  reports.recordOrigin(id, null);
+  reports.recordOrigin(id, null, "test fixture");
   const mounted = mountSurface(h.slot, viewOf(id, "fixture-plain", false));
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(h.calls.filter((call) => call.name === "compositionDeclare").length, 0, "the view declared before authorization");

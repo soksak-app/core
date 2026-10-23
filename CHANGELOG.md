@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F262-7: The presentation refusal of a view tab without an origin names the tab, its plugin, its space and project, the path that created the tab, and whether this session recorded its origin. Each tab creation site names its path.
 - F262-6a: The view bridge serves `runtime.project(listener)`, which gives the listener the last project of the plugin host at once and makes no call to the host, as `runtime.theme` does. A plugin host page that subscribed the project message through `runtime.native.on` was refused by the host.
 - F262-4a: A layout write names its writing path (add space, saved layout, recreate or library replacement), and each view tab that it stores without an origin member is recorded in the application log with its tab, plugin and path.
 - F262-5: A navigation state or message of a plugin host that arrives after its window closed is not reported as `project window is closed`.
