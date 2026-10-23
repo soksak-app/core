@@ -1,10 +1,11 @@
-// Measure the URL and OS-reported process fields for path-only and explicit WebKit process display names.
+// Measure URL-derived and explicit WebKit process display names without activating the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <libproc.h>
 #import <stdio.h>
 #import <stdlib.h>
 #import <string.h>
+#import <unistd.h>
 #import "private/webkit.h"
 
 static int failures;
@@ -14,8 +15,13 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static BOOL until(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:15];
+static NSString *configuredValue(NSString *key, NSString *fallback) {
+    NSString *value = NSProcessInfo.processInfo.environment[key];
+    return value.length ? value : fallback;
+}
+
+static BOOL until(BOOL (^done)(void), NSTimeInterval seconds) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
                                  beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
@@ -61,89 +67,414 @@ static BOOL until(BOOL (^done)(void)) {
 }
 @end
 
-static NSString *processListing(pid_t pid) {
-    FILE *pipe = popen("/usr/bin/lsappinfo list", "r");
-    if (!pipe) return @"lsappinfo unavailable";
-    char *line = NULL;
-    size_t capacity = 0;
-    NSMutableArray<NSString *> *previous = [NSMutableArray array];
-    NSMutableString *listing = nil;
-    while (getline(&line, &capacity, pipe) >= 0) {
-        NSString *current = [NSString stringWithUTF8String:line];
-        if ([current containsString:[NSString stringWithFormat:@"pid = %d ", pid]]) {
-            listing = [NSMutableString string];
-            NSUInteger start = previous.count;
-            while (start > 0 && ![previous[start - 1] containsString:@" ASN:"]) start--;
-            if (start > 0) start--;
-            for (NSUInteger index = start; index < previous.count; index++) [listing appendString:previous[index]];
-            [listing appendString:current];
+@interface SPJavaScriptResult : NSObject
+@property BOOL completed;
+@property (nonatomic, copy) NSString *url;
+@property (nonatomic, copy) NSString *failure;
+@end
+
+@implementation SPJavaScriptResult
+- (void)dealloc {
+    [_url release];
+    [_failure release];
+    [super dealloc];
+}
+@end
+
+@interface SPProcessOutput : NSObject
+@property (nonatomic, copy) NSData *standardOutput;
+@property (nonatomic, copy) NSData *standardError;
+@end
+
+@implementation SPProcessOutput
+- (void)dealloc {
+    [_standardOutput release];
+    [_standardError release];
+    [super dealloc];
+}
+@end
+
+static NSString *processListing(pid_t pid, NSString **displayName, NSString **failure) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:@"/usr/bin/lsappinfo"];
+    task.arguments = @[@"list"];
+    NSPipe *outputPipe = [NSPipe pipe];
+    NSPipe *errorPipe = [NSPipe pipe];
+    task.standardOutput = outputPipe;
+    task.standardError = errorPipe;
+    NSError *launchError = nil;
+    if (![task launchAndReturnError:&launchError]) {
+        *failure = [NSString stringWithFormat:@"lsappinfo launch failed: %@", launchError];
+        return nil;
+    }
+
+    NSFileHandle *outputReader = outputPipe.fileHandleForReading;
+    NSFileHandle *errorReader = errorPipe.fileHandleForReading;
+    SPProcessOutput *processOutput = [[SPProcessOutput alloc] init];
+    dispatch_group_t drained = dispatch_group_create();
+    dispatch_group_enter(drained);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        processOutput.standardOutput = [outputReader readDataToEndOfFile];
+        dispatch_group_leave(drained);
+    });
+    dispatch_group_enter(drained);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        processOutput.standardError = [errorReader readDataToEndOfFile];
+        dispatch_group_leave(drained);
+    });
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+    while (task.isRunning && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+    if (task.isRunning) {
+        [task terminate];
+        [task waitUntilExit];
+        dispatch_group_wait(drained, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+        *failure = @"lsappinfo list exceeded 5000ms";
+        dispatch_release(drained);
+        [processOutput release];
+        return nil;
+    }
+    if (dispatch_group_wait(drained, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) != 0) {
+        *failure = @"lsappinfo output did not reach EOF after process exit";
+        dispatch_release(drained);
+        [processOutput release];
+        return nil;
+    }
+    dispatch_release(drained);
+    NSData *output = processOutput.standardOutput;
+    NSData *errors = processOutput.standardError;
+    if (task.terminationReason != NSTaskTerminationReasonExit || task.terminationStatus != 0) {
+        NSString *errorText = [[[NSString alloc] initWithData:errors encoding:NSUTF8StringEncoding] autorelease];
+        *failure = [NSString stringWithFormat:@"lsappinfo exited with reason %ld status %d: %@",
+            (long)task.terminationReason, task.terminationStatus, errorText];
+        [processOutput release];
+        return nil;
+    }
+    NSString *text = [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease];
+    if (text == nil) {
+        *failure = @"lsappinfo output is not UTF-8";
+        [processOutput release];
+        return nil;
+    }
+    NSArray<NSString *> *lines = [text componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet];
+    NSString *pidNeedle = [NSString stringWithFormat:@"pid = %d ", pid];
+    NSUInteger entryLine = NSNotFound;
+    for (NSUInteger index = 0; index < lines.count; index++) {
+        if ([lines[index] containsString:pidNeedle]) {
+            entryLine = index;
             break;
         }
-        [previous addObject:current];
-        if (previous.count > 8) [previous removeObjectAtIndex:0];
     }
-    free(line);
-    int result = pclose(pipe);
-    (void)result;
-    return listing.length ? listing : @"no LaunchServices process entry";
+    if (entryLine == NSNotFound) {
+        *failure = [NSString stringWithFormat:@"lsappinfo has no process entry for pid %d", pid];
+        [processOutput release];
+        return nil;
+    }
+    NSUInteger start = entryLine;
+    while (start > 0 && ![lines[start] containsString:@" ASN:"]) start--;
+    if (![lines[start] containsString:@" ASN:"]) {
+        *failure = [NSString stringWithFormat:@"lsappinfo pid %d entry has no ASN display-name line", pid];
+        [processOutput release];
+        return nil;
+    }
+    NSRange labelRange = [lines[start] rangeOfString:@"^\\s*\\d+\\) \"([^\"]+)\" ASN:"
+        options:NSRegularExpressionSearch];
+    if (labelRange.location == NSNotFound) {
+        *failure = [NSString stringWithFormat:@"lsappinfo pid %d entry has no quoted display name: %@", pid, lines[start]];
+        [processOutput release];
+        return nil;
+    }
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:
+        @"^\\s*\\d+\\) \"([^\"]+)\" ASN:" options:0 error:nil];
+    NSTextCheckingResult *match = [regex firstMatchInString:lines[start] options:0
+        range:NSMakeRange(0, lines[start].length)];
+    if (match == nil || match.numberOfRanges < 2) {
+        *failure = [NSString stringWithFormat:@"lsappinfo pid %d display name could not be parsed", pid];
+        [processOutput release];
+        return nil;
+    }
+    *displayName = [lines[start] substringWithRange:[match rangeAtIndex:1]];
+    NSString *result = [[lines subarrayWithRange:NSMakeRange(start, entryLine - start + 1)] componentsJoinedByString:@"\n"];
+    [processOutput release];
+    return result;
 }
 
-static void measure(NSWindow *window, SPProcessLabelScheme *handler,
+static pid_t measure(NSWindow *window, SPProcessLabelScheme *handler,
     NSString *caseName, NSString *address, NSString *displayName) {
-    WKWebViewConfiguration *configuration = [[[WKWebViewConfiguration alloc] init] autorelease];
+    WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
     [configuration setURLSchemeHandler:handler forURLScheme:@"sok"];
     [configuration setURLSchemeHandler:handler forURLScheme:@"soksak"];
     if (displayName) [configuration _setProcessDisplayName:displayName];
-    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 640, 240) configuration:configuration] autorelease];
+    WKWebView *view = [[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 640, 240) configuration:configuration];
+    [configuration release];
     [window.contentView addSubview:view];
-    SPProcessLabelNavigation *navigation = [[[SPProcessLabelNavigation alloc] init] autorelease];
+    SPProcessLabelNavigation *navigation = [[SPProcessLabelNavigation alloc] init];
     view.navigationDelegate = navigation;
     [view loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:address]]];
-    check(until(^BOOL { return navigation.finished; }), [NSString stringWithFormat:@"%@ navigation finishes", caseName]);
+    BOOL navigationFinished = until(^BOOL { return navigation.finished; }, 15);
+    check(navigationFinished, [NSString stringWithFormat:@"%@ navigation finishes within 15000ms", caseName]);
     check(navigation.failure == nil, [NSString stringWithFormat:@"%@ navigation succeeds: %@", caseName, navigation.failure]);
-    if (navigation.failure) return;
+    if (!navigationFinished || navigation.failure) {
+        view.navigationDelegate = nil;
+        [view stopLoading];
+        [view removeFromSuperview];
+        [view release];
+        [navigation release];
+        return 0;
+    }
 
-    __block BOOL evaluated = NO;
-    __block NSString *loadedURL = nil;
+    SPJavaScriptResult *evaluation = [[SPJavaScriptResult alloc] init];
     [view evaluateJavaScript:@"location.href" completionHandler:^(id result, NSError *error) {
-        if ([result isKindOfClass:NSString.class]) loadedURL = [result copy];
-        if (error) fprintf(stderr, "FAIL: %s URL evaluation: %s\n", caseName.UTF8String, error.localizedDescription.UTF8String);
-        evaluated = YES;
+        if ([result isKindOfClass:NSString.class]) evaluation.url = result;
+        if (error) evaluation.failure = error.localizedDescription;
+        evaluation.completed = YES;
     }];
-    check(until(^BOOL { return evaluated; }), [NSString stringWithFormat:@"%@ exposes its loaded URL", caseName]);
+    BOOL evaluationFinished = until(^BOOL { return evaluation.completed; }, 5);
+    check(evaluationFinished, [NSString stringWithFormat:@"%@ URL evaluation finishes within 5000ms", caseName]);
+    check(evaluation.failure == nil, [NSString stringWithFormat:@"%@ URL evaluation succeeds: %@", caseName, evaluation.failure]);
+    check(evaluation.url && [evaluation.url isEqualToString:address],
+        [NSString stringWithFormat:@"%@ keeps the requested URL origin", caseName]);
+
     pid_t pid = view._webProcessIdentifier;
+    check(pid > 0, [NSString stringWithFormat:@"%@ has a WebContent process", caseName]);
     char name[PROC_PIDPATHINFO_MAXSIZE] = {0};
     char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
-    int nameLength = proc_name(pid, name, sizeof(name));
-    int pathLength = proc_pidpath(pid, path, sizeof(path));
+    int nameLength = pid > 0 ? proc_name(pid, name, sizeof(name)) : -1;
+    int pathLength = pid > 0 ? proc_pidpath(pid, path, sizeof(path)) : -1;
+    check(nameLength > 0, [NSString stringWithFormat:@"%@ proc_name succeeds for pid %d", caseName, pid]);
+    check(pathLength > 0, [NSString stringWithFormat:@"%@ proc_pidpath succeeds for pid %d", caseName, pid]);
+    NSString *reportedProcessName = nameLength > 0 ? [NSString stringWithUTF8String:name] : nil;
+    NSString *reportedProcessPath = pathLength > 0 ? [NSString stringWithUTF8String:path] : nil;
+    check(reportedProcessName != nil, [NSString stringWithFormat:@"%@ proc_name is valid UTF-8", caseName]);
+    check(reportedProcessPath != nil, [NSString stringWithFormat:@"%@ proc_pidpath is valid UTF-8", caseName]);
+
+    NSString *launchServicesName = nil;
+    NSString *listingFailure = nil;
+    NSString *listing = pid > 0 ? processListing(pid, &launchServicesName, &listingFailure) : nil;
+    check(listing != nil, [NSString stringWithFormat:@"%@ LaunchServices lookup succeeds: %@", caseName, listingFailure]);
+    if (listing) {
+        printf("LAUNCHSERVICES case=%s displayName=%s %s\n", caseName.UTF8String,
+            launchServicesName.UTF8String, listing.UTF8String);
+        if (displayName) {
+            check([launchServicesName isEqualToString:displayName],
+                [NSString stringWithFormat:@"%@ LaunchServices display name equals %@ (got %@)", caseName,
+                    displayName, launchServicesName]);
+        } else {
+            check(![launchServicesName isEqualToString:address],
+                [NSString stringWithFormat:@"%@ URL path does not become the LaunchServices display name (got %@)",
+                    caseName, launchServicesName]);
+        }
+    }
     printf("MEASURE case=%s requested=%s loaded=%s override=%s webContentPid=%d proc_name=%s proc_pidpath=%s\n",
-        caseName.UTF8String, address.UTF8String, loadedURL.UTF8String ?: "<unavailable>",
-        displayName.UTF8String ?: "<none>", pid, nameLength > 0 ? name : "<unavailable>",
-        pathLength > 0 ? path : "<unavailable>");
-    printf("LAUNCHSERVICES case=%s %s\n", caseName.UTF8String, processListing(pid).UTF8String);
+        caseName.UTF8String, address.UTF8String, evaluation.url.UTF8String ?: "<unavailable>",
+        displayName.UTF8String ?: "<none>", pid, reportedProcessName.UTF8String ?: "<unavailable>",
+        reportedProcessPath.UTF8String ?: "<unavailable>");
     fflush(stdout);
-    check(loadedURL && [loadedURL isEqualToString:address], [NSString stringWithFormat:@"%@ keeps the requested URL origin", caseName]);
-    check(pid > 0, [NSString stringWithFormat:@"%@ has a WebContent process", caseName]);
-    [loadedURL release];
+
     view.navigationDelegate = nil;
+    [view stopLoading];
+    [view removeFromSuperview];
+    [view release];
+    [navigation release];
+    [evaluation release];
+    return pid;
 }
 
-int main(void) { @autoreleasepool {
+static BOOL processExited(pid_t pid) {
+    if (pid <= 0) return YES;
+    char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    return proc_pidpath(pid, path, sizeof(path)) != 0;
+}
+
+static int runWebKitCases(void) {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
-    NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(50, 50, 660, 280)
-        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
-    SPProcessLabelScheme *handler = [[[SPProcessLabelScheme alloc] init] autorelease];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(50, 50, 660, 280)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    [window setReleasedWhenClosed:NO];
+    SPProcessLabelScheme *handler = [[SPProcessLabelScheme alloc] init];
     [window orderBack:nil];
 
-    measure(window, handler, @"legacy-origin", @"sok://terminal/page", nil);
-    measure(window, handler, @"requested-path", @"soksak://plugin/terminal", nil);
-    measure(window, handler, @"explicit-display-name", @"sok://terminal/page",
-        @"soksak://plugin/terminal");
+    NSString *originURL = configuredValue(@"SOKSAK_PROCESS_LABEL_ORIGIN_URL", @"sok://sample/page");
+    NSString *displayURL = configuredValue(@"SOKSAK_PROCESS_LABEL_DISPLAY_URL", @"soksak://plugin/sample");
+    NSString *displayName = configuredValue(@"SOKSAK_PROCESS_LABEL_PLUGIN", @"soksak://plugin/sample");
+    measure(window, handler, @"legacy-origin", originURL, nil);
+    measure(window, handler, @"requested-display-path", displayURL, nil);
+    measure(window, handler, @"explicit-display-name", originURL, displayName);
 
     [window close];
+    [window release];
+    [handler release];
+    check(!NSApp.isActive, @"the measurement does not activate the application");
     return failures ? 1 : 0;
+}
+
+static int runSidecarProcessNameHelper(void) {
+        NSString *displayName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/sample");
+        NSProcessInfo.processInfo.processName = displayName;
+        printf("HELPER pid=%d processName=%s argv0=%s\n", NSProcessInfo.processInfo.processIdentifier,
+            NSProcessInfo.processInfo.processName.UTF8String,
+            NSProcessInfo.processInfo.arguments.firstObject.UTF8String);
+        fflush(stdout);
+        char done = 0;
+        (void)read(STDIN_FILENO, &done, sizeof(done));
+        return 0;
+}
+
+static BOOL runWebKitWorkerAndCheckCleanup(void) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = NSBundle.mainBundle.executableURL;
+    task.arguments = @[@"--webkit-label-worker"];
+    NSPipe *outputPipe = [NSPipe pipe];
+    NSPipe *errorPipe = [NSPipe pipe];
+    task.standardOutput = outputPipe;
+    task.standardError = errorPipe;
+    NSError *launchError = nil;
+    check([task launchAndReturnError:&launchError], [NSString stringWithFormat:@"WebKit measurement worker launches: %@", launchError]);
+    if (!task.isRunning) return NO;
+    NSFileHandle *outputReader = outputPipe.fileHandleForReading;
+    NSFileHandle *errorReader = errorPipe.fileHandleForReading;
+    SPProcessOutput *processOutput = [[SPProcessOutput alloc] init];
+    dispatch_group_t drained = dispatch_group_create();
+    dispatch_group_enter(drained);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        processOutput.standardOutput = [outputReader readDataToEndOfFile];
+        dispatch_group_leave(drained);
+    });
+    dispatch_group_enter(drained);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        processOutput.standardError = [errorReader readDataToEndOfFile];
+        dispatch_group_leave(drained);
+    });
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:60];
+    while (task.isRunning && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                                 beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    }
+    if (task.isRunning) {
+        [task terminate];
+        [task waitUntilExit];
+        check(NO, @"WebKit measurement worker exits within 60000ms");
+    }
+    BOOL outputDrained = dispatch_group_wait(drained, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) == 0;
+    check(outputDrained, @"WebKit measurement worker stdout and stderr reach EOF");
+    dispatch_release(drained);
+    NSString *output = [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding] autorelease];
+    NSString *errors = [[[NSString alloc] initWithData:processOutput.standardError encoding:NSUTF8StringEncoding] autorelease];
+    [processOutput release];
+    if (output) fputs(output.UTF8String, stdout);
+    if (errors.length) fprintf(stderr, "WebKit measurement worker stderr:\n%s\n", errors.UTF8String);
+    check(task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
+        [NSString stringWithFormat:@"WebKit measurement worker exits successfully (reason %ld status %d)",
+            (long)task.terminationReason, task.terminationStatus]);
+    if (!output) {
+        check(NO, @"WebKit measurement worker output is UTF-8");
+        return NO;
+    }
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"webContentPid=(\\d+)"
+        options:0 error:nil];
+    NSArray<NSTextCheckingResult *> *matches = [regex matchesInString:output options:0
+        range:NSMakeRange(0, output.length)];
+    check(matches.count == 3, [NSString stringWithFormat:@"the worker reports all three WebContent PIDs (got %lu)",
+        (unsigned long)matches.count]);
+    for (NSTextCheckingResult *match in matches) {
+        pid_t pid = (pid_t)[[output substringWithRange:[match rangeAtIndex:1]] intValue];
+        BOOL exited = until(^BOOL { return !processExited(pid); }, 10);
+        check(exited, [NSString stringWithFormat:@"WebContent process %d exits within 10000ms after its owning worker exits", pid]);
+    }
+    return failures == 0;
+}
+
+static BOOL measureSidecarProcessNameSetter(void) {
+    NSString *requestedName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/sample");
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = NSBundle.mainBundle.executableURL;
+    task.arguments = @[@"--sidecar-process-name-helper"];
+    NSPipe *outputPipe = [NSPipe pipe];
+    NSPipe *controlPipe = [NSPipe pipe];
+    task.standardOutput = outputPipe;
+    task.standardInput = controlPipe;
+    task.standardError = [NSFileHandle fileHandleWithNullDevice];
+    NSError *launchError = nil;
+    check([task launchAndReturnError:&launchError], [NSString stringWithFormat:@"process-name helper launches: %@", launchError]);
+    if (!task.isRunning) return NO;
+    pid_t pid = task.processIdentifier;
+    NSFileHandle *reader = outputPipe.fileHandleForReading;
+    SPProcessOutput *processOutput = [[SPProcessOutput alloc] init];
+    dispatch_semaphore_t lineReady = dispatch_semaphore_create(0);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSMutableData *line = [NSMutableData data];
+        while (line.length == 0 || ((const char *)line.bytes)[line.length - 1] != '\n') {
+            NSData *character = [reader readDataOfLength:1];
+            if (character.length == 0) break;
+            [line appendData:character];
+        }
+        processOutput.standardOutput = line;
+        dispatch_semaphore_signal(lineReady);
+    });
+    BOOL ready = dispatch_semaphore_wait(lineReady, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) == 0;
+    check(ready, @"process-name helper reports its configured name within 5000ms");
+    dispatch_release(lineReady);
+    NSString *helperLine = ready
+        ? [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding] autorelease]
+        : nil;
+    if (helperLine) fputs(helperLine.UTF8String, stdout);
+    check(helperLine != nil && [helperLine containsString:[NSString stringWithFormat:@"processName=%@", requestedName]],
+        [NSString stringWithFormat:@"NSProcessInfo.processName returns %@ inside the helper (got %@)", requestedName, helperLine]);
+
+    char name[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    int nameLength = pid > 0 ? proc_name(pid, name, sizeof(name)) : -1;
+    int pathLength = pid > 0 ? proc_pidpath(pid, path, sizeof(path)) : -1;
+    NSString *reportedProcessName = nameLength > 0 ? [NSString stringWithUTF8String:name] : nil;
+    NSString *reportedProcessPath = pathLength > 0 ? [NSString stringWithUTF8String:path] : nil;
+    check(nameLength > 0 && reportedProcessName != nil,
+        [NSString stringWithFormat:@"proc_name reports the helper process %d", pid]);
+    check(pathLength > 0 && reportedProcessPath != nil,
+        [NSString stringWithFormat:@"proc_pidpath reports the helper process %d", pid]);
+
+    NSString *launchServicesName = nil;
+    NSString *listingFailure = nil;
+    NSString *listing = processListing(pid, &launchServicesName, &listingFailure);
+    if (listing) {
+        printf("LAUNCHSERVICES helper displayName=%s %s\n", launchServicesName.UTF8String, listing.UTF8String);
+        check([launchServicesName isEqualToString:requestedName],
+            [NSString stringWithFormat:@"the public process-name setter gives the LaunchServices label %@ (got %@)",
+                requestedName, launchServicesName]);
+    } else {
+        printf("MEASURE helper launchServices=unregistered detail=%s\n", listingFailure.UTF8String);
+    }
+    printf("MEASURE helper requested=%s processName=%s proc_name=%s proc_pidpath=%s\n",
+        requestedName.UTF8String, helperLine.UTF8String ?: "<unavailable>",
+        reportedProcessName.UTF8String ?: "<unavailable>", reportedProcessPath.UTF8String ?: "<unavailable>");
+    fflush(stdout);
+
+    [controlPipe.fileHandleForWriting writeData:[NSData dataWithBytes:"x" length:1]];
+    [controlPipe.fileHandleForWriting closeFile];
+    BOOL helperExited = until(^BOOL { return !task.isRunning; }, 5);
+    if (!helperExited) {
+        [task terminate];
+        [task waitUntilExit];
+    }
+    check(helperExited && task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
+        @"the disposable process-name helper exits cleanly within 5000ms after measurement");
+    BOOL exited = until(^BOOL { return !processExited(pid); }, 5);
+    check(exited, [NSString stringWithFormat:@"process-name helper %d is gone within 5000ms", pid]);
+    [processOutput release];
+    return failures == 0;
+}
+
+int main(int argc, const char **argv) { @autoreleasepool {
+    if (argc == 2 && strcmp(argv[1], "--webkit-label-worker") == 0) return runWebKitCases();
+    if (argc == 2 && strcmp(argv[1], "--sidecar-process-name-helper") == 0) {
+        return runSidecarProcessNameHelper();
+    }
+    BOOL sidecarMeasured = measureSidecarProcessNameSetter();
+    BOOL webKitMeasured = runWebKitWorkerAndCheckCleanup();
+    return sidecarMeasured && webKitMeasured ? 0 : 1;
 } }
