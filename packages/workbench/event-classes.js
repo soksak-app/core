@@ -120,6 +120,8 @@ const EXACT = new Map([
   ["page.trace.picker.close", "call"],
   ["page.update.operation", "call"],
   ["page.view.call", "call"],
+  ["page.view.call.cancel", "call"],
+  ["page.view.event.cancel", "call"],
   ["page.view.reply", "call"],
   ["page.window.operation", "call"],
   ["sok.command", "call"],

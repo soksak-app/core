@@ -752,6 +752,20 @@
       },
       "description": "The workbench sent the reply of a view call to the view; outcome is result or error, and the reply carries the same id as its page.view.call."
     },
+    "page.view.call.cancel": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": { "plugin": "string", "surface": "string", "id": "number", "command": "string" },
+      "description": "Closing the surface canceled the reply of this received view call; no reply was sent to the ended view."
+    },
+    "page.view.event.cancel": {
+      "layer": "page",
+      "class": "call",
+      "level": "debug",
+      "fields": { "plugin": "string", "surface": "string", "event": "string" },
+      "description": "Closing the surface canceled delivery of this view event after the host refused it because the view had ended."
+    },
     "page.input.shortcut.failed": {
       "layer": "page",
       "class": "input",

@@ -16,24 +16,34 @@
  *     status      status(name, fn): follows the value of the status name, as the registry observe does; fn(value) receives each value
  *                 and the function returns the unsubscribe function, which it calls at the end of the watch
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
+ *     closing     optional AbortSignal of the surface lifetime; a refusal after abort cancels delivery
+ *     cancel      cancel(event): records a refused delivery that ended with the surface
  *     report      report(text): receives the text of a push that the host refused
  *
  * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), logLevels(), statusWatch(name),
  * statusUnwatch(name), close()}. A subscription call resolves with null, and a second call for the same name or id registers nothing.
- * An unwatch of a name that is not watched ends nothing and resolves with null.
+ * An unwatch of a name that is not watched ends nothing and resolves with null. A push refused after close or lifetime abort is canceled;
+ * a refusal while the surface remains open is reported.
  */
-export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, status, push, report }) {
+export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, status, push, report, closing, cancel = () => {} }) {
   if (typeof push !== "function" || typeof report !== "function") {
     throw new TypeError("createViewSubscriptions requires the push and report functions");
   }
   // The registration of each key and its off function, by key. A key is native:<name>, sidecar.message:<id>, sidecar.failure:<id>,
   // or status:<name>.
   const registered = new Map();
-  // Set by close: an event that arrives after the surface closed is pushed to no view.
+  // Set by close: an event that arrives after the surface closed is canceled without a host send.
   let closed = false;
   const forward = (event, data) => {
-    if (closed) return;
+    if (closed || closing?.aborted) {
+      cancel(event);
+      return;
+    }
     push(event, data).then(undefined, (error) => {
+      if (closed || closing?.aborted) {
+        cancel(event);
+        return;
+      }
       // default: a refusal that is not an Error carries its value as the text.
       report(`view event ${event}: ${error?.message ?? error}`);
     });

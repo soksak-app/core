@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.17: View 종료 후에도 pending call reply와 sidecar event가 host에서 문서를 제거한 뒤 전달을 시도할 수 있었다. Workbench는 pending call 대기를 abort하고 종료 뒤 완료된 결과를 버리며, 취소한 call reply와 거부된 event 전달을 기록한다. 소유 Red는 두 `no ready document` 오류와 오래된 reply 시도를 재현했다. Green은 두 취소 기록, 종료 후 전송 없음, application 오류 없음을 확인한다. Live-view 거부 검사는 계속 오류를 보고한다.
+
 - F212.13-1-1: Diagnostic input reference가 `focused` state를 JSON number `1`로 직렬화해 두 host keyboard check가 native key를 보내기 전에 실패했다. Raw JSON reply를 검사하는 native test는 기존 serializer에서 실패했으며 NSNumber equality assertion은 통과했다. Snapshot은 결과를 `@YES` 또는 `@NO`로 명시적으로 boxing하며 같은 소유 assertion과 macOS 26.6.2 arm64 `input_reference_test`가 통과한다. 승인된 두 host keyboard check는 F212.12-2-2-4에서 계속한다.
 
 - F212.12-1-21: View display 검사기는 설치되고 활성화된 view를 열거하고 capture content offset을 적용하여 반환 tab의 applied rectangle을 측정하며 명시적 plugin content case 없는 acceptance를 거부한다. 기존 소유 Red assertion 세 개와 missing-case Red가 통과한다. 실제 plugin별 first-content acceptance는 F212.12-1-22에서 미완료다.

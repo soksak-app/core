@@ -137,6 +137,7 @@ test("a view call writes a debug receipt and a debug reply record with its id", 
     listeners.get("view-call")({ id: 7, command: "runtime.settings.read", params: null });
     // The reply is sent after the call has settled, so the test waits for the viewReply call.
     await replyArrived;
+    await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.call"), [{ level: "debug", event: "page.view.call",
       fields: { plugin: pluginId, surface: surfaceId, id: 7, command: "runtime.settings.read" } }]);
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
@@ -193,6 +194,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     listeners.get("view-call")({ id: 8, command: "runtime.textSize.on", params: null });
     await replyArrived;
+    await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
       fields: { plugin: pluginId, surface: surfaceId, id: 8, outcome: "result" } }]);
     assert.deepEqual(replies.map(({ id, result }) => ({ id, result })), [{ id: 8, result: null }]);
@@ -739,6 +741,96 @@ test("a view reply the host refuses is reported through the page error path", { 
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.ok(reported.includes("view call 3 reply: host refused the reply"),
       `the refused reply was not reported: ${JSON.stringify(reported)}`);
+  } finally {
+    globalThis.dispatchEvent = previousDispatch;
+    globalThis.ErrorEvent = previousError;
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
+test("closing a view cancels a pending call reply and event delivery", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const sidecarListeners = new Map();
+  const emitted = [];
+  const reported = [];
+  let resolveSend;
+  let sendStarted;
+  const sendStartedPromise = new Promise((resolve) => { sendStarted = resolve; });
+  let rejectEvent;
+  let ended = false;
+  const staleHostCalls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime,
+        native: { ...runtime.native, on: async (name, listener) => {
+          listeners.set(name, listener);
+          return () => {};
+        }, call: async (name) => {
+          if (name === "viewEvent") return new Promise((_resolve, reject) => { rejectEvent = reject; });
+          if (name === "viewReply" && ended) {
+            staleHostCalls.push(name);
+            throw new Error(`surface ${surface.surfaceId} has no ready document`);
+          }
+          return null;
+        } },
+        sidecar: () => ({
+          send: async () => {
+            sendStarted();
+            return new Promise((resolve) => { resolveSend = resolve; });
+          },
+          on: async (id, listener) => {
+            sidecarListeners.set(id, listener);
+            return () => sidecarListeners.delete(id);
+          },
+          onFailure: async () => () => {},
+        }),
+      };
+    },
+  } });
+  const actualPageLog = await import("../page-log.js");
+  t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
+  const previousError = globalThis.ErrorEvent;
+  const previousDispatch = globalThis.dispatchEvent;
+  globalThis.ErrorEvent = dom.window.ErrorEvent;
+  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-close-pending-delivery");
+  const pluginId = "fixture-close-pending-view";
+  const surfaceId = "fixture-close-pending-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] },
+    sidecars: ["fixture-sidecar"], composition: { kind: "view", page: "ui/page.html" } };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    const call = listeners.get("view-call");
+    call({ id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
+    await new Promise((resolve) => setImmediate(resolve));
+    sidecarListeners.get("probe")({ n: 1 });
+    call({ id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 2 } } });
+    await sendStartedPromise;
+    await disposeSurface(surfaceId);
+    ended = true;
+    rejectEvent(new Error(`surface ${surfaceId} has no ready document`));
+    resolveSend(null);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual({
+      staleHostCalls,
+      reported,
+      callCanceled: emitted.some(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11),
+      eventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
+    }, { staleHostCalls: [], reported: [], callCanceled: true, eventCanceled: true });
   } finally {
     globalThis.dispatchEvent = previousDispatch;
     globalThis.ErrorEvent = previousError;

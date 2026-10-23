@@ -271,6 +271,10 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       on: (listener) => Promise.resolve(logGate.onChange(listener)),
     },
     push: (event, data) => scoped.native.call("viewEvent", { event, data }),
+    closing,
+    cancel: (event) => emitEvent("debug", "page.view.event.cancel", {
+      plugin: surface.pluginId, surface: surface.surfaceId, event,
+    }),
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
   });
   // The commands of the view. A command is declared through the exposure of the surface, and each request of it runs in the view.
@@ -362,6 +366,12 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       });
       return;
     }
+    if (closing.aborted) {
+      emitEvent("debug", "page.view.call.cancel", {
+        plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
+      });
+      return;
+    }
     // The receipt of a call and its reply are records of the page at the debug level, so a call that never replies is the last
     // receipt without a reply (docs/spec/logging.md#policy).
     emitEvent("debug", "page.view.call", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command) });
@@ -373,13 +383,29 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       // default: a rejection that is not an Error replies with its text.
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
     ).then((reply) => {
-      emitEvent("debug", "page.view.reply", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, outcome: "error" in reply ? "error" : "result" });
-      return scoped.native.call("viewReply", reply);
+      if (closing.aborted) {
+        emitEvent("debug", "page.view.call.cancel", {
+          plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
+        });
+        return null;
+      }
+      return scoped.native.call("viewReply", reply).then(() => {
+        emitEvent("debug", "page.view.reply", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, outcome: "error" in reply ? "error" : "result" });
+      });
     }).catch((error) => {
+      if (closing.aborted) {
+        emitEvent("debug", "page.view.call.cancel", {
+          plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
+        });
+        return;
+      }
       // default: a refusal that is not an Error carries its value as the text.
       dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} reply: ${error?.message ?? error}` }));
     });
   });
+  closing.addEventListener("abort", () => {
+    for (const controller of pending.values()) controller.abort();
+  }, { once: true });
   // The replies of the view to the commands of the page.
   const replies = scoped.native.on("view-reply", (event) => {
     try {
