@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F240-7: Align completed review and producer-contract statuses with their recorded evidence, keep inactive CI and window gates waiting, and refresh the open-reference index from owning checklists. Pending release and measurement requirements remain open.
+
 - F239-26: Record the shutdown check defects: terminal preparation polls statuses despite available notifications, and the run does not audit application errors. The correction and owning verification remain pending.
 
 - F244-2-1: Remove the hidden DOM tab memory benchmark, its Make target, fixture-only test and parity lane. The benchmark used module mounts that the view-only surface contract removed, so it no longer measured the current application. Historical measurements and native memory checks remain available.
