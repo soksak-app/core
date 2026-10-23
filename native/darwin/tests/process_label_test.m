@@ -6,7 +6,9 @@
 #import <stdlib.h>
 #import <string.h>
 #import <unistd.h>
+#import "private/launch_services.h"
 #import "private/webkit.h"
+#import "support/temporary_folder.h"
 
 static int failures;
 
@@ -326,6 +328,43 @@ static int runSidecarProcessNameHelper(void) {
         return 0;
 }
 
+static int runRegisteredSidecarDisplayNameHelper(void) {
+    OSStatus registrationStatus = _RegisterApplication(NULL, NULL);
+    if (registrationStatus != noErr) {
+        fprintf(stderr, "HELPER_ERROR _RegisterApplication status=%d\n", (int)registrationStatus);
+        return 2;
+    }
+    SPLSASNRef asn = _LSGetCurrentApplicationASN();
+    if (asn == NULL) {
+        fputs("HELPER_ERROR _LSGetCurrentApplicationASN returned null\n", stderr);
+        return 3;
+    }
+    NSString *requestedName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/vt");
+    OSStatus setStatus = _LSSetApplicationInformationItem(SPLSDefaultSessionID, asn,
+        _kLSDisplayNameKey, (CFTypeRef)requestedName, NULL);
+    if (setStatus != noErr) {
+        fprintf(stderr, "HELPER_ERROR _LSSetApplicationInformationItem status=%d\n", (int)setStatus);
+        return 4;
+    }
+    CFTypeRef copiedName = _LSCopyApplicationInformationItem(SPLSDefaultSessionID, asn, _kLSDisplayNameKey);
+    NSString *actualName = (NSString *)copiedName;
+    if (actualName == nil || ![actualName isEqualToString:requestedName]) {
+        fprintf(stderr, "HELPER_ERROR LaunchServices returned display name %s\n",
+            actualName.UTF8String ?: "<null>");
+        if (copiedName) CFRelease(copiedName);
+        return 5;
+    }
+    printf("REGISTERED_HELPER pid=%d displayName=%s executable=%s bundle=%s\n",
+        NSProcessInfo.processInfo.processIdentifier, actualName.UTF8String,
+        NSBundle.mainBundle.executableURL.lastPathComponent.UTF8String,
+        NSBundle.mainBundle.bundleURL.path.UTF8String);
+    fflush(stdout);
+    CFRelease(copiedName);
+    char done = 0;
+    (void)read(STDIN_FILENO, &done, sizeof(done));
+    return 0;
+}
+
 static BOOL runWebKitWorkerAndCheckCleanup(void) {
     NSTask *task = [[[NSTask alloc] init] autorelease];
     task.executableURL = NSBundle.mainBundle.executableURL;
@@ -469,12 +508,162 @@ static BOOL measureSidecarProcessNameSetter(void) {
     return failures == 0;
 }
 
+static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *caseName, pid_t baselineFrontmostPid) {
+    NSString *requestedName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/vt");
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    task.executableURL = [NSURL fileURLWithPath:executable];
+    task.arguments = @[@"--registered-sidecar-display-name-helper"];
+    NSPipe *outputPipe = [NSPipe pipe];
+    NSPipe *controlPipe = [NSPipe pipe];
+    task.standardOutput = outputPipe;
+    task.standardError = outputPipe;
+    task.standardInput = controlPipe;
+    NSMutableDictionary *environment = [NSMutableDictionary dictionaryWithDictionary:NSProcessInfo.processInfo.environment];
+    environment[@"SOKSAK_PROCESS_LABEL_SIDECAR"] = requestedName;
+    task.environment = environment;
+    NSError *launchError = nil;
+    check([task launchAndReturnError:&launchError],
+        [NSString stringWithFormat:@"%@ helper launches without activating the application: %@", caseName, launchError]);
+    if (!task.isRunning) return NO;
+
+    pid_t pid = task.processIdentifier;
+    NSFileHandle *reader = outputPipe.fileHandleForReading;
+    SPProcessOutput *processOutput = [[SPProcessOutput alloc] init];
+    dispatch_semaphore_t lineReady = dispatch_semaphore_create(0);
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSMutableData *line = [NSMutableData data];
+        while (line.length == 0 || ((const char *)line.bytes)[line.length - 1] != '\n') {
+            NSData *character = [reader readDataOfLength:1];
+            if (character.length == 0) break;
+            [line appendData:character];
+        }
+        processOutput.standardOutput = line;
+        dispatch_semaphore_signal(lineReady);
+    });
+    BOOL ready = dispatch_semaphore_wait(lineReady, dispatch_time(DISPATCH_TIME_NOW, 5000 * NSEC_PER_MSEC)) == 0;
+    check(ready, [NSString stringWithFormat:@"%@ helper checks into LaunchServices and reports within 5000ms", caseName]);
+    dispatch_release(lineReady);
+    NSString *helperLine = ready
+        ? [[[NSString alloc] initWithData:processOutput.standardOutput encoding:NSUTF8StringEncoding] autorelease]
+        : nil;
+    if (helperLine) fputs(helperLine.UTF8String, stdout);
+    check(helperLine != nil && [helperLine containsString:[NSString stringWithFormat:@"displayName=%@", requestedName]],
+        [NSString stringWithFormat:@"%@ helper sets the exact LaunchServices display name %@ (got %@)",
+            caseName, requestedName, helperLine ?: @"<no output>"]);
+
+    NSString *launchServicesName = nil;
+    NSString *listingFailure = nil;
+    NSString *listing = processListing(pid, &launchServicesName, &listingFailure);
+    check(listing != nil, [NSString stringWithFormat:@"%@ helper is registered while running: %@", caseName, listingFailure]);
+    if (listing) {
+        printf("LAUNCHSERVICES case=%s displayName=%s %s\n", caseName.UTF8String,
+            launchServicesName.UTF8String, listing.UTF8String);
+        check([launchServicesName isEqualToString:requestedName],
+            [NSString stringWithFormat:@"%@ LaunchServices name exactly equals %@ (got %@)",
+                caseName, requestedName, launchServicesName]);
+    }
+    NSRunningApplication *runningApplication = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+    check(runningApplication != nil,
+        [NSString stringWithFormat:@"%@ has an NSRunningApplication record", caseName]);
+    if (runningApplication) {
+        printf("NSRUNNINGAPPLICATION case=%s localizedName=%s bundleIdentifier=%s\n", caseName.UTF8String,
+            runningApplication.localizedName.UTF8String ?: "<nil>",
+            runningApplication.bundleIdentifier.UTF8String ?: "<nil>");
+        check([runningApplication.localizedName isEqualToString:requestedName],
+            [NSString stringWithFormat:@"%@ NSRunningApplication.localizedName equals %@ (got %@)",
+                caseName, requestedName, runningApplication.localizedName ?: @"<nil>"]);
+    }
+
+    char name[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
+    int nameLength = pid > 0 ? proc_name(pid, name, sizeof(name)) : -1;
+    int pathLength = pid > 0 ? proc_pidpath(pid, path, sizeof(path)) : -1;
+    NSString *reportedName = nameLength > 0 ? [NSString stringWithUTF8String:name] : nil;
+    NSString *reportedPath = pathLength > 0 ? [NSString stringWithUTF8String:path] : nil;
+    check(nameLength > 0 && reportedName != nil,
+        [NSString stringWithFormat:@"%@ proc_name succeeds for pid %d", caseName, pid]);
+    check(pathLength > 0 && reportedPath != nil,
+        [NSString stringWithFormat:@"%@ proc_pidpath succeeds for pid %d", caseName, pid]);
+    check([reportedPath.lastPathComponent isEqualToString:[executable lastPathComponent]],
+        [NSString stringWithFormat:@"%@ keeps executable basename %@ (got %@)", caseName,
+            executable.lastPathComponent, reportedPath.lastPathComponent]);
+    check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == baselineFrontmostPid,
+        [NSString stringWithFormat:@"%@ check-in leaves frontmost application pid %d unchanged", caseName, baselineFrontmostPid]);
+    printf("MEASURE case=%s requested=%s pid=%d proc_name=%s proc_pidpath=%s\n", caseName.UTF8String,
+        requestedName.UTF8String, pid, reportedName.UTF8String ?: "<unavailable>",
+        reportedPath.UTF8String ?: "<unavailable>");
+    fflush(stdout);
+
+    if (task.isRunning) {
+        [controlPipe.fileHandleForWriting writeData:[NSData dataWithBytes:"x" length:1]];
+        [controlPipe.fileHandleForWriting closeFile];
+    }
+    BOOL exited = until(^BOOL { return !task.isRunning; }, 5);
+    if (!exited) {
+        [task terminate];
+        [task waitUntilExit];
+    }
+    check(exited && task.terminationReason == NSTaskTerminationReasonExit && task.terminationStatus == 0,
+        [NSString stringWithFormat:@"%@ helper exits successfully within 5000ms", caseName]);
+    check(until(^BOOL { return !processExited(pid); }, 5),
+        [NSString stringWithFormat:@"%@ helper process %d is gone within 5000ms", caseName, pid]);
+    check(NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == baselineFrontmostPid,
+        [NSString stringWithFormat:@"%@ helper exit leaves frontmost application pid %d unchanged", caseName, baselineFrontmostPid]);
+    [processOutput release];
+    return failures == 0;
+}
+
+static BOOL measureRegisteredDisplayNameCases(void) {
+    NSString *root = temporaryFolder(@"process-label-registration-");
+    if (root == nil) return NO;
+    NSString *source = NSBundle.mainBundle.executableURL.path;
+    NSString *bareDirectory = [root stringByAppendingPathComponent:@"bare"];
+    NSString *bundleExecutable = [root stringByAppendingPathComponent:@"SidecarLabel.app/Contents/MacOS/process_label_test"];
+    NSString *bundleContents = [[bundleExecutable stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+    NSError *error = nil;
+    check([NSFileManager.defaultManager createDirectoryAtPath:bareDirectory withIntermediateDirectories:YES attributes:nil error:&error],
+        [NSString stringWithFormat:@"create bare helper folder: %@", error]);
+    error = nil;
+    check([NSFileManager.defaultManager createDirectoryAtPath:[bundleExecutable stringByDeletingLastPathComponent]
+        withIntermediateDirectories:YES attributes:nil error:&error],
+        [NSString stringWithFormat:@"create genuine helper app bundle folder: %@", error]);
+    NSString *bareExecutable = [bareDirectory stringByAppendingPathComponent:@"process_label_test"];
+    error = nil;
+    check([NSFileManager.defaultManager copyItemAtPath:source toPath:bareExecutable error:&error],
+        [NSString stringWithFormat:@"copy bare helper executable: %@", error]);
+    error = nil;
+    check([NSFileManager.defaultManager copyItemAtPath:source toPath:bundleExecutable error:&error],
+        [NSString stringWithFormat:@"copy helper executable into app bundle: %@", error]);
+    NSDictionary *info = @{
+        @"CFBundleExecutable": @"process_label_test",
+        @"CFBundleIdentifier": @"app.soksak.test.process-label-sidecar",
+        @"CFBundleName": @"process_label_test",
+        @"CFBundleDisplayName": @"process_label_test",
+        @"CFBundlePackageType": @"APPL",
+        @"CFBundleShortVersionString": @"0.0.1",
+        @"CFBundleVersion": @"0.0.1",
+        @"LSUIElement": @YES,
+    };
+    error = nil;
+    check([info writeToURL:[NSURL fileURLWithPath:[bundleContents stringByAppendingPathComponent:@"Info.plist"]]
+        atomically:YES], @"write valid temporary LSUIElement app bundle metadata");
+    pid_t baselineFrontmostPid = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    check(baselineFrontmostPid > 0, @"capture frontmost application before LaunchServices check-in");
+    BOOL bare = measureRegisteredDisplayNameHelper(bareExecutable, @"bare-helper", baselineFrontmostPid);
+    BOOL bundled = measureRegisteredDisplayNameHelper(bundleExecutable, @"bundled-helper", baselineFrontmostPid);
+    return bare && bundled;
+}
+
 int main(int argc, const char **argv) { @autoreleasepool {
     if (argc == 2 && strcmp(argv[1], "--webkit-label-worker") == 0) return runWebKitCases();
     if (argc == 2 && strcmp(argv[1], "--sidecar-process-name-helper") == 0) {
         return runSidecarProcessNameHelper();
     }
+    if (argc == 2 && strcmp(argv[1], "--registered-sidecar-display-name-helper") == 0) {
+        return runRegisteredSidecarDisplayNameHelper();
+    }
     BOOL sidecarMeasured = measureSidecarProcessNameSetter();
+    BOOL registrationMeasured = measureRegisteredDisplayNameCases();
     BOOL webKitMeasured = runWebKitWorkerAndCheckCleanup();
-    return sidecarMeasured && webKitMeasured ? 0 : 1;
+    return sidecarMeasured && registrationMeasured && webKitMeasured ? 0 : 1;
 } }

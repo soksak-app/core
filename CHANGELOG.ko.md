@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.16-3: Tracked native 측정은 bare helper와 동일한 executable을 임시 `LSUIElement` bundle 안에서 실행한 경우를 비교한다. `_RegisterApplication`만 호출하면 기본 LaunchServices label이 남지만 check-in 후 `_kLSDisplayNameKey`를 설정하면 두 helper 모두 LaunchServices와 `NSRunningApplication.localizedName`에 정확한 `soksak://sidecar/vt` label을 설정하면서 executable basename을 유지한다. Bare helper에는 bundle identifier가 없고 `BackgroundOnly`로 남는다. 두 경우 모두 frontmost PID를 바꾸지 않고 helper가 종료된다. private 등록 경로로 executable path를 바꾸지 않고 bare sidecar process에 label을 설정할 수 있음을 확인했다. Activity Monitor 전용 표시와 production 적용은 아직 확인하지 않았다.
+
 - F212.16-2: Native process-label 측정은 subprocess 오류, process record 누락, OS process query 실패, 잘못된 override label에서 실패한다. WebKit worker는 종료 전에 모든 view를 해제하고 parent는 각 WebContent process가 종료되는지 확인한다. 분리된 helper는 `NSProcessInfo.processName`이 요청한 sidecar label을 반환하지만 `proc_name`과 executable path는 helper 이름을 유지하고 LaunchServices는 해당 PID를 등록하지 않음을 확인한다. 소유 검사는 application을 활성화하지 않고 통과한다.
 
 - F212.16-1: `process_label_test`는 일반 WebKit scheme handler로 `sok://terminal/page`와 `soksak://plugin/terminal`을 로드하고, 명시적 process display-name override와 LaunchServices 및 process field를 비교한다. macOS 26.6.2 arm64에서 요청 URL path는 generic LaunchServices label을 바꾸지 않았다. private `_setProcessDisplayName:` override는 loaded URL을 유지하면서 정확히 `soksak://plugin/terminal` label을 설정했다. 세 사례는 별도 WebContent process를 사용했다. 공개 naming API, Activity Monitor 전용 표시, 여러 page가 한 WebContent process를 공유하는 경우는 검증하지 않았다. 기록된 test inventory는 이제 test file 901개를 포함한다.
