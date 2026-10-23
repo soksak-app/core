@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { copyFileSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,7 +17,8 @@ for (const app of Object.values(APPS)) {
     await main.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });
 
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-view-start-")));
-    writeFileSync(join(root, "sample.txt"), "alpha\n");
+    const editorBytes = "alpha\n";
+    writeFileSync(join(root, "sample.txt"), editorBytes);
     copyFileSync(HWP_FIXTURE, join(root, "two-paragraphs.hwp"));
     main.cleanup(() => rmSync(root, { recursive: true, force: true }));
 
@@ -48,9 +50,11 @@ for (const app of Object.values(APPS)) {
       "the editor surface did not receive the file-open path", { surface: editor.tab });
     assert.deepEqual(editorStart.params, { path: "sample.txt" });
     const editorDocument = await project.until("editor.document", (value) =>
-      value?.path === "sample.txt" && typeof value.version === "string",
+      value?.path === "sample.txt" && value.version === createHash("sha256").update(editorBytes).digest("hex")
+        && value.length === editorBytes.length,
     "the editor did not read the file after receiving its start parameters", { surface: editor.tab });
     assert.equal(editorDocument.path, "sample.txt");
+    assert.equal(editorDocument.length, 6);
 
     const hwp = await project.run("core.file.open", { path: "two-paragraphs.hwp" });
     assert.equal(typeof hwp.tab, "string", "core.file.open returned no HWP tab");
@@ -60,8 +64,10 @@ for (const app of Object.values(APPS)) {
     const hwpStart = await project.until("core.surface.document", (value) => value?.params?.path === "two-paragraphs.hwp",
       "the HWP surface did not receive the file-open path", { surface: hwp.tab });
     assert.deepEqual(hwpStart.params, { path: "two-paragraphs.hwp" });
+    const hwpBytes = readFileSync(HWP_FIXTURE);
     const hwpDocument = await project.until("hwp.document", (value) =>
-      value?.path === "two-paragraphs.hwp" && typeof value.version === "string" && value.pages > 0 && value.phase === "ready",
+      value?.path === "two-paragraphs.hwp" && value.version === createHash("sha256").update(hwpBytes).digest("hex")
+        && value.pages > 0 && value.phase === "ready",
     "the HWP reader did not finish with a document version and pages", { surface: hwp.tab });
     assert.equal(hwpDocument.path, "two-paragraphs.hwp");
     assert.ok(editorSurface && hwpSurface);
