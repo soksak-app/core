@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.16-1: `process_label_test`는 일반 WebKit scheme handler로 `sok://terminal/page`와 `soksak://plugin/terminal`을 로드하고, 명시적 process display-name override와 LaunchServices 및 process field를 비교한다. macOS 26.6.2 arm64에서 요청 URL path는 generic LaunchServices label을 바꾸지 않았다. private `_setProcessDisplayName:` override는 loaded URL을 유지하면서 정확히 `soksak://plugin/terminal` label을 설정했다. 세 사례는 별도 WebContent process를 사용했다. 공개 naming API, Activity Monitor 전용 표시, 여러 page가 한 WebContent process를 공유하는 경우는 검증하지 않았다. 기록된 test inventory는 이제 test file 901개를 포함한다.
+
 - F212.17: View 종료 후에도 pending call reply와 sidecar event가 host에서 문서를 제거한 뒤 전달을 시도할 수 있었다. Workbench는 pending call 대기를 abort하고 종료 뒤 완료된 결과를 버리며, 취소한 call reply와 거부된 event 전달을 기록한다. 소유 Red는 두 `no ready document` 오류와 오래된 reply 시도를 재현했다. Green은 두 취소 기록, 종료 후 전송 없음, application 오류 없음을 확인한다. Live-view 거부 검사는 계속 오류를 보고한다.
 
 - F212.13-1-1: Diagnostic input reference가 `focused` state를 JSON number `1`로 직렬화해 두 host keyboard check가 native key를 보내기 전에 실패했다. Raw JSON reply를 검사하는 native test는 기존 serializer에서 실패했으며 NSNumber equality assertion은 통과했다. Snapshot은 결과를 `@YES` 또는 `@NO`로 명시적으로 boxing하며 같은 소유 assertion과 macOS 26.6.2 arm64 `input_reference_test`가 통과한다. 승인된 두 host keyboard check는 F212.12-2-2-4에서 계속한다.

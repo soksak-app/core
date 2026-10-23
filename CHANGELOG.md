@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.16-1: `process_label_test` loads both `sok://terminal/page` and `soksak://plugin/terminal` through an ordinary WebKit scheme handler, then compares LaunchServices and process fields with an explicit process display-name override. On macOS 26.6.2 arm64, the requested URL path loads without changing the generic LaunchServices label; the private `_setProcessDisplayName:` override sets the exact `soksak://plugin/terminal` label while leaving the loaded URL unchanged. The three cases used separate WebContent processes. This does not verify a public naming API, Activity Monitor-specific rendering, or multiple pages sharing one WebContent process. The recorded test inventory now includes 901 test files.
+
 - F212.17: Ending a view could leave pending call replies and sidecar events attempting delivery after the host removed its document. The workbench now aborts pending call waits, discards results that settle after closure, and records canceled call replies and refused event deliveries. The owning Red reproduced both `no ready document` errors and a stale reply attempt; Green verifies both cancellation records, no post-close send, and no application error. The live-view refusal check still reports its error.
 
 - F212.13-1-1: The diagnostic input reference serialized its `focused` state as the JSON number `1`, so the two-host keyboard check failed before sending native keys. A native test of the raw JSON reply failed on the unchanged serializer even though an NSNumber equality assertion passed. The snapshot now boxes the result explicitly as `@YES` or `@NO`; the same owning assertion passes, and `input_reference_test` passes on macOS 26.6.2 arm64. The approved two-host keyboard check remains under F212.12-2-2-4.
