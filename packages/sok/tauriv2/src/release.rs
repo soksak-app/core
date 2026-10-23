@@ -391,6 +391,18 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
     else {
         return Err("sidecar.json: executable is required".into());
     };
+    if declaration.get("displayName").is_none() {
+        return Err("sidecar.json: displayName is required".into());
+    }
+    if !declaration["displayName"]
+        .as_str()
+        .is_some_and(valid_sidecar_display_name)
+    {
+        return Err(
+            "sidecar.json: displayName must be soksak://sidecar/ followed by one lowercase identifier"
+                .into(),
+        );
+    }
     for required in ["sidecar.json", executable] {
         if !listed.iter().any(|path| path == required) {
             return Err(format!("package.json files: {required} is not listed"));
@@ -426,6 +438,15 @@ fn run_release(dir: &str, out: &str, platform: &str, stdout: &mut dyn Write) -> 
         &json!({"name": name, "version": version, "platform": platform,
             "release": output.display().to_string(), "sha256": sum}),
     )
+}
+
+fn valid_sidecar_display_name(value: &str) -> bool {
+    let Some(component) = value.strip_prefix("soksak://sidecar/") else {
+        return false;
+    };
+    let mut bytes = component.bytes();
+    matches!(bytes.next(), Some(b'a'..=b'z'))
+        && bytes.all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 /// Runs the plugin and sidecar commands that write files without a running application.

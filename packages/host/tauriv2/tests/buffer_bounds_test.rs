@@ -100,7 +100,8 @@ impl Blocked {
         let declarations = vec![SidecarDeclaration {
             name: ECHO.to_string(),
             folder: directory.path().to_path_buf(),
-            data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+            data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+                .to_vec(),
             version: "0.0.1".to_string(),
             dependents: Vec::new(),
         }];
@@ -449,7 +450,8 @@ fn a_line_that_is_written_at_once_stores_no_write_wait() {
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),
-        data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+        data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_vec(),
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     }];

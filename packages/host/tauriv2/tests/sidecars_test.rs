@@ -122,7 +122,7 @@ fn echo_sidecars() -> (Sidecars<FakeOwner>, folder::Folder) {
     std::fs::write(&program, format!("#!/bin/sh\ntee {}\n", record.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let mut sidecars = create(
-        &files(r#"{"executable":"echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -260,7 +260,8 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
     let declare_in = |name: &str, folder: &Path| SidecarDeclaration {
         name: name.to_string(),
         folder: folder.to_path_buf(),
-        data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+        data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_vec(),
         version: "0.0.1".to_string(),
         dependents: Vec::new(),
     };
@@ -326,7 +327,7 @@ fn undeclared_and_stopped_sidecars_are_rejected() {
 fn a_missing_executable_fails() {
     let directory = folder::Folder::new();
     let sidecars = create(
-        &files(r#"{"executable":"echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -351,7 +352,7 @@ fn a_sidecar_receives_the_log_directory() {
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let mut created = create(
-        &files(r#"{"executable":"echo","protocol":1}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -384,7 +385,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
     assert!(error.contains("is not declared by any plugin"), "{error}");
     sidecars
         .declare(&declare(
-            &files(r#"{"executable":"echo","protocol":1}"#),
+            &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
             directory.path(),
         ))
         .unwrap();
@@ -404,7 +405,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
 fn an_executable_outside_the_package_fails() {
     let directory = folder::Folder::new();
     let error = create(
-        &files(r#"{"executable":"../escape","protocol":1}"#),
+        &files(r#"{"executable":"../escape","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .err()
@@ -420,7 +421,7 @@ fn an_executable_outside_the_package_fails() {
 fn an_absolute_executable_fails() {
     let directory = folder::Folder::new();
     let error = create(
-        &files(r#"{"executable":"/bin/sh","protocol":1}"#),
+        &files(r#"{"executable":"/bin/sh","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .err()
@@ -435,7 +436,9 @@ fn an_absolute_executable_fails() {
 #[test]
 fn persistent_transport_requires_a_config_directory() {
     let directory = folder::Folder::new();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let error = Sidecars::<FakeOwner>::new(
         &declare(&fixture, directory.path()),
         std::path::PathBuf::new(),
@@ -450,7 +453,7 @@ fn persistent_transport_requires_a_config_directory() {
 fn an_unsupported_protocol_fails() {
     let directory = folder::Folder::new();
     let error = create(
-        &files(r#"{"executable":"echo","protocol":2}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":2}"#),
         directory.path(),
     )
     .err()
@@ -466,7 +469,7 @@ fn an_unsupported_protocol_fails() {
 fn persistent_transport_rejects_unknown_transport() {
     let directory = folder::Folder::new();
     let error = create(
-        &files(r#"{"executable":"echo","protocol":1,"transport":"ptyd"}"#),
+        &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"ptyd"}"#),
         directory.path(),
     )
     .err()
@@ -479,7 +482,9 @@ fn persistent_transport_rejects_unknown_transport() {
 fn persistent_transport_accepts_a_non_canonical_config_directory() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
-    let fixture = files(r#"{"executable":"echo","protocol":1,"transport":"persistent"}"#);
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
     let sidecars = Sidecars::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().join("."),
@@ -536,11 +541,13 @@ fn slow_sidecar_does_not_block_other_sends() {
     let files: Files = vec![
         (
             "@fixture/sidecar-slow",
-            r#"{"executable":"slow","protocol":1}"#.to_string(),
+            r#"{"executable":"slow","displayName":"soksak://sidecar/probe","protocol":1}"#
+                .to_string(),
         ),
         (
             "@fixture/sidecar-fast",
-            r#"{"executable":"fast","protocol":1}"#.to_string(),
+            r#"{"executable":"fast","displayName":"soksak://sidecar/probe","protocol":1}"#
+                .to_string(),
         ),
     ];
     let mut sidecars = create(&files, directory.path()).unwrap();
@@ -635,7 +642,8 @@ fn stop_graceful_shutdown() {
 
     let files: Files = vec![(
         "@fixture/sidecar-graceful",
-        r#"{"executable":"graceful","protocol":1}"#.to_string(),
+        r#"{"executable":"graceful","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_string(),
     )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
@@ -713,7 +721,8 @@ fn stop_closes_unread_output_in_child() {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let files: Files = vec![(
         "@fixture/sidecar-talkative",
-        r#"{"executable":"talkative","protocol":1}"#.to_string(),
+        r#"{"executable":"talkative","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_string(),
     )];
     let mut sidecars = create(&files, directory.path()).unwrap();
     // stop() ends by force only after the deadline passes. If it returns before the deadline, the sidecar wrote all of
@@ -977,7 +986,8 @@ fn close_during_stop_sends_nothing() {
     let release = Release(release);
     let files: Files = vec![(
         "@fixture/sidecar-lingering",
-        r#"{"executable":"lingering","protocol":1}"#.to_string(),
+        r#"{"executable":"lingering","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_string(),
     )];
     let mut sidecars = create(&files, directory.path()).unwrap();
     sidecars.stop_timeout = STALL;
@@ -1047,7 +1057,8 @@ fn stop_forced_kill_in_child() {
 
     let files: Files = vec![(
         "@fixture/sidecar-stubborn",
-        r#"{"executable":"stubborn","protocol":1}"#.to_string(),
+        r#"{"executable":"stubborn","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_string(),
     )];
 
     let mut sidecars = create(&files, directory.path()).unwrap();
@@ -1129,7 +1140,7 @@ fn script_sidecars(script: &str) -> (Stopping, folder::Folder) {
     .unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     let sidecars = create(
-        &files(r#"{"executable":"fake","protocol":1}"#),
+        &files(r#"{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}"#),
         directory.path(),
     )
     .unwrap();
@@ -1340,7 +1351,11 @@ fn closing_sidecars(
     let program = directory.path().join("closing");
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let files: Files = vec![(ECHO, r#"{"executable":"closing","protocol":1}"#.to_string())];
+    let files: Files = vec![(
+        ECHO,
+        r#"{"executable":"closing","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_string(),
+    )];
     let sidecars = std::sync::Arc::new(create(&files, directory.path()).unwrap());
     let (snapshot, snapshots) = channel();
     let observed = std::sync::Arc::downgrade(&sidecars);
@@ -1422,7 +1437,11 @@ fn declaration_replaces_a_sidecar_whose_folder_changed() {
         std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
         directory
     };
-    let files: Files = vec![(ECHO, r#"{"executable":"answer","protocol":1}"#.to_string())];
+    let files: Files = vec![(
+        ECHO,
+        r#"{"executable":"answer","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_string(),
+    )];
     let (first, second) = (folder("first"), folder("second"));
     let sidecars = create(&files, &first).unwrap();
     let (window, messages, failures) = failing_owner("a", "/projects/replace");
@@ -2180,7 +2199,8 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
     let declarations = vec![SidecarDeclaration {
         name: ECHO.to_string(),
         folder: directory.path().to_path_buf(),
-        data: br#"{"executable":"fake","protocol":1}"#.to_vec(),
+        data: br#"{"executable":"fake","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_vec(),
         version: "0.0.1".to_string(),
         dependents: vec!["plugin-a".to_string()],
     }];

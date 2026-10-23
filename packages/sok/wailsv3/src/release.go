@@ -339,6 +339,14 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 	if !ok {
 		return fmt.Errorf("sidecar.json: executable is required")
 	}
+	displayValue, exists := sidecar["displayName"]
+	if !exists {
+		return fmt.Errorf("sidecar.json: displayName is required")
+	}
+	displayName, ok := text(displayValue)
+	if !ok || !validSidecarDisplayName(displayName) {
+		return fmt.Errorf("sidecar.json: displayName must be soksak://sidecar/ followed by one lowercase identifier")
+	}
 	for _, required := range []string{"sidecar.json", executable} {
 		if !slices.Contains(listed, required) {
 			return fmt.Errorf("package.json files: %s is not listed", required)
@@ -385,6 +393,23 @@ func runRelease(dir, out, platform string, stdout io.Writer) error {
 		return err
 	}
 	return printJSON(stdout, map[string]string{"name": name, "version": version, "platform": platform, "release": output, "sha256": sum})
+}
+
+func validSidecarDisplayName(value string) bool {
+	const prefix = "soksak://sidecar/"
+	if !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	component := strings.TrimPrefix(value, prefix)
+	if len(component) == 0 || component[0] < 'a' || component[0] > 'z' {
+		return false
+	}
+	for _, char := range component[1:] {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // readSums reads SHA256SUMS as the sha256 of each release name. When the file does not exist, the list is empty.

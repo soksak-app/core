@@ -131,7 +131,7 @@ fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> Folde
     write_file(
         &config.join(folder).join("sidecar.json"),
         &format!(
-            r#"{{"executable":"worker","protocol":1,"replay":{{"role":"{role}","executable":"replay.sh","inputs":{REPLAY_INPUTS}}}}}"#
+            r#"{{"executable":"worker","displayName":"soksak://sidecar/probe","protocol":1,"replay":{{"role":"{role}","executable":"replay.sh","inputs":{REPLAY_INPUTS}}}}}"#
         ),
         0o644,
     );
@@ -622,7 +622,7 @@ fn replay_refuses_a_segment_whose_inputs_break_the_rules_of_a_session() {
     let file = config.join("sidecars/probe-worker/1.0.0/darwin-arm64/sidecar.json");
     write_file(
         &file,
-        r#"{"executable":"worker","protocol":1,"replay":{"role":"fake","executable":"replay.sh"}}"#,
+        r#"{"executable":"worker","displayName":"soksak://sidecar/probe","protocol":1,"replay":{"role":"fake","executable":"replay.sh"}}"#,
         0o644,
     );
     let (_, stderr, code) = run_replay(&config, &["s1"]);

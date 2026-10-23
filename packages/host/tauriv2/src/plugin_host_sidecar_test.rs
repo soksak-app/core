@@ -204,7 +204,7 @@ fn declared(executable: &Path, config: &Path) -> Sidecars<TestOwner> {
         &[SidecarDeclaration {
             name: SIDECAR.to_string(),
             folder: executable.to_path_buf(),
-            data: br#"{"executable":"echo","protocol":1,"transport":"persistent"}"#.to_vec(),
+            data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_vec(),
             version: "0.0.1".to_string(),
             dependents: vec!["probe".to_string()],
         }],
@@ -577,7 +577,8 @@ fn declared_stdio(executable: &Path, config: &Path) -> Sidecars<RecordingOwner> 
         &[SidecarDeclaration {
             name: SIDECAR.to_string(),
             folder: executable.to_path_buf(),
-            data: br#"{"executable":"echo","protocol":1}"#.to_vec(),
+            data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+                .to_vec(),
             version: "0.0.1".to_string(),
             dependents: vec!["probe".to_string()],
         }],

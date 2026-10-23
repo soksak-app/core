@@ -220,13 +220,39 @@ fn sidecar_tree(version: &str) -> Folder {
             ("package.json", &package),
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 1}"#,
+                r#"{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe"}"#,
             ),
             ("build/worker*", &binary),
             ("build/intermediate", "not listed"),
         ],
     );
     dir
+}
+
+#[test]
+fn sidecar_release_rejects_a_missing_display_name() {
+    let tree = sidecar_tree("0.1.0");
+    write_tree(
+        tree.path(),
+        &[(
+            "sidecar.json",
+            r#"{"executable":"build/worker","protocol":1}"#,
+        )],
+    );
+    let out = Folder::new("release");
+    let (code, _, stderr) = run(&[
+        "sidecar",
+        "release",
+        text(tree.path()),
+        text(out.path()),
+        "--platform",
+        "darwin-arm64",
+    ]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (1, "sok: sidecar.json: displayName is required\n")
+    );
+    assert_eq!(std::fs::read_dir(out.path()).unwrap().count(), 0);
 }
 
 // contract: cli.release.writes-release-and-sums
@@ -343,7 +369,7 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         &[
             (
                 "sidecar.json",
-                r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen", "executable": "build/replay"}}"#,
+                r#"{"executable": "build/worker", "displayName":"soksak://sidecar/probe","protocol": 1, "replay": {"role": "screen", "executable": "build/replay"}}"#,
             ),
             ("build/replay*", "binary replay"),
         ],
@@ -389,7 +415,7 @@ fn sidecar_release_refuses_a_replay_executable_that_the_package_does_not_ship() 
         tree.path(),
         &[(
             "sidecar.json",
-            r#"{"executable": "build/worker", "protocol": 1, "replay": {"role": "screen"}}"#,
+            r#"{"executable": "build/worker", "displayName":"soksak://sidecar/probe","protocol": 1, "replay": {"role": "screen"}}"#,
         )],
     );
     let (code, _, stderr) = release(&tree);

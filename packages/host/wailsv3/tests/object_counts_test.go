@@ -79,7 +79,7 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "echo"), []byte("#!/bin/sh\ncat > /dev/null\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","protocol":1}`), directory)
+	sidecars, err := host.NewSidecars(declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
