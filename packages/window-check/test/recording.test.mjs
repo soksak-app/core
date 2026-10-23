@@ -92,6 +92,21 @@ test("a stopped recording is removed after finalization without another stop", a
   assert.equal(existsSync(recording.frames), false, "the recording folder stayed");
 });
 
+test("a tracked recording is finalized when its frame path has an equivalent filesystem spelling", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "soksak-record-path-identity-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const client = fakeClient(directory);
+  const s = newSession(directory, client);
+  const captures = join(directory, "logs", "captures");
+  const frames = join(captures, "capture-alias");
+  mkdirSync(frames);
+  writeFileSync(join(frames, "frame-0001.bgra"), "capture evidence");
+  s.trackRecording(`${captures}/./capture-alias`);
+
+  await cleanUp(s);
+  assert.equal(existsSync(frames), false, "the tracked recording was not removed after successful finalization");
+});
+
 test("a recording stop requires its callback status artifact", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));

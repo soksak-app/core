@@ -72,6 +72,7 @@ test("probe body passes", async (t) => {
     cleanups: [],
     eventStart: { "host-1-1.jsonl": { offset: ${started}, inode: ${JSON.stringify(String(statSync(join(dir, "logs", "host-1-1.jsonl"), { bigint: true }).ino))} } },
     expectedErrors: ${expected},
+    recordings: new Set(),
     markTest: async () => null,
   };
   t.after(() => finishSession(t, session, () => {}));

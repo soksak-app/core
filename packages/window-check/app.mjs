@@ -290,7 +290,8 @@ export async function finishSession(t, session, close) {
     // recording left by an otherwise successful check is itself a failure; preserve it for the same reason.
     const left = recordingFolders(session.app.configDir).filter((name) => !session.recordingsBefore.includes(name))
       .map((name) => join(session.app.configDir, "logs", "captures", name));
-    const untracked = left.filter((folder) => !session.recordings.has(folder));
+    const trackedRecordingPaths = new Set([...session.recordings].map((folder) => realpathSync(folder)));
+    const untracked = left.filter((folder) => !trackedRecordingPaths.has(realpathSync(folder)));
     const failedRecordings = left.filter((folder) => session.failedRecordings.has(folder));
     if (left.length && (!t.passed || failures.length || untracked.length || failedRecordings.length)) {
       if (untracked.length && t.passed && failures.length === 0) {

@@ -10,6 +10,8 @@
 
 - F212.12-2-2-4-3: The window-check session now removes owned recordings only after every cleanup and the application error audit succeed. Failed checks, failed capture stops, artifact validation errors, audit errors and untracked leftover folders retain evidence; a caught capture failure still fails the check. The owning session-cleanup and recording tests pass 11/11; `make docs-check` passes.
 
+- F212.12-2-2-4-4: Window-check recording ownership now compares canonical filesystem identities, so an equivalent frame-path spelling is tracked and removed after a successful session. The owning test failed on the unchanged finalizer and passes after the correction; recording and session-cleanup tests pass 12/12.
+
 - F212.10-editor-2: The provider page can now load only its own declared shared modules even when no contributor is connected. Other pages still require a compatible item for an enabled provider. The owning Go and Rust Red tests each returned no shared files; the same tests and the existing grant cases pass after the fix.
 
 - F212.16-13: Tauri's application entry now imports `soksak://core/start.json`, matching the current host scheme. The owning test failed against the old `sok:` import, then passed while resolving only the canonical address. The Tauri package tests pass 18/18, and a rebuilt 0.0.20 window reports `ready:true`.
