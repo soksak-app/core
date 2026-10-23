@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2-4: 승인된 두 host 검사에서 reference와 terminal 입력은 통과했고 Wails capture도 기준을 충족했다. Tauri 입력도 reference text와 terminal output이 예상대로 나왔지만 연속 complete frame 간 terminal 녹화가 33 ms를 0.1167917 ms 초과했다. Callback trace에는 중간 frame과 writer rejection이 없었다. Mach timebase 125/3에서 display 차이는 794803 tick, arrival 차이는 797653 tick, 동기 처리 구간은 33066 및 45061 tick이다. 처리 완료 시각은 비동기 compression과 file write 전이므로 writer I/O는 측정하지 않는다. Raw capture와 실행 출력은 진단을 위해 보존했으며 원인은 정하지 않았다. Input method와 처음 foreground였던 application을 복원했다. Display cadence 조사는 F212.12-2-2-4-8에 연결한다.
+
 - F212.12-2-2-4-7: Capture가 Core Video pixel-buffer lock/unlock 반환값을 확인한다. Lock 실패는 frame과 `CVReturn`을 기록하고 base-address 접근 및 unlock을 하지 않으며 pending-writer permit을 반환한다. Unlock 실패는 결과를 기록하고 복사한 frame을 해제·거부한 뒤 writer에 제출하지 않고 permit을 반환한다. 소유 `capture_metadata_test`는 변경 전 unchecked 경로에서 두 실패를 재현하고 수정 후 통과하며, macOS 26.6.2 arm64에서 `make docs-check`가 통과한다.
 
 - F212.10-core-2: Workbench는 plane slot부터 compositor record까지 tab의 전체 surface descriptor를 보존해 view start values에 저장 params를 전달한다. Dormant tab은 저장 params를 사용하고 placeholder slot은 descriptor를 제거한다. Owning Red는 `start.params === null`인 `core.file.open`에서 실패했다. 같은 검사에서 active host dispatch, dormant 값, 명시적 null, 중복 wire params 부재를 확인한다. Workbench/compositor/view/params 검사는 33/33, `make docs-check`는 통과한다. Wails와 Tauri 0.0.20 비활성화 E2E는 각 반환 project id와 ready window, 기대 params 및 editor path/version/length, HWP path/version/pages/phase를 확인했다. 강화한 새 실행도 2/2 통과했으며 editor와 HWP version이 각각 fixture SHA-256과 일치하고, editor 길이는 6, HWP page 수는 양수이고 phase는 ready였다. 두 host와 sidecar가 종료되고 endpoint가 제거됐으며 crash marker는 모두 비어 있었다. Wails stderr에 assertion 이후 E2E cleanup이 project window를 닫을 때 `WebviewWindow #2 not found`가 기록됐으며 F212.10-core-3에서 별도로 추적한다.
