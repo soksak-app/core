@@ -10,6 +10,8 @@
 
 - F212.12-2-2-2: The current-window terminal focus check records native pointer delivery, the text input region and the first responder without replacing the layout. It reproduced the hidden view and missing terminal focus binding, then passed on both diagnostic hosts with the native reveal correction and terminal P66. Native typing and public delivery remain unverified.
 
+- F212.12-1-23: The actual view bridge registers document, input and hit exposure once instead of observing a main-page placeholder. Document audits aggregate actual shared binder connections and open shadow roots. View rectangles add their current applied origin once; the surface menu remains in the main document. The owning and staging tests pass; application observation and release remain pending.
+
 - F212.12-2-2-1: Revealing a prepared surface reapplies the visibility of its view as well as its native regions. A view placed while the surface was hidden previously stayed hidden because the refresh visited only the native plane, so the regions displayed while mouse input missed the view. The owning native test reproduces the preparation order and passes after failing its visibility, press and focus assertions.
 
 - F212.12-1-20: The `core.plugins` status reports the surface `composition` of each loaded plugin, independently of open tabs, so window checks can find views that have no card. The owning Red assertion now passes with all 22 plugin-operation and composition-kind tests.

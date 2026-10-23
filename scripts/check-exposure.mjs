@@ -43,8 +43,8 @@ errors.push(...auditExposure({
   where: "packages/workbench",
   exposes: coreExposes,
   sources,
-  // The core surface entries (core.surface.*) are registered by the plugin page interface.
-  registrations: [readFileSync(join(ROOT, "packages/plugin-api/page.js"), "utf8")],
+  // The core document entries are registered by the view bridge in the actual surface document.
+  registrations: [readFileSync(join(ROOT, "packages/plugin-api/view.js"), "utf8")],
 }));
 
 // The declarations of a plugin are checked by each plugin repository with soksak-exposure of plugin-api (docs/spec/plugins.md#repositories).

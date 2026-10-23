@@ -4,8 +4,7 @@
 // tokens that the host sent on their own root.
 import { page as runtimePage } from "@soksak/runtime";
 import {
-  EXPOSURE, MANIFEST, SURFACE_CORE, createExpose, declarationMap, orderedSidecar, pageIdentity,
-  validateExposureFile,
+  createExpose, declarationMap, orderedSidecar, pageIdentity,
 } from "@soksak/plugin-api";
 import { installDocumentErrors } from "./document-errors.js";
 import { createSurfaceCompositionController } from "./surface-composition.js";
@@ -54,7 +53,6 @@ if (page) {
 export function followTheme() {
   return new Promise((applied) => {
     page.theme((theme) => {
-      themed = true;
       const root = document.documentElement;
       root.style.colorScheme = theme.scheme;
       for (const [token, value] of Object.entries(theme.tokens)) {
@@ -64,8 +62,6 @@ export function followTheme() {
     });
   });
 }
-
-let themed = false;
 
 async function fetchJson(path) {
   const response = await fetch(path);
@@ -85,17 +81,10 @@ export async function ownManifest() {
   return (await ownPlugin()).manifest;
 }
 
-/**
- * The exposed entries that this document can register: the plugin.json declarations of the same plugin plus the surface
- * document entries (core.surface.*) of the core declarations.
- */
+/** The plugin declarations of this host or modal document; core document entries belong to the view bridge. */
 async function ownDeclarations() {
-  // default: exposes is an optional field of plugin.json; a plugin without it registers only the core surface entries.
-  const plugin = (await ownManifest()).exposes ?? {};
-  const core = validateExposureFile(await fetchJson(`/${EXPOSURE}`)).exposes;
-  const surfaceCore = Object.fromEntries(Object.entries(core)
-    .map(([key, list]) => [key, list.filter((entry) => entry.name.startsWith(SURFACE_CORE))]));
-  return declarationMap(surfaceCore, declarationMap(plugin));
+  // default: exposes is optional; a plugin without it registers no entries.
+  return declarationMap((await ownManifest()).exposes ?? {});
 }
 
 /** The exposure registration function of a surface page. It is null without a native host. */
@@ -106,76 +95,4 @@ export async function createSurfaceComposition({ regions = {}, overlays = {} } =
   if (!runtimePage) return null;
   const declaration = (await ownManifest()).surface?.composition;
   return createSurfaceCompositionController(runtimePage, declaration, { regions, overlays }, window);
-}
-
-/* The input record of the surface document. It is core.surface.input of docs/spec/exposure.md. */
-const INPUT_TYPES = ["pointerdown", "pointerup", "pointermove", "click", "wheel", "keydown"];
-const INPUT_KEPT = 32;
-
-/** Creates one status that reports when the value changes. */
-function observed(read) {
-  const listeners = new Set();
-  return {
-    read,
-    subscribe: (fn) => {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    notify: () => {
-      const value = read();
-      for (const fn of listeners) fn(value);
-    },
-  };
-}
-
-/** Registers the core surface entries in every plugin surface document. */
-function exposeSurfaceDocument() {
-  const root = document.documentElement;
-  const documentState = observed(() => ({
-    url: location.href,
-    timeOrigin: performance.timeOrigin,
-    readyState: document.readyState,
-    themed,
-    scale: devicePixelRatio,
-    body: document.body
-      ? { width: document.body.getBoundingClientRect().width, height: document.body.getBoundingClientRect().height }
-      : null,
-    viewport: { width: visualViewport.width, height: visualViewport.height },
-    filter: getComputedStyle(root).filter,
-    unbound: document.body ? expose.audit(document.body) : [],
-  }));
-  const events = [];
-  let sequence = 0;
-  const input = observed(() => events.slice());
-  for (const type of INPUT_TYPES) {
-    addEventListener(type, (event) => {
-      // default: a key event has no coordinates and a pointer event has no key, so those fields are null.
-      events.push({ sequence: ++sequence, type, trusted: event.isTrusted, x: event.clientX ?? null, y: event.clientY ?? null, key: event.key ?? null });
-      if (events.length > INPUT_KEPT) events.shift();
-      input.notify();
-    }, true);
-  }
-  document.addEventListener("readystatechange", documentState.notify);
-  addEventListener("resize", documentState.notify);
-  visualViewport.addEventListener("resize", documentState.notify);
-  new MutationObserver(documentState.notify).observe(root, { attributes: true, attributeFilter: ["style", "class"] });
-  // unbound changes when an operable element is added or when its name and command change.
-  new MutationObserver(documentState.notify).observe(root, {
-    subtree: true, childList: true, attributes: true, attributeFilter: ["data-command", "data-expose", "role", "contenteditable"],
-  });
-  expose.onBinding(documentState.notify);
-  Promise.all([
-    expose.status("core.surface.document", documentState.read, documentState.subscribe),
-    expose.status("core.surface.input", input.read, input.subscribe),
-    expose.command("core.surface.hit", ({ x, y }) => document.elementFromPoint(x, y) !== null),
-  ]).catch((error) => console.error(`core surface entries: ${error.message}`));
-}
-
-// The surface entries are registered only in a plugin page, and the page identity must resolve first: a mismatch is logged, not registered.
-if (expose) {
-  pageIdentity(location, fetchJson)
-    .then((plugin) => {
-      if (plugin) exposeSurfaceDocument();
-    })
-    .catch((error) => console.error(`core surface entries: ${error.message}`));
 }

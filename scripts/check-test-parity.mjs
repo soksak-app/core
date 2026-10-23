@@ -188,6 +188,22 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F212.12-1-23",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "observeSurfaceDocument" },
+      { file: "packages/plugin-api/surface-document.js", symbol: "auditDocument" },
+      { file: "packages/workbench/exposure.js", symbol: "options.surfaceFrame(surface)" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge registers the actual view document without plugin exposure setup" },
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "document watchers observe delegated shadow controls and mutations and close after unwatch" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "a view rectangle uses the selected surface's current applied origin once" },
+      { file: "packages/workbench/test/exposure.test.mjs", id: "the surface menu command is owned by the main document" },
+    ],
+    expected: "The actual view owns its document, input and hit entries once, its audit includes shared binders and open shadow roots, and view rectangles add the current applied origin once while the main document retains its menu command.",
+    levels: ["unit"],
+  },
+  {
     id: "F212.12-1-10-5",
     implementation: [{ file: "packages/plugin-api/view-modules.js", symbol: "export function checkViewModules" }],
     tests: [
@@ -1204,7 +1220,7 @@ const FEATURE_LINKS = [
     id: "F11-1",
     implementation: [
       { file: "packages/workbench/core-exposure.js", symbol: "core.page.audit" },
-      { file: "packages/workbench/surface-exposure.js", symbol: "unbound" },
+      { file: "packages/plugin-api/surface-document.js", symbol: "unbound" },
     ],
     tests: [{ file: "e2e/audit.test.mjs", id: "every control on every screen runs a declared command and has a dom name" }],
     expected: "Rebuilt Tauri and Wails audit every visible control on workspace, menus, renames, settings scopes and sections, library forms/search, and the return path; every control has a declared command and DOM name.",

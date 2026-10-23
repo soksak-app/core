@@ -14,7 +14,7 @@ import { pluginRecords } from "./plugin-records.js";
 import { timed, trace } from "./performance.js";
 import { emitEvent } from "./page-log.js";
 import {
-  EXPOSE_KINDS, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, SURFACE_CORE, declarationKey, declarationMap,
+  EXPOSE_KINDS, EXPOSURE_ERRORS, ExposureError, METHOD_KINDS, surfaceDocumentEntry, declarationKey, declarationMap,
   exposureEntries, replyPayload, validateExposes, validateExposureFile,
 } from "@soksak/plugin-api";
 
@@ -33,8 +33,8 @@ const byAttribute = (name) => () => [...document.querySelectorAll(`[data-expose=
 
 const ownerOf = (name) => name.slice(0, name.indexOf("."));
 
-/** Whether the name is registered by a surface document: a plugin name or core.surface.*. */
-const surfaceName = (name) => ownerOf(name) !== "core" || name.startsWith(SURFACE_CORE);
+/** Whether the name is registered by a surface document: a plugin name or one of the three core document entries. */
+const surfaceName = (name) => ownerOf(name) !== "core" || surfaceDocumentEntry(name);
 
 /** The key of one watch. A watch that names a surface and a watch that does not are different. */
 // default: as stated above, the surface of a watch that names no surface is null.
@@ -44,8 +44,7 @@ const watchKey = (name, surface) => JSON.stringify([name, surface ?? null]);
 const surfacePorts = new Map();
 
 // The surfaces whose page is a view. A view answers the forwarded requests of its own names through its exposure-request subscription
-// (docs/spec/native-surfaces.md#view-surfaces), so a request of a view surface reaches the port of the page only when it names a core
-// surface entry, which the page registers for every surface (docs/spec/exposure.md#surface-documents).
+// (docs/spec/native-surfaces.md#view-surfaces), including the core document entries. No view request reaches the main-page placeholder.
 // Each mount of a view holds its own mark, so the dispose of an earlier mount of the same surface removes only its mark.
 const viewSurfaces = new Map();
 
@@ -91,6 +90,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     surfacePlugin: () => null, preferred: () => [], registrationChanged: () => {}, unloaded: () => false,
     // Work to wait for after a core command ran. The document passes the drawing of the plane, so a command that changed the layout replies after it is drawn.
     settled: () => undefined,
+    // default: without a composition source no applied frame is known, and a view rectangle is refused by forward.
+    surfaceFrame: () => null,
     // Called when an observation inside this document fails. It is reported as a page error (docs/spec/plugins.md#sections).
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: error.message })),
   };
@@ -156,6 +157,14 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (timeout !== undefined) request.timeout = timeout;
     const reply = await call("exposureForward", request);
     if (reply.error) throw new ExposureError(reply.error.code, reply.error.message);
+    if (method === "dom.rect" && reply.result && viewSurfaces.has(surface)) {
+      const frame = options.surfaceFrame(surface);
+      if (!frame || ![frame.x, frame.y].every(Number.isFinite)) {
+        throw new ExposureError(EXPOSURE_ERRORS.failed, `surface ${surface} has no valid applied frame`);
+      }
+      // Native view page zoom is 1. CSS sizing is already in the local rectangle, including the plugin's text-size changes.
+      return { ...reply.result, x: reply.result.x + frame.x, y: reply.result.y + frame.y, document: { x: 0, y: 0 } };
+    }
     // default: a reply that carries no result is the reply of a command whose result is null.
     return reply.result ?? null;
   }
@@ -635,7 +644,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     commandTimeout: (name) => declared.get(declarationKey("command", name))?.declaration.timeout,
     surfaceDeclarations() {
       const listed = list();
-      const onlySurface = (entry) => entry.name.startsWith(SURFACE_CORE);
+      const onlySurface = (entry) => surfaceDocumentEntry(entry.name);
       return {
         status: listed.status.filter(onlySurface),
         commands: listed.commands.filter(onlySurface),
@@ -687,17 +696,9 @@ export function markViewSurface(surface) {
   };
 }
 
-const isCoreSurfaceRequest = ({ params }) => typeof params?.name === "string" && params.name.startsWith(SURFACE_CORE);
-
-/**
- * Whether a view answers the request. A view answers the names it declares; a core surface entry (core.surface.*) is answered by the
- * surface document alone, so the view is not forwarded it (docs/spec/exposure.md#surface-documents).
- */
-export const viewOwns = (request) => !isCoreSurfaceRequest(request);
-
 export async function dispatchSurfaceRequest(request) {
   // A view answers its own request through its subscription, so the request is consumed here and is not forwarded to the view again.
-  if (viewSurfaces.has(request.surface) && viewOwns(request)) return true;
+  if (viewSurfaces.has(request.surface)) return true;
   const port = surfacePorts.get(request.surface);
   if (!port) return false;
   await port(request);

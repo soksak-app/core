@@ -608,6 +608,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onSaved(coreChanged);
 
   await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged, settled: drawn, report,
+    surfaceFrame: (surface) => {
+      const record = seated()?.surfaces.find((entry) => entry.id === surface);
+      return record ? shift(record.applied, planeOrigin()) : null;
+    },
     unloaded: (surface) => memory.unloaded(surface), projectData: pluginHostData });
 }
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { EXPOSURE_ERRORS, SURFACE_CORE, validateExposureFile } from "@soksak/plugin-api";
+import { EXPOSURE_ERRORS, surfaceDocumentEntry, validateExposureFile } from "@soksak/plugin-api";
 
 // A fake document and fake plugin declarations. They use no real plugin name.
 const dom = new JSDOM(`<body>
@@ -12,7 +12,7 @@ const dom = new JSDOM(`<body>
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 
-const { createRegistry, installExposure, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest, viewOwns } = await import("../exposure.js");
+const { createRegistry, installExposure, markViewSurface, registry, registerSurfacePort, dispatchSurfaceRequest } = await import("../exposure.js");
 const { keepHostCommands } = await import("../plugin-host.js");
 
 test("mounted surface exposure routes through its registered module and releases ownership", async () => {
@@ -31,7 +31,7 @@ test("mounted surface exposure routes through its registered module and releases
   }
 });
 
-test("a view surface sends only its core surface entries to the page port, and consumes its other requests for the view", async () => {
+test("a view surface answers its core document entries without reaching the main page port", async () => {
   const surface = "fixture-view-surface";
   const received = [];
   const remove = registerSurfacePort(surface, async (request) => { received.push(request.id); });
@@ -40,10 +40,10 @@ test("a view surface sends only its core surface entries to the page port, and c
     assert.equal(await dispatchSurfaceRequest({ surface, id: 1, method: "status.get", params: { name: "fixture-view.lines" } }), true);
     assert.equal(await dispatchSurfaceRequest({ surface, id: 2, method: "status.get", params: { name: "core.surface.document" } }), true);
     assert.equal(await dispatchSurfaceRequest({ surface, id: 3, method: "exposure.list", params: {} }), true);
-    assert.deepEqual(received, [2], "a request of the view reached the page port");
+    assert.deepEqual(received, [], "a request of the view reached the main page placeholder");
     unmark();
     assert.equal(await dispatchSurfaceRequest({ surface, id: 4, method: "status.get", params: { name: "fixture-view.lines" } }), true);
-    assert.deepEqual(received, [2, 4], "a surface that is no longer a view does not consume its requests");
+    assert.deepEqual(received, [4], "a surface that is no longer a view does not consume its requests");
   } finally {
     unmark();
     remove();
@@ -53,7 +53,7 @@ test("a view surface sends only its core surface entries to the page port, and c
 const coreExposes = () => ({
   status: [
     { name: "core.fixture.count", description: "Count.", schema: { type: "integer" } },
-    { name: "core.surface.fixture", description: "Registered by surface pages.", schema: {} },
+    { name: "core.surface.document", description: "Registered by surface pages.", schema: {} },
   ],
   commands: [{ name: "core.fixture.add", description: "Adds.", params: { type: "object", properties: { n: { type: "integer" } } }, result: { type: "integer" } }],
   dom: [
@@ -94,14 +94,14 @@ test("registration tracing attributes core loss to its document and live request
   const surface = "registration-timeline-surface";
   const remove = registerObservedPort(surface, async () => {});
   try {
-    made.registered({ surface, kind: "status", name: "core.surface.fixture" });
+    made.registered({ surface, kind: "status", name: "core.surface.document" });
     made.registered({ surface, closed: true });
     made.registered({ surface, kind: "status", name: "probe.lines" });
     assert.deepEqual(records.map((record) => record.phase), ["registered", "closed", "registered"]);
     assert.equal(records[1].event, "surface.registration");
     assert.equal(records[1].hasPort, true, "the close lost its live callback attribution");
     assert.equal(records[1].timeOrigin, performance.timeOrigin);
-    assert.deepEqual(records[1].names, ["status core.surface.fixture"], "the close lost the removed core names");
+    assert.deepEqual(records[1].names, ["status core.surface.document"], "the close lost the removed core names");
     made.unregisterSurface(surface);
     assert.equal(records.at(-1).phase, "disposed");
     assert.deepEqual(records.at(-1).names, ["status probe.lines"]);
@@ -139,9 +139,9 @@ test("the core declaration file is valid and every main-page entry is registered
   validateExposureFile(file);
   const source = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
   const code = source("core-exposure.js");
-  // The surface document registers core.surface.* through @soksak/plugin-api/page.
-  const main = (list) => list.filter(({ name }) => !name.startsWith(SURFACE_CORE));
-  assert.ok(file.exposes.status.some(({ name }) => name.startsWith(SURFACE_CORE)), "surface document entries are declared");
+  // The core view bridge registers only the three common document entries.
+  const main = (list) => list.filter(({ name }) => !surfaceDocumentEntry(name));
+  assert.ok(file.exposes.status.some(({ name }) => surfaceDocumentEntry(name)), "surface document entries are declared");
   for (const { name } of main(file.exposes.status)) assert.match(code, new RegExp(`status\\("${name}"`), name);
   for (const { name } of main(file.exposes.commands)) assert.match(code, new RegExp(`command\\("${name}"`), name);
   // Reads every owning module of the staging declaration. A separated operation module passes the same name check.
@@ -161,7 +161,7 @@ test("the registry registers the core declarations of the exposure file", () => 
     "entries keep the declaration format and add registered");
   assert.deepEqual(Object.values(listed).flat().map((entry) => `${entry.name} ${entry.registered}`), [
     "core.fixture.count false",
-    "core.surface.fixture false",
+    "core.surface.document false",
     "core.fixture.add false",
     "core.fixture.button false",
     "core.fixture.row false",
@@ -286,11 +286,43 @@ test("a dom request of a plugin host entry is refused as failed while the host p
   }
 });
 
-// contract: exposure.relay.one-answerer-per-request
-test("a view is forwarded only the requests it owns: a core surface entry is answered by the surface document alone", () => {
-  assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "fixture.session" } }), true);
-  assert.equal(viewOwns({ surface: "tab-a", method: "status.watch", params: { name: "core.surface.document" } }), false);
-  assert.equal(viewOwns({ surface: "tab-a", method: "status.get", params: { name: "core.surface.input" } }), false);
+
+test("the surface menu command is owned by the main document", { timeout: 5000 }, async () => {
+  const made = createRegistry();
+  made.declare("core", { commands: [{ name: "core.surface.menu", description: "Opens the menu.",
+    params: { type: "object" }, result: { type: "string" } }] });
+  made.command("core.surface.menu", () => "main menu");
+  assert.deepEqual(await made.handle({ method: "command.run", params: { name: "core.surface.menu", params: {} } }),
+    { result: "main menu" });
+  assert.deepEqual(made.surfaceDeclarations().commands, [], "the menu was handed to the view document");
+});
+
+test("a view rectangle uses the selected surface's current applied origin once", { timeout: 5000 }, async () => {
+  const local = { x: 12, y: 24, width: 80, height: 30 };
+  const made = coreRegistry(fakeHost(() => ({ result: local })));
+  const placements = new Map([
+    ["tab-a", { x: 215.25, y: 116.5, w: 400, h: 300, visible: true }],
+    ["tab-b", { x: 700, y: 95, w: 200, h: 100, visible: true }],
+  ]);
+  const unmarks = [...placements.keys()].map(markViewSurface);
+  made.configure({ surfacePlugin: () => "probe", preferred: () => ["tab-b"],
+    surfaceFrame: (surface) => placements.get(surface) });
+  for (const surface of placements.keys()) made.registered({ surface, kind: "dom", name: "probe.lines" });
+  try {
+    for (const [surface, placement] of placements) {
+      const result = (await made.handle({ method: "dom.rect", params: { name: "probe.lines", surface } })).result;
+      assert.deepEqual(result, { ...local, x: local.x + placement.x, y: local.y + placement.y, document: { x: 0, y: 0 } });
+    }
+    placements.set("tab-b", { x: 120, y: 180, w: 0, h: 0, visible: false });
+    const moved = (await made.handle({ method: "dom.rect", params: { name: "probe.lines" } })).result;
+    assert.deepEqual(moved, { ...local, x: 132, y: 204, document: { x: 0, y: 0 } },
+      "the preferred hidden view uses its applied origin without scaling or a guessed viewport ratio");
+    placements.delete("tab-b");
+    assert.match((await made.handle({ method: "dom.rect", params: { name: "probe.lines" } })).error.message,
+      /tab-b.*applied frame/, "a missing applied frame must not become a valid-looking zero origin");
+  } finally {
+    for (const unmark of unmarks) unmark();
+  }
 });
 
 
@@ -546,35 +578,35 @@ test("surface pages register core surface entries, and requests can name the sur
   const made = coreRegistry(host);
   const plugins = { "tab-a": "probe", "tab-b": "probe" };
   made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null, preferred: () => ["tab-a"] });
-  made.registered({ surface: "tab-a", kind: "status", name: "core.surface.fixture" });
-  made.registered({ surface: "tab-b", kind: "status", name: "core.surface.fixture" });
+  made.registered({ surface: "tab-a", kind: "status", name: "core.surface.document" });
+  made.registered({ surface: "tab-b", kind: "status", name: "core.surface.document" });
   made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
-  made.registered({ surface: "tab-x", kind: "status", name: "core.surface.fixture" });
+  made.registered({ surface: "tab-x", kind: "status", name: "core.surface.document" });
   assert.deepEqual(made.namesOf("tab-x"), [], "a core surface entry of an unknown surface is held");
-  assert.equal(made.list().status.find((entry) => entry.name === "core.surface.fixture").registered, true);
+  assert.equal(made.list().status.find((entry) => entry.name === "core.surface.document").registered, true);
 
   const get = (params) => made.handle({ method: "status.get", params });
-  assert.deepEqual(await get({ name: "core.surface.fixture" }), { result: "core.surface.fixture@tab-a" });
-  assert.deepEqual(await get({ name: "core.surface.fixture", surface: "tab-b" }), { result: "core.surface.fixture@tab-b" });
+  assert.deepEqual(await get({ name: "core.surface.document" }), { result: "core.surface.document@tab-a" });
+  assert.deepEqual(await get({ name: "core.surface.document", surface: "tab-b" }), { result: "core.surface.document@tab-b" });
   assert.equal((await get({ name: "probe.lines", surface: "tab-a" })).error.code, EXPOSURE_ERRORS.unregistered,
     "a surface that has not registered the name is rejected");
   assert.equal((await get({ name: "probe.lines", surface: 3 })).error.code, EXPOSURE_ERRORS.invalidParams);
 
-  await made.handle({ method: "status.watch", params: { name: "core.surface.fixture", surface: "tab-b" } });
-  await made.handle({ method: "status.watch", params: { name: "core.surface.fixture" } });
+  await made.handle({ method: "status.watch", params: { name: "core.surface.document", surface: "tab-b" } });
+  await made.handle({ method: "status.watch", params: { name: "core.surface.document" } });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(host.calls.filter(([name]) => name === "exposureChanged").map(([, arg]) => arg), [
-    { name: "core.surface.fixture", surface: "tab-b", value: "tab-b" },
-    { name: "core.surface.fixture", value: "tab-a" },
+    { name: "core.surface.document", surface: "tab-b", value: "tab-b" },
+    { name: "core.surface.document", value: "tab-a" },
   ], "a watch that named a surface reports it, and watches with and without a surface are separate");
   const forwarded = (method) => host.calls.filter(([name, arg]) => name === "exposureForward" && arg.method === method)
     .map(([, arg]) => [arg.surface, arg.params]);
   assert.deepEqual(forwarded("status.watch"), [
-    ["tab-b", { name: "core.surface.fixture" }],
-    ["tab-a", { name: "core.surface.fixture" }],
+    ["tab-b", { name: "core.surface.document" }],
+    ["tab-a", { name: "core.surface.document" }],
   ]);
-  await made.handle({ method: "status.unwatch", params: { name: "core.surface.fixture", surface: "tab-b" } });
-  assert.deepEqual(forwarded("status.unwatch"), [["tab-b", { name: "core.surface.fixture" }]]);
+  await made.handle({ method: "status.unwatch", params: { name: "core.surface.document", surface: "tab-b" } });
+  assert.deepEqual(forwarded("status.unwatch"), [["tab-b", { name: "core.surface.document" }]]);
 });
 
 test("a core command answers after the configured settling work", async () => {

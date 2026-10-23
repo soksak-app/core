@@ -314,14 +314,14 @@ test("the start values of a view carry its params, origin, project and declarati
     params: { path: "a.md" },
     origin: { directory: "/work/one" },
     project: { id: "prj-one", root: "/work/one" },
-    declarations: { commands: [] },
+    declarations: { status: [], commands: [], dom: [] },
   });
   recordOrigin("tab-without-directory", null, "test fixture");
   assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {} }, null), {
     params: null,
     origin: { directory: null },
     project: null,
-    declarations: {},
+    declarations: { status: [], commands: [], dom: [] },
   });
 });
 
@@ -793,8 +793,7 @@ test("a failed view mount releases its exposure port, and a retry mounts the sur
   }
 });
 
-// A view surface mounts with the core surface entries that exposure.json declares. The view registers its own port for the forwarded
-// requests, and the page registers the core entries of the surface, so the surface mounts once and the entries are registered.
+// A view receives the core declarations at startup and registers them from its own document, never from the main-page placeholder.
 test("a view surface mounts with the core surface entries that exposure.json declares", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
@@ -818,7 +817,7 @@ test("a view surface mounts with the core surface entries that exposure.json dec
   const exposureFile = (await import("../exposure.json", { with: { type: "json" } })).default;
   const { installExposure, registry, dispatchSurfaceRequest } = await import("../exposure.js");
   installExposure(structuredClone(exposureFile));
-  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-core-exposure");
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, viewStartValues } = await import("../surface-modules.js?view-core-exposure");
   const pluginId = "fixture-core-view";
   const surfaceId = "fixture-core-view-surface";
   recordOrigin(surfaceId, null, "test fixture");
@@ -829,9 +828,10 @@ test("a view surface mounts with the core surface entries that exposure.json dec
     authorizeSurface(surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
-    const names = registry.namesOf(surfaceId);
-    assert.ok(names.includes("status core.surface.document"), `the document status is not registered: ${JSON.stringify(names)}`);
-    assert.ok(names.includes("command core.surface.hit"), `the hit command is not registered: ${JSON.stringify(names)}`);
+    assert.deepEqual(registry.namesOf(surfaceId), [], "the main placeholder registered view document entries");
+    const start = viewStartValues(surface, null);
+    assert.deepEqual(start.declarations.status.map(({ name }) => name).sort(), ["core.surface.document", "core.surface.input"]);
+    assert.deepEqual(start.declarations.commands.map(({ name }) => name), ["core.surface.hit"]);
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 7, method: "status.get", params: { name: "core.surface.document" } }),
       true, "the core entry of the view surface is not served by its page");
   } finally {

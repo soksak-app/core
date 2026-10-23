@@ -11,6 +11,53 @@
 /** An operable element. For each such element, audit requires a command and a dom name. */
 export const INTERACTIVE = 'button, input, select, textarea, [role="button"], [contenteditable]:not([contenteditable="false"])';
 
+// Actual connections across binders of one document. Weak keys do not retain detached elements or documents.
+const documentConnections = new WeakMap();
+const documentDelegations = new WeakMap();
+const documentListeners = new WeakMap();
+const notifyDocument = (document) => {
+  for (const listener of documentListeners.get(document) ?? []) listener();
+};
+
+/** Observes connection changes in one document without changing an individual binder's audit scope. */
+export function onDocumentBinding(document, listener) {
+  if (!documentListeners.has(document)) documentListeners.set(document, new Set());
+  const listeners = documentListeners.get(document);
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** All open roots of a document or subtree, discovered again for every audit. */
+export function documentRoots(root) {
+  const roots = [root];
+  for (let i = 0; i < roots.length; i++) {
+    for (const element of roots[i].querySelectorAll("*")) if (element.shadowRoot) roots.push(element.shadowRoot);
+  }
+  return roots;
+}
+
+const auditRow = (element, connected) => ({
+  tag: element.tagName.toLowerCase(),
+  // default: an absent exposure or command is reported as null.
+  expose: element.dataset.expose ?? null,
+  command: connected ? element.dataset.command ?? null : null,
+  // default: an element without an accessible name, title or text has empty text.
+  text: (element.getAttribute("aria-label") || element.title || element.textContent || "").trim().slice(0, 40),
+});
+
+/** Audits actual connections of all binders in the current document, including its open shadow roots. */
+export function auditDocument(root) {
+  const connected = (element) => {
+    if (documentConnections.get(element)?.size) return true;
+    if (!element.dataset.command) return false;
+    for (let at = element; at; at = at.parentNode) if (documentDelegations.get(at)?.size) return true;
+    return false;
+  };
+  return documentRoots(root).flatMap((part) => [...part.querySelectorAll(INTERACTIVE)])
+    .filter((element) => !connected(element) || !element.dataset.expose)
+    .map((element) => auditRow(element, connected(element)));
+}
+
 /** The current value of a value input element. A checkbox yields a boolean. */
 export const valueOf = (el) => (el.type === "checkbox" ? el.checked : el.value);
 
@@ -36,6 +83,15 @@ export function createBinder(run, { check, changed = () => {} }) {
   const bound = new WeakSet();
   const roots = new WeakSet();
   const cleanup = new Set();
+  const tracked = new Map();
+  const owner = {};
+  const track = (element, table) => {
+    if (!table.has(element)) table.set(element, new Set());
+    table.get(element).add(owner);
+    if (!tracked.has(table)) tracked.set(table, new Set());
+    tracked.get(table).add(element);
+    notifyDocument(element.ownerDocument);
+  };
 
   /** Marks an element with a command. The caller passes an input that a delegated root or the caller handles. */
   function mark(el, name, params, valueName) {
@@ -65,6 +121,7 @@ export function createBinder(run, { check, changed = () => {} }) {
     el.addEventListener(event, listener);
     cleanup.add(() => el.removeEventListener(event, listener));
     bound.add(el);
+    track(el, documentConnections);
     changed();
     return el;
   }
@@ -97,6 +154,7 @@ export function createBinder(run, { check, changed = () => {} }) {
       cleanup.add(() => root.removeEventListener(type, listener));
     }
     roots.add(root);
+    track(root, documentDelegations);
     changed();
     return root;
   }
@@ -138,5 +196,12 @@ export function createBinder(run, { check, changed = () => {} }) {
   return { mark, bind, delegate, audit, run: runDeclared, dispose() {
     cleanup.forEach((dispose) => dispose());
     cleanup.clear();
+    const documents = new Set();
+    for (const [table, elements] of tracked) for (const element of elements) {
+      table.get(element)?.delete(owner);
+      documents.add(element.ownerDocument);
+    }
+    tracked.clear();
+    for (const document of documents) notifyDocument(document);
   } };
 }

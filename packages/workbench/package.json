@@ -54,7 +54,6 @@
     "report-record.js",
     "version-range.js",
     "installed-plugins.js",
-    "surface-exposure.js",
     "host.js",
     "host-store.js",
     "host-calls.js",
