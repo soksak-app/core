@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: push-check events-check census-check failures-check declared-ui-benchmark benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage hidden-tab-memory trace-share host-allocations app-update-check
+.PHONY: push-check events-check census-check failures-check declared-ui-benchmark benchmark-rust benchmark-go preflight prepare build verify browser-example-check registry-manifest-check docs-check records-check commits-check hooks boundaries platforms windows-build-check hosts-check e2e-check e2e-registry-tls exposure-check parity-check host-parity-check language-test release-check rust-tests-alone rust-repeat go-repeat node-repeat temp-audit page-memory object-counts host-calls app-usage trace-share host-allocations app-update-check
 
 docs-check:
 	@node scripts/check-docs.mjs
@@ -80,9 +80,6 @@ app-usage:
 
 # Prints the JS heap and the DOM node count of the main page with TABS hidden DOM tabs of each fixture kind mounted and after
 # their unload (packages/workbench/benchmark/hidden-tab-memory.mjs, docs/spec/plugins.md#memory-saver). It prints numbers and asserts nothing.
-hidden-tab-memory:
-	@cd packages/workbench && node --expose-gc --experimental-test-module-mocks --no-warnings benchmark/hidden-tab-memory.mjs --tabs $(or $(TABS),4)
-
 # Measures each declared UI case with its own process timeout and the bounds of docs/spec/declared-ui.md.
 declared-ui-benchmark:
 	@node scripts/test-command.mjs --id declared-ui-tree --timeout-ms 30000 -- node --experimental-test-module-mocks --no-warnings packages/workbench/benchmark/declared-ui.mjs --case tree

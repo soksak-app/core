@@ -106,7 +106,6 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
   lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
   lane("declared UI benchmark", "js-ts", ["packages/workbench/benchmark/declared-ui.mjs"], ["packages/workbench/test/declared-ui-benchmark.test.mjs"], { sharedTests: true }),
-  lane("hidden tab memory benchmark", "js-ts", ["packages/workbench/benchmark/hidden-tab-memory.mjs"], ["packages/workbench/test/hidden-tab-memory.test.mjs"], { sharedTests: true }),
   lane("client", "js-ts", [
     "packages/client/*.js",
     "packages/client/platform/**/*.js",
