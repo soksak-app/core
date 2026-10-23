@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { VIEW_IMPORTS, VIEW_IMPORTS_FILE } from "@soksak/plugin-api";
 
 const STAGE = fileURLToPath(new URL("../stage.mjs", import.meta.url));
@@ -51,6 +51,19 @@ test("a staged frontend with --diagnostics has the page diagnostic methods", (t)
 test("unknown staging arguments are rejected", (t) => {
   const app = fixtureApp(t);
   assert.throws(() => execFileSync(process.execPath, [STAGE, "out", "--release"], { cwd: app, stdio: "pipe" }), /usage/);
+});
+
+test("a staged registry override leaves the application environment unchanged", (t) => {
+  const app = fixtureApp(t);
+  const sourceEnvironment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
+  sourceEnvironment.registry = "https://registry.example/index.json";
+  writeFileSync(join(app, "environment.json"), JSON.stringify(sourceEnvironment));
+  const registryIndex = join(app, "registry # folder", "index.json");
+
+  stage(app, "--registry-index", registryIndex);
+
+  assert.equal(JSON.parse(readFileSync(join(app, "out/environment.json"), "utf8")).registry, pathToFileURL(registryIndex).href);
+  assert.equal(JSON.parse(readFileSync(join(app, "environment.json"), "utf8")).registry, "https://registry.example/index.json");
 });
 
 /** A configuration directory with two enabled plugins and one disabled plugin installed. probe holds the diagnostics declaration. */

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Places the frontend of the application in one directory (staging layout in docs/spec/plugins.md).
 //
-//   soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]
+//   soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]
 //
 // Reads environment.json from the application package in the current directory. The package location is found
-// by Node module resolution. Files are only copied and their content is not changed.
+// by Node module resolution. The staged registry changes only when --registry-index is given.
 //
 //   <output>/                        files of the workbench package
 //   <output>/modules/<package.json name>/   the files of soksak and plugin-api
@@ -28,18 +28,18 @@
 import { parseArgs } from "node:util";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { STAGED } from "./staged.js";
 import {
   CORE_ROOT_FILE, ENVIRONMENT, INSTALLED_PLUGINS, RUNTIME, VIEW_IMPORTS, VIEW_IMPORTS_FILE, modulePath, validateEnvironment, validateInstalledPlugins, viewCoreTargets,
 } from "@soksak/plugin-api";
 
-const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>]";
+const USAGE = "usage: soksak-stage <output directory> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]";
 let parsed;
 try {
   parsed = parseArgs({
-    options: { diagnostics: { type: "boolean", default: false }, installed: { type: "string" } },
+    options: { diagnostics: { type: "boolean", default: false }, installed: { type: "string" }, "registry-index": { type: "string" } },
     allowPositionals: true, strict: true, tokens: true,
   });
   // parseArgs keeps the last value of a repeated option, so a repeated option is found from the tokens and refused.
@@ -55,7 +55,7 @@ if (parsed.positionals.length !== 1) {
   process.exit(2);
 }
 const [out] = parsed.positionals;
-const { diagnostics, installed: installedDirectory } = parsed.values;
+const { diagnostics, installed: installedDirectory, "registry-index": registryIndex } = parsed.values;
 
 const app = process.cwd();
 const target = resolve(app, out);
@@ -131,7 +131,12 @@ function enabledInstalledPlugins(configuration) {
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
-const environment = validateEnvironment(readJson(join(app, ENVIRONMENT)));
+const environmentInput = readJson(join(app, ENVIRONMENT));
+if (registryIndex !== undefined) {
+  if (!isAbsolute(registryIndex)) throw new Error("--registry-index must be an absolute file path");
+  environmentInput.registry = pathToFileURL(registryIndex).href;
+}
+const environment = validateEnvironment(environmentInput);
 const runtime = join(app, environment.runtime);
 if (!existsSync(join(runtime, "index.js"))) throw new Error(`${environment.runtime}/index.js is missing`);
 

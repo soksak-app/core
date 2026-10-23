@@ -286,14 +286,14 @@ A plugin that becomes loaded after a restart uses the kept tabs, links, sections
 
 ## Staged layout
 
-`soksak-stage <output> [--diagnostics] [--installed <configuration directory>]` runs in an application directory and resolves packages through Node module resolution. It copies files without changing them:
+`soksak-stage <output> [--diagnostics] [--installed <configuration directory>] [--registry-index <absolute index path>]` runs in an application directory and resolves packages through Node module resolution. `--registry-index` converts the absolute index path to a file URL with Node's `pathToFileURL` and replaces `environment.json`'s registry only in the staged environment. The debug staging targets pass the absolute path of the generated workspace registry, after `make registry` builds it. Release staging does not pass `--registry-index`, so the declared HTTPS registry remains the release default. The source `environment.json` is unchanged. The staged frontend contains:
 
 | Path | Source |
 | --- | --- |
 | `/` | `files` of `@soksak/workbench` |
 | `/modules/<package>/` | `files` of `soksak` and `@soksak/plugin-api` |
 | `/runtime/` | The application's `runtime` directory |
-| `/environment.json` | The application's `environment.json` |
+| `/environment.json` | The application's `environment.json`, with its registry replaced only when `--registry-index` is passed |
 | `/core-root.json` | The core targets of the view import map, computed by `viewCoreTargets` of `@soksak/plugin-api` from the staged files of `soksak` and `@soksak/plugin-api`; the hosts read it as the list of core targets ([core root](plugin-processes.md)) |
 | `/view-imports.json` | The view import map: the JSON text of `VIEW_IMPORTS` of `@soksak/plugin-api`. Each host reads it at start and sets it on the native view handler, which inserts it into each view page ([plugin processes](plugin-processes.md), rule 4) |
 | `/diagnostics.js` | With `--diagnostics`, the workbench's `observe.js` (the page diagnostic methods); otherwise the workbench's empty module `release-diagnostics.js` |

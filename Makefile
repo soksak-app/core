@@ -370,11 +370,11 @@ stage-tauriv2 = pnpm -F @soksak/tauriv2 exec soksak-stage src/frontend $(1)
 
 # Staging does not touch the bundle. The bundle is rebuilt only by the build targets. This keeps the executable of the debug app that checks use
 # from being removed by the staging of a check target such as native-test.
-frontend-wailsv3: build
-	@$(call stage-wailsv3,--diagnostics)
+frontend-wailsv3: build registry
+	@$(call stage-wailsv3,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
 
-frontend-tauriv2: build
-	@$(call stage-tauriv2,--diagnostics)
+frontend-tauriv2: build registry
+	@$(call stage-tauriv2,--diagnostics --registry-index "$(abspath $(REGISTRY)/index.json)")
 
 # generate_context! includes the frontend, so this rebuilds the crate.
 tauriv2-build: native-darwin frontend-tauriv2

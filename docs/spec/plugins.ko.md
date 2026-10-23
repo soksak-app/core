@@ -287,14 +287,14 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 
 ## 스테이징 배치
 
-`soksak-stage <출력> [--diagnostics] [--installed <설정 디렉터리>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. 파일 내용을 바꾸지 않고 복사한다.
+`soksak-stage <출력> [--diagnostics] [--installed <설정 디렉터리>] [--registry-index <절대 index 경로>]`는 애플리케이션 디렉터리에서 실행하고 Node 모듈 해석으로 패키지를 찾는다. `--registry-index`는 절대 index 경로를 Node의 `pathToFileURL`로 file URL로 바꾸고, staged 환경에서만 `environment.json`의 registry를 교체한다. Debug staging target은 `make registry`가 생성한 workspace registry의 절대 경로를 전달한다. Release staging은 `--registry-index`를 전달하지 않으므로 선언된 HTTPS registry가 기본값으로 남는다. 원본 `environment.json`은 바뀌지 않는다. 스테이징된 프런트엔드는 다음을 포함한다:
 
 | 경로 | 원본 |
 | --- | --- |
 | `/` | `@soksak/workbench`의 `files` |
 | `/modules/<패키지>/` | `soksak`, `@soksak/plugin-api`의 `files` |
 | `/runtime/` | 애플리케이션의 `runtime` 디렉터리 |
-| `/environment.json` | 애플리케이션의 `environment.json` |
+| `/environment.json` | 애플리케이션의 `environment.json`; `--registry-index`가 있을 때만 registry를 교체한다 |
 | `/core-root.json` | view import map의 core target 목록. `@soksak/plugin-api`의 `viewCoreTargets`가 스테이징된 `soksak`과 `@soksak/plugin-api` 파일에서 계산하며, 호스트는 이것을 core target 목록으로 읽는다 ([core root](plugin-processes.ko.md)) |
 | `/view-imports.json` | view import map의 JSON 텍스트. `@soksak/plugin-api`의 `VIEW_IMPORTS`이며, 각 호스트가 시작할 때 읽어 native view handler에 설정하고 handler가 각 view 페이지에 넣는다([plugin 처리](plugin-processes.ko.md), rule 4) |
 | `/diagnostics.js` | `--diagnostics`이면 워크벤치의 `observe.js`(페이지 진단 메서드), 아니면 워크벤치의 빈 모듈 `release-diagnostics.js` |
