@@ -1,5 +1,6 @@
 // The project list is stored in the shared store; the active project and the window ownership are stored in the running window.
 import { issueId } from "./ids.js";
+import { forgetTabsLeft } from "./tab-reports.js";
 import { beginOperation } from "./operations.js";
 import { beginSettings, selectProject, value, flushSettings } from "./settings.js";
 import { flushEvents } from "./page-log.js";
@@ -146,7 +147,10 @@ export function begin(snapshot) {
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
   listener.load(layout);
-  opened.spaces.find((s) => s.id === opened.activeSpaceId).layout = listener.save("recreate");
+  const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
+  const previousRecreated = recreated.layout;
+  recreated.layout = listener.save("recreate");
+  forgetTabsLeft(previousRecreated.state.cards, recreated.layout.state.cards);
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
@@ -268,7 +272,11 @@ export function keep(path) {
   const project = active();
   if (!project || !listener || browsing) return writing;
   const before = projectTabs(project);
-  project.spaces.find((s) => s.id === project.activeSpaceId).layout = listener.save(path);
+  const space = project.spaces.find((s) => s.id === project.activeSpaceId);
+  const previous = space.layout;
+  space.layout = listener.save(path);
+  // The tabs that the previous stored layout of this space held and the saved one does not hold leave their origins (docs/spec/projects.md#tab-origin).
+  forgetTabsLeft(previous.state.cards, space.layout.state.cards);
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
@@ -430,7 +438,9 @@ export function closeSpace(id) {
   const next = id === project.activeSpaceId ? rest[Math.min(at, rest.length - 1)] : null;
   if (next) checkSpace(project, next.id);
   keep("saved layout");
-  project.spaces.splice(at, 1);
+  const [removed] = project.spaces.splice(at, 1);
+  // The tabs of the removed space leave its stored layout, so their origins end (docs/spec/projects.md#tab-origin).
+  forgetTabsLeft(removed.layout.state.cards, []);
   if (next) project.activeSpaceId = next.id;
   restore("saved layout");
   // The tabs of the closed space are in no layout, so their sidecar sessions end.

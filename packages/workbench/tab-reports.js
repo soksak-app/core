@@ -235,21 +235,14 @@ export function missingOriginRecords(state, path) {
   return records;
 }
 
-// The tab ids of the last stored layout state. A tab that a stored layout held and that the next one does not hold has left the layout.
-let storedIds = new Set();
-
 /**
- * The stored form of a layout state: each content-card tab carries its origin member, and the records of tabs that left the stored
- * layout are dropped. The state is the displayed layout only, so a tab of another space, such as the first tab of a space that was added
- * and not displayed yet, has no record in it; that record is kept until a stored layout held the tab and no longer does. A closed tab
- * keeps no origin, and an id is not reused, so dropping its record loses no value.
+ * The stored form of a layout state: each content-card tab carries its origin member. The state is the displayed layout only, so the
+ * origins of the tabs of the other spaces are not read or changed here (docs/spec/projects.md#tab-origin).
  */
 export function storedLayoutState(state) {
-  const ids = new Set();
   const cards = state.cards.map((card) => {
     if (!Array.isArray(card.data?.tabs)) return card;
     const tabs = card.data.tabs.map((tab) => {
-      ids.add(tab.id);
       // The member of the layout is replaced by the origin that the tab holds, so a stored value is never read twice.
       const { origin: _stored, ...rest } = tab;
       const member = storedOriginMember(tab.id);
@@ -257,11 +250,25 @@ export function storedLayoutState(state) {
     });
     return { ...card, data: { ...card.data, tabs } };
   });
-  for (const map of [origins, loaded, refusals]) {
-    for (const id of [...map.keys()]) if (storedIds.has(id) && !ids.has(id)) map.delete(id);
-  }
-  storedIds = ids;
   return { ...state, cards };
+}
+
+/**
+ * Drops the origin of each tab that the previous stored layout of a space held and its next stored layout does not hold. Only the stored
+ * layout of the tab's own space ends its origin, so a tab of another space keeps it (docs/spec/projects.md#tab-origin). A closed tab keeps
+ * no origin, and an id is not reused, so dropping its record loses no value.
+ */
+export function forgetTabsLeft(previousCards, nextCards) {
+  const kept = new Set(nextCards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id)));
+  for (const card of previousCards) {
+    // default: a card without tabs holds no tab that could leave.
+    for (const tab of card.data?.tabs ?? []) {
+      if (kept.has(tab.id)) continue;
+      origins.delete(tab.id);
+      loaded.delete(tab.id);
+      refusals.delete(tab.id);
+    }
+  }
 }
 
 /** Records whether the surface of tabId reports work in progress (docs/spec/plugins.md#memory-saver). */

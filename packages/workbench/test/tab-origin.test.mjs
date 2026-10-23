@@ -2,7 +2,7 @@
 // valid origin, and the stored form (docs/spec/projects.md, docs/spec/native-surfaces.md#view-surfaces).
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordOrigin, releasedNonViewOrigin, restoreOrigin, reportDirectory, storedLayoutState, tabOrigin, viewRefusal } from "../tab-reports.js";
+import { forgetTabsLeft, recordOrigin, releasedNonViewOrigin, restoreOrigin, reportDirectory, storedLayoutState, tabOrigin, viewRefusal } from "../tab-reports.js";
 import * as tabReports from "../tab-reports.js";
 import { recordStoredOrigins } from "../stored-layout.js";
 
@@ -73,16 +73,22 @@ test("the layout read refuses each view tab once, returns its text, and never th
   assert.deepEqual(tabOrigin("t-plain"), { directory: null });
 });
 
-test("storing the displayed layout keeps the origin of a tab of a space that is not displayed yet, and drops a tab that left", () => {
+test("storing the displayed layout keeps the origin of a tab of a space that is not displayed yet", () => {
   recordOrigin("origin-space-old", null, "test fixture");
   storedLayoutState({ cards: [{ id: "c", data: { tabs: [{ id: "origin-space-old", plugin: "p" }] } }] });
   // A new space records the origin of its first tab before the displayed layout is stored, as addSpace does.
   recordOrigin("origin-space-new", null, "test fixture");
   storedLayoutState({ cards: [{ id: "c", data: { tabs: [{ id: "origin-space-old", plugin: "p" }] } }] });
   assert.deepEqual(tabOrigin("origin-space-new"), { directory: null }, "the origin of the new space's tab was dropped");
-  // A tab that the stored layout held and that the next stored layout does not hold leaves the map.
-  storedLayoutState({ cards: [{ id: "c", data: { tabs: [] } }] });
-  assert.throws(() => tabOrigin("origin-space-old"), /has no origin/);
+  assert.deepEqual(tabOrigin("origin-space-old"), { directory: null });
+});
+
+test("a tab that its own space's previous stored layout held and its next stored layout does not hold leaves the map", () => {
+  recordOrigin("origin-left", null, "test fixture");
+  const previous = [{ id: "c", data: { tabs: [{ id: "origin-left", plugin: "p" }] } }];
+  storedLayoutState({ cards: previous });
+  forgetTabsLeft(previous, []);
+  assert.throws(() => tabOrigin("origin-left"), /has no origin/);
 });
 
 test("a view tab whose origin is refused and then restored with a valid origin is not refused any more", () => {
@@ -108,5 +114,13 @@ test("a layout write that holds a view tab without an origin member names the ta
   assert.deepEqual(tabReports.missingOriginRecords(state, "saved layout"), ["saved layout stores tab origin-missing of plugin view-plugin without an origin member"]);
   assert.deepEqual(tabReports.missingOriginRecords(state, null), [], "a read that names no writing path records nothing");
   assert.throws(() => tabReports.missingOriginRecords(state, "elsewhere"), /unknown layout writing path: elsewhere/);
+});
+
+test("a tab of a space that is not displayed keeps its origin across the display of another space", () => {
+  recordOrigin("origin-away", null, "test fixture");
+  storedLayoutState({ cards: [{ id: "c-away", data: { tabs: [{ id: "origin-away", plugin: "p" }] } }] });
+  recordOrigin("origin-other", null, "test fixture");
+  storedLayoutState({ cards: [{ id: "c-other", data: { tabs: [{ id: "origin-other", plugin: "p" }] } }] });
+  assert.deepEqual(tabOrigin("origin-away"), { directory: null }, "the origin of a tab in another space was dropped by the display of this space");
 });
 
