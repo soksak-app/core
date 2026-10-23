@@ -78,8 +78,6 @@ app-usage:
 	@case "$(CONFIG_DIR)" in '') echo "app-usage requires CONFIG_DIR=DIR [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@node scripts/measure-app-usage.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --interval $(or $(INTERVAL),10)
 
-# Prints the JS heap and the DOM node count of the main page with TABS hidden DOM tabs of each fixture kind mounted and after
-# their unload (packages/workbench/benchmark/hidden-tab-memory.mjs, docs/spec/plugins.md#memory-saver). It prints numbers and asserts nothing.
 # Measures each declared UI case with its own process timeout and the bounds of docs/spec/declared-ui.md.
 declared-ui-benchmark:
 	@node scripts/test-command.mjs --id declared-ui-tree --timeout-ms 30000 -- node --experimental-test-module-mocks --no-warnings packages/workbench/benchmark/declared-ui.mjs --case tree

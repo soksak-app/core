@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F244-2-2: 삭제된 DOM memory benchmark의 오래된 Makefile 설명을 제거한다.
+
 - F240-7: 완료된 review와 producer-contract status를 기록된 증거에 맞추고, active work가 없는 CI와 window gate를 waiting으로 두며, owning checklist에서 open-reference index를 갱신한다. 대기 중인 release와 measurement 요구는 열린 상태를 유지한다.
 
 - F239-26: shutdown check의 결함을 기록한다. terminal 준비는 notification이 있는데도 status를 polling하며 실행 중 application error를 감사하지 않는다. 수정과 owning 검증은 대기 중이다.
