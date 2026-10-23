@@ -1,11 +1,10 @@
-// Private Launch Services declarations used only by process-label checks.
-// The intended call sequence and scope are listed in docs/operations/private-native-apis.md.
+// Private Launch Services declarations used by process identity.
+// The call conditions and owning tests are listed in docs/operations/private-native-apis.md.
 #import <ApplicationServices/ApplicationServices.h>
 #import <CoreServices/CoreServices.h>
 
 typedef const struct CF_BRIDGED_TYPE(id) __LSASN *SPLSASNRef;
 typedef int32_t SPLSSessionID;
-
 static const SPLSSessionID SPLSDefaultSessionID = -2;
 
 extern OSStatus _RegisterApplication(CFDictionaryRef applicationInfo, ProcessSerialNumber *processSerialNumber);

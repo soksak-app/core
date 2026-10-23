@@ -57,6 +57,8 @@ importers:
         specifier: workspace:*
         version: link:../packages/window-check
 
+  native/darwin/process-identity: {}
+
   packages/client: {}
 
   packages/host/tauriv2: {}

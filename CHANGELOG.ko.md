@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.16-7: Core는 Darwin 전용 private Git package `@soksak/native-process-identity-darwin@0.0.20`을 통해 `soksak_process_set_display_name`을 제공한다. Package는 static library, public C header, relocatable pkg-config metadata를 빌드한다. Red: 변경 전 구현에서 owning API test가 symbol 부재로 실패한다. Green: 동일 test가 주입한 registration/set 오류, process ASN 누락, 잘못된 URI와 readback 불일치를 명시적으로 거부하고 성공 경로를 통과한다. 별도 packed-package 설치 후 relocated pkg-config 경로로 static consumer를 compile하고 실행한다. 비활성화 process-label 측정은 public API를 사용해 LaunchServices와 `NSRunningApplication.localizedName`에서 bare 및 bundled helper의 정확한 이름을 독립 확인하며 두 helper는 executable path를 유지하고 종료한다. Package는 publish하지 않았다. Sidecar startup 적용은 F212.16-6에 남아 있다.
+
 - F212.16-5: Plugin view URL은 canonical `soksak://<plugin id>` origin을 사용하고, core가 만든 각 plugin WebContent process에는 별도 LaunchServices label `soksak://plugin/<plugin id>`을 설정한다. 소유 native 검사는 이전 handler에서 canonical origin load가 실패하는 Red 뒤, 격리된 두 plugin view의 정확한 label과 서로 다른 PID를 확인하는 Green을 통과했다. 다섯 WebContent process가 모두 종료됨도 확인했다. 현재 registry plugin runtime은 application-origin web storage가 아닌 tab/project API로 application state를 저장하며, 외부 HTTP(S) 문서 origin은 바뀌지 않는다. macOS 26.6.2 arm64에서 소유 `process_label_test`가 통과한다.
 
 

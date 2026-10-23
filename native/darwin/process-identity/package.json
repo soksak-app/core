@@ -1,0 +1,18 @@
+{
+  "name": "@soksak/native-process-identity-darwin",
+  "version": "0.0.20",
+  "private": true,
+  "description": "Static macOS process display identity API for native sidecars.",
+  "files": [
+    "include/soksak_process_identity.h",
+    "lib/libsoksak-process-identity.a",
+    "lib/pkgconfig/soksak-process-identity.pc"
+  ],
+  "scripts": {
+    "prepare": "make",
+    "test": "make test"
+  },
+  "os": [
+    "darwin"
+  ]
+}

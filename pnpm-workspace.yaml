@@ -3,6 +3,7 @@ packages:
   - packages/host/*
   - apps/*
   - e2e
+  - native/darwin/process-identity
 allowBuilds:
   '@parcel/watcher': false
   esbuild: true

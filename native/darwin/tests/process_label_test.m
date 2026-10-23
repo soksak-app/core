@@ -8,7 +8,7 @@
 #import <stdlib.h>
 #import <string.h>
 #import <unistd.h>
-#import "private/launch_services.h"
+#include "soksak_process_identity.h"
 #import "private/webkit.h"
 #import "document_view.h"
 #import "support/temporary_folder.h"
@@ -502,7 +502,7 @@ static int runWebKitCases(void) {
 }
 
 static int runSidecarProcessNameHelper(void) {
-        NSString *displayName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/sample");
+        NSString *displayName = configuredValue(@"SOKSAK_SIDECAR_DISPLAY_NAME", @"soksak://sidecar/sample");
         NSProcessInfo.processInfo.processName = displayName;
         printf("HELPER pid=%d processName=%s argv0=%s\n", NSProcessInfo.processInfo.processIdentifier,
             NSProcessInfo.processInfo.processName.UTF8String,
@@ -512,38 +512,19 @@ static int runSidecarProcessNameHelper(void) {
 }
 
 static int runRegisteredSidecarDisplayNameHelper(void) {
-    OSStatus registrationStatus = _RegisterApplication(NULL, NULL);
-    if (registrationStatus != noErr) {
-        fprintf(stderr, "HELPER_ERROR _RegisterApplication status=%d\n", (int)registrationStatus);
+    NSString *requestedName = configuredValue(@"SOKSAK_SIDECAR_DISPLAY_NAME", @"soksak://sidecar/sample");
+    char error[512] = {0};
+    int status = soksak_process_set_display_name(requestedName.UTF8String, error, sizeof(error));
+    if (status != 0) {
+        fprintf(stderr, "HELPER_ERROR process identity status=%d: %s\n", status, error);
         return 2;
     }
-    SPLSASNRef asn = _LSGetCurrentApplicationASN();
-    if (asn == NULL) {
-        fputs("HELPER_ERROR _LSGetCurrentApplicationASN returned null\n", stderr);
-        return 3;
-    }
-    NSString *requestedName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/vt");
-    OSStatus setStatus = _LSSetApplicationInformationItem(SPLSDefaultSessionID, asn,
-        _kLSDisplayNameKey, (CFTypeRef)requestedName, NULL);
-    if (setStatus != noErr) {
-        fprintf(stderr, "HELPER_ERROR _LSSetApplicationInformationItem status=%d\n", (int)setStatus);
-        return 4;
-    }
-    CFTypeRef copiedName = _LSCopyApplicationInformationItem(SPLSDefaultSessionID, asn, _kLSDisplayNameKey);
-    NSString *actualName = (NSString *)copiedName;
-    if (actualName == nil || ![actualName isEqualToString:requestedName]) {
-        fprintf(stderr, "HELPER_ERROR LaunchServices returned display name %s\n",
-            actualName.UTF8String ?: "<null>");
-        if (copiedName) CFRelease(copiedName);
-        return 5;
-    }
     printf("REGISTERED_HELPER pid=%d displayName=%s executable=%s bundle=%s\n",
-        NSProcessInfo.processInfo.processIdentifier, actualName.UTF8String,
+        NSProcessInfo.processInfo.processIdentifier, requestedName.UTF8String,
         NSBundle.mainBundle.executableURL.lastPathComponent.UTF8String,
         NSBundle.mainBundle.bundleURL.path.UTF8String);
     fflush(stdout);
-    CFRelease(copiedName);
-    return waitForControlByte("registered display-name helper") ? 6 : 0;
+    return waitForControlByte("registered display-name helper") ? 3 : 0;
 }
 
 static BOOL runWebKitWorkerAndCheckCleanup(void) {
@@ -611,7 +592,7 @@ static BOOL runWebKitWorkerAndCheckCleanup(void) {
 }
 
 static BOOL measureSidecarProcessNameSetter(void) {
-    NSString *requestedName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/sample");
+    NSString *requestedName = configuredValue(@"SOKSAK_SIDECAR_DISPLAY_NAME", @"soksak://sidecar/sample");
     NSTask *task = [[[NSTask alloc] init] autorelease];
     task.executableURL = NSBundle.mainBundle.executableURL;
     task.arguments = @[@"--sidecar-process-name-helper"];
@@ -723,7 +704,7 @@ static BOOL registeredHelperRejectsControlEOF(void) {
 }
 
 static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *caseName, pid_t baselineFrontmostPid) {
-    NSString *requestedName = configuredValue(@"SOKSAK_PROCESS_LABEL_SIDECAR", @"soksak://sidecar/vt");
+    NSString *requestedName = configuredValue(@"SOKSAK_SIDECAR_DISPLAY_NAME", @"soksak://sidecar/vt");
     NSTask *task = [[[NSTask alloc] init] autorelease];
     task.executableURL = [NSURL fileURLWithPath:executable];
     task.arguments = @[@"--registered-sidecar-display-name-helper"];
@@ -733,7 +714,7 @@ static BOOL measureRegisteredDisplayNameHelper(NSString *executable, NSString *c
     task.standardError = outputPipe;
     task.standardInput = controlPipe;
     NSMutableDictionary *environment = [NSMutableDictionary dictionaryWithDictionary:NSProcessInfo.processInfo.environment];
-    environment[@"SOKSAK_PROCESS_LABEL_SIDECAR"] = requestedName;
+    environment[@"SOKSAK_SIDECAR_DISPLAY_NAME"] = requestedName;
     task.environment = environment;
     NSError *launchError = nil;
     check([task launchAndReturnError:&launchError],
