@@ -10,6 +10,7 @@ import { connect } from "@soksak/client";
 import { APPS } from "@soksak/window-check/app.mjs";
 import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
 import { untilShutdown } from "@soksak/window-check/shutdown-wait.mjs";
+import { prepareTerminal } from "./prepare-terminal.mjs";
 
 const app = APPS[Object.keys(APPS)[0]];
 const endpointFile = `${app.configDir}/endpoint.json`;
@@ -43,38 +44,6 @@ async function waitForReady(client) {
   return Date.now() - started;
 }
 
-async function prepareTerminal(client) {
-  let surfaces = await request(client, "status.get", { window: "main", name: "core.surfaces" });
-  let surface = surfaces.find((item) => item.plugin === "terminal" && item.visible)?.surface;
-  if (!surface) {
-    await request(client, "diagnostics.fixture", { window: "main", settings: {} });
-    const grid = await request(client, "status.get", { window: "main", name: "core.grid" });
-    const terminal = grid.cards.flatMap((card) => card.tabs).find((tab) => tab.plugin === "terminal");
-    if (!terminal) throw new Error("shutdown fixture has no terminal tab");
-    await request(client, "command.run", { window: "main", name: "core.tab.select", params: { tab: terminal.id } });
-  }
-  const started = Date.now();
-  while (Date.now() - started < STARTUP_LIMIT) {
-    surfaces = await request(client, "status.get", { window: "main", name: "core.surfaces" });
-    surface = surfaces.find((item) => item.plugin === "terminal" && item.visible)?.surface;
-    if (surface) break;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  if (!surface) throw new Error("shutdown fixture terminal did not become visible");
-  await request(client, "command.run", {
-    window: "main", name: "terminal.input",
-    surface,
-    params: { bytes: "printf '\\033[?1002h\\033[?1006hSHUTDOWN-READY\\n'\r" },
-  });
-  const ready = Date.now();
-  while (Date.now() - ready < STARTUP_LIMIT) {
-    const session = await request(client, "status.get", { window: "main", name: "terminal.session", surface });
-    if (session.sessionId && session.error === undefined) return { surface, sessionId: session.sessionId };
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  throw new Error("terminal session did not become ready before shutdown");
-}
-
 /** The configuration directory of the one persistent service that published an endpoint: the terminal service. */
 function serviceDirectory() {
   const directory = join(app.configDir, "services");
@@ -88,7 +57,8 @@ await waitForFilesystem("endpoint", () => existsSync(endpointFile), STARTUP_LIMI
 const client = await connect({ configDir: app.configDir });
 const pid = client.endpoint.pid;
 await waitForReady(client);
-const terminal = process.env.SOKSAK_SHUTDOWN_TERMINAL === "1" ? await prepareTerminal(client) : null;
+const terminal = process.env.SOKSAK_SHUTDOWN_TERMINAL === "1"
+  ? await prepareTerminal(client, request, { startupLimit: STARTUP_LIMIT }) : null;
 const by = process.env.SOKSAK_SHUTDOWN_BY ?? "command";
 if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
 // The connections end when their processes end, so each one is opened before the request that ends the application.
