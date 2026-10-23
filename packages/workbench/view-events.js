@@ -1,6 +1,6 @@
 // The page side of the event subscriptions of a view (docs/spec/native-surfaces.md#view-surfaces). A subscription call of the view
 // registers one listener in the page, and each event that the listener receives is pushed to the view as a host message
-// {sok: 1, event, data} through push. The subscriptions end when the surface closes.
+// {sok: 1, event, data} through push. The subscriptions end when the surface closes or its document process ends.
 
 /**
  * Creates the subscriptions of one view surface.
@@ -17,13 +17,14 @@
  *                 and the function returns the unsubscribe function, which it calls at the end of the watch
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it
  *     closing     optional AbortSignal of the surface lifetime; a refusal after abort cancels delivery
- *     cancel      cancel(event): records a refused delivery that ended with the surface
+ *     cancel      cancel(event): records a delivery canceled by document or surface end
  *     report      report(text): receives the text of a push that the host refused
  *
  * Returns {native(name), sidecarMessage(id), sidecarFailure(id), textSize(), settings(), logLevels(), statusWatch(name),
- * statusUnwatch(name), close()}. A subscription call resolves with null, and a second call for the same name or id registers nothing.
- * An unwatch of a name that is not watched ends nothing and resolves with null. A push refused after close or lifetime abort is canceled;
- * a refusal while the surface remains open is reported.
+ * statusUnwatch(name), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers nothing.
+ * restart() ends current subscriptions and invalidates pending deliveries while allowing the new document to subscribe again. An unwatch
+ * of a name that is not watched ends nothing and resolves with null. A refusal after document or surface end is canceled; a refusal while
+ * the current document remains open is reported.
  */
 export function createViewSubscriptions({ native, sidecar, textSize, settings, logLevels, status, push, report, closing, cancel = () => {} }) {
   if (typeof push !== "function" || typeof report !== "function") {
@@ -32,19 +33,21 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
   // The registration of each key and its off function, by key. A key is native:<name>, sidecar.message:<id>, sidecar.failure:<id>,
   // or status:<name>.
   const registered = new Map();
+  // A restarted host process is a new document even though its surface stays mounted.
+  let generation = 0;
   // Set by close: an event that arrives after the surface closed is canceled without a host send.
   let closed = false;
   let delivery = Promise.resolve();
-  const forward = (event, data) => {
+  const forward = (event, data, owner = generation) => {
     delivery = delivery.then(async () => {
-      if (closed || closing?.aborted) {
+      if (closed || closing?.aborted || owner !== generation) {
         cancel(event);
         return;
       }
       try {
         await push(event, data);
       } catch (error) {
-        if (closed || closing?.aborted) {
+        if (closed || closing?.aborted || owner !== generation) {
           cancel(event);
           return;
         }
@@ -70,7 +73,11 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
   const subscribe = (key, register) => {
     if (closed) return Promise.reject(new Error("view subscriptions are closed"));
     if (registered.has(key)) return Promise.resolve(null);
+    const owner = generation;
     const pending = registration(key, register).then((off) => {
+      if (owner !== generation || closed) {
+        return Promise.resolve(off()).then(() => null);
+      }
       registered.set(key, off);
       return null;
     });
@@ -82,30 +89,44 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
     native(name) {
       return subscribe(`native:${name}`, () => {
         if (typeof native !== "function") throw new TypeError("view subscriptions have no surface event");
-        return native(name, (data) => forward(name, data));
+        const owner = generation;
+        return native(name, (data) => forward(name, data, owner));
       });
     },
     sidecarMessage(id) {
-      return subscribe(`sidecar.message:${id}`, () => sidecar.on(id, (body) => forward("sidecar.message", { id, body })));
+      return subscribe(`sidecar.message:${id}`, () => {
+        const owner = generation;
+        return sidecar.on(id, (body) => forward("sidecar.message", { id, body }, owner));
+      });
     },
     sidecarFailure(id) {
-      return subscribe(`sidecar.failure:${id}`, () => sidecar.onFailure(id, (reason) => forward("sidecar.failure", { id, reason })));
+      return subscribe(`sidecar.failure:${id}`, () => {
+        const owner = generation;
+        return sidecar.onFailure(id, (reason) => forward("sidecar.failure", { id, reason }, owner));
+      });
     },
     textSize() {
-      return subscribe("textSize", () => textSize((factor) => forward("textSize", factor)));
+      return subscribe("textSize", () => {
+        const owner = generation;
+        return textSize((factor) => forward("textSize", factor, owner));
+      });
     },
     settings() {
-      return subscribe("settings", () => settings((values) => forward("settings", values)));
+      return subscribe("settings", () => {
+        const owner = generation;
+        return settings((values) => forward("settings", values, owner));
+      });
     },
     // The stored levels are read again at each change of the policy, and only levels that differ from the last are pushed.
     logLevels() {
       return subscribe("log.levels", () => {
+        const owner = generation;
         let last = logLevels.read().join();
         return logLevels.on(() => {
           const next = logLevels.read();
           if (next.join() === last) return;
           last = next.join();
-          forward("log.levels", next);
+          forward("log.levels", next, owner);
         });
       });
     },
@@ -113,7 +134,8 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
     statusWatch(name) {
       // A refusal of the page is a rejection, so the executor carries a synchronous throw of the observation into it.
       return subscribe(`status:${name}`, () => new Promise((resolve) => {
-        resolve(status(name, (value) => forward("status", { name, value })));
+        const owner = generation;
+        resolve(status(name, (value) => forward("status", { name, value }, owner)));
       }));
     },
     statusUnwatch(name) {
@@ -122,6 +144,13 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, l
       if (off === undefined) return Promise.resolve(null);
       registered.delete(key);
       return Promise.resolve(off()).then(() => null);
+    },
+    async restart() {
+      if (closed) throw new Error("view subscriptions are closed");
+      generation += 1;
+      const offs = [...registered.values()];
+      registered.clear();
+      for (const off of offs) await off();
     },
     async close() {
       closed = true;

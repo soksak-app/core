@@ -647,6 +647,141 @@ test("a view process end forgets the regions that its surface attached", { timeo
   }
 });
 
+// The host ends one view document while its calls and subscriptions are in flight. Late work from that document must stay canceled
+// after a new document registers its subscriptions, while the new document's live work continues to report refusals.
+test("a view process end cancels its pending work across restart and accepts new document subscriptions", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const nativeListeners = new Map();
+  const sidecarListeners = [];
+  const replies = [];
+  const calls = [];
+  const emitted = [];
+  const reported = [];
+  let resolveOldSend;
+  let oldSendStarted;
+  const oldSendStartedPromise = new Promise((resolve) => { oldSendStarted = resolve; });
+  let resolveOldEventStarted;
+  const oldEventStartedPromise = new Promise((resolve) => { resolveOldEventStarted = resolve; });
+  let oldEventReject;
+  let newDocumentReady = false;
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime,
+        native: { ...runtime.native,
+          on: async (name, listener) => {
+            nativeListeners.set(name, listener);
+            return () => nativeListeners.delete(name);
+          },
+          call: async (name, payload) => {
+            calls.push({ name, payload });
+            if (name === "viewEvent" && payload.data.body.id === "old") {
+              resolveOldEventStarted();
+              return new Promise((_resolve, reject) => { oldEventReject = reject; });
+            }
+            if (name === "viewEvent" && payload.data.body.id === "live-refusal") {
+              throw new Error("current view document refused the event");
+            }
+            if (name === "viewReply") {
+              replies.push(payload);
+              if (payload.id === 11 && newDocumentReady) calls.push({ name: "staleReplyReachedReplacement", payload });
+            }
+            return null;
+          },
+        },
+        sidecar: () => ({
+          send: async (_id, body) => {
+            if (body.id === "old") {
+              oldSendStarted();
+              return new Promise((resolve) => { resolveOldSend = resolve; });
+            }
+            return null;
+          },
+          on: async (id, listener) => {
+            const entry = { id, listener, active: true };
+            sidecarListeners.push(entry);
+            return () => { entry.active = false; };
+          },
+          onFailure: async () => () => {},
+        }),
+      };
+    },
+  } });
+  const actualPageLog = await import("../page-log.js");
+  t.mock.module("../page-log.js", { exports: { ...actualPageLog, emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
+  const previousError = globalThis.ErrorEvent;
+  const previousDispatch = globalThis.dispatchEvent;
+  globalThis.ErrorEvent = dom.window.ErrorEvent;
+  globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-process-end-pending-work");
+  const pluginId = "fixture-view-process-generation";
+  const surfaceId = "fixture-view-process-generation-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] },
+    sidecars: ["fixture-sidecar"], composition: { kind: "view", page: "ui/page.html" } };
+  const settle = async (condition) => {
+    for (let turn = 0; turn < 100 && !condition(); turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.ok(condition(), "the view-process operation settled");
+  };
+  try {
+    authorizeSurface(surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    const call = nativeListeners.get("view-call");
+    call({ id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
+    await settle(() => sidecarListeners.length === 1);
+    call({ id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { id: "old" } } });
+    await oldSendStartedPromise;
+    sidecarListeners[0].listener({ id: "old" });
+    await oldEventStartedPromise;
+    const ended = nativeListeners.get("view-process-ended");
+    assert.equal(typeof ended, "function", "the mounted surface listens for host view-process end");
+    ended({ surface: surfaceId });
+
+    // A restarted document sends a new subscription before the old handler settles.
+    call({ id: 12, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
+    await settle(() => replies.some(({ id }) => id === 12));
+    newDocumentReady = true;
+    resolveOldSend(null);
+    oldEventReject(new Error(`surface ${surfaceId} has no ready document`));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const currentListener = sidecarListeners.at(-1);
+    currentListener.listener({ id: "new" });
+    await settle(() => calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "new"));
+    currentListener.listener({ id: "live-refusal" });
+    await settle(() => reported.length > 0);
+
+    assert.deepEqual({
+      staleReplies: replies.filter(({ id }) => id === 11),
+      staleReplyReachedReplacement: calls.some(({ name }) => name === "staleReplyReachedReplacement"),
+      oldListenerActive: sidecarListeners[0].active,
+      newListenerActive: sidecarListeners.at(-1).active,
+      oldCallCanceled: emitted.some(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11),
+      oldEventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
+      reports: reported,
+      newEventDelivered: calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "new"),
+    }, {
+      staleReplies: [], staleReplyReachedReplacement: false, oldListenerActive: false, newListenerActive: true,
+      oldCallCanceled: true, oldEventCanceled: true,
+      reports: ["view event sidecar.message: current view document refused the event"], newEventDelivered: true,
+    });
+  } finally {
+    globalThis.dispatchEvent = previousDispatch;
+    globalThis.ErrorEvent = previousError;
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // The exposure port of a view is released when its surface is disposed, not when the view's listener registrations settle: a
 // registration that settles after the dispose (a slow native listener) must not keep the port, or mounting the same surface again
 // fails with "already has an exposure port".

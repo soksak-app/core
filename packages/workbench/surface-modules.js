@@ -249,7 +249,8 @@ function answerViewCalls(surface, scoped, page, context, closing) {
   // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
   const gate = pluginNativeGate(scoped.native);
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
-  const pending = new Map();
+  let pending = new Map();
+  let documentGeneration = 0;
   // The event subscriptions of the view. Each event is pushed to the view as viewEvent, and the subscriptions end with the answers.
   const subscriptions = createViewSubscriptions({
     // All exposure requests belong to the actual view document, including its core entries.
@@ -361,7 +362,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
   const answering = scoped.native.on("view-call", (event) => {
     if (event?.cancel === true) {
       // A cancel has no reply: the call that it ends replies cancelled.
-      answerViewCall(event, options).catch((error) => {
+      answerViewCall(event, { ...options, pending }).catch((error) => {
         dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} cancel: ${error.message}` }));
       });
       return;
@@ -377,13 +378,20 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     emitEvent("debug", "page.view.call", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command) });
     // A surface that declares surface.unload reads its tab state from the store, which the page opens during its start (projects.js).
     // Its call waits until the store has been tried, as the mount does, so a call during the start is not answered before the store.
-    (surface.unload ? tabStatesReady().then(() => answerViewCall(event, options)) : answerViewCall(event, options)).then(
+    const receivedGeneration = documentGeneration;
+    const receivedPending = pending;
+    const receivedOptions = { ...options, pending: receivedPending };
+    const runCall = () => {
+      if (closing.aborted || receivedGeneration !== documentGeneration) return Promise.reject(new Error("cancelled"));
+      return answerViewCall(event, receivedOptions);
+    };
+    (surface.unload ? tabStatesReady().then(runCall) : runCall()).then(
       // default: a handler that returns no value replies with null, which is the result of a call without a value.
       (result) => ({ id: event.id, result: result ?? null }),
       // default: a rejection that is not an Error replies with its text.
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
     ).then((reply) => {
-      if (closing.aborted) {
+      if (closing.aborted || receivedGeneration !== documentGeneration) {
         emitEvent("debug", "page.view.call.cancel", {
           plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
         });
@@ -393,7 +401,7 @@ function answerViewCalls(surface, scoped, page, context, closing) {
         emitEvent("debug", "page.view.reply", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, outcome: "error" in reply ? "error" : "result" });
       });
     }).catch((error) => {
-      if (closing.aborted) {
+      if (closing.aborted || receivedGeneration !== documentGeneration) {
         emitEvent("debug", "page.view.call.cancel", {
           plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
         });
@@ -401,6 +409,16 @@ function answerViewCalls(surface, scoped, page, context, closing) {
       }
       // default: a refusal that is not an Error carries its value as the text.
       dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} reply: ${error?.message ?? error}` }));
+    });
+  });
+  const ending = scoped.native.on("view-process-ended", () => {
+    documentRegions.released(surface.surfaceId);
+    documentGeneration += 1;
+    for (const controller of pending.values()) controller.abort();
+    pending.clear();
+    pending = new Map();
+    subscriptions.restart().catch((error) => {
+      dispatchEvent(new ErrorEvent("error", { message: `view subscriptions restart: ${error.message}` }));
     });
   });
   closing.addEventListener("abort", () => {
@@ -416,9 +434,10 @@ function answerViewCalls(surface, scoped, page, context, closing) {
     }
   });
   // The answers end with the view: the listeners are removed, the open command runs end, and each page subscription is ended.
-  return Promise.all([answering, replies]).then(([offCall, offReply]) => () => {
+  return Promise.all([answering, replies, ending]).then(([offCall, offReply, offEnding]) => () => {
     offCall();
     offReply();
+    offEnding();
     forgetCommands();
     unmarkView();
     viewCommands.close();
@@ -568,13 +587,11 @@ export async function mountSurface(slot, surface, { onState = () => {} } = {}) {
     const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));
     // The host closed the document and image regions of the surface with the ended view, so the region record forgets them
     // until the restarted view attaches them again (docs/spec/native-surfaces.md#view-surfaces).
-    const ending = scoped.native.on("view-process-ended", () => documentRegions.released(surface.surfaceId));
     closing.signal.addEventListener("abort", () => {
       answering.then((off) => off());
       stopping.then((off) => off());
       responding.then((off) => off());
       abandoning.then((off) => off());
-      ending.then((off) => off());
       forgetView(surface.surfaceId);
     }, { once: true });
     entry.mounted = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
