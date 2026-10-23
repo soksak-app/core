@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-2-2-4-2: Capture callback record는 기록한 정확한 상대 frame 파일명을 담고, frame을 기록하지 않았으면 `null`을 담는다. Native Red는 cached, idle, blank callback과 JSONL 연결에서 실패했고, 파일명과 실제 파일 존재를 확인하는 `capture_metadata_test`가 통과한다. `make docs-check`가 통과한다.
+
 - F212.10-editor-2: Contributor 연결이 없어도 provider page는 자기 선언 shared module만 불러올 수 있다. 다른 page는 계속 enabled provider에 대한 호환 item이 있어야 한다. Go와 Rust 소유 Red 검사는 shared file이 없는 결과를 반환했으며 수정 후 같은 검사와 기존 grant 사례가 통과한다.
 
 - F212.16-13: Tauri application entry가 현재 host scheme과 일치하도록 `soksak://core/start.json`을 import한다. 소유 검사는 이전 `sok:` import에서 실패한 뒤 canonical address만 해석해 통과한다. Tauri package test는 18/18로 통과하고 재빌드한 0.0.20 window는 `ready:true`를 보고한다.

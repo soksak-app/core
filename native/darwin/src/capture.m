@@ -153,11 +153,12 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     }
     id statusValue = hasStatus ? @((int)status) : [NSNull null];
     id timeValue = hasDisplayTime ? [NSString stringWithFormat:@"%llu", (unsigned long long)shown] : [NSNull null];
-    [self.callbackStatusTrace addObject:@{
+    [self.callbackStatusTrace addObject:[NSMutableDictionary dictionaryWithDictionary:@{
         @"sequence": @(self.callbackStatusTrace.count + 1),
         @"status": statusValue,
         @"displayTime": timeValue,
-    }];
+        @"frame": [NSNull null],
+    }]];
     return YES;
 }
 
@@ -292,6 +293,8 @@ static void reportCaptureFileFailure(int number, NSString *operation, NSString *
     }
     self.queued = number;
     NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
+    NSMutableDictionary *callbackRecord = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
+    callbackRecord[@"frame"] = path.lastPathComponent;
     dispatch_async(captureWriter, ^{
         CFTimeInterval began = CACurrentMediaTime();
         // Preserves the header and compresses all pixels and row padding losslessly.
