@@ -27,6 +27,31 @@ export function createDeclaredSource({ plugin, status }) {
   if (typeof plugin !== "string" || plugin === "") throw new TypeError("the declared source requires the plugin id");
   if (typeof status !== "string" || status === "") throw new TypeError(`the declared source of ${plugin} requires a status name`);
   const where = `${plugin}.${status}`;
+  function subscribe(event, matches, receive) {
+    let closed = false;
+    let registration;
+    try {
+      registration = bridge.on(event, (message) => {
+        if (matches(message)) receive(message);
+      });
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    return Promise.resolve(registration).then((unsubscribe) => {
+      if (typeof unsubscribe !== "function") throw new TypeError(`${where}: snapshot listener registration did not return an unsubscribe function`);
+      if (closed) {
+        unsubscribe();
+        return () => {};
+      }
+      return () => {
+        closed = true;
+        unsubscribe();
+      };
+    }, (error) => {
+      closed = true;
+      throw error;
+    });
+  }
   return {
     channel(source) {
       if (source.surface === null) {
@@ -36,22 +61,9 @@ export function createDeclaredSource({ plugin, status }) {
           send: (message) => bridge.call("pluginHostEvent", { plugin, event: message.event, data: { plugin: message.plugin, status: message.status, seq: message.seq } })
             .catch((error) => dispatchEvent(new ErrorEvent("error", { message: `${where}: ${error.message}` }))),
           onMessage: (receive) => {
-            let unsubscribe = null;
-            let closed = false;
-            Promise.resolve(bridge.on("declared-ui-snapshot", (event) => {
-              if (event?.plugin !== plugin || event?.surface !== undefined) return;
+            return subscribe("declared-ui-snapshot", (event) => event?.plugin === plugin && event?.surface === undefined, (event) => {
               receive({ event: SNAPSHOT_EVENT, plugin, status: event.status, seq: event.seq, value: event.value, skipped: event.skipped });
-            })).then((off) => {
-              if (closed) off();
-              else unsubscribe = off;
-            }, (error) => {
-              dispatchEvent(new ErrorEvent("error", { message: `${where}: ${error.message}` }));
             });
-            return () => {
-              closed = true;
-              // default: an unsubscribe before the registration completed ends nothing here; the registration ends itself.
-              unsubscribe?.();
-            };
           },
         };
       }
@@ -62,23 +74,9 @@ export function createDeclaredSource({ plugin, status }) {
         send: (message) => bridge.call("viewEvent", { surface: source.surface, event: message.event, data: { plugin: message.plugin, status: message.status, seq: message.seq } })
           .catch((error) => dispatchEvent(new ErrorEvent("error", { message: `${where}: ${error.message}` }))),
         onMessage: (receive) => {
-          let unsubscribe = null;
-          let closed = false;
-          // The registration of a runtime listener is asynchronous; the unsubscribe ends it as soon as it is registered.
-          Promise.resolve(bridge.on("declared-ui-snapshot", (event) => {
-            if (event?.surface !== source.surface || event?.plugin !== plugin) return;
+          return subscribe("declared-ui-snapshot", (event) => event?.surface === source.surface && event?.plugin === plugin, (event) => {
             receive({ event: SNAPSHOT_EVENT, plugin, status: event.status, seq: event.seq, value: event.value, skipped: event.skipped });
-          })).then((off) => {
-            if (closed) off();
-            else unsubscribe = off;
-          }, (error) => {
-            dispatchEvent(new ErrorEvent("error", { message: `${where}: ${error.message}` }));
           });
-          return () => {
-            closed = true;
-            // default: an unsubscribe before the registration completed ends nothing here; the registration ends itself.
-            unsubscribe?.();
-          };
         },
       };
     },

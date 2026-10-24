@@ -2650,6 +2650,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-41",
+    implementation: [
+      { file: "packages/workbench/declared-source.js", symbol: "function subscribe(event, matches, receive)" },
+      { file: "packages/workbench/declared-section.js", symbol: "const ready = createSnapshotReceiver" },
+      { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotReceiver" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "the first push is subscribed before the source is pulled" },
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "a source change before subscription readiness unsubscribes late and never pulls the old source" },
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "closing before subscription readiness unsubscribes late and never pulls" },
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "reconciling the ready source again keeps one listener and one pull" },
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "a view channel resolves readiness only after the runtime listener is installed" },
+      { file: "packages/plugin-api/test/snapshots.test.mjs", id: "the receiver resolves an asynchronous subscription after it installs its listener" },
+    ],
+    expected: "The workbench installs the snapshot listener before pulling a chosen source, accepts a push that arrives before the pull reply, rejects invalid unsubscribe results, and releases a delayed subscription after its source becomes obsolete.",
+    levels: ["unit"],
+  },
+  {
     id: "F244",
     implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
     tests: [

@@ -170,6 +170,7 @@ export function createSnapshotSender({ plugin, send, onMessage, report }) {
  *     plugin      the plugin id of the snapshots that it accepts
  *     send        send(message): sends one message to the plugin synchronously; throws when it cannot
  *     onMessage   onMessage(listener): delivers each message from the plugin to listener; returns the unsubscribe function
+ *                 immediately when registration is synchronous, or a promise of it when registration is asynchronous
  *     onSnapshot  onSnapshot(status, seq, value, skipped): receives each snapshot and the count of values it skipped
  *
  * The acknowledgement is sent before onSnapshot runs, so the plugin releases its slot when the snapshot arrives. An error of
@@ -195,7 +196,13 @@ export function createSnapshotReceiver({ plugin, send, onMessage, onSnapshot }) 
     onSnapshot(message.status, message.seq, message.value, message.skipped);
   }
 
-  return onMessage(receive);
+  const registration = onMessage(receive);
+  const unsubscribe = (value) => {
+    if (typeof value !== "function") throw new TypeError("snapshot channel registration did not return an unsubscribe function");
+    return value;
+  };
+  if (registration && typeof registration.then === "function") return Promise.resolve(registration).then(unsubscribe);
+  return unsubscribe(registration);
 }
 
 /**

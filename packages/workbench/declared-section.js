@@ -102,9 +102,10 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     if (next === null) return;
     current = next;
     generation += 1;
+    const mine = generation;
     const link = channel(next);
     if (link !== null) {
-      stop = createSnapshotReceiver({
+      const ready = createSnapshotReceiver({
         plugin: owner,
         send: link.send,
         onMessage: link.onMessage,
@@ -117,6 +118,17 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
           accept(seq, value, next);
         },
       });
+      Promise.resolve(ready).then((unsubscribe) => {
+        if (mine !== generation || current === null || current.id !== next.id) {
+          unsubscribe();
+          return;
+        }
+        stop = unsubscribe;
+        pullCurrent();
+      }, (error) => {
+        if (mine === generation) failed(error);
+      });
+      return;
     }
     pullCurrent();
   }

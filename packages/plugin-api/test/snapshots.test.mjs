@@ -234,6 +234,44 @@ test("the receiver acknowledges each snapshot with its seq and passes the value 
   assert.deepEqual(transport.sent, [{ event: "declared-ui.snapshot.ack", plugin: "probe", status: "probe.tree", seq: 3 }]);
 });
 
+test("the receiver resolves an asynchronous subscription after it installs its listener", async () => {
+  const sent = [];
+  let deliver;
+  let ready;
+  const registration = new Promise((resolve) => { ready = resolve; });
+  const subscribed = createSnapshotReceiver({
+    plugin: "probe",
+    send: (message) => sent.push(message),
+    onMessage: (listener) => {
+      deliver = listener;
+      return registration;
+    },
+    onSnapshot: () => {},
+  });
+  let complete = false;
+  const completed = subscribed.then((unsubscribe) => {
+    complete = true;
+    return unsubscribe;
+  });
+  await Promise.resolve();
+  assert.equal(complete, false, "the receiver reported readiness before its transport");
+  ready(() => {});
+  const unsubscribe = await completed;
+  assert.equal(complete, true, "the receiver did not report readiness after its transport");
+  deliver({ event: "declared-ui.snapshot", plugin: "probe", status: "probe.tree", seq: 1, value: "x", skipped: 0 });
+  assert.deepEqual(sent, [{ event: "declared-ui.snapshot.ack", plugin: "probe", status: "probe.tree", seq: 1 }]);
+  unsubscribe();
+});
+
+test("the receiver rejects a subscription that does not return an unsubscribe function", () => {
+  assert.throws(() => createSnapshotReceiver({
+    plugin: "probe",
+    send: () => {},
+    onMessage: () => undefined,
+    onSnapshot: () => {},
+  }), /snapshot channel registration did not return an unsubscribe function/);
+});
+
 test("the receiver refuses a snapshot of another plugin or with an invalid field", () => {
   const transport = fakeTransport();
   createSnapshotReceiver({ plugin: "probe", send: transport.send, onMessage: transport.onMessage, onSnapshot: () => {} });

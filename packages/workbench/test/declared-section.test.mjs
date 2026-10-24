@@ -20,13 +20,13 @@ const leaf = (key) => ({ key, label: key });
 let counter = 0;
 
 /** A declared section for one status, with fake registrations, a fake channel per source, and a fake pull. */
-async function harness() {
+async function harness({ deferSubscription = false } = {}) {
   const name = `s${++counter}`;
   const module = await import(`../declared-section.js?${name}`);
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], skipped: [], failures: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
@@ -36,7 +36,19 @@ async function harness() {
     choose: () => module.chooseSource({ statusId, active: world.active, registrants: world.registrants, host: world.host ?? null }),
     channel: (source) => ({
       send: (message) => { world.acks.push({ source: source.id, message }); },
-      onMessage: (listener) => { world.channels.set(source.id, listener); return () => { world.channels.delete(source.id); }; },
+      onMessage: (listener) => {
+        if (!world.deferSubscription) {
+          world.channels.set(source.id, listener);
+          return () => { world.channels.delete(source.id); };
+        }
+        let ready;
+        const readiness = new Promise((resolve) => { ready = resolve; });
+        world.deferredSubscriptions.push(() => {
+          world.channels.set(source.id, listener);
+          ready(() => { world.channels.delete(source.id); });
+        });
+        return readiness;
+      },
     }),
     pull: (source) => {
       world.pulls.push(source.id);
@@ -87,6 +99,17 @@ test("the active view that registered the status is the source: it is pulled onc
   h.push("view-a", 2, list(["b"]));
   assert.deepEqual(h.labels(), ["b"], "the pushed value was not drawn");
   assert.deepEqual(h.world.acks.map((ack) => ack.message.seq), [2], "the snapshot was not acknowledged");
+});
+
+test("reconciling the ready source again keeps one listener and one pull", async () => {
+  const h = await harness();
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.section.reconcile();
+  h.section.reconcile();
+  await settle();
+  assert.equal(h.world.channels.size, 1, "reconciling the same source installed duplicate listeners");
+  assert.deepEqual(h.world.pulls, ["view-a"], "reconciling the same source pulled more than once");
 });
 
 test("tree expansion is sent to its source and displayed after the authoritative snapshot", async () => {
@@ -140,12 +163,64 @@ test("a pull reply with a lower seq than the last accepted value is discarded", 
   h.world.active = "view-a";
   h.world.deferPull = true;
   h.section.reconcile();
+  await settle();
   h.push("view-a", 5, list(["x"]));
   assert.deepEqual(h.labels(), ["x"]);
   h.world.deferred[0]({ seq: 2, value: list(["old"]) });
   await settle();
   assert.deepEqual(h.world.pulls, ["view-a"], "the source was pulled more than once");
   assert.deepEqual(h.labels(), ["x"], "a pull reply with a lower seq was drawn");
+});
+
+test("the first push is subscribed before the source is pulled", async () => {
+  const h = await harness({ deferSubscription: true });
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.world.pullReply = { seq: 0, value: null };
+  h.world.deferPull = true;
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.world.pulls, [], "the source was pulled before its snapshot listener was ready");
+  h.world.deferredSubscriptions[0]();
+  await settle();
+  assert.deepEqual(h.world.pulls, ["view-a"], "the source was not pulled after subscription readiness");
+  h.push("view-a", 1, list(["first-push"]));
+  assert.deepEqual(h.world.acks.map(({ message }) => message.seq), [1], "the ready listener did not receive the first push");
+  assert.deepEqual(h.labels(), ["first-push"], "the ready listener did not draw the first push");
+  h.world.deferred[0]({ seq: 0, value: null });
+  await settle();
+  assert.deepEqual(h.labels(), ["first-push"], "the first push was not accepted before the pull reply");
+});
+
+test("a source change before subscription readiness unsubscribes late and never pulls the old source", async () => {
+  const h = await harness({ deferSubscription: true });
+  h.world.registrants = ["view-a", "view-b"];
+  h.world.active = "view-a";
+  h.section.reconcile();
+  h.world.active = "view-b";
+  h.section.reconcile();
+  assert.deepEqual(h.world.pulls, [], "a source was pulled before subscription readiness");
+  h.world.deferSubscription = false;
+  h.world.deferredSubscriptions[0]();
+  h.world.deferredSubscriptions[1]();
+  await settle();
+  assert.equal(h.world.channels.has("view-a"), false, "the obsolete subscription remained after readiness");
+  assert.deepEqual(h.world.pulls, ["view-b"], "the obsolete source was pulled or the chosen source was not pulled");
+  assert.equal(h.world.channels.has("view-b"), true, "the chosen source listener was not installed");
+  h.section.close();
+  assert.equal(h.world.channels.size, 0, "closing the section left a listener installed");
+});
+
+test("closing before subscription readiness unsubscribes late and never pulls", async () => {
+  const h = await harness({ deferSubscription: true });
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.section.reconcile();
+  h.section.close();
+  h.world.deferredSubscriptions[0]();
+  await settle();
+  assert.equal(h.world.channels.has("view-a"), false, "the late listener remained after the section closed");
+  assert.deepEqual(h.world.pulls, [], "the source was pulled after the section closed");
 });
 
 test("a pull reply with value null leaves the section cleared until the first push", async () => {
@@ -204,10 +279,12 @@ test("a pull reply of a source that is no longer chosen is discarded", async () 
   h.world.deferPull = true;
   h.world.pullReply = { seq: 1, value: list(["old"]) };
   h.section.reconcile();
+  await settle();
   h.world.registrants = ["view-b"];
   h.world.active = "view-b";
   h.world.pullReply = { seq: 1, value: list(["new"]) };
   h.section.reconcile();
+  await settle();
   assert.equal(h.body.textContent, "", "a section was drawn before a pull reply arrived");
   h.world.deferred[0]({ seq: 1, value: list(["old"]) });
   await settle();

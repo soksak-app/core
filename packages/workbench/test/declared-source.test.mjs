@@ -9,6 +9,8 @@ import test, { mock } from "node:test";
 const calls = [];
 const listeners = new Map();
 let refusal = null;
+let delayListenerRegistration = false;
+let completeListenerRegistration = null;
 mock.module("@soksak/runtime", { namedExports: {
   host: {
     call: (name, arg) => {
@@ -18,6 +20,14 @@ mock.module("@soksak/runtime", { namedExports: {
     on: (name, listener) => {
       let set = listeners.get(name);
       if (!set) listeners.set(name, set = new Set());
+      if (delayListenerRegistration) {
+        return new Promise((resolve) => {
+          completeListenerRegistration = () => {
+            set.add(listener);
+            resolve(() => set.delete(listener));
+          };
+        });
+      }
       set.add(listener);
       return Promise.resolve(() => set.delete(listener));
     },
@@ -87,7 +97,7 @@ test("the channel delivers each snapshot of its surface and plugin, and the unsu
   const { channel } = createDeclaredSource({ plugin: "probe", status: "lines" });
   const link = channel({ id: "view-a", surface: "view-a" });
   const received = [];
-  const unsubscribe = link.onMessage((message) => received.push(message));
+  const unsubscribe = await link.onMessage((message) => received.push(message));
   await new Promise((resolve) => setImmediate(resolve));
   emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 2, value: { n: 1 }, skipped: 1 });
   emit("declared-ui-snapshot", { surface: "view-b", plugin: "probe", status: "lines", seq: 3, value: null, skipped: 0 });
@@ -101,6 +111,30 @@ test("the channel delivers each snapshot of its surface and plugin, and the unsu
   assert.deepEqual(received.length, 1, "the unsubscribe did not end the delivery");
 });
 
+test("a view channel resolves readiness only after the runtime listener is installed", async () => {
+  const { channel } = createDeclaredSource({ plugin: "probe", status: "lines" });
+  const link = channel({ id: "view-a", surface: "view-a" });
+  const received = [];
+  delayListenerRegistration = true;
+  let ready = false;
+  const registration = link.onMessage((message) => received.push(message)).then((unsubscribe) => {
+    ready = true;
+    return unsubscribe;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ready, false, "the channel reported readiness before runtime listener installation");
+  assert.equal(listeners.get("declared-ui-snapshot")?.size ?? 0, 0, "the fake runtime installed a listener before readiness");
+  completeListenerRegistration();
+  const unsubscribe = await registration;
+  assert.equal(ready, true, "the channel did not report readiness after runtime listener installation");
+  emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 1, value: { n: 1 }, skipped: 0 });
+  assert.equal(received.length, 1, "the ready listener did not receive the first snapshot");
+  unsubscribe();
+  assert.equal(listeners.get("declared-ui-snapshot")?.size ?? 0, 0, "unsubscribe did not remove the runtime listener");
+  delayListenerRegistration = false;
+  completeListenerRegistration = null;
+});
+
 test("the channel of a plugin host source acknowledges through pluginHostEvent and delivers the snapshots of its plugin", async () => {
   const { channel } = createDeclaredSource({ plugin: "probe", status: "lines" });
   const link = channel({ id: "plugin:probe", surface: null });
@@ -111,7 +145,7 @@ test("the channel of a plugin host source acknowledges through pluginHostEvent a
     arg: { plugin: "probe", event: "declared-ui.snapshot.ack", data: { plugin: "probe", status: "lines", seq: 3 } },
   }, "the acknowledgement was not the plugin host event of the source");
   const received = [];
-  const unsubscribe = link.onMessage((message) => received.push(message));
+  const unsubscribe = await link.onMessage((message) => received.push(message));
   emit("declared-ui-snapshot", { plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
   emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 6, value: null, skipped: 0 });
   emit("declared-ui-snapshot", { plugin: "other", status: "lines", seq: 7, value: null, skipped: 0 });
