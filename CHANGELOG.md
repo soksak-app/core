@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-47-34: Correct the ScreenCaptureKit stop comment.
+  `minimumFrameInterval` limits the requested update rate and does not guarantee
+  idle callbacks at that cadence. Stop waits for a callback at or beyond the
+  requested display boundary and reports an explicit error when its existing
+  one-second wait
+  expires. Capture behavior and the 33 ms criterion are unchanged.
+
 - F212.10-core-3-8: Strengthen the terminal page-reload acceptance case to
   correlate the current document identity and source-generation page call and
   reply with the accepted native `viewReply` host call. Preserve transcript

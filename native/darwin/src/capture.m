@@ -867,11 +867,9 @@ int sp_capture_stop(double after) {
         return 0;
     }
     SCStream* stream = captureStream;
-    // Stops after the screen presented up to the later of the call time and after has been fully delivered to the
-    // stream. The content committed by the
-    // application can be presented later than the call, so the caller passes its display time. The stream delivers
-    // idle frames every minimumFrameInterval
-    // even if the screen does not change, so the wait ends within one interval.
+    // Stops after a callback delivers a display time at or beyond the later of the call time and requested
+    // presentation time. A pending size change must finish first. If no qualifying callback arrives within the
+    // existing one-second wait, the stop reports an explicit error.
     mach_timebase_info_data_t base;
     mach_timebase_info(&base);
     uint64_t now = mach_absolute_time();

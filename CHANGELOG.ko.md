@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-34: ScreenCaptureKit stop 주석을 실제 동작에 맞춘다.
+  `minimumFrameInterval`은 요청 update rate를 제한하며 해당 간격의 idle
+  callback을 보장하지 않는다. Stop은 요청 display 경계 이상인 callback을
+  기다리고 기존 1초 대기가 끝나면 명시적 오류를 보고한다. Capture 동작과
+  33ms 기준은 바꾸지 않았다.
+
 - F212.10-core-3-8: terminal page-reload acceptance case를 강화해
   current document identity 및 source-generation page call/reply를 받아들여진
   native `viewReply` host call과 연결한다. Reload 전에 transcript 수집을
