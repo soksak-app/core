@@ -2599,3 +2599,8 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   Host logs have no error-level records and the check restores its frontmost
   baseline. This does not verify the activation-tier HWP case or the original
   user-reported symptom.
+
+- F240-9: Correct the first F240-8 execution stage after its prerequisites
+  completed. Record the passing eight-mode shutdown acceptance, completed
+  source-generation work, and the remaining rebuilt-host Files checks. This
+  checklist update changes no behavior and claims no Files runtime pass.

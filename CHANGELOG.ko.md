@@ -2581,3 +2581,8 @@
   수, 두 text line, document region native press 뒤 keyboard focus를 확인한다.
   Host log에는 error-level record가 없고 check는 시작 frontmost baseline을
   복원한다. Activation-tier HWP case와 최초 사용자 보고 증상은 검증하지 않았다.
+
+- F240-9: 선행 조건이 완료된 뒤 F240-8의 첫 실행 단계를 수정한다. 8모드
+  shutdown acceptance 통과, source-generation 작업 완료, rebuilt host에서
+  남은 Files 검사를 기록한다. Checklist 수정이며 동작 변경이나 Files runtime
+  통과 주장은 없다.
