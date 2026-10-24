@@ -5333,6 +5333,27 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-47-30-3",
+    implementation: [
+      { file: "native/darwin/src/capture.m", symbol: "- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber" },
+      { file: "native/darwin/src/capture.m", symbol: "- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration" },
+      { file: "native/darwin/src/capture.m", symbol: "static bool finalizeCaptureArtifacts(SPCapture *sink)" },
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "func captureStopPayload(" },
+      { file: "packages/host/tauriv2/src/recording.rs", symbol: "pub fn stop_payload(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "finalization reports an explicit unavailable display-link trace when no observation was recorded" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "the finalized display-link trace preserves ordered timestamps, raw callback clock, timebase, and window state" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "hidden and off-display observations remain recorded but cannot claim available refresh coverage" },
+      { file: "native/darwin/tests/capture_metadata_test.m", id: "the display-link trace records its 4096 bound, omitted count, incomplete state, and explicit error" },
+      { file: "native/darwin/tests/capture_resize_test.m", id: "stopping the capture invalidates its retained display link" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestCaptureStopPayloadReportsNormalFrameLimit" },
+      { file: "packages/host/tauriv2/tests/recording_test.rs", id: "the_stop_payload_reports_a_normal_frame_limit" },
+    ],
+    expected: "A capture records bounded, validated AppKit display-link observations separately from ScreenCaptureKit callbacks and publishes the artifact path in both host stop payloads; hidden or missing observations are unavailable, overflow is explicitly incomplete, and the trace does not identify or prove presentation of a source frame.",
+    levels: ["native", "unit"],
+  },
+  {
     id: "F239-47-31",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalStageEvents(events, stageOffset)" }],
     tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "a status notification delivered during a sample satisfies the sample's original event offset" }],
