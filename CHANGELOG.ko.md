@@ -4,10 +4,14 @@
 
 ## 미배포
 
-- F239-51: helper 추출 이후 file-open failure check에서 사용하던 Files tree
-  node lookup을 복구한다. Check는 소유 모듈의 `nodeByPath`를 import하며,
-  소유 test는 중첩 project-relative 경로를 검사한다. Focused helper test는
-  5/5 통과하고 `make docs-check`도 통과한다. 두 host runtime case는 재실행하지 않았다.
+- F239-51: helper 추출 이후 Files tree lookup을 소유 helper에서 import한다.
+  보존된 두 host runtime attempt는 수정 전 helper에서
+  `ReferenceError: treeNodes is not defined`로 실패했다. Focused helper test는
+  5/5, `make docs-check`는 통과했지만 같은 runtime case는 재실행하지 않아
+  runtime acceptance는 F239-51-1에서 추적한다.
+
+- F239-51-1: tree lookup 수정의 runtime acceptance를 별도로 추적한다. 수정 전
+  두 host attempt는 Red 증거이며 수정 후 window run 기록은 없다.
 
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는
