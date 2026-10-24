@@ -118,6 +118,8 @@ fn invalid_json_closes_connection() {
 | `diagnostics.input-reference.declared` | Diagnostic endpoint는 같은 window의 input reference method를 선언한다. | both |
 | `diagnostics.input-reference.validates-document` | Input reference action은 wait에서만 빈 문자열을 포함한 document 문자열을 받으며 없거나 잘못된 값을 거부한다. | both |
 | `diagnostics.input-reference.rejects-nul` | Native input reference adapter는 action이나 document의 NUL을 거부하고 오류로 한 번 완료한다. | both |
+| `endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal` | diagnostics build에서 `{window}`을 담은 실제 endpoint JSON-RPC `diagnostics.clock` 요청은 host event-record clock의 `{mono_ns}`를 양수 canonical uint64 십진 문자열로 반환하고, 같은 연결의 두 번째 요청은 첫 값보다 작지 않은 값을 반환한다. | both |
+| `endpoint.diagnostics-clock.absent-without-diagnostics` | diagnostics build 옵션이 없으면 endpoint는 `diagnostics.clock`을 선언하지 않으며 해당 요청의 연결을 닫는다. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | 한도에 도달한 녹화의 중지 페이로드는 frames, count, limited true, 가장 긴 간격을 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-callback-status` | 녹화 중지 페이로드는 녹화 폴더 안에 있는 bounded callback status 및 정확한 display time JSONL artifact의 경로를 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | both |

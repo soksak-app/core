@@ -128,12 +128,19 @@ export function captureFromCallback(decoded, callback) {
   return capture;
 }
 
-/** Reads the exposed host event clock, whose Darwin monotonic domain is CLOCK_UPTIME_RAW/mach absolute time. */
-export function hostClockBoundary(reply) {
-  const value = reply?.clock?.mono_ns;
-  assert.ok(Number.isSafeInteger(value) && value > 0,
-    "host clock reply must contain a positive integer mono_ns");
-  return { clockDomain: "mach-absolute", machAbsoluteNs: String(value) };
+/** Reads the declared diagnostic host clock, whose Darwin monotonic domain is CLOCK_UPTIME_RAW/mach absolute time. */
+export async function hostClockBoundary(request) {
+  assert.equal(typeof request, "function", "host clock boundary requires an endpoint request function");
+  const reply = await request("diagnostics.clock", {});
+  assert.ok(reply !== null && typeof reply === "object" && !Array.isArray(reply)
+    && Object.keys(reply).length === 1 && Object.hasOwn(reply, "mono_ns"),
+  "diagnostics.clock reply must contain only mono_ns");
+  const value = reply.mono_ns;
+  assert.ok(typeof value === "string" && /^[1-9][0-9]*$/.test(value),
+    "diagnostics.clock mono_ns must be canonical positive decimal text");
+  assert.ok(BigInt(value) <= 18_446_744_073_709_551_615n,
+    "diagnostics.clock mono_ns must fit uint64");
+  return { clockDomain: "mach-absolute", machAbsoluteNs: value };
 }
 
 /** Associates each decoded frame with one terminal key interval using the recorded Mach display time. */

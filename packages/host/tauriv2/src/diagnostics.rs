@@ -64,6 +64,15 @@ fn internal(error: impl ToString) -> Failure {
     Failure::new(-32603, error.to_string())
 }
 
+/// Returns the host monotonic clock as an unsigned nanosecond value.
+pub(crate) fn clock() -> Result<Value, Failure> {
+    let mono_ns = crate::event_log::monotonic_ns();
+    if mono_ns == 0 {
+        return Err(internal("the monotonic clock returned zero"));
+    }
+    Ok(json!({"mono_ns": mono_ns.to_string()}))
+}
+
 /// Runs a diagnostic method.
 pub(crate) fn call(
     host: &Host,

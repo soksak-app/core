@@ -71,13 +71,34 @@ testWithTimeout("capture frames map to one half-open input interval by exact Mac
   assert.equal(grouped.get("second")[0].name, "frame-0001.bgra");
 });
 
-testWithTimeout("host clock boundaries identify the Mach-absolute domain and reject malformed replies", () => {
-  assert.deepEqual(hostClockBoundary({ clock: { mono_ns: 1_000_000_123 } }), {
+testWithTimeout("host clock boundaries use the declared endpoint and canonical Mach-absolute nanoseconds", async () => {
+  const calls = [];
+  const request = async (method, params) => {
+    calls.push({ method, params });
+    return { mono_ns: "18446744073709551615" };
+  };
+  assert.deepEqual(await hostClockBoundary(request), {
     clockDomain: "mach-absolute",
-    machAbsoluteNs: "1000000123",
+    machAbsoluteNs: "18446744073709551615",
   });
-  assert.throws(() => hostClockBoundary({ clock: { mono_ns: "continuous-time" } }), /positive integer mono_ns/);
-  assert.throws(() => hostClockBoundary({ clock: null }), /positive integer mono_ns/);
+  assert.deepEqual(calls, [{ method: "diagnostics.clock", params: {} }]);
+  const invalidReplies = [
+    null,
+    {},
+    { clock: { mono_ns: "1000000123" } },
+    { mono_ns: 1000000123 },
+    { mono_ns: "0" },
+    { mono_ns: "01" },
+    { mono_ns: "+1" },
+    { mono_ns: "1e3" },
+    { mono_ns: "1.0" },
+    { mono_ns: "18446744073709551616" },
+    { mono_ns: "1000000123", extra: true },
+  ];
+  for (const reply of invalidReplies) {
+    await assert.rejects(hostClockBoundary(async () => reply), /diagnostics\.clock/,
+      `invalid diagnostics.clock reply was accepted: ${JSON.stringify(reply)}`);
+  }
 });
 
 testWithTimeout("capture stage attribution rejects continuous-time boundaries even when values overlap", () => {

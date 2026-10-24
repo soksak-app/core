@@ -31,7 +31,7 @@ const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
 async function machAbsoluteBoundary(s) {
-  return hostClockBoundary(await s.request("log", { action: "clock" }));
+  return hostClockBoundary((method, params) => s.request(method, params));
 }
 
 function assertReferenceRanges(state, label) {
@@ -319,6 +319,9 @@ for (const app of Object.values(APPS)) {
       };
       persist("manifest.json", manifest);
       t.diagnostic(`${app.name}: durable input trace directory ${artifactDir}`);
+
+      manifest.clockPreflight = await machAbsoluteBoundary(s);
+      persist("manifest.json", manifest);
 
       const original = (await s.request("diagnostics.input.source")).current;
       s.cleanup(() => s.request("diagnostics.input.source", { select: original }));

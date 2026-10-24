@@ -74,6 +74,7 @@ const TRANSCRIPT: &str = "diagnostics.transcript";
 #[cfg(feature = "diagnostics")]
 const DIAGNOSTICS: &[&str] = &[
     "diagnostics.fixture",
+    "diagnostics.clock",
     "diagnostics.drag",
     "diagnostics.capture.start",
     "diagnostics.capture.stop",
@@ -1325,6 +1326,10 @@ fn run(shared: &Shared, method: &str, params: Option<Value>) -> Result<Box<RawVa
         return crate::log_query::answer(&shared.config, params);
     }
     let (window, params) = target(shared, method, params)?;
+    #[cfg(feature = "diagnostics")]
+    if method == "diagnostics.clock" {
+        return raw(&crate::diagnostics::clock()?);
+    }
     shared.service.call(&window, method, params)
 }
 
