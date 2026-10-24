@@ -13,7 +13,16 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
-import { assertTerminalStageCoherent, terminalLineBeforeCursor, visibleInputBeforeCursor } from "./terminal-ime-document.mjs";
+import {
+  assertTerminalStageCoherent,
+  sameTerminalComposition,
+  startTerminalStatusObserver,
+  terminalComposeMatchesPreedit,
+  terminalCompositionState,
+  terminalLineBeforeCursor,
+  visibleInputBeforeCursor,
+  waitForStateEvent as waitForStateEventAfter,
+} from "./terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
@@ -311,10 +320,14 @@ for (const app of Object.values(APPS)) {
       const x = terminalView.document.x + terminalView.x + terminalView.width / 2;
       const y = terminalView.document.y + terminalView.y + terminalView.height / 2;
       await s.pointer(x, y, "move", { activate: true });
-      await s.click(x, y);
       await s.until("host.window", (host) => host.active === true &&
+        host.key === true, "the application did not become the active key window");
+      await s.run("terminal.focus", {}, surface);
+      await s.until("terminal.cursor", (cursor) => cursor.focused === true,
+        "the declared terminal focus command did not focus the input region", { surface });
+      await s.until("host.window", (host) => host.responder?.surface === surface &&
         host.regions.some((region) => region.surface === surface && region.focused),
-      "the terminal did not receive focus in the active key window");
+      "the terminal focus command did not install its native responder");
       assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
         `the ${KOREAN_2SET} input source is not enabled`);
 
@@ -343,34 +356,64 @@ for (const app of Object.values(APPS)) {
 
       const observations = [];
       const referenceStates = [];
+      const stateEventWaiters = new Set();
       const observeTerminal = async (group, key, index, beforeCompose, stateEvents) => {
         const deadline = Date.now() + 1500;
+        const eventOffset = observedStateEvents.length - stateEvents.length;
         let compose;
         let cursor;
         let screen;
+        let host;
+        let snapshot;
+        let attempt = 0;
         for (;;) {
+          const sampleEventOffset = observedStateEvents.length;
+          attempt += 1;
           compose = await s.get("terminal.compose", surface);
           cursor = await s.get("terminal.cursor", surface);
-          if ((cursor?.preedit?.text ?? "") !== compose.text) {
-            await s.until("terminal.cursor", (value) => (value?.preedit?.text ?? "") === compose.text,
-              `${key}: terminal cursor preedit did not catch up with compose`, { surface, timeout: 1500 });
-            continue;
-          }
           screen = await presentedScreen(s, surface);
           const currentCompose = await s.get("terminal.compose", surface);
           const currentCursor = await s.get("terminal.cursor", surface);
-          if (JSON.stringify(compose) === JSON.stringify(currentCompose) &&
-            JSON.stringify(cursor) === JSON.stringify(currentCursor) &&
-            (currentCursor?.preedit?.text ?? "") === currentCompose.text) break;
-          assert.ok(Date.now() < deadline, `${key}: terminal compose/cursor/frame did not become coherent`);
+          host = await s.get("host.window");
+          const region = host.regions.find((item) => item.surface === surface && item.name === "view");
+          const currentEvents = observedStateEvents.slice(eventOffset);
+          snapshot = {
+            attempt,
+            compose,
+            cursor,
+            screen,
+            currentCompose,
+            currentCursor,
+            region,
+            stateEvents: currentEvents,
+          };
+
+          const compositionStable = sameTerminalComposition(terminalCompositionState(compose, cursor),
+            terminalCompositionState(currentCompose, currentCursor));
+          const cursorMatchesCompose = terminalComposeMatchesPreedit(currentCompose, currentCursor);
+          const latestCompose = currentEvents.findLast((event) => event.name === "terminal.compose")?.value;
+          const latestCursor = currentEvents.findLast((event) => event.name === "terminal.cursor")?.value;
+          const latestScreen = currentEvents.findLast((event) => event.name === "terminal.screen")?.value;
+          const statusesMatch = latestCompose && latestCursor && Array.isArray(latestScreen) &&
+            sameTerminalComposition(terminalCompositionState(latestCompose, latestCursor),
+              terminalCompositionState(currentCompose, currentCursor)) &&
+            JSON.stringify(latestScreen) === JSON.stringify(screen.rows);
+          const baseScreenPresented = region?.presented?.generation === screen.frame.generation &&
+            region.presented.raster === screen.frame.raster && region.presented.sequence >= screen.frame.sequence;
+          snapshot.coherence = { compositionStable, cursorMatchesCompose, statusesMatch, baseScreenPresented };
+          persist(`observer-${group}-${String(index).padStart(2, "0")}-${String(attempt).padStart(2, "2")}.json`, snapshot);
+          if (compositionStable && cursorMatchesCompose && statusesMatch && baseScreenPresented) break;
+          assert.ok(Date.now() < deadline,
+            `${key}: terminal state did not become coherent (${JSON.stringify(snapshot.coherence)}); snapshots are in ${artifactDir}`);
+          await waitForStateEvent(sampleEventOffset, key,
+            "no later terminal status notification followed an incoherent observer sample");
         }
-        const host = await s.get("host.window");
         const region = host.regions.find((item) => item.surface === surface && item.name === "view");
         const observation = {
           group,
           index,
           key,
-          stateEvents,
+          stateEvents: observedStateEvents.slice(eventOffset),
           beforeCompose,
           compose,
           cursor,
@@ -465,49 +508,59 @@ for (const app of Object.values(APPS)) {
       const terminalX = terminalViewAfterReference.document.x + terminalViewAfterReference.x + terminalViewAfterReference.width / 2;
       const terminalY = terminalViewAfterReference.document.y + terminalViewAfterReference.y + terminalViewAfterReference.height / 2;
       await s.pointer(terminalX, terminalY, "move", { activate: true });
-      await s.click(terminalX, terminalY);
-      await s.until("host.window", (host) => host.active === true &&
+      await s.until("host.window", (host) => host.active === true && host.key === true,
+        "the application did not regain the active key window");
+      await s.run("terminal.focus", {}, surface);
+      await s.until("terminal.cursor", (cursor) => cursor.focused === true,
+        "the terminal did not regain focus after the reference closed", { surface });
+      await s.until("host.window", (host) => host.responder?.surface === surface &&
         host.regions.some((region) => region.surface === surface && region.focused),
-      "the terminal did not receive focus after the reference closed");
+      "the terminal did not regain its native responder after the reference closed");
       assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
         `the ${KOREAN_2SET} input source is not enabled for the terminal`);
+      const terminalReady = {
+        host: await s.get("host.window"),
+        compose: await s.get("terminal.compose", surface),
+        cursor: await s.get("terminal.cursor", surface),
+      };
+      persist("terminal-ready.json", terminalReady);
+      assert.equal(terminalReady.host.active, true, "the terminal host is not the active application before key input");
+      assert.equal(terminalReady.host.key, true, "the terminal host window is not key before key input");
+      assert.equal(terminalReady.host.responder?.surface, surface, "the terminal is not the native responder before key input");
 
       const observedStateEvents = [];
       const pendingStateEvents = [];
-      const observedStatusNames = new Set(["terminal.compose", "terminal.cursor", "terminal.screen"]);
-      const offStateEvents = s.client.on("status.changed", (params) => {
-        if (params?.window !== s.window || params?.surface !== surface || !observedStatusNames.has(params?.name)) return;
-        const event = { at: performance.now(), name: params.name, value: params.value };
+      const stateObserver = await startTerminalStatusObserver(s, surface, (event) => {
         observedStateEvents.push(event);
-        for (const pending of [...pendingStateEvents]) {
-          if (observedStateEvents.length > pending.after) {
-            clearTimeout(pending.timer);
-            pendingStateEvents.splice(pendingStateEvents.indexOf(pending), 1);
-            pending.resolve(event);
-          }
-        }
+        for (const notify of [...stateEventWaiters]) notify();
       });
-      for (const name of observedStatusNames) await s.request("status.watch", { name, surface });
       s.cleanup(async () => {
-        offStateEvents();
-        for (const pending of pendingStateEvents) clearTimeout(pending.timer);
-        for (const name of observedStatusNames) await s.request("status.unwatch", { name, surface });
+        stateEventWaiters.clear();
+        await stateObserver.stop();
       });
-      const waitForStateEvent = (after, key) => new Promise((resolve, reject) => {
-        if (observedStateEvents.length > after) {
-          resolve(observedStateEvents.at(-1));
-          return;
+      const waitForStateEvent = async (after, key,
+        missingMessage = "no terminal compose, cursor or screen status notification followed the input") => {
+        try {
+          return await waitForStateEventAfter(observedStateEvents, after, (notify) => {
+            stateEventWaiters.add(notify);
+            return () => stateEventWaiters.delete(notify);
+          }, `${key}: ${missingMessage}`, 1500);
+        } catch (error) {
+          const sample = { key, error: error.message, stateEvents: [...observedStateEvents] };
+          try {
+            sample.compose = await s.get("terminal.compose", surface);
+            sample.cursor = await s.get("terminal.cursor", surface);
+            sample.screen = await s.run("terminal.screen.read", {}, surface);
+            sample.host = await s.get("host.window");
+            sample.region = sample.host.regions.find((item) => item.surface === surface && item.name === "view");
+          } catch (captureError) {
+            sample.captureError = captureError.message;
+          }
+          persist(`status-notification-failure-${key.replaceAll(/[^a-zA-Z0-9-]/g, "-")}.json`, sample);
+          error.message += `; raw status/frame snapshot saved in ${artifactDir}`;
+          throw error;
         }
-        const pending = {
-          after,
-          resolve,
-          timer: setTimeout(() => {
-            pendingStateEvents.splice(pendingStateEvents.indexOf(pending), 1);
-            reject(new Error(`${key}: no terminal compose, cursor or screen status notification followed the input`));
-          }, 1500),
-        };
-        pendingStateEvents.push(pending);
-      });
+      };
       const baselineScreen = await presentedScreen(s, surface);
       const baselineCursor = await s.get("terminal.cursor", surface);
       const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
@@ -531,8 +584,6 @@ for (const app of Object.values(APPS)) {
         };
       };
 
-      await s.until("terminal.compose", (compose) => compose.text === "",
-        "the terminal started with a nonempty preedit", { surface });
       for (let index = 0; index < 8; index++) {
         const before = await s.get("terminal.compose", surface);
         await startTrace(`terminal-k-${index + 1}`);

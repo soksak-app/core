@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F239-47-2: The activation observer now keeps the event offset from before
+  each status sample, so a notification delivered while the sample reads
+  compose, cursor, screen and host state is not lost. Red: the controlled
+  deferred-event case timed out when the wait offset was taken after delivery.
+  Green: the owning `terminal-ime-document.test.mjs` suite passes 10/10. A
+  preserved Wails trace delivered compose and cursor updates at 3603 ms and
+  3708 ms, then exposed screen frame 9 beside presented region frame 12. The
+  observer now accepts a later region frame for base-screen presentation;
+  exact composition-frame correlation and captured glyph measurement remain
+  open in F239-47-6. This change does not prove the marked glyph was visible.
+
+
 - F212.10-editor-1: The editor window check now clicks the declared
   `editor.content` rectangle and waits for that view to become the native
   responder before sending keys, including after a main-page reload. In the
@@ -47,8 +59,18 @@
   and compares the PTY command line plus preedit with the reference document,
   retaining native-insert and terminal-input callback records. A focused
   owning test validates the raw `{frame, rows}` DTO, trailing spaces, width-two
-  cells, compose/cursor marked and selected ranges, and frame/state coherence
-  (5/5). One continuous capture spans both
+  cells, compose/cursor marked and selected ranges, and exact frame/state
+  coherence (9/9). A semantic observer comparison keeps composition ranges,
+  cursor position and focus while excluding blink and drawing fields; its
+  controlled Red fails on full cursor-state comparison. Required composition
+  fields and preedit ranges are validated explicitly; a controlled Red proves
+  that a missing marked range is rejected. A separate fixture covers a null
+  protocol preedit against the empty compose clear with selection `{0,0}`; the
+  retained activation trace has object-valued preedit. A controlled watch test
+  reproduces managed `until` unwatching a raw status subscription; the observer
+  now completes its empty-state precondition before opening that stream. The
+  observer saves each
+  raw sample before evaluating coherence. One continuous capture spans both
   sequences; callback sequences, decoded frames and gaps are checked, and the
   complete capture is copied into the disposable trace directory before
   cleanup. The

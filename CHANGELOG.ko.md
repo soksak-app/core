@@ -4,6 +4,17 @@
 
 ## 미배포
 
+- F239-47-2: activation observer가 각 status sample 전에 event offset을
+  저장해 compose, cursor, screen, host 상태를 읽는 동안 도착한 알림을
+  놓치지 않는다. Red: controlled deferred-event case에서 알림 뒤에 wait
+  offset을 잡으면 timeout됐다. Green: owning
+  `terminal-ime-document.test.mjs`가 10/10 통과한다. 보존된 Wails trace는
+  3603 ms의 compose와 3708 ms의 cursor 갱신 뒤 screen frame 9와 presented
+  region frame 12를 보였다. Observer는 base screen 표시를 위해 이후 region
+  frame을 허용한다. Exact composition-frame correlation과 captured glyph
+  측정은 F239-47-6에 남아 있다. 이 변경은 marked glyph가 보였음을 입증하지 않는다.
+
+
 - F212.10-editor-1: Editor window check은 key 입력 전에 선언된
   `editor.content` rectangle을 native click하고 해당 view가 native responder가
   될 때까지 기다린다. Main page reload 뒤에도 같은 절차를 적용한다. 보존된 두
