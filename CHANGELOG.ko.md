@@ -7,8 +7,10 @@
 - F239-47: 보고된 terminal IME 표시 증상과 미확인 원인을 기록한다. 수용
   기준은 실패 경계를 찾기 위해 AppKit 기준 입력, native input trace, terminal
   preedit, PTY 상태 및 전체 입력 녹화를 요구한다. Activation case는 커서 행까지만
-  committed cell을 읽고 preedit는 따로 비교한다. 화면 행 fixture 검사는 1/1
-  통과한다. Space가 preedit를 끝내고 PTY cursor를 이동시키는지 검사하며, native와
+  committed cell을 읽고 preedit는 따로 비교한다. Red: 변경 전 helper는 첫 모음
+  단계의 prompt 공백을 잘라 prompt-only 상태를 거부했다. Green: 실제 whitespace를
+  보존하고 wide cell을 column width로 계산하며 빈 padding row를 무시한다. 소유 fixture
+  검사는 1/1 통과한다. Space가 preedit를 끝내고 PTY cursor를 이동시키며 native와
   PTY insert trace에는 네 모음만 포함된다. Space는 inserted text가 아니라 key다.
   `node --check`, `make docs-check`, `git diff --check`가 통과한다. Activation case는
   실행하지 않았다. `make e2e-check`는 기존 `e2e/normal-shutdown-runner.mjs:95`

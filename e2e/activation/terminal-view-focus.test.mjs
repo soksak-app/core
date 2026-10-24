@@ -62,6 +62,30 @@ function hostWindowFacts(value, surface) {
   };
 }
 
+function cellIndexAtColumn(cells, target) {
+  let column = 0;
+  for (let index = 0; index < cells.length; index++) {
+    const width = cells[index].width;
+    assert.ok(Number.isInteger(width) && width >= 0,
+      `terminal screen cell has invalid width: ${JSON.stringify(cells[index])}`);
+    if (width === 0) continue;
+    if (column === target) return index;
+    assert.ok(target >= column + width || target <= column,
+      `terminal cursor splits a wide screen cell: ${JSON.stringify({ target, column, cell: cells[index] })}`);
+    column += width;
+  }
+  assert.equal(column, target, `terminal cursor column is outside the row: ${JSON.stringify({ target, column })}`);
+  return cells.length;
+}
+
+function cellTextBetweenColumns(cells, start, end) {
+  assert.ok(Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start,
+    `invalid terminal screen column range ${start}..${end}`);
+  const first = cellIndexAtColumn(cells, start);
+  const last = cellIndexAtColumn(cells, end);
+  return cells.slice(first, last).map((cell) => cell.ch === undefined ? "" : cell.ch).join("");
+}
+
 function visibleInputBeforeCursor(screen, cursor, prompt) {
   assert.ok(Number.isInteger(cursor.row) && Number.isInteger(cursor.col),
     `terminal cursor has no cell position: ${JSON.stringify(cursor)}`);
@@ -71,20 +95,24 @@ function visibleInputBeforeCursor(screen, cursor, prompt) {
   for (let row = prompt.row; row <= cursor.row; row++) {
     const cells = screen.lines[row];
     const start = row === prompt.row ? prompt.col : 0;
-    const end = row === cursor.row ? cursor.col : cells.length;
-    rows.push(cells.slice(start, end).map((cell) => cell.ch === undefined ? " ".repeat(cell.width) : cell.ch).join(""));
+    const end = row === cursor.row ? cursor.col : cells.reduce((columns, cell) => columns + cell.width, 0);
+    rows.push(cellTextBetweenColumns(cells, start, end));
   }
-  const committed = rows.join("").trimEnd();
+  const committed = rows.join("");
   assert.ok(committed.startsWith(prompt.text),
     `terminal cursor prefix lost its initial shell prompt: ${JSON.stringify({ prompt, cursor, committed })}`);
   return `${committed.slice(prompt.text.length)}${cursor.preedit?.text ?? ""}`;
 }
 
-test("visible input uses the cursor row and ignores later blank screen rows", () => {
-  const cells = (text) => Array.from(text, (ch) => ({ ch, width: 1 }));
-  const screen = { lines: [cells("$ ㅏㅏ   "), cells("          ")] };
-  const cursor = { row: 0, col: 4, preedit: { text: "ㅏ" } };
-  assert.equal(visibleInputBeforeCursor(screen, cursor, { row: 0, col: 0, text: "$ " }), "ㅏㅏㅏ");
+test("visible input preserves the prompt, handles wide cells, and ignores later blanks", () => {
+  const screen = { lines: [
+    [{ ch: "$", width: 1 }, { ch: " ", width: 1 }, { ch: undefined, width: 1 }],
+    [{ ch: "界", width: 2 }, { ch: undefined, width: 0 }, { ch: undefined, width: 1 }],
+    [{ ch: undefined, width: 10 }],
+  ] };
+  const prompt = { row: 0, col: 0, text: cellTextBetweenColumns(screen.lines[0], 0, 2) };
+  assert.equal(visibleInputBeforeCursor(screen, { row: 0, col: 2, preedit: { text: "ㅏ" } }, prompt), "ㅏ");
+  assert.equal(visibleInputBeforeCursor(screen, { row: 1, col: 2, preedit: { text: "ㅏ" } }, prompt), "界ㅏ");
 });
 
 function inputEventFacts(events, surface) {
@@ -418,8 +446,7 @@ for (const app of Object.values(APPS)) {
             "Korean 2-set must be selected for the terminal");
           const initialScreen = await presentedScreen(s, surface);
           const initialCursor = await s.get("terminal.cursor", surface);
-          const promptCells = initialScreen.lines[initialCursor.row].slice(0, initialCursor.col);
-          const promptText = promptCells.map((cell) => cell.ch === undefined ? " ".repeat(cell.width) : cell.ch).join("");
+          const promptText = cellTextBetweenColumns(initialScreen.lines[initialCursor.row], 0, initialCursor.col);
           assert.ok(promptText.trimEnd().endsWith("$"),
             `the terminal cursor must start at its shell prompt: ${JSON.stringify({ promptText, initialCursor })}`);
           const prompt = { row: initialCursor.row, col: 0, text: promptText };
