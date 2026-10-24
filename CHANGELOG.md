@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F212.10-core-3-8: Strengthen the terminal page-reload acceptance case to
+  correlate the current-generation page call and reply with the generation
+  carried by the accepted native `viewReply` host call. A focused correlator
+  test rejects a mismatched generation and accepts the exact page receipt,
+  reply, and successful host call. Keep the terminal session identity and
+  shell continuation checks. The correlator test and documentation checks
+  pass; fresh Wails and Tauri runtime acceptance remains pending.
+
 - F239-47-33: Add approval-gated e2e selectors for the F8-9 ddd + Korean
   2-Set gksrmf sequence (ddd한글), F143 gksk resyllabification (하나),
   and ten project close/reopen lifecycle cycles per
