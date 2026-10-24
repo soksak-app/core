@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-47-26: Read the current atomic native-input transactions in the IME
+  acceptance consumer. Validate every action and error, require one CID, and
+  match ordered native reports to exact terminal requests. The focused
+  consumer tests pass 6/6; syntax, `make e2e-check`, and `make docs-check`
+  pass. Activation checks were not run.
+
 - F239-55: Require both nonempty run metadata values before the E2E runner
   probes the frontmost application or starts a child. The runner preserves
   the supplied ID and folder for the child. The owning runner tests pass 10/10;

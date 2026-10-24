@@ -12,6 +12,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { ensureTerminals, readScreenUntil } from "../terminal-screen.mjs";
+import { assertInputTraceDelivery, inputTraceTransactions } from "./terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 const JAPANESE = "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese";
@@ -58,7 +59,8 @@ for (const app of Object.values(APPS)) {
       await s.until("terminal.compose", (compose) => compose.text === "",
         "the ended composition left a preedit", { surface });
       const composing = await s.get("terminal.ime.trace", surface);
-      const expected = composing.entries.filter((entry) => entry.kind === "native-compose" && entry.text !== "").at(-1)?.text;
+      const composingTransactions = inputTraceTransactions(composing.entries);
+      const expected = composingTransactions.native.map((entry) => entry.preedit.text).filter((text) => text !== "").at(-1);
       assert.ok(expected, "the trace has no marked text");
       await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith(expected)),
         `the ended composition did not write ${expected} to the PTY`);
@@ -71,16 +73,18 @@ for (const app of Object.values(APPS)) {
         `the committed text was repeated: ${JSON.stringify(commandRows)}`);
 
       const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
-      const composed = trace.entries.filter((entry) => entry.kind === "native-compose" && entry.text !== "");
       assert.equal(trace.overflow, false, "the IME trace overflowed");
-      const inserts = trace.entries.filter((entry) => entry.kind === "native-insert");
-      const written = trace.entries.filter((entry) => entry.kind === "terminal-input" && entry.input.type === "insert")
-        .map((entry) => entry.input.text);
-      t.diagnostic(`${app.name}: marked ${JSON.stringify(composed.map((entry) => entry.text))}, native inserts ${JSON.stringify(inserts.map((entry) => entry.text))}, terminal inserts ${JSON.stringify(written)}`);
-      assert.deepEqual(inserts.map((entry) => entry.text), [expected], "the native client did not commit the marked text exactly once");
+      const { native, terminal: terminalRequests } = assertInputTraceDelivery(trace.entries);
+      const composed = native.filter((entry) => entry.preedit.text !== "");
+      const inserts = native.filter((entry) => entry.actions.some((action) => action.type === "insert"));
+      const written = terminalRequests.flatMap((entry) => entry.actions.filter((action) => action.type === "insert")
+        .map((action) => action.text));
+      t.diagnostic(`${app.name}: marked ${JSON.stringify(composed.map((entry) => entry.preedit.text))}, native inserts ${JSON.stringify(inserts.flatMap((entry) => entry.actions.filter((action) => action.type === "insert").map((action) => action.text)))}, terminal inserts ${JSON.stringify(written)}`);
+      assert.deepEqual(inserts.flatMap((entry) => entry.actions.filter((action) => action.type === "insert")
+        .map((action) => action.text)), [expected], "the native client did not commit the marked text exactly once");
       assert.deepEqual(written, [expected], "the terminal input queue did not write the marked text exactly once");
       const commit = inserts[0].sequence;
-      assert.ok(!trace.entries.some((entry) => entry.kind === "native-compose" && entry.sequence > commit && entry.text !== ""),
+      assert.ok(!native.some((entry) => entry.sequence > commit && entry.preedit.text !== ""),
         "a preedit followed the commit");
       t.diagnostic(`${app.name}: PASS ${expected} committed once`);
     });

@@ -18,6 +18,8 @@ import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFra
   planVisualStage, readRetainedSources }
   from "./ime-visual-capture.mjs";
 import {
+  assertInputTraceDelivery,
+  inputTraceTransactions,
   assertTerminalStageCoherent,
   sameTerminalComposition,
   startTerminalStatusObserver,
@@ -239,10 +241,14 @@ for (const app of Object.values(APPS)) {
 
       const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
       assert.equal(trace.overflow, false, "the IME trace overflowed");
-      const inserts = trace.entries.filter((entry) => entry.kind === "native-insert").map((entry) => entry.text).join("");
-      const written = trace.entries.filter((entry) => entry.kind === "terminal-input" && entry.input.type === "insert")
-        .map((entry) => entry.input.text).join("");
-      const composed = trace.entries.filter((entry) => entry.kind === "native-compose" && entry.text !== "").map((entry) => entry.text);
+      const { native, terminal: terminalRequests } = assertInputTraceDelivery(trace.entries);
+      const inserts = native.flatMap((entry) => entry.actions.filter((action) => action.type === "insert")
+        .map((action) => action.text)).join("");
+      const written = terminalRequests.flatMap((entry) => entry.actions.filter((action) => action.type === "insert")
+        .map((action) => action.text)).join("");
+      const preeditStates = native.map((entry) => entry.preedit.text);
+      const composed = preeditStates.filter((text, index) => index === 0 || text !== preeditStates[index - 1])
+        .filter((text) => text !== "");
       t.diagnostic(`${app.name}: native inserts ${JSON.stringify(inserts)}, terminal inserts ${JSON.stringify(written)}, preedit ${JSON.stringify(composed)}`);
       assert.equal(inserts, "ddd한글 한 한1하", "the native client did not commit each syllable exactly once in order");
       assert.equal(written, "ddd한글 한 한1하", "the terminal input queue did not receive each committed syllable exactly once in order");
@@ -251,13 +257,12 @@ for (const app of Object.values(APPS)) {
         assert.ok([suffix, `한${suffix}`].includes(composed[index]),
           `the second syllable did not compose in order: ${JSON.stringify(composed.slice(0, 6))}`);
       }
-      assert.ok(!trace.entries.some((entry) => entry.kind === "native-key" && entry.key === "Backspace"),
+      assert.ok(!native.some((entry) => entry.actions.some((action) => action.type === "key" && action.key === "Backspace")),
         "Backspace during a composition reached the terminal as a key");
-      const enters = trace.entries.filter((entry) =>
-        (entry.kind === "native-key" && entry.key === "Enter") ||
-        (entry.kind === "terminal-input" && entry.input?.type === "command" && entry.input.selector === "insertNewline:"))
-        .map((entry) => entry.sequence);
-      const lastInsert = trace.entries.filter((entry) => entry.kind === "native-insert").at(-1).sequence;
+      const enters = native.filter((entry) => entry.actions.some((action) =>
+        (action.type === "key" && action.key === "Enter") ||
+        (action.type === "command" && action.selector === "insertNewline:"))).map((entry) => entry.sequence);
+      const lastInsert = native.filter((entry) => entry.actions.some((action) => action.type === "insert")).at(-1).sequence;
       assert.equal(enters.length, 4, "four Enter actions were not traced");
       assert.ok(enters[3] > lastInsert, "Enter was delivered before the committed text");
       t.diagnostic(`${app.name}: PASS ddd한글 after an input-source switch`);
@@ -364,6 +369,7 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`${app.name}: CALLBACKS ${JSON.stringify({ key, entries: result.entries })}`);
         assert.equal(result.overflow, false, `${key}: IME trace overflowed`);
         assert.ok(result.entries.length > 0, `${key}: no IME callback was recorded`);
+        assertInputTraceDelivery(result.entries);
         return result.entries;
       };
       s.cleanup(async () => {
@@ -643,12 +649,14 @@ for (const app of Object.values(APPS)) {
         const line = terminalLineBeforeCursor(observation.screen, observation.cursor, `terminal input ${index}`);
         const committed = line.slice(promptPrefix.length);
         assertReferenceRanges(referenceState, `AppKit state after input ${index}`);
+        const { native } = inputTraceTransactions(entries);
         return {
           expected: referenceState.document,
           actual,
           ptyCommitted: committed,
           preedit: observation.compose.text,
-          nativeInserts: entries.filter((entry) => entry.kind === "native-insert").map((entry) => entry.text),
+          nativeInserts: native.flatMap((entry) => entry.actions.filter((action) => action.type === "insert")
+            .map((action) => action.text)),
           terminalInputs: entries.filter((entry) => entry.kind === "terminal-input"),
         };
       };
@@ -705,7 +713,7 @@ for (const app of Object.values(APPS)) {
       await waitForStateEvent(backspaceEventOffset, "Backspace");
       const backspaceEntries = await stopTrace("terminal-Backspace");
       assert.ok(terminalInputReceiptMatches(backspaceEntries, "Backspace"),
-        "Backspace has no matching native-key or deleteBackward terminal callback");
+        "Backspace has no matching key or deleteBackward input transaction");
       const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, knownState,
         observedStateEvents.slice(backspaceEventOffset), referenceStates[8].document);
       knownState = { compose: backspaceObservation.compose, cursor: backspaceObservation.cursor,
@@ -737,7 +745,7 @@ for (const app of Object.values(APPS)) {
       await waitForStateEvent(spaceEventOffset, "Space");
       const spaceEntries = await stopTrace("terminal-Space");
       assert.ok(terminalInputReceiptMatches(spaceEntries, "Space"),
-        "Space has no matching native-key or space-insert callback");
+        "Space has no matching key or space-insert input transaction");
       const spaceObservation = await observeTerminal("terminal", "Space", 10, knownState,
         observedStateEvents.slice(spaceEventOffset), referenceStates[9].document);
       const spaceComparison = applyTerminalInput(referenceStates[9], spaceObservation, spaceEntries, 10);

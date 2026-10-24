@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-26: IME acceptance consumer가 현재 atomic native-input transaction을
+  읽도록 한다. 모든 action과 error를 검증하고 CID 하나를 요구하며, 순서가 있는
+  native report를 terminal request와 정확히 대조한다. Focused consumer test는
+  6/6 통과하고 syntax, `make e2e-check`, `make docs-check`도 통과한다.
+  Activation 검사는 실행하지 않았다.
+
 - F239-55: E2E 실행기가 frontmost application을 조회하거나 child를 시작하기
   전에 비어 있지 않은 run metadata 두 값을 함께 요구한다. 전달된 ID와 폴더는
   child에 그대로 유지된다. 소유 실행기 test는 10/10 통과하고 syntax,

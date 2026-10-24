@@ -133,28 +133,159 @@ export function terminalObserverStatusesMatch(currentEvents, baseline, current) 
     after.frame.sequence >= before.frame.sequence;
 }
 
-/** Reports whether a per-key IME trace contains a callback that can acknowledge the key just sent. */
-export function terminalInputReceiptMatches(entries, key) {
-  assert.ok(Array.isArray(entries), "terminal IME callback entries must be an array");
+function exactObject(value, keys, label) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), `${label} must be an object`);
+  assert.deepEqual(Object.keys(value).sort(), [...keys].sort(), `${label} has missing or unexpected fields`);
+}
+
+function strictRange(value, label) {
+  if (value === null) return null;
+  exactObject(value, ["location", "length"], label);
+  assert.ok(Number.isSafeInteger(value.location) && value.location >= 0, `${label}.location is invalid`);
+  assert.ok(Number.isSafeInteger(value.length) && value.length >= 0, `${label}.length is invalid`);
+  assert.ok(Number.isSafeInteger(value.location + value.length), `${label} exceeds the safe integer range`);
+  return value;
+}
+
+function strictPreedit(value, label) {
+  exactObject(value, ["text", "markedRange", "selectedRange", "replacementRange", "attributed"], label);
+  assert.equal(typeof value.text, "string", `${label}.text must be text`);
+  assert.equal(typeof value.attributed, "boolean", `${label}.attributed must be boolean`);
+  for (const key of ["markedRange", "selectedRange", "replacementRange"]) strictRange(value[key], `${label}.${key}`);
+  for (const key of ["markedRange", "selectedRange"]) {
+    const range = value[key];
+    if (range !== null) assert.ok(range.location + range.length <= value.text.length,
+      `${label}.${key} exceeds the UTF-16 text bounds`);
+  }
+  return value;
+}
+
+function strictAction(value, label) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), `${label} must be an object`);
+  if (value.type === "insert") {
+    exactObject(value, ["type", "text", "replacementRange", "attributed"], label);
+    assert.equal(typeof value.text, "string", `${label}.text must be text`);
+    strictRange(value.replacementRange, `${label}.replacementRange`);
+    assert.equal(typeof value.attributed, "boolean", `${label}.attributed must be boolean`);
+    return value;
+  }
+  if (value.type === "key") {
+    assert.equal(typeof value.key, "string", `${label}.key must be text`);
+    assert.ok(value.key.length > 0, `${label}.key must not be empty`);
+    const fields = value.key === "Char" ? ["type", "key", "text", "shift", "alt", "ctrl"] :
+      ["type", "key", "shift", "alt", "ctrl"];
+    exactObject(value, fields, label);
+    if (value.key === "Char") assert.equal(typeof value.text, "string", `${label}.text must be text`);
+    for (const modifier of ["shift", "alt", "ctrl"]) {
+      assert.equal(typeof value[modifier], "boolean", `${label}.${modifier} must be boolean`);
+    }
+    return value;
+  }
+  if (value.type === "command") {
+    exactObject(value, ["type", "selector"], label);
+    assert.equal(typeof value.selector, "string", `${label}.selector must be text`);
+    assert.ok(value.selector.length > 0, `${label}.selector must not be empty`);
+    return value;
+  }
+  throw new Error(`${label}.type is unsupported: ${JSON.stringify(value.type)}`);
+}
+
+function strictCids(value, label) {
+  assert.ok(Array.isArray(value) && value.length === 1 && typeof value[0] === "string" && value[0].length > 0,
+    `${label} must contain exactly one nonempty correlation identifier`);
+  return value;
+}
+
+function strictActions(value, label) {
+  assert.ok(Array.isArray(value), `${label} must be an array`);
+  return value.map((action, index) => strictAction(action, `${label}[${index}]`));
+}
+
+function strictTraceSequence(value, label) {
+  assert.ok(Number.isSafeInteger(value) && value > 0, `${label} must be a positive safe integer`);
+  return value;
+}
+
+/** Parses every current input transaction in a trace, validating trailing records before a caller accepts a match. */
+export function inputTraceTransactions(entries) {
+  assert.ok(Array.isArray(entries), "terminal IME trace entries must be an array");
+  const native = [];
+  const terminal = [];
+  for (const [index, entry] of entries.entries()) {
+    assert.ok(entry && typeof entry === "object" && !Array.isArray(entry), `trace entry ${index} must be an object`);
+    if (["native-insert", "native-key", "native-compose"].includes(entry.kind)) {
+      throw new Error(`trace entry ${index} uses obsolete ${entry.kind}; expected native-input`);
+    }
+    if (entry.kind === "native-input") {
+      exactObject(entry.input, ["actions", "preedit", "errors"], `native-input ${index}.input`);
+      const sequence = strictTraceSequence(entry.sequence, `native-input ${index}.sequence`);
+      const cids = strictCids(entry.cids, `native-input ${index}.cids`);
+      const actions = strictActions(entry.input.actions, `native-input ${index}.actions`);
+      const preedit = strictPreedit(entry.input.preedit, `native-input ${index}.preedit`);
+      assert.ok(Array.isArray(entry.input.errors), `native-input ${index}.errors must be an array`);
+      for (const [errorIndex, error] of entry.input.errors.entries()) {
+        exactObject(error, ["reason"], `native-input ${index}.errors[${errorIndex}]`);
+        assert.equal(typeof error.reason, "string", `native-input ${index}.errors[${errorIndex}].reason must be text`);
+        assert.ok(error.reason.length > 0, `native-input ${index}.errors[${errorIndex}].reason must not be empty`);
+      }
+      assert.equal(entry.input.errors.length, 0,
+        `native input transaction failed: ${entry.input.errors.map(({ reason }) => reason).join("; ")}`);
+      native.push({ cids, actions, preedit, sequence });
+      continue;
+    }
+    if (entry.kind === "terminal-input") {
+      exactObject(entry.input, ["operation", "actions", "preedit"], `terminal-input ${index}.input`);
+      assert.equal(entry.input.operation, "input", `terminal-input ${index}.input.operation must be input`);
+      const sequence = strictTraceSequence(entry.sequence, `terminal-input ${index}.sequence`);
+      const cids = strictCids(entry.cids, `terminal-input ${index}.cids`);
+      const actions = strictActions(entry.input.actions, `terminal-input ${index}.actions`);
+      const preedit = strictPreedit(entry.input.preedit, `terminal-input ${index}.preedit`);
+      terminal.push({ cids, actions, preedit, sequence });
+      continue;
+    }
+    throw new Error(`trace entry ${index} has unsupported kind ${JSON.stringify(entry.kind)}`);
+  }
+  return { native, terminal };
+}
+
+/** Verifies that every successful native transaction reached the VT request unchanged with the same CID. */
+export function assertInputTraceDelivery(entries) {
+  const { native, terminal } = inputTraceTransactions(entries);
+  assert.equal(terminal.length, native.length,
+    `trace has ${native.length} native input reports and ${terminal.length} terminal input requests`);
+  for (const [index, transaction] of native.entries()) {
+    const request = terminal[index];
+    assert.deepEqual(request.cids, transaction.cids, `input transaction ${index} changed its correlation identifiers`);
+    assert.ok(request.sequence > transaction.sequence, `input transaction ${index} request preceded its native report`);
+    assert.deepEqual(request.actions, transaction.actions, `input transaction ${index} changed actions before the VT request`);
+    assert.deepEqual(request.preedit, transaction.preedit, `input transaction ${index} changed preedit before the VT request`);
+  }
+  return { native, terminal };
+}
+
+function transactionMatchesKey(transaction, key) {
   if (key === "k") {
-    return entries.some((entry) => (entry.kind === "native-key" && entry.key === key) ||
-      (entry.kind === "native-compose" && typeof entry.text === "string" && entry.text !== "") ||
-      (entry.kind === "native-insert" && typeof entry.text === "string" && entry.text !== "") ||
-      (entry.kind === "terminal-input" && ["compose", "insert"].includes(entry.input?.type) &&
-        typeof entry.input.text === "string" && entry.input.text !== ""));
+    return transaction.actions.some((action) => (action.type === "key" && action.key === "Char" && action.text === key) ||
+      (action.type === "insert" && action.text.length > 0)) || transaction.preedit.text.length > 0;
   }
   if (key === "Backspace") {
-    return entries.some((entry) => (entry.kind === "native-key" && entry.key === key) ||
-      (entry.kind === "terminal-input" && entry.input?.type === "command" &&
-        entry.input.selector === "deleteBackward:"));
+    return transaction.actions.some((action) => (action.type === "key" && action.key === key) ||
+      (action.type === "command" && action.selector === "deleteBackward:"));
   }
   if (key === "Space") {
-    return entries.some((entry) => (entry.kind === "native-key" && entry.key === key) ||
-      (entry.kind === "native-insert" && typeof entry.text === "string" && entry.text.includes(" ")) ||
-      (entry.kind === "terminal-input" && entry.input?.type === "insert" &&
-        typeof entry.input.text === "string" && entry.input.text.includes(" ")));
+    return transaction.actions.some((action) => (action.type === "key" && (action.key === key ||
+      (action.key === "Char" && action.text.includes(" ")))) ||
+      (action.type === "insert" && action.text.includes(" ")));
   }
   throw new Error(`terminal IME trace has no receipt rule for key ${JSON.stringify(key)}`);
+}
+
+/** Reports whether a current native or terminal transaction acknowledges the key just sent. */
+export function terminalInputReceiptMatches(entries, key) {
+  assert.ok(["k", "Backspace", "Space"].includes(key),
+    `terminal IME trace has no receipt rule for key ${JSON.stringify(key)}`);
+  const transactions = inputTraceTransactions(entries);
+  return [...transactions.native, ...transactions.terminal].some((transaction) => transactionMatchesKey(transaction, key));
 }
 
 const TERMINAL_INPUT_STATUSES = ["terminal.compose", "terminal.cursor", "terminal.screen"];

@@ -7,6 +7,8 @@ import {
   terminalComposeMatchesPreedit,
   terminalLineBeforeCursor,
   terminalCompositionState,
+  assertInputTraceDelivery,
+  inputTraceTransactions,
   terminalInputReceiptMatches,
   terminalObserverStatusesMatch,
   terminalStageMatchesReference,
@@ -198,17 +200,104 @@ test("a fresh screen event can accompany a coherent composition reread", () => {
     { compose, cursor, screen: currentScreen }), true);
 });
 
-test("per-key IME trace receipts identify the expected native or terminal callback", () => {
-  assert.equal(terminalInputReceiptMatches([{ kind: "native-compose", text: "ㅏ" }], "k"), true);
-  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "compose", text: "ㅏ" } }], "k"), true);
-  assert.equal(terminalInputReceiptMatches([{ kind: "native-key", key: "Backspace" }], "Backspace"), true);
-  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "command", selector: "deleteBackward:" } }],
-    "Backspace"), true);
-  assert.equal(terminalInputReceiptMatches([{ kind: "native-insert", text: " " }], "Space"), true);
-  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "insert", text: " " } }], "Space"), true);
-  assert.equal(terminalInputReceiptMatches([{ kind: "native-compose", text: "ㅏ" }], "Backspace"), false);
+test("per-key IME receipts read current native transactions and VT input requests", () => {
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  let sequence = 0;
+  const native = (action) => ({ kind: "native-input", sequence: ++sequence, cids: ["input-cid-1"], input: {
+    actions: [action], preedit, errors: [],
+  } });
+  const terminal = (action) => ({ kind: "terminal-input", sequence: ++sequence, cids: ["input-cid-1"], input: {
+    operation: "input", actions: [action], preedit,
+  } });
+  const insert = { type: "insert", text: "ㅏ", replacementRange: null, attributed: true };
+  const backspace = { type: "command", selector: "deleteBackward:" };
+  const backspaceKey = { type: "key", key: "Backspace", shift: false, alt: false, ctrl: false };
+  const characterKey = { type: "key", key: "Char", text: "k", shift: false, alt: false, ctrl: false };
+  const space = { type: "insert", text: " ", replacementRange: null, attributed: false };
+
+  assert.equal(terminalInputReceiptMatches([native(insert)], "k"), true);
+  assert.equal(terminalInputReceiptMatches([terminal(insert)], "k"), true);
+  assert.equal(terminalInputReceiptMatches([native(characterKey)], "k"), true);
+  assert.equal(terminalInputReceiptMatches([terminal(characterKey)], "k"), true);
+  assert.equal(terminalInputReceiptMatches([native(backspace)], "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([terminal(backspace)], "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([native(backspaceKey)], "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([terminal(backspaceKey)], "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([native(space)], "Space"), true);
+  assert.equal(terminalInputReceiptMatches([terminal(space)], "Space"), true);
+  assert.equal(terminalInputReceiptMatches([native(insert)], "Backspace"), false);
   assert.equal(terminalInputReceiptMatches([], "k"), false);
   assert.throws(() => terminalInputReceiptMatches([], "Enter"), /no receipt rule for key/);
+});
+
+test("native input transaction actions acknowledge a committed character key", () => {
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const entry = { kind: "native-input", sequence: 1, input: { actions: [
+    { type: "insert", text: "ㅏ", replacementRange: null, attributed: true },
+  ], preedit, errors: [] }, cids: ["input-cid-1"] };
+  assert.equal(terminalInputReceiptMatches([entry], "k"), true);
+});
+
+test("one terminal input request acknowledges a committed character key", () => {
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const entry = { kind: "terminal-input", sequence: 1, input: { operation: "input", actions: [
+    { type: "insert", text: "ㅏ", replacementRange: null, attributed: true },
+  ], preedit }, cids: ["input-cid-1"] };
+  assert.equal(terminalInputReceiptMatches([entry], "k"), true);
+});
+
+test("compose-only transactions with empty action arrays retain the preedit receipt", () => {
+  const preedit = { text: "ㅎ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const native = { kind: "native-input", sequence: 3, cids: ["input-cid-3"],
+    input: { actions: [], preedit, errors: [] } };
+  const terminal = { kind: "terminal-input", sequence: 4, cids: ["input-cid-3"],
+    input: { operation: "input", actions: [], preedit } };
+  assert.equal(terminalInputReceiptMatches([native], "k"), true);
+  assert.equal(terminalInputReceiptMatches([terminal], "k"), true);
+  assert.deepEqual(assertInputTraceDelivery([native, terminal]).native[0].actions, []);
+});
+
+test("input transaction validation checks every action and correlation identifier", () => {
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const valid = { kind: "native-input", sequence: 1, cids: ["input-cid-1"], input: { actions: [
+    { type: "insert", text: "ㅏ", replacementRange: null, attributed: true },
+  ], preedit, errors: [] } };
+  const malformedTail = { ...valid, input: { ...valid.input, actions: [...valid.input.actions, { type: "unknown" }] } };
+  assert.throws(() => terminalInputReceiptMatches([valid, malformedTail], "k"), /actions\[1\]\.type is unsupported/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, cids: ["one", "two"] }]), /exactly one nonempty correlation/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, sequence: 0 }]), /sequence must be a positive safe integer/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input,
+    preedit: { ...valid.input.preedit, markedRange: { location: 1, length: 1 } } } }]), /UTF-16 text bounds/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input, actions: [
+    { type: "key", key: "Char", text: null, shift: false, alt: false, ctrl: false },
+  ] } }]), /actions\[0\]\.text must be text/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input,
+    errors: [{ reason: "native callback failed" }] } }]), /native input transaction failed: native callback failed/);
+  assert.throws(() => inputTraceTransactions([{ kind: "native-insert", text: "ㅏ" }]), /obsolete native-insert/);
+  assert.throws(() => inputTraceTransactions([{ kind: "other-input", input: {} }]), /unsupported kind "other-input"/);
+});
+
+test("native report and terminal request preserve actions, preedit and CID", () => {
+  const preedit = { text: "", markedRange: null, selectedRange: { location: 0, length: 0 },
+    replacementRange: null, attributed: false };
+  const action = { type: "insert", text: " ", replacementRange: null, attributed: false };
+  const native = { kind: "native-input", sequence: 4, cids: ["input-cid-9"], input: { actions: [action], preedit, errors: [] } };
+  const terminal = { kind: "terminal-input", sequence: 5, cids: ["input-cid-9"], input: {
+    operation: "input", actions: [action], preedit,
+  } };
+  assert.deepEqual(assertInputTraceDelivery([native, terminal]), {
+    native: [{ cids: ["input-cid-9"], actions: [action], preedit, sequence: 4 }],
+    terminal: [{ cids: ["input-cid-9"], actions: [action], preedit, sequence: 5 }],
+  });
+  assert.throws(() => assertInputTraceDelivery([native, { ...terminal, cids: ["different-cid"] }]),
+    /input transaction 0 changed its correlation identifiers/);
+  assert.throws(() => assertInputTraceDelivery([native, { ...terminal, sequence: native.sequence }]),
+    /request preceded its native report/);
 });
 
 test("a terminal observer requires a fresh semantic input status, not blink-only state", () => {
