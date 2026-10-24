@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F212.10-core-3-6: Retire a view's exposure registrations in the same
+  synchronous workbench transition that accepts its exact source-generation
+  end. Source retirement precedes `view-process-ended`, so the previous
+  registration could remain selectable after its generation disappeared.
+  The view lifecycle test fails before the correction at that interval and
+  passes with a registration observer seeing the retired state. A delayed old
+  end leaves a replacement registration intact. The focused view lifecycle and chooser guard tests pass 1/1 each;
+  `source-origins.test.mjs` passes 5/5, and `make docs-check` passes. The preserved Wails
+  application error has not been rechecked against this source change.
+
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
   test confirms that an object or null presentation caret does not change the

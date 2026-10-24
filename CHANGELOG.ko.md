@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F212.10-core-3-6: 정확한 현재 source-generation 종료를 받아들이는 동일한
+  동기 workbench transition에서 view의 exposure registration을 retire한다.
+  Source retirement가 `view-process-ended`보다 먼저라 generation이 사라진 뒤에도
+  이전 registration이 선택될 수 있었다. View lifecycle test는 수정 전 그 구간에서
+  실패하고, 수정 뒤 observer가 retire된 상태를 보는지 확인한다. 지연된 이전 end는
+  replacement registration을 유지한다. 집중 view lifecycle 및 chooser guard test는 각각 1/1,
+  `source-origins.test.mjs`는 5/5이며 `make docs-check`도 통과한다. 보존된 Wails application 오류는 이 source
+  변경으로 다시 확인하지 않았다.
+
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는
   object 또는 null presentation caret이 hash를 바꾸지 않고 raw engine cursor
