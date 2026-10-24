@@ -295,7 +295,7 @@ macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하�
 
 `scripts/check-hosts.mjs`는 `packages/host/wailsv3`와 `packages/host/tauriv2`, `apps/wailsv3`와 `apps/tauriv2`를 비교한다. `.go`와 `.rs` 파일은 확장자를 제외한 상대 경로로, 그 밖의 파일은 상대 경로로 비교한다. 한쪽에만 있는 파일은 허용 차이 표의 차이 ID와 함께 목록에 있을 때만 통과한다. 검사는 Git이 추적하거나 추적할 파일만 읽으므로 생성된 `src/frontend/` 파일은 비교하지 않는다.
 
-`scripts/check-platforms.mjs`는 `platform/<os>/` 디렉터리 밖에 있는 다음 항목을 보고한다: 운영체제 접미사(`_darwin`, `_windows` 등)를 가진 파일 이름, 그리고 소스 파일의 `runtime.GOOS`, Go 운영체제 빌드 태그, Rust 운영체제 `cfg` 속성, `process.platform`. `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
+`scripts/check-platforms.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
 
 ## native/darwin
 

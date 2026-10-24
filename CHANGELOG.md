@@ -10,6 +10,15 @@
   assertions. The focused binary builds and the default non-activation path
   passes 9/9. The activation path has not run; its acceptance item remains
   open.
+- F212.16-8: Parse JavaScript platform selectors as executable syntax so
+  benchmark runtime metadata and its exact test assertion are distinguished
+  from implementation selection. String and comment fixtures do not trigger
+  the audit; Go and Rust rules are limited to their respective source files.
+  Red: unchanged `make platforms` reported six findings, including the two
+  benchmark metadata uses. Green: the owning audit tests pass 2/2, the
+  benchmark findings disappear, and the four separately tracked selectors
+  remain. `make platforms` still reports those four F239-48-1 findings and
+  does not pass globally. `make docs-check` passes. No app was launched.
 
 - F240-11: Reconcile the execution plan with current owner evidence. F239-47-9
   now records its preserved activation Red/Green log and platform without
