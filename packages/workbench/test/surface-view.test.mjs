@@ -341,6 +341,70 @@ test("mounting a view surface imports no module and declares its view compositio
   }
 });
 
+test("a page-start view waits for the initial project context and a disposed preview cannot declare composition", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/?project=prj-startup" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const actualHost = await import("../host.js");
+  const actualProjects = await import("../projects.js");
+  let commitProject;
+  const projectContext = new Promise((resolve) => { commitProject = resolve; });
+  t.mock.module("../projects.js", { exports: { ...actualProjects, waitForInitialProjectContext: () => projectContext } });
+  const calls = [];
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name, payload) => {
+        calls.push({ name, payload });
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?initial-project-context");
+  const pluginId = "fixture-initial-project-context";
+  const disposedId = "fixture-initial-project-context-disposed";
+  const currentId = "fixture-initial-project-context-current";
+  recordOrigin(disposedId, null, "test fixture");
+  recordOrigin(currentId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = (surfaceId) => ({ module: null, surfaceId, pluginId,
+    declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } });
+  let obsoleteMount;
+  let currentMount;
+  try {
+    seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [disposedId]: 1, [currentId]: 1 } });
+    authorizeSurface(disposedId);
+    obsoleteMount = mountSurface(document.querySelector("#slot"), surface(disposedId));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
+      "the startup preview declared native composition before projectShown committed the project root");
+
+    await disposeSurface(disposedId);
+    authorizeSurface(currentId);
+    currentMount = mountSurface(document.querySelector("#slot"), surface(currentId));
+    commitProject({ id: "prj-startup", root: "/work/startup" });
+    await obsoleteMount;
+    await currentMount;
+    await waitSurfaceCompositionDeclared(currentId);
+    assert.deepEqual(calls.filter(({ name }) => name === "compositionDeclare").map(({ payload }) => payload.plugin), [pluginId],
+      "a disposed first-layout preview declared composition after projectShown");
+  } finally {
+    if (obsoleteMount && !calls.some(({ name, payload }) => name === "compositionDeclare" && payload.plugin === pluginId)) {
+      commitProject({ id: "prj-startup", root: "/work/startup" });
+    }
+    if (obsoleteMount) await obsoleteMount.catch(() => {});
+    if (currentMount) await currentMount.catch(() => {});
+    await disposeSurface(disposedId);
+    await disposeSurface(currentId);
+    dom.window.close();
+  }
+});
+
 // A view surface is ready once its composition is declared: the card leaves the loading state, as a module surface does after its module mounts.
 test("a view surface reports phase ready after its view declares its composition", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });

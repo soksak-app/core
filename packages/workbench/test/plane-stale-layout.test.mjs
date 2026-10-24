@@ -38,6 +38,8 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
   const mounts = [];
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     mountSurface: (slot, surface) => { mounts.push(surface.surfaceId); return Promise.resolve(); },
     disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
   } });

@@ -47,6 +47,8 @@ test("a background session whose tab closes before its subscription finished end
     mountSurface: (slot, surface) => { mounted.add(surface.surfaceId); return Promise.resolve(); },
     disposeSurface: (id) => { mounted.delete(id); return Promise.resolve(); },
     mountedSurface: (id) => (mounted.has(id) ? { surfaceId: id } : null),
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     placePluginPlaceholder: () => {},
   } });
   t.mock.module("../environment.js", { exports: {

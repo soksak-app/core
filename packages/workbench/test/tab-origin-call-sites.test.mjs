@@ -47,6 +47,8 @@ async function setup(t, { cards }) {
   // The surface modules are not loaded. A view tab and a plain tab both join the slot of their tab.
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     mountSurface: () => Promise.resolve(),
     disposeSurface: () => Promise.resolve(), focusSurface: () => true,
     placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),

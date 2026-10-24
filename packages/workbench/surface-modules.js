@@ -13,7 +13,7 @@ import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, originHistory, tabOrigin,
   unloadTab, viewRefusal } from "./tab-reports.js";
 import { icon } from "./icons.js";
-import { active, tabStateStore, tabStatesReady } from "./projects.js";
+import { active, tabStateStore, tabStatesReady, waitForInitialProjectContext } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
 import { pluginRecords } from "./plugin-records.js";
 import { logGate } from "./log-gate.js";
@@ -840,6 +840,9 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
       }, { once: true });
       const mountReadiness = (native ? authorizationFor(surface.surfaceId) : Promise.resolve())
         .then(async () => {
+          // begin() may draw a project preview before initialise publishes its root to the native host.
+          // Keep that preview from starting a native view until the owning project context is committed.
+          await waitForInitialProjectContext();
           // Does not start the registration of a surface that was removed while waiting for approval.
           if (entry.disposed) return null;
           entry.authorized = true;

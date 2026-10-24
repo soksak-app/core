@@ -38,6 +38,8 @@ test("closing the picker writes picker.close with the reason of the close", { ti
   } });
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     mountSurface: () => Promise.resolve(),
     disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
   } });

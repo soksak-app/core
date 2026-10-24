@@ -61,7 +61,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
   const compositor = await import("../compositor.js");
-  const { surfacePlacementsForHost } = await import("../surface-modules.js");
+  const { authorizeSurface, surfacePlacementsForHost } = await import("../surface-modules.js");
   const { recordOrigin } = await import("../tab-reports.js");
   const { surfaces: hostSurfaces } = await import("../host.js");
   try {
@@ -72,6 +72,8 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
 
     await compositor.publish();
     const initial = compositor.latest();
+    authorizeSurface(initial.surfaces[0].id);
+    await hostSurfaces.theme({ scheme: "light", tokens: {} });
     await hostSurfaces.place({ ...initial, surfaces: surfacePlacementsForHost(initial.surfaces, null) });
     const initialSync = hostCalls.filter(({ name }) => name === "syncSurfaces").at(-1);
     assert.strictEqual(initialSync.request.surfaces[0].start.params, null,
@@ -86,6 +88,8 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     await compositor.publish();
     const record = compositor.latest();
     const surfaces = surfacePlacementsForHost(record.surfaces, null);
+    authorizeSurface(opened.tab);
+    await hostSurfaces.theme({ scheme: "light", tokens: {} });
     await hostSurfaces.place({ ...record, surfaces });
     const dispatched = hostCalls.filter(({ name }) => name === "syncSurfaces")
       .flatMap(({ request }) => request.surfaces.map((surface) => ({ request, surface })))

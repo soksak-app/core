@@ -57,6 +57,17 @@ test("a background session opens only for a tab without a mounted surface and en
     disposeSurface: (id) => { mounted.delete(id); return Promise.resolve(); },
     mountedSurface: (id) => (mounted.has(id) ? { surfaceId: id } : null),
     placePluginPlaceholder: () => {},
+    surfaceForTab: (tab) => surfaceOf(tab.plugin)(tab.id),
+  } });
+  let commitProjectContext;
+  let rejectProjectContext;
+  let projectContextReady = false;
+  let projectContextFailed = false;
+  let projectContext = new Promise((resolve) => { commitProjectContext = resolve; });
+  t.mock.module("../projects.js", { exports: {
+    initialProjectContextReady: () => projectContextReady,
+    initialProjectContextFailed: () => projectContextFailed,
+    waitForInitialProjectContext: () => projectContext,
   } });
   // One card with two tabs of the plugin that declares the background session; the first is shown.
   t.mock.module("../environment.js", { exports: {
@@ -88,7 +99,11 @@ test("a background session opens only for a tab without a mounted surface and en
     plane.adopt(plane.fresh());
     const [shown, hidden] = plane.currentGrid().card("main").data.tabs.map((tab) => tab.id);
     assert.ok(mounted.has(shown), "the first draw did not mount the shown tab");
-    // The hidden tab has no surface, so its session is a background session.
+    assert.equal(sends.length, 0, "the preview opened a background session before the project context was committed");
+    projectContextReady = true;
+    commitProjectContext();
+    await new Promise((resolve) => setImmediate(resolve));
+    // After projectShown commits, the hidden tab has no surface and gets its background session.
     assert.equal(opens(hidden), 1, "the tab without a surface got no background open");
     assert.deepEqual(decisions(hidden), ["open:absent"]);
 
@@ -106,6 +121,26 @@ test("a background session opens only for a tab without a mounted surface and en
     listeners.get(hidden)?.({ event: "connection", connected: true });
     assert.equal(opens(hidden), 1, `the shown tab ${hidden} got a background open after the reconnection`);
     assert.deepEqual(reports, []);
+
+    // A failed page initialization rejects the pending observer once. Later redraws must not start sessions or report it again.
+    projectContextReady = false;
+    projectContextFailed = false;
+    projectContext = new Promise((_resolve, reject) => { rejectProjectContext = reject; });
+    plane.clear?.();
+    mounted.clear();
+    const failedContextPlane = await import("../plane.js?failed-initial-project-context");
+    failedContextPlane.onLayout((made, draw) => draw());
+    const beforeFailedContext = sends.length;
+    failedContextPlane.adopt(failedContextPlane.fresh());
+    assert.equal(sends.length, beforeFailedContext, "a preview opened a background session while failed initialization was still pending");
+    projectContextFailed = true;
+    rejectProjectContext(new Error("initial project context failed"));
+    await new Promise((resolve) => setImmediate(resolve));
+    failedContextPlane.settle();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(sends.length, beforeFailedContext, "a later redraw opened a background session after startup context failure");
+    assert.deepEqual(reports, [], "the background observer duplicated the initialization error report");
+    failedContextPlane.clear?.();
   } finally {
     plane.clear?.();
   }
