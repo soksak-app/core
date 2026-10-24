@@ -90,8 +90,10 @@ static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRun
     return errors;
 }
 
+static void closeTraceWindow(NSWindow *window, void *region, void *mainSurface);
+
 static NSArray<NSString *> *baselineAndOuterRestoreErrors(NSString *baselineSource, NSString *outerSource,
-    NSRunningApplication *outerApplication, NSDate *deadline) {
+    NSRunningApplication *outerApplication, NSDate *deadline, NSWindow *window, void *region, void *mainSurface) {
     pid_t outerPID = outerApplication.processIdentifier;
     SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, deadline); };
     SPIMEReadSource readSource = ^NSString * { return currentSourceID(); };
@@ -102,8 +104,8 @@ static NSArray<NSString *> *baselineAndOuterRestoreErrors(NSString *baselineSour
             && pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier; }, deadline);
     };
     SPIMEReadFrontmostProcess readFrontmost = ^pid_t { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier; };
-    return sp_ime_source_restore_errors(baselineSource, outerSource, outerPID,
-        readSource, activate, readFrontmost, select);
+    return sp_ime_source_cleanup_errors(baselineSource, outerSource, outerPID,
+        readSource, activate, readFrontmost, select, ^{ closeTraceWindow(window, region, mainSurface); });
 }
 
 static void reportRestoreErrors(NSArray<NSString *> *errors, NSString *phase) {
@@ -311,10 +313,12 @@ static BOOL typeKeyUntil(NSWindow *window, NSString *key, NSUInteger (^answered)
     return received;
 }
 
-static void selectSourceUntil(NSString *source, NSTextInputContext *context, NSDate *deadline) {
-    check(sp_input_source_select(source.UTF8String), [NSString stringWithFormat:@"%@ is selected for the bounded trace", source]);
-    check(pumpUntil(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; }, deadline),
-        [NSString stringWithFormat:@"%@ reaches the current input context before the shared deadline", source]);
+static BOOL selectSourceUntil(NSString *source, NSTextInputContext *context, NSDate *deadline) {
+    BOOL selected = selectAndAwaitInputSource(source, deadline);
+    check(selected, [NSString stringWithFormat:@"%@ is selected and adopted for the bounded trace", source]);
+    BOOL adopted = selected && pumpUntil(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; }, deadline);
+    check(adopted, [NSString stringWithFormat:@"%@ reaches the focused input context before the shared deadline", source]);
+    return selected && adopted;
 }
 
 static NSDictionary *textViewState(SPRecordingTextView *view) {
@@ -389,9 +393,8 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     [control.inputContext discardMarkedText];
     control.string = @"";
     [control.calls removeAllObjects];
-    selectSourceUntil(ABC, control.inputContext, deadline);
-    selectSourceUntil(KOREAN_2SET, control.inputContext, deadline);
-    if (![control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]) return;
+    if (!selectSourceUntil(ABC, control.inputContext, deadline)
+        || !selectSourceUntil(KOREAN_2SET, control.inputContext, deadline)) return;
     for (NSUInteger index = 0; index < 8 && deadline.timeIntervalSinceNow > 0; index++) {
         __block BOOL received = NO;
         NSArray *native = capturedEvents(^{ received = typeKeyUntil(window, @"k", controlAnswered, deadline); });
@@ -420,9 +423,8 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     NSTextInputContext *regionContext = ((NSView *)region).inputContext;
     check(pumpUntil(^BOOL { return NSTextInputContext.currentInputContext == regionContext; }, deadline),
         @"the image region input context becomes current before the trace");
-    selectSourceUntil(ABC, regionContext, deadline);
-    selectSourceUntil(KOREAN_2SET, regionContext, deadline);
-    if (![regionContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]) return;
+    if (!selectSourceUntil(ABC, regionContext, deadline)
+        || !selectSourceUntil(KOREAN_2SET, regionContext, deadline)) return;
     [events removeAllObjects];
     NSMutableArray<NSDictionary *> *regionStates = [NSMutableArray array];
     NSMutableArray<NSArray<NSDictionary *> *> *regionNative = [NSMutableArray array];
@@ -544,25 +546,32 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         check(window.firstResponder == (NSResponder *)region,
             @"the image region becomes first responder before selecting Korean 2-Set");
     }
-    if (!sp_input_source_select(KOREAN_2SET.UTF8String)) {
-        fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
-        if (focusedTrace) {
+    NSTextInputContext *context = ((NSView *)region).inputContext;
+    if (abcBaselineTrace) {
+        NSMutableArray<NSString *> *adoptionErrors = [NSMutableArray array];
+        BOOL adopted = sp_ime_source_run_after_adoption(KOREAN_2SET,
+            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, traceDeadline); },
+            ^NSString * { return currentSourceID(); },
+            ^BOOL { return NSTextInputContext.currentInputContext == context
+                && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; },
+            ^{}, adoptionErrors);
+        check(adopted, @"Korean 2-Set is selected and adopted by the focused image region before the gesture");
+        reportRestoreErrors(adoptionErrors, @"Korean input-context adoption");
+        if (!adopted) {
             NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
-            closeTraceWindow(window, region, mainSurface);
-            if (abcBaselineTrace) {
-                reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp, cleanupDeadline),
-                    @"outer state cleanup after Korean source selection failure");
-            } else {
-                reportRestoreErrors(outerStateRestoreErrors(previousSource, previousApp, cleanupDeadline),
-                    @"outer state cleanup after Korean source selection failure");
-            }
+            reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
+                cleanupDeadline, window, region, mainSurface), @"baseline and outer cleanup after Korean adoption failure");
             traceDeadline = nil;
             return 1;
         }
-        return 1;
+    } else {
+        if (!sp_input_source_select(KOREAN_2SET.UTF8String)) {
+            fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
+            return 1;
+        }
+        check(pump(^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; }),
+            [NSString stringWithFormat:@"Korean 2-Set is the current input source (got %@)", currentSourceID()]);
     }
-    check(pump(^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; }),
-        [NSString stringWithFormat:@"Korean 2-Set is the current input source (got %@)", currentSourceID()]);
     if (!abcBaselineTrace) {
         [NSApp activateIgnoringOtherApps:YES];
         [window makeKeyAndOrderFront:nil];
@@ -571,11 +580,12 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         check(window.firstResponder == (NSResponder *)region, @"the image region is the first responder");
     }
     // Waits until the input context of the region has selected Korean 2-set before sending keys.
-    NSTextInputContext *context = ((NSView *)region).inputContext;
-    check(pump(^BOOL { return NSTextInputContext.currentInputContext == context
-            && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; }),
-        [NSString stringWithFormat:@"the region's input context is current and selects Korean 2-Set (current %d, selected %@)",
-            NSTextInputContext.currentInputContext == context, context.selectedKeyboardInputSource]);
+    if (!abcBaselineTrace) {
+        check(pump(^BOOL { return NSTextInputContext.currentInputContext == context
+                && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; }),
+            [NSString stringWithFormat:@"the region's input context is current and selects Korean 2-Set (current %d, selected %@)",
+                NSTextInputContext.currentInputContext == context, context.selectedKeyboardInputSource]);
+    }
     // Control: confirms that the AppKit default text view composes the keys received through the same path (-[NSWindow sendEvent:], same as the endpoint injector) into
     // the correct document. Right after the switch the input method rewrites the committed character through a replacement range, so
     // the final document is compared, not the marked state.
@@ -583,19 +593,24 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     control.calls = [NSMutableArray array];
     [window.contentView addSubview:control];
     [window makeFirstResponder:control];
-    pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
+    BOOL controlContextReady = pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
         && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
     if (focusedTrace) {
-        backspaceTrace(window, control, region);
+        NSMutableArray<NSString *> *adoptionErrors = [NSMutableArray array];
+        BOOL adopted = sp_ime_source_run_after_adoption(KOREAN_2SET,
+            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, traceDeadline); },
+            ^NSString * { return currentSourceID(); },
+            ^BOOL { return controlContextReady && NSTextInputContext.currentInputContext == control.inputContext
+                && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]
+                && [context.selectedKeyboardInputSource isEqual:KOREAN_2SET]; },
+            ^{ backspaceTrace(window, control, region); }, adoptionErrors);
+        check(adopted, @"Korean 2-Set remains adopted by both input contexts before sending keys");
+        reportRestoreErrors(adoptionErrors, @"reference and image-region Korean adoption");
         traceDeadline = nil;
         NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
         if (abcBaselineTrace) {
-            reportRestoreErrors(sp_ime_source_select_errors(ABC,
-                ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, cleanupDeadline); },
-                ^NSString * { return currentSourceID(); }), @"ABC baseline setup before outer restoration");
-            closeTraceWindow(window, region, mainSurface);
-            reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp, cleanupDeadline),
-                @"baseline and outer state restoration");
+            reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
+                cleanupDeadline, window, region, mainSurface), @"baseline and outer state restoration");
         } else {
             check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
             check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),

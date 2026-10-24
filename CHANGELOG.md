@@ -5,10 +5,14 @@
 ## Unreleased
 
 - F239-47-8: Make the focused native repeat establish and verify an ABC input-source
-  baseline before Korean 2-Set input. Cleanup restores the outer application, verifies
-  ABC, then restores and verifies the original source and application. A controlled
-  native test checks restoration ordering and reports source-selection and activation
-  failures. The activation repeat remains unrun with this mode.
+  baseline before Korean 2-Set input. The source and active input contexts must adopt
+  Korean before the gesture callback runs. On adoption failure, cleanup selects ABC
+  before closing the test context, restores the outer application, verifies ABC, then
+  restores and verifies the original source and application. Controlled native tests
+  check the no-key failure path, cleanup ordering, and retained selection and activation
+  errors. A faulted callback that ran after failed Korean selection made the no-key
+  assertion fail with one key callback; the corrected helper passes 15 assertions. The
+  focused target builds without activation; the activation repeat remains unrun.
 
 - F239-47-8: Add a tracked repeat target for the focused native input-source
   restoration check. The generic native `repeat` target cannot pass the focused

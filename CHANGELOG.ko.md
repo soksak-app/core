@@ -5,10 +5,14 @@
 ## 미배포
 
 - F239-47-8: Focused native repeat이 Korean 2-Set 입력 전에 ABC input-source
-  baseline을 설정하고 확인하도록 한다. Cleanup은 outer app을 복원하고 ABC를
-  확인한 뒤 원래 source와 app을 복원·확인한다. 제어된 native test는 복원 순서와
-  source 선택 및 app 활성화 오류 보고를 검증한다. 이 모드의 activation repeat은
-  아직 실행하지 않았다.
+  baseline을 설정하고 확인하도록 한다. Gesture 전 Korean source와 활성 input
+  context의 adoption을 확인한다. Adoption이 실패하면 cleanup은 test context를 닫기
+  전에 ABC를 선택하고, outer app을 복원해 ABC를 확인한 뒤 원래 source와 app을
+  복원·확인한다. 제어된 native test는 key 미전송 실패 경로, cleanup 순서와 source
+  선택 및 app 활성화 오류 보존을 검증한다. Korean 선택 실패 뒤 gesture를 실행한
+  faulted callback은 key 미전송 assertion을 실패시키고 key callback 한 개를 남겼다.
+  수정 후 assertion 15개가 통과한다. Focused target은 activation 없이 빌드했고 이
+  모드의 activation repeat은 아직 실행하지 않았다.
 
 - F239-47-8: Focused native input-source 복원 검사를 위한 추적 repeat target을
   추가한다. 기존 native `repeat` target은 focused 인자를 전달하지 못한다.

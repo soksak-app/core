@@ -17,6 +17,20 @@ NSArray<NSString *> *sp_ime_source_select_errors(NSString *expected,
     return errors;
 }
 
+BOOL sp_ime_source_run_after_adoption(NSString *expected, SPIMESelectAndAwaitSource selectAndAwait,
+    SPIMEReadSource readSource, BOOL (^contextAdopted)(void), void (^run)(void),
+    NSMutableArray<NSString *> *errors) {
+    if (!errors) return NO;
+    [errors addObjectsFromArray:sp_ime_source_select_errors(expected, selectAndAwait, readSource)];
+    if (errors.count > 0) return NO;
+    if (!contextAdopted || !contextAdopted()) {
+        [errors addObject:[NSString stringWithFormat:@"the active input context did not adopt %@", expected]];
+        return NO;
+    }
+    if (run) run();
+    return YES;
+}
+
 NSArray<NSString *> *sp_ime_source_restore_errors(NSString *baselineSource, NSString *outerSource,
     pid_t outerProcessIdentifier, SPIMEReadSource readSource, SPIMEActivateProcess activateProcess,
     SPIMEReadFrontmostProcess readFrontmost, SPIMESelectAndAwaitSource selectAndAwait) {
@@ -59,5 +73,18 @@ NSArray<NSString *> *sp_ime_source_restore_errors(NSString *baselineSource, NSSt
         [errors addObject:[NSString stringWithFormat:@"frontmost process after outer source restoration is %d, expected %d",
             finalFrontmost, outerProcessIdentifier]];
     }
+    return errors;
+}
+
+NSArray<NSString *> *sp_ime_source_cleanup_errors(NSString *baselineSource, NSString *outerSource,
+    pid_t outerProcessIdentifier, SPIMEReadSource readSource, SPIMEActivateProcess activateProcess,
+    SPIMEReadFrontmostProcess readFrontmost, SPIMESelectAndAwaitSource selectAndAwait,
+    void (^closeTestContext)(void)) {
+    NSMutableArray<NSString *> *errors = [NSMutableArray arrayWithArray:
+        sp_ime_source_select_errors(baselineSource, selectAndAwait, readSource)];
+    if (closeTestContext) closeTestContext();
+    else [errors addObject:@"the active IME test context could not be closed"];
+    [errors addObjectsFromArray:sp_ime_source_restore_errors(baselineSource, outerSource,
+        outerProcessIdentifier, readSource, activateProcess, readFrontmost, selectAndAwait)];
     return errors;
 }
