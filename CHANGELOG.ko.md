@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F212.16-8: JavaScript platform selector를 실행 가능한 syntax로 분석해
+  benchmark runtime metadata와 정확한 test assertion을 구현 선택과 구분한다.
+  String과 comment fixture는 audit을 trigger하지 않고 Go/Rust 규칙은 각 언어
+  파일에만 적용한다. Red: 변경 전 `make platforms`는 benchmark metadata 사용
+  두 개를 포함해 finding 여섯 개를 보고했다. Green: owning audit test 2/2가
+  통과하고 benchmark finding은 사라지며 별도 추적하는 selector 네 개는 남는다.
+  `make platforms`는 F239-48-1의 네 finding을 계속 보고하므로 전체 통과가 아니다.
+  `make docs-check`가 통과한다. 앱은 실행하지 않았다.
+
 - F240-11: 현재 owner 근거에 맞춰 실행 계획을 정합화한다. F239-47-9에는
   보존된 activation Red/Green log와 platform을 기록하며 terminal 동작은
   주장하지 않는다. F212.12-2-2-4-8-2-2 상세 상태는 active checklist 한 곳에

@@ -15,6 +15,7 @@ import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-hosts.mjs";
+import { auditPlatformSource } from "../check-platforms.mjs";
 import { auditE2ESource } from "../check-e2e.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -427,8 +428,49 @@ test("release marker scanner finds capture code in an executable without symbols
   assert.match(errors[0], /window capture/);
 });
 
-test("platform audit accepts only declared platform boundaries", { timeout: 5000 }, async () => {
+test("platform audit clears benchmark metadata and preserves other known findings", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-platforms.mjs")]);
-  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /Platform checks passed: \d+ files/);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert.doesNotMatch(output, /packages\/workbench\/benchmark\/declared-ui\.mjs/);
+  assert.doesNotMatch(output, /packages\/workbench\/test\/declared-ui-benchmark\.test\.mjs/);
+  if (result.code === 0) {
+    assert.match(output, /Platform checks passed: \d+ files/);
+    return;
+  }
+  assert.equal(result.code, 1, output);
+  assert.equal((output.match(/packages\/sok\/tauriv2\/tests\/process_wait_test\.rs:/g) ?? []).length, 2, output);
+  assert.equal((output.match(/scripts\/test\/bundle-preparation\.test\.mjs:/g) ?? []).length, 2, output);
+});
+
+test("platform audit permits direct runtime metadata but rejects all other selectors", { timeout: 2000 }, () => {
+  assert.deepEqual(auditPlatformSource("packages/workbench/benchmark/declared-ui.mjs",
+    `function environment() { return { packageVersion, platform: process.platform, arch: process.arch }; }`), []);
+  assert.deepEqual(auditPlatformSource("packages/workbench/test/declared-ui-benchmark.test.mjs",
+    `assert.equal(result.environment.platform, process.platform);`), []);
+  assert.deepEqual(auditPlatformSource("packages/workbench/benchmark/other.mjs",
+    `assert.equal(result.environment.platform, process.platform);`), [
+    "packages/workbench/benchmark/other.mjs:1: Node process.platform outside platform/<os>/",
+  ]);
+  assert.deepEqual(auditPlatformSource("packages/workbench/benchmark/other.mjs",
+    `function other() { return { platform: process.platform }; }`), [
+    "packages/workbench/benchmark/other.mjs:1: Node process.platform outside platform/<os>/",
+  ]);
+  assert.deepEqual(auditPlatformSource("packages/workbench/benchmark/other.mjs",
+    `if (process.platform === 'darwin') useNativePath();`), [
+    "packages/workbench/benchmark/other.mjs:1: Node process.platform outside platform/<os>/",
+  ]);
+  assert.deepEqual(auditPlatformSource("packages/workbench/test/implementation.test.mjs",
+    `if (process.platform === 'darwin') useNativePath();`), [
+    "packages/workbench/test/implementation.test.mjs:1: Node process.platform outside platform/<os>/",
+  ]);
+  assert.deepEqual(auditPlatformSource("scripts/test/bundle-preparation.test.mjs",
+    `test('darwin case', { skip: process.platform !== 'darwin' });`), [
+    "scripts/test/bundle-preparation.test.mjs:1: Node process.platform outside platform/<os>/",
+  ]);
+  assert.deepEqual(auditPlatformSource("packages/sok/tauriv2/tests/process_wait_test.rs",
+    '#[cfg(target_os = "macos")]'), [
+    "packages/sok/tauriv2/tests/process_wait_test.rs:1: Rust OS cfg outside platform/<os>/",
+  ]);
+  assert.deepEqual(auditPlatformSource("scripts/test/soksak-scripts.test.mjs",
+    `const example = '#[cfg(target_os = "macos")] process.platform';`), []);
 });
