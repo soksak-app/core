@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-48-5: 선언된 application window check만 core package-name boundary audit에서
+  제외한다. 분류 조건은 `e2e/` test source, `@soksak/window-check/app.mjs`의 `open`
+  import, imported binding의 실제 호출이다. Red: 변경 전 audit는 browser cohort
+  window check에서 Files와 VT sidecar 이름을 보고했다. Green: focused owner test
+  1/1과 16 components 대상 `make boundaries`가 통과한다. 일반 core test의 plugin
+  이름은 계속 거부하며 구현 경로 읽기도 검사한다.
+
 - F239-47-20: input receipt 뒤 각 coherent terminal document가 같은 window의
   AppKit reference와 일치할 때까지 기다린다. Backspace는 먼저 preedit을 지워도
   PTY에 committed vowel 8개가 남고, 이후 status event에서 기대한 7개 화면을

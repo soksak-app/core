@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-48-5: Exclude only declared application window checks from the core
+  package-name boundary audit. Classification requires an `e2e/` test source,
+  an import of `open` from `@soksak/window-check/app.mjs`, and a call through
+  that imported binding. Red: the unchanged audit reported the Files and VT
+  sidecar names in the browser cohort window check. Green: the focused owner
+  test passes 1/1 and `make boundaries` passes for 16 components. Regular core
+  tests still reject plugin names, and implementation-path reads remain checked.
+
 - F239-47-20: Wait for each coherent terminal document to match the same-window
   AppKit reference after input receipt. Backspace can first clear the preedit
   while the PTY still shows eight committed vowels, then publish the expected

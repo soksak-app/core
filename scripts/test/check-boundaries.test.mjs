@@ -51,6 +51,53 @@ test("checkNames allows the exact core names and refuses the others", () => {
   ]);
 });
 
+test("boundary names distinguish declared window checks from core tests without permitting implementation reads", { timeout: 1000 }, () => {
+  const names = new Set(corePackageNames());
+  assert.deepEqual(checkNames(names, ["e2e/browser-cohort-upgrade.test.mjs"]), []);
+
+  const source = [
+    'import { open as launch } from "@soksak/window-check/app.mjs";',
+    "await launch(context, application);",
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.deepEqual(checkNames(names, ["e2e/window-like.test.mjs"], () => source), [],
+    "an aliased window-check opener must retain its declared role");
+  const packageFile = "packages/workbench/test/window-check.test.mjs";
+  assert.deepEqual(checkNames(names, [packageFile], () => source), [
+    `${packageFile}:3: core source names ${scoped("sidecar-probe")}, which is not a core package`,
+  ]);
+
+  const fake = [
+    '// import { open } from "@soksak/window-check/app.mjs";',
+    'const note = "open(context, application)";',
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.equal(checkNames(names, ["e2e/window-like.test.mjs"], () => fake).length, 1,
+    "comments and strings must not classify a package test as a window check");
+  const shadowed = [
+    'import { open as launch } from "@soksak/window-check/app.mjs";',
+    "function helper(launch) { launch(context, application); }",
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.equal(checkNames(names, ["e2e/window-like.test.mjs"], () => shadowed).length, 1,
+    "a shadowed local function must not count as calling the imported opener");
+
+  const components = [
+    { dir: "e2e", kind: "core", name: scoped("e2e") },
+    { dir: "packages/workbench", kind: "core", name: scoped("workbench") },
+    { dir: "packages/plugin-api", kind: "core", name: scoped("plugin-api") },
+  ];
+  const windowFile = "e2e/window-like.test.mjs";
+  const readFile = {
+    [packageFile]: `${source}\nreadFileSync(new URL("../../plugin-api/index.js", import.meta.url));`,
+    [windowFile]: `${source}\nreadFileSync(new URL("../packages/plugin-api/index.js", import.meta.url));`,
+  };
+  assert.deepEqual(checkTestPathReads(components, [packageFile, windowFile], (file) => readFile[file]), [
+    `${packageFile}:4: test of ${scoped("workbench")} reads a path of ${scoped("plugin-api")}: ../../plugin-api/index.js`,
+    `${windowFile}:4: test of ${scoped("e2e")} reads a path of ${scoped("plugin-api")}: ../packages/plugin-api/index.js`,
+  ], "a window-check import must not exempt implementation path reads");
+});
+
 test("checkNames reports a file it cannot read", () => {
   const errors = checkNames(core, ["packages/x/missing.js"], () => {
     throw new Error("gone");
