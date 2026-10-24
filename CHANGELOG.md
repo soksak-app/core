@@ -3505,3 +3505,11 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   values. The focused consumer cases pass 2/2 after reproducing the rejection of
   sequence zero. P87 runtime input remains incomplete because that rejection
   stopped each host after its first terminal key; no visual acceptance is claimed.
+
+- F212.10-core-3-10: Specify a generation-aware native view-reply dispatch
+  record after generation validation and native post completion. The required
+  page identity distinguishes native post acceptance from JavaScript receipt;
+  post errors keep the existing RPC error path. Workbench, Wails and Tauri
+  owning checks pass, as do event generation and `make docs-check`; runtime
+  verification remains pending. Event generation also synchronized two
+  already-declared trace classes missing from generated maps.

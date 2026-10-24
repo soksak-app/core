@@ -200,6 +200,8 @@ type channelPlatform struct {
 	postedOnUI    []bool
 	messageOnSet  string
 	messageOnLoad string
+	afterPost     func()
+	rejectPost    bool
 	// tasks is the number of UI-thread tasks running now, which runUITask counts.
 	tasks int
 }
@@ -236,7 +238,10 @@ func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(v
 func (p *channelPlatform) PostDocument(document unsafe.Pointer, value string) bool {
 	p.posted = append(p.posted, value)
 	p.postedOnUI = append(p.postedOnUI, p.tasks > 0)
-	return true
+	if p.afterPost != nil {
+		p.afterPost()
+	}
+	return !p.rejectPost
 }
 
 // contract: view.source-registration-precedes-provider-messages
@@ -540,7 +545,7 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 7, Result: json.RawMessage(`{"count":2}`)}); err != nil {
+	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 7, Result: json.RawMessage(`{"count":2}`)}); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	if len(fake.posted) != before+1 {
@@ -553,7 +558,7 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	if reply["sok"] != float64(1) || reply["id"] != float64(7) || !reflect.DeepEqual(reply["result"], map[string]any{"count": float64(2)}) {
 		t.Fatalf("reply %v, want sok 1, id 7 and the result", reply)
 	}
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}}); err != nil {
+	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}}); err != nil {
 		t.Fatalf("error reply: %v", err)
 	}
 	var failed map[string]any
@@ -563,14 +568,132 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	if failed["id"] != float64(8) || failed["error"] == nil {
 		t.Fatalf("error reply %v, want id 8 and the error", failed)
 	}
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 9}); err == nil || err.Error() != "view reply 9 has neither a result nor an error" {
+	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 9}); err == nil || err.Error() != "view reply 9 has neither a result nor an error" {
 		t.Fatalf("reply without result or error: %v", err)
 	}
 }
 
+// contract: view.call.reply
+func TestViewReplyRecordsTheNativePostResultAfterPosting(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	s.name = "main"
+	const id = uint64(991)
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	before := len(fake.posted)
+	postReturned := false
+	fake.afterPost = func() {
+		records.Lock()
+		defer records.Unlock()
+		for _, record := range records.buffer {
+			if record.event == "host.view.reply.dispatch" && strings.Contains(string(record.fields), `"id":991`) {
+				t.Fatalf("dispatch was recorded before native PostDocument returned")
+			}
+		}
+		postReturned = true
+	}
+	req := ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)}
+	if err := s.replyView(req); err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	if !postReturned {
+		t.Fatal("native PostDocument callback did not run")
+	}
+	if len(fake.posted) != before+1 {
+		t.Fatalf("native posts: %d, want one additional post", len(fake.posted)-before)
+	}
+	var found []map[string]any
+	records.Lock()
+	for _, record := range records.buffer {
+		if record.event != "host.view.reply.dispatch" {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(record.fields, &fields); err != nil {
+			records.Unlock()
+			t.Fatal(err)
+		}
+		if fields["id"] == float64(id) {
+			found = append(found, fields)
+		}
+	}
+	records.Unlock()
+	want := map[string]any{"window": "main", "page": "page-1", "surface": "probe-surface", "generation": float64(req.Generation), "id": float64(id), "outcome": "result", "disposition": "posted"}
+	if !reflect.DeepEqual(found, []map[string]any{want}) {
+		t.Fatalf("dispatch records %v, want %v after native post", found, want)
+	}
+}
+
+// contract: view.call.reply
+func TestStaleViewReplyRecordsDiscardWithoutPosting(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	s.name = "main"
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	before := len(fake.posted)
+	const id = uint64(992)
+	current := viewGeneration(s, "probe-surface")
+	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: current + 1, ID: id, Result: json.RawMessage(`null`)}); err != nil {
+		t.Fatalf("stale reply: %v", err)
+	}
+	if len(fake.posted) != before {
+		t.Fatalf("stale reply posted %d messages", len(fake.posted)-before)
+	}
+	if !hasViewReplyDispatch(t, id, map[string]any{
+		"window": "main", "page": "page-1", "surface": "probe-surface",
+		"generation": float64(current + 1), "id": float64(id), "outcome": "result",
+		"disposition": "discarded", "reason": "view-generation-not-current",
+	}) {
+		t.Fatalf("stale reply dispatch record missing")
+	}
+}
+
+// contract: view.call.reply
+func TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	s.name = "main"
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	fake.rejectPost = true
+	const id = uint64(993)
+	err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)})
+	if err == nil || err.Error() != "probe-surface: the view document refused the message" {
+		t.Fatalf("refused post error: %v", err)
+	}
+	if hasViewReplyDispatch(t, id, nil) {
+		t.Fatalf("refused native post emitted a dispatch record")
+	}
+}
+
+func hasViewReplyDispatch(t *testing.T, id uint64, want map[string]any) bool {
+	t.Helper()
+	var found []map[string]any
+	records.Lock()
+	defer records.Unlock()
+	for _, record := range records.buffer {
+		if record.event != "host.view.reply.dispatch" {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(record.fields, &fields); err != nil {
+			t.Fatalf("dispatch record is not JSON: %v", err)
+		}
+		if fields["id"] == float64(id) {
+			found = append(found, fields)
+		}
+	}
+	if want == nil {
+		return len(found) != 0
+	}
+	return reflect.DeepEqual(found, []map[string]any{want})
+}
+
 // contract: view.call.reply-null-result
 func TestViewReplyWithANullResultKeepsTheNullResult(t *testing.T) {
-	req, err := argument[ViewReplyRequest]("request", json.RawMessage(`{"surface":"probe-surface","generation":1,"id":1,"result":null}`))
+	req, err := argument[ViewReplyRequest]("request", json.RawMessage(`{"page":"page-1","surface":"probe-surface","generation":1,"id":1,"result":null}`))
 	if err != nil {
 		t.Fatalf("reply with a null result: %v", err)
 	}
@@ -580,6 +703,16 @@ func TestViewReplyWithANullResultKeepsTheNullResult(t *testing.T) {
 	}
 	if result, ok := message["result"].(json.RawMessage); !ok || string(result) != "null" {
 		t.Fatalf("posted result %v, want null", message["result"])
+	}
+}
+
+// contract: view.call.reply
+func TestViewReplyWithoutPageIdentityIsRejected(t *testing.T) {
+	_, err := ViewReplyMessage(ViewReplyRequest{
+		Surface: "probe-surface", Generation: 1, ID: 1, Result: json.RawMessage(`null`),
+	})
+	if err == nil || err.Error() != "view reply names no page" {
+		t.Fatalf("reply without page identity: %v", err)
 	}
 }
 

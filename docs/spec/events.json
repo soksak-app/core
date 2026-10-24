@@ -1149,6 +1149,13 @@
       },
       "description": "The host forwarded the reply of a view call to the view; outcome is result or error, and the id is the id of the call."
     },
+    "host.view.reply.dispatch": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {"window": "string", "page": "string", "surface": "string", "generation": "number", "id": "number", "outcome": "string", "disposition": "string", "reason?": "string"},
+      "description": "After generation validation, the host records the view-reply dispatch result; for a current target, it records after the native post operation returns. disposition is posted when the native post API accepts the message, or discarded when the target generation is no longer current; reason is view-generation-not-current for discarded. posted does not prove JavaScript receipt or handling. A native post error rejects the host call and writes no dispatch record."
+    },
     "host.stall": {
       "layer": "host",
       "class": "lifecycle",

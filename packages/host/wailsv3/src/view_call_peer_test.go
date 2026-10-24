@@ -38,7 +38,7 @@ func TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost(t *testing.T) {
 	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":8,"command":"probe.run","params":{}}}`); err != nil {
 		t.Fatalf("view call: %v", err)
 	}
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: generation, ID: 8, Result: []byte(`null`)}); err != nil {
+	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: generation, ID: 8, Result: []byte(`null`)}); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	endView(t, s, fake)

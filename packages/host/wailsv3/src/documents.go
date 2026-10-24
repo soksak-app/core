@@ -1911,6 +1911,7 @@ func DeclaredSnapshotEvent(surface, plugin string, message json.RawMessage) (map
 
 // ViewReplyRequest is the reply of the main page to a call request of the view of Surface. It has a result or an error, not both.
 type ViewReplyRequest struct {
+	Page       string          `json:"page"`
 	Surface    string          `json:"surface"`
 	Generation uint64          `json:"generation"`
 	ID         uint64          `json:"id"`
@@ -1926,6 +1927,9 @@ type ViewReplyError struct {
 
 // ViewReplyMessage returns the message that the host posts to the view for a reply: {"id", "result"} or {"id", "error"}.
 func ViewReplyMessage(req ViewReplyRequest) (map[string]any, error) {
+	if req.Page == "" {
+		return nil, errors.New("view reply names no page")
+	}
 	if len(req.Result) == 0 && req.Error == nil {
 		return nil, fmt.Errorf("view reply %d has neither a result nor an error", req.ID)
 	}
@@ -1953,11 +1957,40 @@ func (s *Surfaces) replyView(req ViewReplyRequest) error {
 	if err != nil {
 		return err
 	}
+	outcome := "result"
+	if req.Error != nil {
+		outcome = "error"
+	}
 	if !s.currentViewGeneration(req.Surface, req.Generation) {
+		EmitHost(LevelDebug, "host.view.reply.dispatch", map[string]any{
+			"window": s.name, "page": req.Page, "surface": req.Surface,
+			"generation": req.Generation, "id": req.ID, "outcome": outcome,
+			"disposition": "discarded", "reason": "view-generation-not-current",
+		})
 		return nil
 	}
 	s.documents.answerViewCall(req.Surface, req.Generation, req.ID)
-	return s.postViewGeneration(req.Surface, req.Generation, message)
+	ready, stale, err := s.sendToViewGeneration(req.Surface, &req.Generation, message)
+	if err != nil {
+		return err
+	}
+	disposition := "posted"
+	fields := map[string]any{
+		"window": s.name, "page": req.Page, "surface": req.Surface,
+		"generation": req.Generation, "id": req.ID, "outcome": outcome, "disposition": disposition,
+	}
+	if stale {
+		fields["disposition"] = "discarded"
+		fields["reason"] = "view-generation-not-current"
+		EmitHost(LevelDebug, "host.view.reply.dispatch", fields)
+		return nil
+	}
+	if !ready {
+		return fmt.Errorf("%s has no ready document", req.Surface)
+	}
+	EmitHost(LevelDebug, "host.view.reply.dispatch", fields)
+	s.viewRecords().recordEnd(req.Surface)
+	return nil
 }
 
 // ViewEventRequest is the event that the main page pushes to the view of Surface. Event names the subscription and Data is its value,

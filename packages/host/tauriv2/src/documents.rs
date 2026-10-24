@@ -1861,17 +1861,53 @@ fn view_request_disposition(generation: u64, posted: bool) -> Value {
 
 pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
     let message = view_reply_message(&reply)?;
-    if post_for_view_generation(
-        webview,
-        "view reply",
-        &reply.surface,
-        reply.generation,
-        message,
-    )? {
-        window_data(&webview.window())?
-            .documents
-            .views()
-            .answer_call(&reply.surface, reply.generation, reply.id);
+    let window = webview.window();
+    let window_name = window.label().to_string();
+    dispatch_view_reply(
+        &reply,
+        &window_name,
+        || {
+            post_for_view_generation(
+                webview,
+                "view reply",
+                &reply.surface,
+                reply.generation,
+                message,
+            )
+        },
+        || {
+            window_data(&window)?.documents.views().answer_call(
+                &reply.surface,
+                reply.generation,
+                reply.id,
+            );
+            Ok(())
+        },
+    )
+}
+
+fn dispatch_view_reply(
+    reply: &ViewReply,
+    window: &str,
+    post: impl FnOnce() -> Result<bool, String>,
+    answer: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let posted = post()?;
+    let mut fields = json!({
+        "window": window,
+        "page": reply.page,
+        "surface": reply.surface,
+        "generation": reply.generation,
+        "id": reply.id,
+        "outcome": if reply.error.is_some() { "error" } else { "result" },
+        "disposition": if posted { "posted" } else { "discarded" },
+    });
+    if !posted {
+        fields["reason"] = json!("view-generation-not-current");
+    }
+    emit_host(Level::Debug, "host.view.reply.dispatch", fields);
+    if posted {
+        answer()?;
     }
     Ok(())
 }
@@ -2508,6 +2544,7 @@ pub(crate) fn value_field<'de, A: MapAccess<'de>>(map: &mut A) -> Result<Option<
 /// A reply of the main page to a call request of a view: a result or an error (docs/spec/native-surfaces.md#view-surfaces). A null
 /// result is the result of a command without a value, so it is kept as a value.
 pub struct ViewReply {
+    pub page: String,
     pub surface: String,
     pub generation: u64,
     pub id: u64,
@@ -2527,12 +2564,14 @@ impl<'de> Deserialize<'de> for ViewReply {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut surface = None;
+                let mut page = None;
                 let mut generation = None;
                 let mut id = None;
                 let mut result = None;
                 let mut error = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
+                        "page" => page = map.next_value::<Option<String>>()?,
                         "surface" => surface = map.next_value::<Option<String>>()?,
                         "generation" => generation = map.next_value::<Option<u64>>()?,
                         "id" => id = map.next_value::<Option<u64>>()?,
@@ -2544,6 +2583,7 @@ impl<'de> Deserialize<'de> for ViewReply {
                     }
                 }
                 Ok(ViewReply {
+                    page: page.ok_or_else(|| de::Error::missing_field("page"))?,
                     surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
                     generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
@@ -2745,6 +2785,9 @@ pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
 
 /// Returns the message that the host posts to the view for a reply: {"sok", "id", "result"} or {"sok", "id", "error"}.
 pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
+    if reply.page.is_empty() {
+        return Err("view reply names no page".to_string());
+    }
     if reply.generation == 0 {
         return Err("view reply has no source generation".to_string());
     }
