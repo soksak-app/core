@@ -27,7 +27,9 @@ export function hostWindows(host) {
     openProject: ({ id, root, separate, geometry }, cids) =>
       host.call("projectOpen", { id, root, separate, geometry }, { cids }),
     /** Publishes the project whose data context the main page has installed. */
-    projectShown: (project) => host.call("projectShown", { project }),
+    projectShown: (project) => host.call("projectShown", { project: project === null ? null : {
+      id: project.id, root: project.root, title: project.title,
+    } }),
     releaseProject: (id, cids) => host.call("projectRelease", id, { cids }),
     /** Asks another window that shows the project whether the project may be removed, and fulfills with true if it may be removed. */
     askRemoveProject: (id, cids) => host.call("projectRemoveAsk", id, { cids }),

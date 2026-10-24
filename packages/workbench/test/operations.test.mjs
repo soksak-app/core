@@ -99,7 +99,7 @@ test("the window and project calls of the host take the identifiers of their ope
   await windows.close(cids);
   await windows.closeKept(cids);
   await windows.openProject({ id: "prj", root: "/r", separate: false, geometry: null }, cids);
-  await windows.projectShown({ id: "prj", root: "/r", title: "t" });
+  await windows.projectShown({ id: "prj", root: "/r", title: "t", activeSpaceId: "space-1", spaces: [] });
   await windows.projectShown(null);
   await windows.releaseProject("prj", cids);
   await windows.askRemoveProject("prj", cids);

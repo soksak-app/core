@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F212.10-core-3-11: native call 전에 projectShown payload를 명세된
+  `{id, root, title}` field로 projection한다. Tauri strict request decoder가
+  저장 project metadata를 거부하지 않게 한다. Owning operations case는 1/1
+  통과했으며 application runtime 결과는 주장하지 않는다.
+
 - F267.5: 현재 test inventory를 lane 100개, 구현 파일 689개, test 파일
   982개로 기록한다. Parity audit에 미등록 implementation/test와 feature-link
   finding이 없다. 두 examples 절차 문서가 발견 count와 일치한다.

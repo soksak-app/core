@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F212.10-core-3-11: Project shown-project payloads to the declared
+  `{id, root, title}` fields before the native call. This prevents Tauri's
+  strict request decoder from rejecting stored project metadata. The owning
+  operations case passes 1/1; no application runtime result is claimed.
+
 - F267.5: Record the current test inventory as 100 lanes, 689 implementation
   files, and 982 test files. The parity audit reports no uncovered
   implementations, uncovered tests, or feature-link findings. Both example
