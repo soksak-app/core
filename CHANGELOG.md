@@ -17,14 +17,14 @@
   Green: zsh prompt escaping now renders the literal marker; the fixture tests
   pass 2/2 and the activation document helper tests pass 35/35. No application
   or activation run was performed.
-- F239-47-36: Add a named clean-zsh ZLE variant of the existing eight-vowel,
-  Backspace and Space activation scenario. Both scenarios share the same
-  AppKit checkpoints, terminal observations, capture assertions and 33 ms
-  frame-gap limit. The zsh wrapper runs `/bin/zsh -f` with a fixed prompt and
-  does not read user startup files; this does not represent a user's personal
-  prompt or highlighter. The shell-selection owner test passes 2/2, the
-  activation document helper tests pass 35/35, and both edited JavaScript
-  modules pass `node --check`. No activation or application run was performed.
+- F239-47-36: Run the clean-zsh ZLE input variant on both hosts. The ten
+  same-window AppKit reference and terminal logical checkpoints matched on
+  core/host 0.0.21 with terminal 0.0.21 and VT 0.0.17. Both captures exceeded
+  the unchanged 33 ms bound: Wails 33.309749990701675 ms over 145 frames and
+  Tauri 63.02441667020321 ms over 206 frames. No source-frame candidates were
+  available, so this is not visual acceptance. Tauri stderr retains unclassified
+  IMKCFRunLoopWakeUpReliable and TSM caps-lock messages. User startup files and
+  highlighter settings were excluded by the /bin/zsh -f fixture.
 - F239-48-3-5: Place the Tauri Darwin input-reference rejection test beside
   its implementation, matching the Wails owner-test path. The unchanged host
   audit drops from 14 to 13 findings. The Tauri owning test passes 1/1 and
@@ -108,8 +108,13 @@
 - F212.10-core-3-12: Hold first native view composition and background sidecar
   opens until the initial project context is committed and its layout is loaded.
   Release the startup gate after library cleanup on a rejected project open and
-  reject it when page initialization fails. Focused owner tests pass 6/6;
-  application runtime acceptance remains pending.
+  reject it when page initialization fails. Focused owner tests pass 6/6.
+  The exact F3-4 case on the FIFO core/host 0.0.21 cohort failed on both hosts:
+  Wails recorded one undeclared composition error for surface tab-xrezdv at host
+  sequence 66; Tauri recorded the same error for tab-okntn7 at sequence 37. Both
+  run audits failed on that application error. F212.10-core-3-13 fixes a matching
+  placement-order race but is not proven to be the sole trigger. No application
+  acceptance is claimed.
 
 - F212.10-core-3-4: Add a focused two-host window check for a saved inactive Browser view under both memory-saver settings. It verifies unloaded/no native surface when enabled, and loaded/ready/invisible native placement when disabled; the active terminal stays ready and visible. Runtime acceptance remains pending, and the check makes no first-frame pixel claim.
 

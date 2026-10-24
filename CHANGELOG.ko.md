@@ -17,13 +17,14 @@
   Green: zsh prompt escaping이 literal marker를 출력하며 fixture test는 2/2,
   activation document helper test는 35/35 통과한다. Application이나 activation은
   실행하지 않았다.
-- F239-47-36: 기존 여덟 모음·Backspace·Space activation 시나리오에
-  고정 clean-zsh ZLE variant를 추가한다. 두 시나리오는 같은 AppKit checkpoint,
-  terminal 관측, capture assertion, 33 ms frame-gap 기준을 공유한다. zsh wrapper는
-  고정 prompt와 `/bin/zsh -f`를 사용해 사용자 startup file을 읽지 않는다. 사용자의
-  개인 prompt나 highlighter는 대표하지 않는다. Shell 선택 owner test는 2/2,
-  activation document helper test는 35/35 통과했고 두 JavaScript module은
-  `node --check`를 통과했다. Activation이나 application 실행은 하지 않았다.
+- F239-47-36: Clean-zsh ZLE 입력 variant를 양 host 실행한다. Core/host
+  0.0.21, terminal 0.0.21, VT 0.0.17에서 같은 창 AppKit reference와 terminal
+  logical checkpoint 열 개가 일치했다. 두 capture 모두 변경하지 않은 33 ms
+  기준을 넘었다(Wails 145 frame에서 33.309749990701675 ms, Tauri 206 frame에서
+  63.02441667020321 ms). Source-frame candidate가 없어 visual acceptance는
+  아니다. Tauri stderr의 IMKCFRunLoopWakeUpReliable 및 TSM caps-lock message는
+  원인 미분류 상태로 보존했다. /bin/zsh -f fixture는 사용자 startup file과
+  highlighter 설정을 제외했다.
 - F239-48-3-5: Tauri Darwin input-reference 거부 test를 구현 옆에 두어
   Wails owner-test 경로와 맞춘다. 변경 전 host audit은 14개, 변경 후에는
   13개 finding을 보고한다. Tauri owning test는 1/1, `make docs-check`는
@@ -102,7 +103,12 @@
 - F212.10-core-3-12: 초기 project context가 확정되고 레이아웃을 불러올 때까지
   첫 native view composition과 background sidecar open을 보류한다. Project open이
   거부되면 library 정리 뒤 gate를 열고, page initialization 실패는 gate를 reject한다.
-  Focused owner test는 6/6 통과했으며 application runtime acceptance는 대기 중이다.
+  Focused owner test는 6/6 통과한다. FIFO core/host 0.0.21 cohort의 정확한 F3-4
+  case는 양 host 모두 실패했다. Wails는 host sequence 66의 surface tab-xrezdv,
+  Tauri는 sequence 37의 tab-okntn7에서 undeclared composition error를 기록했다.
+  양 run audit은 이 application error로 실패했다. F212.10-core-3-13은 일치하는
+  placement-order race를 고치지만 유일한 trigger라는 증거는 없다. Application
+  acceptance를 주장하지 않는다.
 
 - F212.10-core-3-4: 두 memory-saver 설정에서 저장된 비활성 Browser view를 확인하는 focused two-host window check를 추가한다. Enabled에서는 unloaded/no native surface, disabled에서는 loaded/ready/invisible native placement를 확인하며 active terminal은 두 경우 모두 ready 상태로 보이고 배치된다. Runtime acceptance는 대기 중이며 first-frame pixel은 주장하지 않는다.
 
