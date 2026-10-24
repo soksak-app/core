@@ -6,11 +6,23 @@
 
 - F239-47-2: Add `test-activation-backspace` as a focused Korean IME
   comparison between an AppKit text view and an image region in one window,
-  plus an e2e terminal case for both hosts. The native case records callback
-  batches and compares document/selection with committed text and preedit; the
-  e2e case records terminal states and each presented frame. Neither case is
-  run because it activates the application and changes the selected source.
-  No production correction is established.
+  plus an e2e terminal case for both hosts. The e2e case sends the same keys to
+  the same-window AppKit reference and terminal, stores each reference and
+  terminal state and callback batch in the disposable configuration. It
+  asserts the expected AppKit document after each key, waits for terminal
+  compose/cursor/screen notifications without requiring changed preedit text,
+  and compares the PTY command line plus preedit with the reference document,
+  retaining native-insert and terminal-input callback records. A focused
+  owning test validates the raw `{frame, rows}` DTO, trailing spaces, width-two
+  cells, compose/cursor marked and selected ranges, and frame/state coherence
+  (5/5). One continuous capture spans both
+  sequences; callback sequences, decoded frames and gaps are checked, and the
+  complete capture is copied into the disposable trace directory before
+  cleanup. The
+  native case records callback batches and compares document/selection with
+  committed text and preedit. Neither case is run because it activates the
+  application and changes the selected source. No production correction is
+  established.
 
 - F239-47-5: Replace the Files identifiers in core Workbench tree and
   section-address fixtures with synthetic identifiers. The fixtures still

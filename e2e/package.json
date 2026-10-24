@@ -10,7 +10,7 @@
     "verify:person": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
     "verify:real": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
     "repeat": "soksak-window-repeat --setup ./setup.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test test/*.test.mjs activation/terminal-ime-document.test.mjs",
     "verify:terminal-sidebar-current": "node --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
     "verify:shutdown": "node normal-shutdown.mjs",
     "verify:terminal-focus-current": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs"

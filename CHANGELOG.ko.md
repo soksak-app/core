@@ -5,11 +5,21 @@
 ## 미배포
 
 - F239-47-2: `test-activation-backspace`는 같은 창의 AppKit text view와
-  image region을 비교하고 양쪽 host의 e2e terminal case를 추가한다. Native
+  image region을 비교하고 양쪽 host의 e2e terminal case를 추가한다. E2E는
+  같은 열 개 입력을 같은 창의 AppKit reference와 terminal에 보내고, 각
+  reference 및 terminal state와 callback batch를 disposable configuration에
+  저장한다. 매 key 뒤 예상 AppKit document를 확인하고, preedit text 변경을
+  요구하지 않은 채 terminal compose/cursor/screen notification을 기다리며,
+  PTY command line과 preedit을 reference document와 비교하고 native-insert 및
+  terminal-input callback 기록을 보존한다. 하나의
+  owning test는 raw `{frame, rows}` DTO, trailing space, width-2 cell과
+  compose/cursor marked·selected range와 frame/state coherence를 검증한다(5/5).
+  하나의 연속 capture가 두 sequence를
+  감싸고 callback sequence, decoded frame과 gap을 검사한다. 전체 capture는
+  cleanup 전에 disposable trace directory로 복사한다. Native
   검사는 callback batch를 기록하고 document/selection과 committed text·preedit을
-  비교하며, e2e 검사는 terminal state와 각 presented frame을 기록한다. 두
-  검사는 애플리케이션을 활성화하고 input source를 바꾸므로 실행하지 않았다.
-  Production 수정은 확인되지 않았다.
+  비교한다. 두 검사는 애플리케이션을 활성화하고 input source를 바꾸므로
+  실행하지 않았다. Production 수정은 확인되지 않았다.
 
 - F239-47-5: core Workbench tree 및 section-address fixture의 Files 식별자를
   synthetic identifier로 바꾼다. Fixture는 root key, 여러 tree의 redraw,
