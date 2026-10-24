@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
+import { getClosedProjectSnapshot } from "./project-close-snapshot.mjs";
 import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
 import { readEvents, currentEventOffsets, traceRows } from "@soksak/window-check/event-log.mjs";
 import { openStages, systemState } from "./open-report.mjs";
@@ -479,24 +480,22 @@ for (const app of Object.values(APPS)) {
       `the window still reports the closed project ${await project()}`);
     await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section === undefined),
       "the library still draws Files sidebar sections after project close");
-    const noProjectTree = (snapshot) => snapshot.version > treeSectionBefore.acceptedSeq
-      && snapshot.value?.elements?.length === 1
-      && snapshot.value.elements[0].kind === "status-line"
-      && snapshot.value.elements[0].key === "project"
-      && snapshot.value.elements[0].text === "프로젝트 없음";
-    const treeAfter = await s.until("files.tree", noProjectTree,
-      "files.tree did not publish a newer no-project snapshot after close");
+    const noProjectTree = (value) => value?.elements?.length === 1
+      && value.elements[0].kind === "status-line"
+      && value.elements[0].key === "project"
+      && value.elements[0].text === "프로젝트 없음";
+    const treeAfter = await getClosedProjectSnapshot(s, "files.tree", treeSectionBefore.acceptedSeq,
+      noProjectTree, "files.tree did not publish its no-project snapshot after close");
     assert.deepEqual(treeAfter.value?.elements, [
       { kind: "status-line", key: "project", text: "프로젝트 없음" },
     ], "files.tree retained project rows after close");
-    const noProjectBookmarks = (snapshot) => snapshot.version > bookmarksSectionBefore.acceptedSeq
-      && snapshot.value?.elements?.length === 1
-      && snapshot.value.elements[0].kind === "list"
-      && snapshot.value.elements[0].key === "bookmarks"
-      && snapshot.value.elements[0].empty === "프로젝트 없음"
-      && snapshot.value.elements[0].items?.length === 0;
-    const bookmarksAfter = await s.until("files.bookmarks", noProjectBookmarks,
-      "files.bookmarks did not publish a newer no-project snapshot after close");
+    const noProjectBookmarks = (value) => value?.elements?.length === 1
+      && value.elements[0].kind === "list"
+      && value.elements[0].key === "bookmarks"
+      && value.elements[0].empty === "프로젝트 없음"
+      && value.elements[0].items?.length === 0;
+    const bookmarksAfter = await getClosedProjectSnapshot(s, "files.bookmarks", bookmarksSectionBefore.acceptedSeq,
+      noProjectBookmarks, "files.bookmarks did not publish its no-project snapshot after close");
     assert.deepEqual(bookmarksAfter.value?.elements, [
       { kind: "list", key: "bookmarks", empty: "프로젝트 없음", items: [] },
     ], "files.bookmarks retained project rows after close");

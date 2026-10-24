@@ -27,6 +27,13 @@
   The pre-correction two-host attempt is Red evidence; no post-correction window
   run is recorded.
 
+- F239-52: Use `status.get` for plugin-host-only Files snapshots in the
+  project-close check. The retained runtime attempt failed both cases with
+  `-32602 plugin host files does not serve status.watch`. The focused consumer
+  test verifies the declared pull method; this establishes API compliance only,
+  not publication ordering. F239-52-1 tracks an event-driven accepted-snapshot
+  watermark and delayed-publication verification.
+
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
   test confirms that an object or null presentation caret does not change the

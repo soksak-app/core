@@ -24,6 +24,13 @@
 - F239-51-1: tree lookup 수정의 runtime acceptance를 별도로 추적한다. 수정 전
   두 host attempt는 Red 증거이며 수정 후 window run 기록은 없다.
 
+- F239-52: project-close check에서 plugin-host 전용 Files snapshot에
+  `status.get`을 사용한다. 보존된 runtime attempt는 두 case 모두
+  `-32602 plugin host files does not serve status.watch`로 실패했다. Focused
+  consumer test는 선언된 pull method를 검증한다. 이는 API 준수만 확인하며
+  publication 순서는 확인하지 않는다. F239-52-1에서 event-driven
+  accepted-snapshot watermark와 지연 publication 검증을 추적한다.
+
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는
   object 또는 null presentation caret이 hash를 바꾸지 않고 raw engine cursor
