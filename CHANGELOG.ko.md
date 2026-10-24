@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-48-3-6: Go diagnostics input-reference parser test를 Rust owner test
+  옆에 둔다. 변경 전 host audit은 13개, 변경 후에는 12개 finding을 보고한다.
+  집중 Go test 1/1과 `make docs-check`가 통과했다. 격리 worktree에 `acorn`이
+  없어 main parity 검증은 대기 중이다.
+- F239-48-3-6: Go diagnostics input-reference parser test를 계약 owner인
+  Rust test module과 맞춰 배치한다. 변경 전 host audit은 13개, 변경 후에는
+  12개 finding을 보고한다. 집중 Go test 1/1과 `make docs-check`가 통과했다.
+  격리 worktree에 `acorn` dependency가 없어 main parity 검증은 대기 중이다.
 - F239-47-35: 완료된 cursor-baseline predicate를 exported 구현과 두 소유
   frame-identity test에 연결한다. Inventory audit이 누락된 feature link를
   거부했으며 exemption 없이 통과한다.

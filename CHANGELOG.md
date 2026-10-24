@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-48-3-6: Place the Go diagnostics input-reference parser test beside
+  its Rust owner test. The unchanged host audit drops from 13 to 12 findings.
+  The focused Go test passes 1/1 and `make docs-check` passes. Main parity
+  validation remains pending; this isolated worktree lacks `acorn`.
+- F239-48-3-6: Place the Go diagnostics input-reference parser test beside
+  its contract owner, matching the Rust test module. The unchanged host audit
+  drops from 13 to 12 findings. The focused Go test passes 1/1 and
+  `make docs-check` passes. Main parity validation remains pending because the
+  isolated worktree lacks the `acorn` dependency.
 - F239-47-35: Link the completed cursor-baseline predicate to its exported
   implementation and the two owning frame-identity tests. The inventory audit
   rejected the missing feature link and now passes without an exemption.
