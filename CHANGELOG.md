@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-35-4: Plugin-host `runtime.native.on` now accepts exactly `exposure-request` and `declared-ui.expanded`; other event names remain refused. Red: the unchanged public plugin-host-call test rejected `declared-ui.expanded` with `native event declared-ui.expanded is not served to a plugin host`. Green: the same owning test passes 23/23 and verifies both subscriptions plus refusal of `document-state`; `make exposure-check` passes. `make docs-check` passes.
+
 - F239-35-2: Plugin-host status.get now removes the registered plugin owner prefix before sending declared-ui.snapshot.request. The registry uses the qualified name while the plugin snapshot store uses the local key. Red: the unchanged createRegistry.handle test passed probe.lines to the fake host instead of lines. Green: the same test passes and asserts one local-key pull with no retry; exposure.test.mjs passes 35/35, exposure-host-round-trip.test.mjs passes 1/1, and make exposure-check passes. make docs-check passes 112 files, 394 error records and 1729 record checks. Window runtime acceptance remains under F239-35.
 
 - F212.12-2-2-4-8-2-3: The macOS image region now decodes the IOSurface

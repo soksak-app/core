@@ -385,14 +385,20 @@ test("the registration notice of a view call, runtime.native.call registered, re
 });
 
 // contract: plugin-host.channel.call-served-set
-test("runtime.native.on subscribes the host to exposure-request, and another native event is refused", async () => {
+test("runtime.native.on subscribes the host to declared UI expansion and exposure requests, and refuses other events", { timeout: 10000 }, async () => {
   const pluginHost = listen();
   const count = calls.length;
   try {
     emit("plugin-host-call", { plugin: "probe", id: 30, command: "runtime.native.on", params: { name: "exposure-request" } });
     await tick();
     assert.deepEqual(calls.slice(count), [{ name: "pluginHostReply", arg: { plugin: "probe", id: 30, result: null } }]);
-    emit("plugin-host-call", { plugin: "probe", id: 31, command: "runtime.native.on", params: { name: "document-state" } });
+    emit("plugin-host-call", { plugin: "probe", id: 31, command: "runtime.native.on", params: { name: "declared-ui.expanded" } });
+    await tick();
+    assert.deepEqual(calls.slice(count), [
+      { name: "pluginHostReply", arg: { plugin: "probe", id: 30, result: null } },
+      { name: "pluginHostReply", arg: { plugin: "probe", id: 31, result: null } },
+    ]);
+    emit("plugin-host-call", { plugin: "probe", id: 32, command: "runtime.native.on", params: { name: "document-state" } });
     await tick();
     assert.equal(calls.at(-1).arg.error.code, -32000);
     assert.equal(calls.at(-1).arg.error.message, "native event document-state is not served to a plugin host");

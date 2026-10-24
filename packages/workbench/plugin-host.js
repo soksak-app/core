@@ -348,8 +348,8 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
         return { result: null };
       }
       if (event.command === "runtime.native.on") {
-        // The only native event of a host page is exposure-request; every other event name is refused (docs/spec/plugin-host.md#channel).
-        if (params.name !== "exposure-request") throw new TypeError(`native event ${params.name} is not served to a plugin host`);
+        // Host pages subscribe only to exposure relay and declared UI expansion events (docs/spec/plugin-host.md#channel).
+        if (params.name !== "exposure-request" && params.name !== "declared-ui.expanded") throw new TypeError(`native event ${params.name} is not served to a plugin host`);
         exposureSubscribers.add(plugin);
         return { result: null };
       }

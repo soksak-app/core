@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-35-4: Plugin-host `runtime.native.on`은 `exposure-request`와 `declared-ui.expanded`만 허용하며 다른 event 이름은 계속 거부한다. Red: 변경 전 public plugin-host-call test는 `native event declared-ui.expanded is not served to a plugin host` 오류로 거부했다. Green: 같은 owning test가 두 구독과 `document-state` 거부를 검증하며 23/23 통과하고 `make exposure-check`도 통과한다. `make docs-check`가 통과한다.
+
 - F239-35-2: Plugin-host status.get은 declared-ui.snapshot.request를 보내기 전에 등록 plugin owner prefix를 제거한다. Registry는 qualified 이름을 사용하지만 plugin snapshot store는 local key를 사용한다. Red: 변경 전 createRegistry.handle test는 fake host에 lines 대신 probe.lines를 전달했다. Green: 같은 test가 local key 요청 한 번과 재시도 부재를 확인하며 통과하고, exposure.test.mjs 35/35, exposure-host-round-trip.test.mjs 1/1 및 make exposure-check가 통과한다. make docs-check는 112 files, 394 error records, 1729 record checks를 통과한다. Window runtime acceptance는 F239-35에 남는다.
 
 - F212.12-2-2-4-8-2-3: macOS image region은 불변 snapshot을 만들 때 IOSurface
