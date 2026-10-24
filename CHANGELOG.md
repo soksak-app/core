@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-8: Reject unknown native IME test arguments before entering AppKit or
+  reading an input source. Move read-only source inspection to a separate probe
+  executable, and make the focused build alias depend on absolute executable
+  targets. The parser Red replay failed both invalid-argument callback checks; the
+  owning parser and fake repeat/build-target checks pass. The absolute build alias
+  compiles both executables without running them. The activation repeat remains
+  unrun after this repair.
+
 - F239-47-8: Make the focused native repeat establish and verify an ABC input-source
   baseline before Korean 2-Set input. The source and active input contexts must adopt
   Korean before the gesture callback runs. On adoption failure, cleanup selects ABC

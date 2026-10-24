@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-8: Native IME test가 AppKit에 진입하거나 input source를 읽기 전에
+  알 수 없는 인자를 거부한다. Read-only source 조회를 별도 probe 실행 파일로
+  분리하고 focused build alias가 절대 실행 파일 target을 dependency로 사용한다.
+  Parser Red replay는 invalid-argument callback 검증 두 개를 실패했다. Owning parser와
+  fake repeat/build-target 검사는 통과한다. 절대 build alias는 두 실행 파일을 실행하지
+  않고 compile한다. 이 수정 뒤 activation repeat은 실행하지 않았다.
+
 - F239-47-8: Focused native repeat이 Korean 2-Set 입력 전에 ABC input-source
   baseline을 설정하고 확인하도록 한다. Gesture 전 Korean source와 활성 input
   context의 adoption을 확인한다. Adoption이 실패하면 cleanup은 test context를 닫기

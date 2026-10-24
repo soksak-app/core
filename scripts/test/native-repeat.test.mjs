@@ -4,7 +4,7 @@
 // tests would.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -54,16 +54,31 @@ test('repeat-activation-backspace forwards its focused variant and stops at its 
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-activation-repeat-'));
   t.after(() => rmSync(build, { recursive: true }));
   const executable = fake(build, 'image_region_ime_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "arg:$1 run:$n"; [ "$1" = "--backspace-trace-abc-baseline" ] && [ "$n" -lt 2 ]');
-  const result = spawnSync('make', ['-C', native, 'repeat-activation-backspace', 'COUNT=3', `BUILD=${build}`, '-o', executable], {
+  const probe = fake(build, 'ime_source_probe', 'echo \'{"source":"com.apple.inputmethod.Korean.2SetKorean","frontmostPID":100,"processPID":200}\'');
+  const result = spawnSync('make', ['-C', native, 'repeat-activation-backspace', 'COUNT=3', `BUILD=${build}`, '-o', executable, '-o', probe], {
     encoding: 'utf8', timeout: 60000,
   });
   assert.match(result.stdout, /^RUN  image_region_ime_test --backspace-trace-abc-baseline \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^PASS image_region_ime_test --backspace-trace-abc-baseline \d+\.\d{3}s$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^FAIL image_region_ime_test --backspace-trace-abc-baseline \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^  arg:--backspace-trace-abc-baseline run:2$/m, 'the failed run output is missing');
+  assert.match(result.stdout, /post-exit source\/app .*matches pre-run/, 'the independent source probe was not compared');
   assert.equal(result.stdout.split('\n').filter((line) => line.startsWith('RUN  image_region_ime_test')).length, 2, result.stdout);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stderr, /FAIL: image_region_ime_test --backspace-trace-abc-baseline run 2 of 3; /, result.stdout + result.stderr);
+});
+
+test('the activation build alias resolves absolute targets without running either executable', (t) => {
+  const build = mkdtempSync(join(tmpdir(), 'soksak-native-activation-build-'));
+  t.after(() => rmSync(build, { recursive: true }));
+  const activation = fake(build, 'image_region_ime_test', 'touch "$0.executed"');
+  const probe = fake(build, 'ime_source_probe', 'touch "$0.executed"');
+  const result = spawnSync('make', ['-C', native, 'build-ime-activation-target', `BUILD=${build}`, '-o', activation, '-o', probe], {
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(existsSync(`${activation}.executed`), false, 'the activation executable was run by its build target');
+  assert.equal(existsSync(`${probe}.executed`), false, 'the read-only probe executable was run by the build target');
 });
 
 test('make repeat-suite shows the runner output of every run of the suite, and passes when each test passes', (t) => {

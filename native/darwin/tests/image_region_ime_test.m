@@ -8,10 +8,12 @@
 // and then checks that the image region commits exactly the order reported by the user (Hangul after ddd).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#include <unistd.h>
 #import "event_ring.h"
 #import "image_region.h"
 #import "input_inject.h"
 #import "input_source.h"
+#import "support/ime_cli.h"
 #import "support/ime_reference_state.h"
 #import "support/ime_source_restore.h"
 #import "support/ime_wire_document.h"
@@ -21,6 +23,7 @@
 static NSString *const ABC = @"com.apple.keylayout.ABC";
 static NSString *const KOREAN_2SET = @"com.apple.inputmethod.Korean.2SetKorean";
 static NSDate *traceDeadline = nil;
+static BOOL focusedSourceTrace = NO;
 
 static int failures = 0;
 
@@ -59,16 +62,63 @@ static NSString *currentSourceID(void) {
     return result;
 }
 
+static NSDictionary *sourceProbeSnapshot(void) {
+    NSRunningApplication *frontmost = NSWorkspace.sharedWorkspace.frontmostApplication;
+    return @{ @"source": currentSourceID() ?: [NSNull null],
+        @"frontmostPID": @(frontmost.processIdentifier), @"processPID": @(getpid()) };
+}
+
+static NSDictionary *independentSourceProbe(NSString *executable, NSString **failure) {
+    NSTask *task = [[[NSTask alloc] init] autorelease];
+    NSPipe *pipe = [NSPipe pipe];
+    task.executableURL = [NSURL fileURLWithPath:executable];
+    task.arguments = @[];
+    task.standardOutput = pipe;
+    NSError *launchError = nil;
+    if (![task launchAndReturnError:&launchError]) {
+        if (failure) *failure = [NSString stringWithFormat:@"could not launch independent source probe: %@", launchError.localizedDescription];
+        return nil;
+    }
+    NSData *output = [pipe.fileHandleForReading readDataToEndOfFile];
+    [task waitUntilExit];
+    if (task.terminationStatus != 0) {
+        if (failure) *failure = [NSString stringWithFormat:@"independent source probe exited %d: %@",
+            task.terminationStatus, [[[NSString alloc] initWithData:output encoding:NSUTF8StringEncoding] autorelease] ?: @"no output"];
+        return nil;
+    }
+    NSError *parseError = nil;
+    id value = [NSJSONSerialization JSONObjectWithData:output options:0 error:&parseError];
+    if (![value isKindOfClass:NSDictionary.class]) {
+        if (failure) *failure = [NSString stringWithFormat:@"independent source probe returned invalid JSON: %@",
+            parseError.localizedDescription ?: @"not an object"];
+        return nil;
+    }
+    return value;
+}
+
 static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
-    if (!sp_input_source_select(source.UTF8String)) return NO;
+    NSString *before = currentSourceID();
+    BOOL selected = sp_input_source_select(source.UTF8String);
+    if (focusedSourceTrace) {
+        fprintf(stdout, "SOURCE_EVENT: select requested=%s before=%s status=%s\n", source.UTF8String,
+            before.UTF8String ?: "unknown", selected ? "noErr" : "error");
+    }
+    if (!selected) return NO;
     __block BOOL answered = NO;
     __block NSString *reason = nil;
     sp_input_source_await(source.UTF8String, ^(const char *error) {
         answered = YES;
         reason = error ? [NSString stringWithUTF8String:error] : nil;
     });
-    if (!pumpUntil(^BOOL { return answered; }, deadline) || reason) return NO;
-    return [currentSourceID() isEqualToString:source];
+    BOOL observed = pumpUntil(^BOOL { return answered; }, deadline) && reason == nil;
+    NSString *after = currentSourceID();
+    BOOL matches = [after isEqualToString:source];
+    if (focusedSourceTrace) {
+        fprintf(stdout, "SOURCE_EVENT: adoption requested=%s notification=%s sourceAfter=%s result=%s\n",
+            source.UTF8String, observed ? "received" : (reason.UTF8String ?: "timeout"), after.UTF8String ?: "unknown",
+            observed && matches ? "matched" : "mismatch");
+    }
+    return observed && matches;
 }
 
 static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRunningApplication *outerApplication,
@@ -483,9 +533,10 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
 // tests/support/no_activation.m: this check activates the application in make test-activation.
 void sp_test_declare_activation(void);
 
-int main(int argc, const char *argv[]) { @autoreleasepool {
-    BOOL abcBaselineTrace = argc == 2 && strcmp(argv[1], "--backspace-trace-abc-baseline") == 0;
+static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
+    BOOL abcBaselineTrace = mode == SP_IME_CLI_ABC_BASELINE;
     BOOL focusedTrace = abcBaselineTrace;
+    focusedSourceTrace = focusedTrace;
     if (focusedTrace) traceDeadline = [NSDate dateWithTimeIntervalSinceNow:55];
     NSString *previousSource = currentSourceID();
     NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
@@ -507,6 +558,18 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         printf("PRECHECK: inputSource=%s frontmostPid=%d frontmostBundle=%s abcBaseline=%d window=single-key-window budgetSeconds=55 cleanupSeconds=5\n",
             previousSource.UTF8String, previousApp.processIdentifier,
             previousApp.bundleIdentifier.UTF8String ?: "unknown", abcBaselineTrace);
+        NSString *expectedSource = [NSProcessInfo.processInfo.environment objectForKey:@"SOKSAK_IME_EXPECTED_OUTER_SOURCE"];
+        NSString *expectedPID = [NSProcessInfo.processInfo.environment objectForKey:@"SOKSAK_IME_EXPECTED_OUTER_FRONTMOST_PID"];
+        if (expectedSource.length > 0 && ![previousSource isEqualToString:expectedSource]) {
+            check(NO, [NSString stringWithFormat:@"outer source before activation is %@, expected pre-run probe %@",
+                previousSource, expectedSource]);
+            return 1;
+        }
+        if (expectedPID.length > 0 && previousApp.processIdentifier != expectedPID.intValue) {
+            check(NO, [NSString stringWithFormat:@"outer frontmost PID before activation is %d, expected pre-run probe %@",
+                previousApp.processIdentifier, expectedPID]);
+            return 1;
+        }
     }
     if (abcBaselineTrace) {
         NSDate *setupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
@@ -609,8 +672,33 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         traceDeadline = nil;
         NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
         if (abcBaselineTrace) {
-            reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
-                cleanupDeadline, window, region, mainSurface), @"baseline and outer state restoration");
+            NSArray<NSString *> *restoreErrors = baselineAndOuterRestoreErrors(ABC, previousSource, previousApp,
+                cleanupDeadline, window, region, mainSurface);
+            reportRestoreErrors(restoreErrors, @"baseline and outer state restoration");
+            NSDictionary *inProcess = sourceProbeSnapshot();
+            NSData *inProcessJSON = [NSJSONSerialization dataWithJSONObject:inProcess options:NSJSONWritingFragmentsAllowed error:NULL];
+            printf("CHECKPOINT before-process-exit in-process=%s cleanupErrors=%lu\n",
+                [[[NSString alloc] initWithData:inProcessJSON encoding:NSUTF8StringEncoding] autorelease].UTF8String,
+                (unsigned long)restoreErrors.count);
+            NSString *probeFailure = nil;
+            NSString *probeExecutable = NSProcessInfo.processInfo.environment[@"SOKSAK_IME_SOURCE_PROBE"];
+            NSDictionary *independent = probeExecutable.length > 0
+                ? independentSourceProbe(probeExecutable, &probeFailure) : nil;
+            if (probeExecutable.length == 0) probeFailure = @"SOKSAK_IME_SOURCE_PROBE is missing";
+            if (independent) {
+                NSData *independentJSON = [NSJSONSerialization dataWithJSONObject:independent options:NSJSONWritingFragmentsAllowed error:NULL];
+                printf("CHECKPOINT before-process-exit independent-process=%s\n",
+                    [[[NSString alloc] initWithData:independentJSON encoding:NSUTF8StringEncoding] autorelease].UTF8String);
+                check([independent[@"source"] isEqual:previousSource],
+                    [NSString stringWithFormat:@"independent process before exit reads outer source %@ (got %@)",
+                        previousSource, independent[@"source"]]);
+                check([independent[@"frontmostPID"] isEqual:@(previousApp.processIdentifier)],
+                    [NSString stringWithFormat:@"independent process before exit reads outer frontmost PID %d (got %@)",
+                        previousApp.processIdentifier, independent[@"frontmostPID"]]);
+            } else {
+                check(NO, [NSString stringWithFormat:@"independent pre-exit source probe failed: %@", probeFailure ?: @"unknown error"]);
+            }
+            fflush(stdout);
         } else {
             check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
             check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
@@ -822,3 +910,24 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     if (previousApp) [previousApp activateWithOptions:0];
     return failures ? 1 : 0;
 }}
+
+typedef struct {
+    int status;
+} sp_ime_cli_context;
+
+static void runIMECommand(sp_ime_cli_mode mode, void *opaque) {
+    sp_ime_cli_context *context = opaque;
+    context->status = runIME(mode);
+}
+
+int main(int argc, const char *argv[]) {
+    sp_ime_cli_context context = { .status = 2 };
+    const char *failure = NULL;
+    if (!sp_ime_cli_dispatch(argc, argv, runIMECommand, &context, &failure)) {
+        if (argc > 2) fprintf(stderr, "FAIL: %s: %s\n", failure ?: "invalid command", argv[2]);
+        else if (argc > 1 && argv[1]) fprintf(stderr, "FAIL: %s: %s\n", failure ?: "invalid command", argv[1]);
+        else fprintf(stderr, "FAIL: %s\n", failure ?: "invalid command");
+        return 2;
+    }
+    return context.status;
+}

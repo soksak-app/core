@@ -88,7 +88,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -187,6 +187,7 @@ $(BUILD)/image_capture_match_test: tests/image_capture_match_test.m $(BUILD)/lib
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
 NATIVE_TESTS = observe_test \
+  ime_cli_test \
   image_region_hangul_test \
   activity_observers_test \
   activity_observers_allocation_test \
@@ -300,15 +301,40 @@ test-view-focus-restore: $(BUILD)/view_focus_test
 # Focused Korean IME comparison. This records the outer input source and frontmost application, establishes ABC,
 # activates the test application, selects Korean 2-set, and sends eight k keys, Backspace, and Space to an AppKit reference and an image region.
 # Run only with approval for an activation-tier input check.
-test-activation-backspace: $(BUILD)/image_region_ime_test
-	@$(BUILD)/image_region_ime_test --backspace-trace-abc-baseline
+test-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
+	@SOKSAK_IME_SOURCE_PROBE="$(BUILD)/ime_source_probe" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace-abc-baseline
 
-# Repeat only the focused activation variant. The generic repeat target cannot pass arguments to its executable.
-repeat-activation-backspace: $(BUILD)/image_region_ime_test
+# Build the activation executable without running it; the absolute prerequisite is the only supported build target.
+build-ime-activation-target: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
+
+test-ime-cli: $(BUILD)/ime_cli_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) ime_cli_test
+
+$(BUILD)/ime_cli_test: tests/ime_cli_test.m tests/support/ime_cli.m tests/support/ime_cli.h Makefile | $(BUILD)
+	@clang -fblocks -Wall -Werror -O2 -mmacosx-version-min=14.4 -I$(CURDIR)/tests $< tests/support/ime_cli.m -o $@
+
+# Repeat the focused activation variant and preserve each child output plus an independent source read after process exit.
+repeat-activation-backspace: $(BUILD)/image_region_ime_test $(BUILD)/ime_source_probe
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-activation-backspace requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@i=1; while [ $$i -le $(COUNT) ]; do \
+	@set -eu; \
+	  evidence_root=$$(mktemp -d "$${TMPDIR:-/tmp}/soksak-F239-47-8-activation-repeat.XXXXXX"); \
+	  echo "EVIDENCE: $$evidence_root"; \
+	  i=1; while [ $$i -le $(COUNT) ]; do \
+	  run_dir="$$evidence_root/run-$$i"; mkdir -p "$$run_dir"; \
+	  probe_folder="$$run_dir/source-probe-before"; mkdir -p "$$probe_folder"; \
+	  SOKSAK_NATIVE_TEST_RUN_FOLDER="$$probe_folder" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) ime_source_probe > "$$run_dir/source-probe-before-runner.log" 2>&1; \
+	  node -e 'const fs=require("node:fs"); const path=require("node:path"); const root=process.argv[1]; const manifest=JSON.parse(fs.readFileSync(path.join(root,"manifest.json"),"utf8")); if(manifest.tests.length!==1||manifest.tests[0].status!=="pass") throw Error("source probe test did not pass"); const snapshot=JSON.parse(fs.readFileSync(path.join(root,manifest.tests[0].output),"utf8")); if(typeof snapshot.source!=="string"||!Number.isSafeInteger(snapshot.frontmostPID)||snapshot.frontmostPID<=0) throw Error("source probe returned invalid state"); process.stdout.write(JSON.stringify(snapshot)+"\n")' "$$probe_folder" > "$$run_dir/pre-run.json"; \
+	  expected_source=$$(node -e 'const x=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.stdout.write(x.source)' "$$run_dir/pre-run.json"); \
+	  expected_pid=$$(node -e 'const x=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")); process.stdout.write(String(x.frontmostPID))' "$$run_dir/pre-run.json"); \
+	  if [ -z "$$expected_source" ] || [ "$$expected_pid" = "0" ]; then echo "FAIL: run $$i source or frontmost process is unavailable; evidence $$run_dir" >&2; exit 1; fi; \
 	  echo "START: image_region_ime_test --backspace-trace-abc-baseline run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace-abc-baseline || { echo "FAIL: image_region_ime_test --backspace-trace-abc-baseline run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
+	  test_status=0; \
+	  SOKSAK_NATIVE_TEST_RUN_FOLDER="$$run_dir/native" SOKSAK_IME_SOURCE_PROBE="$(BUILD)/ime_source_probe" SOKSAK_IME_EXPECTED_OUTER_SOURCE="$$expected_source" SOKSAK_IME_EXPECTED_OUTER_FRONTMOST_PID="$$expected_pid" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace-abc-baseline || test_status=$$?; \
+	  post_probe_folder="$$run_dir/source-probe-after"; mkdir -p "$$post_probe_folder"; \
+	  probe_status=0; SOKSAK_NATIVE_TEST_RUN_FOLDER="$$post_probe_folder" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) ime_source_probe > "$$run_dir/source-probe-after-runner.log" 2>&1 || probe_status=$$?; \
+	  if [ $$probe_status -eq 0 ]; then node -e 'const fs=require("node:fs"); const path=require("node:path"); const root=process.argv[1]; const manifest=JSON.parse(fs.readFileSync(path.join(root,"manifest.json"),"utf8")); if(manifest.tests.length!==1||manifest.tests[0].status!=="pass") throw Error("source probe test did not pass"); const snapshot=JSON.parse(fs.readFileSync(path.join(root,manifest.tests[0].output),"utf8")); if(typeof snapshot.source!=="string"||!Number.isSafeInteger(snapshot.frontmostPID)||snapshot.frontmostPID<=0) throw Error("source probe returned invalid state"); process.stdout.write(JSON.stringify(snapshot)+"\n")' "$$post_probe_folder" > "$$run_dir/post-exit.json" || probe_status=$$?; else cat "$$run_dir/source-probe-after-runner.log"; fi; \
+	  comparison_status=0; if [ $$probe_status -eq 0 ]; then node -e 'const fs=require("node:fs"); const before=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const after=JSON.parse(fs.readFileSync(process.argv[2],"utf8")); const same=before.source===after.source && before.frontmostPID===after.frontmostPID; console.log((same?"PASS":"FAIL")+": post-exit source/app "+JSON.stringify(after)+" "+(same?"matches":"does not match")+" pre-run "+JSON.stringify(before)); process.exitCode=same?0:1' "$$run_dir/pre-run.json" "$$run_dir/post-exit.json" || comparison_status=$$?; else comparison_status=1; fi; \
+	  if [ $$test_status -ne 0 ] || [ $$probe_status -ne 0 ] || [ $$comparison_status -ne 0 ]; then echo "FAIL: image_region_ime_test --backspace-trace-abc-baseline run $$i of $(COUNT); test=$$test_status probe=$$probe_status baseline=$$comparison_status evidence $$run_dir; load $$(uptime)" >&2; exit 1; fi; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: image_region_ime_test --backspace-trace-abc-baseline passed $(COUNT) consecutive runs"
 
@@ -318,8 +344,11 @@ test-activation-backspace-reference: $(BUILD)/ime_reference_state_test
 test-ime-source-restoration: $(BUILD)/ime_source_restore_test
 	@$(BUILD)/ime_source_restore_test
 
-$(BUILD)/image_region_ime_test: tests/image_region_ime_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
-	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+$(BUILD)/image_region_ime_test: tests/image_region_ime_test.m tests/support/ime_cli.m tests/support/ime_cli.h tests/support/ime_source_restore.m tests/support/ime_source_restore.h Makefile $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
+	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_cli.m tests/support/ime_source_restore.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
+$(BUILD)/ime_source_probe: tests/ime_source_probe.m Makefile | $(BUILD)
+	@clang $(CFLAGS) $< $(FRAMEWORKS) -o $@
 
 $(BUILD)/ime_source_restore_test: tests/ime_source_restore_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
