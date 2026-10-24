@@ -84,7 +84,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation test-activation-backspace benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation test-activation-backspace test-activation-backspace-reference benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -238,6 +238,7 @@ NATIVE_TESTS = observe_test \
   document_typing_test \
   document_press_test \
   image_region_test \
+  ime_reference_state_test \
   input_source_test \
   clipboard_test \
   link_test \
@@ -291,6 +292,9 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 # Run only with approval for an activation-tier input check.
 test-activation-backspace: $(BUILD)/image_region_ime_test
 	@$(BUILD)/image_region_ime_test --backspace-trace
+
+test-activation-backspace-reference: $(BUILD)/ime_reference_state_test
+	@$(BUILD)/ime_reference_state_test
 
 repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac

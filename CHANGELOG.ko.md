@@ -41,6 +41,19 @@
   seam을 확인하고 serializer 시험은 payload 형태만 검증한다. F37/F47 runtime
   원인은 여전히 미확인이다.
 
+- F239-47-7: Focused 여덟 모음·Backspace·Space 비교에 고정 AppKit document 및
+  range checkpoint를 추가한다. Red: 변경 전 native test가 mutable
+  `view.string` snapshot을 저장해 열 개의 document assertion이 각 입력 시점
+  값 대신 마지막 값을 보았다. Green: snapshot 복사 후 reference checkpoint 열
+  개가 통과하고 비활성 reference helper는 15/15 통과한다. AppKit marked state는
+  native image-region preedit와 계약이 다르므로 독립 검증한다. Focused trace에서
+  AppKit은 Backspace 뒤 `ㅏ` 일곱 개, Space 뒤 `ㅏ` 일곱 개와 공백 하나를 가진다.
+  Image-region 비교 helper는 insert와 compose record만 결합하고 별도의 Backspace
+  key event를 적용하지 않아 여덟 개를 보고한다. 이는 native test model의 누락이며
+  terminal 출력이나 production defect의 근거가 아니다. F239-47-2는 닫지 않는다.
+  F239-47-9에서 native wire insert, Backspace, Space를 AppKit editing semantics로
+  적용하는 document model을 추적한다.
+
 - F212.10-editor-1: Editor window check은 key 입력 전에 선언된
   `editor.content` rectangle을 native click하고 해당 view가 native responder가
   될 때까지 기다린다. Main page reload 뒤에도 같은 절차를 적용한다. 보존된 두

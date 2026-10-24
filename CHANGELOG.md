@@ -43,6 +43,21 @@
   tests pass 4/4; Tauri ready-path ordering, project-message serializer, and project-change tests pass 3/3. The ordering test exercises the seam called by `Received::Ready`; the serializer test checks payload shape only.
   The F37/F47 runtime cause remains unconfirmed.
 
+- F239-47-7: Add fixed AppKit document and range checkpoints to the focused
+  eight-vowel, Backspace and Space comparison. Red: the unchanged native test
+  stored mutable `view.string` snapshots, so all ten document assertions saw
+  the final value instead of their event-time values. Green: copied snapshots
+  pass all ten reference checkpoints, and the non-activating reference helper
+  passes 15/15. AppKit marked state is validated independently from native
+  image-region preedit; those states have different contracts. The focused
+  trace has seven `ㅏ` in AppKit after Backspace and seven plus a space after
+  Space. The image-region comparison helper reports eight because it combines
+  insert and compose records but does not apply the separate Backspace key
+  event. This is a native test-model gap, not evidence of terminal output or
+  a production defect, and it does not close F239-47-2. F239-47-9 tracks a
+  native-wire document model that applies insert, Backspace and Space through
+  AppKit editing semantics.
+
 - F212.10-editor-1: The editor window check now clicks the declared
   `editor.content` rectangle and waits for that view to become the native
   responder before sending keys, including after a main-page reload. In the

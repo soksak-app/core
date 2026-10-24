@@ -12,6 +12,7 @@
 #import "image_region.h"
 #import "input_inject.h"
 #import "input_source.h"
+#import "support/ime_reference_state.h"
 #import "support/records.h"
 #import "webview_geometry.h"
 
@@ -255,7 +256,8 @@ static void selectSourceUntil(NSString *source, NSTextInputContext *context, NSD
 }
 
 static NSDictionary *textViewState(SPRecordingTextView *view) {
-    return @{@"document": view.string ?: @"", @"marked": @(view.hasMarkedText),
+    NSString *document = [[view.string copy] autorelease];
+    return @{@"document": document ?: @"", @"marked": @(view.hasMarkedText),
         @"markedRange": NSStringFromRange(view.markedRange), @"selectedRange": NSStringFromRange(view.selectedRange),
         @"callbacks": [[view.calls copy] autorelease]};
 }
@@ -397,12 +399,13 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
     for (NSUInteger index = 0; index < count; index++) {
         NSDictionary *reference = controlStates[index];
         NSDictionary *actual = regionStates[index];
-        BOOL hasPreedit = [actual[@"preedit"] length] > 0;
-        check([reference[@"document"] isEqual:actual[@"document"]]
-            && [reference[@"marked"] boolValue] == hasPreedit
-            && (!hasPreedit || ([reference[@"markedRange"] isEqual:actual[@"markedRange"]]
-                && [reference[@"selectedRange"] isEqual:actual[@"selectedRange"]])),
-            [NSString stringWithFormat:@"input state %lu agrees between AppKit and image region (reference %@; region %@)",
+        NSString *expectedDocument = sp_ime_reference_expected_document(index);
+        NSString *referenceMismatch = sp_ime_reference_state_mismatch(reference, expectedDocument,
+            NSMakeRange(expectedDocument.length, 0), NSMakeRange(expectedDocument.length, 0));
+        check(referenceMismatch == nil, [NSString stringWithFormat:@"AppKit reference checkpoint %lu matches its expected document and ranges%@",
+            (unsigned long)index + 1, referenceMismatch ? [@": " stringByAppendingString:referenceMismatch] : @""]);
+        check([reference[@"document"] isEqual:actual[@"document"]],
+            [NSString stringWithFormat:@"input document %lu agrees between AppKit and image region (reference %@; region %@)",
                 (unsigned long)index + 1, reference, actual]);
     }
     check(controlStates.count == 10 && regionStates.count == 10,
