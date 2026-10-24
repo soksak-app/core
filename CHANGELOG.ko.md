@@ -9,6 +9,15 @@
   Green: 여러 tree와 redraw 전후 root 및 path/role child 주소가 풀이되며
   owning 파일이 83/83 통과한다. Exposure와 docs 검사가 통과한다.
 
+- F267.4: `plugins_starter_test.go`를 소유 Wails host lane에 등록한다.
+  기존 test는 `PluginsStarter` binding으로 숫자 state를 보내고
+  `argument request.state must be a string` 경계 오류를 요구한다. Red:
+  `make parity-check`는 미등록 test를 보고했다. Green: 같은 audit는 미등록
+  test 0개, 미등록 implementation 0개, 검사한 link 415개를 보고한다.
+  F266 및 examples count 두 건(현재 100/679/930, 기록 100/673/922)은 남는다.
+  `make -C native/darwin all`로 native library를 준비한 뒤 focused Go runner는
+  1/1 통과한다. App, input, 전체 suite는 실행하지 않았다.
+
 - F267.6: F239-47-1을 native implementation 및 소유 test에 연결하고,
   기존 test와 함께 `image_capture_match.m`을 Darwin document and surface
   lane에 등록한다. Red: 변경 전 `make parity-check`는 F239-47-1 link 누락과

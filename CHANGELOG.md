@@ -9,6 +9,16 @@
   Green: roots and path/role child controls resolve across redraws and multiple
   trees; the owning file passes 83/83. Exposure and docs checks pass.
 
+- F267.4: Assign `plugins_starter_test.go` to its owning Wails host lane.
+  The existing test exercises the `PluginsStarter` binding with a numeric state and
+  requires the boundary error `argument request.state must be a string`.
+  Red: `make parity-check` reported the test as unclaimed. Green: the same
+  audit reports 0 uncovered tests and 0 uncovered implementations across 415
+  links; three unrelated issues remain (F266 and two examples counts, now
+  100/679/930 against the recorded 100/673/922). The focused Go runner could
+  not start before `make -C native/darwin all` prepared its native library.
+  It then passes 1/1. No app, input, or full suite was run.
+
 - F267.6: Link F239-47-1 to its native implementation and owning tests, and
   claim `image_capture_match.m` with its existing test in the Darwin document
   and surface lane. Red: the unchanged `make parity-check` reported the
