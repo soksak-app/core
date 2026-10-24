@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-47: Record the reported terminal IME visibility symptom and its
+  unresolved cause. The acceptance identifies an AppKit reference, native
+  input trace, terminal preedit, PTY state and full-gesture recording needed
+  to locate the failing boundary. No activation or product code changed.
+
 - F239-47-3: Report AppKit's marked range in composition events. The native
   event carries the full retained suffix and the exact text-relative UTF-16
   marked range; it reports `null` only when AppKit has no marked text. Invalid

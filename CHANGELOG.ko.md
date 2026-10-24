@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47: 보고된 terminal IME 표시 증상과 미확인 원인을 기록한다. 수용
+  기준은 실패 경계를 찾기 위해 AppKit 기준 입력, native input trace, terminal
+  preedit, PTY 상태 및 전체 입력 녹화를 요구한다. Activation이나 제품 코드는
+  변경하지 않았다.
+
 - F239-47-3: AppKit marked range를 composition event로 보고한다. Native event는
   보관 suffix 전체와 text 기준 실제 UTF-16 marked range를 담고, AppKit에
   marked text가 없을 때만 `null`을 보낸다. 잘못된 marked range는 input 오류를
