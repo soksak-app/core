@@ -13,7 +13,8 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
-import { capturesByInputStage, evaluateVisualStages, indexFrameStatus, planVisualStage, readRetainedSources }
+import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFrameStatus, persistThenRequireVisualProof,
+  planVisualStage, readRetainedSources }
   from "./ime-visual-capture.mjs";
 import {
   assertTerminalStageCoherent,
@@ -28,6 +29,10 @@ import {
 
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
+
+async function machAbsoluteBoundary(s) {
+  return hostClockBoundary(await s.request("log", { action: "clock" }));
+}
 
 function assertReferenceRanges(state, label) {
   assert.equal(typeof state.document, "string", `${label}: reference document is not text`);
@@ -592,13 +597,14 @@ for (const app of Object.values(APPS)) {
         const before = await s.get("terminal.compose", surface);
         await startTrace(`terminal-k-${index + 1}`);
         const eventOffset = observedStateEvents.length;
-        const startedMonotonicNs = process.hrtime.bigint().toString();
+        const startedBoundary = await machAbsoluteBoundary(s);
         const started = performance.now();
         await s.press("k");
-        const acknowledgedMonotonicNs = process.hrtime.bigint().toString();
+        const acknowledgedBoundary = await machAbsoluteBoundary(s);
         const acknowledged = performance.now();
         manifest.steps.push({ group: "terminal", index: index + 1, key: "k", started, acknowledged,
-          startedMonotonicNs, acknowledgedMonotonicNs });
+          clockDomain: startedBoundary.clockDomain, startedMachAbsoluteNs: startedBoundary.machAbsoluteNs,
+          acknowledgedMachAbsoluteNs: acknowledgedBoundary.machAbsoluteNs });
         persist("manifest.json", manifest);
         await waitForStateEvent(eventOffset, `k-${index + 1}`);
         const stateEvents = observedStateEvents.slice(eventOffset);
@@ -613,21 +619,23 @@ for (const app of Object.values(APPS)) {
           `input ${index + 1} k diverged: terminal committed-plus-preedit ${JSON.stringify(comparison.actual)} ` +
           `differs from AppKit document ${JSON.stringify(comparison.expected)}`);
         visualStages.push({ ...planVisualStage({ key: `k-${index + 1}`, expectedDocument: comparison.expected,
-          observation, prompt }), startedMonotonicNs });
+          observation, prompt }), clockDomain: startedBoundary.clockDomain,
+        startedMachAbsoluteNs: startedBoundary.machAbsoluteNs });
       }
 
       const beforeBackspace = await s.get("terminal.compose", surface);
       const cursorBeforeBackspace = await s.get("terminal.cursor", surface);
       await startTrace("terminal-Backspace");
       const backspaceEventOffset = observedStateEvents.length;
-      const backspaceStartedMonotonicNs = process.hrtime.bigint().toString();
+      const backspaceStartedBoundary = await machAbsoluteBoundary(s);
       const backspaceStarted = performance.now();
       await s.press("Backspace");
-      const backspaceAcknowledgedMonotonicNs = process.hrtime.bigint().toString();
+      const backspaceAcknowledgedBoundary = await machAbsoluteBoundary(s);
       const backspaceAcknowledged = performance.now();
       manifest.steps.push({ group: "terminal", index: 9, key: "Backspace", started: backspaceStarted,
-        acknowledged: backspaceAcknowledged, startedMonotonicNs: backspaceStartedMonotonicNs,
-        acknowledgedMonotonicNs: backspaceAcknowledgedMonotonicNs });
+        acknowledged: backspaceAcknowledged, clockDomain: backspaceStartedBoundary.clockDomain,
+        startedMachAbsoluteNs: backspaceStartedBoundary.machAbsoluteNs,
+        acknowledgedMachAbsoluteNs: backspaceAcknowledgedBoundary.machAbsoluteNs });
       persist("manifest.json", manifest);
       await waitForStateEvent(backspaceEventOffset, "Backspace");
       const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, beforeBackspace,
@@ -640,20 +648,22 @@ for (const app of Object.values(APPS)) {
         `Backspace diverged: terminal committed-plus-preedit ${JSON.stringify(backspaceComparison.actual)} ` +
         `differs from AppKit document ${JSON.stringify(backspaceComparison.expected)}`);
       visualStages.push({ ...planVisualStage({ key: "Backspace", expectedDocument: backspaceComparison.expected,
-        observation: backspaceObservation, prompt }), startedMonotonicNs: backspaceStartedMonotonicNs });
+        observation: backspaceObservation, prompt }), clockDomain: backspaceStartedBoundary.clockDomain,
+      startedMachAbsoluteNs: backspaceStartedBoundary.machAbsoluteNs });
 
       const beforeSpace = await s.get("terminal.compose", surface);
       const cursorBeforeSpace = await s.get("terminal.cursor", surface);
       await startTrace("terminal-Space");
       const spaceEventOffset = observedStateEvents.length;
-      const spaceStartedMonotonicNs = process.hrtime.bigint().toString();
+      const spaceStartedBoundary = await machAbsoluteBoundary(s);
       const spaceStarted = performance.now();
       await s.press("Space");
-      const spaceAcknowledgedMonotonicNs = process.hrtime.bigint().toString();
+      const spaceAcknowledgedBoundary = await machAbsoluteBoundary(s);
       const spaceAcknowledged = performance.now();
       manifest.steps.push({ group: "terminal", index: 10, key: "Space", started: spaceStarted,
-        acknowledged: spaceAcknowledged, startedMonotonicNs: spaceStartedMonotonicNs,
-        acknowledgedMonotonicNs: spaceAcknowledgedMonotonicNs });
+        acknowledged: spaceAcknowledged, clockDomain: spaceStartedBoundary.clockDomain,
+        startedMachAbsoluteNs: spaceStartedBoundary.machAbsoluteNs,
+        acknowledgedMachAbsoluteNs: spaceAcknowledgedBoundary.machAbsoluteNs });
       persist("manifest.json", manifest);
       await waitForStateEvent(spaceEventOffset, "Space");
       const spaceObservation = await observeTerminal("terminal", "Space", 10, beforeSpace,
@@ -666,14 +676,15 @@ for (const app of Object.values(APPS)) {
         `Space diverged: terminal committed-plus-preedit ${JSON.stringify(spaceComparison.actual)} ` +
         `differs from AppKit document ${JSON.stringify(spaceComparison.expected)}`);
       visualStages.push({ ...planVisualStage({ key: "Space", expectedDocument: spaceComparison.expected,
-        observation: spaceObservation, prompt }), startedMonotonicNs: spaceStartedMonotonicNs });
+        observation: spaceObservation, prompt }), clockDomain: spaceStartedBoundary.clockDomain,
+      startedMachAbsoluteNs: spaceStartedBoundary.machAbsoluteNs });
       persist("terminal-final.json", { backspaceObservation, spaceObservation, beforeSpace, cursorBeforeBackspace,
         cursorBeforeSpace });
       assert.equal(observations.length, 10, "the trace omitted an input state or presented frame");
       assert.equal(traces.length, 10, "the trace omitted a native callback batch");
       assert.equal(referenceStates.length, 10, "the trace omitted a same-window AppKit reference state");
       assert.equal(manifest.steps.length, 20, "the trace omitted an acknowledged reference or terminal input");
-      const terminalSequenceEndMonotonicNs = process.hrtime.bigint().toString();
+      const terminalSequenceEndBoundary = await machAbsoluteBoundary(s);
       const { displayed } = await s.presented();
       const recording = await capture.stop({ after: displayed + 100 });
       recordingResult = recording;
@@ -740,7 +751,8 @@ for (const app of Object.values(APPS)) {
         frameStatus = indexFrameStatus(observedStateEvents, prompt, visibleInputBeforeCursor);
         ({ sources, missingStates } = readRetainedSources(capture.frames, frameStatus));
         timedStages = visualStages.map((stage, index) => ({ ...stage,
-          endedMonotonicNs: visualStages[index + 1]?.startedMonotonicNs ?? terminalSequenceEndMonotonicNs }));
+          endedMachAbsoluteNs: visualStages[index + 1]?.startedMachAbsoluteNs ??
+            terminalSequenceEndBoundary.machAbsoluteNs }));
         const samplesByStage = capturesByInputStage(frameCallbacks.map(({ callback }) => ({
           name: callback.frame, callback,
         })), decoded, timedStages);
@@ -762,19 +774,20 @@ for (const app of Object.values(APPS)) {
         });
         throw error;
       }
-      persist("visual-measurements.json", {
-        targetStages: timedStages.map(({ key, frame, cells, glyphs, semantic, startedMonotonicNs, endedMonotonicNs }) =>
-          ({ key, frame, cells, glyphs, semantic, startedMonotonicNs, endedMonotonicNs })),
+      const visualRecord = {
+        targetStages: timedStages.map(({ key, frame, cells, glyphs, semantic, clockDomain,
+          startedMachAbsoluteNs, endedMachAbsoluteNs }) =>
+          ({ key, frame, cells, glyphs, semantic, clockDomain, startedMachAbsoluteNs, endedMachAbsoluteNs })),
         retainedSourceCount: sources.length,
         missingSourceStates,
         sourceStatusRejections: frameStatus.rejections,
         sampleCount: frameCallbacks.length,
         imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
         visualMeasurements,
-      });
+      };
+      persistThenRequireVisualProof(visualMeasurements, visualRecord,
+        (record) => persist("visual-measurements.json", record), app.name);
       assert.equal(visualStages.length, 10, `${app.name}: visual calculator omitted an input stage`);
-      assert.ok(visualMeasurements.every((result) => result.result === "measured"),
-        `${app.name}: rendered glyph/underline proof is incomplete: ${JSON.stringify(visualMeasurements)}`);
       persist("recording.json", { ...recording, frames: preservedCaptureDir, sourceFrames: capture.frames,
         frameFiles: framePaths.map((path) => basename(path)), frameGaps, longestFrameGap, frameCount: decoded.length,
         callbackStatus: preservedCallbackStatus, sourceCallbackStatus: recording.callbackStatus });

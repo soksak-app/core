@@ -128,11 +128,27 @@ export function captureFromCallback(decoded, callback) {
   return capture;
 }
 
+/** Reads the exposed host event clock, whose Darwin monotonic domain is CLOCK_UPTIME_RAW/mach absolute time. */
+export function hostClockBoundary(reply) {
+  const value = reply?.clock?.mono_ns;
+  assert.ok(Number.isSafeInteger(value) && value > 0,
+    "host clock reply must contain a positive integer mono_ns");
+  return { clockDomain: "mach-absolute", machAbsoluteNs: String(value) };
+}
+
 /** Associates each decoded frame with one terminal key interval using the recorded Mach display time. */
 export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
   assert.equal(frameCallbacks.length, decodedFrames.length,
     "captured frame callbacks and decoded frames must have a one-to-one mapping");
   const grouped = new Map(stages.map((stage) => [stage.key, []]));
+  for (const stage of stages) {
+    assert.equal(stage.clockDomain, "mach-absolute",
+      `${stage.key}: input stage boundaries must use the mach-absolute clock domain`);
+    assert.ok(/^\d+$/.test(stage.startedMachAbsoluteNs) && /^\d+$/.test(stage.endedMachAbsoluteNs),
+      `${stage.key}: input stage Mach-absolute boundaries are invalid`);
+    assert.ok(BigInt(stage.startedMachAbsoluteNs) < BigInt(stage.endedMachAbsoluteNs),
+      `${stage.key}: input stage Mach-absolute boundaries are reversed`);
+  }
   for (const [index, { callback, name }] of frameCallbacks.entries()) {
     const numerator = callback.machTimebaseNumerator;
     const denominator = callback.machTimebaseDenominator;
@@ -145,9 +161,9 @@ export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
     const decoded = decodedFrames[index];
     assert.ok(Number.isFinite(decoded.time) && Math.abs(Number(displayNs) / 1e6 - decoded.time) < 0.001,
       `${name}: decoded frame time differs from its callback display time`);
-    const stage = stages.find(({ startedMonotonicNs, endedMonotonicNs }) => {
-      const start = BigInt(startedMonotonicNs);
-      const end = BigInt(endedMonotonicNs);
+    const stage = stages.find(({ startedMachAbsoluteNs, endedMachAbsoluteNs }) => {
+      const start = BigInt(startedMachAbsoluteNs);
+      const end = BigInt(endedMachAbsoluteNs);
       return displayNs >= start && displayNs < end;
     });
     if (!stage) continue;
@@ -160,6 +176,13 @@ export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
     });
   }
   return grouped;
+}
+
+/** Persists every visual result before rejecting incomplete proof so the caller retains failure evidence. */
+export function persistThenRequireVisualProof(measurements, record, persist, label = "rendered") {
+  persist(record);
+  assert.ok(measurements.every((result) => result.result === "measured"),
+    `${label}: rendered glyph/underline proof is incomplete: ${JSON.stringify(measurements)}`);
 }
 
 /** Indexes a source snapshot only when screen rows and frame-bound cursor metadata came from one screen event. */

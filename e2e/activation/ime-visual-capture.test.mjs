@@ -9,9 +9,11 @@ import renderFixture from "./fixtures/screen-render.json" with { type: "json" };
 import {
   captureFromCallback,
   capturesByInputStage,
+  hostClockBoundary,
   evaluateVisualStages,
   indexFrameStatus,
   planVisualStage,
+  persistThenRequireVisualProof,
   readRetainedSources,
 } from "./ime-visual-capture.mjs";
 
@@ -59,12 +61,35 @@ testWithTimeout("capture frames map to one half-open input interval by exact Mac
       colorSpace: "sRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
       contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
   const grouped = capturesByInputStage([{ name: "frame-0001.bgra", callback }], [decoded], [
-    { key: "first", startedMonotonicNs: "900000000", endedMonotonicNs: "1000000000" },
-    { key: "second", startedMonotonicNs: "1000000000", endedMonotonicNs: "1100000000" },
+    { key: "first", clockDomain: "mach-absolute", startedMachAbsoluteNs: "900000000",
+      endedMachAbsoluteNs: "1000000000" },
+    { key: "second", clockDomain: "mach-absolute", startedMachAbsoluteNs: "1000000000",
+      endedMachAbsoluteNs: "1100000000" },
   ]);
   assert.equal(grouped.get("first").length, 0);
   assert.equal(grouped.get("second").length, 1);
   assert.equal(grouped.get("second")[0].name, "frame-0001.bgra");
+});
+
+testWithTimeout("host clock boundaries identify the Mach-absolute domain and reject malformed replies", () => {
+  assert.deepEqual(hostClockBoundary({ clock: { mono_ns: 1_000_000_123 } }), {
+    clockDomain: "mach-absolute",
+    machAbsoluteNs: "1000000123",
+  });
+  assert.throws(() => hostClockBoundary({ clock: { mono_ns: "continuous-time" } }), /positive integer mono_ns/);
+  assert.throws(() => hostClockBoundary({ clock: null }), /positive integer mono_ns/);
+});
+
+testWithTimeout("capture stage attribution rejects continuous-time boundaries even when values overlap", () => {
+  const decoded = { width: 4, height: 6, stride: 16, scale: 1, time: 1000, data: sourceRaster() };
+  const callback = { displayTime: "1000000000", machTimebaseNumerator: 1, machTimebaseDenominator: 1,
+    imageMatch: { captureFrame: { width: 4, height: 6, stride: 16, pixelFormat: 0x42475241,
+      colorSpace: "sRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
+      contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
+  assert.throws(() => capturesByInputStage([{ name: "frame-0001.bgra", callback }], [decoded], [
+    { key: "wrong-clock", clockDomain: "mach-continuous", startedMachAbsoluteNs: "900000000",
+      endedMachAbsoluteNs: "1100000000" },
+  ]), /must use the mach-absolute clock domain/);
 });
 
 testWithTimeout("source manifest loads only digest-verified frame-bound rasters", () => {
@@ -168,4 +193,15 @@ testWithTimeout("visual stage evaluator retains exact target identity and measur
     criteria: { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 } });
   assert.equal(malformed[0].result, "error");
   assert.match(malformed[0].errors[0].error, /different frame/);
+});
+
+testWithTimeout("error and no-proof measurements are persisted before the caller assertion fails", () => {
+  const written = [];
+  const measurements = [
+    { key: "missing-candidate", result: "no-proof", reason: "no-capture-roi-candidate" },
+    { key: "malformed-render", result: "error", errors: [{ error: "renderer frame differs" }] },
+  ];
+  assert.throws(() => persistThenRequireVisualProof(measurements, { visualMeasurements: measurements },
+    (record) => written.push(record)), /rendered glyph\/underline proof is incomplete/);
+  assert.deepEqual(written, [{ visualMeasurements: measurements }]);
 });
