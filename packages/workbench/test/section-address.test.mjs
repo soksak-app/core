@@ -104,16 +104,16 @@ test("a value of the wrong type, an unknown field, or an address that is not an 
 
 test("a declared status-line address resolves its exact static root", () => {
   const { document: statusDocument } = new JSDOM(`
-    <div class="set" data-sidebar="left"><section class="set__section" data-section="files.tree">
-      <div data-expose="core.sidebar.section.status-line" data-key="project" id="project">/project</div>
-      <div data-expose="core.sidebar.section.status-line" data-key="hint" id="hint">Ready</div>
+    <div class="set" data-sidebar="left"><section class="set__section" data-section="demo.tree">
+      <div data-expose="core.sidebar.section.status-line" data-key="line-primary" id="project">/project</div>
+      <div data-expose="core.sidebar.section.status-line" data-key="line-hint" id="hint">Ready</div>
     </section></div>`).window;
   const statusLines = [...statusDocument.querySelectorAll('[data-expose="core.sidebar.section.status-line"]')];
   assert.equal(typeof sectionAddress.resolveSectionStatusLine, "function", "status-line address resolver is missing");
-  const address = { sidebar: "left", section: "files.tree", key: "project" };
+  const address = { sidebar: "left", section: "demo.tree", key: "line-primary" };
   assert.equal(sectionAddress.resolveSectionStatusLine(address, statusLines), statusDocument.querySelector("#project"));
   assert.throws(() => sectionAddress.resolveSectionStatusLine({ ...address, extra: true }, statusLines),
     { code: EXPOSURE_ERRORS.invalidParams });
-  assert.throws(() => sectionAddress.resolveSectionStatusLine({ ...address, key: "missing" }, statusLines),
+  assert.throws(() => sectionAddress.resolveSectionStatusLine({ ...address, key: "line-missing" }, statusLines),
     { code: EXPOSURE_ERRORS.noControl });
 });

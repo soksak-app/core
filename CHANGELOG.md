@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-5: Replace the Files identifiers in core Workbench tree and
+  section-address fixtures with synthetic identifiers. The fixtures still
+  cover root keys, multiple trees across redraw, exact status-line resolution
+  and geometry exposure. Red: unchanged `make boundaries` reported nine
+  references in `declared-ui.test.mjs` and two in `section-address.test.mjs`.
+  Green: the owning test files pass 83/83 and 9/9, and `make boundaries` passes
+  for all 16 components. `make docs-check` passes.
+
 - F239-29-2: Resolve the packed native process identity tarball from the
   package's declared name and version. Red: the owning relocation check asked
   for 0.0.20 although the package declares 0.0.21. Green: the package tests

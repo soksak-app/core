@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-5: core Workbench tree 및 section-address fixture의 Files 식별자를
+  synthetic identifier로 바꾼다. Fixture는 root key, 여러 tree의 redraw,
+  정확한 status-line 해석 및 geometry exposure를 계속 검사한다. Red: 변경 전
+  `make boundaries`가 `declared-ui.test.mjs`에서 9건, `section-address.test.mjs`에서
+  2건을 보고했다. Green: owning test 파일이 각각 83/83, 9/9 통과하고
+  `make boundaries`가 16개 component에서 통과한다. `make docs-check`가 통과한다.
+
 - F239-29-2: 선언한 package name과 version에서 packed native process identity
   tarball을 찾는다. Red: package는 0.0.21을 선언하지만 owning relocation test는
   0.0.20을 요청했다. Green: 격리 설치와 static consumer link를 포함해 package
