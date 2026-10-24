@@ -38,15 +38,20 @@ export function resolveSectionControl(address, elements) {
     return place.sidebar === sidebar && place.section === section && element.dataset.key === key;
   });
   if (sameKey.length === 0) throw new ExposureError(EXPOSURE_ERRORS.noControl, "no control matches the address");
-  const rowControl = sameKey.some((element) => element.dataset.role !== undefined);
-  if (rowControl && (path === undefined || role === undefined)) {
+  const rootControls = sameKey.filter((element) => element.dataset.role === undefined);
+  const rowControls = sameKey.filter((element) => element.dataset.role !== undefined);
+  if (path === undefined && role === undefined && address.action === undefined) {
+    if (rootControls.length > 1) throw invalid("address matches an ambiguous root control");
+    if (rootControls.length === 1) return rootControls[0];
+  }
+  if (rowControls.length && (path === undefined || role === undefined)) {
     throw invalid("address of a control of a list item or a tree node requires path and role");
   }
-  if (!rowControl && (path !== undefined || role !== undefined || address.action !== undefined)) throw invalid("address of a button takes no path, role or action");
-  const found = rowControl
-    ? sameKey.find((element) => element.dataset.path === JSON.stringify(path) && element.dataset.role === role &&
+  if (!rowControls.length && (path !== undefined || role !== undefined || address.action !== undefined)) throw invalid("address of a root control takes no path, role or action");
+  const found = rowControls.length
+    ? rowControls.find((element) => element.dataset.path === JSON.stringify(path) && element.dataset.role === role &&
       (role !== "action" || element.dataset.action === address.action))
-    : sameKey[0];
+    : rootControls[0];
   if (!found) throw new ExposureError(EXPOSURE_ERRORS.noControl, "no control matches the address");
   return found;
 }

@@ -35,6 +35,34 @@ test("an address names one control by its sidebar, section and key, and by its p
   assert.equal(resolveSectionControl({ sidebar: "left", section: "side.count", key: "t1", path: ["b"], role: "label" }, all), label);
 });
 
+test("a unique root control resolves without path or role when tree children share its key", () => {
+  const { document: treeDocument } = new JSDOM(`
+    <div data-sidebar="left"><section class="set__section" data-section="side.tree">
+      <button data-expose="core.sidebar.section.control" data-key="tree" id="root"></button>
+      <button data-expose="core.sidebar.section.control" data-key="tree" data-path='["root"]' data-role="expand" id="expand"></button>
+      <button data-expose="core.sidebar.section.control" data-key="tree" data-path='["root"]' data-role="label" id="label"></button>
+    </section></div>`).window;
+  const treeControls = [...treeDocument.querySelectorAll('[data-expose="core.sidebar.section.control"]')];
+  const address = { sidebar: "left", section: "side.tree", key: "tree" };
+  assert.equal(resolveSectionControl(address, treeControls), treeDocument.querySelector("#root"));
+  assert.equal(resolveSectionControl({ ...address, path: ["root"], role: "label" }, treeControls),
+    treeDocument.querySelector("#label"));
+  assert.equal(resolveSectionControl({ ...address, path: ["root"], role: "expand" }, treeControls),
+    treeDocument.querySelector("#expand"));
+});
+
+test("multiple no-role root controls with one key are explicitly ambiguous", () => {
+  const { document: treeDocument } = new JSDOM(`
+    <div data-sidebar="left"><section class="set__section" data-section="side.tree">
+      <button data-expose="core.sidebar.section.control" data-key="tree" id="root-a"></button>
+      <button data-expose="core.sidebar.section.control" data-key="tree" id="root-b"></button>
+      <button data-expose="core.sidebar.section.control" data-key="tree" data-path='["root"]' data-role="label"></button>
+    </section></div>`).window;
+  const treeControls = [...treeDocument.querySelectorAll('[data-expose="core.sidebar.section.control"]')];
+  assert.throws(() => resolveSectionControl({ sidebar: "left", section: "side.tree", key: "tree" }, treeControls),
+    { code: EXPOSURE_ERRORS.invalidParams, message: /ambiguous root control/ });
+});
+
 test("an action address identifies one node action by path and action key", () => {
   assert.equal(resolveSectionControl({ sidebar: "left", section: "side.count", key: "t1", path: ["b"], role: "action", action: "rename" }, all), action);
   assert.equal(refusal({ sidebar: "left", section: "side.count", key: "t1", path: ["b"], role: "action", action: "missing" }), 1009);

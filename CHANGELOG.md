@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-37-4: Resolve unique root controls before same-key tree children.
+  Red: the unchanged section-address test rejected the root address and did
+  not report duplicate-root ambiguity. Green: the owning test passes 8/8,
+  including exact child addresses and row-only missing-path refusal.
+  Exposure checks, docs checks, and diff checks pass.
+
 - F239-47-1: Preserve image-region focus during diagnostic pointer presses
   delivered directly to the hit view. Red: the unchanged owning test observed
   focus loss and a different first responder after an in-region press. Green:

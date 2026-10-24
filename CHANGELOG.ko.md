@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-37-4: 같은 key의 tree child보다 유일한 root control을 먼저 풀이한다.
+  Red: 변경 전 section-address test가 root 주소를 거부하고 중복 root 모호성을
+  보고하지 않았다. Green: 정확한 child 주소와 row-only path 누락 거부를 포함해
+  owning test가 8/8 통과한다. Exposure, docs, diff 검사가 통과한다.
+
 - F239-47-1: hit view에 직접 전달되는 diagnostic pointer press 중 image
   region focus를 유지한다. Red: 변경 전 owning test가 region 안의 press 뒤
   focus loss와 다른 first responder를 관찰했다. Green: scoped press context가
