@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-33: F8-9 ddd + Korean 2-Set gksrmf sequence (ddd한글),
+  F143 gksk resyllabification (하나), 이전에 승인된
+  eight-vowel gesture를 사용하는 host별 10회 project close/reopen lifecycle
+  cycle의 승인 전용 e2e selector를 추가한다. Case는 정의했지만 실행하지
+  않았으므로 activation 또는 lifecycle acceptance를 주장하지 않는다.
+
 - F239-47-30-1: 한 번 호출하는 diagnostic method로 AppKit window color
   space를 보고한다. Window를 바꾸지 않고 localized name과 사용할 수 있는 ICC
   profile data의 SHA-256 fingerprint를 반환한다. 변경 전에는 method가 없어 두

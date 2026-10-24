@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-47-33: Add approval-gated e2e selectors for the F8-9 ddd + Korean
+  2-Set gksrmf sequence (ddd한글), F143 gksk resyllabification (하나),
+  and ten project close/reopen lifecycle cycles per
+  host using the previously approved eight-vowel gesture. The cases are
+  defined but have not been run; no activation or lifecycle acceptance is
+  claimed.
+
 - F239-47-30-1: Report the AppKit window color space through a one-shot
   diagnostic method. The query returns its localized name and the SHA-256
   fingerprint of ICC profile data when available, without changing the
