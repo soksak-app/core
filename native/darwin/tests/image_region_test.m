@@ -99,6 +99,17 @@ static NSString *lastPreedit(NSUInteger from) {
     return text;
 }
 
+// The last native composition report after from, including the retained text and its exact range state.
+static NSDictionary *lastComposeEvent(NSUInteger from) {
+    NSDictionary *composition = nil;
+    for (NSUInteger i = from; i < collectedEvents.count; i++) {
+        NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+            options:0 error:NULL];
+        if ([event[@"type"] isEqual:@"compose"]) composition = event;
+    }
+    return composition;
+}
+
 // Creates a global IOSurface with the four corners painted in different colors
 static IOSurfaceRef createColoredGlobalSurface(size_t width, size_t height, unsigned char *nonce) {
     IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)@{
@@ -506,6 +517,111 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([committedTexts(0) isEqualToArray:@[@"한글"]] && [lastPreedit(0) isEqual:@""]
             && regionView.textStorage.length == 0,
             [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
+
+        void *rangeRegion = sp_region_create(surface, "test8-range", testEvent, NULL);
+        sp_region_place(rangeRegion, 10, 10, 10, 10, true);
+        sp_region_focus(rangeRegion);
+        NSTextView *rangeView = (NSTextView *)rangeRegion;
+        Method composesMethod = class_getInstanceMethod(rangeView.class, NSSelectorFromString(@"selectedSourceComposes"));
+        IMP originalComposes = method_getImplementation(composesMethod);
+        Method hangulOnlyMethod = class_getInstanceMethod(rangeView.class, NSSelectorFromString(@"selectedSourceComposesOnlyHangul"));
+        IMP originalHangulOnly = method_getImplementation(hangulOnlyMethod);
+        IMP composingSource = imp_implementationWithBlock(^BOOL(id self) { return YES; });
+        IMP nonHangulOnlySource = imp_implementationWithBlock(^BOOL(id self) { return NO; });
+        method_setImplementation(composesMethod, composingSource);
+        method_setImplementation(hangulOnlyMethod, nonHangulOnlySource);
+        NSUInteger beforeUnmarkedSuffix = collectedEvents.count;
+        [(id<NSTextInputClient>)rangeView insertText:@"abc" replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSDictionary *compose = lastComposeEvent(beforeUnmarkedSuffix);
+        check([compose[@"text"] isEqual:@"abc"] && compose[@"markedRange"] == NSNull.null,
+            [NSString stringWithFormat:@"TEST 8: compose reports null while retaining an unmarked suffix (got %@)", compose]);
+        ((void (*)(id, SEL, NSUInteger))objc_msgSend)(rangeView, NSSelectorFromString(@"commitThrough:"), (NSUInteger)1);
+        NSUInteger beforePartialMark = collectedEvents.count;
+        [(id<NSTextInputClient>)rangeView setMarkedText:@"c" selectedRange:NSMakeRange(0, 0)
+            replacementRange:NSMakeRange(2, 1)];
+        compose = lastComposeEvent(beforePartialMark);
+        check([rangeView.string isEqual:@"abc"] && [compose[@"text"] isEqual:@"bc"]
+            && [compose[@"markedRange"][@"location"] isEqual:@1]
+            && [compose[@"markedRange"][@"length"] isEqual:@1],
+            [NSString stringWithFormat:@"TEST 8: compose reports the actual partial marked range relative to its suffix (got %@)", compose]);
+        NSUInteger beforeSelectionChange = collectedEvents.count;
+        [(id<NSTextInputClient>)rangeView setMarkedText:@"c" selectedRange:NSMakeRange(1, 0)
+            replacementRange:NSMakeRange(2, 1)];
+        compose = lastComposeEvent(beforeSelectionChange);
+        check([compose[@"text"] isEqual:@"bc"]
+            && [compose[@"selectedRange"][@"location"] isEqual:@2],
+            [NSString stringWithFormat:@"TEST 8: an unchanged compose text reports its changed selected range (got %@)", compose]);
+        NSUInteger beforeUTF16Range = collectedEvents.count;
+        [(id<NSTextInputClient>)rangeView setMarkedText:@"😀" selectedRange:NSMakeRange(0, 0)
+            replacementRange:NSMakeRange(2, 1)];
+        compose = lastComposeEvent(beforeUTF16Range);
+        check([rangeView.string isEqual:@"ab😀"] && [compose[@"text"] isEqual:@"b😀"]
+            && [compose[@"markedRange"][ @"location"] isEqual:@1]
+            && [compose[@"markedRange"][ @"length"] isEqual:@2],
+            [NSString stringWithFormat:@"TEST 8: markedRange uses UTF-16 offsets relative to the retained suffix (got %@)", compose]);
+        void *invalidRangeRegion = sp_region_create(surface, "test8-invalid-range", testEvent, NULL);
+        sp_region_place(invalidRangeRegion, 10, 10, 10, 10, true);
+        sp_region_focus(invalidRangeRegion);
+        NSTextView *invalidRangeView = (NSTextView *)invalidRangeRegion;
+        [(id<NSTextInputClient>)invalidRangeView setMarkedText:@"x" selectedRange:NSMakeRange(1, 0)
+            replacementRange:NSMakeRange(NSNotFound, 0)];
+        Method nativeMarkedRangeMethod = class_getInstanceMethod(NSTextView.class, @selector(markedRange));
+        IMP originalNativeMarkedRange = nativeMarkedRangeMethod ? method_getImplementation(nativeMarkedRangeMethod) : NULL;
+        if (!nativeMarkedRangeMethod) {
+            check(NO, @"TEST 8: NSTextView exposes its native markedRange method for the invalid-range check");
+        } else {
+            IMP invalidNativeMarkedRange = imp_implementationWithBlock(^NSRange(id self) {
+                return NSMakeRange(NSNotFound, 0);
+            });
+            method_setImplementation(nativeMarkedRangeMethod, invalidNativeMarkedRange);
+            NSUInteger beforeInvalidMarkedRange = collectedEvents.count;
+            ((void (*)(id, SEL))objc_msgSend)(invalidRangeView, NSSelectorFromString(@"reportPreedit"));
+            method_setImplementation(nativeMarkedRangeMethod, originalNativeMarkedRange);
+            imp_removeBlock(invalidNativeMarkedRange);
+            BOOL reportedInvalidMarkedRange = NO;
+            BOOL emittedInvalidCompose = NO;
+            for (NSUInteger index = beforeInvalidMarkedRange; index < collectedEvents.count; index++) {
+                NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[index] dataUsingEncoding:NSUTF8StringEncoding]
+                    options:0 error:NULL];
+                if ([event[@"type"] isEqual:@"error"] && [event[@"reason"] containsString:@"marked range"]) reportedInvalidMarkedRange = YES;
+                if ([event[@"type"] isEqual:@"compose"]) emittedInvalidCompose = YES;
+            }
+            check(reportedInvalidMarkedRange && !emittedInvalidCompose,
+                @"TEST 8: an invalid native marked range reports an input error and emits no compose event");
+        }
+        sp_region_close(invalidRangeRegion);
+        void *unmarkRegion = sp_region_create(surface, "test8-unmark", testEvent, NULL);
+        sp_region_place(unmarkRegion, 10, 10, 10, 10, true);
+        sp_region_focus(unmarkRegion);
+        NSTextView *unmarkView = (NSTextView *)unmarkRegion;
+        [(id<NSTextInputClient>)unmarkView setMarkedText:@"c" selectedRange:NSMakeRange(1, 0)
+            replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSUInteger beforeUnmarkState = collectedEvents.count;
+        NSRange selectionBeforeUnmark = unmarkView.selectedRange;
+        [unmarkView unmarkText];
+        compose = lastComposeEvent(beforeUnmarkState);
+        NSUInteger unmarkComposeCount = 0;
+        NSMutableArray *unmarkComposeEvents = [NSMutableArray array];
+        for (NSUInteger index = beforeUnmarkState; index < collectedEvents.count; index++) {
+            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[index] dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:NULL];
+            if ([event[@"type"] isEqual:@"compose"]) {
+                unmarkComposeCount++;
+                [unmarkComposeEvents addObject:event];
+            }
+        }
+        check([unmarkView.string isEqual:@"c"] && !unmarkView.hasMarkedText
+            && NSEqualRanges(unmarkView.selectedRange, selectionBeforeUnmark) && unmarkComposeCount == 1
+            && [compose[@"text"] isEqual:@"c"] && compose[@"markedRange"] == NSNull.null,
+            [NSString stringWithFormat:@"TEST 8: unmark reports null once when selection and retained suffix are unchanged (selection %@ -> %@, events %lu, got %@)",
+                NSStringFromRange(selectionBeforeUnmark), NSStringFromRange(unmarkView.selectedRange), (unsigned long)unmarkComposeCount, unmarkComposeEvents]);
+        sp_region_close(unmarkRegion);
+        method_setImplementation(composesMethod, originalComposes);
+        method_setImplementation(hangulOnlyMethod, originalHangulOnly);
+        imp_removeBlock(composingSource);
+        imp_removeBlock(nonHangulOnlySource);
+        sp_region_close(rangeRegion);
+        [window makeFirstResponder:nil];
 
         // Every callback of the input method and every report to the page is the event `native.input.callback` or
         // `native.input.report` with its arguments, the typed text, the state of the input document before and after, and the

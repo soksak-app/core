@@ -4,6 +4,23 @@
 
 ## 미배포
 
+- F239-47-3: AppKit marked range를 composition event로 보고한다. Native event는
+  보관 suffix 전체와 text 기준 실제 UTF-16 marked range를 담고, AppKit에
+  marked text가 없을 때만 `null`을 보낸다. 잘못된 marked range는 input 오류를
+  보고한다. Text, marked range, selection range 변화마다 composition update를
+  보낸다. `unmarkText`의 nested update를 미뤄 최종 상태만 전달한다. Red:
+  변경 전 `image_region_test`에서 null/부분/UTF-16 range metadata 누락,
+  selection-only 갱신 누락, malformed range 오류 누락, 최종 한 번만 보내야 할
+  unmark compose가 중간 빈 suffix와 최종 보관 suffix 두 번 보고되는 등 assertion
+  6개가 실패했다. Green: `image_region_test` 1/1,
+  Wails/Tauri event relay 각 1/1, plugin API image-event 전달 1/1,
+  공식 Korean-preedit screen-hash case 1/1 통과. Composition 상태는 저장하지
+  않으므로 data migration은 필요 없다. `make docs-check`가 통과한다.
+  `make parity-check`는 무관한 finding 3개(F266 feature link, 양언어 examples
+  count)를 보고하고, `make boundaries`는 기존 Workbench test 두 곳의 plugin-id
+  문자열을 보고한다. Application build/launch 및 activation-tier 입력 검사는
+  실행하지 않았다.
+
 - F239-37-5: 그려진 각 tree root에 선언된 key를 붙인다. Red: owning
   `drawValue` test가 exposed control 목록에서 tree root를 풀이하지 못했다.
   Green: 여러 tree와 redraw 전후 root 및 path/role child 주소가 풀이되며

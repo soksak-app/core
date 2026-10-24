@@ -22,6 +22,10 @@ use crate::platform::{self, Handle};
 use crate::surfaces::{require_region, surface_handle};
 use crate::windows::{emit_window, window_data};
 
+fn image_event_payload(surface: &str, name: &str, event: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({ "surface": surface, "name": name, "event": event })
+}
+
 /// An image region call of a surface page.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Request {
@@ -843,9 +847,7 @@ fn create(
                 }
                 let report_surface = event_surface.clone();
                 let report_name = event_name.clone();
-                let payload = serde_json::json!({
-                    "surface": event_surface, "name": event_name, "event": event,
-                });
+                let payload = image_event_payload(&event_surface, &event_name, event);
                 let deferred_surface = report_surface.clone();
                 let deferred_name = report_name.clone();
                 let deferred_host = host.clone();
@@ -869,6 +871,10 @@ fn create(
         Ok(handle)
     })
 }
+
+#[cfg(test)]
+#[path = "images_test.rs"]
+mod images_test;
 
 /// Runs run on the main thread for a created image region.
 fn with_image<T: Send + 'static>(

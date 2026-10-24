@@ -54,6 +54,11 @@
 @property BOOL closed;
 @property BOOL hasFocus;
 @property(copy) NSString *reportedPreedit;  // The composition string reported last.
+@property BOOL unmarking;
+@property BOOL hasReportedCompositionState;
+@property NSRange reportedMarkedRange;
+@property NSRange reportedSelectedRange;
+@property BOOL reportedHasMarkedText;
 @property NSUInteger committedLength;       // The length from the document start already committed by insert.
 @property(copy) NSString *unhandledKey;     // The report of a special key given to the input method first. Reported if the input method does not handle it.
 @property NSUInteger reports;               // The number of reports sent. Used to check whether the input context answered a key.
@@ -871,7 +876,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)unmarkText {
     BOOL opened = [self enterInput];
     NSString *before = [self inputState];
-    [super unmarkText];
+    BOOL wasUnmarking = self.unmarking;
+    self.unmarking = YES;
+    @try {
+        [super unmarkText];
+    } @finally {
+        self.unmarking = wasUnmarking;
+    }
+    if (!wasUnmarking) [self reportPreedit];
     [self logInput:@"unmarkText" fields:@"" before:before];
     [self leaveInput:opened];
 }
@@ -918,24 +930,55 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self report:json.UTF8String];
 }
 
-// Reports the string after the commit position that the input method can still revise as the composition string.
-// Reports only when it changed.
+// Reports the retained suffix and its exact AppKit composition and selection state.
 - (void)reportPreedit {
+    if (self.unmarking) {
+        [self logInput:@"reportPreedit" fields:@"\"deferred\":true" before:nil];
+        return;
+    }
     NSString *storage = self.textStorage.string;
-    NSString *preedit = self.committedLength <= storage.length ? [storage substringFromIndex:self.committedLength] : @"";
-    if ([preedit isEqualToString:self.reportedPreedit]) {
+    if (self.committedLength > storage.length) {
+        NSString *reason = [NSString stringWithFormat:@"committed input length %lu exceeds document length %lu",
+            (unsigned long)self.committedLength, (unsigned long)storage.length];
+        [self failInput:reason where:"composition range" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
+        return;
+    }
+    NSString *preedit = [storage substringFromIndex:self.committedLength];
+    BOOL hasMarkedText = [super hasMarkedText];
+    NSRange marked = hasMarkedText ? [super markedRange] : NSMakeRange(NSNotFound, 0);
+    NSRange localMarked = NSMakeRange(NSNotFound, 0);
+    if (hasMarkedText) {
+        if (marked.location == NSNotFound || marked.location < self.committedLength
+            || marked.location > storage.length || marked.length > storage.length - marked.location) {
+            NSString *reason = [NSString stringWithFormat:@"marked range %@ is outside the retained composition text of length %lu",
+                [self jsonRange:marked], (unsigned long)preedit.length];
+            [self failInput:reason where:"composition range" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
+            return;
+        }
+        localMarked = NSMakeRange(marked.location - self.committedLength, marked.length);
+    }
+    NSRange selected = [super selectedRange];
+    NSRange localSelected = selected.location != NSNotFound && selected.location >= self.committedLength
+        ? NSMakeRange(selected.location - self.committedLength, selected.length) : NSMakeRange(NSNotFound, 0);
+    BOOL changed = !self.hasReportedCompositionState
+        || ![preedit isEqualToString:self.reportedPreedit]
+        || hasMarkedText != self.reportedHasMarkedText
+        || !NSEqualRanges(localMarked, self.reportedMarkedRange)
+        || !NSEqualRanges(localSelected, self.reportedSelectedRange);
+    if (!changed) {
         [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":false",
             [self jsonEscapedString:preedit]] before:nil];
         return;
     }
     self.reportedPreedit = preedit;
+    self.hasReportedCompositionState = YES;
+    self.reportedHasMarkedText = hasMarkedText;
+    self.reportedMarkedRange = localMarked;
+    self.reportedSelectedRange = localSelected;
     [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":true",
         [self jsonEscapedString:preedit]] before:nil];
-    NSRange selected = self.selectedRange;
-    NSRange local = selected.location != NSNotFound && selected.location >= self.committedLength
-        ? NSMakeRange(selected.location - self.committedLength, selected.length) : NSMakeRange(NSNotFound, 0);
-    NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
-        [self jsonEscapedString:preedit], [self jsonRange:local]];
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"markedRange\":%@,\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
+        [self jsonEscapedString:preedit], [self jsonRange:localMarked], [self jsonRange:localSelected]];
     [self report:json.UTF8String];
 }
 

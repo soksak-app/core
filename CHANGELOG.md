@@ -4,6 +4,24 @@
 
 ## Unreleased
 
+- F239-47-3: Report AppKit's marked range in composition events. The native
+  event carries the full retained suffix and the exact text-relative UTF-16
+  marked range; it reports `null` only when AppKit has no marked text. Invalid
+  marked ranges report an input error. Text, marked-range, and selection-range
+  changes each produce a composition update. `unmarkText` defers nested updates
+  and reports only the final state. Red: the unchanged `image_region_test`
+  failed six assertions for missing null/partial/UTF-16 range metadata, a missing
+  selection-only update, a missing malformed-range error, and two unmark reports
+  (an intermediate empty suffix and final retained suffix) instead of one final
+  report. Green: `image_region_test` 1/1, Wails and
+  Tauri event relay tests 1/1 each, plugin API image-event pass-through 1/1, and
+  the official Korean-preedit screen-hash case 1/1. Composition state is not
+  persisted, so no data migration is required. `make docs-check` passes;
+  `make parity-check` reports three unrelated findings (F266 feature link and
+  both examples count records), and `make boundaries` reports existing plugin-id
+  references in two Workbench tests. No application build, launch, or activation-
+  tier input test was run.
+
 - F239-37-5: Add the declared key to each rendered tree root. Red: the owning
   `drawValue` test could not resolve a tree root through the exposed controls.
   Green: roots and path/role child controls resolve across redraws and multiple

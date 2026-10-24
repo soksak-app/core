@@ -621,6 +621,10 @@
                 "blinking": false,
                 "preedit": {
                   "text": "한",
+                  "markedRange": {
+                    "location": 0,
+                    "length": 1
+                  },
                   "selectedRange": {
                     "location": 0,
                     "length": 1

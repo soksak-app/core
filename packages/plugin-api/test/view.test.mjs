@@ -581,9 +581,21 @@ test("composition.create of a view attaches its declared regions and places one 
   const doc = composition.region("doc");
   const states = [];
   doc.onState((state) => states.push(state));
+  const imageEvents = [];
+  composition.region("picture").on("compose", (event) => imageEvents.push({ name: "picture", event }));
   host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "doc", state: { url: "https://example.test/" } } });
   host({ sok: 1, event: "document-state", data: { surface: "probe-surface", document: "other", state: { url: "https://other.test/" } } });
+  const composeEvent = {
+    type: "compose",
+    text: "한",
+    markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 },
+    replacementRange: null,
+    attributed: false,
+  };
+  host({ sok: 1, event: "image-event", data: { surface: "probe-surface", name: "picture", event: composeEvent } });
   assert.deepEqual(plain(states), [{ url: "https://example.test/" }]);
+  assert.deepEqual(imageEvents, [{ name: "picture", event: composeEvent }], "the native event subscriber receives the complete composition event unchanged");
   await doc.load("https://example.test/");
   await composition.region("picture").setCaret({ x: 1, y: 2, width: 3, height: 4 });
   assert.deepEqual(posted.slice(-2).map(({ command, params }) => ({ command, params })), [
