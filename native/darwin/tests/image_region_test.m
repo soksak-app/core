@@ -1,7 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
-#import <objc/message.h>
 #import <objc/runtime.h>
 #include <unistd.h>
 #import "event_ring.h"
@@ -99,17 +98,6 @@ static NSString *lastPreedit(NSUInteger from) {
         if ([event[@"type"] isEqual:@"input"]) text = event[@"preedit"][@"text"];
     }
     return text;
-}
-
-// The final native preedit snapshot after from, including retained text and exact range state.
-static NSDictionary *lastComposeEvent(NSUInteger from) {
-    NSDictionary *composition = nil;
-    for (NSUInteger i = from; i < collectedEvents.count; i++) {
-        NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
-            options:0 error:NULL];
-        if ([event[@"type"] isEqual:@"input"]) composition = event[@"preedit"];
-    }
-    return composition;
 }
 
 // Creates a global IOSurface with the four corners painted in different colors
@@ -472,449 +460,115 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region7);
     }
 
-    // TEST 8: synthetic NSTextInputClient calls. This test does not go through the active input source.
-    // Whether inserted text is committed immediately or remains as an editable preedit depends on the selected input source,
-    // so each case is committed by a focus change, and then the same
-    // committed text is checked under every input source.
+    // TEST 8: the input client stores only marked text and reports committed transactions.
     {
         void *region8 = sp_region_create(surface, "test8", testEvent, NULL);
         sp_region_place(region8, 10, 10, 10, 10, true);
         sp_region_focus(region8);
-        NSTextView *regionView = (NSTextView *)region8;
-        check([window.firstResponder isKindOfClass:NSTextView.class],
-            @"TEST 8: image input responder delegates text-system state to NSTextView");
-        // F8-9: All editing that NSTextView inherits is turned off or does not affect input.
-        check(!regionView.automaticQuoteSubstitutionEnabled && !regionView.automaticDashSubstitutionEnabled
-            && !regionView.automaticTextReplacementEnabled && !regionView.automaticSpellingCorrectionEnabled
-            && !regionView.automaticLinkDetectionEnabled && !regionView.automaticDataDetectionEnabled
-            && !regionView.automaticTextCompletionEnabled && !regionView.continuousSpellCheckingEnabled
-            && !regionView.grammarCheckingEnabled && !regionView.smartInsertDeleteEnabled
-            && regionView.enabledTextCheckingTypes == 0,
-            @"TEST 8: automatic substitution, replacement, spelling, grammar, detection, completion, and text checking are off");
-        check(!regionView.allowsUndo && !regionView.isRichText && !regionView.importsGraphics
-            && !regionView.usesFindBar && !regionView.usesFontPanel && !regionView.usesRuler,
-            @"TEST 8: undo, rich text, graphics, find, font panel, and ruler are off");
+        NSView *regionView = (NSView *)region8;
+        id<NSTextInputClient> client = (id<NSTextInputClient>)region8;
+
         check([regionView validRequestorForSendType:NSPasteboardTypeString returnType:NSPasteboardTypeString] == nil
             && [regionView validRequestorForSendType:NSPasteboardTypeString returnType:nil] == nil,
-            @"TEST 8: the Services menu cannot read or replace the input document");
+            @"TEST 8: Services cannot read or replace the marked-text buffer");
         check([regionView hitTest:NSMakePoint(1, 1)] == nil,
-            @"TEST 8: pointer, menu, and drag input never target the input client");
-        NSUInteger beforeSubstitution = [collectedEvents count];
-        [regionView insertText:@"\"a\" -- (c) teh" replacementRange:NSMakeRange(NSNotFound, 0)];
-        [window makeFirstResponder:nil];
-        check([[committedTexts(beforeSubstitution) componentsJoinedByString:@""] isEqual:@"\"a\" -- (c) teh"],
-            [NSString stringWithFormat:@"TEST 8: inserted text is committed without substitution or correction (got %@)", committedTexts(beforeSubstitution)]);
-        sp_region_focus(region8);
+            @"TEST 8: the native input client does not receive pointer input");
 
-        [collectedEvents removeAllObjects];
-        [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
-        check(regionView.hasMarkedText && [lastPreedit(0) isEqual:@"한"],
-            [NSString stringWithFormat:@"TEST 8: marked text is reported as preedit (got %@)", collectedEvents]);
-        [(id<NSTextInputClient>)regionView setMarkedText:@"한글" selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
-        check(NSEqualRanges(regionView.markedRange, NSMakeRange(0, 2)) && [lastPreedit(0) isEqual:@"한글"],
-            @"TEST 8: a replacement preedit updates the marked range and the reported preedit");
-        check(committedTexts(0).count == 0, @"TEST 8: marked text is not committed");
-        [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(NSNotFound, 0)];
-        [window makeFirstResponder:nil];
-        check([committedTexts(0) isEqualToArray:@[@"한글"]] && [lastPreedit(0) isEqual:@""]
-            && regionView.textStorage.length == 0,
-            [NSString stringWithFormat:@"TEST 8: inserted text is committed exactly once by the focus change (got %@)", collectedEvents]);
+        NSUInteger beforePlainInsert = collectedEvents.count;
+        [client insertText:@"\"a\" -- (c) teh" replacementRange:NSMakeRange(NSNotFound, 0)];
+        check([committedTexts(beforePlainInsert) isEqualToArray:@[@"\"a\" -- (c) teh"]]
+            && [lastPreedit(beforePlainInsert) isEqual:@""],
+            [NSString stringWithFormat:@"TEST 8: insertText preserves exact plain text without substitutions (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforePlainInsert, collectedEvents.count - beforePlainInsert)]]);
 
-        void *rangeRegion = sp_region_create(surface, "test8-range", testEvent, NULL);
-        sp_region_place(rangeRegion, 10, 10, 10, 10, true);
-        sp_region_focus(rangeRegion);
-        NSTextView *rangeView = (NSTextView *)rangeRegion;
-        Method composesMethod = class_getInstanceMethod(rangeView.class, NSSelectorFromString(@"selectedSourceComposes"));
-        IMP originalComposes = method_getImplementation(composesMethod);
-        Method hangulOnlyMethod = class_getInstanceMethod(rangeView.class, NSSelectorFromString(@"selectedSourceComposesOnlyHangul"));
-        IMP originalHangulOnly = method_getImplementation(hangulOnlyMethod);
-        IMP composingSource = imp_implementationWithBlock(^BOOL(id self) { return YES; });
-        IMP nonHangulOnlySource = imp_implementationWithBlock(^BOOL(id self) { return NO; });
-        method_setImplementation(composesMethod, composingSource);
-        method_setImplementation(hangulOnlyMethod, nonHangulOnlySource);
-        NSUInteger beforeUnmarkedSuffix = collectedEvents.count;
-        [(id<NSTextInputClient>)rangeView insertText:@"abc" replacementRange:NSMakeRange(NSNotFound, 0)];
-        NSDictionary *compose = lastComposeEvent(beforeUnmarkedSuffix);
-        check([compose[@"text"] isEqual:@"abc"] && compose[@"markedRange"] == NSNull.null,
-            [NSString stringWithFormat:@"TEST 8: compose reports null while retaining an unmarked suffix (got %@)", compose]);
-        ((void (*)(id, SEL, NSUInteger))objc_msgSend)(rangeView, NSSelectorFromString(@"commitThrough:"), (NSUInteger)1);
-        NSUInteger beforePartialMark = collectedEvents.count;
-        [(id<NSTextInputClient>)rangeView setMarkedText:@"c" selectedRange:NSMakeRange(0, 0)
-            replacementRange:NSMakeRange(2, 1)];
-        compose = lastComposeEvent(beforePartialMark);
-        check([rangeView.string isEqual:@"abc"] && [compose[@"text"] isEqual:@"bc"]
-            && [compose[@"markedRange"][@"location"] isEqual:@1]
-            && [compose[@"markedRange"][@"length"] isEqual:@1],
-            [NSString stringWithFormat:@"TEST 8: compose reports the actual partial marked range relative to its suffix (got %@)", compose]);
-        NSUInteger beforeSelectionChange = collectedEvents.count;
-        [(id<NSTextInputClient>)rangeView setMarkedText:@"c" selectedRange:NSMakeRange(1, 0)
-            replacementRange:NSMakeRange(2, 1)];
-        compose = lastComposeEvent(beforeSelectionChange);
-        check([compose[@"text"] isEqual:@"bc"]
-            && [compose[@"selectedRange"][@"location"] isEqual:@2],
-            [NSString stringWithFormat:@"TEST 8: an unchanged compose text reports its changed selected range (got %@)", compose]);
-        NSUInteger beforeUTF16Range = collectedEvents.count;
-        [(id<NSTextInputClient>)rangeView setMarkedText:@"😀" selectedRange:NSMakeRange(0, 0)
-            replacementRange:NSMakeRange(2, 1)];
-        compose = lastComposeEvent(beforeUTF16Range);
-        check([rangeView.string isEqual:@"ab😀"] && [compose[@"text"] isEqual:@"b😀"]
-            && [compose[@"markedRange"][ @"location"] isEqual:@1]
-            && [compose[@"markedRange"][ @"length"] isEqual:@2],
-            [NSString stringWithFormat:@"TEST 8: markedRange uses UTF-16 offsets relative to the retained suffix (got %@)", compose]);
-        void *invalidRangeRegion = sp_region_create(surface, "test8-invalid-range", testEvent, NULL);
-        sp_region_place(invalidRangeRegion, 10, 10, 10, 10, true);
-        sp_region_focus(invalidRangeRegion);
-        NSTextView *invalidRangeView = (NSTextView *)invalidRangeRegion;
-        [(id<NSTextInputClient>)invalidRangeView setMarkedText:@"x" selectedRange:NSMakeRange(1, 0)
+        [client setMarkedText:@"a😀c" selectedRange:NSMakeRange(3, 0)
             replacementRange:NSMakeRange(NSNotFound, 0)];
-        Method nativeMarkedRangeMethod = class_getInstanceMethod(NSTextView.class, @selector(markedRange));
-        IMP originalNativeMarkedRange = nativeMarkedRangeMethod ? method_getImplementation(nativeMarkedRangeMethod) : NULL;
-        if (!nativeMarkedRangeMethod) {
-            check(NO, @"TEST 8: NSTextView exposes its native markedRange method for the invalid-range check");
-        } else {
-            IMP invalidNativeMarkedRange = imp_implementationWithBlock(^NSRange(id self) {
-                return NSMakeRange(NSNotFound, 0);
-            });
-            method_setImplementation(nativeMarkedRangeMethod, invalidNativeMarkedRange);
-            NSUInteger beforeInvalidMarkedRange = collectedEvents.count;
-            ((void (*)(id, SEL))objc_msgSend)(invalidRangeView, NSSelectorFromString(@"reportPreedit"));
-            method_setImplementation(nativeMarkedRangeMethod, originalNativeMarkedRange);
-            imp_removeBlock(invalidNativeMarkedRange);
-            BOOL reportedInvalidMarkedRange = NO;
-            BOOL preservedLastValidPreedit = NO;
-            for (NSUInteger index = beforeInvalidMarkedRange; index < collectedEvents.count; index++) {
-                NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[index] dataUsingEncoding:NSUTF8StringEncoding]
-                    options:0 error:NULL];
-                for (NSDictionary *error in event[@"errors"]) {
-                    if ([error[@"reason"] containsString:@"marked range"]) reportedInvalidMarkedRange = YES;
-                }
-                if ([event[@"type"] isEqual:@"input"] && [(NSArray *)event[@"actions"] count] == 0
-                    && [event[@"preedit"][@"text"] isEqual:@"x"]
-                    && [event[@"preedit"][@"markedRange"][ @"length"] isEqual:@1]) preservedLastValidPreedit = YES;
-            }
-            check(reportedInvalidMarkedRange && preservedLastValidPreedit,
-                @"TEST 8: an invalid native marked range reports an error and retains the last valid preedit snapshot");
-        }
-        sp_region_close(invalidRangeRegion);
-        void *unmarkRegion = sp_region_create(surface, "test8-unmark", testEvent, NULL);
-        sp_region_place(unmarkRegion, 10, 10, 10, 10, true);
-        sp_region_focus(unmarkRegion);
-        NSTextView *unmarkView = (NSTextView *)unmarkRegion;
-        [(id<NSTextInputClient>)unmarkView setMarkedText:@"c" selectedRange:NSMakeRange(1, 0)
+        check([client hasMarkedText] && NSEqualRanges([client markedRange], NSMakeRange(0, 4))
+            && NSEqualRanges([client selectedRange], NSMakeRange(3, 0))
+            && [lastPreedit(collectedEvents.count - 1) isEqual:@"a😀c"],
+            @"TEST 8: marked and selected ranges use UTF-16 offsets in the pending buffer");
+        NSRange actualRange = NSMakeRange(NSNotFound, 0);
+        NSAttributedString *substring = [client attributedSubstringForProposedRange:NSMakeRange(1, 2)
+            actualRange:&actualRange];
+        check([substring.string isEqual:@"😀"] && NSEqualRanges(actualRange, NSMakeRange(1, 2)),
+            [NSString stringWithFormat:@"TEST 8: substring queries return the requested UTF-16 range (got %@ at %@)",
+                substring.string, NSStringFromRange(actualRange)]);
+
+        NSUInteger beforePartialReplace = collectedEvents.count;
+        [client setMarkedText:@"x" selectedRange:NSMakeRange(1, 0)
+            replacementRange:NSMakeRange(1, 2)];
+        check([client hasMarkedText] && NSEqualRanges([client markedRange], NSMakeRange(0, 3))
+            && NSEqualRanges([client selectedRange], NSMakeRange(2, 0))
+            && [lastPreedit(beforePartialReplace) isEqual:@"axc"],
+            [NSString stringWithFormat:@"TEST 8: partial replacement updates only the selected UTF-16 span (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforePartialReplace, collectedEvents.count - beforePartialReplace)]]);
+
+        NSUInteger beforeInvalidRange = collectedEvents.count;
+        [client setMarkedText:@"z" selectedRange:NSMakeRange(2, 0)
             replacementRange:NSMakeRange(NSNotFound, 0)];
-        NSUInteger beforeUnmarkState = collectedEvents.count;
-        NSRange selectionBeforeUnmark = unmarkView.selectedRange;
-        [unmarkView unmarkText];
-        compose = lastComposeEvent(beforeUnmarkState);
-        NSUInteger unmarkComposeCount = 0;
-        NSMutableArray *unmarkComposeEvents = [NSMutableArray array];
-        for (NSUInteger index = beforeUnmarkState; index < collectedEvents.count; index++) {
+        BOOL rejectedSelection = NO;
+        for (NSUInteger index = beforeInvalidRange; index < collectedEvents.count; index++) {
             NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[index] dataUsingEncoding:NSUTF8StringEncoding]
                 options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"input"]) {
-                unmarkComposeCount++;
-                [unmarkComposeEvents addObject:event[@"preedit"]];
+            for (NSDictionary *error in event[@"errors"]) {
+                if ([error[@"reason"] containsString:@"selected range"]) rejectedSelection = YES;
             }
         }
-        check([unmarkView.string isEqual:@"c"] && !unmarkView.hasMarkedText
-            && NSEqualRanges(unmarkView.selectedRange, selectionBeforeUnmark) && unmarkComposeCount == 1
-            && [compose[@"text"] isEqual:@"c"] && compose[@"markedRange"] == NSNull.null,
-            [NSString stringWithFormat:@"TEST 8: unmark reports null once when selection and retained suffix are unchanged (selection %@ -> %@, events %lu, got %@)",
-                NSStringFromRange(selectionBeforeUnmark), NSStringFromRange(unmarkView.selectedRange), (unsigned long)unmarkComposeCount, unmarkComposeEvents]);
-        sp_region_close(unmarkRegion);
-        void *atomicRegion = sp_region_create(surface, "test8-atomic-insert", testEvent, NULL);
-        sp_region_place(atomicRegion, 10, 10, 10, 10, true);
-        sp_region_focus(atomicRegion);
-        NSTextView *atomicView = (NSTextView *)atomicRegion;
-        [(id<NSTextInputClient>)atomicView insertText:@"abc" replacementRange:NSMakeRange(NSNotFound, 0)];
-        NSUInteger beforeCommittedInsert = collectedEvents.count;
-        [(id<NSTextInputClient>)atomicView insertText:@"X" replacementRange:NSMakeRange(NSNotFound, 0)];
-        NSDictionary *committedInsert = nil;
-        NSUInteger transactionsAfterInsert = 0;
-        for (NSUInteger i = beforeCommittedInsert; i < collectedEvents.count; i++) {
-            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"input"]) {
-                for (NSDictionary *action in event[@"actions"]) if ([action[@"type"] isEqual:@"insert"]) committedInsert = action;
-                committedInsert = committedInsert ? [[committedInsert mutableCopy] autorelease] : nil;
-                if (committedInsert) [(NSMutableDictionary *)committedInsert setObject:event[@"preedit"] forKey:@"preedit"];
-                transactionsAfterInsert++;
-            }
+        check(rejectedSelection && [client hasMarkedText]
+            && [lastPreedit(beforeInvalidRange) isEqual:@"axc"],
+            [NSString stringWithFormat:@"TEST 8: invalid selection reports an error and preserves the last valid buffer (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforeInvalidRange, collectedEvents.count - beforeInvalidRange)]]);
+
+        NSUInteger beforeUnmark = collectedEvents.count;
+        [client unmarkText];
+        check([committedTexts(beforeUnmark) isEqualToArray:@[@"axc"]]
+            && ![client hasMarkedText] && NSEqualRanges([client markedRange], NSMakeRange(NSNotFound, 0))
+            && [lastPreedit(beforeUnmark) isEqual:@""],
+            [NSString stringWithFormat:@"TEST 8: unmarkText commits the buffer once and clears marked state (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforeUnmark, collectedEvents.count - beforeUnmark)]]);
+        NSUInteger afterUnmark = collectedEvents.count;
+        [client unmarkText];
+        check(collectedEvents.count == afterUnmark,
+            @"TEST 8: unmarkText without marked text emits no duplicate transaction");
+
+        NSUInteger beforeCommand = collectedEvents.count;
+        [client doCommandBySelector:@selector(deleteForward:)];
+        check(collectedEvents.count == beforeCommand + 1
+            && [collectedEvents.lastObject containsString:@"deleteForward:"],
+            @"TEST 8: doCommandBySelector reports the command selector");
+
+        NSArray<NSDictionary *> *captured = capturedEvents(^{
+            [client setMarkedText:@"pending" selectedRange:NSMakeRange(7, 0)
+                replacementRange:NSMakeRange(NSNotFound, 0)];
+            [client insertText:@42 replacementRange:NSMakeRange(NSNotFound, 0)];
+        });
+        BOOL markedCallbackRecorded = NO;
+        BOOL invalidInsertRecorded = NO;
+        for (NSDictionary *event in captured) {
+            NSDictionary *fields = event[@"fields"];
+            if ([event[@"name"] isEqual:@"native.input.callback"]
+                && [fields[@"call"] isEqual:@"setMarkedText"] && [fields[@"after"][@"markedText"] isEqual:@"pending"])
+                markedCallbackRecorded = YES;
+            if ([event[@"name"] isEqual:@"native.input.callback"]
+                && [fields[@"call"] isEqual:@"insertText"] && [fields[@"dropped"] isEqual:@"not text"])
+                invalidInsertRecorded = YES;
         }
-        NSDictionary *insertPreedit = committedInsert[@"preedit"];
-        check([committedInsert[@"text"] isEqual:@"abc"] && [insertPreedit[@"text"] isEqual:@"X"]
-            && insertPreedit[@"markedRange"] == NSNull.null && insertPreedit[@"selectedRange"] != nil
-            && insertPreedit[@"replacementRange"] == NSNull.null && [insertPreedit[@"attributed"] isEqual:@NO]
-            && transactionsAfterInsert == 1,
-            [NSString stringWithFormat:@"TEST 8: one input transaction carries the committed insert and resulting strict preedit snapshot (got %@)",
-                [collectedEvents subarrayWithRange:NSMakeRange(beforeCommittedInsert, collectedEvents.count - beforeCommittedInsert)]]);
-        NSUInteger beforeSamePreeditCommit = collectedEvents.count;
-        [(id<NSTextInputClient>)atomicView insertText:@"X" replacementRange:NSMakeRange(NSNotFound, 0)];
-        NSDictionary *samePreeditInsert = nil;
-        NSUInteger samePreeditTransactionCount = 0;
-        for (NSUInteger i = beforeSamePreeditCommit; i < collectedEvents.count; i++) {
-            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"input"]) {
-                for (NSDictionary *action in event[@"actions"]) if ([action[@"type"] isEqual:@"insert"]) samePreeditInsert = action;
-                if (samePreeditInsert) {
-                    samePreeditInsert = [[samePreeditInsert mutableCopy] autorelease];
-                    [(NSMutableDictionary *)samePreeditInsert setObject:event[@"preedit"] forKey:@"preedit"];
-                }
-                samePreeditTransactionCount++;
-            }
+        check(markedCallbackRecorded && invalidInsertRecorded,
+            [NSString stringWithFormat:@"TEST 8: callbacks record buffer state and reject non-text input (got %@)", captured]);
+
+        [regionView retain];
+        sp_region_close(region8);
+        NSArray<NSDictionary *> *closedEvents = capturedEvents(^{
+            [client insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
+        });
+        [regionView release];
+        BOOL droppedClosedReport = NO;
+        for (NSDictionary *event in closedEvents) {
+            if ([event[@"name"] isEqual:@"native.input.report"] && [event[@"fields"][@"dropped"] isEqual:@YES])
+                droppedClosedReport = YES;
         }
-        check([samePreeditInsert[@"text"] isEqual:@"X"] && [samePreeditInsert[@"preedit"][@"text"] isEqual:@"X"]
-            && samePreeditTransactionCount == 1,
-            [NSString stringWithFormat:@"TEST 8: a new commit is sent once when retained preedit text is unchanged (got %@)",
-                [collectedEvents subarrayWithRange:NSMakeRange(beforeSamePreeditCommit, collectedEvents.count - beforeSamePreeditCommit)]]);
-        NSUInteger beforeBackspace = collectedEvents.count;
-        [atomicView setValue:@"{\"type\":\"key\",\"key\":\"Backspace\",\"shift\":false,\"alt\":false,\"ctrl\":false}" forKey:@"unhandledKey"];
-        [(id<NSTextInputClient>)atomicView doCommandBySelector:@selector(deleteBackward:)];
-        NSUInteger pendingInsertIndex = NSNotFound, backspaceIndex = NSNotFound;
-        NSUInteger insertActionIndex = NSNotFound, backspaceActionIndex = NSNotFound;
-        NSDictionary *clearedPreedit = nil;
-        for (NSUInteger i = beforeBackspace; i < collectedEvents.count; i++) {
-            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
-                options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"input"]) {
-                NSArray *actions = event[@"actions"];
-                for (NSUInteger actionIndex = 0; actionIndex < actions.count; actionIndex++) {
-                    NSDictionary *action = actions[actionIndex];
-                    if ([action[@"type"] isEqual:@"insert"]) { pendingInsertIndex = i; insertActionIndex = actionIndex; }
-                    if ([action[@"type"] isEqual:@"key"] && [action[@"key"] isEqual:@"Backspace"]) { backspaceIndex = i; backspaceActionIndex = actionIndex; }
-                }
-                if (pendingInsertIndex != NSNotFound) clearedPreedit = event[@"preedit"];
-            }
-        }
-        check(pendingInsertIndex != NSNotFound && backspaceIndex == pendingInsertIndex && backspaceActionIndex > insertActionIndex
-            && [clearedPreedit[@"text"] isEqual:@""] && clearedPreedit[@"markedRange"] == NSNull.null,
-            [NSString stringWithFormat:@"TEST 8: clearing the committed suffix reports its empty preedit before the pending Backspace (got %@)",
-                [collectedEvents subarrayWithRange:NSMakeRange(beforeBackspace, collectedEvents.count - beforeBackspace)]]);
-        sp_region_close(atomicRegion);
-        method_setImplementation(composesMethod, originalComposes);
-        method_setImplementation(hangulOnlyMethod, originalHangulOnly);
-        imp_removeBlock(composingSource);
-        imp_removeBlock(nonHangulOnlySource);
-        sp_region_close(rangeRegion);
-        [window makeFirstResponder:nil];
-
-        // Every callback of the input method and every report to the page is the event `native.input.callback` or
-        // `native.input.report` with its arguments, the typed text, the state of the input document before and after, and the
-        // correlation identifier of the input (docs/spec/logging.md#correlation-identifier).
-        sp_region_focus(region8);
-        {
-            NSUInteger beforeCapture = [collectedEvents count];
-            NSArray<NSDictionary *> *captured = capturedEvents(^{
-                [(id<NSTextInputClient>)regionView setMarkedText:@"한" selectedRange:NSMakeRange(1, 0)
-                    replacementRange:NSMakeRange(NSNotFound, 0)];
-                [(id<NSTextInputClient>)regionView insertText:@"한글" replacementRange:NSMakeRange(0, 1)];
-                // Leaving the focus commits what the document holds.
-                [window makeFirstResponder:nil];
-            });
-            NSString *records = captured.description;
-            NSMutableArray *calls = [NSMutableArray array];
-            NSMutableArray *reports = [NSMutableArray array];
-            for (NSDictionary *event in captured) {
-                if ([event[@"name"] isEqual:@"native.input.callback"]) [calls addObject:event[@"fields"]];
-                if ([event[@"name"] isEqual:@"native.input.report"]) [reports addObject:event[@"fields"][@"report"]];
-            }
-            // The callbacks that one callback causes take its identifier, and the identifier travels in the report to the page.
-            NSDictionary *markedEvent = nil, *insertedEvent = nil, *composeReport = nil;
-            for (NSDictionary *event in captured) {
-                NSDictionary *fields = event[@"fields"];
-                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"setMarkedText"]) markedEvent = event;
-                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"]) insertedEvent = event;
-                if ([event[@"name"] isEqual:@"native.input.report"]) {
-                    NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[fields[@"report"] dataUsingEncoding:NSUTF8StringEncoding]
-                        options:0 error:NULL];
-                    if ([payload[@"type"] isEqual:@"input"] && [payload[@"preedit"][@"text"] containsString:@"한"]
-                        && !composeReport) composeReport = event;
-                }
-            }
-            BOOL everyEventHasOneCid = captured.count > 0;
-            for (NSDictionary *event in captured) {
-                if (![event[@"name"] hasPrefix:@"native.input.c"] && ![event[@"name"] isEqual:@"native.input.report"]) continue;
-                if ([event[@"cids"] count] != 1) everyEventHasOneCid = NO;
-            }
-            check(everyEventHasOneCid, [NSString stringWithFormat:@"TEST 8: every callback and every report of the input method has one correlation identifier (got %@)", records]);
-            // The catalog declares the member dropped of a report as a boolean, so the record holds a JSON boolean (#F161.33).
-            BOOL everyDroppedIsBoolean = YES;
-            for (NSDictionary *event in captured) {
-                if (![event[@"name"] isEqual:@"native.input.report"]) continue;
-                if (CFGetTypeID((CFTypeRef)event[@"fields"][@"dropped"]) != CFBooleanGetTypeID()) everyDroppedIsBoolean = NO;
-            }
-            check(everyDroppedIsBoolean, [NSString stringWithFormat:@"TEST 8: the dropped member of every report is a boolean (got %@)", records]);
-            check(markedEvent && composeReport && [markedEvent[@"cids"] isEqualToArray:composeReport[@"cids"]],
-                [NSString stringWithFormat:@"TEST 8: a callback and the report it causes share one correlation identifier (got %@)", records]);
-            check(markedEvent && insertedEvent && ![markedEvent[@"cids"] isEqualToArray:insertedEvent[@"cids"]],
-                @"TEST 8: two callbacks of the input method are two inputs with two identifiers");
-            NSString *composePage = nil;
-            for (NSUInteger i = beforeCapture; i < collectedEvents.count; i++) {
-                NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
-                    options:0 error:NULL];
-                if ([payload[@"type"] isEqual:@"input"] && [payload[@"preedit"][@"text"] containsString:@"한"]) {
-                    composePage = collectedEvents[i];
-                    break;
-                }
-            }
-            NSDictionary *pageEvent = composePage ? [NSJSONSerialization JSONObjectWithData:[composePage dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
-            check(composeReport && [pageEvent[@"cids"] isEqualToArray:composeReport[@"cids"]],
-                [NSString stringWithFormat:@"TEST 8: the report to the page carries the correlation identifier (got %@)", composePage]);
-            // A callback records the processing that it causes (the preedit, the commit) before its own record.
-            NSDictionary * (^named)(NSString *) = ^NSDictionary *(NSString *name) {
-                for (NSDictionary *call in calls) if ([call[@"call"] isEqual:name]) return call;
-                return nil;
-            };
-            NSDictionary *marked = named(@"setMarkedText");
-            NSDictionary *inserted = named(@"insertText");
-            check(named(@"reportPreedit") != nil && named(@"commitThrough") != nil,
-                [NSString stringWithFormat:@"TEST 8: the preedit and the commit that a callback causes are recorded (got %@)", records]);
-            check([marked[@"call"] isEqual:@"setMarkedText"] && [marked[@"text"] isEqual:@"한"]
-                && [marked[@"selectedRange"][@"location"] isEqual:@1] && marked[@"replacementRange"] == NSNull.null,
-                [NSString stringWithFormat:@"TEST 8: setMarkedText is recorded with its text and ranges (got %@)", records]);
-            check(marked[@"before"][@"active"] != nil && marked[@"before"][@"keyWindow"] != nil
-                && marked[@"after"][@"active"] != nil && marked[@"after"][@"keyWindow"] != nil,
-                [NSString stringWithFormat:@"TEST 8: the state records whether the application is active and whether the window is the key window (got %@)", marked]);
-            check([marked[@"before"][@"document"] isEqual:@""] && [marked[@"after"][@"document"] isEqual:@"한"]
-                && [marked[@"after"][@"marked"][@"length"] isEqual:@1] && [marked[@"after"][@"committed"] isEqual:@0]
-                && marked[@"before"][@"source"] != nil,
-                @"TEST 8: the record holds the document, the marked range, the committed length and the input source before and after");
-            check([inserted[@"call"] isEqual:@"insertText"] && [inserted[@"text"] isEqual:@"한글"]
-                && [inserted[@"replacementRange"][@"location"] isEqual:@0] && [inserted[@"replacementRange"][@"length"] isEqual:@1],
-                @"TEST 8: insertText is recorded with its text and its replacement range");
-            BOOL reportedPreedit = NO;
-            for (NSString *report in reports) {
-                NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[report dataUsingEncoding:NSUTF8StringEncoding]
-                    options:0 error:NULL];
-                if ([payload[@"type"] isEqual:@"input"] && [payload[@"preedit"][@"text"] containsString:@"한"]) reportedPreedit = YES;
-            }
-            check(reportedPreedit, [NSString stringWithFormat:@"TEST 8: the final preedit transaction is recorded as sent (got %@)", reports]);
-        }
-        [window makeFirstResponder:nil];
-
-        // An input method edits its previous insert through a replacement range: U+314E -> U+D558 -> U+D55C.
-        sp_region_focus(region8);
-        void (^inputMethod)(NSString *, NSRange) = ^(NSString *text, NSRange range) {
-            [(id<NSTextInputClient>)regionView insertText:text replacementRange:range];
-        };
-        NSUInteger beforeEdit = [collectedEvents count];
-        inputMethod(@"ㅎ", NSMakeRange(NSNotFound, 0));
-        NSArray *afterFirst = committedTexts(beforeEdit);
-        inputMethod(@"하", NSMakeRange(0, 1));
-        inputMethod(@"한", NSMakeRange(0, 1));
-        if (afterFirst.count == 0) {
-            check(committedTexts(beforeEdit).count == 0 && [lastPreedit(beforeEdit) isEqual:@"한"],
-                [NSString stringWithFormat:@"TEST 8: replaced input-method text stays editable preedit (got %@)", collectedEvents]);
-            inputMethod(@"ㄱ", NSMakeRange(NSNotFound, 0));
-            // The Korean input method revises the syllable before its newest insert, so with a source that composes only
-            // Hangul that syllable stays in the preedit (image_region_hangul_test.m); another composing source commits it.
-            BOOL hangulOnly = ((BOOL (*)(id, SEL))objc_msgSend)(regionView, NSSelectorFromString(@"selectedSourceComposesOnlyHangul"));
-            check(hangulOnly ? (committedTexts(beforeEdit).count == 0 && [lastPreedit(beforeEdit) isEqual:@"한ㄱ"])
-                : ([committedTexts(beforeEdit) isEqualToArray:@[@"한"]] && [lastPreedit(beforeEdit) isEqual:@"ㄱ"]),
-                [NSString stringWithFormat:@"TEST 8: an appended insert commits the text before it, except the syllable that a Hangul source revises (got %@)", collectedEvents]);
-            [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(insertNewline:)];
-            check([[committedTexts(beforeEdit) componentsJoinedByString:@""] isEqual:@"한ㄱ"] && [lastPreedit(beforeEdit) isEqual:@""]
-                && [[collectedEvents lastObject] rangeOfString:@"insertNewline:"].location != NSNotFound,
-                [NSString stringWithFormat:@"TEST 8: a command commits the remaining preedit before it is reported (got %@)", collectedEvents]);
-
-            // F8-16-1: The Korean input method composes only Hangul. Text that the input method inserts after it commits a syllable
-            // (Space or a digit) is committed immediately together with that syllable. A new jamo remains as preedit.
-            if ([regionView.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."]) {
-                NSUInteger beforeSpace = [collectedEvents count];
-                NSUInteger base = regionView.textStorage.length;
-                inputMethod(@"ㅎ", NSMakeRange(NSNotFound, 0));
-                inputMethod(@"하", NSMakeRange(base, 1));
-                inputMethod(@"한", NSMakeRange(base, 1));
-                inputMethod(@"한", NSMakeRange(base, 1));
-                inputMethod(@" ", NSMakeRange(NSNotFound, 0));
-                check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 "]
-                    && [lastPreedit(beforeSpace) isEqual:@""],
-                    [NSString stringWithFormat:@"TEST 8: a space after a Korean syllable is committed at once (got %@)", collectedEvents]);
-                inputMethod(@"1", NSMakeRange(NSNotFound, 0));
-                inputMethod(@"ㄱ", NSMakeRange(NSNotFound, 0));
-                check([[committedTexts(beforeSpace) componentsJoinedByString:@""] isEqual:@"한 1"]
-                    && [lastPreedit(beforeSpace) isEqual:@"ㄱ"],
-                    [NSString stringWithFormat:@"TEST 8: a digit is committed at once and a new jamo stays preedit (got %@)", collectedEvents]);
-                [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(insertNewline:)];
-                NSUInteger beforeBatch = [collectedEvents count];
-                NSUInteger batchStart = regionView.textStorage.length;
-                inputMethod(@"은", NSMakeRange(NSNotFound, 0));
-                inputMethod(@"은 ", NSMakeRange(batchStart, 1));
-                check([[committedTexts(beforeBatch) componentsJoinedByString:@""] isEqual:@"은 "]
-                    && [lastPreedit(beforeBatch) isEqual:@""],
-                    [NSString stringWithFormat:@"TEST 8: a Korean syllable and Space in one insert are committed at once (got %@)", collectedEvents]);
-            } else {
-                printf("TEST 8: the selected input source is not the Korean input method; the Korean commit rule needs it\n");
-            }
-            [window makeFirstResponder:nil];
-            sp_region_focus(region8);
-        } else {
-            printf("TEST 8: the selected input source is a keyboard layout; replacement cases need an input method\n");
-        }
-
-        NSUInteger beforeDelete = [collectedEvents count];
-        [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(deleteForward:)];
-        check([collectedEvents count] == beforeDelete + 1 &&
-            [[collectedEvents lastObject] rangeOfString:@"deleteForward:"].location != NSNotFound,
-            @"TEST 8: doCommandBySelector reports its selector");
-
-        NSAttributedString *attributed = [[[NSAttributedString alloc] initWithString:@"한글"] autorelease];
-        [(id<NSTextInputClient>)regionView setMarkedText:attributed selectedRange:NSMakeRange(1, 0)
-            replacementRange:NSMakeRange(NSNotFound, 0)];
-        check([lastPreedit(0) isEqual:@"한글"], @"TEST 8: attributed marked text is reported as preedit");
-        NSUInteger beforeUnmark = [collectedEvents count];
-        [regionView unmarkText];
-        [window makeFirstResponder:nil];
-        // In the NSTextInputClient contract, unmarkText accepts marked text as ordinary input.
-        check([committedTexts(beforeUnmark) isEqualToArray:@[@"한글"]] && [lastPreedit(beforeUnmark) isEqual:@""]
-            && !regionView.hasMarkedText && regionView.textStorage.length == 0,
-            [NSString stringWithFormat:@"TEST 8: unmarkText commits the marked text exactly once (got %@)", collectedEvents]);
-        NSUInteger afterUnmark = [collectedEvents count];
-        [regionView unmarkText];
-        check([collectedEvents count] == afterUnmark,
-            [NSString stringWithFormat:@"TEST 8: unmarkText without marked text reports nothing (got %lu events)",
-                [collectedEvents count] - afterUnmark]);
-
-        NSUInteger beforeNoop = [collectedEvents count];
-        [(id<NSTextInputClient>)regionView setMarkedText:@"pending" selectedRange:NSMakeRange(7, 0)
-            replacementRange:NSMakeRange(NSNotFound, 0)];
-        NSUInteger beforeNoopCommand = [collectedEvents count];
-        [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(noop:)];
-        check([collectedEvents count] == beforeNoopCommand && [regionView.string isEqual:@"pending"]
-            && [lastPreedit(beforeNoop) isEqual:@"pending"],
-            [NSString stringWithFormat:@"TEST 8: noop: preserves pending input without reporting a command (got %@)", collectedEvents]);
-
-        // An input that the region drops is recorded with its reason: a command that does nothing, an insert that is not
-        // text, and a report to a region that is closed.
-        {
-            NSArray<NSDictionary *> *dropEvents = capturedEvents(^{
-                [(id<NSTextInputClient>)regionView doCommandBySelector:@selector(noop:)];
-                [(id<NSTextInputClient>)regionView insertText:@42 replacementRange:NSMakeRange(NSNotFound, 0)];
-            });
-            NSString *records = dropEvents.description;
-            BOOL noopDropped = NO, notTextDropped = NO;
-            for (NSDictionary *event in dropEvents) {
-                NSDictionary *fields = event[@"fields"];
-                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"doCommandBySelector"] && [fields[@"dropped"] isEqual:@"noop"]) noopDropped = YES;
-                if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"] && [fields[@"dropped"] isEqual:@"not text"]) notTextDropped = YES;
-            }
-            check(noopDropped, [NSString stringWithFormat:@"TEST 8: a noop: command is recorded as dropped (got %@)", records]);
-            check(notTextDropped, [NSString stringWithFormat:@"TEST 8: an insert that is not text is recorded as dropped (got %@)", records]);
-            [regionView retain];
-            sp_region_close(region8);
-            NSArray<NSDictionary *> *closedEvents = capturedEvents(^{
-                [(id<NSTextInputClient>)regionView insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
-            });
-            [regionView release];
-            BOOL reportDropped = NO;
-            for (NSDictionary *event in closedEvents) {
-                if ([event[@"name"] isEqual:@"native.input.report"] && [event[@"fields"][@"dropped"] isEqual:@YES]) reportDropped = YES;
-            }
-            check(reportDropped, [NSString stringWithFormat:@"TEST 8: a report to a closed region is recorded as dropped (got %@)", closedEvents]);
-            region8 = NULL;
-        }
-
+        check(droppedClosedReport,
+            [NSString stringWithFormat:@"TEST 8: reporting through a closed region is recorded as dropped (got %@)", closedEvents]);
     }
 
     // TEST 9: accessibility and caret
@@ -1060,7 +714,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             ? [NSJSONSerialization JSONObjectWithData:[collectedEvents[beforeKey] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
         check(keyDown && [keyDown[@"cids"] count] == 1 && [keyDown[@"level"] intValue] == SP_EVENT_INFO
                 && [keyDown[@"fields"][@"keyCode"] isEqual:@36] && [keyDown[@"fields"][@"characters"] isEqual:@"\r"]
-                && [keyDown[@"fields"][@"before"][@"document"] isEqual:@""],
+                && [keyDown[@"fields"][@"before"][@"markedText"] isEqual:@""],
             [NSString stringWithFormat:@"TEST 11: a key is the event native.input.key_down with its code, characters and one identifier (got %@)", keyEvents]);
         check(keyDown && keyReport && [keyReport[@"cids"] isEqualToArray:keyDown[@"cids"]] && [pageKey[@"cids"] isEqualToArray:keyDown[@"cids"]]
                 && [keyDown[@"cids"][0] hasPrefix:@"native-test."],
@@ -1079,9 +733,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_place(region, 10, 10, 10, 10, true);
         NSArray *types = [(NSView *)region registeredDraggedTypes];
         check(types.count == 0, [NSString stringWithFormat:@"drag: the region registers no dragged types (got %@)", types]);
-        // NSTextView registers drag types again when it gains focus or its editing state changes.
         sp_region_focus(region);
-        [(NSTextView *)region setEditable:YES];
         types = [(NSView *)region registeredDraggedTypes];
         check(types.count == 0, [NSString stringWithFormat:@"drag: a focused region registers no dragged types (got %@)", types]);
         sp_region_close(region);
@@ -1109,22 +761,23 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region);
     }
 
-    // A key goes to the input method when it is a normal character or when the document holds marked text; when the
+    // A key goes to the input method when it is a normal character or when the input client holds marked text; when the
     // input method does not answer (outside the key window of the active application), the key is reported as an error
     // instead of being dropped without a report. The test gives the region an input context that answers nothing.
     for (NSString *marked in @[@"", @"\u3139"]) {
         void *region = sp_region_create(surface, "silent", testEvent, NULL);
         sp_region_place(region, 10, 10, 10, 10, true);
         sp_region_focus(region);
-        NSTextView *regionView = (NSTextView *)region;
-        SilentInputContext *silent = [[[SilentInputContext alloc] initWithClient:regionView] autorelease];
+        NSView *regionView = (NSView *)region;
+        id<NSTextInputClient> client = (id<NSTextInputClient>)region;
+        SilentInputContext *silent = [[[SilentInputContext alloc] initWithClient:client] autorelease];
         sp_region_set_input_context(region, silent);
         if (marked.length > 0) {
-            [(id<NSTextInputClient>)regionView setMarkedText:marked selectedRange:NSMakeRange(1, 0)
+            [client setMarkedText:marked selectedRange:NSMakeRange(1, 0)
                 replacementRange:NSMakeRange(NSNotFound, 0)];
         }
-        check(regionView.hasMarkedText == (marked.length > 0),
-            [NSString stringWithFormat:@"silent input method: the document holds the marked text \"%@\" when the key arrives", marked]);
+        check([client hasMarkedText] == (marked.length > 0),
+            [NSString stringWithFormat:@"silent input method: the marked buffer holds \"%@\" when the key arrives", marked]);
         NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
             windowNumber:0 context:nil characters:@"\u3147" charactersIgnoringModifiers:@"\u3147" isARepeat:NO keyCode:2];
         [collectedEvents removeAllObjects];
@@ -1675,14 +1328,13 @@ int main(int argc, char **argv) { @autoreleasepool {
     {
         void *region = sp_region_create(surface, "edit-actions", testEvent, NULL);
         sp_region_place(region, 0, 0, 0, 0, true);
-        NSTextView *regionView = (NSTextView *)region;
+        NSView *regionView = (NSView *)region;
         NSUInteger before = collectedEvents.count;
         [NSApp sendAction:@selector(paste:) to:regionView from:nil];
         [NSApp sendAction:@selector(pasteAsPlainText:) to:regionView from:nil];
         NSArray *reported = [collectedEvents subarrayWithRange:NSMakeRange(before, collectedEvents.count - before)];
-        check([reportsWithoutCids(reported) isEqualToArray:@[@{@"type": @"action", @"name": @"paste"}, @{@"type": @"action", @"name": @"paste"}]]
-            && regionView.textStorage.length == 0,
-            [NSString stringWithFormat:@"edit actions: paste reports one paste action and leaves the input document empty (got %@)", reported]);
+        check([reportsWithoutCids(reported) isEqualToArray:@[@{@"type": @"action", @"name": @"paste"}, @{@"type": @"action", @"name": @"paste"}]],
+            [NSString stringWithFormat:@"edit actions: paste reports one paste action per command (got %@)", reported]);
         // Copy goes to the page command that copies the selection and does not write the input method document to the pasteboard.
         NSInteger changes = NSPasteboard.generalPasteboard.changeCount;
         NSUInteger beforeCopy = collectedEvents.count;
@@ -1692,12 +1344,13 @@ int main(int argc, char **argv) { @autoreleasepool {
             && NSPasteboard.generalPasteboard.changeCount == changes,
             [NSString stringWithFormat:@"edit actions: copy reports one copy action and leaves the pasteboard unchanged (got %@)", copied]);
         NSMenuItem *item = [[[NSMenuItem alloc] initWithTitle:@"" action:@selector(copy:) keyEquivalent:@""] autorelease];
-        check([regionView validateMenuItem:item], @"edit actions: Copy is enabled for a terminal region");
+        id<NSUserInterfaceValidations> validator = (id<NSUserInterfaceValidations>)regionView;
+        check([validator validateUserInterfaceItem:item], @"edit actions: Copy is enabled for a terminal region");
         item.action = @selector(paste:);
-        check([regionView validateMenuItem:item], @"edit actions: Paste is enabled for a terminal region");
+        check([validator validateUserInterfaceItem:item], @"edit actions: Paste is enabled for a terminal region");
         for (NSString *name in @[@"cut:", @"selectAll:", @"delete:"]) {
             item.action = NSSelectorFromString(name);
-            check(![regionView validateMenuItem:item],
+            check(![validator validateUserInterfaceItem:item],
                 [NSString stringWithFormat:@"edit actions: %@ is disabled for a terminal region", name]);
         }
         sp_region_close(region);

@@ -16,6 +16,10 @@
 #import "observe.h"
 #import "webview_geometry.h"
 
+static BOOL inputRangeFitsLength(NSRange range, NSUInteger length) {
+    return range.location != NSNotFound && range.location <= length && range.length <= length - range.location;
+}
+
 @class SPImageRegion;
 
 @interface SPImageClipView : NSClipView
@@ -29,7 +33,7 @@
 @end
 
 // Image region implementation.
-@interface SPImageRegion : NSTextView
+@interface SPImageRegion : NSView <NSTextInputClient>
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
@@ -54,12 +58,13 @@
 @property BOOL closed;
 @property BOOL hasFocus;
 @property(copy) NSString *reportedPreedit;  // The composition string reported last.
+@property(retain) NSMutableAttributedString *markedTextBuffer;
+@property NSRange inputSelection;
 @property BOOL unmarking;
 @property BOOL hasReportedCompositionState;
 @property NSRange reportedMarkedRange;
 @property NSRange reportedSelectedRange;
 @property BOOL reportedHasMarkedText;
-@property NSUInteger committedLength;       // The length from the document start already committed by insert.
 @property(copy) NSString *unhandledKey;     // The report of a special key given to the input method first. Reported if the input method does not handle it.
 @property NSUInteger reports;               // The number of reports sent. Used to check whether the input context answered a key.
 @property(copy) NSString *activeCid;        // The correlation identifier of the input being processed; nil outside one.
@@ -77,7 +82,6 @@
 - (NSString *)jsonEscapedString:(NSString *)string;
 - (NSString *)inputState;
 - (NSString *)preeditSnapshotJSON:(BOOL *)changed;
-- (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range;
 - (void)reportInsert:(NSString *)text;
 - (void)logInput:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (BOOL)enterInput;
@@ -175,12 +179,6 @@ static NSString *keypadKeyName(unsigned short keyCode) {
     }
 }
 
-// YES for a Hangul jamo (U+1100–U+11FF, U+3130–U+318F, U+A960–U+A97F, U+D7B0–U+D7FF) or a syllable (U+AC00–U+D7A3).
-static BOOL isHangul(unichar ch) {
-    return (ch >= 0x1100 && ch <= 0x11FF) || (ch >= 0x3130 && ch <= 0x318F) || (ch >= 0xA960 && ch <= 0xA97F)
-        || (ch >= 0xAC00 && ch <= 0xD7A3) || (ch >= 0xD7B0 && ch <= 0xD7FF);
-}
-
 // The registry of live image regions (weak references). A closed region disappears when it is deallocated. Every
 // region operation is
 // on the main thread.
@@ -227,45 +225,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     if (!self) return nil;
     if (!spLiveRegions) spLiveRegions = [[NSHashTable alloc] initWithOptions:NSPointerFunctionsWeakMemory capacity:0];
     [spLiveRegions addObject:self];
-    self.drawsBackground = NO;
-    self.textColor = NSColor.clearColor;
-    self.insertionPointColor = NSColor.clearColor;
-    self.textContainerInset = NSZeroSize;
-    self.markedTextAttributes = @{
-        NSForegroundColorAttributeName: NSColor.clearColor,
-        NSBackgroundColorAttributeName: NSColor.clearColor,
-        NSUnderlineStyleAttributeName: @0,
-    };
-    self.selectedTextAttributes = @{
-        NSForegroundColorAttributeName: NSColor.clearColor,
-        NSBackgroundColorAttributeName: NSColor.clearColor,
-    };
-    self.richText = NO;
-    self.allowsUndo = NO;
-    // Only the string that the input method inserted is kept in the document. The automatic editing of AppKit changes
-    // input, so it is turned off.
-    self.automaticQuoteSubstitutionEnabled = NO;
-    self.automaticDashSubstitutionEnabled = NO;
-    self.automaticTextReplacementEnabled = NO;
-    self.automaticSpellingCorrectionEnabled = NO;
-    self.automaticLinkDetectionEnabled = NO;
-    self.automaticDataDetectionEnabled = NO;
-    self.automaticTextCompletionEnabled = NO;
-    self.continuousSpellCheckingEnabled = NO;
-    self.grammarCheckingEnabled = NO;
-    self.smartInsertDeleteEnabled = NO;
-    self.enabledTextCheckingTypes = 0;
-    self.usesFindBar = NO;
-    self.usesFontPanel = NO;
-    self.usesRuler = NO;
-    self.importsGraphics = NO;
-    self.displaysLinkToolTips = NO;
+    self.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];
+    self.inputSelection = NSMakeRange(0, 0);
     self.reportedPreedit = @"";
     self.lastValidPreeditJSON = @"{\"text\":\"\",\"markedRange\":null,\"selectedRange\":{\"location\":0,\"length\":0},\"replacementRange\":null,\"attributed\":false}";
     sp_observe_notification_selector("image_region.input_source", SP_OBSERVE_RECORD, self, @selector(inputSourceChanged:),
         NSTextInputContextKeyboardSelectionDidChangeNotification, nil);
-    self.editable = YES;
-    self.selectable = YES;
     self.wantsLayer = YES;
     self.layerUsesCoreImageFilters = YES;
     self.imageLayer = [[[CALayer alloc] init] autorelease];
@@ -288,6 +253,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [_inputPreedit release];
     [_inputFailureReason release];
     [_lastValidPreeditJSON release];
+    [_markedTextBuffer release];
     // Releases the immutable snapshot after the contents of the layer are cleared.
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
@@ -298,7 +264,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [super dealloc];
 }
 
-// The keys of the region go to the context that sp_region_set_input_context gave, and otherwise to the context of AppKit.
+// The keys of the region go to the supplied diagnostic context when present, and otherwise to AppKit's context.
 - (NSTextInputContext *)inputContext {
     if (self.givenInputContext) return self.givenInputContext;
     return [super inputContext];
@@ -312,8 +278,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return nil;
 }
 
-// NSTextView recreates the I-beam cursor tracking area in updateTrackingAreas.
-// This view is not a pointer hit target, so that area is removed and the cursor of the page is kept.
+// The image region is not a pointer hit target, so no cursor tracking area is needed.
 - (void)updateTrackingAreas {
     [super updateTrackingAreas];
     for (NSTrackingArea *area in [[self.trackingAreas copy] autorelease]) {
@@ -345,7 +310,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     SEL action = item.action;
     if (action == @selector(paste:) || action == @selector(pasteAsPlainText:) || action == @selector(copy:)) return YES;
     if (action == @selector(cut:) || action == @selector(selectAll:) || action == @selector(delete:)) return NO; // silent: a turned-off Edit action is the answer of the menu validation, which AppKit shows as a disabled item
-    return [super validateUserInterfaceItem:item];
+    return YES;
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem *)item {
@@ -762,7 +727,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
 
-    // NSTextView owns the lifecycle of the AppKit input method events and the composition state.
+    // A marked buffer remains owned by this client until the input method commits or cancels it.
     if ([self hasMarkedText]) {
         [self passToInputMethod:event];
         return;
@@ -893,9 +858,9 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         // during composition turns a syllable with a final consonant into one without it). If the input method does
         // not handle the key, AppKit requests the command of that key, and
         // then the remaining string is committed and the original key is reported (doCommandBySelector:).
-        if (isSpecialKey && !hasCtrlOrOption && self.textStorage.length > self.committedLength) {
+        if (isSpecialKey && !hasCtrlOrOption && self.markedTextBuffer.length > 0) {
             self.unhandledKey = json;
-            [super keyDown:event];
+            [self interpretKeyEvents:@[event]];
             self.unhandledKey = nil;
             return;
         }
@@ -912,7 +877,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // the input context receives a key sent to another window but inserts no character, so no answer is reported as an error.
 - (void)passToInputMethod:(NSEvent *)event {
     NSUInteger before = self.reports;
-    [super keyDown:event];
+    [self interpretKeyEvents:@[event]];
     if (self.reports == before && !(NSApp.isActive && self.window.isKeyWindow)) {
         NSString *reason = [NSString stringWithFormat:
             @"input method did not answer native keyCode=%hu outside the key window of the active application",
@@ -959,17 +924,8 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self report:json.UTF8String];
 }
 
-// The input method can rewrite a string it inserted earlier by using a replacement range (for example, the macOS
-// Korean input method composes a syllable in steps).
-// The input method remembers the document position of the syllable being composed, so while an input source that
-// composes is selected, the string the input method inserted
-// stays in the document even after it is committed. The input method no longer revises the part before the start of
-// the newly inserted string, except that the Korean input method revises the one syllable before it, so that part is
-// committed by insert, and the rest is reported as the composition string. The Korean input method composes only
-// Hangul, so when the string it inserted
-// ends with a non-Hangul character (for example, a space or digit after a syllable), the input method no longer
-// revises it and it is committed at once.
-// The document is cleared when the composition of the input method ends.
+// The client owns only the current marked text. A commit emits the resolved replacement once and clears that buffer;
+// terminal output, including previously committed text, is not an editable client document.
 - (void)insertText:(id)string replacementRange:(NSRange)range {
     BOOL opened = [self enterInput];
     [self handleInsertText:string replacementRange:range];
@@ -977,64 +933,38 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)handleInsertText:(id)string replacementRange:(NSRange)range {
-    NSString *text = [string isKindOfClass:NSAttributedString.class]
-        ? [(NSAttributedString *)string string]
+    BOOL attributed = [string isKindOfClass:NSAttributedString.class];
+    NSString *text = attributed ? [(NSAttributedString *)string string]
         : ([string isKindOfClass:NSString.class] ? (NSString *)string : nil);
     NSString *before = [self inputState];
     NSString *fields = [NSString stringWithFormat:@"\"text\":%@,\"attributed\":%@,\"replacementRange\":%@",
         text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
-        [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false", [self jsonRange:range]];
+        attributed ? @"true" : @"false", [self jsonRange:range]];
     if ([self rejectCallbackAfterInputFailure:@"insertText" fields:fields before:before]) return;
     if (!text) {
         [self logInput:@"insertText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
     }
-    [self performInsertText:string text:text range:range];
+    if (range.location != NSNotFound && !inputRangeFitsLength(range, self.markedTextBuffer.length)) {
+        NSString *reason = [NSString stringWithFormat:@"replacement range %@ is outside the marked buffer of length %lu",
+            [self jsonRange:range], (unsigned long)self.markedTextBuffer.length];
+        [self failInput:reason where:"input method" text:[NSString stringWithFormat:
+            @"%@: text \"%@\" replacement %@ state %@", reason, [self jsonEscapedString:text],
+            [self jsonRange:range], [self inputState]]];
+        [self logInput:@"insertText" fields:[fields stringByAppendingFormat:
+            @",\"dropped\":\"invalid replacement range\",\"reason\":\"%@\"", [self jsonEscapedString:reason]] before:before];
+        return;
+    }
+    NSString *committed = text;
+    if (range.location != NSNotFound) {
+        NSMutableString *replacement = [NSMutableString stringWithString:self.markedTextBuffer.string];
+        [replacement replaceCharactersInRange:range withString:text];
+        committed = replacement;
+    }
+    self.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];
+    self.inputSelection = NSMakeRange(0, 0);
+    [self reportInsert:committed];
     [self logInput:@"insertText" fields:fields before:before];
-}
-
-// The processing of an insert of the input method: the replacement of committed text is reported as an error, the text
-// enters the document, and what the document holds is committed or reported as preedit.
-- (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range {
-    if (range.location != NSNotFound && range.location < self.committedLength) {
-        // A string already sent to the PTY cannot be undone. The replacement is reported as an error instead of being
-        // discarded.
-        NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
-            (unsigned long)range.location, (unsigned long)self.committedLength];
-        [self failInput:reason where:"input method" text:[NSString stringWithFormat:@"%@: text \"%@\" replacement %@ state %@",
-            reason, [self jsonEscapedString:text], [self jsonRange:range], [self inputState]]];
-        return;
-    }
-    [super insertText:string replacementRange:range];
-    if (self.hasMarkedText) {
-        [self reportPreedit];
-        return;
-    }
-    if (![self selectedSourceComposes]) {
-        NSString *committed = [self commitThrough:self.textStorage.length];
-        [self clearDocument];
-        if (committed.length) [self reportInsert:committed];
-        else [self reportPreedit];
-        return;
-    }
-    NSUInteger end = self.selectedRange.location;
-    NSUInteger start = end >= text.length ? end - text.length : 0;
-    // The Korean input method revises the syllable before its newest insert (a final consonant that a vowel follows moves to
-    // the next syllable), and it can append the new syllable before it replaces that one, so that syllable stays in the
-    // document until the next insert or the end of the composition commits it.
-    NSUInteger through = start;
-    if ([self selectedSourceComposesOnlyHangul] && through > self.committedLength
-        && isHangul([self.textStorage.string characterAtIndex:through - 1])) {
-        through -= 1;
-    }
-    NSMutableString *committed = [NSMutableString string];
-    if (through > self.committedLength) [committed appendString:[self commitThrough:through]];
-    if ([self selectedSourceComposesOnlyHangul] && self.textStorage.length > self.committedLength) {
-        unichar last = [self.textStorage.string characterAtIndex:self.textStorage.length - 1];
-        if (!isHangul(last)) [committed appendString:[self commitThrough:self.textStorage.length]];
-    }
-    if (committed.length) [self reportInsert:committed];
-    else [self reportPreedit];
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
@@ -1057,18 +987,45 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         [self logInput:@"setMarkedText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
     }
-    if (replacementRange.location != NSNotFound && replacementRange.location < self.committedLength) {
-        NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
-            (unsigned long)replacementRange.location, (unsigned long)self.committedLength];
+    if (text.length == 0) {
+        self.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];
+        self.inputSelection = NSMakeRange(0, 0);
+        [self reportPreedit];
+        [self logInput:@"setMarkedText" fields:fields before:before];
+        return;
+    }
+    BOOL selectedValid = selectedRange.location == NSNotFound
+        ? selectedRange.length == 0 : inputRangeFitsLength(selectedRange, text.length);
+    if (!selectedValid) {
+        NSString *reason = [NSString stringWithFormat:@"selected range %@ is outside marked text of length %lu",
+            [self jsonRange:selectedRange], (unsigned long)text.length];
+        [self failInput:reason where:"input method" text:[NSString stringWithFormat:
+            @"%@: text \"%@\" selected %@ state %@", reason, [self jsonEscapedString:text],
+            [self jsonRange:selectedRange], [self inputState]]];
+        [self logInput:@"setMarkedText" fields:[fields stringByAppendingFormat:
+            @",\"dropped\":\"invalid selected range\",\"reason\":\"%@\"", [self jsonEscapedString:reason]] before:before];
+        return;
+    }
+    BOOL replacementValid = replacementRange.location == NSNotFound
+        || inputRangeFitsLength(replacementRange, self.markedTextBuffer.length);
+    if (!replacementValid) {
+        NSString *reason = [NSString stringWithFormat:@"replacement range %@ is outside marked buffer of length %lu",
+            [self jsonRange:replacementRange], (unsigned long)self.markedTextBuffer.length];
         [self failInput:reason where:"input method" text:[NSString stringWithFormat:
             @"%@: text \"%@\" replacement %@ state %@", reason, [self jsonEscapedString:text],
             [self jsonRange:replacementRange], [self inputState]]];
         [self logInput:@"setMarkedText" fields:[fields stringByAppendingFormat:
-            @",\"dropped\":\"committed text replacement\",\"reason\":\"%@\"",
-            [self jsonEscapedString:reason]] before:before];
+            @",\"dropped\":\"unsupported replacement range\",\"reason\":\"%@\"", [self jsonEscapedString:reason]] before:before];
         return;
     }
-    [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
+    NSMutableString *replacement = [NSMutableString stringWithString:self.markedTextBuffer.string];
+    NSUInteger insertionLocation = replacementRange.location == NSNotFound ? 0 : replacementRange.location;
+    NSRange mutationRange = replacementRange.location == NSNotFound
+        ? NSMakeRange(0, replacement.length) : replacementRange;
+    [replacement replaceCharactersInRange:mutationRange withString:text];
+    self.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:replacement] autorelease];
+    self.inputSelection = selectedRange.location == NSNotFound
+        ? NSMakeRange(NSNotFound, 0) : NSMakeRange(insertionLocation + selectedRange.location, selectedRange.length);
     [self reportPreedit];
     [self logInput:@"setMarkedText" fields:fields before:before];
 }
@@ -1076,92 +1033,63 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)unmarkText {
     BOOL opened = [self enterInput];
     NSString *before = [self inputState];
-    if ([self rejectCallbackAfterInputFailure:@"unmarkText" fields:@"" before:before]) {
-        [self leaveInput:opened];
-        return;
+    if (![self rejectCallbackAfterInputFailure:@"unmarkText" fields:@"" before:before]) {
+        NSString *committed = [[self.markedTextBuffer.string copy] autorelease];
+        self.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];
+        self.inputSelection = NSMakeRange(0, 0);
+        if (committed.length) [self reportInsert:committed];
+        else [self reportPreedit];
+        [self logInput:@"unmarkText" fields:@"" before:before];
     }
-    BOOL wasUnmarking = self.unmarking;
-    self.unmarking = YES;
-    @try {
-        [super unmarkText];
-    } @finally {
-        self.unmarking = wasUnmarking;
-    }
-    if (!wasUnmarking) [self reportPreedit];
-    [self logInput:@"unmarkText" fields:@"" before:before];
     [self leaveInput:opened];
 }
 
-// Checks whether the selected input source is an input method. A keyboard layout does not rewrite the strings it
-// inserted.
-- (BOOL)selectedSourceComposes {
-    NSString *identifier = self.inputContext.selectedKeyboardInputSource;
-    if (!identifier) {
-        sp_log_error("input method", "the input context has no selected keyboard input source");
-        return NO;
-    }
-    NSArray *sources = (NSArray *)TISCreateInputSourceList(
-        (CFDictionaryRef)@{(id)kTISPropertyInputSourceID: identifier}, false);
-    BOOL composes = NO;
-    if (sources.count > 0) {
-        CFStringRef type = TISGetInputSourceProperty((TISInputSourceRef)sources[0], kTISPropertyInputSourceType);
-        composes = type && !CFEqual(type, kTISTypeKeyboardLayout);
-    }
-    [sources release];
-    return composes;
+- (BOOL)hasMarkedText {
+    BOOL marked = self.markedTextBuffer.length > 0;
+    [self logQuery:@"hasMarkedText" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", marked ? @"true" : @"false"]; }];
+    return marked;
 }
 
-// YES if the selected input source is the macOS Korean input method. This input method composes only Hangul jamo and
-// syllables, and while composing by replacement range
-// it sends no callback that the composition ended (a Space after a syllable is insert(" ") after the syllable is
-// committed again).
-- (BOOL)selectedSourceComposesOnlyHangul {
-    return [self.inputContext.selectedKeyboardInputSource hasPrefix:@"com.apple.inputmethod.Korean."];
+- (NSRange)markedRange {
+    NSRange range = self.markedTextBuffer.length ? NSMakeRange(0, self.markedTextBuffer.length) : NSMakeRange(NSNotFound, 0);
+    [self logQuery:@"markedRange" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]; }];
+    return range;
 }
 
-// Reports the part of the document from the commit position to end as committed input. It does not change the
-// document.
-- (NSString *)commitThrough:(NSUInteger)end {
-    if (end <= self.committedLength) return @"";
-    NSString *committed = [self.textStorage.string substringWithRange:
-        NSMakeRange(self.committedLength, end - self.committedLength)];
-    NSUInteger from = self.committedLength;
-    self.committedLength = end;
-    [self logInput:@"commitThrough" fields:[NSString stringWithFormat:@"\"from\":%lu,\"to\":%lu,\"committed\":\"%@\"",
-        (unsigned long)from, (unsigned long)end, [self jsonEscapedString:committed]] before:nil];
-    return committed;
+- (NSRange)selectedRange {
+    NSRange range = self.inputSelection;
+    [self logQuery:@"selectedRange" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]; }];
+    return range;
 }
 
-// Serializes the retained suffix and its exact AppKit composition and selection state.
-- (NSString *)preeditSnapshotJSON:(BOOL *)changedOut {
-    if (self.unmarking) {
-        [self logInput:@"reportPreedit" fields:@"\"deferred\":true" before:nil];
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText {
+    return @[];
+}
+
+- (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
+    if (!inputRangeFitsLength(range, self.markedTextBuffer.length)) {
+        if (actualRange) *actualRange = NSMakeRange(NSNotFound, 0);
         return nil;
     }
-    NSString *storage = self.textStorage.string;
-    if (self.committedLength > storage.length) {
-        NSString *reason = [NSString stringWithFormat:@"committed input length %lu exceeds document length %lu",
-            (unsigned long)self.committedLength, (unsigned long)storage.length];
+    if (actualRange) *actualRange = range;
+    return [[[NSAttributedString alloc] initWithAttributedString:
+        [self.markedTextBuffer attributedSubstringFromRange:range]] autorelease];
+}
+
+- (NSString *)preeditSnapshotJSON:(BOOL *)changedOut {
+    NSString *preedit = self.markedTextBuffer.string;
+    BOOL hasMarkedText = preedit.length > 0;
+    NSRange localMarked = hasMarkedText ? NSMakeRange(0, preedit.length) : NSMakeRange(NSNotFound, 0);
+    NSRange selected = self.inputSelection;
+    BOOL selectedValid = selected.location == NSNotFound
+        ? selected.length == 0 : inputRangeFitsLength(selected, preedit.length);
+    if (!selectedValid) {
+        NSString *reason = [NSString stringWithFormat:@"selected range %@ is outside marked text of length %lu",
+            [self jsonRange:selected], (unsigned long)preedit.length];
         [self failInput:reason where:"composition range" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
         return nil;
     }
-    NSString *preedit = [storage substringFromIndex:self.committedLength];
-    BOOL hasMarkedText = [super hasMarkedText];
-    NSRange marked = hasMarkedText ? [super markedRange] : NSMakeRange(NSNotFound, 0);
-    NSRange localMarked = NSMakeRange(NSNotFound, 0);
-    if (hasMarkedText) {
-        if (marked.location == NSNotFound || marked.location < self.committedLength
-            || marked.location > storage.length || marked.length > storage.length - marked.location) {
-            NSString *reason = [NSString stringWithFormat:@"marked range %@ is outside the retained composition text of length %lu",
-                [self jsonRange:marked], (unsigned long)preedit.length];
-            [self failInput:reason where:"composition range" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
-            return nil;
-        }
-        localMarked = NSMakeRange(marked.location - self.committedLength, marked.length);
-    }
-    NSRange selected = [super selectedRange];
-    NSRange localSelected = selected.location != NSNotFound && selected.location >= self.committedLength
-        ? NSMakeRange(selected.location - self.committedLength, selected.length) : NSMakeRange(NSNotFound, 0);
+    NSRange localSelected = selected;
     BOOL changed = !self.hasReportedCompositionState
         || ![preedit isEqualToString:self.reportedPreedit]
         || hasMarkedText != self.reportedHasMarkedText
@@ -1181,7 +1109,6 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return snapshot;
 }
 
-// Reports the retained suffix and its exact AppKit composition and selection state.
 - (void)reportPreedit {
     BOOL opened = [self enterInput];
     @try {
@@ -1210,27 +1137,18 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [self report:json.UTF8String];
 }
 
-- (void)clearDocument {
-    NSString *before = [self inputState];
-    [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
-    self.committedLength = 0;
-    [self logInput:@"clearDocument" fields:@"" before:before];
-}
-
-// Commits the remaining string and ends the composition of the input method before a command, a special key, focus
-// release, an input source switch, or close.
-// While the input method holds marked text, the input method decides the commit.
+// Finalizes pending input before a command, focus transition, source change, or close. The input context may call
+// unmarkText during a commit; the empty buffer prevents a duplicate action.
 - (void)commitPending {
-    if (self.hasMarkedText || self.textStorage.length == 0) {
-        [self logInput:@"commitPending" fields:@"\"skipped\":true" before:nil];
+    NSString *pending = [[self.markedTextBuffer.string copy] autorelease];
+    if (pending.length == 0) {
+        [self logInput:@"commitPending" fields:@"\"committed\":false" before:nil];
         return;
     }
-    [self logInput:@"commitPending" fields:@"\"skipped\":false" before:nil];
-    NSString *committed = [self commitThrough:self.textStorage.length];
-    [self.inputContext discardMarkedText];
-    [self clearDocument];
-    if (committed.length) [self reportInsert:committed];
-    else [self reportPreedit];
+    self.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];
+    self.inputSelection = NSMakeRange(0, 0);
+    [self reportInsert:pending];
+    [self logInput:@"commitPending" fields:@"\"committed\":true" before:nil];
 }
 
 - (void)inputSourceChanged:(NSNotification *)notification {
@@ -1253,24 +1171,6 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *json = [NSString stringWithFormat:@"{\"call\":\"%@\",%@\"focus\":%@}", call,
         arguments.length ? [arguments stringByAppendingString:@","] : @"", self.hasFocus ? @"true" : @"false"];
     sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, "native.input.query", json.UTF8String);
-}
-
-- (NSRange)markedRange {
-    NSRange range = [super markedRange];
-    [self logQuery:@"markedRange" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]; }];
-    return range;
-}
-
-- (NSRange)selectedRange {
-    NSRange range = [super selectedRange];
-    [self logQuery:@"selectedRange" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", [self jsonRange:range]]; }];
-    return range;
-}
-
-- (BOOL)hasMarkedText {
-    BOOL marked = [super hasMarkedText];
-    [self logQuery:@"hasMarkedText" fields:^NSString * { return [NSString stringWithFormat:@"\"answer\":%@", marked ? @"true" : @"false"]; }];
-    return marked;
 }
 
 - (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(NSRangePointer)actualRange {
@@ -1323,15 +1223,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     return escaped;
 }
 
-// The state of the input document as JSON: the text, the committed length, the marked and selected ranges, the preedit
-// that was reported last, the selected input source and the focus. Every record of the input holds it, so a defect of the
-// input is located from the files alone.
+// The state of the marked buffer, its selection, the selected input source and focus. Every input record includes this
+// state so callback behavior can be diagnosed from the trace.
 - (NSString *)inputState {
     NSString *source = self.inputContext.selectedKeyboardInputSource;
     return [NSString stringWithFormat:
-        @"{\"document\":\"%@\",\"committed\":%lu,\"marked\":%@,\"selected\":%@,\"reportedPreedit\":\"%@\","
+        @"{\"markedText\":\"%@\",\"marked\":%@,\"selected\":%@,\"reportedPreedit\":\"%@\","
         @"\"source\":%@,\"focus\":%@,\"closed\":%@,\"reports\":%lu,\"active\":%@,\"keyWindow\":%@}",
-        [self jsonEscapedString:self.textStorage.string], (unsigned long)self.committedLength,
+        [self jsonEscapedString:self.markedTextBuffer.string],
         [self hasMarkedText] ? [self jsonRange:self.markedRange] : @"null", [self jsonRange:self.selectedRange],
         [self jsonEscapedString:self.reportedPreedit ?: @""],
         source ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:source]] : @"null",
@@ -1646,6 +1545,12 @@ void sp_region_close(void *handle) {
     BOOL opened = [view enterInput];
     @try {
         [view commitPending];
+        NSWindow *window = view.window;
+        if (window.firstResponder == view) [window makeFirstResponder:window.contentView];
+        [view.inputContext discardMarkedText];
+        view.givenInputContext = nil;
+        view.markedTextBuffer = [[[NSMutableAttributedString alloc] initWithString:@""] autorelease];
+        view.inputSelection = NSMakeRange(0, 0);
     } @finally {
         [view leaveInput:opened];
     }

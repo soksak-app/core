@@ -8,6 +8,7 @@
 @interface SPControlledInputContext : NSTextInputContext
 @property(copy) void (^callback)(id<NSTextInputClient> client);
 @property NSUInteger handledEvents;
+@property NSUInteger discardedMarkedTextCalls;
 @property(copy) NSString *sourceIdentifier;
 @end
 
@@ -19,6 +20,10 @@
 }
 - (NSString *)selectedKeyboardInputSource {
     return self.sourceIdentifier ?: @"com.apple.keylayout.ABC";
+}
+- (void)discardMarkedText {
+    self.discardedMarkedTextCalls++;
+    [super discardMarkedText];
 }
 - (void)dealloc {
     [_callback release];
@@ -69,10 +74,11 @@ int main(void) { @autoreleasepool {
     check(composition != NULL && region != NULL, @"the exported image region is created");
 
     reports = [NSMutableArray array];
-    NSTextView *view = (NSTextView *)region;
+    NSView *view = (NSView *)region;
+    id<NSTextInputClient> client = (id<NSTextInputClient>)region;
     check(view.inputContext != nil,
         @"the normal image region uses AppKit's input context before diagnostic injection");
-    SPControlledInputContext *context = [[[SPControlledInputContext alloc] initWithClient:view] autorelease];
+    SPControlledInputContext *context = [[[SPControlledInputContext alloc] initWithClient:client] autorelease];
     sp_region_set_input_context(region, context);
     [window makeFirstResponder:view];
 
@@ -96,11 +102,27 @@ int main(void) { @autoreleasepool {
     check(actions.count == 1 && [actions[0][@"type"] isEqual:@"insert"]
         && [actions[0][@"text"] isEqual:@"committed"],
         [NSString stringWithFormat:@"the transaction retains the committed insert (got %@)", transaction]);
+
     check([transaction[@"preedit"][ @"text"] isEqual:@"next"]
         && [transaction[@"preedit"][ @"markedRange"][ @"length"] isEqual:@4],
         [NSString stringWithFormat:@"the transaction carries only the final marked snapshot (got %@)", transaction]);
     check([transaction[@"errors"] isEqualToArray:@[]],
         @"a valid input transaction has no callback errors");
+
+    // Insert followed by unmark in one physical key callback scope emits one committed action.
+    [reports removeAllObjects];
+    context.callback = ^(id<NSTextInputClient> client) {
+        [client setMarkedText:@"nested" selectedRange:NSMakeRange(6, 0)
+            replacementRange:NSMakeRange(NSNotFound, 0)];
+        [client insertText:@"nested" replacementRange:NSMakeRange(NSNotFound, 0)];
+        [client unmarkText];
+    };
+    [view keyDown:keyEvent(7, @"x", 0)];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    actions = transaction[@"actions"];
+    check(reports.count == 1 && actions.count == 1 && [actions[0][@"text"] isEqual:@"nested"]
+        && [transaction[@"preedit"][@"text"] isEqual:@""] && [transaction[@"errors"] isEqual:@[]],
+        [NSString stringWithFormat:@"insert and unmark in one key scope commit once (got %@)", reports]);
 
     // An ordered command callback remains adjacent to its preceding committed insert in the same physical input.
     [reports removeAllObjects];
@@ -118,6 +140,21 @@ int main(void) { @autoreleasepool {
         && [actions[1][@"selector"] isEqual:@"deleteBackward:"],
         [NSString stringWithFormat:@"insert and deleteBackward command remain ordered in one transaction (got %@)", reports]);
 
+    [reports removeAllObjects];
+    context.callback = ^(id<NSTextInputClient> client) {
+        [client setMarkedText:@"pending-before-command" selectedRange:NSMakeRange(22, 0)
+            replacementRange:NSMakeRange(NSNotFound, 0)];
+        [client doCommandBySelector:@selector(deleteBackward:)];
+    };
+    [view keyDown:keyEvent(7, @"x", 0)];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    actions = transaction[@"actions"];
+    check(actions.count == 2 && [actions[0][@"type"] isEqual:@"insert"]
+        && [actions[0][@"text"] isEqual:@"pending-before-command"]
+        && [actions[1][@"type"] isEqual:@"command"]
+        && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"a command commits pending text before its ordered command action (got %@)", transaction]);
+
     // A callback outside keyDown is one transaction, and an empty modifier-key scope sends no input event.
     [reports removeAllObjects];
     [(id<NSTextInputClient>)region setMarkedText:@"standalone" selectedRange:NSMakeRange(10, 0)
@@ -125,212 +162,227 @@ int main(void) { @autoreleasepool {
     check(reports.count == 1 && [reports[0][@"type"] isEqual:@"input"],
         [NSString stringWithFormat:@"a standalone text callback publishes one transaction (got %@)", reports]);
     [reports removeAllObjects];
+    [(id<NSTextInputClient>)region setMarkedText:@"source-change" selectedRange:NSMakeRange(13, 0)
+        replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    [NSNotificationCenter.defaultCenter postNotificationName:NSTextInputContextKeyboardSelectionDidChangeNotification
+        object:context];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"actions"] count] == 1
+        && [transaction[@"actions"][0][@"text"] isEqual:@"source-change"]
+        && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"a change of input source commits pending text once (got %@)", reports]);
+    [reports removeAllObjects];
     context.callback = nil;
     [view keyDown:keyEvent(7, @"x", NSEventModifierFlagCommand)];
     check(reports.count == 0, [NSString stringWithFormat:@"a key scope with no text callback publishes no input (got %@)", reports]);
 
-    // The controlled context reproduces four consecutive Korean vowel keys from the native callback trace.
+    // Replay the controlled Korean callbacks against the exported NSView input client.
     sp_region_close(region);
     region = sp_region_create(surface, "hangul-input-transaction", receiveRegionEvent, NULL);
     check(region != NULL, @"the Hangul input region is created through the exported interface");
-    view = (NSTextView *)region;
-    context = [[[SPControlledInputContext alloc] initWithClient:view] autorelease];
+    view = (NSView *)region;
+    client = (id<NSTextInputClient>)region;
+    context = [[[SPControlledInputContext alloc] initWithClient:client] autorelease];
     context.sourceIdentifier = @"com.apple.inputmethod.Korean.2SetKorean";
     sp_region_set_input_context(region, context);
     [window makeFirstResponder:view];
-
-    context.callback = ^(id<NSTextInputClient> client) {
-        [client setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0)
+    NSMutableString *committedVowels = [NSMutableString string];
+    NSTextView *vowelReference = [[[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 120, 30)] autorelease];
+    transaction = nil;
+    NSArray<NSDictionary *> *key4Records = nil;
+    for (NSUInteger key = 1; key <= 4; key++) {
+        [vowelReference setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0)
             replacementRange:NSMakeRange(NSNotFound, 0)];
-    };
-    [reports removeAllObjects];
-    [view keyDown:keyEvent(40, @"ㅏ", 0)];
-    check([view.string isEqual:@"ㅏ"] && reports.count == 1,
-        [NSString stringWithFormat:@"the first controlled vowel starts composition (document %@, reports %@)", view.string, reports]);
-
-    context.callback = ^(id<NSTextInputClient> client) {
-        [client setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0)
-            replacementRange:NSMakeRange(NSNotFound, 0)];
-        [client insertText:@"ㅏ" replacementRange:NSMakeRange(NSNotFound, 0)];
-        [client setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0)
-            replacementRange:NSMakeRange(NSNotFound, 0)];
-    };
-    for (NSUInteger key = 2; key <= 3; key++) {
+        if (key > 1) {
+            [vowelReference insertText:@"ㅏ" replacementRange:NSMakeRange(NSNotFound, 0)];
+            [vowelReference setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0)
+                replacementRange:NSMakeRange(NSNotFound, 0)];
+        }
+        context.callback = ^(id<NSTextInputClient> inputClient) {
+            [inputClient setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+            if (key > 1) {
+                [inputClient insertText:@"ㅏ" replacementRange:NSMakeRange(NSNotFound, 0)];
+                [inputClient setMarkedText:@"ㅏ" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+            }
+        };
         [reports removeAllObjects];
-        [view keyDown:keyEvent(40, @"ㅏ", 0)];
+        if (key == 4) key4Records = capturedEvents(^{ [view keyDown:keyEvent(40, @"ㅏ", 0)]; });
+        else [view keyDown:keyEvent(40, @"ㅏ", 0)];
+        transaction = reports.count == 1 ? reports[0] : nil;
+        for (NSDictionary *action in transaction[@"actions"]) {
+            if ([action[@"type"] isEqual:@"insert"]) [committedVowels appendString:action[@"text"]];
+        }
+        NSString *visible = [committedVowels stringByAppendingString:transaction[@"preedit"][@"text"] ?: @""];
         NSString *expected = [@"ㅏ" stringByPaddingToLength:key withString:@"ㅏ" startingAtIndex:0];
-        check([view.string isEqual:expected],
-            [NSString stringWithFormat:@"vowel %lu retains the expected input document (got %@)", (unsigned long)key, view.string]);
+        check(reports.count == 1 && [visible isEqual:expected] && [visible isEqual:vowelReference.string],
+            [NSString stringWithFormat:@"Korean key %lu commits and retains marked text without loss or duplication (visible %@, AppKit reference %@, transaction %@)",
+                (unsigned long)key, visible, vowelReference.string, transaction]);
+        if (key == 1) {
+            check([client hasMarkedText] && NSEqualRanges([client markedRange], NSMakeRange(0, 1))
+                && NSEqualRanges([client selectedRange], NSMakeRange(1, 0)),
+                [NSString stringWithFormat:@"the client exposes marked text and local selection (transaction %@)", transaction]);
+        }
     }
-    NSArray<NSDictionary *> *key4Records = capturedEvents(^{
-        [reports removeAllObjects];
-        [view keyDown:keyEvent(40, @"ㅏ", 0)];
-    });
-    transaction = reports.count == 1 ? reports[0] : nil;
-    actions = transaction[@"actions"];
-    check([view.string isEqual:@"ㅏㅏㅏㅏ"] && reports.count == 1
-        && [transaction[@"type"] isEqual:@"input"] && actions.count == 1
-        && [actions[0][@"type"] isEqual:@"insert"] && [actions[0][@"text"] isEqual:@"ㅏ"]
-        && [transaction[@"preedit"][ @"text"] isEqual:@"ㅏㅏㅏ"]
-        && [transaction[@"preedit"][ @"markedRange"][ @"location"] isEqual:@2]
-        && [transaction[@"preedit"][ @"markedRange"][ @"length"] isEqual:@1],
-        [NSString stringWithFormat:@"the fourth vowel publishes its commit and final three-vowel preedit atomically (got %@)", reports]);
-    BOOL committedFirstVowel = NO;
+    check([transaction[@"actions"] count] == 1 && [transaction[@"actions"][0][@"text"] isEqual:@"ㅏ"]
+        && [transaction[@"preedit"][@"text"] isEqual:@"ㅏ"]
+        && [transaction[@"preedit"][@"markedRange"][@"location"] isEqual:@0]
+        && [transaction[@"preedit"][@"selectedRange"][@"location"] isEqual:@1],
+        [NSString stringWithFormat:@"the fourth vowel has one committed insert and one local marked vowel (transaction %@)", transaction]);
+    BOOL fourthInsertCallback = NO;
     for (NSDictionary *record in key4Records) {
         NSDictionary *fields = record[@"fields"];
-        if ([record[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"commitThrough"]
-            && [fields[@"committed"] isEqual:@"ㅏ"] && [fields[@"to"] isEqual:@1]) committedFirstVowel = YES;
-    }
-    check(committedFirstVowel,
-        [NSString stringWithFormat:@"the fourth-key fixture commits exactly the first vowel (records %@)", key4Records]);
-
-    // Replacing the first committed vowel fails before mutating the native input document or sending an insert report.
-    [reports removeAllObjects];
-    NSString *before = [[view.string copy] autorelease];
-    NSArray<NSDictionary *> *invalidRecords = capturedEvents(^{
-        [(id<NSTextInputClient>)region insertText:@"invalid" replacementRange:NSMakeRange(0, 1)];
-    });
-    check([view.string isEqual:before],
-        [NSString stringWithFormat:@"a rejected committed-range replacement leaves the document unchanged (before %@, after %@)", before, view.string]);
-    transaction = reports.count == 1 ? reports[0] : nil;
-    check([(NSArray *)transaction[@"errors"] count] == 1 && [(NSArray *)transaction[@"actions"] count] == 0
-        && [transaction[@"preedit"][ @"text"] isEqual:@"ㅏㅏㅏ"],
-        [NSString stringWithFormat:@"a rejected replacement preserves the last valid preedit without an action (got %@)", reports]);
-    BOOL recordedUnchangedRejectedCallback = NO;
-    BOOL sentCommittedInsert = NO;
-    for (NSDictionary *record in invalidRecords) {
-        NSDictionary *fields = record[@"fields"];
         if ([record[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"]
-            && [fields[@"text"] isEqual:@"invalid"]
-            && [fields[@"before"][@"document"] isEqual:fields[@"after"][@"document"]]
-            && [fields[@"before"][@"committed"] isEqual:fields[@"after"][@"committed"]]
-            && [fields[@"before"][@"marked"] isEqual:fields[@"after"][@"marked"]]
-            && [fields[@"before"][@"selected"] isEqual:fields[@"after"][@"selected"]]) {
-            recordedUnchangedRejectedCallback = YES;
-        }
-        if ([record[@"name"] isEqual:@"native.input.report"]
-            && [fields[@"report"] containsString:@"\"type\":\"insert\""]) sentCommittedInsert = YES;
+            && [fields[@"text"] isEqual:@"ㅏ"]) fourthInsertCallback = YES;
     }
-    check(recordedUnchangedRejectedCallback,
-        [NSString stringWithFormat:@"the rejected callback remains observable with unchanged state (got %@)", invalidRecords]);
-    check(!sentCommittedInsert,
-        [NSString stringWithFormat:@"the rejected callback sends no committed insert report (got %@)", invalidRecords]);
+    check(fourthInsertCallback, [NSString stringWithFormat:@"the fourth input scope records its commit callback (records %@)", key4Records]);
 
-    // A callback failure rejects the remaining synchronous callbacks in that same keyDown scope.
+    [reports removeAllObjects];
+    NSArray<NSDictionary *> *invalidSelectionRecords = capturedEvents(^{
+        [client setMarkedText:@"x" selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    });
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([client hasMarkedText] && [transaction[@"preedit"][@"text"] isEqual:@"ㅏ"]
+        && [transaction[@"errors"] count] == 1 && [transaction[@"actions"] count] == 0,
+        [NSString stringWithFormat:@"invalid local selection leaves the marked buffer unchanged (transaction %@, records %@)", transaction, invalidSelectionRecords]);
+
+    [reports removeAllObjects];
+    NSArray<NSDictionary *> *invalidReplacementRecords = capturedEvents(^{
+        [client insertText:@"invalid" replacementRange:NSMakeRange(0, 2)];
+    });
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([client hasMarkedText] && [transaction[@"preedit"][@"text"] isEqual:@"ㅏ"]
+        && [transaction[@"errors"] count] == 1 && [transaction[@"actions"] count] == 0,
+        [NSString stringWithFormat:@"out-of-buffer insert replacement is rejected (transaction %@, records %@)", transaction, invalidReplacementRecords]);
+
     sp_region_close(region);
     region = sp_region_create(surface, "input-transaction-failure-prefix", receiveRegionEvent, NULL);
     check(region != NULL, @"the callback-failure region is created through the exported interface");
-    view = (NSTextView *)region;
-    context = [[[SPControlledInputContext alloc] initWithClient:view] autorelease];
+    view = (NSView *)region;
+    client = (id<NSTextInputClient>)region;
+    context = [[[SPControlledInputContext alloc] initWithClient:client] autorelease];
     context.sourceIdentifier = @"com.apple.inputmethod.Korean.2SetKorean";
     sp_region_set_input_context(region, context);
     [window makeFirstResponder:view];
-    id<NSTextInputClient> client = (id<NSTextInputClient>)region;
     [client insertText:@"가" replacementRange:NSMakeRange(NSNotFound, 0)];
     [client insertText:@"나" replacementRange:NSMakeRange(NSNotFound, 0)];
     [client insertText:@"다" replacementRange:NSMakeRange(NSNotFound, 0)];
-    check([view.string isEqual:@"가나다"],
-        [NSString stringWithFormat:@"the failure fixture seeds a revisable Hangul document (got %@)", view.string]);
-    __block NSString *documentBeforeFailureKey = nil;
     [reports removeAllObjects];
     context.callback = ^(id<NSTextInputClient> inputClient) {
         [inputClient insertText:@"라" replacementRange:NSMakeRange(NSNotFound, 0)];
-        documentBeforeFailureKey = [view.string copy];
         [inputClient insertText:@"invalid" replacementRange:NSMakeRange(0, 1)];
         [inputClient insertText:@"마" replacementRange:NSMakeRange(NSNotFound, 0)];
     };
-    NSArray<NSDictionary *> *failedScopeRecords = capturedEvents(^{
-        [view keyDown:keyEvent(40, @"ㅏ", 0)];
-    });
+    NSArray<NSDictionary *> *failedScopeRecords = capturedEvents(^{ [view keyDown:keyEvent(40, @"ㅏ", 0)]; });
     transaction = reports.count == 1 ? reports[0] : nil;
-    actions = transaction[@"actions"];
-    check([view.string isEqual:documentBeforeFailureKey],
-        [NSString stringWithFormat:@"a callback after an input failure does not mutate the accepted prefix (before %@, after %@)",
-            documentBeforeFailureKey, view.string]);
-    check(actions.count == 1 && [actions[0][@"type"] isEqual:@"insert"]
-        && [actions[0][@"text"] isEqual:@"나"]
-        && [transaction[@"preedit"][@"text"] isEqual:@"다라"]
-        && [(NSArray *)transaction[@"errors"] count] == 1,
-        [NSString stringWithFormat:@"the transaction retains its valid prefix and last valid preedit only (got %@)", transaction]);
+    check([transaction[@"actions"] count] == 1 && [transaction[@"actions"][0][@"text"] isEqual:@"라"]
+        && [transaction[@"preedit"][@"text"] isEqual:@""] && [transaction[@"errors"] count] == 1,
+        [NSString stringWithFormat:@"the failed scope keeps its valid ordered action (transaction %@)", transaction]);
     BOOL rejectedLaterCallback = NO;
     for (NSDictionary *record in failedScopeRecords) {
         NSDictionary *fields = record[@"fields"];
         if ([record[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"]
             && [fields[@"text"] isEqual:@"마"] && [fields[@"dropped"] isEqual:@"input scope already failed"]
-            && [fields[@"before"][@"document"] isEqual:fields[@"after"][@"document"]]
-            && [fields[@"before"][@"committed"] isEqual:fields[@"after"][@"committed"]]
+            && [fields[@"before"][@"markedText"] isEqual:fields[@"after"][@"markedText"]]
             && [fields[@"before"][@"marked"] isEqual:fields[@"after"][@"marked"]]
             && [fields[@"before"][@"selected"] isEqual:fields[@"after"][@"selected"]]) rejectedLaterCallback = YES;
     }
-    check(rejectedLaterCallback,
-        [NSString stringWithFormat:@"the later callback is logged as rejected with unchanged state (got %@)", failedScopeRecords]);
-    [documentBeforeFailureKey release];
-
-    // A new native input scope starts clean after the failed scope.
-    context.callback = ^(id<NSTextInputClient> inputClient) {
-        [inputClient insertText:@"바" replacementRange:NSMakeRange(NSNotFound, 0)];
-    };
+    check(rejectedLaterCallback, [NSString stringWithFormat:@"post-error callback is rejected without buffer mutation (records %@)", failedScopeRecords]);
+    context.callback = ^(id<NSTextInputClient> inputClient) { [inputClient insertText:@"바" replacementRange:NSMakeRange(NSNotFound, 0)]; };
     [reports removeAllObjects];
     [view keyDown:keyEvent(40, @"ㅏ", 0)];
     transaction = reports.count == 1 ? reports[0] : nil;
-    check([view.string isEqual:@"가나다라바"] && [(NSArray *)transaction[@"errors"] count] == 0
-        && [transaction[@"preedit"][@"text"] isEqual:@"라바"],
-        [NSString stringWithFormat:@"the next key scope processes normally after the failure (document %@, transaction %@)",
-            view.string, transaction]);
+    check([transaction[@"errors"] count] == 0 && [transaction[@"actions"][0][@"text"] isEqual:@"바"],
+        [NSString stringWithFormat:@"new key scope accepts text after failure (transaction %@)", transaction]);
 
-    // A marked-text replacement cannot rewrite a character already committed past the native boundary.
     sp_region_close(region);
-    region = sp_region_create(surface, "input-transaction-marked-replacement", receiveRegionEvent, NULL);
-    check(region != NULL, @"the marked-replacement region is created through the exported interface");
-    view = (NSTextView *)region;
-    context = [[[SPControlledInputContext alloc] initWithClient:view] autorelease];
+    region = sp_region_create(surface, "input-transaction-partial-replacement", receiveRegionEvent, NULL);
+    check(region != NULL, @"the marked-buffer replacement region is created through the exported interface");
+    view = (NSView *)region;
+    client = (id<NSTextInputClient>)region;
+    context = [[[SPControlledInputContext alloc] initWithClient:client] autorelease];
     context.sourceIdentifier = @"com.apple.inputmethod.Korean.2SetKorean";
     sp_region_set_input_context(region, context);
     [window makeFirstResponder:view];
-    client = (id<NSTextInputClient>)region;
-    [client insertText:@"가" replacementRange:NSMakeRange(NSNotFound, 0)];
-    [client insertText:@"나" replacementRange:NSMakeRange(NSNotFound, 0)];
-    [client insertText:@"다" replacementRange:NSMakeRange(NSNotFound, 0)];
-    check([view.string isEqual:@"가나다"],
-        [NSString stringWithFormat:@"the marked-replacement fixture seeds a committed Hangul prefix (got %@)", view.string]);
-    NSString *beforeMarkedReplacement = [[view.string copy] autorelease];
+    [client setMarkedText:@"abc" selectedRange:NSMakeRange(3, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    NSRange actualRange = NSMakeRange(NSNotFound, 0);
+    NSAttributedString *substring = [client attributedSubstringForProposedRange:NSMakeRange(1, 1) actualRange:&actualRange];
+    NSAttributedString *outside = [client attributedSubstringForProposedRange:NSMakeRange(3, 1) actualRange:NULL];
+    check([substring.string isEqual:@"b"] && NSEqualRanges(actualRange, NSMakeRange(1, 1)) && outside == nil,
+        [NSString stringWithFormat:@"input query returns exact marked-buffer UTF-16 text (substring %@, range %@, outside %@)", substring, NSStringFromRange(actualRange), outside]);
     [reports removeAllObjects];
-    context.callback = ^(id<NSTextInputClient> inputClient) {
-        [inputClient setMarkedText:@"invalid" selectedRange:NSMakeRange(7, 0)
-            replacementRange:NSMakeRange(0, 1)];
-        [inputClient insertText:@"later" replacementRange:NSMakeRange(NSNotFound, 0)];
-    };
-    NSArray<NSDictionary *> *markedReplacementRecords = capturedEvents(^{
-        [view keyDown:keyEvent(40, @"ㅏ", 0)];
-    });
+    [client setMarkedText:@"x" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(1, 1)];
     transaction = reports.count == 1 ? reports[0] : nil;
-    actions = transaction[@"actions"];
-    check([view.string isEqual:beforeMarkedReplacement],
-        [NSString stringWithFormat:@"a rejected marked replacement preserves the committed prefix and input document (before %@, after %@)",
-            beforeMarkedReplacement, view.string]);
-    check([(NSArray *)transaction[@"errors"] count] == 1
-        && [transaction[@"errors"][0][@"reason"] containsString:@"replaced committed text at 0 (committed 1)"]
-        && actions.count == 0,
-        [NSString stringWithFormat:@"the marked replacement reports one committed-prefix error and no action (got %@)", transaction]);
-    BOOL rejectedMarkedCallbackUnchanged = NO;
-    BOOL rejectedFollowingCallbackUnchanged = NO;
-    for (NSDictionary *record in markedReplacementRecords) {
-        NSDictionary *fields = record[@"fields"];
-        if (![record[@"name"] isEqual:@"native.input.callback"]) continue;
-        BOOL unchanged = [fields[@"before"][@"document"] isEqual:fields[@"after"][@"document"]]
-            && [fields[@"before"][@"committed"] isEqual:fields[@"after"][@"committed"]]
-            && [fields[@"before"][@"marked"] isEqual:fields[@"after"][@"marked"]]
-            && [fields[@"before"][@"selected"] isEqual:fields[@"after"][@"selected"]];
-        if ([fields[@"call"] isEqual:@"setMarkedText"] && [fields[@"dropped"] isEqual:@"committed text replacement"]
-            && unchanged) rejectedMarkedCallbackUnchanged = YES;
-        if ([fields[@"call"] isEqual:@"insertText"] && [fields[@"text"] isEqual:@"later"]
-            && [fields[@"dropped"] isEqual:@"input scope already failed"] && unchanged) rejectedFollowingCallbackUnchanged = YES;
-    }
-    check(rejectedMarkedCallbackUnchanged && rejectedFollowingCallbackUnchanged,
-        [NSString stringWithFormat:@"the marked replacement and later callback are recorded as rejected without mutation (got %@)",
-            markedReplacementRecords]);
+    check([transaction[@"preedit"][@"text"] isEqual:@"axc"]
+        && [transaction[@"preedit"][@"markedRange"][@"length"] isEqual:@3]
+        && [transaction[@"preedit"][@"selectedRange"][@"location"] isEqual:@2],
+        [NSString stringWithFormat:@"partial mark replacement keeps both surrounding characters visible (transaction %@)", transaction]);
+    [reports removeAllObjects];
+    [client insertText:@"y" replacementRange:NSMakeRange(1, 1)];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"actions"][0][@"text"] isEqual:@"ayc"] && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"partial committed replacement sends the resolved buffer once (transaction %@)", transaction]);
+    NSTextView *reference = [[[NSTextView alloc] initWithFrame:NSMakeRect(0, 0, 120, 30)] autorelease];
+    [reference setMarkedText:@"abc" selectedRange:NSMakeRange(1, 1)
+        replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reference insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
+    NSString *referenceResult = reference.string;
+    [reports removeAllObjects];
+    [client setMarkedText:@"abc" selectedRange:NSMakeRange(1, 1) replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    [client insertText:@"x" replacementRange:NSMakeRange(NSNotFound, 0)];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"actions"][0][@"text"] isEqual:referenceResult]
+        && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"NSNotFound insertion matches the AppKit text-view reference %@ (transaction %@)", referenceResult, transaction]);
 
+    [reports removeAllObjects];
+    [client setMarkedText:@"pending" selectedRange:NSMakeRange(7, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    [client unmarkText];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"actions"][0][@"text"] isEqual:@"pending"] && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"unmark accepts pending text once (transaction %@)", transaction]);
+    [reports removeAllObjects];
+    [client setMarkedText:@"once" selectedRange:NSMakeRange(4, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    [client insertText:@"once" replacementRange:NSMakeRange(NSNotFound, 0)];
+    [client unmarkText];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"actions"][0][@"text"] isEqual:@"once"] && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"unmark after insert does not duplicate the commit (transaction %@)", transaction]);
+    [reports removeAllObjects];
+    [client setMarkedText:@"cancel" selectedRange:NSMakeRange(6, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    [client setMarkedText:@"" selectedRange:NSMakeRange(0, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"actions"] count] == 0 && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"explicit empty marked text cancels without commit (transaction %@)", transaction]);
+
+    // Closing a region commits its pending marked buffer, detaches its input context, and releases the responder.
+    [reports removeAllObjects];
+    [client setMarkedText:@"close-pending" selectedRange:NSMakeRange(13, 0)
+        replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    [view retain];
     sp_region_close(region);
+    transaction = reports.count == 1 ? reports[0] : nil;
+    NSUInteger closeInsertCount = 0;
+    BOOL closeInsertTextMatches = NO;
+    for (NSDictionary *action in transaction[@"actions"]) {
+        if ([action[@"type"] isEqual:@"insert"]) {
+            closeInsertCount++;
+            closeInsertTextMatches = [action[@"text"] isEqual:@"close-pending"];
+        }
+    }
+    check(closeInsertCount == 1 && closeInsertTextMatches && [transaction[@"preedit"][@"text"] isEqual:@""],
+        [NSString stringWithFormat:@"close commits the pending text exactly once (transaction %@)", reports]);
+    check(context.discardedMarkedTextCalls == 1 && view.inputContext != context && ![client hasMarkedText]
+        && view.superview == nil && window.firstResponder != view,
+        [NSString stringWithFormat:@"close discards input-method state and detaches the responder (discard calls %lu)",
+            (unsigned long)context.discardedMarkedTextCalls]);
+    [view release];
+
     sp_surface_close(composition);
     [window close];
     [window release];

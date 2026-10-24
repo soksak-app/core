@@ -1,8 +1,5 @@
-// The Korean input method revises the syllable before its newest insert: a final consonant that a vowel follows moves to the
-// next syllable, and the input method can append the new syllable before it replaces the previous one. The image region must
-// keep that syllable revisable, so every committed syllable reaches the page once and in order (docs/spec/persistent-services.md).
-// The selected input source is the machine's, so the check answers the two questions of the region about it (whether the
-// source composes and whether it composes only Hangul) through the runtime, without changing the input source of the person.
+// The input client owns pending marked text and applies Korean replacement ranges locally. The test verifies resyllabification
+// and ordered commit without storing or replacing committed terminal history.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -66,44 +63,53 @@ int main(void) { @autoreleasepool {
     void *region = sp_region_create(surface, "view", regionEvent, NULL);
     sp_region_place(region, 10, 10, 200, 100, true);
     sp_region_focus(region);
-    NSTextView *view = (NSTextView *)region;
-    // The selected source is the Korean input method, which composes only Hangul.
-    BOOL (^yes)(id) = ^BOOL(id self) { return YES; };
-    for (NSString *name in @[@"selectedSourceComposes", @"selectedSourceComposesOnlyHangul"]) {
-        Method method = class_getInstanceMethod(view.class, NSSelectorFromString(name));
-        check(method != NULL, [NSString stringWithFormat:@"the region asks %@", name]);
-        method_setImplementation(method, imp_implementationWithBlock(yes));
-    }
-    id<NSTextInputClient> client = (id<NSTextInputClient>)view;
+    id<NSTextInputClient> client = (id<NSTextInputClient>)region;
     NSRange none = NSMakeRange(NSNotFound, 0);
 
-    // A syllable with a final consonant and then a vowel: the input method appends the next syllable (U+B098) and then replaces
-    // the first (U+D55C) by its revision (U+D558), as the logged replacement at the committed length
-    // less one shows; then Space ends the composition.
-    [client insertText:@"한" replacementRange:none];
-    [client insertText:@"나" replacementRange:none];
-    [client insertText:@"하" replacementRange:NSMakeRange(0, 1)];
-    [client insertText:@" " replacementRange:none];
-    check(errors().count == 0, [NSString stringWithFormat:@"the revision of the syllable before the newest insert is not a replacement of committed text (got %@)", errors()]);
-    check([committed() isEqual:@"하나 "], [NSString stringWithFormat:@"the committed text is 하나 and the space, each once and in order (got %@)", committed()]);
+    // F143 records Korean resyllabification as replacement of the immediately preceding syllable. Under the dedicated
+    // client, AppKit ranges are relative to pending input, so the same revision replaces the local marked character.
+    [client setMarkedText:@"한" selectedRange:NSMakeRange(1, 0) replacementRange:none];
+    [client setMarkedText:@"하나" selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(0, 1)];
+    check([client hasMarkedText] && NSEqualRanges([client markedRange], NSMakeRange(0, 2))
+        && [client selectedRange].location == 2 && [events.lastObject[@"preedit"][@"text"] isEqual:@"하나"],
+        [NSString stringWithFormat:@"Korean resyllabification replaces the local marked syllable (range %@, selection %@, events %@)",
+            NSStringFromRange([client markedRange]), NSStringFromRange([client selectedRange]), events]);
+    [client insertText:@"하나" replacementRange:NSMakeRange(0, 2)];
+    check(errors().count == 0 && [committed() isEqual:@"하나"],
+        [NSString stringWithFormat:@"the resolved Korean syllables commit once in order (got %@, errors %@)", committed(), errors()]);
 
-    // The same syllables when the input method replaces first and appends after: the result is the same.
-    [events removeAllObjects];
-    [client insertText:@"한" replacementRange:none];
-    [client insertText:@"하" replacementRange:NSMakeRange(view.textStorage.length - 1, 1)];
-    [client insertText:@"나" replacementRange:none];
-    [client insertText:@" " replacementRange:none];
-    check(errors().count == 0 && [committed() isEqual:@"하나 "],
-        [NSString stringWithFormat:@"the replacement before the append commits the same text (got %@, errors %@)", committed(), errors()]);
+    sp_region_close(region);
+    events = [NSMutableArray array];
+    region = sp_region_create(surface, "view-append-revision", regionEvent, NULL);
+    sp_region_place(region, 10, 10, 200, 100, true);
+    sp_region_focus(region);
+    client = (id<NSTextInputClient>)region;
+    [client setMarkedText:@"한" selectedRange:NSMakeRange(1, 0) replacementRange:none];
+    [client setMarkedText:@"하" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(0, 1)];
+    [client setMarkedText:@"나" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(1, 0)];
+    check(errors().count == 0 && [client hasMarkedText]
+        && [client attributedSubstringForProposedRange:NSMakeRange(0, 2) actualRange:NULL].string.length == 2,
+        [NSString stringWithFormat:@"a local append after resyllabification preserves the pending syllables (range %@, errors %@)",
+            NSStringFromRange([client markedRange]), errors()]);
+    [client insertText:@"하나" replacementRange:NSMakeRange(0, 2)];
+    check(errors().count == 0 && [committed() isEqual:@"하나"],
+        [NSString stringWithFormat:@"replacement then append commits the syllables once (got %@, errors %@)", committed(), errors()]);
 
-    // A syllable two before the newest insert is no longer revised, so it is committed while the next syllables compose.
-    [events removeAllObjects];
-    [client insertText:@"가" replacementRange:none];
-    [client insertText:@"나" replacementRange:none];
-    [client insertText:@"다" replacementRange:none];
-    check([committed() isEqual:@"가"], [NSString stringWithFormat:@"the syllable two before the newest insert is committed (got %@)", committed()]);
-    [client insertText:@" " replacementRange:none];
-    check([committed() isEqual:@"가나다 "], [NSString stringWithFormat:@"the end of the composition commits the rest in order (got %@)", committed()]);
+    sp_region_close(region);
+    events = [NSMutableArray array];
+    region = sp_region_create(surface, "view-marked-revision", regionEvent, NULL);
+    sp_region_place(region, 10, 10, 200, 100, true);
+    sp_region_focus(region);
+    client = (id<NSTextInputClient>)region;
+    [client setMarkedText:@"가나다" selectedRange:NSMakeRange(3, 0) replacementRange:none];
+    [client setMarkedText:@"라" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(1, 1)];
+    NSAttributedString *pending = [client attributedSubstringForProposedRange:NSMakeRange(0, 3) actualRange:NULL];
+    check([pending.string isEqual:@"가라다"] && [client selectedRange].location == 2,
+        [NSString stringWithFormat:@"a partial marked replacement preserves pending text on both sides (pending %@, selection %@)",
+            pending.string, NSStringFromRange([client selectedRange])]);
+    [client insertText:@"가라다" replacementRange:NSMakeRange(0, 3)];
+    check(errors().count == 0 && [committed() isEqual:@"가라다"],
+        [NSString stringWithFormat:@"the complete revised Hangul buffer commits exactly once (got %@, errors %@)", committed(), errors()]);
 
     sp_region_close(region);
     return failures == 0 ? 0 : 1;
