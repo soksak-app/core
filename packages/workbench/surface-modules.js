@@ -20,7 +20,7 @@ import { logGate } from "./log-gate.js";
 import { emitEvent, eventEnabled } from "./page-log.js";
 import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
-import { trace } from "./performance.js";
+import { trace, traceEnabled } from "./performance.js";
 const mounted = new Map();
 const mounting = new Map();
 let nextMountAttempt = 0;
@@ -62,6 +62,17 @@ function recordMountFailure(entry, phase, error) {
   record.reason = reason;
   emitEvent("error", "page.surface.mount.failed", {
     plugin: entry.pluginId, surface: entry.surfaceId, attempt: record.attempt, phase, reason,
+  });
+}
+
+function traceComposition(entry, action, field, value) {
+  if (!traceEnabled()) return;
+  trace("surface.composition", {
+    page: String(document.defaultView.performance.timeOrigin),
+    surface: entry.surfaceId,
+    attempt: entry.mountRegistration?.attempt ?? null,
+    action,
+    [field]: value,
   });
 }
 
@@ -860,7 +871,13 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
           if (!listenersReady || entry.disposed) return null;
           // The view declares its composition, which resolves the composition wait of the surface. The surface is ready from that
           // declaration, as a module surface is ready after its module mounts: a view has no module whose mount releases it.
-          await page.composition.declare(surface.composition);
+          try {
+            await page.composition.declare(surface.composition);
+            traceComposition(entry, "declare", "outcome", "accepted");
+          } catch (error) {
+            traceComposition(entry, "declare", "outcome", "rejected");
+            throw error;
+          }
           entry.compositionDeclared = true;
           context.status.report("ready");
           releaseSurfaceReady(context);
@@ -954,6 +971,7 @@ export function suspendSurface(surfaceId) {
 function releaseFailedMount(entry, failure, beforeRelease = Promise.resolve()) {
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
+  traceComposition(entry, "dispose", "reason", "mount-failure");
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure });
   const disposing = Promise.resolve().then(async () => {
     await beforeRelease;
@@ -985,6 +1003,7 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
   if (released) entry.lifetime.released = true;
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
+  traceComposition(entry, "dispose", "reason", mode === "unload" ? "unload" : released ? "released" : "close");
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure: null });
   if (mounting.get(surfaceId) === entry.mountRegistration) mounting.delete(surfaceId);
   entry.disposing = Promise.resolve().then(async () => {

@@ -7,7 +7,7 @@
 // This file is not duplicated per application. The only difference between applications is the transport, which the
 // runtime module (@soksak/runtime) handles.
 import { emitEvent, reportRecord } from "./page-log.js";
-import { trace } from "./performance.js";
+import { trace, traceEnabled } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
 import { plugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
@@ -371,12 +371,36 @@ let layoutTurn = Promise.resolve();
 let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
 let surfacePlacementTurn = Promise.resolve();
+let nextSurfaceSyncRequestId = 0;
 
 /**
  * The ordering promise that is fulfilled when layout step step ends. It is fulfilled on failure too, so that a failed transaction does not block the next independent layout.
  * The caller receives that failure as the reply of the place that contains this step and reports it, so it is not written again here (docs/spec/hosts.md#application-log).
  */
 const layoutStepEnd = (step) => step.then(() => undefined, () => undefined);
+
+async function syncSurfaces(request, surfaceModules) {
+  const enabled = traceEnabled();
+  const requestId = enabled ? ++nextSurfaceSyncRequestId : null;
+  const views = enabled ? request.surfaces
+    .filter(({ composition }) => composition?.kind === "view")
+    .map(({ id }) => ({ surface: id, attempt: surfaceModules?.mountedSurface(id)?.mountRegistration?.attempt ?? null })) : null;
+  const record = (outcome) => {
+    if (!enabled) return;
+    trace("surface.sync", {
+      page: String(document.defaultView.performance.timeOrigin), requestId, views, outcome,
+    });
+  };
+  try {
+    const answer = await tell("syncSurfaces", request);
+    record("accepted");
+    return answer;
+  } catch (error) {
+    record("rejected");
+    throw error;
+  }
+}
+
 function orderedSurfacePlacement(operation) {
   const previous = surfacePlacementTurn;
   let release;
@@ -563,7 +587,7 @@ export const surfaces = native ? {
                 await reply;
               } while (reply !== themeReply);
             }
-            return tell("syncSurfaces", request);
+            return syncSurfaces(request, surfaceModules);
           });
           layoutFrame = scheduled;
           layoutResult = scheduled.then((frame) => {

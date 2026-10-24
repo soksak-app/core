@@ -22,6 +22,14 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
   let inspectRelease = true;
   let refuseComposition = false;
   let holdDispose = false;
+  let tracing = true;
+  let pageIdentityReads = 0;
+  const pageTimeOrigin = dom.window.performance.timeOrigin;
+  Object.defineProperty(dom.window.performance, "timeOrigin", { configurable: true, get() {
+    pageIdentityReads += 1;
+    return pageTimeOrigin;
+  } });
+  const traceEvents = [];
   let announceDisposal;
   let releaseDisposal;
   const disposalStarted = new Promise((resolve) => { announceDisposal = resolve; });
@@ -45,6 +53,13 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
         });
       },
     },
+  } });
+
+  const actualPerformance = await import("../performance.js");
+  t.mock.module("../performance.js", { exports: {
+    ...actualPerformance,
+    traceEnabled: () => tracing,
+    trace: (event, fields) => traceEvents.push({ event, fields }),
   } });
 
   const actualHost = await import("../host.js");
@@ -88,11 +103,18 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     authorizeSurface(id);
     await mountSurface(slot, surface);
     await waitSurfaceCompositionDeclared(id);
-
+    assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.composition"), [{
+      event: "surface.composition",
+      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 1, action: "declare", outcome: "accepted" },
+    }], "the accepted native composition declaration was not correlated with its page and mount attempt");
     inspectRelease = false;
     holdDispose = true;
     const oldDisposal = disposeSurface(id, { released: true });
     await disposalStarted;
+    assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "dispose").at(-1), {
+      event: "surface.composition",
+      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 1, action: "dispose", reason: "released" },
+    }, "page disposal was not recorded distinctly from native composition removal");
     assert.equal(mountedSurface(id)?.disposed, true, "the test did not hold the retired entry during cleanup");
     try {
       const staleWait = waitSurfaceCompositionDeclared(id);
@@ -128,9 +150,26 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     const failedWait = waitSurfaceCompositionDeclared(id);
     await assert.rejects(failedMount, /the host refused the replacement composition/);
     await assert.rejects(failedWait, /the host refused the replacement composition/);
+    assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "declare").at(-1), {
+      event: "surface.composition",
+      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 4, action: "declare", outcome: "rejected" },
+    }, "a rejected native declaration was not recorded with the failed mount attempt");
+    assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "dispose").at(-1), {
+      event: "surface.composition",
+      fields: { page: String(document.defaultView.performance.timeOrigin), surface: id, attempt: 4, action: "dispose", reason: "mount-failure" },
+    }, "failed mount disposal did not preserve its page-local reason");
     await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-composition mount attempt 4 failed during mount: the host refused the replacement composition/,
       "a failed replacement must preserve its original failure after releasing its mounted entry");
+
+    const readsBeforeDisabledMount = pageIdentityReads;
+    tracing = false;
+    authorizeSurface(id);
+    await mountSurface(slot, surface);
+    await waitSurfaceCompositionDeclared(id);
+    await disposeSurface(id, { released: true });
+    assert.equal(pageIdentityReads, readsBeforeDisabledMount, "a disabled trace built composition event fields");
   } finally {
+    releaseDisposal();
     await disposeSurface(id);
     dom.window.close();
   }
