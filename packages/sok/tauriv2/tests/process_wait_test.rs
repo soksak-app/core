@@ -101,6 +101,19 @@ fn process_wait_rejects_invalid_inputs_before_waiting() {
             "--timeout-ms is given twice",
         ),
         (
+            "unknown process option",
+            vec![
+                "process",
+                "wait",
+                "1",
+                "--timeout-ms",
+                "1",
+                "--window",
+                "main",
+            ],
+            "unknown option --window",
+        ),
+        (
             "unexpected argument",
             vec!["process", "wait", "1", "extra", "--timeout-ms", "1"],
             "unexpected argument extra",
@@ -121,6 +134,15 @@ fn process_wait_timeout_option_does_not_change_other_commands() {
     assert_eq!(code, 2, "stdout={stdout:?} stderr={stderr:?}");
     assert!(stdout.is_empty(), "stdout={stdout:?}");
     assert!(stderr.contains("unknown option --timeout-ms"), "{stderr}");
+}
+
+// contract: cli.process-wait.repeated-help-is-idempotent
+#[test]
+fn process_wait_repeated_help_is_idempotent() {
+    let (code, stdout, stderr) = run(&["process", "wait", "--help", "--help"]);
+    assert_eq!(code, 0, "stdout={stdout:?} stderr={stderr:?}");
+    assert!(stdout.contains("process wait PID"), "stdout={stdout:?}");
+    assert!(stderr.is_empty(), "stderr={stderr:?}");
 }
 
 // contract: cli.process-wait.requires-an-action

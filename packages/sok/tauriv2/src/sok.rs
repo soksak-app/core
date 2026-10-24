@@ -156,6 +156,14 @@ struct Arguments {
 }
 
 fn parse(args: &[String]) -> Result<Arguments, Error> {
+    parse_with_options(args, BOOLEANS, OPTIONS)
+}
+
+fn parse_with_options(
+    args: &[String],
+    allowed_booleans: &[&str],
+    allowed_options: &[&str],
+) -> Result<Arguments, Error> {
     let mut parsed = Arguments {
         positionals: vec![],
         values: HashMap::new(),
@@ -173,12 +181,12 @@ fn parse(args: &[String]) -> Result<Arguments, Error> {
             Some((name, value)) => (name, Some(value.to_string())),
             None => (option, None),
         };
-        if BOOLEANS.contains(&name) {
+        if allowed_booleans.contains(&name) {
             if inline.is_some() {
                 return Err(usage!("--{name} takes no value"));
             }
             parsed.flags.insert(name.into(), true);
-        } else if OPTIONS.contains(&name) {
+        } else if allowed_options.contains(&name) {
             if parsed.values.contains_key(name) {
                 return Err(usage!("--{name} is given twice"));
             }
@@ -736,6 +744,14 @@ fn connect_to(values: &HashMap<String, String>, options: &Options) -> Result<Cli
 /// Parses the options of a command that does its own parsing.
 pub(crate) fn parse_arguments(args: &[String]) -> Result<Arguments, Error> {
     parse(args)
+}
+
+pub(crate) fn parse_scoped_arguments(
+    args: &[String],
+    allowed_booleans: &[&str],
+    allowed_options: &[&str],
+) -> Result<Arguments, Error> {
+    parse_with_options(args, allowed_booleans, allowed_options)
 }
 
 fn execute(

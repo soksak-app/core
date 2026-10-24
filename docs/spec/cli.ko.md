@@ -52,6 +52,8 @@
 
 `process wait`는 1부터 2147483647까지의 process ID와 1부터 600000밀리초까지의 제한 시간을 반드시 받는다. 운영체제가 PID가 없거나 종료 event가 발생했다고 보고하면 `{"pid": <pid>, "ended": true}`를 출력한다. 제한 시간에 도달하면 `process <pid> did not end within <milliseconds>ms`로 명령이 실패한다. 지원하지 않는 process wait를 포함한 platform 오류는 명령 실패로 보고한다. 이 명령은 process ID를 기다리며, 임의의 PID 재사용을 넘어 process identity를 보장하지 않는다.
 
+`--timeout-ms`는 `process wait`에서만 허용하며 다른 명령에서는 알 수 없는 option으로 거부한다. 이 명령은 다른 CLI 명령과 같은 option parser를 사용한다. 다른 boolean flag와 같이 반복한 `--help`는 같은 flag를 한 번 설정한 것처럼 처리하고, value option을 반복하면 거부한다.
+
 ## Event log
 
 `sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값이거나 애플리케이션의 기본 디렉터리다. `plugin pack`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 시작 시각(초)과 프로세스 식별자다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.

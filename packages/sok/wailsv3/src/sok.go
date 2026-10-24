@@ -83,6 +83,11 @@ type arguments struct {
 }
 
 func parse(args []string) (arguments, error) {
+	return parseAllowed(args, booleans, options)
+}
+
+// parseAllowed applies one command's declared option names using the same CLI token grammar.
+func parseAllowed(args []string, allowedBooleans, allowedOptions map[string]bool) (arguments, error) {
 	parsed := arguments{values: map[string]string{}, flags: map[string]bool{}}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -92,12 +97,12 @@ func parse(args []string) (arguments, error) {
 		}
 		name, value, inline := strings.Cut(arg[2:], "=")
 		switch {
-		case booleans[name]:
+		case allowedBooleans[name]:
 			if inline {
 				return parsed, usage("--%s takes no value", name)
 			}
 			parsed.flags[name] = true
-		case options[name]:
+		case allowedOptions[name]:
 			if _, seen := parsed.values[name]; seen {
 				return parsed, usage("--%s is given twice", name)
 			}

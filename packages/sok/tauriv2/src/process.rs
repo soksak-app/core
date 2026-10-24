@@ -26,70 +26,21 @@ pub(crate) fn run(args: &[String], stdout: &mut dyn Write) -> Result<(), crate::
 }
 
 fn run_wait(args: &[String], stdout: &mut dyn Write) -> Result<(), crate::Error> {
-    let mut positionals = Vec::new();
-    let mut timeout_ms = None;
-    let mut help = false;
-    let mut config_dir = None;
-    let mut i = 0;
-    while i < args.len() {
-        let argument = &args[i];
-        let Some(option) = argument.strip_prefix("--") else {
-            positionals.push(argument.as_str());
-            i += 1;
-            continue;
-        };
-        let (name, inline) = match option.split_once('=') {
-            Some((name, value)) => (name, Some(value)),
-            None => (option, None),
-        };
-        match name {
-            "help" => {
-                if inline.is_some() || help {
-                    return Err(crate::Error::Usage(
-                        "--help takes no value and may be given once".into(),
-                    ));
-                }
-                help = true;
-                i += 1;
-            }
-            "timeout-ms" | "config-dir" => {
-                let value = match inline {
-                    Some(value) => value,
-                    None => {
-                        i += 1;
-                        args.get(i)
-                            .ok_or_else(|| crate::Error::Usage(format!("--{name} needs a value")))?
-                    }
-                };
-                let slot = if name == "timeout-ms" {
-                    &mut timeout_ms
-                } else {
-                    &mut config_dir
-                };
-                if slot.replace(value).is_some() {
-                    return Err(crate::Error::Usage(format!("--{name} is given twice")));
-                }
-                i += 1;
-            }
-            _ => return Err(crate::Error::Usage(format!("unknown option --{name}"))),
-        }
-    }
-    if help {
+    let parsed = crate::parse_scoped_arguments(args, &["help"], &["config-dir", "timeout-ms"])?;
+    if parsed.flag("help") {
         writeln!(stdout, "{}", crate::USAGE).map_err(|error| error.to_string())?;
         return Ok(());
     }
-    // The logged command wrapper reads this option before dispatch to select the sok event-file directory.
-    let _config_dir = config_dir;
-    if positionals.is_empty() {
+    if parsed.positionals.is_empty() {
         return Err(crate::Error::Usage("process wait requires a pid".into()));
     }
-    if positionals.len() > 1 {
+    if parsed.positionals.len() > 1 {
         return Err(crate::Error::Usage(format!(
             "unexpected argument {}",
-            positionals[1]
+            parsed.positionals[1]
         )));
     }
-    let pid_text = positionals[0];
+    let pid_text = &parsed.positionals[0];
     if !decimal_digits(pid_text) {
         return Err(crate::Error::Usage(
             "pid must be an integer from 1 to 2147483647".into(),
@@ -100,8 +51,10 @@ fn run_wait(args: &[String], stdout: &mut dyn Write) -> Result<(), crate::Error>
         .ok()
         .filter(|pid| *pid > 0 && *pid <= i32::MAX as u32)
         .ok_or_else(|| crate::Error::Usage("pid must be an integer from 1 to 2147483647".into()))?;
-    let timeout_text =
-        timeout_ms.ok_or_else(|| crate::Error::Usage("--timeout-ms is required".into()))?;
+    let timeout_text = parsed
+        .values
+        .get("timeout-ms")
+        .ok_or_else(|| crate::Error::Usage("--timeout-ms is required".into()))?;
     if !decimal_digits(timeout_text) {
         return Err(crate::Error::Usage(
             "timeout must be an integer from 1 to 600000 milliseconds".into(),

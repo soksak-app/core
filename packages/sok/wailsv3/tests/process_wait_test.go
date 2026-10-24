@@ -99,6 +99,7 @@ func TestProcessWaitRejectsInvalidInputsBeforeThePlatformCall(t *testing.T) {
 		{"overflow timeout", []string{"process", "wait", "1", "--timeout-ms", "600001"}, "timeout must be an integer from 1 to 600000 milliseconds"},
 		{"nondecimal timeout", []string{"process", "wait", "1", "--timeout-ms", "1x"}, "timeout must be an integer from 1 to 600000 milliseconds"},
 		{"duplicate timeout", []string{"process", "wait", "1", "--timeout-ms", "1", "--timeout-ms", "2"}, "--timeout-ms is given twice"},
+		{"unknown process option", []string{"process", "wait", "1", "--timeout-ms", "1", "--window", "main"}, "unknown option --window"},
 		{"unexpected argument", []string{"process", "wait", "1", "extra", "--timeout-ms", "1"}, "unexpected argument extra"},
 	}
 	for _, c := range cases {
@@ -132,5 +133,16 @@ func TestProcessWaitTimeoutOptionDoesNotChangeOtherCommands(t *testing.T) {
 		sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.21"})
 	if code != 2 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "unknown option --timeout-ms") {
 		t.Fatalf("other command returned code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+// contract: cli.process-wait.repeated-help-is-idempotent
+func TestProcessWaitRepeatedHelpIsIdempotent(t *testing.T) {
+	code, stdout, stderr := runProcessWait(t, func(int, time.Duration) (bool, error) {
+		t.Fatal("help must not wait for a process")
+		return false, nil
+	}, "process", "wait", "--help", "--help")
+	if code != 0 || !strings.Contains(stdout, "process wait PID") || stderr != "" {
+		t.Fatalf("repeated help returned code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }

@@ -12,6 +12,9 @@ import (
 
 const processWaitTimeoutMax = 600000
 
+var processWaitBooleans = map[string]bool{"help": true}
+var processWaitOptions = map[string]bool{"config-dir": true, "timeout-ms": true}
+
 // runProcess runs the process commands that do not connect to an application endpoint.
 func runProcess(args []string, stdout io.Writer) error {
 	if len(args) == 1 && args[0] == "--help" {
@@ -29,50 +32,21 @@ func runProcess(args []string, stdout io.Writer) error {
 
 // runProcessWait parses the command-specific flags and waits for the operating system to report the process ID ended.
 func runProcessWait(args []string, stdout io.Writer) error {
-	positionals := make([]string, 0, 1)
-	values := map[string]string{}
-	flags := map[string]bool{}
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if !strings.HasPrefix(arg, "--") {
-			positionals = append(positionals, arg)
-			continue
-		}
-		name, value, inline := strings.Cut(arg[2:], "=")
-		switch name {
-		case "help":
-			if inline || flags[name] {
-				return usage("--%s takes no value and may be given once", name)
-			}
-			flags[name] = true
-		case "timeout-ms", "config-dir":
-			// The logged command wrapper reads config-dir before dispatch; process wait does not read configuration files.
-			if _, seen := values[name]; seen {
-				return usage("--%s is given twice", name)
-			}
-			if !inline {
-				if i+1 >= len(args) {
-					return usage("--%s needs a value", name)
-				}
-				i++
-				value = args[i]
-			}
-			values[name] = value
-		default:
-			return usage("unknown option --%s", name)
-		}
+	parsed, err := parseAllowed(args, processWaitBooleans, processWaitOptions)
+	if err != nil {
+		return err
 	}
-	if flags["help"] {
+	if parsed.flags["help"] {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
 	}
-	if len(positionals) == 0 {
+	if len(parsed.positionals) == 0 {
 		return usage("process wait requires a pid")
 	}
-	if len(positionals) > 1 {
-		return usage("unexpected argument %s", positionals[1])
+	if len(parsed.positionals) > 1 {
+		return usage("unexpected argument %s", parsed.positionals[1])
 	}
-	pidText := positionals[0]
+	pidText := parsed.positionals[0]
 	if !decimalDigits(pidText) {
 		return usage("pid must be an integer from 1 to 2147483647")
 	}
@@ -80,7 +54,7 @@ func runProcessWait(args []string, stdout io.Writer) error {
 	if err != nil || parsedPID == 0 {
 		return usage("pid must be an integer from 1 to 2147483647")
 	}
-	timeoutText, ok := values["timeout-ms"]
+	timeoutText, ok := parsed.values["timeout-ms"]
 	if !ok {
 		return usage("--timeout-ms is required")
 	}
