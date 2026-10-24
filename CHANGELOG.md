@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- F239-47-20: Wait for each coherent terminal document to match the same-window
+  AppKit reference after input receipt. Backspace can first clear the preedit
+  while the PTY still shows eight committed vowels, then publish the expected
+  seven-vowel screen in a later status event. The caller now waits on the
+  existing event stream within the unchanged 1500 ms deadline and preserves
+  every intermediate status and capture frame. The delayed-status owner test
+  reproduces the old first-coherent result and passes with the completion
+  predicate; `terminal-ime-document.test.mjs` passes 23/23, `make e2e-check`,
+  `make docs-check`, syntax checks, and `git diff --check` pass. No application
+  run was made; F239-47-6 acceptance remains open.
+
 - F239-37-3: Give the file-open failure window check its own 120-second
   timeout. This annotation change does not claim a new test or runtime result.
 - F262-6: Extend the existing project-close window check to require mounted

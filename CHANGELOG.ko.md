@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F239-47-20: input receipt 뒤 각 coherent terminal document가 같은 window의
+  AppKit reference와 일치할 때까지 기다린다. Backspace는 먼저 preedit을 지워도
+  PTY에 committed vowel 8개가 남고, 이후 status event에서 기대한 7개 화면을
+  보낼 수 있다. Caller는 기존 event stream과 변경하지 않은 1500 ms 제한을
+  사용하고 모든 중간 status와 capture frame을 보존한다. Delayed-status owner
+  test는 기존 first-coherent 결과를 재현한 뒤 completion predicate 수정과 함께
+  통과한다. `terminal-ime-document.test.mjs` 23/23, `make e2e-check`,
+  `make docs-check`, syntax check, `git diff --check`가 통과한다. Application은
+  실행하지 않았고 F239-47-6 acceptance는 계속 열려 있다.
+
 - F239-37-3: 파일 열기 실패 window check에 test별 120초 timeout을 지정한다.
   이 annotation 변경은 새 test나 runtime 결과를 주장하지 않는다.
 - F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전

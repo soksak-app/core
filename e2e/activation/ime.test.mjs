@@ -29,6 +29,7 @@ import {
   visibleInputBeforeCursor,
   waitForObservedStatusEvent,
   waitForStateEvent as waitForStateEventAfter,
+  waitForTerminalStage,
 } from "./terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
@@ -371,27 +372,20 @@ for (const app of Object.values(APPS)) {
       const observations = [];
       const referenceStates = [];
       const stateEventWaiters = new Set();
-      const observeTerminal = async (group, key, index, baseline, stateEvents) => {
-        const deadline = Date.now() + 1500;
+      const observeTerminal = async (group, key, index, baseline, stateEvents, expectedDocument) => {
         const eventOffset = observedStateEvents.length - stateEvents.length;
-        let compose;
-        let cursor;
-        let screen;
-        let host;
-        let snapshot;
         let attempt = 0;
-        for (;;) {
-          const sampleEventOffset = observedStateEvents.length;
+        const readSnapshot = async () => {
           attempt += 1;
-          compose = await s.get("terminal.compose", surface);
-          cursor = await s.get("terminal.cursor", surface);
-          screen = await presentedScreen(s, surface);
+          const compose = await s.get("terminal.compose", surface);
+          const cursor = await s.get("terminal.cursor", surface);
+          const screen = await presentedScreen(s, surface);
           const currentCompose = await s.get("terminal.compose", surface);
           const currentCursor = await s.get("terminal.cursor", surface);
-          host = await s.get("host.window");
+          const host = await s.get("host.window");
           const region = host.regions.find((item) => item.surface === surface && item.name === "view");
           const currentEvents = observedStateEvents.slice(eventOffset);
-          snapshot = {
+          const snapshot = {
             attempt,
             baseline,
             compose,
@@ -411,15 +405,34 @@ for (const app of Object.values(APPS)) {
           const coherentReread = cursorMatchesCompose && statusesMatch;
           const baseScreenPresented = region?.presented?.generation === screen.frame.generation &&
             region.presented.raster === screen.frame.raster && region.presented.sequence >= screen.frame.sequence;
+          const coherent = coherentReread && baseScreenPresented;
           snapshot.coherence = { firstReadMatchesReread, cursorMatchesCompose, coherentReread, statusesMatch,
-            baseScreenPresented };
-          persist(`observer-${group}-${String(index).padStart(2, "0")}-${String(attempt).padStart(2, "2")}.json`, snapshot);
-          if (cursorMatchesCompose && statusesMatch && baseScreenPresented) break;
-          assert.ok(Date.now() < deadline,
-            `${key}: terminal state did not become coherent (${JSON.stringify(snapshot.coherence)}); snapshots are in ${artifactDir}`);
-          await waitForStateEvent(sampleEventOffset, key,
-            "no later terminal status notification followed an incoherent observer sample");
-        }
+            baseScreenPresented, stageDocumentMatches: false };
+          snapshot.document = null;
+          snapshot.expectedDocument = expectedDocument;
+          const stateFile = `observer-${group}-${String(index).padStart(2, "0")}-${String(attempt).padStart(2, "2")}.json`;
+          persist(stateFile, snapshot);
+          let document = null;
+          if (coherent) {
+            try {
+              document = visibleInputBeforeCursor(screen, currentCursor, prompt, currentCompose.text,
+                `${key} terminal sample`);
+            } catch (error) {
+              snapshot.documentError = { name: error.name, message: error.message };
+              persist(stateFile, snapshot);
+              throw error;
+            }
+          }
+          snapshot.document = document;
+          snapshot.coherence.stageDocumentMatches = document === expectedDocument;
+          persist(stateFile, snapshot);
+          return { snapshot, coherent, document };
+        };
+        const waitForSample = (after, remaining) => waitForStateEvent(after, key,
+          "terminal state did not reach the same-window AppKit document after a coherent sample", remaining);
+        const selectedSample = await waitForTerminalStage(observedStateEvents, readSnapshot, waitForSample,
+          expectedDocument, key, 1500);
+        const snapshot = selectedSample.snapshot;
         const selected = selectCoherentTerminalObservation(snapshot);
         const { compose: acceptedCompose, cursor: acceptedCursor, screen: acceptedScreen,
           region, stateEvents: acceptedEvents } = selected;
@@ -498,12 +511,13 @@ for (const app of Object.values(APPS)) {
         baselineRowsMatched: true,
       });
       const waitForStateEvent = async (after, key,
-        missingMessage = "no terminal compose, cursor or screen status notification followed the input") => {
+        missingMessage = "no terminal compose, cursor or screen status notification followed the input",
+        timeoutMs = 1500) => {
         try {
           return await waitForStateEventAfter(observedStateEvents, after, (notify) => {
             stateEventWaiters.add(notify);
             return () => stateEventWaiters.delete(notify);
-          }, `${key}: ${missingMessage}`, 1500);
+          }, `${key}: ${missingMessage}`, timeoutMs);
         } catch (error) {
           const sample = { key, error: error.message, stateEvents: [...observedStateEvents] };
           try {
@@ -657,7 +671,8 @@ for (const app of Object.values(APPS)) {
         const entries = await stopTrace(`terminal-k-${index + 1}`);
         assert.ok(terminalInputReceiptMatches(entries, "k"),
           `terminal key k ${index + 1} has no matching native or terminal input callback`);
-        const observation = await observeTerminal("terminal", "k", index + 1, knownState, stateEvents);
+        const observation = await observeTerminal("terminal", "k", index + 1, knownState, stateEvents,
+          referenceStates[index].document);
         knownState = { compose: observation.compose, cursor: observation.cursor, screen: observation.screen };
         const comparison = applyTerminalInput(referenceStates[index], observation, entries, index + 1);
         persist(`comparison-${String(index + 1).padStart(2, "0")}.json`, {
@@ -690,7 +705,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(terminalInputReceiptMatches(backspaceEntries, "Backspace"),
         "Backspace has no matching native-key or deleteBackward terminal callback");
       const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, knownState,
-        observedStateEvents.slice(backspaceEventOffset));
+        observedStateEvents.slice(backspaceEventOffset), referenceStates[8].document);
       knownState = { compose: backspaceObservation.compose, cursor: backspaceObservation.cursor,
         screen: backspaceObservation.screen };
       const backspaceComparison = applyTerminalInput(referenceStates[8], backspaceObservation, backspaceEntries, 9);
@@ -722,7 +737,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(terminalInputReceiptMatches(spaceEntries, "Space"),
         "Space has no matching native-key or space-insert callback");
       const spaceObservation = await observeTerminal("terminal", "Space", 10, knownState,
-        observedStateEvents.slice(spaceEventOffset));
+        observedStateEvents.slice(spaceEventOffset), referenceStates[9].document);
       const spaceComparison = applyTerminalInput(referenceStates[9], spaceObservation, spaceEntries, 10);
       persist("comparison-10.json", { key: "Space", expected: referenceStates[9], ...spaceComparison,
         terminal: spaceObservation, callbacks: spaceEntries });
