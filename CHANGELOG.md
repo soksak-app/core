@@ -11,6 +11,15 @@
   passes 9/9. The activation path has not run; its acceptance item remains
   open.
 
+- F212.12-2-1-2: Verify frontmost restoration only after an activation attempt. It treats an already-frontmost prior process as restored and rejects an absent prior PID.
+  Red: the owning fault test showed that the restoration helper called the
+  activation request and wait callback for a non-activation path. Green: the
+  helper now returns without changing frontmost state when activation was not
+  attempted; after an activation attempt it requires an accepted request and
+  an `NSWorkspaceDidActivateApplicationNotification` for the exact previous PID. The fault test passes 14/14 and the default
+  non-activation view-focus check passes 9/9. The activation variant remains
+  unrun.
+
 - F240-11: Reconcile the execution plan with current owner evidence. F239-47-9
   now records its preserved activation Red/Green log and platform without
   claiming terminal behavior. The detailed F212.12-2-2-4-8-2-2 status appears

@@ -59,6 +59,25 @@ static BOOL activationDone;
 static sp_activate_result activationResult;
 static NSString *activationFrontmost;
 
+@interface TestRunningApplication : NSObject
+- (instancetype)initWithProcessIdentifier:(pid_t)processIdentifier;
+- (pid_t)processIdentifier;
+@end
+
+@implementation TestRunningApplication {
+    pid_t _processIdentifier;
+}
+- (instancetype)initWithProcessIdentifier:(pid_t)processIdentifier {
+    self = [super init];
+    if (self) _processIdentifier = processIdentifier;
+    return self;
+}
+- (pid_t)processIdentifier { return _processIdentifier; }
+@end
+
+typedef BOOL (^ActivateFrontmost)(pid_t);
+typedef BOOL (^WaitForActivationNotification)(BOOL (^)(void));
+
 static void activationReported(void *context, sp_activate_result result, const char *frontmost) {
     (void)context;
     activationResult = result;
@@ -66,9 +85,120 @@ static void activationReported(void *context, sp_activate_result result, const c
     activationDone = YES;
 }
 
-static void restoreFrontmost(NSRunningApplication *previous) {
-    if (!previous || previous.processIdentifier == NSRunningApplication.currentApplication.processIdentifier) return;
-    [previous activateWithOptions:0];
+static BOOL activateAndObserveFrontmostPID(pid_t targetPID, NSNotificationCenter *center,
+    ActivateFrontmost activate, WaitForActivationNotification waitForNotification) {
+    __block BOOL observed = NO;
+    id observer = [center addObserverForName:NSWorkspaceDidActivateApplicationNotification object:nil queue:nil
+        usingBlock:^(NSNotification *notification) {
+            id application = notification.userInfo[NSWorkspaceApplicationKey];
+            if ([application respondsToSelector:@selector(processIdentifier)]
+                && [application processIdentifier] == targetPID) observed = YES;
+        }];
+    BOOL requested = activate(targetPID);
+    BOOL restored = requested && waitForNotification(^BOOL { return observed; });
+    [center removeObserver:observer];
+    return restored;
+}
+
+static BOOL restoreFrontmostUsing(pid_t previousPID, BOOL activationAttempted, pid_t currentFrontmostPID,
+    ActivateFrontmost activate, NSNotificationCenter *center, WaitForActivationNotification waitForNotification) {
+    if (!activationAttempted) return YES;
+    if (previousPID <= 0) return NO;
+    if (currentFrontmostPID == previousPID) return YES;
+    return activateAndObserveFrontmostPID(previousPID, center, activate, waitForNotification);
+}
+
+static BOOL restoreFrontmost(NSRunningApplication *previous, BOOL activationAttempted) {
+    if (!activationAttempted) return YES;
+    pid_t previousPID = previous.processIdentifier;
+    pid_t currentFrontmostPID = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    BOOL restored = restoreFrontmostUsing(previousPID, YES, currentFrontmostPID,
+        ^BOOL(pid_t previousPID) { (void)previousPID; return [previous activateWithOptions:0]; },
+        NSWorkspace.sharedWorkspace.notificationCenter,
+        ^BOOL(BOOL (^condition)(void)) {
+            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+            NSRunLoop *runLoop = NSRunLoop.currentRunLoop;
+            while (!condition() && deadline.timeIntervalSinceNow > 0) {
+                [runLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
+            }
+            return condition();
+        });
+    pid_t actual = NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
+    check(restored,
+        [NSString stringWithFormat:@"the previous frontmost application is restored (expected pid %d, got %d)",
+            previousPID, actual]);
+    return restored;
+}
+
+static int frontmostRestoreTest(void) {
+    __block NSUInteger waits = 0;
+    __block NSUInteger activationRequests = 0;
+    NSNotificationCenter *center = [[[NSNotificationCenter alloc] init] autorelease];
+    BOOL inactive = restoreFrontmostUsing(100, NO, 200,
+        ^BOOL(pid_t previousPID) { (void)previousPID; activationRequests++; return YES; }, center,
+        ^BOOL(BOOL (^condition)(void)) { waits++; return condition(); });
+    check(inactive, @"frontmost restoration is a no-op when activation was not attempted");
+    check(activationRequests == 0 && waits == 0, @"the non-activation path neither requests activation nor observes restoration");
+
+    waits = 0;
+    BOOL refused = restoreFrontmostUsing(100, YES, 200,
+        ^BOOL(pid_t previousPID) { (void)previousPID; activationRequests++; return NO; }, center,
+        ^BOOL(BOOL (^condition)(void)) { waits++; return condition(); });
+    check(!refused, @"frontmost restoration fails when activation is refused");
+    check(waits == 0, @"frontmost notification wait is skipped when activation is refused");
+
+    waits = 0;
+    __block BOOL observedBeforeRequest = NO;
+    BOOL unrelated = restoreFrontmostUsing(100, YES, 200,
+        ^BOOL(pid_t previousPID) {
+            activationRequests++;
+            [center postNotification:[NSNotification notificationWithName:NSWorkspaceDidActivateApplicationNotification object:nil
+                userInfo:@{ NSWorkspaceApplicationKey: [[[TestRunningApplication alloc] initWithProcessIdentifier:200] autorelease] }]];
+            return YES;
+        }, center, ^BOOL(BOOL (^condition)(void)) {
+            waits++;
+            observedBeforeRequest = !condition();
+            return NO;
+        });
+    check(!unrelated, @"an unrelated process activation does not satisfy restoration");
+    check(observedBeforeRequest, @"the notification handler ignores an unrelated process id");
+    check(waits == 1, @"restoration waits after an unrelated activation notification");
+
+    waits = 0;
+    __block BOOL exactNotificationDuringRequest = NO;
+    BOOL restored = restoreFrontmostUsing(100, YES, 200,
+        ^BOOL(pid_t previousPID) {
+            activationRequests++;
+            [center postNotification:[NSNotification notificationWithName:NSWorkspaceDidActivateApplicationNotification object:nil
+                userInfo:@{ NSWorkspaceApplicationKey: [[[TestRunningApplication alloc] initWithProcessIdentifier:previousPID] autorelease] }]];
+            return YES;
+        }, center, ^BOOL(BOOL (^condition)(void)) {
+            waits++;
+            exactNotificationDuringRequest = condition();
+            return exactNotificationDuringRequest;
+        });
+    check(restored, @"frontmost restoration succeeds when the previous process is observed");
+    check(exactNotificationDuringRequest, @"the observer is registered before the activation request");
+
+    waits = 0;
+    BOOL timeout = restoreFrontmostUsing(100, YES, 200,
+        ^BOOL(pid_t previousPID) { (void)previousPID; activationRequests++; return YES; }, center,
+        ^BOOL(BOOL (^condition)(void)) { waits++; return NO; });
+    check(!timeout, @"frontmost restoration fails when no activation notification arrives");
+    check(waits == 1, @"frontmost restoration applies its bounded notification wait");
+
+    waits = 0;
+    BOOL alreadyFrontmost = restoreFrontmostUsing(100, YES, 100,
+        ^BOOL(pid_t previousPID) { (void)previousPID; activationRequests++; return YES; }, center,
+        ^BOOL(BOOL (^condition)(void)) { waits++; return condition(); });
+    check(alreadyFrontmost, @"frontmost restoration succeeds when the prior process is already frontmost");
+    check(waits == 0, @"an already-frontmost prior process needs no activation or notification wait");
+
+    BOOL invalidTarget = restoreFrontmostUsing(0, YES, 200,
+        ^BOOL(pid_t previousPID) { (void)previousPID; activationRequests++; return YES; }, center,
+        ^BOOL(BOOL (^condition)(void)) { (void)condition; waits++; return YES; });
+    check(!invalidTarget, @"frontmost restoration fails when no prior process was captured");
+    return failures ? 1 : 0;
 }
 
 static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NSInteger clicks, float pressure) {
@@ -78,6 +208,7 @@ static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NS
 }
 
 int main(int argc, char **argv) { @autoreleasepool {
+    if (argc == 2 && strcmp(argv[1], "--frontmost-restore-test") == 0) return frontmostRestoreTest();
     BOOL activation = argc == 2 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     NSRunningApplication *previous = NSWorkspace.sharedWorkspace.frontmostApplication;
@@ -129,7 +260,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
     if (!waitFor(^BOOL { return [latest[@"title"] isEqual:@"ready"]; })) {
         fprintf(stderr, "FAIL: the view page did not load within 10 seconds\n");
-        restoreFrontmost(previous);
+        restoreFrontmost(previous, activation);
         return 1;
     }
 
@@ -142,7 +273,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             || !window.isKeyWindow || !NSApp.isActive) {
             fprintf(stderr, "FAIL: the application did not become active with the window key (activation %d, active %d, window key %d, frontmost %s)\n",
                 activationResult, (int)NSApp.isActive, (int)window.isKeyWindow, activationFrontmost.UTF8String ?: "unknown");
-            restoreFrontmost(previous);
+            restoreFrontmost(previous, activation);
             return 1;
         }
     }
@@ -174,6 +305,6 @@ int main(int argc, char **argv) { @autoreleasepool {
     sp_surface_close(surface);
     [window close];
     [window release];
-    restoreFrontmost(previous);
+    restoreFrontmost(previous, activation);
     return failures ? 1 : 0;
 }}
