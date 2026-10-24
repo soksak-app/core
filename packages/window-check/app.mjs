@@ -649,10 +649,28 @@ export class Session {
     }
     const frame = (await this.get("host.window")).frame;
     const x = left >= frame.width ? area.x : area.x + area.width - frame.width;
+    const candidate = { x, y: frame.y, width: frame.width, height: frame.height };
     await this.run("host.window.move", { x, y: frame.y });
-    await this.until("host.window", (value) => value.frame.x === x && !(value.pointer.x >= value.frame.x &&
-      value.pointer.x < value.frame.x + value.frame.width && value.pointer.y >= value.frame.y &&
-      value.pointer.y < value.frame.y + value.frame.height), "the window did not move away from the pointer");
+    try {
+      await this.until("host.window", (value) => value.frame.x === x && !(value.pointer.x >= value.frame.x &&
+        value.pointer.x < value.frame.x + value.frame.width && value.pointer.y >= value.frame.y &&
+        value.pointer.y < value.frame.y + value.frame.height), "the window did not move away from the pointer");
+    } catch (error) {
+      let actual;
+      try {
+        actual = await this.get("host.window");
+      } catch (readError) {
+        throw new AggregateError([error, readError], `${this.app.name}: pointer-outside placement failed and final geometry could not be read`);
+      }
+      const details = {
+        initialPointer: pointer,
+        screenVisible: area,
+        candidate,
+        actual: { frame: actual.frame, pointer: actual.pointer },
+      };
+      error.message = `${error.message}; keepPointerOutside=${JSON.stringify(details)}`;
+      throw error;
+    }
   }
 
   /**

@@ -16,6 +16,11 @@
   보고했으며 정상 host 종료 뒤 baseline 복원은 성공했다. Status observer는 표시된
   screen을 수신한 frame, cursor, compose와 연결한다. 제어된 coherence fixture 3개가
   통과한다. 이 Wails 결과만으로 부모 항목을 닫지 않는다.
+- F239-47-4: `keepPointerOutside()` 대기가 실패하면 초기 포인터, visible screen
+  bounds, 후보 frame, 최종 frame/pointer를 오류에 보존한다. Red: 변경 전 helper의
+  오류에 계산 geometry가 없어 제어된 owning test가 실패했다. Green: 같은 test가
+  진단 정보와 변경되지 않은 이동 요청을 확인하며 1/1 통과한다. `make docs-check`가
+  통과한다. 배치 계산과 수용 조건은 변경하지 않았다.
 
 - F239-47-3: AppKit marked range를 composition event로 보고한다. Native event는
   보관 suffix 전체와 text 기준 실제 UTF-16 marked range를 담고, AppKit에

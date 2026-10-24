@@ -20,6 +20,13 @@
   cursor and compose. Its three controlled coherence fixtures pass. The parent
   item remains active; this Wails result does not close the Tauri or two-host
   criteria.
+- F239-47-4: A failed `keepPointerOutside()` wait now retains the initial
+  pointer, visible screen bounds, candidate frame and final frame/pointer in
+  its error. Red: the unchanged helper failed the controlled pointer-outside
+  test because its error omitted the geometry inputs. Green: the same owning
+  test verifies the diagnostic and unchanged move request, passing 1/1.
+  `make docs-check` passes. Placement calculations and acceptance conditions
+  did not change.
 
 - F239-47-3: Report AppKit's marked range in composition events. The native
   event carries the full retained suffix and the exact text-relative UTF-16
