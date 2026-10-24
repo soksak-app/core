@@ -635,7 +635,8 @@ for (const app of Object.values(APPS)) {
         };
       };
 
-      const visualStages = [];
+      const visualStageInputs = [];
+      let visualStages = [];
       for (let index = 0; index < 8; index++) {
         await startTrace(`terminal-k-${index + 1}`);
         const eventOffset = observedStateEvents.length;
@@ -663,9 +664,9 @@ for (const app of Object.values(APPS)) {
         assert.equal(comparison.actual, comparison.expected,
           `input ${index + 1} k diverged: terminal committed-plus-preedit ${JSON.stringify(comparison.actual)} ` +
           `differs from AppKit document ${JSON.stringify(comparison.expected)}`);
-        visualStages.push({ ...planVisualStage({ key: `k-${index + 1}`, expectedDocument: comparison.expected,
-          observation, prompt }), clockDomain: startedBoundary.clockDomain,
-        startedMachAbsoluteNs: startedBoundary.machAbsoluteNs });
+        visualStageInputs.push({ key: `k-${index + 1}`, expectedDocument: comparison.expected,
+          observation, prompt, clockDomain: startedBoundary.clockDomain,
+          startedMachAbsoluteNs: startedBoundary.machAbsoluteNs });
       }
 
       const cursorBeforeBackspace = knownState.cursor;
@@ -695,9 +696,9 @@ for (const app of Object.values(APPS)) {
       assert.equal(backspaceComparison.actual, backspaceComparison.expected,
         `Backspace diverged: terminal committed-plus-preedit ${JSON.stringify(backspaceComparison.actual)} ` +
         `differs from AppKit document ${JSON.stringify(backspaceComparison.expected)}`);
-      visualStages.push({ ...planVisualStage({ key: "Backspace", expectedDocument: backspaceComparison.expected,
-        observation: backspaceObservation, prompt }), clockDomain: backspaceStartedBoundary.clockDomain,
-      startedMachAbsoluteNs: backspaceStartedBoundary.machAbsoluteNs });
+      visualStageInputs.push({ key: "Backspace", expectedDocument: backspaceComparison.expected,
+        observation: backspaceObservation, prompt, clockDomain: backspaceStartedBoundary.clockDomain,
+        startedMachAbsoluteNs: backspaceStartedBoundary.machAbsoluteNs });
 
       const beforeSpace = knownState.compose;
       const cursorBeforeSpace = knownState.cursor;
@@ -725,13 +726,14 @@ for (const app of Object.values(APPS)) {
       assert.equal(spaceComparison.actual, spaceComparison.expected,
         `Space diverged: terminal committed-plus-preedit ${JSON.stringify(spaceComparison.actual)} ` +
         `differs from AppKit document ${JSON.stringify(spaceComparison.expected)}`);
-      visualStages.push({ ...planVisualStage({ key: "Space", expectedDocument: spaceComparison.expected,
-        observation: spaceObservation, prompt }), clockDomain: spaceStartedBoundary.clockDomain,
-      startedMachAbsoluteNs: spaceStartedBoundary.machAbsoluteNs });
+      visualStageInputs.push({ key: "Space", expectedDocument: spaceComparison.expected,
+        observation: spaceObservation, prompt, clockDomain: spaceStartedBoundary.clockDomain,
+        startedMachAbsoluteNs: spaceStartedBoundary.machAbsoluteNs });
       persist("terminal-final.json", { backspaceObservation, spaceObservation, beforeSpace, cursorBeforeBackspace,
         cursorBeforeSpace });
       assert.equal(observations.length, 10, "the trace omitted an input state or presented frame");
       assert.equal(traces.length, 10, "the trace omitted a native callback batch");
+      assert.equal(visualStageInputs.length, 10, "the trace omitted a visual input stage");
       assert.equal(referenceStates.length, 10, "the trace omitted a same-window AppKit reference state");
       assert.equal(manifest.steps.length, 20, "the trace omitted an acknowledged reference or terminal input");
       const terminalSequenceEndBoundary = await machAbsoluteBoundary(s);
@@ -798,7 +800,13 @@ for (const app of Object.values(APPS)) {
       let timedStages = [];
       let visualMeasurements;
       try {
+        persist("visual-stage-inputs.json", visualStageInputs);
         frameStatus = indexFrameStatus(observedStateEvents, prompt, visibleInputBeforeCursor);
+        visualStages = visualStageInputs.map((stage) => ({
+          ...planVisualStage({ ...stage, frameStatus }),
+          clockDomain: stage.clockDomain,
+          startedMachAbsoluteNs: stage.startedMachAbsoluteNs,
+        }));
         ({ sources, missingStates } = readRetainedSources(capture.frames, frameStatus));
         timedStages = visualStages.map((stage, index) => ({ ...stage,
           endedMachAbsoluteNs: visualStages[index + 1]?.startedMachAbsoluteNs ??
@@ -815,6 +823,7 @@ for (const app of Object.values(APPS)) {
       } catch (error) {
         persist("visual-measurements.json", {
           collectionError: { name: error.name, error: error.message },
+          inputStages: visualStageInputs,
           targetStages: visualStages.map(({ key, frame, cells, glyphs, semantic }) =>
             ({ key, frame, cells, glyphs, semantic })),
           retainedSourceCount: sources.length,

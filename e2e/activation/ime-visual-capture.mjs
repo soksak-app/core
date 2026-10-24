@@ -274,6 +274,7 @@ export function indexFrameStatus(events, prompt, visibleInputBeforeCursor) {
       },
     };
     states.set(key, { frame: cursor.frame, render: cursor.render, semantic,
+      rows,
       eventIndexes: { screen: screenStatus.index, cursor: index },
       screenRowsReused: screenStatus.index !== index - 1 });
   }
@@ -295,14 +296,37 @@ function displayColumnAfter(row, prefix, label) {
 }
 
 /** Builds the exact input ROI and glyph list from one screen/cursor/render observation. */
-export function planVisualStage({ key, expectedDocument, observation, prompt }) {
+export function planVisualStage({ key, expectedDocument, observation, frameStatus, prompt }) {
   const { screen, compose, cursor } = observation;
   const render = cursor.render;
   assert.ok(cursor.frame && render?.frame, `${key}: frame-bound cursor render metadata is missing`);
   assert.deepEqual(render.frame, cursor.frame, `${key}: cursor render metadata belongs to another frame`);
+  frameKey(cursor.frame, `${key} cursor`);
+  frameKey(screen.frame, `${key} base screen`);
   assert.equal(screen.frame.generation, cursor.frame.generation, `${key}: screen and cursor generations differ`);
   assert.equal(screen.frame.raster, cursor.frame.raster, `${key}: screen and cursor rasters differ`);
-  assert.equal(screen.frame.sequence, cursor.frame.sequence, `${key}: screen and cursor sequences differ`);
+  assert.ok(Number.isSafeInteger(screen.frame.sequence) && screen.frame.sequence <= cursor.frame.sequence,
+    `${key}: base screen frame sequence is newer than the overlay cursor frame`);
+  const presented = observation.region?.presented;
+  assert.ok(presented, `${key}: terminal region has no presented frame`);
+  assert.equal(frameKey(presented, `${key} presented`), frameKey(cursor.frame, `${key} cursor`),
+    `${key}: region presented frame differs from the cursor overlay frame`);
+  assert.ok(frameStatus instanceof Map, `${key}: indexed prior screen rows are required`);
+  const rowSource = frameStatus.get(frameKey(cursor.frame, `${key} cursor`));
+  assert.ok(rowSource, `${key}: no indexed prior screen rows for the cursor overlay frame`);
+  assert.deepEqual(screen.rows, rowSource.rows,
+    `${key}: screen-read rows differ from the active observer's indexed prior rows`);
+  assert.equal(frameKey(rowSource.frame, `${key} indexed rows`), frameKey(cursor.frame, `${key} cursor`),
+    `${key}: indexed rows belong to another cursor frame`);
+  assert.equal(frameKey(rowSource.render?.frame, `${key} indexed render`), frameKey(cursor.frame, `${key} cursor`),
+    `${key}: indexed render belongs to another cursor frame`);
+  const screenEventIndex = rowSource.eventIndexes?.screen;
+  const cursorEventIndex = rowSource.eventIndexes?.cursor;
+  assert.ok(Number.isSafeInteger(screenEventIndex) && screenEventIndex >= 0 &&
+    Number.isSafeInteger(cursorEventIndex) && cursorEventIndex > screenEventIndex,
+  `${key}: indexed screen rows do not precede the cursor event`);
+  assert.equal(rowSource.screenRowsReused, screenEventIndex !== cursorEventIndex - 1,
+    `${key}: indexed screen row reuse provenance is inconsistent`);
   assert.equal(visibleInputBeforeCursor(screen, cursor, prompt, compose.text, key), expectedDocument,
     `${key}: terminal document differs from the AppKit reference`);
   assert.equal(cursor.row, prompt.row, `${key}: input wrapped across terminal rows`);
@@ -338,6 +362,18 @@ export function planVisualStage({ key, expectedDocument, observation, prompt }) 
     cellHeight: grid.cellHeight,
     origin: { x: grid.origin.x, y: grid.origin.y },
   };
+  assert.deepEqual(rowSource.semantic, {
+    document: expectedDocument,
+    compose: {
+      text: compose.text,
+      markedRange: compose.markedRange ?? null,
+      selectedRange: compose.selectedRange ?? null,
+      replacementRange: compose.replacementRange ?? null,
+      attributed: compose.attributed,
+    },
+    cursor: { row: cursor.row, col: cursor.col, focused: cursor.focused, preedit: compose.text },
+    geometry,
+  }, `${key}: indexed prior rows do not describe the current expected composition`);
   return {
     key,
     frame: cursor.frame,
