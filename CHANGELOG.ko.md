@@ -8,13 +8,15 @@
   syntax를 검사하고 local Promise helper와 연결된 `then`/`catch` callback까지
   직접 호출 흐름을 따라간다. Promise `reject` 함수로 이어지는 경로와
   관찰용 report-only timer를 허용하고 resolve-only, 미완료, shadowed reject,
-  무관한 text는 거부한다. Red: 변경 전 owning tests가
+  무관한 text는 거부한다. Helper 이름은 callback lexical binding에 따라
+  해석하고 helper 본문은 definition scope에서 분석하며 전달된 argument는
+  call-site scope를 유지한다. Red: 변경 전 owner tests가
   `finish(reject, error)`를 거부하고 가까운 `"reject("` string을 허용했다.
-  Green: focused owning tests 3/3과 `make e2e-check`가 통과하며
+  후속 사례는 양방향 helper shadow 해석 오류를 드러냈다. Green: lexical-scope
+  경계를 포함한 window-source audit tests 11개와 `make e2e-check`가 통과하며
   `make docs-check`는 문서 112개, error record 413개, record check 1755개를
-  통과한다. Source `finish` helper는 단일 settlement와 timer/subscription
-  공통 cleanup을 수행하므로 유지한다. Timeout 값과 status-event 동작은
-  바꾸지 않았다.
+  통과한다. Source `finish` helper는 단일 settlement와 timer/subscription 공통
+  cleanup을 수행하므로 유지한다. Timeout 값과 status-event 동작은 바꾸지 않는다.
 
 - F269: 기존 유효 message projection 15개에 빠져 있던 고유 `screen.hash`
   case 아홉 개를 추가한다. 같은 projection은 case 하나를 공유해 SDK test의

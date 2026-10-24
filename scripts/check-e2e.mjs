@@ -133,7 +133,9 @@ function invokesEffect(node, executor, effectName, environment = new Map(), shad
     const binding = environment.get(calleeName);
     if (binding && invokesCallback(binding.node, executor, effectName, binding.environment, binding.shadowed, active, depth + 1)) return true;
     if (calleeName === effectName && !shadowed.has(effectName)) return true;
-    const helper = localHelper(executor, calleeName);
+    // Resolve only names that still refer to the executor's helper at this
+    // call site. A callback-local binding with the same name takes precedence.
+    const helper = shadowed.has(calleeName) ? null : localHelper(executor, calleeName);
     if (helper && !active.has(helper)) {
       const nextActive = new Set(active).add(helper);
       const helperEnvironment = new Map();
@@ -142,7 +144,10 @@ function invokesEffect(node, executor, effectName, environment = new Map(), shad
         const argument = node.arguments[index];
         if (name && argument) helperEnvironment.set(name, { node: argument, environment, shadowed });
       });
-      const helperShadowed = new Set([...shadowed, ...functionBindings(helper)]);
+      // A helper closes over its definition scope. Caller-local bindings do
+      // not shadow identifiers referenced inside the helper body; forwarded
+      // arguments keep their caller scope in helperEnvironment above.
+      const helperShadowed = functionBindings(helper);
       if (invokesEffect(helper.body, executor, effectName, helperEnvironment, helperShadowed, nextActive, depth + 1)) return true;
     }
     if (["then", "catch"].includes(memberName(node.callee))) {

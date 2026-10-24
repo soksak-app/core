@@ -259,6 +259,32 @@ new Promise((resolve, reject) => {
   assert.deepEqual(auditE2ESource(completion, "e2e/timeout-case.mjs"), []);
 });
 
+test("window-source audit does not resolve a timeout helper through a callback shadow", { timeout: 1000 }, () => {
+  const source = `
+new Promise((resolve, reject) => {
+  const finish = (callback, value) => callback(value);
+  setTimeout(() => {
+    const finish = () => {};
+    finish(reject, new Error("deadline reached"));
+  }, 1500);
+});
+`;
+  assert.equal(auditE2ESource(source, "e2e/timeout-case.mjs").length, 1);
+});
+
+test("window-source audit keeps a local helper's rejection bound to its definition scope", { timeout: 1000 }, () => {
+  const source = `
+new Promise((resolve, reject) => {
+  const finish = () => reject(new Error("deadline reached"));
+  setTimeout(() => {
+    const reject = () => {};
+    finish();
+  }, 1500);
+});
+`;
+  assert.deepEqual(auditE2ESource(source, "e2e/timeout-case.mjs"), []);
+});
+
 test("window-source audit requires a timeout to reject rather than only resolve, wait, or mention rejection", { timeout: 1000 }, () => {
   const sources = [
     'new Promise((resolve) => { setTimeout(() => resolve(null), 1500); });',
