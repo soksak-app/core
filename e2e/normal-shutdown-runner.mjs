@@ -1,4 +1,5 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { connect } from "@soksak/client";
 import { currentEventOffsets, sessionEventBoot } from "@soksak/window-check/event-log.mjs";
@@ -10,6 +11,7 @@ import { auditShutdownErrors } from "./shutdown-audit.mjs";
 
 const STARTUP_LIMIT = 15_000;
 const SHUTDOWN_LIMIT = 5_000;
+const SERVICE_WAIT_LIMIT = 5_000;
 const REQUEST_LIMIT = 10_000;
 
 async function request(client, method, params) {
@@ -37,6 +39,79 @@ function serviceDirectory(configDir) {
   return join(directory, services[0]);
 }
 
+function serviceEndpoint(configDir) {
+  const directory = serviceDirectory(configDir);
+  const file = join(directory, "endpoint.json");
+  let endpoint;
+  try {
+    endpoint = JSON.parse(readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new Error(`${file} is not valid service endpoint JSON: ${error?.message ?? error}`, { cause: error });
+  }
+  if (!endpoint || endpoint.protocol !== 1 || !Number.isInteger(endpoint.pid) || endpoint.pid < 1 || endpoint.pid > 2_147_483_647) {
+    throw new Error(`${file} must contain protocol 1 and a positive int32 pid`);
+  }
+  return { file, pid: endpoint.pid };
+}
+
+/** Waits for the service PID through the CLI bundled beside the declared application executable. */
+export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SERVICE_WAIT_LIMIT, outerLimitMs = timeoutMs + 2_000, spawnChild = spawn }) {
+  const sok = join(dirname(binary), "sok");
+  let details;
+  try {
+    details = statSync(sok);
+  } catch (error) {
+    throw new Error(`bundled sok executable ${sok} is unavailable: ${error?.message ?? error}`, { cause: error });
+  }
+  if (!details.isFile() || (details.mode & 0o111) === 0) throw new Error(`bundled sok executable ${sok} is not an executable file`);
+
+  const child = spawnChild(sok, ["process", "wait", String(pid), "--timeout-ms", String(timeoutMs), "--config-dir", configDir], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const closed = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  let timer;
+  let timedOut = false;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      reject(new Error(`bundled sok process wait exceeded ${outerLimitMs}ms for service PID ${pid}`));
+    }, outerLimitMs);
+  });
+  let status;
+  try {
+    status = await Promise.race([closed, deadline]);
+  } catch (error) {
+    if (timedOut) {
+      const reaped = await Promise.race([closed.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 1_000))]);
+      if (!reaped) {
+        child.kill("SIGKILL");
+        await closed;
+      }
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (status.code !== 0) throw new Error(`bundled sok process wait failed for service PID ${pid} with exit ${status.code ?? status.signal}: ${stderr.trim() || stdout.trim() || "no output"}`);
+  let result;
+  try {
+    result = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(`bundled sok process wait returned invalid JSON for service PID ${pid}: ${error?.message ?? error}; output=${JSON.stringify(stdout)}`, { cause: error });
+  }
+  if (result.pid !== pid || result.ended !== true) throw new Error(`bundled sok process wait returned ${JSON.stringify(result)} for service PID ${pid}, expected ended=true`);
+}
+
 /** Runs the declared shutdown check with replaceable boundaries for its owning controlled-client test. */
 export async function runNormalShutdown({
   app = APPS[Object.keys(APPS)[0]],
@@ -44,6 +119,7 @@ export async function runNormalShutdown({
   waitForFilesystem,
   waitForReady: waitReady = waitForReady,
   waitForShutdown = untilShutdown,
+  waitForServiceProcess: waitServiceProcess = runSokProcessWait,
   prepareTerminal: prepare = prepareTerminal,
   env = process.env,
   write = (line) => console.log(line),
@@ -56,7 +132,7 @@ export async function runNormalShutdown({
   write(`START normal-shutdown app=${app.name} case_timeout_ms=${SHUTDOWN_LIMIT}`);
   await waitFilesystem("endpoint", () => existsSync(endpointFile), STARTUP_LIMIT);
   const client = await connectClient({ configDir: app.configDir });
-  let serviceClient = null;
+  let service = null;
   const failures = [];
   let audit = null;
   let result;
@@ -71,7 +147,7 @@ export async function runNormalShutdown({
       ? await prepare(client, request, { startupLimit: STARTUP_LIMIT }) : null;
     const by = env.SOKSAK_SHUTDOWN_BY ?? "command";
     if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
-    serviceClient = terminal ? await connectClient({ configDir: serviceDirectory(app.configDir) }) : null;
+    service = terminal ? serviceEndpoint(app.configDir) : null;
 
     const from = Date.now();
     if (by === "signal") {
@@ -85,27 +161,20 @@ export async function runNormalShutdown({
       if (reply !== null) throw new Error(`host.quit returned ${JSON.stringify(reply)}, expected null`);
     }
     const { closedMs } = await waitForShutdown(client, endpointFile, { from, limit: SHUTDOWN_LIMIT });
-    let serviceClosedMs = "none";
-    if (serviceClient) {
-      const serviceFrom = Date.now();
-      let timer;
-      const deadline = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`the terminal service still holds its connection ${SHUTDOWN_LIMIT}ms after the application quit by ${by}`)), SHUTDOWN_LIMIT);
-      });
-      try {
-        await Promise.race([serviceClient.ended, deadline]);
-      } finally {
-        clearTimeout(timer);
-      }
-      serviceClosedMs = Date.now() - serviceFrom;
+    let serviceObservationMs = "none";
+    if (service) {
+      const observationFrom = Date.now();
+      await waitServiceProcess({ binary: app.binary, configDir: app.configDir, pid: service.pid, timeoutMs: SERVICE_WAIT_LIMIT });
+      if (existsSync(service.file)) throw new Error(`${service.file} remains after service PID ${service.pid} ended`);
+      serviceObservationMs = Date.now() - observationFrom;
     }
-    result = { appName: app.name, pid, terminal, closedMs, serviceClosedMs, by };
+    result = { appName: app.name, pid, terminal, closedMs, serviceObservationMs, by };
   } catch (error) {
     failures.push(error);
   }
 
   const closeErrors = [];
-  for (const [name, connection] of [["terminal-service", serviceClient], ["application", client]]) {
+  for (const [name, connection] of [["application", client]]) {
     if (!connection) continue;
     try {
       connection.close();
@@ -126,7 +195,7 @@ export async function runNormalShutdown({
     throw new AggregateError(failures, `${app.name}: shutdown reported ${failures.length} errors; primary failure: ${failures[0]?.message ?? String(failures[0])}`);
   }
 
-  write(`PASS normal-shutdown app=${app.name} by=${result.by} pid=${result.pid} terminal=${result.terminal?.sessionId ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${result.closedMs} service_closed_ms=${result.serviceClosedMs}`);
-  return { appName: result.appName, pid: result.pid, terminal: result.terminal, closedMs: result.closedMs, serviceClosedMs: result.serviceClosedMs };
+  write(`PASS normal-shutdown app=${app.name} by=${result.by} pid=${result.pid} terminal=${result.terminal?.sessionId ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${result.closedMs} service_exit_observation_ms=${result.serviceObservationMs}`);
+  return { appName: result.appName, pid: result.pid, terminal: result.terminal, closedMs: result.closedMs, serviceObservationMs: result.serviceObservationMs };
 }
 
