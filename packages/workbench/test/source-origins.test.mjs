@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins, sourceOrigin } from "../source-origins.js";
+import { endSourceOrigin, onSourceOriginRegistered, registerSourceOrigin, seedSourceOrigins, sourceOrigin } from "../source-origins.js";
 
 test("a retired registration at the startup floor cannot create a ghost source", () => {
   seedSourceOrigins({ floor: 11, pluginHosts: {}, views: {} });
@@ -27,4 +27,17 @@ test("a newer source survives delayed registration and end events of its predece
   assert.equal(registerSourceOrigin("probe", null, 7), false);
   assert.equal(endSourceOrigin("probe", null, 7), false);
   assert.equal(sourceOrigin("probe", null), 9);
+});
+
+test("a source registration observer receives only the current and accepted generations", () => {
+  seedSourceOrigins({ floor: 7, pluginHosts: {}, views: { "probe-view": 7 } });
+  const generations = [];
+  const off = onSourceOriginRegistered("probe", "probe-view", (generation) => generations.push(generation));
+  assert.deepEqual(generations, [7]);
+  assert.equal(registerSourceOrigin("probe", "probe-view", 6), false);
+  assert.equal(registerSourceOrigin("probe", "probe-view", 8), true);
+  assert.deepEqual(generations, [7, 8]);
+  off();
+  assert.equal(registerSourceOrigin("probe", "probe-view", 9), true);
+  assert.deepEqual(generations, [7, 8], "a disposed observer received a later registration");
 });

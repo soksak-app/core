@@ -4,7 +4,7 @@ import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
-import { sourceOrigin } from "./source-origins.js";
+import { onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
@@ -356,10 +356,9 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
   });
   // The commands of the view. A command is declared through the exposure of the surface, and each request of it runs in the view.
+  // The native view is created by declaring the composition below, so its first source generation may not exist yet.
+  // Listener installation is synchronous; the ordered registration event makes the generation available before calls arrive.
   let viewGeneration = sourceOrigin(surface.pluginId, surface.surfaceId);
-  if (!Number.isSafeInteger(viewGeneration) || viewGeneration < 1) {
-    throw new Error(`surface ${surface.surfaceId} has no current native source generation`);
-  }
   let viewCommands;
   let forgetCommands;
   const installViewCommands = (generation) => {
@@ -373,16 +372,20 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     viewCommands = commands;
     forgetCommands = keepViewCommands(surface.surfaceId, commands, generation);
   };
-  installViewCommands(viewGeneration);
+  if (Number.isSafeInteger(viewGeneration) && viewGeneration > 0) installViewCommands(viewGeneration);
   const refreshViewCommands = (generation = sourceOrigin(surface.pluginId, surface.surfaceId)) => {
-    if (!Number.isSafeInteger(generation) || generation < 1 || generation === viewGeneration) return false;
-    const previous = viewCommands;
-    forgetCommands();
-    previous.close();
+    if (!Number.isSafeInteger(generation) || generation < 1 || (generation === viewGeneration && viewCommands)) return false;
+    if (viewCommands) {
+      forgetCommands();
+      viewCommands.close();
+    }
     viewGeneration = generation;
     installViewCommands(generation);
     return true;
   };
+  const stopObservingSource = onSourceOriginRegistered(surface.pluginId, surface.surfaceId, (generation) => {
+    if (sourceOrigin(surface.pluginId, surface.surfaceId) === generation) refreshViewCommands(generation);
+  });
   const currentSourceGeneration = () => sourceOrigin(surface.pluginId, surface.surfaceId);
   // The exposure of the view. A forwarded exposure request of the view reaches the view through its exposure-request subscription and is
   // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the page does not
@@ -530,7 +533,13 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     for (const controller of pending.values()) controller.abort();
     pending.clear();
     pending = new Map();
-    refreshViewCommands();
+    if (viewCommands) {
+      forgetCommands();
+      viewCommands.close();
+      viewCommands = undefined;
+      forgetCommands = undefined;
+    }
+    viewGeneration = undefined;
     subscriptions.restart().catch((error) => {
       dispatchEvent(new ErrorEvent("error", { message: `view subscriptions restart: ${error.message}` }));
     });
@@ -557,9 +566,10 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   return async () => {
     if (closed) return;
     closed = true;
-    forgetCommands();
+    stopObservingSource();
+    if (viewCommands) forgetCommands();
     unmarkView();
-    viewCommands.close();
+    viewCommands?.close();
     await subscriptions.close();
   };
 }

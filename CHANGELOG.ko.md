@@ -31,8 +31,8 @@
   event와 replacement document event 모두 generation이 없었다. Green: 같은 test가
   old pending send의 generation 1과 current send의 generation 2를 확인한다. 늦은
   old subscription callback은 취소되며 replacement에 도달하지 않는다. Surface-view
-  test 파일은 21/21 통과한다. 별도 `no current native source generation` startup
-  오류는 아직 검증되지 않았다.
+  test 파일은 21/21 통과한다. F239-46-4에서 native source 등록 전 mount-order
+  실패를 재현하고 수정했다.
 
 - F239-37-4: 같은 key의 tree child보다 유일한 root control을 먼저 풀이한다.
   Red: 변경 전 section-address test가 root 주소를 거부하고 중복 root 모호성을
@@ -2523,3 +2523,7 @@
   queue-overflow 처리를 유지한다. 집중 Go 시험 3/3, Rust queue·attribution·
   empty-reason 시험은 각각 1/1 통과한다. Event와 docs 검사도 통과한다.
   원본 JavaScript 오류는 아직 확인되지 않았다.
+- F239-46-4: View surface가 composition 생성 전에 listener를 설치하고 accepted
+  native source registration에서 current generation을 받은 뒤 command layer를
+  만든다. 소유 mount test는 generation 누락 실패, source-ended 뒤 process-ended,
+  replacement 뒤 늦은 old end를 확인한다. `surface-view.test.mjs` 22/22 통과한다.

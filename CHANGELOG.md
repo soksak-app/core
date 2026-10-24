@@ -32,8 +32,8 @@
   document event. Green: the same test verifies generation 1 for the old
   pending send and generation 2 for current sends; a late old subscription
   callback is canceled and never reaches the replacement. The surface-view
-  test file passes 21/21. The separate `no current native source generation`
-  startup error remains unverified.
+  test file passes 21/21. F239-46-4 later reproduces and fixes the separate
+  mount-order failure before native source registration.
 
 - F239-37-4: Resolve unique root controls before same-key tree children.
   Red: the unchanged section-address test rejected the root address and did
@@ -2534,3 +2534,8 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   prefix, and keep queue-overflow handling. Focused Go tests pass 3/3; Rust
   queue, attribution, and empty-reason tests each pass 1/1. Event and docs checks
   pass. The original JavaScript error remains unknown.
+- F239-46-4: A view surface now installs listeners before composition creation
+  and defers its command layer until an accepted native source registration
+  provides a current generation. The owning mount test reproduces the
+  missing-generation failure, checks source-ended before process-ended and
+  rejects a late old end after replacement; the surface-view tests pass 22/22.

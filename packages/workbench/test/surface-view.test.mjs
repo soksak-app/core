@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
-import { registerSourceOrigin, seedSourceOrigins } from "../source-origins.js";
+import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins } from "../source-origins.js";
+import { viewCommandGenerationOf } from "../view-commands.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
@@ -31,7 +32,9 @@ test("a queued view call from a retired source generation does not reach the rep
   const listeners = sourceListenerMap();
   const replies = [];
   const actualHost = await import("../host.js");
-  t.mock.module("../source-origins.js", { namedExports: {
+  const actualSourceOrigins = await import("../source-origins.js");
+  t.mock.module("../source-origins.js", { exports: {
+    ...actualSourceOrigins,
     sourceOrigin: (_plugin, surface) => surface === "fixture-generation-surface" ? 2 : undefined,
   } });
   t.mock.module("../host.js", { exports: {
@@ -66,6 +69,70 @@ test("a queued view call from a retired source generation does not reach the rep
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(replies, [{ id: 2, result: {}, generation: 2 }], "the current view call did not reply with its source generation");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
+test("a view mount waits for its actual source registration before serving the first call", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const calls = [];
+  const replies = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => listeners.delete(name);
+      }, call: async (name, payload) => {
+        calls.push({ name, payload });
+        if (name === "viewReply") replies.push(payload);
+        if (name === "compositionDeclare") {
+          assert.ok(listeners.has("view-call"), "view-call listener was not installed before composition declaration");
+          assert.ok(listeners.has("view-reply"), "view-reply listener was not installed before composition declaration");
+        }
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-delayed-source-origin");
+  const pluginId = "fixture-view-delayed-origin";
+  const surfaceId = "fixture-view-delayed-origin-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } };
+  try {
+    authorizeSurface(surfaceId);
+    seedSourceOrigins({ floor: 0, pluginHosts: {}, views: {} });
+    await mountSurface(document.querySelector("#slot"), surface);
+    await waitSurfaceCompositionDeclared(surfaceId);
+    assert.equal(calls.some(({ name }) => name === "viewRequest"), false, "mount invented a view command generation");
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.settings.read", params: null });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [], "an unregistered generation was served");
+    assert.equal(registerSourceOrigin(pluginId, surfaceId, 1), true, "the native source registration was not accepted");
+    assert.equal(viewCommandGenerationOf(surfaceId), 1, "registration did not bind the command layer before the first call");
+    assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the source end did not retire its exact generation");
+    listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
+    assert.equal(viewCommandGenerationOf(surfaceId), null, "process end did not release the commands of the ended document");
+
+    assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source registration was not accepted");
+    assert.equal(viewCommandGenerationOf(surfaceId), 2, "the replacement registration did not bind its own command layer");
+    listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
+    assert.equal(viewCommandGenerationOf(surfaceId), 2, "a late old process end removed the replacement command layer");
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [{ id: 2, result: {}, generation: 2 }], "the first current call was not served after actual registration");
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
@@ -836,8 +903,9 @@ test("a view process end cancels its pending work across restart and accepts new
     await oldEventStartedPromise;
     const ended = nativeListeners.get("view-process-ended");
     assert.equal(typeof ended, "function", "the mounted surface listens for host view-process end");
-    assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register");
-    ended({ surface: surfaceId });
+    assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the old source was not retired before its process-ended event");
+    ended({ surface: surfaceId, generation: 1 });
+    assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register after the old process ended");
 
     // A restarted document sends a new subscription before the old handler settles.
     call({ surface: surfaceId, generation: 2, id: 12, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });

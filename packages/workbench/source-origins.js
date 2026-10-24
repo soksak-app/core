@@ -3,6 +3,7 @@
 let floor = 0;
 let pluginHosts = new Map();
 let views = new Map();
+const registrationListeners = new Map();
 
 function tableOf(surface) {
   return surface === null ? pluginHosts : views;
@@ -10,6 +11,20 @@ function tableOf(surface) {
 
 function identityOf(plugin, surface) {
   return surface === null ? plugin : surface;
+}
+
+function listenerSet(surface, identity) {
+  let byIdentity = registrationListeners.get(surface);
+  if (!byIdentity) {
+    byIdentity = new Map();
+    registrationListeners.set(surface, byIdentity);
+  }
+  let listeners = byIdentity.get(identity);
+  if (!listeners) {
+    listeners = new Set();
+    byIdentity.set(identity, listeners);
+  }
+  return listeners;
 }
 
 /** Seeds the current generations and high-watermark returned atomically by the native host. */
@@ -43,7 +58,32 @@ export function registerSourceOrigin(plugin, surface, generation) {
   if (generation <= floor) return current === generation;
   floor = generation;
   table.set(identity, generation);
+  for (const listener of registrationListeners.get(surface)?.get(identity) ?? []) listener(generation);
   return true;
+}
+
+/** Calls listener with the current generation and each later accepted registration for this source. */
+export function onSourceOriginRegistered(plugin, surface, listener) {
+  if (typeof plugin !== "string" || plugin === "" || (surface !== null && (typeof surface !== "string" || surface === "")) ||
+      typeof listener !== "function") {
+    throw new TypeError("declared UI source registration listener requires a plugin, source and function");
+  }
+  const identity = identityOf(plugin, surface);
+  const listeners = listenerSet(surface, identity);
+  listeners.add(listener);
+  const current = tableOf(surface).get(identity);
+  if (current !== undefined) listener(current);
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      const byIdentity = registrationListeners.get(surface);
+      byIdentity?.delete(identity);
+      if (byIdentity?.size === 0) registrationListeners.delete(surface);
+    }
+  };
 }
 
 /** Removes a source only when its end event names the exact current generation. */
