@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-51: Restore the Files tree node lookup used by the file-open failure
+  check after helper extraction. The check imports `nodeByPath` from its owner;
+  the owning test covers nested project-relative paths. The focused helper test
+  passes 5/5 and `make docs-check` passes. The two-host runtime case was not
+  rerun.
+
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
   test confirms that an object or null presentation caret does not change the

@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
-import { hasOpenFailureRow, openFailureRow, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
+import { hasOpenFailureRow, nodeByPath, openFailureRow, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
 import { distance, readPng } from "@soksak/window-check/png.mjs";
 
 /** Presses the center of the element with native input. */
@@ -620,7 +620,6 @@ for (const app of Object.values(APPS)) {
     writeFileSync(join(project.root, folder, "note.zzz"), "note\n");
     writeFileSync(join(project.root, folder, "other.zzz"), "other\n");
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
-    const nodeByPath = (snapshot, path) => treeNodes(snapshot).find((node) => node.params?.path === path) ?? null;
     const nodeKeyPath = (snapshot, path) => {
       const tree = snapshot.value?.elements.find((element) => element.kind === "tree" && element.key === "files");
       const find = (nodes, parents = []) => {

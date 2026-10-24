@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasOpenFailureRow, openFailureRow, treeNodes, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
+import { hasOpenFailureRow, nodeByPath, openFailureRow, treeNodes, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
+
+test("the Files tree node lookup finds a nested path in its declared snapshot", () => {
+  const snapshot = { value: { elements: [{ kind: "tree", key: "files", nodes: [
+    { key: "folder", params: { path: "folder" }, children: [
+      { key: "file", params: { path: "folder/note.zzz" }, selected: true },
+    ] },
+  ] }] } };
+  assert.equal(nodeByPath(snapshot, "folder/note.zzz").selected, true);
+  assert.equal(nodeByPath(snapshot, "missing"), null);
+});
 
 test("the Files tree baseline waits for a current accepted snapshot", async () => {
   const pending = [{ sidebar: "left", sections: [{ id: "files.tree", source: { id: "files", surface: null },

@@ -72,3 +72,8 @@ export function treeNodes(snapshot) {
   const flatten = (nodes) => (nodes ?? []).flatMap((node) => [node, ...flatten(node.children)]);
   return flatten(tree?.nodes);
 }
+
+/** Returns the node with the requested project-relative path from a declared Files tree snapshot. */
+export function nodeByPath(snapshot, path) {
+  return treeNodes(snapshot).find((node) => node.params?.path === path) ?? null;
+}
