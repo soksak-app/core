@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-32: macOS arm64에서 Wails 0.0.21 first-project 추적 검사를 한 번 실행해 1/1 통과했다. 같은 창에서 library가 교체됐고 `core.project.open`은 235ms에 응답했으며 page error가 없고 frontmost 기준을 복원했다. timing/system-load trace, stdout, host JSONL, debug JSONL, stderr를 보존했다. 이는 한 번의 미재현이며 과거 10초 timeout 원인은 아직 모른다. 반복 target을 마칠 때까지 항목은 열린 상태다.
+
 - F239-33: `installStarter`는 실패 원문을 보존하고, network 연결과 재시작이 해결책이라고 약속하는 문구를 제거한다. Red: 존재하지 않는 pack과 제어된 manifest format 오류 시험이 변경 전 코드의 근거 없는 안내 문구로 실패했다. Green: 소유 plugin operations test 22/22과 `make docs-check` 문서 112개, 기록 1718개가 통과한다.
 - F239-34: Tauri와 Wails가 plugin-host `result` 멤버의 존재 여부를 구분하므로 `result: null`도 유효한 reply다. 두 멤버가 함께 있거나 모두 없는 reply는 거부하고, 비null 결과와 유효한 error는 보존한다. Red: 변경 전 각 소유 테스트가 `result: null`을 result와 error가 모두 없는 것으로 거부했다. Green: 두 Red/Green 소유 사례, Tauri plugin-host channel 테스트 24/24, Wails plugin-host channel 테스트 14/14와 `make docs-check`가 통과한다. 관찰한 Tauri `files.refresh` channel 오류는 이 parser 결함과 일치하지만 정확한 요청/reply 상관관계는 확인하지 않았다. macOS arm64에서 기존 canonical workspace index를 사용해 두 debug host bundle을 다시 빌드했고 code signature 검증을 통과했다. 기본 Tauri 0.0.21 development profile이 starter plugin 세 개 loaded, 필수 sidecar 두 개 installed, 다섯 `soksak://` plugin/sidecar 이름, ready host 상태, page/verification error 없음과 `files.refresh`의 성공한 null reply로 재실행됐다. 새 host log에는 error record가 없다. Wails first-project timeout은 F239-32에서 계속 조사한다.
 
