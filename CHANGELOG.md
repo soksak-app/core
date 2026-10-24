@@ -15,6 +15,21 @@
   exact composition-frame correlation and captured glyph measurement remain
   open in F239-47-6. This change does not prove the marked glyph was visible.
 
+- F239-47-10: Add a core calculator for frame-bound renderer geometry and
+  capture ROI evidence. It retains every exact matching source identity,
+  checks same-frame semantic state, maps BGRA captures through screen bounds,
+  scale, content rect and row stride, and clips floating glyph/underline bounds
+  with floor/ceil at the cell edge. The consumer checks glyph ink and underline
+  separately and handles a difference-blended block cursor against inverted
+  foreground/background. Red: a stub calculator returned null for target and
+  duplicate identities; six owning assertions failed. Green: the owning
+  `terminal-ime-visual.test.mjs` passes 6/6, including ambiguous identities,
+  extra guard-cell ink, wrong underline range, lower glyph strokes, blank block
+  cursor, fractional bounds, and missing renderer metadata. `make docs-check`
+  passes. The fixture verifies the core calculator only; two-host visual
+  acceptance remains open in F239-47-6, and renderer metadata is not yet
+  available in application status.
+
 - F267.7: Classify F239-47-5 as a fixture-only boundary correction rather
   than product behavior. The fixture update replaces sibling-plugin IDs in
   Workbench tests with neutral keys and preserves their assertions. Red: the

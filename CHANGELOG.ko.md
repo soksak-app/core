@@ -14,6 +14,20 @@
   frame을 허용한다. Exact composition-frame correlation과 captured glyph
   측정은 F239-47-6에 남아 있다. 이 변경은 marked glyph가 보였음을 입증하지 않는다.
 
+- F239-47-10: Frame-bound renderer geometry와 capture ROI 근거를 계산하는
+  core helper를 추가한다. 정확히 일치한 source identity를 모두 보존하고,
+  같은 frame의 semantic state를 확인하며, screen bounds, scale, content rect,
+  row stride를 거쳐 BGRA capture를 매핑한다. Floating glyph/underline bounds는
+  cell edge에서 floor/ceil을 적용해 clip한다. Consumer는 glyph ink와 underline을
+  따로 확인하고 difference blend block cursor를 반전된 foreground/background와
+  비교한다. Red: stub calculator가 target 및 duplicate identity에 null을 반환해
+  owning assertion 6개가 실패했다. Green: `terminal-ime-visual.test.mjs`가
+  모호한 identity, guard cell 초과 ink, 잘못된 underline 범위, 낮은 glyph 획,
+  빈 block cursor, fractional bounds, renderer metadata 누락을 포함해 6/6
+  통과한다. `make docs-check`가 통과한다. Fixture는 core calculator만 검증한다.
+  양 host visual acceptance는 F239-47-6에 남아 있으며 application status에
+  renderer metadata는 아직 없다.
+
 - F267.7: F239-47-5를 제품 동작이 아닌 fixture 전용 boundary correction으로
   분류한다. 이 변경은 Workbench test의 sibling-plugin ID를 중립 key로 바꾸고
   기존 assertion을 보존한다. Red: 변경하지 않은 parity checker는 F239-47-5를
