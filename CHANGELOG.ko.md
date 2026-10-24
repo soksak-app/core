@@ -9,9 +9,10 @@
   `scripts/test/platform/darwin/`으로 이동한다. Nested Node 경로를 등록하고 test
   parity를 갱신한다. macOS에서 `make platforms`, 공통 process-wait test 4/4,
   Darwin process-wait test 3/3, bundle-preparation test 2/2, nested test discovery
-  1/1, `make docs-check`가 통과한다. Linux/Windows target 동작 검증은 target host
-  실행이 남아 있고, cross-target 검사는 각 C compiler toolchain이 없어 실행하지
-  못했다. `make parity-check`는 uncovered test/implementation 없이 기존 finding
+  1/1, `make docs-check`가 통과한다. Linux target cross-check는 Zig로 통과했다.
+  Windows cross-check는 package에 도달한 뒤 기존 `event_log.rs`와 `ownership.rs`의
+  Unix 전용 filesystem extension 때문에 test target 전에 실패한다. Linux/Windows
+  target host 동작 검증은 남아 있다. `make parity-check`는 uncovered test/implementation 없이 기존 finding
   여덟 개를 보고한다.
 
 - F212.12-2-1-2: 선택적 activated view-focus test 경로를 추가한다. Activation
