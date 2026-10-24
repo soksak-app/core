@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-12: Core visual calculator를 실제 VT `screen.render` metadata에 맞춘다. Producer는 소문자 `bgra8`/`premultiplied`, top-level underline metric, glyph별 width/font run/effective draw color/nullable cell-local bounds 및 underline rectangle, cursor draw state를 공개한다. Native capture artifact는 별도 `BGRA8`/`premultiplied-first` contract를 유지하며 consumer는 metadata를 바꾸지 않고 원본 byte를 color 비교용으로 decode한다. Red: producer-shaped fixture가 기존 helper에서 `bgra8`과 `BGRA8` 차이로 실패했다. Green: 같은 fixture와 negative control이 `terminal-ime-visual.test.mjs` 9/9 통과한다. Preedit/inverse color, width-2 glyph fractional geometry, blink-off cursor metadata, measure 전 malformed 거부, difference cursor pixel을 검사한다. `make docs-check`가 통과한다. Live input은 실행하지 않았으며 F239-47-6 acceptance를 완료하지 않는다.
+
 - F270: E2E source audit가 Acorn 8.18.0으로 timeout callback의 JavaScript
   syntax를 검사하고 local Promise helper와 연결된 `then`/`catch` callback까지
   직접 호출 흐름을 따라간다. Promise `reject` 함수로 이어지는 경로와

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-12: Align the core visual calculator with actual VT `screen.render` metadata. The producer reports lowercase `bgra8`/`premultiplied`, top-level underline metrics, per-glyph width, font runs, effective draw colors, nullable cell-local bounds and underline rectangles, and cursor draw state. Native capture artifacts retain their own `BGRA8`/`premultiplied-first` contract; the consumer decodes the original bytes for color comparison without changing artifact metadata. Red: the producer-shaped fixture failed the unchanged helper at `bgra8` versus `BGRA8`. Green: the same fixture and negative controls pass in `terminal-ime-visual.test.mjs` (9/9), including preedit/inverse colors, wide-glyph fractional geometry, blink-off cursor metadata, malformed-before-measure validation and difference cursor pixels. `make docs-check` passes. No live input was run; this does not complete F239-47-6 acceptance.
+
 - F270: The E2E source audit uses Acorn 8.18.0 to check timeout callbacks as
   JavaScript syntax and follows direct calls through local Promise helpers and
   their attached `then`/`catch` callbacks. It accepts a path to the Promise's

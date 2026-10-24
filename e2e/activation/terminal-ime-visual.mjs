@@ -89,7 +89,8 @@ function cropCell(raster, cell, label) {
     const from = (y + row) * bytesPerRow + x * 4;
     bytes.set(data.subarray(from, from + cellWidth * 4), row * cellWidth * 4);
   }
-  return { width: cellWidth, height: cellHeight, bytes };
+  return { width: cellWidth, height: cellHeight, bytes, format: raster.format, alpha: raster.alpha,
+    colorSpace: raster.colorSpace };
 }
 
 function cropCells(raster, cells, label) {
@@ -107,7 +108,8 @@ function cropCells(raster, cells, label) {
       offset += rowBytes;
     }
   }
-  return { width, height, bytes };
+  return { width, height, bytes, format: crops[0].format, alpha: crops[0].alpha,
+    colorSpace: crops[0].colorSpace };
 }
 
 function cropRect(raster, rect, label) {
@@ -227,8 +229,8 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
     Number.isInteger(pixel.height) && pixel.height > 0, "renderer pixel dimensions are invalid");
   assert.ok(Number.isInteger(pixel.bytesPerRow) && pixel.bytesPerRow >= pixel.width * 4,
     "renderer pixel stride is invalid");
-  assert.equal(pixel.format, "BGRA8", "renderer pixel format must be BGRA8");
-  assert.equal(pixel.alpha, "premultiplied-first", "renderer alpha mode is unsupported");
+  assert.equal(pixel.format, "bgra8", "renderer pixel format must be bgra8");
+  assert.equal(pixel.alpha, "premultiplied", "renderer alpha mode is unsupported");
   assert.equal(pixel.colorSpace, "sRGB", "renderer color space is unsupported");
   assert.equal(pixel.origin, "top-left", "renderer pixel origin must be top-left");
   const grid = render.grid;
@@ -241,25 +243,36 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
     grid.origin.y + grid.rows * grid.cellHeight <= pixel.height, "renderer grid is outside the pixel frame");
   const font = render.font;
   assert.ok(font && typeof font.family === "string" && font.family.length > 0 &&
-    [font.size, font.ascent, font.descent, font.leading].every(Number.isFinite) && font.size > 0,
+    [font.size, font.ascent, font.descent, font.leading, font.baselineFromCellTop].every(Number.isFinite) && font.size > 0,
   "renderer font metrics are invalid");
-  const underline = render.underline?.rect;
-  assert.ok(underline && [underline.x, underline.y, underline.width, underline.height].every(Number.isFinite) &&
-    underline.width > 0 && underline.height > 0 &&
-    render.underline.colorSource === "cell.foregroundAfterInverse",
-  "renderer underline rectangle or color source is invalid");
-  rasterizeCellBounds(underline, grid.cellWidth, grid.cellHeight, "renderer underline rectangle");
+  const underline = render.underline;
+  assert.ok(underline && Number.isFinite(underline.positionFromBaseline) &&
+    underline.positionCoordinate === "CoreText y-up" && Number.isFinite(underline.thickness) &&
+    underline.thickness > 0 && Number.isFinite(underline.minimumThickness) &&
+    underline.minimumThickness > 0 && underline.colorSource === "glyph.foreground",
+  "renderer underline metrics are invalid");
   assert.ok(Array.isArray(render.glyphs), "renderer glyph bounds are missing");
   for (const glyph of render.glyphs) {
     assert.ok(Number.isInteger(glyph.row) && glyph.row >= 0 && glyph.row < grid.rows &&
       Number.isInteger(glyph.col) && glyph.col >= 0 && glyph.col < grid.cols &&
+      Number.isInteger(glyph.width) && glyph.width > 0 && glyph.col + glyph.width <= grid.cols &&
+      Number.isInteger(glyph.fontRuns) && glyph.fontRuns > 0 &&
       typeof glyph.grapheme === "string" && glyph.grapheme.length > 0,
     "renderer glyph identity is invalid");
+    assert.ok(/^#[0-9a-f]{6}$/.test(glyph.foreground) && /^#[0-9a-f]{6}$/.test(glyph.background),
+      "renderer effective glyph colors are invalid");
     const bounds = glyph.bounds;
-    assert.ok(bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) &&
-      bounds.width > 0 && bounds.height > 0,
-    "renderer glyph ink rectangle is invalid");
-    rasterizeCellBounds(bounds, grid.cellWidth, grid.cellHeight, "renderer glyph bounds");
+    assert.ok(bounds === null || (bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) &&
+      bounds.width > 0 && bounds.height > 0), "renderer glyph ink rectangle is invalid");
+    if (bounds !== null) rasterizeCellBounds(bounds, grid.cellWidth * glyph.width, grid.cellHeight,
+      "renderer glyph bounds");
+    assert.ok(glyph.underline && Object.hasOwn(glyph.underline, "rect"), "renderer glyph underline is missing");
+    const glyphUnderline = glyph.underline.rect;
+    assert.ok(glyphUnderline === null || (glyphUnderline &&
+      [glyphUnderline.x, glyphUnderline.y, glyphUnderline.width, glyphUnderline.height].every(Number.isFinite) &&
+      glyphUnderline.width > 0 && glyphUnderline.height > 0), "renderer glyph underline rectangle is invalid");
+    if (glyphUnderline !== null) rasterizeCellBounds(glyphUnderline, grid.cellWidth * glyph.width,
+      grid.cellHeight, "renderer glyph underline");
   }
   for (const expected of expectedGlyphs) {
     assert.ok(render.glyphs.some((glyph) => glyph.row === expected.row && glyph.col === expected.col &&
@@ -270,17 +283,31 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
   assert.ok(cursor && typeof cursor.shape === "string" &&
     [cursor.focused, cursor.visible, cursor.blinkVisible].every((value) => typeof value === "boolean"),
   "terminal cursor state is incomplete");
-  assert.ok(renderedCursor && ["x", "y", "width", "height"].every((key) =>
-    Number.isInteger(renderedCursor.rect?.[key])), "renderer cursor rectangle is missing");
+  assert.ok(renderedCursor && (renderedCursor.rect === null || ["x", "y", "width", "height"].every((key) =>
+    Number.isFinite(renderedCursor.rect?.[key]))), "renderer cursor rectangle is invalid");
   assert.equal(renderedCursor.shape, cursor.shape, "renderer cursor shape differs from terminal status");
   for (const field of ["focused", "visible", "blinkVisible"]) {
     assert.equal(renderedCursor[field], cursor[field], `renderer cursor ${field} differs from terminal status`);
   }
   assert.ok(["difference", "normal"].includes(renderedCursor.blend), "renderer cursor blend is unsupported");
-  assert.ok(renderedCursor.rect.x >= 0 && renderedCursor.rect.y >= 0 && renderedCursor.rect.width > 0 &&
-    renderedCursor.rect.height > 0 && renderedCursor.rect.x + renderedCursor.rect.width <= pixel.width &&
-    renderedCursor.rect.y + renderedCursor.rect.height <= pixel.height,
-  "renderer cursor rectangle is outside the frame");
+  assert.ok(renderedCursor.color === null || /^#[0-9a-f]{6}$/.test(renderedCursor.color),
+    "renderer cursor color is invalid");
+  assert.ok(Number.isFinite(renderedCursor.border) && renderedCursor.border >= 0, "renderer cursor border is invalid");
+  if (renderedCursor.blend === "difference") {
+    assert.equal(renderedCursor.color, null, "difference cursor must not claim a color");
+  }
+  if (renderedCursor.rect !== null) {
+    assert.ok(renderedCursor.rect.x >= 0 && renderedCursor.rect.y >= 0 &&
+      renderedCursor.rect.width > 0 && renderedCursor.rect.height > 0 &&
+      renderedCursor.rect.x + renderedCursor.rect.width <= pixel.width &&
+      renderedCursor.rect.y + renderedCursor.rect.height <= pixel.height,
+    "renderer cursor rectangle is outside the frame");
+  }
+  const drawn = renderedCursor.visible && renderedCursor.blinkVisible && renderedCursor.shape !== "hidden";
+  if (drawn) {
+    assert.ok(renderedCursor.rect, "drawn cursor rectangle is missing");
+    if (renderedCursor.blend === "normal") assert.ok(renderedCursor.color !== null, "drawn normal cursor color is missing");
+  }
   return { result: "declared", frame };
 }
 
@@ -298,15 +325,35 @@ export function rasterizeCellBounds(bounds, cellWidth, cellHeight, label = "rend
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-export function measureRenderedCell(cellPixels, render, target, cellColors, criteria) {
+function hexRgb(color) {
+  return [1, 3, 5].map((index) => Number.parseInt(color.slice(index, index + 2), 16));
+}
+
+function rendererCaptureRepresentation(pixel) {
+  assert.equal(pixel.format, "bgra8", "renderer pixel format must be bgra8");
+  assert.equal(pixel.alpha, "premultiplied", "renderer alpha mode is unsupported");
+  // The capture interface labels CoreGraphics premultiplied-first while its declared BGRA8 bytes are B,G,R,A.
+  return { format: "BGRA8", alpha: "premultiplied-first", colorSpace: pixel.colorSpace };
+}
+
+function captureArtifactRgb(bytes, offset) {
+  const alpha = bytes[offset + 3];
+  if (alpha === 0) return null;
+  const unpremultiply = (channel) => Math.min(255, Math.round(channel * 255 / alpha));
+  return [unpremultiply(bytes[offset + 2]), unpremultiply(bytes[offset + 1]), unpremultiply(bytes[offset])];
+}
+
+export function measureRenderedCell(cellPixels, render, target, criteria) {
   if (render === null) return { result: "no-proof", reason: "renderer-metadata-unavailable" };
   assert.ok(target?.frame && target.cursor, "frame-bound terminal cursor state is required");
   validateRenderMetadata(render, target.frame, target.cursor,
     [{ row: target.row, col: target.col, grapheme: target.grapheme }]);
-  const glyph = render?.glyphs?.find((entry) => entry.row === target.row && entry.col === target.col &&
+  const glyph = render.glyphs.find((entry) => entry.row === target.row && entry.col === target.col &&
     entry.grapheme === target.grapheme);
-  if (!glyph || !render.underline?.rect) {
-    return { result: "no-proof", reason: "same-frame-glyph-or-underline-metrics-missing" };
+  if (glyph.bounds === null) return { result: "no-proof", reason: "same-frame-glyph-ink-bounds-missing" };
+  const expectedArtifact = rendererCaptureRepresentation(render.pixel);
+  for (const [field, value] of Object.entries(expectedArtifact)) {
+    assert.equal(cellPixels[field], value, `capture artifact ${field} differs from renderer pixel representation`);
   }
   const { width, height, bytes } = cellPixels;
   const { cellWidth, cellHeight } = render.grid;
@@ -314,16 +361,15 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
   const gridY = render.grid.origin.y;
   assert.ok(Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 &&
     bytes instanceof Uint8Array && bytes.length === width * height * 4,
-  "cell pixels must be tightly packed BGRA8");
-  assert.equal(width, cellWidth, "cell crop width differs from renderer grid");
+  "cell pixels must be tightly packed BGRA8 capture bytes");
+  assert.equal(width, cellWidth * glyph.width, "cell crop width differs from renderer glyph width");
   assert.equal(height, cellHeight, "cell crop height differs from renderer grid");
-  const validColor = (color) => Array.isArray(color) && color.length === 3 &&
-    color.every((value) => Number.isInteger(value) && value >= 0 && value <= 255);
-  assert.ok(validColor(cellColors.foreground) && validColor(cellColors.background),
-    "resolved cell foreground and background are required");
   assert.equal(typeof target.marked, "boolean", "cell marked state is required");
-  const glyphRect = rasterizeCellBounds(glyph.bounds, cellWidth, cellHeight, "glyph bounds");
-  const underlineRect = rasterizeCellBounds(render.underline.rect, cellWidth, cellHeight, "underline bounds");
+  const foreground = hexRgb(glyph.foreground);
+  const background = hexRgb(glyph.background);
+  const glyphRect = rasterizeCellBounds(glyph.bounds, cellWidth * glyph.width, cellHeight, "glyph bounds");
+  const underlineRect = glyph.underline.rect === null ? null :
+    rasterizeCellBounds(glyph.underline.rect, cellWidth * glyph.width, cellHeight, "underline bounds");
   assert.ok(Number.isInteger(criteria.colorDistance) && criteria.colorDistance > 0,
     "consumer colorDistance must be positive");
   assert.ok(Number.isInteger(criteria.minimumGlyphPixels) && criteria.minimumGlyphPixels > 0,
@@ -331,25 +377,26 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
   assert.ok(Number.isFinite(criteria.minimumUnderlineCoverage) && criteria.minimumUnderlineCoverage > 0 &&
     criteria.minimumUnderlineCoverage <= 1, "consumer minimumUnderlineCoverage must be in (0, 1]");
   const cursor = render.cursor;
-  const isCursorPixel = (x, y) => cursor.visible && cursor.blinkVisible &&
+  const isCursorPixel = (x, y) => cursor.rect && cursor.visible && cursor.blinkVisible && cursor.shape !== "hidden" &&
     x + gridX + target.col * cellWidth >= cursor.rect.x &&
     x + gridX + target.col * cellWidth < cursor.rect.x + cursor.rect.width &&
     y + gridY + target.row * cellHeight >= cursor.rect.y &&
     y + gridY + target.row * cellHeight < cursor.rect.y + cursor.rect.height;
   const matchesForeground = (pixel, x, y) => {
     const inverse = isCursorPixel(x, y) && cursor.shape === "block" && cursor.blend === "difference";
-    const foreground = inverse ? cellColors.foreground.map((channel) => 255 - channel) : cellColors.foreground;
-    const background = inverse ? cellColors.background.map((channel) => 255 - channel) : cellColors.background;
-    return rgbDistance(pixel, foreground) < criteria.colorDistance &&
-      rgbDistance(pixel, background) >= criteria.colorDistance;
+    const effectiveForeground = inverse ? foreground.map((channel) => 255 - channel) : foreground;
+    const effectiveBackground = inverse ? background.map((channel) => 255 - channel) : background;
+    return rgbDistance(pixel, effectiveForeground) < criteria.colorDistance &&
+      rgbDistance(pixel, effectiveBackground) >= criteria.colorDistance;
   };
   let ink = 0;
   for (let y = glyphRect.y; y < glyphRect.y + glyphRect.height; y++) {
     for (let x = glyphRect.x; x < glyphRect.x + glyphRect.width; x++) {
-      if (x >= underlineRect.x && x < underlineRect.x + underlineRect.width &&
+      if (underlineRect && x >= underlineRect.x && x < underlineRect.x + underlineRect.width &&
           y >= underlineRect.y && y < underlineRect.y + underlineRect.height) continue;
       const offset = (y * width + x) * 4;
-      const pixel = [bytes[offset + 2], bytes[offset + 1], bytes[offset]];
+      const pixel = captureArtifactRgb(bytes, offset);
+      if (pixel === null) continue;
       const inCursor = isCursorPixel(x, y);
       if (inCursor && (cursor.shape !== "block" || cursor.blend !== "difference")) {
         return { result: "no-proof", reason: "glyph-overlaps-unsupported-cursor" };
@@ -358,15 +405,17 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
     }
   }
   let underlineCoverage = 0;
-  for (let y = underlineRect.y; y < underlineRect.y + underlineRect.height; y++) {
-    let run = 0;
-    for (let x = underlineRect.x; x < underlineRect.x + underlineRect.width; x++) {
-      const offset = (y * width + x) * 4;
-      const pixel = [bytes[offset + 2], bytes[offset + 1], bytes[offset]];
-      if (matchesForeground(pixel, x, y)) {
-        run++;
-        underlineCoverage = Math.max(underlineCoverage, run / underlineRect.width);
-      } else run = 0;
+  if (underlineRect) {
+    for (let y = underlineRect.y; y < underlineRect.y + underlineRect.height; y++) {
+      let run = 0;
+      for (let x = underlineRect.x; x < underlineRect.x + underlineRect.width; x++) {
+        const offset = (y * width + x) * 4;
+        const pixel = captureArtifactRgb(bytes, offset);
+        if (pixel !== null && matchesForeground(pixel, x, y)) {
+          run++;
+          underlineCoverage = Math.max(underlineCoverage, run / underlineRect.width);
+        } else run = 0;
+      }
     }
   }
   const underlined = underlineCoverage >= criteria.minimumUnderlineCoverage;
@@ -374,4 +423,3 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
   const passes = glyphPresent && underlined === target.marked;
   return { result: passes ? "measured" : "failed", glyphPixels: ink, underlineCoverage, underlined, glyphPresent };
 }
-
