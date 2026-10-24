@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F267.10: Verify native input callback state and replacement rejection.
+  The owning region tests assert that callback before/after records contain
+  AppKit-matching boolean `active` and `keyWindow` values, and that an invalid
+  marked-text replacement preserves the buffer, reports one error, emits no
+  action, and rejects later callbacks in the same scope. This adds coverage
+  for existing behavior; no production source changes are included.
+
 - F212.10-core-3-10: Record generation-bound native view-reply post results.
   The required `page` identifies the current main document. `posted` means the
   native post API accepted the message; `discarded` identifies a stale target.
