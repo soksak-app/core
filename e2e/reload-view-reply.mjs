@@ -1,5 +1,6 @@
 // Correlates the generation-bearing host binding transcript with page view-call records.
-export function acceptedCurrentViewReplies(events, transcriptLines, { plugin, surface }) {
+export function acceptedCurrentViewReplies(events, transcriptLines, { page, plugin, surface }) {
+  if (typeof page !== "string" || page.length === 0) throw new TypeError("viewReply evidence requires the current page identity");
   const prefix = "host viewReply ";
   const transcripts = [];
   for (const line of transcriptLines) {
@@ -19,7 +20,7 @@ export function acceptedCurrentViewReplies(events, transcriptLines, { plugin, su
     transcripts.push({ payload, outcome: Object.hasOwn(payload, "error") ? "error" : "result" });
   }
 
-  const sourceEvents = events.filter((event) => event.layer === "page" &&
+  const sourceEvents = events.filter((event) => event.layer === "page" && event.page === page &&
     ["page.view.call", "page.view.reply", "page.view.call.cancel"].includes(event.event));
   const matches = [];
   for (const { payload, outcome } of transcripts) {

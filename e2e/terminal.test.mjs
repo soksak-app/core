@@ -16,8 +16,8 @@ const largerTitle = async (s) => MENU_TITLES[(await s.get("host.menu")).language
 
 
 import { APPS, drag, failure, open, within } from "@soksak/window-check/app.mjs";
-import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
-import { fresh } from "./fixture.mjs";
+import { currentEventOffsets, readEvents, untilEventLine } from "@soksak/window-check/event-log.mjs";
+import { fresh, reading } from "./fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
@@ -794,7 +794,7 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { call: "debug" }, reads: ["page.view.call", "page.view.reply"] });
+    await fresh(s, { log: { call: "debug" }, reads: ["page.start", "page.view.call", "page.view.reply"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     const before = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });
@@ -806,21 +806,40 @@ for (const app of Object.values(APPS)) {
     const offsets = currentEventOffsets(s.app.configDir);
     const document = (await s.get("core.window.document")).timeOrigin;
     await s.run("host.window.reload");
-    await s.until("core.window.document", (value) => value.timeOrigin !== document && value.readyState === "complete",
+    const reloadedDocument = await s.until("core.window.document", (value) =>
+      value.timeOrigin !== document && value.readyState === "complete",
       "the main document did not reload");
+    const currentPage = String(reloadedDocument.timeOrigin);
+    await untilEventLine(s.app.configDir, offsets, (line) => {
+      if (!line.startsWith("info page page.start: ")) return false;
+      const fields = JSON.parse(line.slice(line.indexOf("{")));
+      return fields.time_origin === reloadedDocument.timeOrigin;
+    }, 30000, reading(s.app, ["page.start"]));
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === surface && item.exposes.includes("status terminal.session")), "the terminal did not return after the reload");
     const after = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not return", { surface });
-    await log.until((lines) => lines.some((line) => line.startsWith("host viewReply ") &&
-      line.includes(`"surface":${JSON.stringify(surface)}`)),
-    `the terminal view did not receive an accepted viewReply after reload`);
-    await s.flushLog();
-    const pageEvents = readEvents(s.app.configDir, offsets).events.filter((event) =>
-      event.layer === "page" && (event.event === "page.view.call" || event.event === "page.view.reply" ||
-        event.event === "page.view.call.cancel"));
-    const accepted = acceptedCurrentViewReplies(pageEvents, log.lines, { plugin: "terminal", surface });
-    assert.ok(accepted.length > 0,
-      `no post-reload page receipt and reply match an accepted host viewReply: ${JSON.stringify({ pageEvents, transcript: log.lines })}`);
+    let transcriptPosition = log.lines.length;
+    let pageEvents = [];
+    let accepted = [];
+    const replyDeadline = Date.now() + 30000;
+    while (accepted.length === 0) {
+      const remaining = replyDeadline - Date.now();
+      assert.ok(remaining > 0,
+        `no post-reload page receipt and reply match an accepted host viewReply: ${JSON.stringify({ pageEvents, transcript: log.lines })}`);
+      await log.until((lines) => lines.slice(transcriptPosition).some((line) => line.startsWith("host viewReply ") &&
+        line.includes(`"surface":${JSON.stringify(surface)}`)),
+      `the terminal view did not receive an accepted viewReply after reload`, remaining);
+      transcriptPosition = log.lines.length;
+      await s.flushLog();
+      const events = readEvents(s.app.configDir, offsets).events;
+      const starts = events.filter((event) => event.layer === "page" && event.event === "page.start" &&
+        event.page === currentPage && event.fields.time_origin === reloadedDocument.timeOrigin);
+      assert.equal(starts.length, 1,
+        `the reloaded document ${currentPage} has no unique page.start record: ${JSON.stringify(events)}`);
+      pageEvents = events.filter((event) => event.layer === "page" && event.page === currentPage &&
+        ["page.view.call", "page.view.reply", "page.view.call.cancel"].includes(event.event));
+      accepted = acceptedCurrentViewReplies(pageEvents, log.lines, { page: currentPage, plugin: "terminal", surface });
+    }
     const { id, generation } = accepted[0];
     assert.equal(unansweredViewCalls(pageEvents).some((call) => call.plugin === "terminal" &&
       call.surface === surface && call.id === id && call.generation === generation), false,

@@ -5,11 +5,11 @@
 ## 미배포
 
 - F212.10-core-3-8: terminal page-reload acceptance case를 강화해
-  current-generation page call/reply를 받아들여진 native `viewReply` host
-  call의 generation과 연결한다. 범위 correlator test는 generation이 다른
-  회신을 거부하고 정확한 page receipt/reply와 성공한 host call을 받아들인다.
-  Terminal session identity와 shell continuation 검증은 유지한다. Correlator와
-  문서 검사가 통과했으며 새 Wails/Tauri runtime acceptance는 남아 있다.
+  current document identity 및 source-generation page call/reply를 받아들여진
+  native `viewReply` host call과 연결한다. Test는 offset 이후 도착한 이전
+  page의 회신과 generation이 다른 회신을 거부한다. Terminal session identity와
+  shell continuation 검증은 유지한다. Correlator와 문서 검사가 통과했으며
+  새 Wails/Tauri runtime acceptance는 남아 있다.
 
 - F239-47-33: F8-9 ddd + Korean 2-Set gksrmf sequence (ddd한글),
   F143 gksk resyllabification (하나), 이전에 승인된
