@@ -4,6 +4,22 @@
 
 ## 미배포
 
+- F239-47-30-3: ScreenCaptureKit callback record와 별도로 capture 수명 동안
+  공개 AppKit display-link trace를 기록하고 두 host의 stop payload에서 artifact
+  경로를 제공한다. Trace는 검증한 clock observation을 기록하고 bounded overflow를
+  명시적으로 보고하며 hidden/off-display 또는 callback 없는 실행은 unavailable로
+  표시한다. Source frame을 식별하거나 layer 표시를 입증하지 않으며 capture
+  acceptance를 바꾸지 않는다. 집중 native metadata/resize test와 Wails/Tauri
+  stop-payload test는 각각 1/1 통과한다. 제어 lifecycle Red에서 link가 없는 경우 background stop이 retained window를 호출 thread에서 해제하는 문제가 확인됐다. 같은 test가 실패한 뒤 teardown은 main thread에서 해제하도록 수정했다. Resource 없는 반복 stop은 이전에 queue된 무효화가 실행되기 전 완료로 표시하지 않는다. 제어한 lookup/stop interleave는 취소 뒤의 설치를 거부한다. Stop 뒤 완료되는 clock failure는 다음 recording을 오염시키지 않으며 invalid timestamp와 overflow 오류는 lifecycle lock 안에서 귀속한다. Lifecycle과 race assertion이 통과한다. 이전 resize test 한 실행은 기대값 640x320
+  대신 400x200 frame을 기록했다. Fixture가 timing을 보존하기 전에 capture 출력을
+  삭제했으므로 원인은 F239-47-30-4에서 미분류 상태다.
+
+- F239-47-30-4: 원인이 분류되지 않은 growing-window capture 관측을 추적한다.
+  Resize fixture는 이제 실패한 capture 결과를 보존하고 resize 요청 시각과 frame
+  표시 시각을 출력한다. 이후 집중 resize 실행은 통과했지만 이전 실패 원인을
+  설명하지 않는다.
+
+
 - F239-47-32: Native input transaction이 callback action과 최종 preedit을
   한 번의 표시 단위로 묶지만, 비동기 PTY output은 이후 event와 frame으로
   도착할 수 있음을 명확히 한다. 공개 macOS callback batching 구현을 비규범적

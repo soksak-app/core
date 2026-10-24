@@ -34,9 +34,53 @@ static CVReturn injectedUnlock(CVPixelBufferRef buffer, CVPixelBufferLockFlags f
     CVReturn actual = CVPixelBufferUnlockBaseAddress(buffer, flags);
     return actual == kCVReturnSuccess ? injectedUnlockResult : actual;
 }
+
+static int displayWindowLastReleaseThread = -1;
+static int trackDisplayWindowReleases;
+static dispatch_semaphore_t displayLinkWindowLookupReached;
+static dispatch_semaphore_t displayLinkWindowLookupResume;
+static int displayLinkWindowLookupHookWaitResult = -1;
+static int displayLinkWindowLookupFound;
+static int displayLinkLookupRaceStopReturned;
+static dispatch_semaphore_t displayLinkClockReadEntered;
+static dispatch_semaphore_t displayLinkClockReadResume;
+static kern_return_t delayedFailedDisplayLinkTimebase(mach_timebase_info_data_t *timebase) {
+    (void)timebase;
+    dispatch_semaphore_signal(displayLinkClockReadEntered);
+    dispatch_semaphore_wait(displayLinkClockReadResume, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    return KERN_FAILURE;
+}
+static void pauseDisplayLinkInstallationAfterWindowLookup(NSWindow *window) {
+    __atomic_store_n(&displayLinkWindowLookupFound, window != nil ? 1 : 0, __ATOMIC_RELAXED);
+    dispatch_semaphore_signal(displayLinkWindowLookupReached);
+    displayLinkWindowLookupHookWaitResult = (int)dispatch_semaphore_wait(displayLinkWindowLookupResume,
+        dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+}
+@interface SPDisplayWindowReleaseProbe : NSWindow
+@end
+@implementation SPDisplayWindowReleaseProbe
+- (oneway void)release {
+    if (__atomic_load_n(&trackDisplayWindowReleases, __ATOMIC_RELAXED)) {
+        __atomic_store_n(&displayWindowLastReleaseThread, [NSThread isMainThread] ? 1 : 0, __ATOMIC_RELAXED);
+    }
+    [super release];
+}
+@end
+
+@interface SPFakeDisplayLink : NSObject
+@property (nonatomic) NSUInteger invalidationCount;
+- (void)invalidate;
+@end
+@implementation SPFakeDisplayLink
+- (void)invalidate { self.invalidationCount++; }
+@end
 static void *countingBaseAddress(CVPixelBufferRef buffer) {
     injectedBaseAddressCalls++;
     return CVPixelBufferGetBaseAddress(buffer);
+}
+
+static uint64_t rawMachForMediaTime(double seconds, mach_timebase_info_data_t timebase) {
+    return (uint64_t)roundl((long double)seconds * 1e9L * (long double)timebase.denom / (long double)timebase.numer);
 }
 
 static void check(BOOL ok, NSString *label) {
@@ -472,6 +516,346 @@ int main(void) { @autoreleasepool {
         && [measuredJSON[@"machTimebaseNumerator"] unsignedIntValue] == measuredTimebase.numer
         && [measuredJSON[@"machTimebaseDenominator"] unsignedIntValue] == measuredTimebase.denom,
         @"the callback artifact preserves the raw timing values and actual mach timebase");
+
+    sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
+    check(finalizeCaptureArtifacts(used), @"the stopped recording finalizes its source manifest and callback trace");
+    check([[NSFileManager defaultManager] fileExistsAtPath:
+        [directory stringByAppendingPathComponent:kCaptureCallbackStatusFile]],
+        @"the finalizer preserves the callback artifact path");
+    NSString *displayLinkPath = [directory stringByAppendingPathComponent:@"display-link.json"];
+    NSData *displayLinkData = [NSData dataWithContentsOfFile:displayLinkPath];
+    NSDictionary *displayLinkRecord = displayLinkData
+        ? [NSJSONSerialization JSONObjectWithData:displayLinkData options:0 error:nil] : nil;
+    check([displayLinkRecord[@"state"] isEqual:@"unavailable"]
+        && [displayLinkRecord[@"reason"] isKindOfClass:NSString.class]
+        && [displayLinkRecord[@"observations"] isEqual:@[]]
+        && [displayLinkRecord[@"omittedObservations"] isEqual:@0],
+        @"finalization reports an explicit unavailable display-link trace when no observation was recorded");
+    clearCaptureError();
+    kern_return_t (*displayLinkOriginalTimebaseReader)(mach_timebase_info_data_t *) = captureReadTimebase;
+    captureReadTimebase = failedTimebase;
+    [used displayLinkDidRefresh:nil];
+    captureReadTimebase = displayLinkOriginalTimebaseReader;
+    check([used.displayLinkState isEqual:@"unavailable"] && [NSString stringWithUTF8String:sp_capture_error()].length == 0,
+        @"a late display-link callback after stop cannot report a timebase error into the next capture");
+
+    SPCapture *windowReleaseFixture = [SPCapture new];
+    NSWindow *retainedWindow = [[SPDisplayWindowReleaseProbe alloc] initWithContentRect:NSMakeRect(0, 0, 10, 10)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    windowReleaseFixture.displayWindow = retainedWindow;
+    [retainedWindow release];
+    displayWindowLastReleaseThread = -1;
+    trackDisplayWindowReleases = 1;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [windowReleaseFixture stopDisplayLinkObservation];
+    });
+    NSDate *windowReleaseDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (!windowReleaseFixture.displayLinkInvalidated
+        && windowReleaseDeadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
+            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, windowReleaseDeadline.timeIntervalSinceNow)]];
+    }
+    trackDisplayWindowReleases = 0;
+    check(windowReleaseFixture.displayLinkInvalidated
+        && __atomic_load_n(&displayWindowLastReleaseThread, __ATOMIC_RELAXED) == 1,
+        @"a retained capture window without a display link is released on the main thread after background stop");
+    [windowReleaseFixture.displayWindow close];
+    [windowReleaseFixture release];
+
+    SPCapture *queuedInvalidationFixture = [SPCapture new];
+    SPFakeDisplayLink *queuedLink = [SPFakeDisplayLink new];
+    queuedInvalidationFixture.displayLink = (CADisplayLink *)queuedLink;
+    queuedInvalidationFixture.displayLinkStopped = NO;
+    queuedInvalidationFixture.displayLinkInvalidated = NO;
+    dispatch_semaphore_t stopReturned = dispatch_semaphore_create(0);
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [queuedInvalidationFixture stopDisplayLinkObservation];
+        dispatch_semaphore_signal(stopReturned);
+    });
+    long stopWait = dispatch_semaphore_wait(stopReturned, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    check(stopWait == 0, @"the linked background stop returns after queuing main-thread invalidation");
+    [queuedInvalidationFixture stopDisplayLinkObservation];
+    check(!queuedInvalidationFixture.displayLinkInvalidated && queuedLink.invalidationCount == 0,
+        @"a second resource-free stop does not complete or duplicate a queued invalidation");
+    NSDate *queuedInvalidationDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (!queuedInvalidationFixture.displayLinkInvalidated && queuedInvalidationDeadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
+            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, queuedInvalidationDeadline.timeIntervalSinceNow)]];
+    }
+    check(queuedInvalidationFixture.displayLinkInvalidated && queuedLink.invalidationCount == 1,
+        @"the original queued invalidation completes once on the main run loop");
+    [queuedLink release];
+    [queuedInvalidationFixture release];
+
+    NSWindow *lookupWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 10, 10)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    lookupWindow.releasedWhenClosed = NO;
+    SPCapture *lookupRaceFixture = [SPCapture new];
+    displayLinkWindowLookupReached = dispatch_semaphore_create(0);
+    displayLinkWindowLookupResume = dispatch_semaphore_create(0);
+    displayLinkWindowLookupHookWaitResult = -1;
+    displayLinkWindowLookupFound = 0;
+    displayLinkLookupRaceStopReturned = 0;
+    captureDisplayLinkAfterWindowLookup = pauseDisplayLinkInstallationAfterWindowLookup;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [lookupRaceFixture startDisplayLinkObservationForWindowNumber:lookupWindow.windowNumber];
+        long lookupWait = dispatch_semaphore_wait(displayLinkWindowLookupReached,
+            dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+        if (lookupWait == 0) [lookupRaceFixture stopDisplayLinkObservation];
+        __atomic_store_n(&displayLinkLookupRaceStopReturned, lookupWait == 0 ? 1 : 2, __ATOMIC_RELAXED);
+        dispatch_semaphore_signal(displayLinkWindowLookupResume);
+    });
+    NSDate *lookupRaceDeadline = [NSDate dateWithTimeIntervalSinceNow:3];
+    while (__atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) == 0
+        && lookupRaceDeadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:
+            [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, lookupRaceDeadline.timeIntervalSinceNow)]];
+    }
+    captureDisplayLinkAfterWindowLookup = NULL;
+    check(__atomic_load_n(&displayLinkLookupRaceStopReturned, __ATOMIC_RELAXED) == 1
+        && displayLinkWindowLookupHookWaitResult == 0
+        && __atomic_load_n(&displayLinkWindowLookupFound, __ATOMIC_RELAXED) == 1
+        && lookupRaceFixture.displayLinkStopped
+        && lookupRaceFixture.displayWindow == nil && lookupRaceFixture.displayLink == nil,
+        @"a stop during window lookup prevents the installer from retaining or creating resources afterward");
+    [lookupWindow close];
+    [lookupWindow release];
+    [lookupRaceFixture release];
+    dispatch_release(displayLinkWindowLookupResume);
+    dispatch_release(displayLinkWindowLookupReached);
+
+    SPCapture *lateFailureFixture = [SPCapture new];
+    displayLinkClockReadEntered = dispatch_semaphore_create(0);
+    displayLinkClockReadResume = dispatch_semaphore_create(0);
+    dispatch_semaphore_t lateCallbackFinished = dispatch_semaphore_create(0);
+    kern_return_t (*originalDisplayLinkTimebaseReader)(mach_timebase_info_data_t *) = captureReadTimebase;
+    clearCaptureError();
+    captureReadTimebase = delayedFailedDisplayLinkTimebase;
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [lateFailureFixture displayLinkDidRefresh:nil];
+        dispatch_semaphore_signal(lateCallbackFinished);
+    });
+    long callbackEntered = dispatch_semaphore_wait(displayLinkClockReadEntered,
+        dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    [lateFailureFixture stopDisplayLinkObservation];
+    dispatch_semaphore_signal(displayLinkClockReadResume);
+    long callbackFinished = dispatch_semaphore_wait(lateCallbackFinished,
+        dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
+    captureReadTimebase = originalDisplayLinkTimebaseReader;
+    check(callbackEntered == 0 && callbackFinished == 0
+        && [lateFailureFixture.displayLinkState isEqual:@"unavailable"]
+        && lateFailureFixture.omittedDisplayLinkObservations == 0
+        && [NSString stringWithUTF8String:sp_capture_error()].length == 0,
+        @"a callback clock failure completing after stop cannot taint the next capture");
+    [lateFailureFixture release];
+    dispatch_release(lateCallbackFinished);
+    dispatch_release(displayLinkClockReadResume);
+    dispatch_release(displayLinkClockReadEntered);
+
+    NSString *observationDirectory = [directory stringByAppendingPathComponent:@"display-link-observations"];
+    NSError *observationDirectoryError = nil;
+    BOOL observationDirectoryCreated = [[NSFileManager defaultManager] createDirectoryAtPath:observationDirectory
+        withIntermediateDirectories:YES attributes:nil error:&observationDirectoryError];
+    check(observationDirectoryCreated, [NSString stringWithFormat:@"the display-link fixture directory is created (%@)", observationDirectoryError]);
+    SPCapture *observationFixture = [SPCapture new];
+    observationFixture.directory = observationDirectory;
+    mach_timebase_info_data_t observationTimebase = {};
+    mach_timebase_info(&observationTimebase);
+    uint64_t firstCallbackTime = mach_absolute_time();
+    double firstMediaTime = CACurrentMediaTime();
+    uint64_t firstMediaClockAfter = mach_absolute_time();
+    double firstTimestamp = firstMediaTime - 0.05;
+    [observationFixture recordDisplayLinkTimestamp:firstTimestamp targetTimestamp:firstTimestamp + 0.016 duration:0.016
+        callbackTime:firstCallbackTime mediaClockTime:firstMediaTime mediaClockAfter:firstMediaClockAfter
+        timebase:observationTimebase windowNumber:41 displayID:@(7)
+        visible:YES occluded:NO applicationActive:NO];
+    uint64_t secondCallbackTime = mach_absolute_time();
+    double secondMediaTime = CACurrentMediaTime();
+    uint64_t secondMediaClockAfter = mach_absolute_time();
+    double secondTimestamp = firstTimestamp + 0.001;
+    [observationFixture recordDisplayLinkTimestamp:secondTimestamp targetTimestamp:secondTimestamp + 0.016 duration:0.016
+        callbackTime:secondCallbackTime mediaClockTime:secondMediaTime mediaClockAfter:secondMediaClockAfter
+        timebase:observationTimebase windowNumber:41 displayID:@(7)
+        visible:YES occluded:YES applicationActive:NO];
+    sp_image_capture_match_begin(observationDirectory.fileSystemRepresentation, captureWriter);
+    check(finalizeCaptureArtifacts(observationFixture), @"the finalizer writes a controlled display-link observation trace");
+    NSData *observationData = [NSData dataWithContentsOfFile:
+        [observationDirectory stringByAppendingPathComponent:kCaptureDisplayLinkFile]];
+    NSDictionary *observationTrace = observationData
+        ? [NSJSONSerialization JSONObjectWithData:observationData options:0 error:nil] : nil;
+    NSArray *observations = observationTrace[@"observations"];
+    NSDictionary *firstObservation = observations.count > 0 ? observations[0] : nil;
+    NSDictionary *secondObservation = observations.count > 1 ? observations[1] : nil;
+    check([observationTrace[@"state"] isEqual:@"available"] && observations.count == 2
+        && [firstObservation[@"sequence"] isEqual:@1] && [secondObservation[@"sequence"] isEqual:@2]
+        && [firstObservation[@"windowNumber"] isEqual:@41] && [firstObservation[@"displayID"] isEqual:@7]
+        && [firstObservation[@"visible"] isEqual:@YES] && [firstObservation[@"occluded"] isEqual:@NO]
+        && [secondObservation[@"occluded"] isEqual:@YES] && [secondObservation[@"applicationActive"] isEqual:@NO]
+        && [firstObservation[@"callbackTime"] isKindOfClass:NSString.class]
+        && [firstObservation[@"callbackMediaTime"] isKindOfClass:NSNumber.class]
+        && [firstObservation[@"mediaClockAfter"] isKindOfClass:NSString.class]
+        && [firstObservation[@"machTimebaseNumerator"] unsignedIntValue] == observationTimebase.numer
+        && [firstObservation[@"machTimebaseDenominator"] unsignedIntValue] == observationTimebase.denom,
+        [NSString stringWithFormat:@"the finalized display-link trace preserves ordered timestamps, raw callback clock, timebase, and window state (%@)", observationTrace]);
+    [observationFixture release];
+
+    NSString *visibilityDirectory = [directory stringByAppendingPathComponent:@"display-link-visibility"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:visibilityDirectory withIntermediateDirectories:YES attributes:nil error:nil];
+    SPCapture *visibilityFixture = [SPCapture new];
+    visibilityFixture.directory = visibilityDirectory;
+    uint64_t visibilityBefore = mach_absolute_time();
+    double visibilityMedia = CACurrentMediaTime();
+    uint64_t visibilityAfter = mach_absolute_time();
+    double visibilityTimestamp = visibilityMedia - 0.02;
+    [visibilityFixture recordDisplayLinkTimestamp:visibilityTimestamp targetTimestamp:visibilityTimestamp + 0.016 duration:0.016
+        callbackTime:visibilityBefore mediaClockTime:visibilityMedia mediaClockAfter:visibilityAfter
+        timebase:observationTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES];
+    uint64_t hiddenBefore = mach_absolute_time();
+    double hiddenMedia = CACurrentMediaTime();
+    uint64_t hiddenAfter = mach_absolute_time();
+    double hiddenTimestamp = visibilityTimestamp + 0.001;
+    [visibilityFixture recordDisplayLinkTimestamp:hiddenTimestamp targetTimestamp:hiddenTimestamp + 0.016 duration:0.016
+        callbackTime:hiddenBefore mediaClockTime:hiddenMedia mediaClockAfter:hiddenAfter
+        timebase:observationTimebase windowNumber:41 displayID:@7 visible:NO occluded:YES applicationActive:YES];
+    uint64_t offDisplayBefore = mach_absolute_time();
+    double offDisplayMedia = CACurrentMediaTime();
+    uint64_t offDisplayAfter = mach_absolute_time();
+    double offDisplayTimestamp = hiddenTimestamp + 0.001;
+    [visibilityFixture recordDisplayLinkTimestamp:offDisplayTimestamp targetTimestamp:offDisplayTimestamp + 0.016 duration:0.016
+        callbackTime:offDisplayBefore mediaClockTime:offDisplayMedia mediaClockAfter:offDisplayAfter
+        timebase:observationTimebase windowNumber:41 displayID:nil visible:YES occluded:NO applicationActive:YES];
+    sp_image_capture_match_begin(visibilityDirectory.fileSystemRepresentation, captureWriter);
+    check(finalizeCaptureArtifacts(visibilityFixture), @"the hidden-window display-link trace is finalized");
+    NSData *visibilityData = [NSData dataWithContentsOfFile:
+        [visibilityDirectory stringByAppendingPathComponent:kCaptureDisplayLinkFile]];
+    NSDictionary *visibilityTrace = visibilityData
+        ? [NSJSONSerialization JSONObjectWithData:visibilityData options:0 error:nil] : nil;
+    NSArray *visibilityObservations = visibilityTrace[@"observations"];
+    NSDictionary *offDisplayObservation = visibilityObservations.count > 2 ? visibilityObservations[2] : nil;
+    NSDictionary *hiddenObservation = visibilityObservations.count > 1 ? visibilityObservations[1] : nil;
+    check([visibilityTrace[@"state"] isEqual:@"unavailable"]
+        && visibilityObservations.count == 3
+        && [visibilityTrace[@"reason"] isEqual:@"the captured window had no display during a display-link observation"]
+        && [hiddenObservation[@"visible"] isEqual:@NO]
+        && [offDisplayObservation[@"displayID"] isEqual:NSNull.null],
+        [NSString stringWithFormat:@"hidden and off-display observations remain recorded but cannot claim available refresh coverage (%@)", visibilityTrace]);
+    [visibilityFixture release];
+
+    NSString *invalidDirectory = [directory stringByAppendingPathComponent:@"display-link-invalid"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:invalidDirectory withIntermediateDirectories:YES attributes:nil error:nil];
+    SPCapture *invalidFixture = [SPCapture new];
+    invalidFixture.directory = invalidDirectory;
+    uint64_t invalidCallbackTime = mach_absolute_time();
+    double invalidMediaTime = CACurrentMediaTime();
+    uint64_t invalidMediaClockAfter = mach_absolute_time();
+    double invalidTimestamp = invalidMediaTime - 0.02;
+    [invalidFixture recordDisplayLinkTimestamp:invalidTimestamp targetTimestamp:invalidTimestamp + 0.016 duration:0.016
+        callbackTime:invalidCallbackTime mediaClockTime:invalidMediaTime mediaClockAfter:invalidMediaClockAfter
+        timebase:observationTimebase windowNumber:41 displayID:@7
+        visible:YES occluded:NO applicationActive:YES];
+    double regressedMediaTime = CACurrentMediaTime();
+    uint64_t regressedAfter = mach_absolute_time();
+    double regressedTimestamp = regressedMediaTime - 0.01;
+    [invalidFixture recordDisplayLinkTimestamp:regressedTimestamp targetTimestamp:regressedTimestamp - 0.001 duration:0.016
+        callbackTime:invalidCallbackTime - 1 mediaClockTime:regressedMediaTime mediaClockAfter:regressedAfter
+        timebase:observationTimebase windowNumber:41 displayID:@7
+        visible:YES occluded:NO applicationActive:YES];
+    check([invalidFixture.displayLinkState isEqual:@"incomplete"]
+        && invalidFixture.omittedDisplayLinkObservations == 1
+        && invalidFixture.displayLinkObservations.count == 1
+        && [[NSString stringWithUTF8String:sp_capture_error()] containsString:@"display-link trace incomplete"],
+        @"a regressed display-link callback clock is rejected without discarding its valid prefix");
+    sp_image_capture_match_begin(invalidDirectory.fileSystemRepresentation, captureWriter);
+    check(finalizeCaptureArtifacts(invalidFixture), @"a clock-invalid display-link trace still writes its final artifact");
+    NSData *invalidData = [NSData dataWithContentsOfFile:
+        [invalidDirectory stringByAppendingPathComponent:kCaptureDisplayLinkFile]];
+    NSDictionary *invalidTrace = invalidData
+        ? [NSJSONSerialization JSONObjectWithData:invalidData options:0 error:nil] : nil;
+    check([invalidTrace[@"state"] isEqual:@"incomplete"]
+        && [invalidTrace[@"observations"] count] == 1
+        && [invalidTrace[@"omittedObservations"] isEqual:@1],
+        @"the clock-invalid artifact preserves its valid prefix and omitted observation count");
+    [invalidFixture release];
+    clearCaptureError();
+
+    NSString *boundaryDirectory = [directory stringByAppendingPathComponent:@"display-link-clock-boundary"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:boundaryDirectory withIntermediateDirectories:YES attributes:nil error:nil];
+    SPCapture *boundaryFixture = [SPCapture new];
+    boundaryFixture.directory = boundaryDirectory;
+    uint64_t boundaryCallbackTime = mach_absolute_time();
+    double boundaryMediaTime = CACurrentMediaTime();
+    uint64_t boundaryMediaClockAfter = mach_absolute_time();
+    [boundaryFixture recordDisplayLinkTimestamp:1e20 targetTimestamp:1e20 + 1e10 duration:0.016
+        callbackTime:boundaryCallbackTime mediaClockTime:boundaryMediaTime mediaClockAfter:boundaryMediaClockAfter
+        timebase:observationTimebase windowNumber:41 displayID:@7
+        visible:YES occluded:NO applicationActive:YES];
+    check([boundaryFixture.displayLinkState isEqual:@"incomplete"]
+        && boundaryFixture.omittedDisplayLinkObservations == 1
+        && boundaryFixture.displayLinkObservations.count == 0,
+        @"a timestamp whose Mach conversion exceeds the unsigned clock range is rejected");
+    [boundaryFixture release];
+    clearCaptureError();
+
+    NSString *timebaseDirectory = [directory stringByAppendingPathComponent:@"display-link-timebase-change"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:timebaseDirectory withIntermediateDirectories:YES attributes:nil error:nil];
+    SPCapture *timebaseFixture = [SPCapture new];
+    timebaseFixture.directory = timebaseDirectory;
+    uint64_t timebaseBefore = mach_absolute_time();
+    double timebaseMedia = CACurrentMediaTime();
+    uint64_t timebaseAfter = mach_absolute_time();
+    double timebaseTimestamp = timebaseMedia - 0.02;
+    [timebaseFixture recordDisplayLinkTimestamp:timebaseTimestamp targetTimestamp:timebaseTimestamp + 0.016 duration:0.016
+        callbackTime:timebaseBefore mediaClockTime:timebaseMedia mediaClockAfter:timebaseAfter
+        timebase:observationTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES];
+    mach_timebase_info_data_t changedTimebase = observationTimebase;
+    changedTimebase.numer++;
+    uint64_t changedBefore = mach_absolute_time();
+    double changedMedia = CACurrentMediaTime();
+    uint64_t changedAfter = mach_absolute_time();
+    double changedTimestamp = timebaseTimestamp + 0.001;
+    [timebaseFixture recordDisplayLinkTimestamp:changedTimestamp targetTimestamp:changedTimestamp + 0.016 duration:0.016
+        callbackTime:changedBefore mediaClockTime:changedMedia mediaClockAfter:changedAfter
+        timebase:changedTimebase windowNumber:41 displayID:@7 visible:YES occluded:NO applicationActive:YES];
+    check([timebaseFixture.displayLinkState isEqual:@"incomplete"]
+        && timebaseFixture.omittedDisplayLinkObservations == 1
+        && timebaseFixture.displayLinkObservations.count == 1,
+        @"a changed Mach timebase invalidates the clock correlation and preserves its valid prefix");
+    [timebaseFixture release];
+    clearCaptureError();
+
+    NSString *overflowDirectory = [directory stringByAppendingPathComponent:@"display-link-overflow"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:overflowDirectory withIntermediateDirectories:YES attributes:nil error:nil];
+    SPCapture *overflowFixture = [SPCapture new];
+    overflowFixture.directory = overflowDirectory;
+    double overflowBase = CACurrentMediaTime();
+    for (NSUInteger index = 0; index < 4097; index++) {
+        double timestamp = overflowBase + (double)index * 0.001;
+        double mediaClockTime = timestamp + 0.00025;
+        uint64_t callbackTime = rawMachForMediaTime(timestamp + 0.0002, observationTimebase);
+        uint64_t mediaClockAfter = rawMachForMediaTime(timestamp + 0.0003, observationTimebase);
+        [overflowFixture recordDisplayLinkTimestamp:timestamp targetTimestamp:timestamp + 0.016 duration:0.016
+            callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
+            timebase:observationTimebase windowNumber:41 displayID:@7
+            visible:YES occluded:NO applicationActive:YES];
+    }
+    check(overflowFixture.displayLinkObservations.count == 4096
+        && overflowFixture.omittedDisplayLinkObservations == 1
+        && [overflowFixture.displayLinkState isEqual:@"incomplete"]
+        && [[NSString stringWithUTF8String:sp_capture_error()] containsString:@"capacity exceeded"],
+        @"the display-link trace records its 4096 bound, omitted count, incomplete state, and explicit error");
+    sp_image_capture_match_begin(overflowDirectory.fileSystemRepresentation, captureWriter);
+    check(finalizeCaptureArtifacts(overflowFixture), @"an incomplete display-link trace still writes its final artifact");
+    NSData *overflowData = [NSData dataWithContentsOfFile:
+        [overflowDirectory stringByAppendingPathComponent:kCaptureDisplayLinkFile]];
+    NSDictionary *overflowTrace = overflowData
+        ? [NSJSONSerialization JSONObjectWithData:overflowData options:0 error:nil] : nil;
+    check([overflowTrace[@"state"] isEqual:@"incomplete"]
+        && [overflowTrace[@"observations"] count] == 4096
+        && [overflowTrace[@"omittedObservations"] isEqual:@1]
+        && [overflowTrace[@"reason"] isEqual:@"display-link observation capacity exceeded (4096 records)"],
+        @"the incomplete artifact preserves all accepted records and the exact omitted callback count");
+    [overflowFixture release];
+    clearCaptureError();
 
     beginSequence(&used);
     controlledTimes[0] = 300;

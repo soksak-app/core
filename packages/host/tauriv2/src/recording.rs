@@ -19,7 +19,8 @@ pub fn stop_payload(
     layouts: &[[f64; 5]],
 ) -> Value {
     let callback_status = directory.join("callback-status.jsonl");
-    json!({"frames": directory.to_string_lossy(), "callbackStatus": callback_status.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
+    let display_link = directory.join("display-link.json");
+    json!({"frames": directory.to_string_lossy(), "callbackStatus": callback_status.to_string_lossy(), "displayLink": display_link.to_string_lossy(), "count": count, "limited": limited, "longestGap": longest_gap, "layouts": layout_trace(layouts)})
 }
 
 /// Converts the placement transaction record into {ticket, begun, presented, committed}. A stage that did not happen is

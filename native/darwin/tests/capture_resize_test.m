@@ -4,6 +4,7 @@
 #import "../src/capture.m"
 
 static int failures;
+static double resizeRequestedAtMilliseconds;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
@@ -68,8 +69,11 @@ int main(void) { @autoreleasepool {
     // Checks that the index-th (from 1) frame of a recording holds the window size points in device pixels. Frame numbers continue
     // across recordings, so the frame is chosen by the file order of the directory.
     BOOL (^frameIs)(NSString *, int, NSSize, NSString *) = ^BOOL(NSString *directory, int number, NSSize points, NSString *label) {
-        NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory error:nil]
-            sortedArrayUsingSelector:@selector(compare:)];
+        NSArray *files = [[[[NSFileManager defaultManager] contentsOfDirectoryAtPath:directory error:nil]
+            filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSString *name, NSDictionary *bindings) {
+                (void)bindings;
+                return [name hasPrefix:@"frame-"] && [name hasSuffix:@".bgra"];
+            }]] sortedArrayUsingSelector:@selector(compare:)];
         NSString *path = number >= 1 && number <= (int)files.count
             ? [directory stringByAppendingPathComponent:files[number - 1]] : nil;
         NSData *stored = path ? [NSData dataWithContentsOfFile:path] : nil;
@@ -84,8 +88,9 @@ int main(void) { @autoreleasepool {
         uint32_t width = (uint32_t)llround(points.width * scale), height = (uint32_t)llround(points.height * scale);
         BOOL ok = head[0] == width && head[1] == height && info[4] == 1;
         check(ok, [NSString stringWithFormat:@"%@: frame %d records the window at device pixels "
-            "(buffer %ux%u, content %.1fx%.1f at content scale %.4f; expected %ux%u at 1)",
-            label, number, head[0], head[1], info[2], info[3], info[4], width, height]);
+            "(buffer %ux%u, content %.1fx%.1f at content scale %.4f; expected %ux%u at 1; "
+            "frame displayed at %.3fms, resize requested at %.3fms)",
+            label, number, head[0], head[1], info[2], info[3], info[4], width, height, info[6], resizeRequestedAtMilliseconds]);
         return ok;
     };
     // Runs change while recording the window and stops after its presentation. Returns the frame count and leaves the directory in directory.
@@ -103,15 +108,30 @@ int main(void) { @autoreleasepool {
         free(operationError);
         if (!recording) return 0;
         check(sp_capture_wait() == 1, [NSString stringWithFormat:@"%@: a first frame arrives (%s)", label, sp_capture_error()]);
+        resizeRequestedAtMilliseconds = CACurrentMediaTime() * 1000;
         change();
         [window display];
         int frames = sp_capture_stop(presentedAfterChange());
         NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()];
+        NSData *displayLinkData = [NSData dataWithContentsOfFile:
+            [directory stringByAppendingPathComponent:@"display-link.json"]];
+        NSDictionary *displayLinkTrace = displayLinkData
+            ? [NSJSONSerialization JSONObjectWithData:displayLinkData options:0 error:nil] : nil;
+        check([displayLinkTrace[@"state"] isEqual:@"available"]
+            && [displayLinkTrace[@"observations"] isKindOfClass:NSArray.class]
+            && [displayLinkTrace[@"observations"] count] > 0,
+            [NSString stringWithFormat:@"%@ : the visible capture window produces independent AppKit refresh observations", label]);
+        check(captureSink.displayLink == nil && captureSink.displayLinkStopped && captureSink.displayLinkInvalidated,
+            [NSString stringWithFormat:@"%@ : stopping the capture invalidates its retained display link", label]);
         check(stopError.length == 0 && frames > 0,
             [NSString stringWithFormat:@"%@: recording stops without error (frames %d, error %@)", label, frames, stopError]);
         return frames;
     };
     void (^remove)(NSString *) = ^(NSString *directory) {
+        if (failures != 0 && directory != nil) {
+            fprintf(stderr, "RETAIN capture evidence: %s\n", directory.UTF8String);
+            return;
+        }
         NSError *removal = nil;
         check(directory == nil || [[NSFileManager defaultManager] removeItemAtPath:directory error:&removal],
             [NSString stringWithFormat:@"capture files are removed (%@)", removal]);
@@ -136,6 +156,17 @@ int main(void) { @autoreleasepool {
         frameIs(directory, frames, NSMakeSize(200, 100), @"after shrinking");
     }
     remove(directory);
+    [captureSink startDisplayLinkObservationForWindowNumber:window.windowNumber];
+    check(captureSink.displayLink != nil, @"a visible test window creates an AppKit display link for asynchronous teardown");
+    SPCapture *asyncStopSink = [captureSink retain];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [asyncStopSink stopDisplayLinkObservation];
+        [asyncStopSink release];
+    });
+    NSDate *invalidationDeadline = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (!captureSink.displayLinkInvalidated && invalidationDeadline.timeIntervalSinceNow > 0) spin(0.005);
+    check(captureSink.displayLink == nil && captureSink.displayLinkStopped && captureSink.displayLinkInvalidated,
+        @"background capture stop completes main-run-loop display-link invalidation without blocking the window thread");
     check(!NSApp.isActive, @"recording does not activate the application");
     [window close];
     fprintf(stderr, "%s: native capture follows a growing window (%.1fms)\n", failures ? "FAIL" : "PASS",
