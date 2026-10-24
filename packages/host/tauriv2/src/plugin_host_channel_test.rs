@@ -10,6 +10,39 @@ use crate::plugin_host_channel::{
     plugin_host_queue_full, reply_message, request_message,
 };
 
+#[test]
+fn a_plugin_host_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
+    let origins = crate::source_origins::DeclaredSourceOrigins::default();
+    let generation = origins
+        .issue_plugin_host("probe")
+        .expect("the host origin is issued");
+    let channels = PluginHostChannels::default();
+    channels.register("probe", None, generation);
+
+    let registered = crate::source_origins::declared_source_origin_event("probe", None, generation);
+    let snapshot = channels
+        .receive(
+            "probe",
+            r#"{"message":{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"items":[]}}}"#,
+        )
+        .expect("the first provider snapshot is relayed");
+    let status_registration = channels
+        .receive(
+            "probe",
+            r#"{"message":{"id":2,"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"items"}}}}"#,
+        )
+        .expect("the first status registration is relayed");
+
+    assert_eq!(
+        registered,
+        json!({"plugin":"probe","generation":generation})
+    );
+    assert!(matches!(snapshot, Received::Emit(_, payload) if payload["generation"] == generation));
+    assert!(
+        matches!(status_registration, Received::Emit(_, payload) if payload["generation"] == generation)
+    );
+}
+
 /// Returns the channels of a window with the host of plugin probe and, when ready is set, the ready document doc-1.
 fn host_channels(ready: bool) -> PluginHostChannels {
     let channels = PluginHostChannels::default();

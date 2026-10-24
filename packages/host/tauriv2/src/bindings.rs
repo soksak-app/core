@@ -565,7 +565,7 @@ fn plugin_host_event(
 #[tauri::command(async)]
 fn declared_source_origins(
     webview: Webview,
-) -> Result<crate::windows::DeclaredSourceOriginsSnapshot, String> {
+) -> Result<crate::source_origins::DeclaredSourceOriginsSnapshot, String> {
     let window = webview.window();
     crate::exposure::authorize_main_caller(webview.label(), window.label(), "declared source origins")?;
     let task_window = window.clone();

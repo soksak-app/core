@@ -32,6 +32,13 @@
   module을 가리키며 count 감사는 lane 100개, 구현 파일 692개, test 파일
   984개로 통과한다. Relay 동작은 바꾸지 않았다.
 
+- F239-48-3-4: Rust declared-source generation state와 snapshot helper를
+  `windows.rs`에서 대응하는 Wails module 옆의 `source_origins.rs`로 옮긴다.
+  State test는 module 옆에 두고 plugin-host 및 view-channel 통합 test는 각
+  owner에 남긴다. Focused Go test는 2/2, focused Rust test는 3/3 통과한다.
+  Host-tree 감사는 경로 finding이 17개에서 14개로 줄었고 다른 경로는 계속
+  열린 상태다. 동작과 wire 형식은 바꾸지 않았다.
+
 - F239-47-32: Native input transaction이 callback action과 최종 preedit을
   한 번의 표시 단위로 묶지만, 비동기 PTY output은 이후 event와 frame으로
   도착할 수 있음을 명확히 한다. 공개 macOS callback batching 구현을 비규범적

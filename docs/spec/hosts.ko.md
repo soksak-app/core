@@ -22,6 +22,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     host.go        패키지 문서, Run                   host.rs
     bindings.go    페이지 호출 등록                   bindings.rs
     windows.go     창, 준비, 닫기, 종료               windows.rs
+    source_origins.go 선언된 source generation       source_origins.rs
     projects.go    폴더 확인, 선택, 생성              projects.rs
     workspace.go   설정과 프로젝트 저장               workspace.rs
     surfaces.go    표면 동기화, 표시, 배치            surfaces.rs

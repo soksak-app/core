@@ -1,6 +1,6 @@
 //! Project windows, the window registry, ready/close/exit, window state and window buttons.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
@@ -20,6 +20,7 @@ use crate::platform::{self, Handle};
 use crate::projects::project_folder;
 use crate::shapes::Shapes;
 use crate::sidecars::WindowSidecars;
+use crate::source_origins::{DeclaredSourceOrigins, declared_source_origin_event};
 use crate::surfaces::{Rect, Running, SurfaceComposition, Views, Watching};
 use crate::theme::CurrentTheme;
 
@@ -155,129 +156,6 @@ pub(crate) fn register_declared_source_event_stream(
         .install(channel);
     Ok(())
 }
-
-#[derive(Default)]
-pub(crate) struct DeclaredSourceOrigins(Mutex<DeclaredSourceOriginsState>);
-
-pub(crate) const MAX_DECLARED_SOURCE_GENERATION: u64 = 9_007_199_254_740_991;
-
-pub(crate) fn validate_declared_source_generation_limit(
-    generation: u64,
-    subject: &str,
-) -> Result<(), String> {
-    if generation > MAX_DECLARED_SOURCE_GENERATION {
-        return Err(format!(
-            "{subject} source generation exceeds the JavaScript safe integer limit"
-        ));
-    }
-    Ok(())
-}
-
-#[derive(Default)]
-struct DeclaredSourceOriginsState {
-    floor: u64,
-    plugin_hosts: BTreeMap<String, u64>,
-    views: BTreeMap<String, u64>,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DeclaredSourceOriginsSnapshot {
-    floor: u64,
-    plugin_hosts: BTreeMap<String, u64>,
-    views: BTreeMap<String, u64>,
-}
-
-pub(crate) fn declared_source_origin_event(
-    plugin: &str,
-    surface: Option<&str>,
-    generation: u64,
-) -> serde_json::Value {
-    let mut payload = serde_json::json!({"plugin": plugin, "generation": generation});
-    if let Some(surface) = surface {
-        payload["surface"] = serde_json::json!(surface);
-    }
-    payload
-}
-
-impl DeclaredSourceOrigins {
-    fn lock(&self) -> std::sync::MutexGuard<'_, DeclaredSourceOriginsState> {
-        self.0.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    pub(crate) fn issue_plugin_host(&self, plugin: &str) -> Result<u64, String> {
-        let mut state = self.lock();
-        let generation = state
-            .floor
-            .checked_add(1)
-            .filter(|generation| *generation <= MAX_DECLARED_SOURCE_GENERATION)
-            .ok_or_else(|| {
-                "declared source generation exceeds the JavaScript safe integer limit".to_string()
-            })?;
-        state.floor = generation;
-        state.plugin_hosts.insert(plugin.to_string(), generation);
-        Ok(generation)
-    }
-
-    pub(crate) fn end_plugin_host(&self, plugin: &str, generation: u64) -> bool {
-        let mut state = self.lock();
-        if state.plugin_hosts.get(plugin) != Some(&generation) {
-            return false;
-        }
-        state.plugin_hosts.remove(plugin);
-        true
-    }
-
-    pub(crate) fn take_all_plugin_hosts(&self) -> Vec<(String, u64)> {
-        std::mem::take(&mut self.lock().plugin_hosts)
-            .into_iter()
-            .collect()
-    }
-
-    pub(crate) fn current_plugin_host(&self, plugin: &str) -> Option<u64> {
-        self.lock().plugin_hosts.get(plugin).copied()
-    }
-
-    pub(crate) fn issue_view(&self, surface: &str) -> Result<u64, String> {
-        let mut state = self.lock();
-        let generation = state
-            .floor
-            .checked_add(1)
-            .filter(|generation| *generation <= MAX_DECLARED_SOURCE_GENERATION)
-            .ok_or_else(|| {
-                "declared source generation exceeds the JavaScript safe integer limit".to_string()
-            })?;
-        state.floor = generation;
-        state.views.insert(surface.to_string(), generation);
-        Ok(generation)
-    }
-
-    pub(crate) fn end_view(&self, surface: &str, generation: u64) -> bool {
-        let mut state = self.lock();
-        if state.views.get(surface) != Some(&generation) {
-            return false;
-        }
-        state.views.remove(surface);
-        true
-    }
-
-    pub(crate) fn current_view(&self, surface: &str) -> Option<u64> {
-        self.lock().views.get(surface).copied()
-    }
-
-    pub(crate) fn snapshot(&self) -> DeclaredSourceOriginsSnapshot {
-        let state = self.lock();
-        DeclaredSourceOriginsSnapshot {
-            floor: state.floor,
-            plugin_hosts: state.plugin_hosts.clone(),
-            views: state.views.clone(),
-        }
-    }
-}
-
-#[cfg(test)]
-#[path = "../tests/declared_source_origins/declared_source_origins_test.rs"]
-mod declared_source_origins_test;
 
 #[cfg(test)]
 #[path = "../tests/declared_source_stream/stream_test.rs"]

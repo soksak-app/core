@@ -680,7 +680,7 @@ pub fn reply_message(reply: &PluginHostReply) -> Result<Value, String> {
     if reply.generation == 0 {
         return Err("plugin host reply has no source generation".to_string());
     }
-    crate::windows::validate_declared_source_generation_limit(
+    crate::source_origins::validate_declared_source_generation_limit(
         reply.generation,
         "plugin host reply",
     )?;
@@ -710,7 +710,7 @@ pub fn request_message(request: &PluginHostRequest) -> Result<Value, String> {
     if request.generation == 0 {
         return Err("plugin host request has no source generation".to_string());
     }
-    crate::windows::validate_declared_source_generation_limit(
+    crate::source_origins::validate_declared_source_generation_limit(
         request.generation,
         "plugin host request",
     )?;
@@ -741,7 +741,7 @@ pub fn event_message(event: &PluginHostEvent) -> Result<Value, String> {
     if event.generation == 0 {
         return Err("plugin host event has no source generation".to_string());
     }
-    crate::windows::validate_declared_source_generation_limit(
+    crate::source_origins::validate_declared_source_generation_limit(
         event.generation,
         "plugin host event",
     )?;
@@ -798,7 +798,7 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
         && let Err(error) = crate::windows::emit_declared_source_event(
             window,
             "declared-ui-source-ended",
-            crate::windows::declared_source_origin_event(plugin, None, generation),
+            crate::source_origins::declared_source_origin_event(plugin, None, generation),
         )
     {
         log_error("plugin host", error);

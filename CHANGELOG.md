@@ -34,6 +34,14 @@
   open. The test inventory maps the new Rust test module; its count audit passes
   at 100 lanes, 692 implementation files and 984 test files. No relay behavior changed.
 
+- F239-48-3-4: Move Rust declared-source generation state and its snapshot
+  helpers from `windows.rs` to `source_origins.rs`, beside the matching Wails
+  module. Place the state tests beside that module and keep plugin-host and
+  view-channel integration tests with their owners. The focused Go tests pass
+  2/2 and the focused Rust tests pass 3/3. The host-tree audit reports 14
+  remaining path findings, down from 17; the other unmatched paths remain open.
+  No behavior or wire format changed.
+
 - F239-47-32: Clarify that native input transactions group callback actions
   and final preedit for a presentation, while asynchronous PTY output may
   arrive in later events and frames. Record public macOS callback-batching

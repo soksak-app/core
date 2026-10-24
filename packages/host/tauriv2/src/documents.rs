@@ -1372,7 +1372,11 @@ pub(crate) fn sync_view(
             if let Err(error) = crate::windows::emit_declared_source_event(
                 window,
                 "declared-ui-source-registered",
-                crate::windows::declared_source_origin_event(plugin, Some(surface), generation),
+                crate::source_origins::declared_source_origin_event(
+                    plugin,
+                    Some(surface),
+                    generation,
+                ),
             ) {
                 data.documents.views().forget_if_current(surface, &origin);
                 data.declared_source_origins.end_view(surface, generation);
@@ -1797,7 +1801,7 @@ fn emit_source_ended(window: &Window, plugin: &str, surface: &str, generation: u
     if let Err(error) = crate::windows::emit_declared_source_event(
         window,
         "declared-ui-source-ended",
-        crate::windows::declared_source_origin_event(plugin, Some(surface), generation),
+        crate::source_origins::declared_source_origin_event(plugin, Some(surface), generation),
     ) {
         log_error("view channel", error);
     }
@@ -2713,7 +2717,10 @@ pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
     if request.generation == 0 {
         return Err("view request has no source generation".to_string());
     }
-    crate::windows::validate_declared_source_generation_limit(request.generation, "view request")?;
+    crate::source_origins::validate_declared_source_generation_limit(
+        request.generation,
+        "view request",
+    )?;
     if request.id == 0 {
         return Err("view request has no id".to_string());
     }
@@ -2773,7 +2780,10 @@ pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
     if event.generation == 0 {
         return Err("view event has no source generation".to_string());
     }
-    crate::windows::validate_declared_source_generation_limit(event.generation, "view event")?;
+    crate::source_origins::validate_declared_source_generation_limit(
+        event.generation,
+        "view event",
+    )?;
     if event.event.is_empty() {
         return Err("view event has an empty event name".to_string());
     }
@@ -2791,7 +2801,10 @@ pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
     if reply.generation == 0 {
         return Err("view reply has no source generation".to_string());
     }
-    crate::windows::validate_declared_source_generation_limit(reply.generation, "view reply")?;
+    crate::source_origins::validate_declared_source_generation_limit(
+        reply.generation,
+        "view reply",
+    )?;
     match (&reply.result, &reply.error) {
         (None, None) => Err(format!(
             "view reply {} has neither a result nor an error",

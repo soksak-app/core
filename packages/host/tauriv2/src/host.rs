@@ -94,6 +94,7 @@ pub mod running_calls;
 mod shapes;
 mod sidecar_reply;
 pub mod sidecars;
+pub(crate) mod source_origins;
 #[cfg(feature = "diagnostics")]
 pub mod stall_dump;
 pub mod stall_watch;
