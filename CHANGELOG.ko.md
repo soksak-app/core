@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F212.10-core-3-9: page reload 뒤 terminal 회신을 수락하기 전에 host의
+  native view-reply dispatch 기록을 요구한다. Page call과 source receipt/reply는
+  host가 native post를 수락했음을 증명하지 않는다. 현재 window, page, surface,
+  generation, id, outcome을 검증하고 `posted` 기록 하나를 일치하는 page
+  receipt/reply와 연결한다. Page-call 인자와 layer 간 timestamp는 사용하지
+  않는다. 집중 correlator owner와 변경한 e2e 파일 3개의 공개 structural
+  source audit가 통과했다. 전체 `make e2e-check`와 재빌드된 두 host runtime
+  검증은 남아 있다.
+
 - F212.10-core-3-8: terminal page-reload acceptance case를 강화해
   current document identity 및 source-generation page call/reply를 받아들여진
   native `viewReply` host call과 연결한다. Reload 전에 transcript 수집을
