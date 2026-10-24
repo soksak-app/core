@@ -121,6 +121,21 @@
   이는 native document model만 검증하며 terminal PTY나 IME 동작을 입증하지 않는다.
   F239-47-8과 F239-47-2는 계속 열린 상태다.
 
+- F239-28: 로컬 browser cohort upgrade를 검사하는 tracked Wails check를 추가한다.
+  F239-27 profile의 disposable 복사본에서 official CLI로 기존 browser 및
+  sidecar cohort를 frozen candidate package로 교체했다. Check의 registry,
+  설치 version, loaded plugin 상태, ready surface, page error 상태와 verifier
+  상태 assertion은 세 번 통과했다. 세 실행 모두 선언되지 않은 application error로
+  `finishSession`에서 실패했다. 최신 P45 실행은 host JSONL sequence 41에서
+  `no project is shown`, sequence 265에서 `desktop.ini`, sequence 273에서
+  `.localized` 파일 열기 오류를 기록했다. 이후 status는 page error 없음과
+  verifier failure 0이었고 Files/VT sidecar log에는 error-level 항목이 없었다.
+  Operator는 기대한 plugin/sidecar label을 확인했다. Plugin label은 두 project
+  window에서 관찰됐다. Host와 sidecar는 endpoint와 lock을 남기지 않고 종료했다.
+  No-project 원인은 Files P45 조사에 남고 파일 열기 오류는 미분류 상태다.
+  Offline frozen install, `make e2e-check`, `make docs-check`가 통과한다.
+  F239-28은 미완료다.
+
 - F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
   투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract
   test는 message case가 없어 실패했다. Green: paired assertion과
@@ -2886,3 +2901,4 @@
   3/3; Wails project test 5/5; Tauri project, readiness, ownership, null,
   release, binding, geometry test 통과. 집중 로그는 `/tmp/F262-10-*`에 보존한다.
   F28 runtime Files 오류는 조사 중이며 이 변경의 원인으로 연결하지 않는다.
+- F239-28: browser cohort status check를 두 host에서 실행한다. Wails와 Tauri가 Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce`, candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`에서 추적 check를 통과했다. 각 실행은 설치된 plugin/sidecar version, ready surface 및 application error 0개를 확인했다. 두 host와 sidecar가 종료됐고 endpoint와 lock은 남지 않았다. 기존 cohort 실패는 과거 증거로 보존하며 public release를 주장하지 않는다.

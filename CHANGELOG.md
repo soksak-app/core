@@ -132,6 +132,21 @@
   `4afee178d73ea3ce292a65931eeb9ece003b860162af1a9dde88627ed1fb0678`). This validates the native document model only, not terminal PTY
   or IME behavior; F239-47-8 and F239-47-2 remain open.
 
+- F239-28: Add a tracked Wails check for the local browser cohort upgrade. A
+  disposable copy of the F239-27 profile used the official CLI to replace the
+  old browser and sidecar cohort with the frozen candidate packages. The
+  check's registry, installed versions, loaded plugin states, ready surfaces,
+  page status assertions passed in three runs. All failed `finishSession` on
+  undeclared application errors. The latest P45 run recorded `no project is
+  shown` at host JSONL sequence 41, then unhandled `desktop.ini` and
+  `.localized` opens at sequences 265 and 273. Later status showed no page error
+  and zero verifier failures; Files and VT sidecar logs had no error-level
+  records. The operator saw the expected plugin/sidecar labels; plugin labels
+  appeared in two project windows. The host and sidecars exited with no endpoint
+  or lock remaining. The no-project cause remains under Files P45; the file-open
+  errors remain unclassified. Offline frozen install, `make e2e-check` and
+  `make docs-check` pass. F239-28 remains open.
+
 - F268: Publish a screen message with a non-null frame and cursor preedit,
   paired with a hash case for the screen it projects to. Red: the unchanged
   owning contract test failed because the message case was absent. Green: the
@@ -2948,3 +2963,4 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   5/5; Tauri project, readiness, ownership, null, release, binding, and geometry
   tests pass. Focused logs are preserved under `/tmp/F262-10-*`. The F28 runtime
   Files error remains under investigation and is not attributed to this change.
+- F239-28: Run the browser cohort status check on either host. Wails and Tauri both passed the tracked check on Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce` with candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`; each run verified the installed plugin and sidecar versions, ready surfaces, and zero application errors. Both hosts and sidecars exited and left no endpoints or locks. The preserved earlier cohort failures remain historical evidence; this validation does not claim a public release.
