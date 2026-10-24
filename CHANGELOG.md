@@ -48,6 +48,30 @@
   reject it when page initialization fails. Focused owner tests pass 6/6;
   application runtime acceptance remains pending.
 
+- F239-47-30-3: Add a capture-lifetime public AppKit display-link trace beside
+  ScreenCaptureKit callback records, and expose its artifact path from both
+  host stop payloads. The trace records validated clock observations, reports
+  bounded overflow explicitly, and marks hidden/off-display or callback-free
+  runs unavailable. It does not identify a source frame or prove layer
+  presentation, and does not change capture acceptance. The focused native
+  metadata and resize tests pass 1/1 each; focused Wails and Tauri stop-payload
+  tests pass 1/1 each. A controlled lifecycle Red found that a background stop
+  released the retained window on the caller thread when no link existed; the
+  teardown now releases it on the main thread. A repeated resource-free stop
+  also leaves an earlier queued invalidation incomplete until that work runs.
+  A controlled lookup/stop interleave now rejects installation after cancellation.
+  Delayed clock failures after stop cannot contaminate the next recording;
+  invalid timestamp and overflow errors are attributed under the lifecycle lock.
+  The lifecycle and race assertions pass. One
+  earlier resize-test failure recorded a 400x200 frame
+  where 640x320 was expected. Its fixture deleted the capture output before
+  preserving timing; the cause remains unclassified under F239-47-30-4.
+
+- F239-47-30-4: Track the unclassified growing-window capture observation.
+  The resize fixture now retains capture output on failure and prints the
+  resize-request and frame-display times for later classification. A focused
+  resize run passes, which does not explain the earlier failure.
+
 - F239-47-32: Clarify that native input transactions group callback actions
   and final preedit for a presentation, while asynchronous PTY output may
   arrive in later events and frames. Record public macOS callback-batching

@@ -18,7 +18,7 @@ func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
 // contract: diagnostics.capture-stop.payload-reports-frame-limit
 func TestCaptureStopPayloadReportsNormalFrameLimit(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{limited: true, gap: 42.5}, "/tmp/frames", 600, nil)
-	if payload["frames"] != "/tmp/frames" || payload["callbackStatus"] != "/tmp/frames/callback-status.jsonl" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
+	if payload["frames"] != "/tmp/frames" || payload["callbackStatus"] != "/tmp/frames/callback-status.jsonl" || payload["displayLink"] != "/tmp/frames/display-link.json" || payload["count"] != 600 || payload["limited"] != true || payload["longestGap"] != 42.5 {
 		t.Fatalf("payload = %#v", payload)
 	}
 }

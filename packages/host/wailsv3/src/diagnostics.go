@@ -230,6 +230,7 @@ func captureStopPayload(c captureStatus, directory string, count int, records []
 	return map[string]any{
 		"frames":         directory,
 		"callbackStatus": filepath.Join(directory, "callback-status.jsonl"),
+		"displayLink":    filepath.Join(directory, "display-link.json"),
 		"count":          count,
 		"limited":        c.Limited(),
 		"longestGap":     c.LongestGap(),

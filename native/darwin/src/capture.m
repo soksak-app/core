@@ -33,6 +33,7 @@ static uint64_t captureStopAfter;
 static dispatch_semaphore_t captureCaughtUp;
 static dispatch_queue_t captureQueue;
 static int captureBefore;
+static long captureWindowNumber;
 // The serial queue that writes frames to disk, and the upper limit of frames that wait to be written.
 static dispatch_queue_t captureWriter;
 static dispatch_semaphore_t capturePending;
@@ -61,11 +62,24 @@ static kern_return_t (*captureReadTimebase)(mach_timebase_info_data_t *) = mach_
 static CVReturn (*captureLockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockFlags) = CVPixelBufferLockBaseAddress;
 static CVReturn (*captureUnlockBaseAddress)(CVPixelBufferRef, CVPixelBufferLockFlags) = CVPixelBufferUnlockBaseAddress;
 static void *(*captureGetBaseAddress)(CVPixelBufferRef) = CVPixelBufferGetBaseAddress;
+static void (*captureDisplayLinkAfterWindowLookup)(NSWindow *window);
 
 // Receives frames and writes them to files. The frames are delivered as messages, so a receiver object is required.
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
 @property (nonatomic, retain) NSMutableArray<NSDictionary *> *callbackStatusTrace;
+@property (nonatomic, retain) NSMutableArray<NSDictionary *> *displayLinkObservations;
+@property (nonatomic, retain) CADisplayLink *displayLink;
+@property (nonatomic, retain) NSWindow *displayWindow;
+@property (nonatomic, copy) NSString *displayLinkState;
+@property (nonatomic, copy) NSString *displayLinkReason;
+@property (nonatomic) NSUInteger omittedDisplayLinkObservations;
+@property (nonatomic) BOOL displayLinkStopped;
+@property (nonatomic) BOOL displayLinkInvalidated;
+@property (nonatomic) uint64_t lastDisplayLinkTimestampMach;
+@property (nonatomic) uint64_t lastDisplayLinkCallbackTime;
+@property (nonatomic) uint32_t displayLinkTimebaseNumerator;
+@property (nonatomic) uint32_t displayLinkTimebaseDenominator;
 @property (nonatomic) BOOL callbackStatusTraceOverflowed;
 @property (nonatomic) int written;
 @property (nonatomic) int idle;
@@ -84,6 +98,15 @@ static void *(*captureGetBaseAddress)(CVPixelBufferRef) = CVPixelBufferGetBaseAd
 - (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
     hasDisplayTime:(BOOL)hasDisplayTime callbackTime:(uint64_t)callbackTime writeStartTime:(uint64_t)writeStartTime
     timebase:(mach_timebase_info_data_t)timebase;
+- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber;
+- (void)stopDisplayLinkObservation;
+- (void)invalidateDisplayLink:(CADisplayLink *)link window:(NSWindow *)window;
+- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
+    callbackTime:(uint64_t)callbackTime mediaClockTime:(double)mediaClockTime mediaClockAfter:(uint64_t)mediaClockAfter
+    timebase:(mach_timebase_info_data_t)timebase windowNumber:(long)windowNumber
+    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive;
+- (void)rejectDisplayLinkObservation:(NSString *)reason;
+- (NSDictionary *)displayLinkRecord;
 - (void)write:(CMSampleBufferRef)sample callbackTime:(uint64_t)callbackTime;
 - (void)processSample:(CMSampleBufferRef)sample status:(SCFrameStatus)status hasStatus:(BOOL)hasStatus
     displayTime:(uint64_t)shown hasDisplayTime:(BOOL)hasDisplayTime;
@@ -200,14 +223,271 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 
 - (instancetype)init {
     self = [super init];
-    if (self) _callbackStatusTrace = [[NSMutableArray alloc] init];
+    if (self) {
+        _callbackStatusTrace = [[NSMutableArray alloc] init];
+        _displayLinkObservations = [[NSMutableArray alloc] init];
+        _displayLinkState = [@"unavailable" copy];
+        _displayLinkReason = [@"no display-link observation was recorded" copy];
+    }
     return self;
 }
 
 - (void)dealloc {
+    [self stopDisplayLinkObservation];
     [_callbackStatusTrace release];
+    [_displayLinkObservations release];
+    [_displayLink release];
+    [_displayWindow release];
+    [_displayLinkState release];
+    [_displayLinkReason release];
     [_directory release];
     [super dealloc];
+}
+
+- (void)startDisplayLinkObservationForWindowNumber:(long)windowNumber {
+    @synchronized (self) {
+        self.displayLinkStopped = NO;
+        self.displayLinkInvalidated = NO;
+        [self.displayLinkObservations removeAllObjects];
+        self.omittedDisplayLinkObservations = 0;
+        self.lastDisplayLinkTimestampMach = 0;
+        self.lastDisplayLinkCallbackTime = 0;
+        self.displayLinkTimebaseNumerator = 0;
+        self.displayLinkTimebaseDenominator = 0;
+        self.displayLinkState = @"unavailable";
+        self.displayLinkReason = @"no display-link callback was delivered during the capture";
+    }
+    void (^install)(void) = ^{
+        @synchronized (self) {
+            if (self.displayLinkStopped) return;
+        }
+        NSWindow *window = nil;
+        for (NSWindow *candidate in NSApp.windows) {
+            if (candidate.windowNumber == windowNumber) { window = candidate; break; }
+        }
+        if (captureDisplayLinkAfterWindowLookup != NULL) captureDisplayLinkAfterWindowLookup(window);
+        if (window == nil) {
+            @synchronized (self) {
+                if (self.displayLinkStopped) return;
+                self.displayLinkReason = @"the captured window is not available in AppKit";
+            }
+            return;
+        }
+        if (!window.isVisible) {
+            @synchronized (self) {
+                if (self.displayLinkStopped) return;
+                self.displayLinkReason = @"the captured window is hidden";
+            }
+            return;
+        }
+        if (window.screen == nil) {
+            @synchronized (self) {
+                if (self.displayLinkStopped) return;
+                self.displayLinkReason = @"the captured window is not on a display";
+            }
+            return;
+        }
+        CADisplayLink *link = [window displayLinkWithTarget:self selector:@selector(displayLinkDidRefresh:)];
+        if (link == nil) {
+            @synchronized (self) {
+                if (self.displayLinkStopped) return;
+                self.displayLinkReason = @"AppKit did not provide a display link for the captured window";
+            }
+            return;
+        }
+        @synchronized (self) {
+            if (self.displayLinkStopped) {
+                [link invalidate];
+                return;
+            }
+            self.displayWindow = window;
+            self.displayLink = link;
+            self.displayLinkInvalidated = NO;
+        }
+        [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    };
+    if ([NSThread isMainThread]) install();
+    else dispatch_async(dispatch_get_main_queue(), install);
+}
+
+- (void)stopDisplayLinkObservation {
+    CADisplayLink *link = nil;
+    NSWindow *window = nil;
+    @synchronized (self) {
+        self.displayLinkStopped = YES;
+        link = [self.displayLink retain];
+        self.displayLink = nil;
+        window = [self.displayWindow retain];
+        self.displayWindow = nil;
+        if (self.displayLinkObservations.count == 0 && [self.displayLinkState isEqual:@"unavailable"]
+            && self.displayLinkReason.length == 0) {
+            self.displayLinkReason = @"no display-link callback was delivered during the capture";
+        }
+    }
+    if (link == nil && window == nil) return;
+    if ([NSThread isMainThread]) {
+        [self invalidateDisplayLink:link window:window];
+    } else {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self invalidateDisplayLink:link window:window];
+        });
+    }
+}
+
+- (void)invalidateDisplayLink:(CADisplayLink *)link window:(NSWindow *)window {
+    [link invalidate];
+    [link release];
+    [window release];
+    @synchronized (self) { self.displayLinkInvalidated = YES; }
+}
+
+- (void)displayLinkDidRefresh:(CADisplayLink *)link {
+    NSWindow *window = nil;
+    @synchronized (self) {
+        if (self.displayLinkStopped) return;
+        window = [self.displayWindow retain];
+    }
+    uint64_t callbackTime = captureRawClock();
+    double mediaClockTime = CACurrentMediaTime();
+    uint64_t mediaClockAfter = captureRawClock();
+    mach_timebase_info_data_t timebase = {};
+    if (captureReadTimebase(&timebase) != KERN_SUCCESS) {
+        [self rejectDisplayLinkObservation:@"mach_timebase_info failed for a display-link callback"];
+        [window release];
+        return;
+    }
+    if (window == nil) {
+        [self rejectDisplayLinkObservation:@"display-link callback arrived without its captured window"];
+        [window release];
+        return;
+    }
+    NSNumber *displayID = window.screen.deviceDescription[@"NSScreenNumber"];
+    [self recordDisplayLinkTimestamp:link.timestamp targetTimestamp:link.targetTimestamp duration:link.duration
+        callbackTime:callbackTime mediaClockTime:mediaClockTime mediaClockAfter:mediaClockAfter
+        timebase:timebase windowNumber:window.windowNumber displayID:displayID
+        visible:window.isVisible occluded:(window.occlusionState & NSWindowOcclusionStateVisible) == 0
+        applicationActive:NSApp.isActive];
+    [window release];
+}
+
+- (void)rejectDisplayLinkObservation:(NSString *)reason {
+    @synchronized (self) {
+        if (self.displayLinkStopped) return;
+        BOOL firstFailure = ![self.displayLinkState isEqual:@"incomplete"];
+        self.displayLinkState = @"incomplete";
+        self.displayLinkReason = reason;
+        self.omittedDisplayLinkObservations++;
+        if (firstFailure) {
+            setCaptureError([NSString stringWithFormat:@"display-link trace incomplete: %@", reason]);
+        }
+    }
+}
+
+- (void)recordDisplayLinkTimestamp:(double)timestamp targetTimestamp:(double)targetTimestamp duration:(double)duration
+    callbackTime:(uint64_t)callbackTime mediaClockTime:(double)mediaClockTime mediaClockAfter:(uint64_t)mediaClockAfter
+    timebase:(mach_timebase_info_data_t)timebase windowNumber:(long)windowNumber
+    displayID:(NSNumber *)displayID visible:(BOOL)visible occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive {
+    @synchronized (self) {
+        if (self.displayLinkStopped) return;
+        if ([self.displayLinkState isEqual:@"incomplete"]) {
+            self.omittedDisplayLinkObservations++;
+            return;
+        }
+        BOOL valid = isfinite(timestamp) && isfinite(targetTimestamp) && isfinite(duration)
+            && isfinite(mediaClockTime) && timestamp > 0 && targetTimestamp > timestamp && duration > 0
+            && mediaClockTime > 0 && callbackTime > 0 && mediaClockAfter >= callbackTime
+            && timebase.numer != 0 && timebase.denom != 0
+            && (self.displayLinkTimebaseNumerator == 0
+                || (timebase.numer == self.displayLinkTimebaseNumerator
+                    && timebase.denom == self.displayLinkTimebaseDenominator))
+            && (self.lastDisplayLinkCallbackTime == 0 || callbackTime > self.lastDisplayLinkCallbackTime);
+        long double timestampRaw = (long double)timestamp * 1e9L * (long double)timebase.denom / (long double)timebase.numer;
+        long double targetRaw = (long double)targetTimestamp * 1e9L * (long double)timebase.denom / (long double)timebase.numer;
+        long double mediaRaw = (long double)mediaClockTime * 1e9L * (long double)timebase.denom / (long double)timebase.numer;
+        long double mediaRounding = fabsl((long double)nextafter(mediaClockTime, INFINITY) - (long double)mediaClockTime)
+            * 1e9L * (long double)timebase.denom / (long double)timebase.numer + 1;
+        valid = valid && isfinite((double)timestampRaw) && isfinite((double)targetRaw)
+            && isfinite((double)mediaRaw)
+            && timestampRaw > 0 && timestampRaw < (long double)UINT64_MAX
+            && targetRaw > timestampRaw && targetRaw < (long double)UINT64_MAX;
+        long double roundedTimestamp = roundl(timestampRaw);
+        long double roundedTarget = roundl(targetRaw);
+        uint64_t timestampMach = valid && roundedTimestamp < (long double)UINT64_MAX ? (uint64_t)roundedTimestamp : 0;
+        uint64_t targetMach = valid && roundedTarget < (long double)UINT64_MAX ? (uint64_t)roundedTarget : 0;
+        valid = valid && timestampMach > self.lastDisplayLinkTimestampMach
+            && targetMach > timestampMach && timestampMach <= callbackTime
+            && mediaRaw + mediaRounding >= (long double)callbackTime
+            && mediaRaw <= (long double)mediaClockAfter + mediaRounding;
+        if (!valid) {
+            BOOL firstFailure = ![self.displayLinkState isEqual:@"incomplete"];
+            self.displayLinkState = @"incomplete";
+            self.displayLinkReason = [NSString stringWithFormat:
+                @"display-link timestamp or clock order invalid (timestamp %.9f target %.9f callback %llu media %.9f after %llu converted %llu/%llu previous %llu/%llu timebase %u/%u)",
+                timestamp, targetTimestamp, (unsigned long long)callbackTime, mediaClockTime,
+                (unsigned long long)mediaClockAfter, (unsigned long long)timestampMach, (unsigned long long)targetMach,
+                (unsigned long long)self.lastDisplayLinkTimestampMach, (unsigned long long)self.lastDisplayLinkCallbackTime,
+                timebase.numer, timebase.denom];
+            self.omittedDisplayLinkObservations++;
+            if (firstFailure) {
+                setCaptureError([NSString stringWithFormat:@"display-link trace incomplete: %@", self.displayLinkReason]);
+            }
+        } else if (self.displayLinkObservations.count >= 4096) {
+            BOOL firstFailure = ![self.displayLinkState isEqual:@"incomplete"];
+            self.displayLinkState = @"incomplete";
+            self.displayLinkReason = @"display-link observation capacity exceeded (4096 records)";
+            self.omittedDisplayLinkObservations++;
+            if (firstFailure) {
+                setCaptureError([NSString stringWithFormat:@"display-link trace incomplete: %@", self.displayLinkReason]);
+            }
+        } else {
+            [self.displayLinkObservations addObject:@{
+                @"sequence": @(self.displayLinkObservations.count + 1),
+                @"timestamp": @(timestamp),
+                @"targetTimestamp": @(targetTimestamp),
+                @"duration": @(duration),
+                @"callbackTime": [NSString stringWithFormat:@"%llu", (unsigned long long)callbackTime],
+                @"callbackMediaTime": @(mediaClockTime),
+                @"mediaClockAfter": [NSString stringWithFormat:@"%llu", (unsigned long long)mediaClockAfter],
+                @"machTimebaseNumerator": @(timebase.numer),
+                @"machTimebaseDenominator": @(timebase.denom),
+                @"windowNumber": @(windowNumber),
+                @"displayID": displayID ?: [NSNull null],
+                @"visible": @(visible),
+                @"occluded": @(occluded),
+                @"applicationActive": @(applicationActive),
+            }];
+            self.lastDisplayLinkTimestampMach = timestampMach;
+            self.lastDisplayLinkCallbackTime = callbackTime;
+            self.displayLinkTimebaseNumerator = timebase.numer;
+            self.displayLinkTimebaseDenominator = timebase.denom;
+            if (!visible || displayID == nil) {
+                self.displayLinkState = @"unavailable";
+                self.displayLinkReason = !visible
+                    ? @"the captured window was hidden during a display-link observation"
+                    : @"the captured window had no display during a display-link observation";
+            } else if ([self.displayLinkState isEqual:@"unavailable"]
+                && [self.displayLinkReason hasPrefix:@"no display-link"]) {
+                self.displayLinkState = @"available";
+                self.displayLinkReason = @"";
+            }
+        }
+    }
+}
+
+- (NSDictionary *)displayLinkRecord {
+    @synchronized (self) {
+        NSString *state = self.displayLinkState;
+        NSString *reason = self.displayLinkReason;
+        if (self.displayLinkObservations.count == 0 && [state isEqual:@"unavailable"] && reason.length == 0) {
+            reason = @"no display-link callback was delivered during the capture";
+        }
+        return @{
+            @"state": state ?: @"unavailable",
+            @"reason": reason ?: @"display-link state was not recorded",
+            @"observations": [[self.displayLinkObservations copy] autorelease],
+            @"omittedObservations": @(self.omittedDisplayLinkObservations),
+        };
+    }
 }
 
 - (BOOL)recordCallbackStatus:(SCFrameStatus)status hasStatus:(BOOL)hasStatus displayTime:(uint64_t)shown
@@ -518,11 +798,17 @@ static void setCaptureError(NSString* message) {
 
 // Errors of the previous stream are also reported but do not change the result of the current recording.
 static void reportCaptureStreamFailure(SCStream *stream, NSString *message) {
+    SPCapture *sink = nil;
     @synchronized([SPCapture class]) {
         bool current = stream != nil && stream == captureStream;
-        if (current) setCaptureError(message);
+        if (current) {
+            setCaptureError(message);
+            sink = [captureSink retain];
+        }
         sp_log_error("capture", [NSString stringWithFormat:@"%@ (stream=%p current=%d)", message, stream, current].UTF8String);
     }
+    [sink stopDisplayLinkObservation];
+    [sink release];
 }
 
 static bool hasCaptureError(void) {
@@ -530,6 +816,7 @@ static bool hasCaptureError(void) {
 }
 
 static NSString *const kCaptureCallbackStatusFile = @"callback-status.jsonl";
+static NSString *const kCaptureDisplayLinkFile = @"display-link.json";
 
 static bool writeCaptureCallbackStatusTrace(SPCapture *sink) {
     NSMutableData *contents = [NSMutableData data];
@@ -566,6 +853,44 @@ static bool writeCaptureCallbackStatusTrace(SPCapture *sink) {
         return false;
     }
     return true;
+}
+
+static bool writeCaptureDisplayLinkTrace(SPCapture *sink) {
+    NSError *error = nil;
+    NSData *data = nil;
+    NSString *encodingFailure = nil;
+    @try {
+        data = [NSJSONSerialization dataWithJSONObject:[sink displayLinkRecord] options:NSJSONWritingPrettyPrinted error:&error];
+    } @catch (NSException *exception) {
+        encodingFailure = exception.reason ?: exception.name;
+    }
+    if (data == nil) {
+        NSString *reason = encodingFailure ?: error.localizedDescription ?: @"no encoding error was provided";
+        setCaptureError([NSString stringWithFormat:@"capture display-link trace could not be encoded: %@", reason]);
+        return false;
+    }
+    NSString *path = [sink.directory stringByAppendingPathComponent:kCaptureDisplayLinkFile];
+    if (![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        NSString *reason = error.localizedDescription ?: @"no write error was provided";
+        setCaptureError([NSString stringWithFormat:@"capture display-link trace could not write %@: %@", path, reason]);
+        return false;
+    }
+    return true;
+}
+
+// Finalizes the artifacts produced by a stopped recording. Keeping this boundary separate lets the recording owner
+// verify finalization with controlled callback records without creating a live ScreenCaptureKit stream.
+static bool finalizeCaptureArtifacts(SPCapture *sink) {
+    [sink stopDisplayLinkObservation];
+    bool sourceManifestWritten = sp_image_capture_match_write_manifest(sink.directory.fileSystemRepresentation);
+    if (!sourceManifestWritten) setCaptureError(@"diagnostic image source artifact manifest or source write failed");
+    bool callbackStatusWritten = writeCaptureCallbackStatusTrace(sink);
+    if (!callbackStatusWritten && !hasCaptureError()) {
+        setCaptureError(@"capture callback status trace failed without a reason");
+    }
+    bool displayLinkWritten = writeCaptureDisplayLinkTrace(sink);
+    sp_image_capture_match_end();
+    return sourceManifestWritten && callbackStatusWritten && displayLinkWritten;
 }
 
 const char *sp_capture_error(void) {
@@ -736,6 +1061,7 @@ bool sp_capture_open(long windowNumber, bool display, char **errorOut) {
     }
     captureConfig = [result.configuration retain];
     captureFilter = [result.filter retain];
+    captureWindowNumber = windowNumber;
     [result release];
     return true;
 }
@@ -809,6 +1135,7 @@ bool sp_capture_start(const char* directory, char **errorOut) {
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
+    [captureSink startDisplayLinkObservationForWindowNumber:captureWindowNumber];
     sp_image_capture_match_begin(captureSink.directory.fileSystemRepresentation, captureWriter);
     // The copied completion block retains the original stream, so its identity is kept after a replacement.
     if (captureStartDone) dispatch_release(captureStartDone);
@@ -913,13 +1240,7 @@ int sp_capture_stop(double after) {
     }
     dispatch_sync(captureQueue, ^{});
     // Source manifest finalization closes source intake and drains the shared writer queue.
-    __block bool sourceManifestWritten = false;
-    sourceManifestWritten = sp_image_capture_match_write_manifest(captureSink.directory.fileSystemRepresentation);
-    if (!sourceManifestWritten) setCaptureError(@"diagnostic image source artifact manifest or source write failed");
-    if (!writeCaptureCallbackStatusTrace(captureSink) && !hasCaptureError()) {
-        setCaptureError(@"capture callback status trace failed without a reason");
-    }
-    sp_image_capture_match_end();
+    finalizeCaptureArtifacts(captureSink);
     @synchronized([SPCapture class]) { captureStream = nil; }
     dispatch_release(captureQueue);
     dispatch_release(stopped);
