@@ -2589,3 +2589,13 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   command or control role. The owning declared-ui and section-address tests
   pass 92/92; exposure and documentation checks pass. The F37 window check
   still needs a runtime run with its original first-visible-node row target.
+- F212.10-hwp-2: Wait for the visible HWP surface to register its document status
+  before reading it. Red: after focused native Enter, both hosts exposed the HWP
+  surface before `hwp.document` was registered, and the test's immediate status
+  request failed. Green: the helper waits on `core.surfaces` until that same
+  surface exposes `status hwp.document`; the non-activating HWP window case then
+  passes 2/2 on Wails and Tauri. It checks the fixture format, page count, both
+  text lines, and keyboard focus after a native press in the document region.
+  Host logs have no error-level records and the check restores its frontmost
+  baseline. This does not verify the activation-tier HWP case or the original
+  user-reported symptom.

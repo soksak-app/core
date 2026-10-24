@@ -2573,3 +2573,11 @@
   부여하지 않고 정확한 static text geometry를 찾는다. 소유 declared-ui 및
   section-address test가 92/92 통과하고 exposure와 docs 검사도 통과한다. F37
   window 검사는 기존 첫 visible node 행 기준을 사용해 runtime 재검증해야 한다.
+- F212.10-hwp-2: visible HWP surface가 document status를 등록한 뒤 조회하도록
+  기다린다. Red: focus된 native Enter 뒤 HWP surface는 보였지만 두 host 모두
+  `hwp.document` 등록 전에 즉시 요청해 실패했다. Green: helper가 `core.surfaces`
+  notification에서 동일 surface의 `status hwp.document` 노출을 기다린다. 이후
+  비활성 HWP window case가 Wails/Tauri에서 2/2 통과했다. Fixture format과 page
+  수, 두 text line, document region native press 뒤 keyboard focus를 확인한다.
+  Host log에는 error-level record가 없고 check는 시작 frontmost baseline을
+  복원한다. Activation-tier HWP case와 최초 사용자 보고 증상은 검증하지 않았다.
