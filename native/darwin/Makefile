@@ -84,7 +84,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation test-activation-backspace test-activation-backspace-reference test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation test-view-focus-restore test-activation-backspace test-activation-backspace-reference test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -288,6 +288,9 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 	@$(BUILD)/image_region_test --activation
 	@$(BUILD)/image_region_ime_test
 	@$(BUILD)/view_focus_test --activation
+
+test-view-focus-restore: $(BUILD)/view_focus_test
+	@$(BUILD)/view_focus_test --frontmost-restore-test
 
 # Focused Korean IME comparison. This activates the application, changes the selected input source,
 # and sends eight k keys, Backspace, and Space to an AppKit reference and an image region in one window.

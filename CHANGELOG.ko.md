@@ -26,6 +26,14 @@
   `make platforms`는 F239-48-1의 네 finding을 계속 보고하므로 전체 통과가 아니다.
   `make docs-check`가 통과한다. 앱은 실행하지 않았다.
 
+- F212.12-2-1-2: Activation 시도가 있었을 때만 이전 전면 앱 복원을
+  확인한다. Red: owning fault test에서 비활성 경로가 복원 activation과
+  대기 callback을 호출하는 동작을 재현했다. Green: activation 미시도 시
+  helper는 전면 상태를 바꾸지 않고 반환하며, activation 시도 후에는 요청
+  성공과 정확한 이전 PID의 `NSWorkspaceDidActivateApplicationNotification`을
+  요구한다. 이미 전면인 이전 process는 추가 activation 없이 복원된 것으로 처리하고 이전 PID 부재는 실패다. Fault test 14/14, 기본 비활성
+  view-focus check 9/9가 통과했다. Activation variant는 실행하지 않았다.
+
 - F240-11: 현재 owner 근거에 맞춰 실행 계획을 정합화한다. F239-47-9에는
   보존된 activation Red/Green log와 platform을 기록하며 terminal 동작은
   주장하지 않는다. F212.12-2-2-4-8-2-2 상세 상태는 active checklist 한 곳에
