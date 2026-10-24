@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-48-3-1: Treat only the fully qualified `tauri::ipc::Channel<T>` as a
+  framework-decoded command argument. Tauri 2.12.1 implements `CommandArg` for
+  this channel and injects it from the JavaScript channel id; it is not a page
+  JSON argument. Red: the owning checker test reported the channel as
+  undecoded. Green: the channel test and the existing unwrapped `String`
+  rejection pass. The paired-host audit now reports the 18 unrelated path
+  findings without the channel classifier error; those findings remain open.
+
 - F239-48-2: The generic tree fixture in `declared-ui-style.test.mjs` used
   `files` as its tree and `expandedByTree` key, but `scripts/workspace-registry.json` declares it as a plugin id
   and `make boundaries` rejected it as a plugin reference in a core test. Red:
