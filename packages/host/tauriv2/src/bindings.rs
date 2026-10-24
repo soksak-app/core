@@ -933,3 +933,7 @@ mod declared_source_stream_tests;
 #[cfg(test)]
 #[path = "../tests/project_data_order/bindings_test.rs"]
 mod project_data_order_tests;
+
+#[cfg(test)]
+#[path = "plugins_starter_test.rs"]
+mod plugins_starter_tests;

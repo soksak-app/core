@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F239-48-3-7: Tauri starter binding의 잘못된 request argument를
+  MockRuntime IPC로 검증한다. Tauri와 Wails owner test가 각각 1/1 통과한다.
+  Host 구조 감사 finding은 12개에서 11개로 줄었다. Main parity inventory
+  검증은 대기 중이다.
 - F239-48-3-6: Go diagnostics input-reference parser test를 계약 owner인
   Rust test module과 맞춰 배치한다. Host audit은 13개에서 12개 finding으로
   줄었다. 변경하지 않은 Go owner test는 1/1 통과한다. Inventory 검사는
