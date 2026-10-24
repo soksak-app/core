@@ -100,6 +100,15 @@
   process waits confirm that both hosts and their sidecars ended. This does
   not claim full Files-suite acceptance.
 
+- F239-47-30: Record two focused color-path experiments without changing the
+  exact pixel criterion. In a non-activating WKWebView comparison, explicit
+  sRGB window backing changed the captured Display P3 red and green samples
+  while neutral gray stayed unchanged. A same-source 16-bit-float image
+  assigned to the image-region layer converted back to the exact 12,288-byte
+  BGRA8 source, but its ScreenCaptureKit crop still differed at 1,821 pixels.
+  Neither result identifies the production cause; the nine-pixel Red fixture
+  remains isolated and the item remains open.
+
 - F239-47-28: Reject a replacement at `committedLength` before AppKit.
   The previous path let AppKit replace
   committed `가` with `invalid`, then reported an out-of-range marked-text
