@@ -826,6 +826,13 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
           // The tab state of a declaring surface is read after it opens, which the page does after the first plane.
           if (surface.unload) await tabStatesReady();
           if (entry.disposed) return null;
+          // The host creates the native view when it receives the composition. Wait until the page has installed the listeners
+          // that answer the first view-call and receive its reply; otherwise the new view can call an event with no subscriber.
+          const listenersReady = await Promise.race([
+            listenerSetup.then((cleanup) => typeof cleanup === "function"),
+            entry.compositionDisposed.then(() => false),
+          ]);
+          if (!listenersReady || entry.disposed) return null;
           // The view declares its composition, which resolves the composition wait of the surface. The surface is ready from that
           // declaration, as a module surface is ready after its module mounts: a view has no module whose mount releases it.
           await page.composition.declare(surface.composition);

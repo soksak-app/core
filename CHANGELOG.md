@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F212.10-core-3-1: Wait for native `view-call` and `view-reply` listener
+  registration before declaring a view composition, which starts native view
+  creation. This prevents the first view calls from racing page listener
+  setup. Red: unchanged `surface-view.test.mjs` failed because composition
+  was declared while registration was deferred. Green: the same fixture
+  confirms both listeners are ready before declaration and both initial calls
+  receive replies; pending setup disposal and registration rejection settle
+  the mount and release successful listeners. The owning view and remount
+  tests pass 33/33, and `make docs-check` passes. The earlier two-host timeout
+  correlation remains unverified; no runtime rerun is claimed.
 - F239-48-3-1: Treat only the fully qualified `tauri::ipc::Channel<T>` as a
   framework-decoded command argument. Tauri 2.12.1 implements `CommandArg` for
   this channel and injects it from the JavaScript channel id; it is not a page
