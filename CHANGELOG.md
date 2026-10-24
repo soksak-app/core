@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-40-1: Add the opt-in native QR frame-identity helper. Red: the
+  owning test failed against the unimplemented helper because it returned no
+  immutable image or raster copy. Green: the same test passes 1/1, covering
+  exact identity round-trip, unissued and cropped payload rejection, ROI
+  containment, multiple-code ambiguity, outside-ROI byte preservation, sRGB
+  and Display P3 metadata, and invalid-input ownership cleanup. The helper uses
+  CoreImage, Vision, and SHA-256; ordinary rendering, capture wiring, physical
+  scanout, and the original visual acceptance remain unverified.
 - F239-48-3-9: Add Wails owner tests for current and retired view callbacks.
   The five focused Go tests pass 5/5. The host audit falls from 12 to 11
   findings, removing the view-origin test-path finding. `make parity-check` and

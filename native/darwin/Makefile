@@ -80,7 +80,7 @@ PROCESS_IDENTITY_LIBRARY := $(CURDIR)/process-identity/lib/libsoksak-process-ide
 OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
-FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz
+FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework Vision -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz
 # The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
 # capture.m).
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
@@ -92,7 +92,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-capture-frame-identity test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -187,6 +187,9 @@ $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m $(BUILD)/l
 $(BUILD)/image_capture_match_test: tests/image_capture_match_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
 	@clang $(CFLAGS) -I$(CURDIR)/src $< tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
+$(BUILD)/capture_frame_identity_test: tests/capture_frame_identity_test.m $(BUILD)/libsoksak-darwin.a $(wildcard src/*.h src/private/*.h)
+	@clang $(CFLAGS) -I$(CURDIR)/src $< -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM) -o $@
+
 # The native tests in the order they run: executables of the build folder, with an argument after a comma. They run one at a time
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
@@ -271,6 +274,7 @@ NATIVE_TESTS = observe_test \
   capture_metadata_test \
   capture_presentation_test \
   image_capture_match_test \
+  capture_frame_identity_test \
   capture_resize_test \
   capture_frame_test \
   dock_menu_test \
@@ -286,6 +290,9 @@ VIEW_PAGE_CASES := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../packages/p
 
 test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_TESTS)
+
+test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
 
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test

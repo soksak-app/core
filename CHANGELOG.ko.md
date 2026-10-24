@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-47-40-1: opt-in native QR frame-identity helper를 추가한다. Red: 구현 전
+  owner test는 helper가 immutable image와 raster copy를 반환하지 않아 동작
+  assertion에서 실패했다. Green: 같은 test가 1/1 통과하며 exact identity
+  round-trip, 발급되지 않은 payload와 잘린 코드 거부, ROI containment, 여러
+  코드의 모호성, ROI 밖 byte 보존, sRGB 및 Display P3 metadata, 잘못된 입력의
+  ownership cleanup을 확인한다. Helper는 CoreImage, Vision, SHA-256을 사용한다.
+  일반 rendering, capture 연결, 물리적 scanout과 기존 시각 수용 검사는 아직
+  검증하지 않았다.
 - F239-48-3-9: Wails current 및 retired view callback의 owner test를 추가한다.
   Go focused test 다섯 개가 5/5 통과한다. Host audit은 view-origin test 경로를
   제거해 12개에서 11개 finding으로 줄었다. `make parity-check`와 `make docs-check`가

@@ -182,6 +182,12 @@
       "allowed": []
     },
     {
+      "term": "frame identity",
+      "definition": "The diagnostic nonce and source generation, raster, and sequence encoded in a visible QR code to correlate a captured image with its exact source raster.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "presentation caret",
       "definition": "A provider-defined runtime grid coordinate used to place an input caret in a raster presentation overlay; it is distinct from the engine cursor and is not part of the generic screen hash or replay inputs.",
       "rejected": [],
