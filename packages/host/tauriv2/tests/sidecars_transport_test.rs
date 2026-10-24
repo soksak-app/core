@@ -89,7 +89,7 @@ const ECHO: &str = "@fixture/sidecar-echo";
 const STALL: Duration = Duration::from_secs(120);
 
 #[test]
-fn sidecar_process_receives_its_declared_display_name() {
+fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let display_name_path = executable_directory.path().join("display-name");
@@ -114,9 +114,10 @@ fn sidecar_process_receives_its_declared_display_name() {
     sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();
     let event = events.recv_timeout(STALL).unwrap();
     assert_eq!(event.surface, "s1");
-    assert_eq!(
-        std::fs::read_to_string(&display_name_path).unwrap(),
-        "soksak://sidecar/probe"
+    let environment = std::fs::read_to_string(&display_name_path).unwrap();
+    assert_ne!(
+        environment, "soksak://sidecar/probe",
+        "host injected the sidecar display name into the child environment"
     );
     sidecars.stop();
 }
@@ -1633,12 +1634,14 @@ fn persistent_service_starts_in_a_new_session() {
     let socket_path = socket_directory.path().join("service.sock");
     let listener = UnixListener::bind(&socket_path).unwrap();
     let pid_path = executable_directory.path().join("pid");
+    let display_name_path = executable_directory.path().join("display-name");
     let service = executable_directory.path().join("echo");
     std::fs::write(
         &service,
         format!(
-            "#!/bin/sh\necho $$ > '{}'\nprintf '{{\"protocol\":1,\"pid\":%d,\"socket\":\"{}\",\"token\":\"session-token\"}}\\n' $$\nexec sleep 600\n",
+            "#!/bin/sh\necho $$ > '{}'\nprintf '%s' \"${{SOKSAK_SIDECAR_DISPLAY_NAME-unset}}\" > '{}'\nprintf '{{\"protocol\":1,\"pid\":%d,\"socket\":\"{}\",\"token\":\"session-token\"}}\\n' $$\nexec sleep 600\n",
             pid_path.display(),
+            display_name_path.display(),
             socket_path.display()
         ),
     )
@@ -1685,6 +1688,11 @@ fn persistent_service_starts_in_a_new_session() {
         .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv_timeout(STALL).unwrap().surface, "surface");
+    let environment = std::fs::read_to_string(&display_name_path).unwrap();
+    assert_ne!(
+        environment, "soksak://sidecar/probe",
+        "host injected the sidecar display name into the persistent child environment"
+    );
     // The service wrote its number before it printed the endpoint.
     let pid: i32 = std::fs::read_to_string(&pid_path)
         .unwrap()

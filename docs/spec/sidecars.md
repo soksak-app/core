@@ -13,7 +13,7 @@ A sidecar is a program in its own repository with a `package.json` and a `sideca
 | Field | Meaning |
 | --- | --- |
 | `executable` | Path of the built executable inside the sidecar |
-| `displayName` | Required process display name in the form `soksak://sidecar/<id>`, where `<id>` is one lowercase identifier component. The host passes this exact value to the child as `SOKSAK_SIDECAR_DISPLAY_NAME`; the sidecar applies it to its own operating-system process identity. It is independent of the dependency name and executable path. |
+| `displayName` | Required process display name in the form `soksak://sidecar/<id>`, where `<id>` is one lowercase identifier component. The sidecar applies this value, embedded from its own versioned `sidecar.json` at build time, to its operating-system process identity. It is independent of the dependency name and executable path. The host does not set this value in the child environment. |
 | `protocol` | Message format version. The current version is `1` |
 | `helpers` | Optional array of helper programs. Each item has `name` (the `name` of the helper's `package.json`) and `executable` (the path inside the helper's folder) |
 | `events` | Optional path inside the package of the file with the event catalog of the sidecar ([logging](logging.md#catalog)); the release packs the file |
@@ -22,6 +22,8 @@ A sidecar is a program in its own repository with a `package.json` and a `sideca
 A plugin declares the sidecars its page uses, each with a version range, as the `dependencies` of its `plugin.json` ([plugins](plugins.md#pluginjson)). Installation extracts each sidecar's release into the configuration directory.
 
 `sidecar.json` is a manifest of a versioned release, not user data. Installing another sidecar release extracts its versioned package into a different install path and updates the installed declaration to that package. A release that adds a required manifest field updates its package and its dependent plugin version range; installing that release replaces the old manifest. The current reader rejects an older manifest that lacks `displayName` with the manifest path and missing field. It does not infer a name or read both manifest forms. `protocol` remains the wire-message protocol and does not version the manifest.
+
+The installer does not overwrite an existing sidecar version folder. Removing a plugin removes its package folder and prunes sidecar folders no remaining installed plugin declares; reinstalling then extracts the selected release again. This replaces installed package files, not project documents. A plugin may store its own data outside its package folder, so inspect its declared storage contract before removing it to replace a sidecar.
 
 The host resolves sidecars from the installed plugins ([serving installed plugins](installation.md#serving-installed-plugins)):
 

@@ -915,7 +915,7 @@ impl<O> Core<O> {
     }
 
     /// The executable and the persistence of the declared sidecar name.
-    fn declaration(&self, name: &str) -> Option<(PathBuf, bool, String)> {
+    fn declaration(&self, name: &str) -> Option<(PathBuf, bool)> {
         let declarations = self
             .declarations
             .read()
@@ -923,11 +923,7 @@ impl<O> Core<O> {
             // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         let program = declarations.declared.get(name)?.clone();
-        Some((
-            program,
-            declarations.persistent[name],
-            declarations.display_names[name].clone(),
-        ))
+        Some((program, declarations.persistent[name]))
     }
 }
 
@@ -1448,7 +1444,7 @@ impl<O: Owner> Sidecars<O> {
             let persistent = self
                 .core
                 .declaration(name)
-                .is_some_and(|(_, persistent, _)| persistent);
+                .is_some_and(|(_, persistent)| persistent);
             if !persistent {
                 owner.deliver_failure(Failure {
                     sidecar: name.to_string(),
@@ -1549,7 +1545,7 @@ impl<O: Owner> Sidecars<O> {
                 // default: a sidecar that did not declare persistent runs for each window.
                 self.core
                     .declaration(name)
-                    .is_some_and(|(_, persistent, _)| persistent)
+                    .is_some_and(|(_, persistent)| persistent)
                     && process
                         .persistent
                         .as_ref()
@@ -1918,7 +1914,7 @@ impl<O: Owner> Sidecars<O> {
                     return Err("sidecars are stopped".into());
                 }
                 if !state.running.contains_key(&name) {
-                    let (program, _, _) = self
+                    let (program, _) = self
                         .core
                         .declaration(&name)
                         .ok_or_else(|| format!("sidecar {name} is not declared"))?;
@@ -2413,16 +2409,15 @@ impl<O: Owner> Core<O> {
     /// process of the window. The write and read threads are returned so that they are started after the registration.
     /// lost is the revival that runs the start of a persistent service, or None.
     fn start(core: &Arc<Self>, name: &str, lost: Option<&Revival>) -> Result<Started, String> {
-        let (program, persistent, display_name) = core
+        let (program, persistent) = core
             .declaration(name)
             .ok_or_else(|| format!("sidecar {name} is not declared by any plugin"))?;
         // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
-            return Self::start_persistent(core, name, &program, &display_name, lost);
+            return Self::start_persistent(core, name, &program, lost);
         }
         let mut threads: Vec<Thread> = Vec::new();
         let mut command = Command::new(&program);
-        command.env("SOKSAK_SIDECAR_DISPLAY_NAME", &display_name);
         // The host has the folder `logs` of its configuration directory, where a sidecar writes its event file
         // (docs/spec/sidecars.md#log).
         command
@@ -2550,7 +2545,6 @@ impl<O: Owner> Core<O> {
         core: &Arc<Self>,
         name: &str,
         program: &Path,
-        display_name: &str,
         lost: Option<&Revival>,
     ) -> Result<Started, String> {
         #[derive(Deserialize)]
@@ -2587,7 +2581,7 @@ impl<O: Owner> Core<O> {
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not
                     // a fallback transport.
-                    return Self::start_persistent(core, name, program, display_name, lost);
+                    return Self::start_persistent(core, name, program, lost);
                 }
                 endpoint
             }
@@ -2608,7 +2602,6 @@ impl<O: Owner> Core<O> {
                 .map_err(|error| format!("sidecar {name}: service log: {error}"))?;
                 let mut command = Command::new(program);
                 command
-                    .env("SOKSAK_SIDECAR_DISPLAY_NAME", display_name)
                     .arg("--service-dir")
                     .arg(&service_dir)
                     .arg("--log-dir")
@@ -3208,7 +3201,7 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
     if let Err(reason) = &outcome
         && refused_connect(reason, name)
     {
-        let program = core.declaration(name).map(|(program, _, _)| program);
+        let program = core.declaration(name).map(|(program, _)| program);
         let endpoint = program
             .as_deref()
             .and_then(|program| program.file_name())

@@ -1417,6 +1417,7 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 // The service writes its number to a file, prints the endpoint, and remains until the check ends it.
 // contract: sidecars-transport.persistent.starts-in-new-session
 func TestPersistentServiceStartsInANewSession(t *testing.T) {
+	t.Setenv("SOKSAK_SIDECAR_DISPLAY_NAME", "inherited-value")
 	executableDir := t.TempDir()
 	socketDir := socketParent(t)
 	socket := filepath.Join(socketDir, "service.sock")
@@ -1426,7 +1427,8 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	}
 	defer listener.Close()
 	pidPath := filepath.Join(executableDir, "pid")
-	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '{\"protocol\":1,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, socket)
+	environmentPath := filepath.Join(executableDir, "display-name")
+	script := fmt.Sprintf("#!/bin/sh\necho $$ > '%s'\nprintf '%%s' \"${SOKSAK_SIDECAR_DISPLAY_NAME-unset}\" > '%s'\nprintf '{\"protocol\":1,\"pid\":%%d,\"socket\":\"%s\",\"token\":\"harness-token\"}\\n' $$\nexec sleep 600\n", pidPath, environmentPath, socket)
 	if err := os.WriteFile(filepath.Join(executableDir, "service"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1479,6 +1481,11 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	owner := &harnessOwner{root: "/session", seen: make(chan SidecarMessage, 4)}
 	if err := sendWithin(t, sidecars, owner, 30*time.Second); err != nil {
 		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(environmentPath); err != nil {
+		t.Fatal(err)
+	} else if string(data) != "inherited-value" {
+		t.Fatalf("persistent child display-name environment = %q, want inherited value unchanged", data)
 	}
 	// The service wrote its number before it printed the endpoint.
 	data, err := os.ReadFile(pidPath)

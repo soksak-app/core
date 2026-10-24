@@ -135,7 +135,7 @@ func scriptSidecarsWithManifest(t *testing.T, script, manifest string) (*host.Si
 	return sidecars, directory
 }
 
-func TestSidecarProcessReceivesItsDeclaredDisplayName(t *testing.T) {
+func TestSidecarProcessDoesNotReceiveItsDisplayNameFromTheHost(t *testing.T) {
 	t.Setenv("SOKSAK_SIDECAR_DISPLAY_NAME", "inherited-value")
 	sidecars, directory := scriptSidecarsWithManifest(t, `#!/bin/sh
 printf '%s' "$SOKSAK_SIDECAR_DISPLAY_NAME" > DIR/display-name
@@ -154,8 +154,8 @@ exec cat
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(name) != "soksak://sidecar/probe" {
-		t.Fatalf("child display name = %q", name)
+	if string(name) != "inherited-value" {
+		t.Fatalf("child display-name environment = %q, want inherited value unchanged", name)
 	}
 }
 
