@@ -11,6 +11,7 @@ const listeners = new Map();
 let refusal = null;
 let delayListenerRegistration = true;
 let completeListenerRegistration = null;
+let rejectListenerRegistration = null;
 mock.module("@soksak/runtime", { namedExports: {
   host: {
     call: (name, arg) => {
@@ -18,6 +19,7 @@ mock.module("@soksak/runtime", { namedExports: {
       return refusal === null ? Promise.resolve(null) : Promise.reject(new Error(refusal));
     },
     on: (name, listener) => {
+      if (rejectListenerRegistration !== null) return Promise.reject(rejectListenerRegistration);
       let set = listeners.get(name);
       if (!set) listeners.set(name, set = new Set());
       if (delayListenerRegistration) {
@@ -87,6 +89,24 @@ test("the channel delivers each snapshot of its surface and plugin, and the unsu
   assert.deepEqual(delivered, ["first:2"], "an unsubscribed recipient received an already queued delivery");
   stopFirst();
   stopSecond();
+});
+
+test("listener registration failure remains observable without an early unhandled rejection", async () => {
+  const failure = new Error("snapshot listener registration failed");
+  rejectListenerRegistration = failure;
+  const isolated = await import("../declared-source.js?registration-failure");
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const readiness = isolated.startDeclaredSnapshotIngress();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(unhandled, [], "listener registration failed before startup observed its readiness");
+    await assert.rejects(readiness, /snapshot listener registration failed/);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+    rejectListenerRegistration = null;
+  }
 });
 
 test("an expansion update reaches the plugin view as declared-ui.expanded", async () => {

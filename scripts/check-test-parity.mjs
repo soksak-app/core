@@ -2650,6 +2650,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-42-1",
+    implementation: [{ file: "packages/workbench/declared-source.js", symbol: "ingressReady.catch((error) =>" }],
+    tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "listener registration failure remains observable without an early unhandled rejection" }],
+    expected: "A listener-registration failure is observed immediately to prevent an early unhandled rejection, while startup consumers still receive the same rejected readiness promise.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-42",
     implementation: [
       { file: "packages/workbench/declared-source.js", symbol: "export function startDeclaredSnapshotIngress()" },

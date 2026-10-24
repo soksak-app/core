@@ -180,6 +180,7 @@ tree 노드의 focus target은 그 label 컨트롤이 있고 활성이면 label 
 - (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - 메인 페이지는 window의 snapshot ingress listener를 하나 설치한다. 이 listener는 snapshot envelope를 검사하고 각 push에 정확히 한 번 확인 응답한 뒤 routing한다. Plugin, 출처, status로 현재 section recipient에게 전달한다. 일치하는 recipient가 없는 snapshot은 확인 응답한 뒤 버린다. section이 mount되지 않은 status도 이에 포함된다. 확인 응답 수는 mount된 recipient 수와 무관하다.
 - Section subscription은 고른 출처를 pull하기 전에 window ingress에 recipient를 등록한다. Subscription readiness는 recipient 등록을 뜻한다. 메인 페이지가 view를 배치하거나 plugin host 생성을 위해 window ready를 알리기 전에 window ingress listener가 준비된다. Subscription 작업은 recipient 등록 뒤에만 unsubscribe 함수를 resolve한다. readiness 전에 출처가 바뀌거나 section이 닫히면 workbench는 readiness가 완료되는 즉시 recipient를 제거하고 해당 출처를 pull하지 않는다. readiness 뒤 pull 응답 전에 전달된 snapshot은 정상적으로 수락하므로, 더 낮은 sequence의 pull은 이를 덮어쓸 수 없다.
+- Window ingress listener 설치 실패는 readiness를 reject한다. 메인 페이지는 이 Promise의 rejection을 즉시 관측해 early unhandled rejection을 막고, plugin host를 만들거나 view를 배치하기 전 startup 경계에서 원래 Promise의 같은 오류를 전달한다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
 - 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 선택된 출처가 아닌 짝에서 온 pull 응답, 또는 `seq`가 출처에서 마지막으로 받아들인 값의 `seq`보다 낮은 pull 응답은 검사 없이 버린다. 트리나 오류 표시를 바꾸지 않는다.
 

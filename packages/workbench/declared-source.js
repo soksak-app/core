@@ -70,6 +70,10 @@ export function startDeclaredSnapshotIngress() {
   } catch (error) {
     ingressReady = Promise.reject(error);
   }
+  // Startup awaits this promise after its synchronous first draw and asynchronous storage setup. Observe a rejection immediately
+  // to prevent an early unhandled-rejection event; this handler returns the cause as a fulfilled observation value, while callers
+  // still receive the original rejected promise at their startup boundary.
+  ingressReady.catch((error) => error);
   return ingressReady;
 }
 
