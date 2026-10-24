@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- F239-47-17: Index frame-bound preedit state with prior terminal rows.
+  The rows-only `terminal.screen` status suppresses JSON-identical values,
+  so a cursor frame and preedit update can arrive without a new screen
+  notification. The activation caller now waits for initial screen, compose
+  and frame-bound cursor events before input. Red: the unchanged indexer
+  rejected unchanged prior rows followed by compose and an advanced cursor
+  frame because no screen notification was adjacent. Green: use only the
+  latest prior screen event from the observed stream, preserve its index and
+  reuse provenance, reject missing/future rows and same-generation/raster
+  sequence regression, and retain exact cursor/render frame checks. The
+  visual capture tests pass 11/11 and observer tests pass 20/20.
+  `make e2e-check` and `make docs-check` pass. No activation rerun was performed;
+  F239-47-6 remains open.
 - F239-47-16: Keep the raw terminal cursor observer subscribed after
   AppKit reference focus returns. The old caller used managed
   `Client.watch` through `s.until` for a cursor status already watched by
