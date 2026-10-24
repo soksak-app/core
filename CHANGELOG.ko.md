@@ -4,6 +4,27 @@
 
 ## 미배포
 
+- F212.10-core-3-10: generation이 지정된 native view-reply post 결과를 기록한다.
+  필수 `page`는 현재 main document를 식별한다. `posted`는 native post API가
+  message를 수락했다는 뜻이고 `discarded`는 stale target이다. Workbench와 두
+  host owner test 및 event generation이 통과한다. Terminal reload case는
+  Wails/Tauri에서 2/2 통과했다. 각 current page의 terminal call/reply는
+  `window: main`, `generation: 7`, `id: 1`, `outcome: result`,
+  `disposition: posted` dispatch와 일치한다. Session ID와 shell process가
+  유지되고 고유 shell marker를 출력해 다시 읽었다. 양 run audit와 양 host의
+  전체 event-log audit가 오류 없이 통과했다. 두 host와 terminal sidecar가
+  종료됐고 endpoint가 없으며 시작 전 frontmost baseline을 유지했다. Runtime
+  범위는 macOS 26.6.2 arm64, core 0.0.21, browser/editor 0.0.7, Files 0.0.8 및
+  sidecar 0.0.8, HWP 0.0.5, terminal 0.0.21, VT 0.0.17이다. Wails SHA-256
+  `c9a52f7419fb7489dce971d73af8bfa517fcfda8afaa2de066ca397d666a7583`, Tauri
+  SHA-256 `30732658fd845c20a1957400a01859b900515b9e1e8e3227afa7ab93f756a1ab`,
+  P47 registry index SHA-256
+  `4c192acd4fd8e121811641b38b18067d8c36e9b53b431aa75958cc2a22027c94`가 검증한
+  artifact다. Case 시간은 Wails 2893.867ms, Tauri 2735.095ms다. `make docs-check`와
+  primary `make e2e-check`가 통과했으며 전체 window suite는 실행하지 않았다. 이
+  결과는 native post 수락을 증명하며 JavaScript 수신이나 F212.10-core-3-2의 모든 call barrier를
+  증명하지 않는다.
+
 - F239-47-30-2: host parity에서 hyphen이 있는 Go diagnostic endpoint 이름을 읽는다. 선언된 `diagnostics.native.window-color-space` method를 Go assignment parser가 놓쳐 host mismatch를 잘못 보고했다. 소유 parser Red에서 해당 assertion 실패를 재현했고, matcher 수정 뒤 같은 test와 parser test 8개가 통과한다. `make host-parity-check`와 `make docs-check`가 통과한다.
 
 - F239-47-34: ScreenCaptureKit stop 주석을 실제 동작에 맞춘다.
@@ -12,23 +33,19 @@
   기다리고 기존 1초 대기가 끝나면 명시적 오류를 보고한다. Capture 동작과
   33ms 기준은 바꾸지 않았다.
 
-- F212.10-core-3-9: page reload 뒤 terminal 회신을 수락하기 전에 host의
-  native view-reply dispatch 기록을 요구한다. Page call과 source receipt/reply는
-  host가 native post를 수락했음을 증명하지 않는다. 현재 window, page, surface,
-  generation, id, outcome을 검증하고 `posted` 기록 하나를 일치하는 page
-  receipt/reply와 연결한다. Page-call 인자와 layer 간 timestamp는 사용하지
-  않는다. 집중 correlator owner와 변경한 e2e 파일 3개의 공개 structural
-  source audit가 통과했다. 전체 `make e2e-check`와 재빌드된 두 host runtime
-  검증은 남아 있다.
+- F212.10-core-3-9: terminal reload 회신을 native post 수락과 연결한다.
+  Host dispatch 기록에서 시작해 exact target tuple 및 outcome을 선언 plugin의
+  page receipt/reply와 연결한다. Stale, 누락, 중복 dispatch를 거부하고
+  page-call 인자와 layer 간 timestamp는 사용하지 않는다. Owner test 1/1과
+  변경된 e2e 파일 세 개의 공개 structural source audit가 통과한다. 양 host
+  runtime 결과는 F212.10-core-3-10에 기록했다. Primary `make e2e-check`는 통과했으며 전체 window suite는 실행하지 않았다.
 
-- F212.10-core-3-8: terminal page-reload acceptance case를 강화해
-  current document identity 및 source-generation page call/reply를 받아들여진
-  native `viewReply` host call과 연결한다. Reload 전에 transcript 수집을
-  시작하고 readiness까지 line을 보존해 startup reply를 놓치지 않으며 새 page
-  identity로 걸러 늦게 도착한 이전 page 회신을 거부한다. Test는 generation이
-  다른 회신도 거부한다. Terminal session identity와 shell continuation 검증은
-  유지한다. Correlator와 문서 검사가 통과했으며 새 Wails/Tauri runtime
-  acceptance는 남아 있다.
+- F212.10-core-3-8: main-page reload가 current-generation terminal view call을
+  받고 host native post가 reply를 수락하는지 확인한다. Current page event,
+  terminal session ID, shell continuation 검사를 유지한다. 집중 consumer test
+  1/1, 정확한 Wails/Tauri reload case 2/2 통과. Runtime tuple과 artifact 정보는
+  F212.10-core-3-10에 있다. 모든 host view call의 page receipt를 검사하지 않아
+  F212.10-core-3-2는 열린 상태다.
 
 - F239-47-33: F8-9 ddd + Korean 2-Set gksrmf sequence (ddd한글), F143 gksk
   resyllabification (하나), 이전에 승인된 eight-vowel gesture를 사용하는 host별 10회 project
@@ -3404,10 +3421,3 @@
   값을 거부한다. sequence 0 거부를 재현한 뒤 집중 consumer case가 2/2
   통과한다. P87 runtime input은 해당 거부 때문에 각 host에서 terminal key
   하나 뒤 중단됐으므로 visual acceptance를 주장하지 않는다.
-
-- F212.10-core-3-10: generation을 식별하는 native view-reply dispatch 기록을
-  generation 검증과 native post 완료 뒤 기록한다. 필수 page identity로
-  native post 수락과 JavaScript 수신을 구분하고 post 오류는 기존 RPC 오류
-  경로를 유지한다. Workbench, Wails, Tauri 소유 검사와 event generation,
-  `make docs-check`가 통과했고 runtime 검증은 남아 있다. Event generation은
-  generated map에서 빠졌던 기존 선언 trace class 두 개도 동기화했다.

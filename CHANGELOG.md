@@ -4,6 +4,28 @@
 
 ## Unreleased
 
+- F212.10-core-3-10: Record generation-bound native view-reply post results.
+  The required `page` identifies the current main document. `posted` means the
+  native post API accepted the message; `discarded` identifies a stale target.
+  Workbench and both host owner tests pass, as does event generation. The
+  terminal reload case passes on Wails and Tauri (2/2); each current page's
+  terminal call and reply match a `window: main`, `generation: 7`, `id: 1`,
+  `outcome: result`, `disposition: posted` dispatch. The session ID and shell
+  process remain stable, and a unique shell marker is printed and read back.
+  Both run audits and both full event-log audits pass with no errors. Both hosts
+  and terminal sidecars ended with no endpoints; the original frontmost
+  baseline was unchanged. Runtime scope: macOS 26.6.2 arm64, core 0.0.21,
+  browser/editor 0.0.7, Files 0.0.8 and sidecar 0.0.8, HWP 0.0.5, terminal
+  0.0.21 and VT 0.0.17. Wails SHA-256
+  `c9a52f7419fb7489dce971d73af8bfa517fcfda8afaa2de066ca397d666a7583`, Tauri
+  SHA-256 `30732658fd845c20a1957400a01859b900515b9e1e8e3227afa7ab93f756a1ab`,
+  and P47 registry index SHA-256
+  `4c192acd4fd8e121811641b38b18067d8c36e9b53b431aa75958cc2a22027c94` identify
+  the tested artifacts. The case took 2893.867 ms on Wails and 2735.095 ms on
+  Tauri. `make docs-check` and primary `make e2e-check` pass; the full window suite was not run. This acceptance
+  proves native post acceptance, not JavaScript receipt or the all-call
+  listener-barrier condition tracked by F212.10-core-3-2.
+
 - F239-47-30-2: Read hyphenated Go diagnostic endpoint names in host parity. The declared `diagnostics.native.window-color-space` method was omitted by the Go assignment parser, producing a false host mismatch. The owning parser Red reproduces that assertion failure; the same test and all 8 parser tests pass with the corrected matcher. `make host-parity-check` and `make docs-check` pass.
 
 - F239-47-34: Correct the ScreenCaptureKit stop comment.
@@ -13,24 +35,22 @@
   one-second wait
   expires. Capture behavior and the 33 ms criterion are unchanged.
 
-- F212.10-core-3-9: Require the host's native view-reply dispatch record
-  before accepting a terminal reply after page reload. The page call and its
-  source receipt/reply do not prove that the host accepted a native post.
-  Start from the dispatch record, validate its target and outcome, and join
-  one `posted` record to the matching page receipt/reply. Ignore page-call
-  arguments and cross-layer timestamps. The focused correlator owner passes
-  1/1 and the exported structural source audit passes for all three changed
-  e2e files. Full `make e2e-check` and rebuilt two-host runtime verification
-  remain pending.
+- F212.10-core-3-9: Correlate terminal reload replies with native post
+  acceptance. Start from the host dispatch record and join its exact target
+  tuple and outcome to the declared-plugin page receipt/reply. Reject stale,
+  missing and duplicate dispatch evidence; ignore page-call arguments and
+  cross-layer timestamps. The owner test passes 1/1 and the exported structural
+  source audit passes for all three changed e2e files. The two-host runtime
+  result is recorded under F212.10-core-3-10; primary `make e2e-check` passes,
+  while the full window suite was not run.
 
-- F212.10-core-3-8: Strengthen the terminal page-reload acceptance case to
-  correlate the current document identity and source-generation page call and
-  reply with the accepted native `viewReply` host call. Preserve transcript
-  lines from before reload through readiness, then filter them by the new page
-  identity so an early startup reply is retained and a late old-page reply is
-  rejected. The test rejects a mismatched generation. Keep the terminal session
-  identity and shell continuation checks. The correlator test and documentation
-  checks pass; fresh Wails and Tauri runtime acceptance remains pending.
+- F212.10-core-3-8: Verify that a main-page reload receives a current-generation
+  terminal view call whose reply is accepted by the host's native post API.
+  Preserve the current-page event evidence, terminal session ID and shell
+  continuation checks. The focused consumer test passes 1/1 and the exact
+  Wails/Tauri reload case passes 2/2. Runtime tuple and artifact details are
+  recorded under F212.10-core-3-10. F212.10-core-3-2 remains open because this
+  case does not verify every host view call has a matching page receipt.
 
 - F239-47-33: Add approval-gated e2e selectors for F8-9 gksrmf and F143 gksk
   input sequences plus ten project
@@ -3517,11 +3537,3 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   values. The focused consumer cases pass 2/2 after reproducing the rejection of
   sequence zero. P87 runtime input remains incomplete because that rejection
   stopped each host after its first terminal key; no visual acceptance is claimed.
-
-- F212.10-core-3-10: Specify a generation-aware native view-reply dispatch
-  record after generation validation and native post completion. The required
-  page identity distinguishes native post acceptance from JavaScript receipt;
-  post errors keep the existing RPC error path. Workbench, Wails and Tauri
-  owning checks pass, as do event generation and `make docs-check`; runtime
-  verification remains pending. Event generation also synchronized two
-  already-declared trace classes missing from generated maps.
