@@ -31,6 +31,8 @@ View display acceptance는 설치되고 활성화된 view plugin을 열거하고
 
 ## 앱 인수 검증
 
+Multi-host window-check session은 test worker를 시작하기 전에 frontmost application identity 하나를 캡처한다. Session runner는 같은 검증된 `{pid, name, bundle}` context를 `SOKSAK_WINDOW_CHECK_BASELINE`으로 global setup과 모든 test worker에 전달한다. Worker와 host invocation은 baseline을 다시 캡처하지 않는다. Global setup은 context가 없거나 잘못됐거나, 해당 process가 더는 같은 application이 아니거나, baseline PID가 검사 대상 host인 경우 거부한다. 같은 session의 별도 host invocation은 같은 context를 받아 검증한다. 각 check 뒤 검사한 host가 frontmost이면 하네스는 이 baseline으로 복원한다. 다른 검사 대상 host가 계속 frontmost이면 보고한다. 무관한 application이 frontmost이면 하네스는 그대로 두지만, 공유 baseline이 복원되지 않았으므로 검사 결과를 거부한다.
+
 요구된 검증 등급에서 관측하지 못한 완료 조건은 미해결로 남는다. 단위 검사 통과, 성공한 명령 응답, 동작 추정은 앱의 완료 검증을 입증하지 않는다.
 
 안정화 기간에는 변경 영역 자체 검사에 더해 검사 빌드에서 터미널·셸·브라우저·모달 기본 동작을 매번 검사한다. 호출 성공뿐 아니라 선언된 입력, 결과 상태, 실제 출력, 격리, 정리를 확인한다. 창 검사는 일회용 실행 인스턴스에 연결하고 사용자가 실패를 보고한 창을 보존한다. 앱을 직접 기동하거나 잘못된 상태를 보정해서 통과시키지 않는다.

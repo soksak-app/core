@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect, EndpointError } from "@soksak/client";
-import { activateApp, coveringWindows, frontmostApp, restoreFrontmost } from "./frontmost.mjs";
+import { activateApp, coveringWindows, frontmostApp, restoreFrontmost, sessionBaselineFromEnvironment } from "./frontmost.mjs";
 import { STALL_AFTER, announceStall, pageProcesses, sampleStall } from "./stall-sample.mjs";
 import { untilEndpoint } from "./endpoint-wait.mjs";
 import { readEventErrors, sessionEventBoot, sessionEventStart, writeEventOffsets } from "./event-log.mjs";
@@ -97,8 +97,6 @@ function running(pid) {
 
 let locked = false;
 const sessionTails = new Map();
-let baselineFrontmost = null;
-let baselineCaptured = false;
 /**
  * The process numbers of the hosts that the checks of this process opened. A check fails when one of them stays active
  * after the check.
@@ -187,25 +185,30 @@ export async function open(t, app) {
         "after make e2e-registry-tls, and run them again.",
     );
   }
+  let baseline;
+  try {
+    baseline = sessionBaselineFromEnvironment(process.env, {
+      hosts: [{ name: app.name, pid: client.endpoint.pid }],
+    });
+  } catch (error) {
+    client.close();
+    releaseSlot();
+    throw error;
+  }
   const session = new Session(app, client);
   // A check can write the pasteboard of the user. This cleanup saves every item format and verifies the restored
   // pasteboard after all other cleanups have finished. Cleanups run in reverse order of registration, so this one is
   // last.
   const pasteboard = readPasteboard();
-  // A full-screen transition or a new project window activates the application. When the check activated it, the check
-  // restores the application that was active before at the end. The synthetic drag of the next check requires an
-  // inactive application.
+  // A full-screen transition or a new project window activates the application. Cleanup restores the single session
+  // baseline before another check runs; the synthetic drag requires an inactive application.
   testedHosts.add(client.endpoint.pid);
   const previous = frontmostApp();
-  if (!baselineCaptured) {
-    baselineFrontmost = previous;
-    baselineCaptured = true;
-  }
-  if (baselineFrontmost !== null && baselineFrontmost !== client.endpoint.pid) {
+  if (baseline.pid !== client.endpoint.pid) {
     session.cleanup(async () => {
       const { before, after } = await restoreFrontmost({
         name: app.name,
-        baseline: baselineFrontmost,
+        baseline: baseline.pid,
         host: session.client.endpoint.pid,
         hosts: [...testedHosts],
         inactive: () => session.until("host.window", (w) => w.active === false, "the application stayed active after the check"),

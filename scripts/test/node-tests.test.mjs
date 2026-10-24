@@ -19,6 +19,8 @@ test("a test script is a list of steps: a command before the tests, and the flag
   assert.deepEqual(parseTestScript("node --test test/", "p"), { before: [], flags: [], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node --test --experimental-test-module-mocks test/", "p"),
     { before: [], flags: ["--experimental-test-module-mocks"], paths: ["test/"] });
+  assert.deepEqual(parseTestScript("node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'", "e2e"),
+    { before: [], flags: ["--test-concurrency=1", "--test-global-setup=./setup.mjs"], paths: ["activation/*.test.mjs"] });
   assert.deepEqual(parseTestScript("pnpm build && node --test test/", "p"), { before: ["pnpm build"], flags: [], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node --test scripts/test/*.test.mjs && pnpm -r test", "p"), { before: [], flags: [], paths: ["scripts/test/*.test.mjs"] });
   assert.throws(() => parseTestScript("jest", "p"), /p: the test script "jest" is not node --test/);
@@ -108,7 +110,7 @@ test("the root names its own test files in test:scripts because its test script 
 
 test("another script of the packages that have it is discovered, and quotes around a glob are not part of the path", () => {
   const root = workspace();
-  put(root, "e2e/package.json", JSON.stringify({ name: "e2e", scripts: { test: "node --test test/*.test.mjs", verify: "node --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'" } }));
+  put(root, "e2e/package.json", JSON.stringify({ name: "e2e", scripts: { test: "node --test test/*.test.mjs", verify: "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'" } }));
   put(root, "e2e/a.test.mjs", "");
   put(root, "e2e/test/unit.test.mjs", "");
   put(root, "other/package.json", JSON.stringify({ name: "other", scripts: { test: "node --test test/" } }));

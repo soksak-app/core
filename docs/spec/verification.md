@@ -31,6 +31,8 @@ The command supervisor takes an explicit identifier, executable/arguments, worki
 
 ## Application acceptance
 
+A multi-host window-check session captures one frontmost application identity before starting its test workers. The session runner passes the same validated `{pid, name, bundle}` context to global setup and every test worker through `SOKSAK_WINDOW_CHECK_BASELINE`; a worker or host invocation does not capture a replacement baseline. Global setup rejects a missing or malformed context, a context whose process is no longer the same application, and a baseline PID that belongs to a tested host. Separate host invocations in one session receive and validate the same context. After every check, the harness restores this baseline when the checked host is frontmost. It reports another tested host that remains frontmost. If an unrelated application is frontmost, the harness leaves it undisturbed and rejects the check result because the shared baseline was not restored.
+
 An acceptance condition without observation at its required verification level remains unresolved. Unit passes, successful command replies, and inferred behavior do not establish application acceptance.
 
 During stabilization, each change runs its local tests plus terminal, shell, browser, and modal basic behavior tests on the tested build. Verify declared input, resulting state, actual output, isolation, and cleanup, not only dispatch success. Window tests attach to disposable running instances and preserve reported failed windows. They do not start applications or compensate for incorrect state to obtain a pass.

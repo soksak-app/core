@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs";
 import { readEndpoint } from "@soksak/client";
 import { APPS } from "./app.mjs";
-import { sessionBaseline } from "./frontmost.mjs";
+import { SESSION_BASELINE_ENV, sessionBaselineFromEnvironment } from "./frontmost.mjs";
 
 export async function globalSetup() {
   // An application without an executable is skipped by open, so it is not a host to check.
@@ -15,5 +15,6 @@ export async function globalSetup() {
     if (!existsSync(app.binary)) continue;
     hosts.push({ name: app.name, pid: (await readEndpoint(app.configDir)).pid });
   }
-  sessionBaseline({ hosts });
+  const baseline = sessionBaselineFromEnvironment(process.env, { hosts });
+  process.env[SESSION_BASELINE_ENV] = JSON.stringify(baseline);
 }
