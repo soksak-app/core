@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-37-3: Focus the selected Files tree label before sending Enter.
+  Attempt03 showed the editor disabled and the selected node's declared
+  `files.open` action, but the failure row did not appear. The owning helper
+  test reproduced Enter running without a `core.focus` precondition. A shared
+  declared-sidebar helper resolves the addressed control's unique index within
+  its section, focuses it through `core.focus.set`, and waits for the exact
+  focus status; the existing Enter route and failure-row assertions remain.
+  The helper tests pass 9/9; focused Wails runtime acceptance is pending.
+
 - F239-47-28: Reject a replacement at `committedLength` before AppKit.
   The previous path let AppKit replace
   committed `가` with `invalid`, then reported an out-of-range marked-text

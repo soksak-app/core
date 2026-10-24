@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-37-3: Enter를 보내기 전에 선택된 Files tree label에 focus를 준다.
+  Attempt03은 editor disabled 및 선택 node의 선언된 `files.open` action을
+  확인했지만 failure row는 나타나지 않았다. Owning helper test는 `core.focus`
+  조건을 확인하지 않고 Enter를 호출하는 동작을 재현했다. 공유
+  declared-sidebar helper는 주소가 지정된 control의 section 내 고유 index를
+  찾고 `core.focus.set`으로 focus를 준 뒤 정확한 focus status를 기다린다.
+  기존 Enter 경로와 failure-row assertion은 유지한다. Helper test 9/9가
+  통과했고 focused Wails runtime acceptance는 대기 중이다.
+
 - F239-47-28: `committedLength` 앞의 replacement를 AppKit 전에 거부한다.
   기존 경로는 AppKit이 확정 `가`를 `invalid`로
   바꾸게 한 뒤 marked range 오류를 보고했다. 이제 callback은 committed-prefix

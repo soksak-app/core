@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import assert from "node:assert/strict";
+import { declaredSidebarControlIndex } from "./declared-sidebar-control.mjs";
 
 export const FIXTURE = new URL("./fixtures/two-paragraphs.hwp", import.meta.url);
 export const sha = (text) => createHash("sha256").update(text).digest("hex");
@@ -41,35 +42,6 @@ const treeAddress = (snapshot, path, role = "label") => {
   const keys = treePath(snapshot, path);
   assert.ok(keys, `${path} is not a node of the declared tree`);
   return { sidebar: "left", section: "files.tree", key: tree.key, path: keys, role };
-};
-
-const controlIndex = async (s, address) => {
-  const sidebars = await s.get("core.sidebars");
-  let index = 0;
-  let range;
-  for (const sidebar of sidebars) {
-    for (const section of sidebar.sections) {
-      const end = index + section.controls;
-      if (sidebar.sidebar === address.sidebar && section.id === address.section) {
-        range = { start: index, end };
-        break;
-      }
-      index = end;
-    }
-    if (range) break;
-  }
-  assert.ok(range, `no exposed controls for ${address.sidebar}/${address.section}`);
-
-  const expected = await s.request("dom.rect", { name: "core.sidebar.section.control", address });
-  const matches = [];
-  for (let candidate = range.start; candidate < range.end; candidate += 1) {
-    const rect = await s.request("dom.rect", { name: "core.sidebar.section.control", index: candidate });
-    if (rect.x === expected.x && rect.y === expected.y && rect.width === expected.width && rect.height === expected.height) {
-      matches.push(candidate);
-    }
-  }
-  assert.equal(matches.length, 1, `the declared control address maps to ${matches.length} exposed DOM indices`);
-  return matches[0];
 };
 
 const clickTreeControl = async (s, address) => {
@@ -159,7 +131,7 @@ export async function openHwp(s) {
     (snapshot) => treeNode(snapshot, path)?.selected === true,
     "the file label did not publish its selection");
   assert.equal(treeNode(tree, path)?.selected, true, "the file label did not select the HWP file");
-  const fileLabelIndex = await controlIndex(s, fileLabelAddress);
+  const fileLabelIndex = await declaredSidebarControlIndex(s, fileLabelAddress);
   assert.equal(await s.run("core.focus.set", { name: "core.sidebar.section.control", index: fileLabelIndex }), null);
   await s.until("core.focus", (focus) => focus?.name === "core.sidebar.section.control" && focus.index === fileLabelIndex,
     "core.focus.set did not focus the selected file label");

@@ -75,6 +75,7 @@ test("file-open failure check reads the declared tree snapshot, not removed stat
       if (name === "core.sidebars") return [{ sidebar: "left", sections: [section] }];
       if (name === "files.tree") return tree;
       if (name === "core.page.error") return null;
+      if (name === "core.focus") return { name: "core.sidebar.section.control", index: 5, surface: null };
       throw new Error(`unexpected status ${name}`);
     },
     async until(name, predicate) {
@@ -89,13 +90,31 @@ test("file-open failure check reads the declared tree snapshot, not removed stat
       throw new Error(`unexpected wait ${name}`);
     },
   };
-  await openFailureRow(s, "folder/note.zzz", sequence, async () => { triggered = true; });
+  await openFailureRow(s, "folder/note.zzz", sequence, async () => { triggered = true; }, 5);
   assert.equal(triggered, true, "the native Enter action did not run");
   assert.equal(hasOpenFailureRow(tree), true, "the snapshot omitted the message row");
   assert.ok(reads.includes("files.tree"), "the check did not read the declared tree snapshot");
   assert.ok(reads.includes("core.sidebars"), "the check did not inspect the rendered tree section");
+  assert.ok(reads.includes("core.focus"), "the check did not confirm keyboard focus before Enter");
   assert.ok(!reads.includes("files.selection"), "the check read an undeclared selection status");
   assert.ok(!reads.includes("files.open"), "the check read the open command as a status");
+});
+
+test("file-open Enter waits for the selected tree label to hold keyboard focus", async () => {
+  let triggered = false;
+  const s = {
+    async get(name) {
+      assert.equal(name, "core.focus");
+      return null;
+    },
+    async until(name) {
+      throw new Error(`${name} was read before the focused tree label`);
+    },
+  };
+  const error = await openFailureRow(s, "folder/note.zzz", 4, async () => { triggered = true; }, 7)
+    .then(() => null, (cause) => cause);
+  assert.match(error?.message ?? "", /focus/i, "the check did not reject a missing keyboard-focus precondition");
+  assert.equal(triggered, false, "the Enter action ran before the selected label had keyboard focus");
 });
 
 test("file-open failure check waits for a newer snapshot to clear the message row", async () => {

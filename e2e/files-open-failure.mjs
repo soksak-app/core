@@ -41,7 +41,10 @@ export async function waitTreeSnapshot(s, afterSequence, predicate, message) {
 }
 
 /** Waits for the file-open error to appear in the selected tree row. */
-export async function openFailureRow(s, path, afterSequence, trigger) {
+export async function openFailureRow(s, path, afterSequence, trigger, focusIndex) {
+  const focus = await s.get("core.focus");
+  assert.equal(focus?.name, "core.sidebar.section.control", "Enter requires a focused declared Files tree control");
+  assert.equal(focus.index, focusIndex, "Enter requires focus on the selected Files tree label");
   await trigger();
   const observed = await waitTreeSnapshot(s, afterSequence,
     (snapshot, section) => {

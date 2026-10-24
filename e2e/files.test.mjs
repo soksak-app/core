@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
+import { focusDeclaredSidebarControl } from "./declared-sidebar-control.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
 import { hasOpenFailureRow, nodeByPath, openFailureRow, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
 import { distance, readPng } from "@soksak/window-check/png.mjs";
@@ -691,7 +692,8 @@ for (const app of Object.values(APPS)) {
     assert.ok(selectedNode, "the selected file is absent from the declared files.tree snapshot");
     assert.equal(selectedNode.open, "files.open", "the selected file has no declared files.open command");
     assert.deepEqual(selectedNode.params, { path: `${folder}/note.zzz` }, "the selected file has unexpected open parameters");
-    const focus = await s.get("core.focus");
+    const openAddress = { sidebar: "left", section: "files.tree", key: "files", path: nodeKeyPath(current.snapshot, `${folder}/note.zzz`), role: "label" };
+    const focus = await focusDeclaredSidebarControl(s, openAddress);
     const window = await s.get("host.window");
     const surfaces = await s.get("core.surfaces");
     const terminal = surfaces.find((surface) => surface.plugin === "terminal" && surface.visible && surface.composition === "view");
@@ -704,7 +706,7 @@ for (const app of Object.values(APPS)) {
       terminal: terminal ? { surface: terminal.id, cursor: terminalCursor } : null,
     })}`);
     // The window check fails on every application error that is logged, so the main document showing the failure would fail it.
-    const failed = await openFailureRow(s, `${folder}/note.zzz`, accepted, () => s.press("Enter"));
+    const failed = await openFailureRow(s, `${folder}/note.zzz`, accepted, () => s.press("Enter"), focus.index);
     // Selecting another path ends the failure.
     await clickRow(failed.snapshot, `${folder}/other.zzz`);
     await waitTreeSnapshot(s, failed.sequence,
