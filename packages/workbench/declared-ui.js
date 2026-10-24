@@ -568,6 +568,7 @@ function paintRoot(box, element, ctx) {
     return;
   }
   box.className = "declared-tree";
+  box.dataset.key = element.key;
   connectTreeKeys(box, { bind: ctx.bind, statusId: ctx.statusId, tree: element.key });
   drawList(box, element.nodes, {
     key: entryKey,

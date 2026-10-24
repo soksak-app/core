@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-37-5: 그려진 각 tree root에 선언된 key를 붙인다. Red: owning
+  `drawValue` test가 exposed control 목록에서 tree root를 풀이하지 못했다.
+  Green: 여러 tree와 redraw 전후 root 및 path/role child 주소가 풀이되며
+  owning 파일이 83/83 통과한다. Exposure와 docs 검사가 통과한다.
+
 - F267.6: F239-47-1을 native implementation 및 소유 test에 연결하고,
   기존 test와 함께 `image_capture_match.m`을 Darwin document and surface
   lane에 등록한다. Red: 변경 전 `make parity-check`는 F239-47-1 link 누락과

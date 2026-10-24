@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-37-5: Add the declared key to each rendered tree root. Red: the owning
+  `drawValue` test could not resolve a tree root through the exposed controls.
+  Green: roots and path/role child controls resolve across redraws and multiple
+  trees; the owning file passes 83/83. Exposure and docs checks pass.
+
 - F267.6: Link F239-47-1 to its native implementation and owning tests, and
   claim `image_capture_match.m` with its existing test in the Darwin document
   and surface lane. Red: the unchanged `make parity-check` reported the

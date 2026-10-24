@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
+import { resolveSectionControl } from "../section-address.js";
 
 const dom = new JSDOM("<body><div id=body></div></body>");
 globalThis.document = dom.window.document;
@@ -327,6 +328,42 @@ test("a tree draws its branches and leaves, and the children of an expanded bran
   const s = section(module);
   s.show(tree([branch("b", [leaf("c")], { expanded: true }), leaf("l")]));
   assert.deepEqual(s.labels(), ["b", "c", "l"]);
+});
+
+test("a tree root address resolves the actual rendered root across redraws and multiple trees", async () => {
+  const module = await load("tree-root-address");
+  const body = document.createElement("section");
+  body.className = "set__section";
+  body.dataset.sidebar = "left";
+  body.dataset.section = "files.tree";
+  const value = (rootLabel, bookmarkLabel) => ({ elements: [
+    { kind: "tree", key: "files", empty: "none", nodes: [leaf("root", { label: rootLabel, command: "demo.select" })] },
+    { kind: "tree", key: "bookmarks", empty: "none", nodes: [leaf("saved", { label: bookmarkLabel, command: "demo.select" })] },
+  ] });
+  const controls = () => [...body.querySelectorAll('[data-expose="core.sidebar.section.control"]')];
+  const address = (key, extra = {}) => ({ sidebar: "left", section: "files.tree", key, ...extra });
+  const bind = (element) => { element.dataset.expose = "core.sidebar.section.control"; };
+  const draw = (elements) => module.drawValue(body, elements, {
+    statusId: "demo.s", bind,
+    expandedByTree: new Map([["files", new Map()], ["bookmarks", new Map()]]),
+  });
+  draw(value("Root", "Saved").elements);
+  const roots = () => [...body.querySelectorAll(".declared-tree")];
+  const [filesRoot, bookmarksRoot] = roots();
+  assert.equal(resolveSectionControl(address("files"), controls()), filesRoot);
+  assert.equal(resolveSectionControl(address("bookmarks"), controls()), bookmarksRoot);
+  assert.equal(filesRoot.dataset.key, "files", "the files tree root does not carry its declared key");
+  assert.equal(bookmarksRoot.dataset.key, "bookmarks", "the bookmark tree root does not carry its declared key");
+  const child = resolveSectionControl(address("files", { path: ["root"], role: "label" }), controls());
+
+  draw(value("Renamed root", "Renamed saved").elements);
+  assert.equal(roots()[0], filesRoot, "redraw replaced the tree root box");
+  assert.equal(roots()[1], bookmarksRoot, "redraw replaced the second tree root box");
+  assert.equal(resolveSectionControl(address("files"), controls()), filesRoot, "redraw lost the root address");
+  assert.equal(resolveSectionControl(address("bookmarks"), controls()), bookmarksRoot, "redraw changed the second root address");
+  assert.equal(resolveSectionControl(address("files", { path: ["root"], role: "label" }), controls()), child,
+    "redraw replaced the addressed child control");
+  assert.equal(child.textContent, "Renamed root", "redraw did not update the retained child control");
 });
 
 test("a collapsed branch hides its children, and its expand control requests the opposite state", async () => {
