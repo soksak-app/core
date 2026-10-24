@@ -5,9 +5,12 @@
 ## 미배포
 
 - F212.10-core-5-6: hidden terminal reload window check를 추가한다. Replacement
-  page start, 유지된 session의 headless open, terminal tab 표시 뒤 image
-  presentation을 관측한다. `node --check`, `make e2e-check`, `make docs-check`가
-  통과한다. 양 host runtime acceptance는 진행 중이다.
+  page start, 유지된 session의 headless open, 숨기기 전 old presented attachment
+  generation, 표시 뒤 더 최신 generation의 presentation과 image-mode event를
+  관측한다. F212.10-core-5-5 host owner test가 정확한 detach acknowledgement
+  barrier를 입증한다. 이 window case는 해당 경계를 측정한다고 주장하지 않고
+  application 연속성을 확인한다. `node --check`, `make e2e-check`,
+  `make docs-check`가 통과한다. 양 host runtime acceptance는 진행 중이다.
 - F239-48-3-8: 양쪽 실제 start-module entry를 module hook으로 짝지어
   검증한다. Owner test는 2/2 통과한다. 현재 host 감사는 예외 추가 없이
   app-start 경로 두 개를 제거해 14개에서 12개 finding으로 줄었다.

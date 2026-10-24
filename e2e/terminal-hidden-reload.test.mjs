@@ -1,5 +1,6 @@
-// A hidden terminal keeps its sidecar session across a main-page reload. The new page opens that session headless after the
-// host releases the old image generation. Showing the terminal again attaches a current image to the same session.
+// A hidden terminal keeps its sidecar session across a main-page reload. The host owner tests establish the exact detach
+// acknowledgement barrier; this window check verifies that the app keeps the session headless and presents a new image
+// generation when the terminal is shown again.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -26,10 +27,17 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a hidden terminal session detaches and reattaches its image across reload`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { settings: { memorySaver: false }, log: EVERY_LEVEL, reads: READS });
+    const fixtureStart = await tailOf(s);
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     const beforeSession = await s.until("terminal.session", (state) => Boolean(state?.sessionId),
       "the terminal session did not open", { surface });
+    const initialModes = await waitForRows(s, fixtureStart, (items) => items.some((row) =>
+      row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface && row.event.fields.mode === "image"),
+    `terminal ${surface} never entered image mode`);
+    const initialImages = initialModes.filter((row) => row.event.event === "sidecar.vt.surface_mode"
+      && row.event.surface === surface && row.event.fields.mode === "image");
+    assert.ok(initialImages.length > 0, `terminal ${surface} has no image-mode event before hiding`);
 
     const grid = await s.get("core.grid");
     const card = grid.cards.find((item) => item.tabs.some((tab) => tab.id === surface));
@@ -41,6 +49,11 @@ for (const app of Object.values(APPS)) {
       && item.visible === false), `terminal ${surface} remained visible`);
     const hiddenRegion = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
     assert.ok(hiddenRegion, `hidden terminal ${surface} has no retained native region`);
+    assert.equal(hiddenRegion.visible, false, `terminal ${surface} is not hidden: ${JSON.stringify(hiddenRegion)}`);
+    assert.ok(hiddenRegion.presented, `hidden terminal ${surface} never presented its old image: ${JSON.stringify(hiddenRegion)}`);
+    assert.ok(Number.isSafeInteger(hiddenRegion.presented.generation) && hiddenRegion.presented.generation > 0,
+      `hidden terminal ${surface} has no presented attachment generation: ${JSON.stringify(hiddenRegion.presented)}`);
+    const oldGeneration = hiddenRegion.presented.generation;
 
     const since = await tailOf(s);
     const oldDocument = (await s.get("core.window.document")).timeOrigin;
@@ -66,15 +79,25 @@ for (const app of Object.values(APPS)) {
       "the page reload replaced the terminal session", { surface });
     assert.equal(replacementSession.sessionId, beforeSession.sessionId);
 
+    const revealSince = await tailOf(s);
     await s.run("core.tab.select", { tab: surface });
     const attached = await s.until("host.window", (host) => host.regions.find((item) => item.surface === surface
-      && item.name === "view" && item.visible && item.presented), "the revealed terminal image was not presented");
-    assert.ok(attached.regions.some((item) => item.surface === surface && item.name === "view" && item.visible && item.presented));
-    rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "sidecar.vt.surface_mode"
-      && row.event.surface === surface && row.event.fields.mode === "image"),
+      && item.name === "view" && item.visible && item.presented && item.presented.generation !== oldGeneration),
+    "the revealed terminal did not present an image from a new attachment generation");
+    const newRegion = attached.regions.find((item) => item.surface === surface && item.name === "view");
+    assert.ok(newRegion.presented.generation > oldGeneration,
+      `terminal ${surface} attachment generation did not increase from ${oldGeneration}: ${JSON.stringify(newRegion.presented)}`);
+    rows = await waitForRows(s, revealSince, (items) => {
+      const selection = items.find((row) => row.event.event === "page.command" && row.event.page === replacementPage
+        && row.event.fields.name === "core.tab.select" && row.event.fields.ok);
+      return selection && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+        && row.event.fields.mode === "image" && row.event.mono_ns > selection.event.mono_ns);
+    },
     `the revealed terminal ${surface} did not return to image mode`);
+    const selection = rows.find((row) => row.event.event === "page.command" && row.event.page === replacementPage
+      && row.event.fields.name === "core.tab.select" && row.event.fields.ok);
     const image = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
-      && row.event.fields.mode === "image");
+      && row.event.fields.mode === "image" && row.event.mono_ns > selection.event.mono_ns);
     assert.ok(image, "the terminal did not attach its image after reveal");
     assert.equal((await s.get("terminal.session", surface)).sessionId, beforeSession.sessionId,
       "revealing the terminal replaced its sidecar session");
@@ -84,6 +107,8 @@ for (const app of Object.values(APPS)) {
     const failedCalls = rows.filter(({ event }) => ["page.call", "page.command", "host.binding.call", "host.endpoint.call"]
       .includes(event.event) && event.fields?.ok === false);
     assert.deepEqual(failedCalls, [], `reload and reveal produced failed runtime calls: ${JSON.stringify(failedCalls)}`);
+    const errors = rows.filter(({ event }) => event.level === "error");
+    assert.deepEqual(errors, [], `reload and reveal produced host, page, or supplier errors: ${JSON.stringify(errors)}`);
     assert.equal(await s.get("core.page.error"), null, "the reload or reveal displayed a page error");
     t.diagnostic(`${app.name}: page.start ${JSON.stringify(start.event.fields.time_origin)}, headless ${headless.event.fields.mode}, image ${image.event.fields.mode}, session ${beforeSession.sessionId}`);
   });
