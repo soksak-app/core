@@ -7,12 +7,15 @@
 - F239-47-23: AppKit composition 상태를 유지하면서 native image-region 입력
   문서를 투명하게 둔다. 변경 전 owning offscreen test는 attributed `ㅏ`에서
   파란 underline pixel 78개, `ㅏㅏ`에서 162개를 측정했다. 같은 frame에서
-  composition report와 known-color sidecar IOSurface도 유지됐다. `drawRect:`가
-  TextKit 그리기를 막은 뒤 focused test는 underline pixel 0개로 통과하고
-  확정 text, marked range, sidecar layer도 유지한다. 앱 활성화나 OS input
-  method 사용은 없었다. P85는 `attributed:false`를 기록했으므로 캡처된 파란 선은
-  아직 이 경로와 상관관계가 확인되지 않았다. Live 양 host visual acceptance는
-  F239-47-6에서 계속 추적한다.
+  composition report와 known-color sidecar IOSurface도 유지됐다. Offscreen
+  composite는 매핑한 image-layer 중심에서 green sentinel을 보였다. AppKit은
+  source DeviceRGB `#20c020`을 `NSCalibratedRGBColorSpace` cache에서
+  `(0.417, 0.773, 0.318)`로 변환하므로 test는 변환 뒤 green channel 분리를
+  확인한다. `drawRect:`가 TextKit 그리기를 막은 뒤 focused test는 underline
+  pixel 0개로 통과하고 확정 text, marked range, 합성된 sidecar layer도 유지한다.
+  앱 활성화나 OS input method 사용은 없었다. P85는 `attributed:false`를
+  기록했으므로 실제 이동하는 파란 표시의 painter는 미확인이다. Live 양 host
+  visual acceptance는 F239-47-6에서 계속 추적한다.
 
 - F212.10-core-3-6: 정확한 현재 source-generation 종료를 받아들이는 동일한
   동기 workbench transition에서 view의 exposure registration을 retire한다.

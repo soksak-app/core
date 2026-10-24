@@ -52,6 +52,26 @@ static NSBitmapImageRep *render(NSView *view) {
     return image;
 }
 
+static BOOL hasSentinelAtLayerCenter(NSBitmapImageRep *image, NSView *view, CALayer *layer, NSString **measurement) {
+    CGFloat scaleX = image.pixelsWide / NSWidth(view.bounds);
+    CGFloat scaleY = image.pixelsHigh / NSHeight(view.bounds);
+    NSInteger x = (NSInteger)floor((NSMidX(layer.frame) - NSMinX(view.bounds)) * scaleX);
+    NSInteger y = (NSInteger)floor((NSMidY(layer.frame) - NSMinY(view.bounds)) * scaleY);
+    if (x < 0 || y < 0 || x >= image.pixelsWide || y >= image.pixelsHigh) {
+        if (measurement) *measurement = [NSString stringWithFormat:@"sample (%ld,%ld) outside %ldx%ld cache",
+            (long)x, (long)y, (long)image.pixelsWide, (long)image.pixelsHigh];
+        return NO;
+    }
+    NSColor *color = [[image colorAtX:x y:y] colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
+    if (measurement) *measurement = [NSString stringWithFormat:@"sample (%ld,%ld)=%@ targetColorSpace=%@",
+        (long)x, (long)y, color, image.colorSpaceName];
+    if (!color) return NO;
+    // AppKit color-manages the DeviceRGB source into the NSCalibratedRGB cache; the known green sentinel is
+    // checked after that conversion by its measured green-channel separation, not by source-channel equality.
+    return color.greenComponent >= 0.6 && color.greenComponent - color.redComponent >= 0.30
+        && color.greenComponent - color.blueComponent >= 0.30;
+}
+
 static NSUInteger bluePixelCount(NSBitmapImageRep *image) {
     NSUInteger count = 0;
     for (NSInteger y = 0; y < image.pixelsHigh; y++) {
@@ -126,6 +146,11 @@ int main(void) { @autoreleasepool {
     check([lastEventOfType(@"compose")[@"text"] isEqual:@"ㅏ"]
         && [lastEventOfType(@"compose")[@"markedRange"][@"length"] unsignedIntegerValue] == 1,
         @"the first marked-text callback still reports its composition and marked range");
+    NSString *compositeMeasurement = @"no rendered bitmap";
+    BOOL sentinelVisible = firstFrame && hasSentinelAtLayerCenter(firstFrame, view, imageLayer, &compositeMeasurement);
+    check(sentinelVisible, [NSString stringWithFormat:
+        @"the offscreen image-region composite shows the sidecar sentinel at the image-layer center (%@)",
+        compositeMeasurement]);
     NSUInteger firstBlue = firstFrame ? bluePixelCount(firstFrame) : 0;
     check(firstBlue == 0, [NSString stringWithFormat:
         @"the native input view paints no blue marked-text underline (measured %lu pixels)", (unsigned long)firstBlue]);
