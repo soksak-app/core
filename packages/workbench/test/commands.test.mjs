@@ -9,6 +9,7 @@ globalThis.document = dom.window.document;
 
 const { registry } = await import("../exposure.js");
 const { audit, bind, commandOf, delegate, mark, run } = await import("../commands.js");
+const { keepHostCommands } = await import("../plugin-host.js");
 
 registry.declare("core", {
   status: [],
@@ -21,6 +22,12 @@ registry.declare("core", {
 const calls = [];
 registry.command("core.fixture.press", (params) => { calls.push(["press", params]); return "pressed"; });
 registry.command("core.fixture.put", (params) => { calls.push(["put", params]); });
+
+registry.declare("fixture", {
+  status: [],
+  commands: [{ name: "fixture.select", description: "Selects.", params: { type: "object", properties: { id: { type: "string" } } }, result: {} }],
+  dom: [],
+});
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const event = (type) => new dom.window.Event(type, { bubbles: true });
@@ -93,4 +100,70 @@ test("run rejects undeclared commands and invalid parameters", async () => {
   await assert.rejects(run("core.fixture.absent"), /unknown command core.fixture.absent/);
   await assert.rejects(run("core.fixture.press", { id: 3 }), /invalid params/);
   assert.equal(await run("core.fixture.press", { id: "c" }), "pressed");
+});
+
+test("a window sidebar command runs only through its declared host source", async () => {
+  const received = [];
+  const windowSidebar = document.createElement("aside");
+  windowSidebar.dataset.windowSidebar = "";
+  windowSidebar.dataset.surface = "unrelated-view";
+  const sourceBody = document.createElement("section");
+  sourceBody.dataset.declared = "";
+  sourceBody.dataset.commandSource = "plugin:fixture";
+  const button = bind(document.createElement("button"), "fixture.select", { id: "row-1" }, {
+    failed: (error) => received.push({ error: error.message }),
+  });
+  sourceBody.append(button);
+  windowSidebar.append(sourceBody);
+  document.body.append(windowSidebar);
+
+  const forget = keepHostCommands("fixture", {
+    run: async (name, params) => {
+      received.push({ name, params });
+      return { selected: params.id };
+    },
+    receive: () => {},
+    close: () => {},
+  });
+  try {
+    registry.hostRegistered({ plugin: "fixture", kind: "command", name: "fixture.select" });
+    button.click();
+    await settle();
+    assert.deepEqual(received, [{ name: "fixture.select", params: { id: "row-1" } }]);
+    delete sourceBody.dataset.commandSource;
+    button.click();
+    await settle();
+    assert.deepEqual(received[1], { error: "owner none has not registered command fixture.select" },
+      "a missing selected source fell back to the registered host");
+  } finally {
+    registry.hostUnregistered("fixture");
+    forget();
+    windowSidebar.remove();
+  }
+});
+
+test("a window sidebar command keeps the exact view source selected for its status", async () => {
+  const received = [];
+  const original = registry.runOwned;
+  registry.runOwned = async (name, params, owner) => {
+    received.push({ name, params, owner });
+    return null;
+  };
+  const windowSidebar = document.createElement("aside");
+  windowSidebar.dataset.windowSidebar = "";
+  const sourceBody = document.createElement("section");
+  sourceBody.dataset.declared = "";
+  sourceBody.dataset.commandSource = "view-exact";
+  const button = bind(document.createElement("button"), "fixture.select", { id: "row-2" });
+  sourceBody.append(button);
+  windowSidebar.append(sourceBody);
+  document.body.append(windowSidebar);
+  try {
+    button.click();
+    await settle();
+    assert.deepEqual(received, [{ name: "fixture.select", params: { id: "row-2" }, owner: "view-exact" }]);
+  } finally {
+    registry.runOwned = original;
+    windowSidebar.remove();
+  }
 });

@@ -4,6 +4,7 @@
 // @soksak/plugin-api). Only commands declared in the registry can be connected.
 import { createBinder } from "@soksak/plugin-api";
 import { registry } from "./exposure.js";
+import { pluginOfHostKey } from "./plugin-host.js";
 
 export { commandOf, valueOf } from "@soksak/plugin-api";
 
@@ -17,8 +18,14 @@ const listeners = new Set();
 const runFrom = (name, params = {}, el) => {
   if (!registry.declared("command", name) || name.startsWith("core.")) return registry.run(name, params);
   const windowSection = el?.closest("[data-window-sidebar]");
-  // default: a window sidebar section with general content has no linked surface, so the owner is null.
-  if (windowSection) return registry.runOwned(name, params, windowSection.dataset.surface ?? null);
+  // A declared section records the exact status source that supplied its content. Host and view sources use different
+  // registration paths, and neither may fall back to another owner.
+  if (windowSection) {
+    const sourceBody = el?.closest("[data-declared]");
+    const source = sourceBody && windowSection.contains(sourceBody) ? sourceBody.dataset.commandSource ?? null : null;
+    const plugin = pluginOfHostKey(source);
+    return plugin === null ? registry.runOwned(name, params, source) : registry.runHosted(name, params, plugin);
+  }
   // default: a command run without an element or from an element outside a surface has no wanted surface (null).
   const wanted = el?.closest("[data-surface]")?.dataset.surface ?? null;
   // default: when there is no surface to choose, the command runs without a surface, and the registry chooses by registration order.

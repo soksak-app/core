@@ -96,7 +96,8 @@ function mountDeclared(entry, record) {
   const status = statusId.slice(owner.length + 1);
   const bindControl = sectionBind(entry);
   const transport = createDeclaredSource({ plugin: owner, status });
-  const declared = createDeclaredSection({
+  let declared = null;
+  declared = createDeclaredSection({
     statusId,
     body: entry.body,
     options: { declared: (name) => registry.declared("command", name), hasIcon, bind: bindControl },
@@ -112,7 +113,12 @@ function mountDeclared(entry, record) {
     }),
     channel: transport.channel,
     pull: transport.pull,
-    changed: notify,
+    changed: () => {
+      const source = declared.state().source;
+      if (source === null) delete entry.body.dataset.commandSource;
+      else entry.body.dataset.commandSource = source.id;
+      notify();
+    },
     // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
     skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status, count }),
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),

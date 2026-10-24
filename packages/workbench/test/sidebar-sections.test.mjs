@@ -236,6 +236,8 @@ test("a declared section selects and pulls a host that registers after the secti
       "the section did not pull when its host registered as the source");
     assert.equal(report().mounted, true, "the host's accepted pull value was not mounted");
     assert.equal(report().text, "host value", "the host's accepted pull value was not drawn");
+    assert.equal(container.querySelector(".set__body").dataset.commandSource, `plugin:${plugin}`,
+      "the command source did not follow the selected plugin host");
     assert.equal(report().controls, 0, "the host's list unexpectedly declared an interactive control");
 
     listeners.get(`plugin:${plugin}`)({ event: "declared-ui.snapshot", plugin, status: "lines", seq: 2,
@@ -253,6 +255,8 @@ test("a declared section selects and pulls a host that registers after the secti
     await settle();
     assert.deepEqual(requested.at(-1), { id: "view-late-host", surface: "view-late-host", status: "lines" },
       "the active view did not replace the host as the chosen source");
+    assert.equal(container.querySelector(".set__body").dataset.commandSource, "view-late-host",
+      "the command source did not follow the selected view");
     assert.equal(report().text, "view value", "the active view's pulled value was not drawn");
     assert.equal(listeners.has(`plugin:${plugin}`), false, "the previous host listener stayed subscribed after a source change");
     assert.ok(listeners.has("view-late-host"), "the new view source was not subscribed");
@@ -277,6 +281,12 @@ test("a declared section selects and pulls a host that registers after the secti
       "the replacement host source was not pulled after the view ended");
     assert.equal(channels.get(`plugin:${plugin}`), 2, "the replacement host did not start one fresh listener");
     assert.equal(report().text, "host value", "the replacement host's value was not drawn");
+    assert.equal(container.querySelector(".set__body").dataset.commandSource, `plugin:${plugin}`,
+      "the command source did not follow the replacement host");
+    registry.hostUnregistered(plugin);
+    await settle();
+    assert.equal(container.querySelector(".set__body").dataset.commandSource, undefined,
+      "the command source remained after its selected status source ended");
   } finally {
     clearSet(container);
     container.remove();

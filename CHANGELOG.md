@@ -15,6 +15,18 @@
   accepted. Green: the same test verifies sRGB preservation, DeviceRGB behavior
   without a tag, rejection of invalid metadata, and preservation of the prior
   snapshot (1/1, 1.142 s).
+- F239-35-3: Declared window-sidebar controls now run through the exact source
+  selected for the section status. Plugin-host sources use the host command
+  registration; view sources use the exact surface registration. A missing
+  source does not fall back to another owner. Red: the unchanged command route
+  failed a host-sourced click with `owner none has not registered command
+  fixture.select`, and the section body omitted its selected source. A nested
+  fixture then showed the route reading the outer window-sidebar wrapper while
+  the source was on the inner declared body; host and view routing both failed.
+  Green: command tests verify host, missing-source and view routing; sidebar
+  tests verify metadata follows host, view, replacement-host and no-source
+  transitions. `commands.test.mjs` passes 8/8 and `sidebar-sections.test.mjs`
+  passes 12/12. Application runtime behavior remains unverified.
 
 - F239-35-1: `core.sidebars` reports the chosen declared-status source, snapshot
   subscription stage, pull phase and reply metadata, and last accepted sequence.

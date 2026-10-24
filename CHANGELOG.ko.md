@@ -13,6 +13,17 @@
   표시했고 잘못된 선언도 허용해 실패했다. Green: 같은 test에서 sRGB 보존, 태그 없는
   경우의 DeviceRGB 동작, 잘못된 metadata 거절, 이전 snapshot 보존을 검증한다(1/1,
   1.142초).
+- F239-35-3: 선언된 window-sidebar control이 section status에 선택된 정확한
+  source로 실행된다. Plugin-host source는 해당 host command 등록을 사용하고
+  view source는 정확한 surface 등록을 사용한다. Source가 없을 때 다른 owner로
+  fallback하지 않는다. Red: 변경 전 command route는 host-sourced click에서
+  `owner none has not registered command fixture.select`로 실패했고 section body에
+  선택 source가 없었다. 중첩 fixture에서는 source가 inner declared body에 있지만
+  route가 outer window-sidebar wrapper를 읽어 host와 view routing이 모두 실패했다.
+  Green: command test가 host, source 부재, view routing을 검증하고 sidebar test가
+  host, view, replacement-host, source 없음 상태에 따른 metadata 변경을 검증한다.
+  `commands.test.mjs` 8/8과 `sidebar-sections.test.mjs` 12/12가 통과한다.
+  Application runtime 동작은 아직 검증되지 않았다.
 
 - F239-35-1: `core.sidebars`가 선택한 declared-status source, snapshot
   subscription 단계, pull 진행 단계와 reply metadata, 마지막 accepted sequence를

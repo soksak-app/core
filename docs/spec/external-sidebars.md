@@ -24,6 +24,8 @@ Rail means only the border joining a content card and its overridden external si
 
 `core.rail` exposes aggregate path and groups identifying the associated content card and fixed sidebar IDs. `core.sidebars` exposes placement, applied plugin or null, card and active tab or null, selected set, orientation, section tabs and presented rectangle. Window sidebar sections use vertical implementations; internal sections follow their card-side orientation.
 
+Commands in a declared window-sidebar section run against the source selected for that section's declared status. A view source uses its exact surface registration; a plugin-host source uses the host registration of that plugin. The source may differ from the focused card's active surface. A missing source or command registration fails; the command does not fall back to another surface or owner.
+
 ## Acceptance
 
 - Retain owning pre-correction Red for duplicate left/right columns, selected override precedence, retired identities/owners and unnecessary rail groups. Run the same assertions after correction.
