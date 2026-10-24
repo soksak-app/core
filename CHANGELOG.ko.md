@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F238-c-20: 기존 current-source plugin 검사를 owner별로 기록하고 plugin check matrix를 바로잡는다. Source 구현과 공개 SDK release는 포함하지 않는다.
+
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen

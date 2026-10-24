@@ -42,13 +42,13 @@ In a plugin repository, `make test` runs the plugin's tests and `make check` run
 
 | Repository | `make check` runs |
 | --- | --- |
-| `browser` | `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
+| `browser` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
 | `editor` | `scripts/check-plugin.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
 | `files` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
-| `hwp` | `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
-| `terminal` | `scripts/check-test-cases.mjs` with `CORE_PLUGIN_API_DIR`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
+| `hwp` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
+| `terminal` | `scripts/check-test-cases.mjs` with `CORE_PLUGIN_API_DIR`, `view-check.js`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
 
-No `check` target runs `soksak-view-check` (`packages/plugin-api/view-check.js`) yet. The bin is published by a core release, and a plugin repository runs it only after it pins a release that publishes the bin.
+Terminal `make check` runs `view-check.js` from the SDK directory selected by `CORE_PLUGIN_API_DIR`. It does not run the `soksak-view-check` package bin. The public SDK pin lacks this checker and `contract/clipboard.json`; F238-c-11-1 tracks the core release and owner pin updates needed for the pinned checks.
 
 A checkout places the repositories in these sibling folders, and a workflow that needs more than one repository checks them out the same way, so the relative folders of `scripts/workspace-registry.json` hold everywhere.
 

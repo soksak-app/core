@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F238-c-20: Record existing current-source plugin checks by owner and correct the plugin check matrix. No source implementation or public SDK release is included.
+
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,

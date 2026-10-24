@@ -42,13 +42,13 @@ Plugin repository에서 `make test`는 plugin의 test를, `make check`는 그 re
 
 | Repository | `make check`가 실행하는 것 |
 | --- | --- |
-| `browser` | `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
+| `browser` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
 | `editor` | `scripts/check-plugin.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
 | `files` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
-| `hwp` | `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
-| `terminal` | `CORE_PLUGIN_API_DIR`와 함께 `scripts/check-test-cases.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
+| `hwp` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
+| `terminal` | `CORE_PLUGIN_API_DIR`와 함께 `scripts/check-test-cases.mjs`, `view-check.js`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
 
-어떤 `check` target도 아직 `soksak-view-check`(`packages/plugin-api/view-check.js`)를 실행하지 않는다. 이 bin은 core release가 게시하며, plugin repository는 그 bin을 게시한 release를 pin한 뒤에야 실행한다.
+Terminal `make check`는 `CORE_PLUGIN_API_DIR`가 가리키는 SDK 디렉터리의 `view-check.js`를 실행한다. `soksak-view-check` package bin을 실행하지는 않는다. 공개 SDK pin에는 이 검사기와 `contract/clipboard.json`이 없다. Pin된 검사를 위해 필요한 core release와 owner pin 변경은 F238-c-11-1에서 추적한다.
 
 Checkout은 repository를 이 sibling 폴더에 두고, repository 둘 이상이 필요한 workflow도 같은 방식으로 checkout한다. 그래서 `scripts/workspace-registry.json`의 상대 폴더가 어디서나 성립한다.
 
