@@ -48,6 +48,38 @@ export function sameTerminalComposition(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+/** Reports whether a coherent terminal sample completed the corresponding reference document. */
+export function terminalStageMatchesReference(snapshot, expectedDocument) {
+  assert.ok(snapshot && typeof snapshot === "object", "terminal stage snapshot must be an object");
+  assert.equal(typeof snapshot.coherent, "boolean", "terminal stage coherence must be boolean");
+  if (snapshot.coherent) assert.equal(typeof snapshot.document, "string", "coherent terminal stage document must be text");
+  assert.equal(typeof expectedDocument, "string", "AppKit reference document must be text");
+  return snapshot.coherent && snapshot.document === expectedDocument;
+}
+
+/** Waits for a coherent terminal document to match the same-key AppKit reference. */
+export async function waitForTerminalStage(events, read, waitForEvent, expectedDocument, label, timeoutMs = 1500) {
+  assert.ok(Array.isArray(events), "terminal stage events must be an array");
+  assert.equal(typeof read, "function", "terminal stage reread must be a function");
+  assert.equal(typeof waitForEvent, "function", "terminal stage event wait must be a function");
+  assert.equal(typeof expectedDocument, "string", "AppKit reference document must be text");
+  assert.ok(Number.isFinite(timeoutMs) && timeoutMs > 0, "terminal stage timeout must be positive");
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const eventOffset = events.length;
+    const snapshot = await read();
+    const remaining = deadline - Date.now();
+    if (remaining < 0) {
+      throw new Error(`${label}: terminal document did not reach its AppKit reference within ${timeoutMs} ms`);
+    }
+    if (terminalStageMatchesReference(snapshot, expectedDocument)) return snapshot;
+    if (remaining <= 0) {
+      throw new Error(`${label}: terminal document did not reach its AppKit reference within ${timeoutMs} ms`);
+    }
+    await waitForEvent(eventOffset, remaining);
+  }
+}
+
 export function terminalComposeMatchesPreedit(compose, cursor) {
   const current = compositionFields(compose, "terminal.compose");
   if (cursor?.preedit === undefined || cursor?.preedit === null) {

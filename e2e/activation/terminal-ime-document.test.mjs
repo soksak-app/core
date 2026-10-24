@@ -9,11 +9,13 @@ import {
   terminalCompositionState,
   terminalInputReceiptMatches,
   terminalObserverStatusesMatch,
+  terminalStageMatchesReference,
   selectCoherentTerminalObservation,
   visibleInputBeforeCursor,
   startTerminalStatusObserver,
   waitForObservedStatusEvent,
   waitForStateEvent,
+  waitForTerminalStage,
 } from "./terminal-ime-document.mjs";
 
 function screen(rows) {
@@ -23,6 +25,67 @@ function screen(rows) {
 function cell(ch, width = 1) {
   return { ch, width };
 }
+
+test("waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate", { timeout: 5000 }, async () => {
+  const empty = { text: "", markedRange: null, selectedRange: { location: 0, length: 0 },
+    replacementRange: null, attributed: false };
+  const priorCompose = { text: "ㅏㅏ", markedRange: null, selectedRange: { location: 2, length: 0 },
+    replacementRange: null, attributed: false };
+  const priorCursor = { row: 0, col: 14, focused: true, preedit: { ...priorCompose } };
+  const eightVowels = "ㅏ".repeat(8);
+  const sevenVowels = "ㅏ".repeat(7);
+  const baseline = {
+    compose: priorCompose,
+    cursor: priorCursor,
+    screen: { ...screen([[cell("$"), cell(" "), ...Array.from("ㅏ".repeat(6), (ch) => cell(ch, 2))]]),
+      frame: { generation: 2, raster: 3, sequence: 4 } },
+  };
+  const events = [
+    { name: "terminal.compose", value: empty },
+    { name: "terminal.cursor", value: { row: 0, col: 18, focused: true, preedit: null } },
+    { name: "terminal.screen", value: [[cell("$"), cell(" "), ...Array.from(eightVowels, (ch) => cell(ch, 2))]] },
+  ];
+  const listeners = new Set();
+  const subscribe = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
+  const prompt = { row: 0, col: 0, text: "$ " };
+  const reads = [];
+  let current = {
+    compose: empty,
+    cursor: { row: 0, col: 18, focused: true, preedit: null },
+    screen: { ...screen(events[2].value), frame: { generation: 2, raster: 3, sequence: 5 } },
+  };
+  let resolveFirstRead;
+  const firstRead = new Promise((resolve) => { resolveFirstRead = resolve; });
+  const read = async () => {
+    const statusEvents = [...events];
+    const coherent = terminalObserverStatusesMatch(statusEvents, baseline, current);
+    const document = visibleInputBeforeCursor(current.screen, current.cursor, prompt, current.compose.text,
+      "Backspace status sample");
+    reads.push(document);
+    if (reads.length === 1) resolveFirstRead();
+    return { coherent, document, stateEvents: statusEvents, ...current };
+  };
+  const waitForEvent = (after, timeoutMs) => waitForStateEvent(events, after, subscribe, "Backspace status", timeoutMs);
+  const waiting = waitForTerminalStage(events, read, waitForEvent, sevenVowels, "Backspace", 1500);
+
+  await firstRead;
+  assert.equal(reads[0], eightVowels, "the first coherent reread is the pending eight-vowel document");
+  current = {
+    compose: empty,
+    cursor: { row: 0, col: 16, focused: true, preedit: null },
+    screen: { ...screen([[cell("$"), cell(" "), ...Array.from(sevenVowels, (ch) => cell(ch, 2))]]),
+      frame: { generation: 2, raster: 3, sequence: 6 } },
+  };
+  events.push({ name: "terminal.cursor", value: current.cursor });
+  events.push({ name: "terminal.screen", value: current.screen.rows });
+  for (const listener of [...listeners]) listener();
+  const accepted = await waiting;
+
+  assert.deepEqual(reads, [eightVowels, sevenVowels]);
+  assert.equal(accepted.document, sevenVowels);
+  assert.equal(accepted.coherent, true);
+  assert.equal(terminalStageMatchesReference(accepted, sevenVowels), true);
+});
 
 test("reads visible input from terminal.screen.read rows and appends preedit once", () => {
   const dto = screen([[cell("$"), cell(" "), cell("ㅏ"), cell("ㅏ")] ]);
