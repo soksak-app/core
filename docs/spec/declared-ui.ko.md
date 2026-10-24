@@ -211,6 +211,7 @@ tree 노드의 focus target은 그 label 컨트롤이 있고 활성이면 label 
 
 `core.sidebars` status는 section마다 다음 필드를 보고한다.
 
+- `source`는 선택된 process registration `{id, surface, generation}` 또는 `null`이다. View source는 surface id를 `id`와 `surface`에 모두 사용한다. Plugin host source는 노출 owner key `plugin:<plugin id>`를 `id`에 사용하고 `surface`는 `null`이다.
 - `controls`는 section 본문에서 DOM 이름 `core.sidebar.section.control`을 가진 요소의 수다. 선언된 section에서는 그 조작 가능한 요소다.
 - `mounted`는 section이 받아들인 값을 그리는 동안 true다. section이 비워지면 false다. section은 받아들인 값이 없을 때 비워진 것이다. 첫 받아들인 값 전, 거부된 값 뒤, 그리고 출처가 바뀐 뒤 새 출처의 첫 값을 받아들이기 전이 그 경우다([status 대응](#status-대응)의 (b) 규칙).
 - `error`는 마지막 값이 거부된 동안의 현재 거부 텍스트이며, 그 밖에는 null이다.

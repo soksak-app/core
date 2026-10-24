@@ -210,6 +210,7 @@ A declared section keeps the header, the fold control, and the tab selection of 
 
 The `core.sidebars` status reports each section with these fields:
 
+- `source` is the chosen process registration `{id, surface, generation}` or `null`. A view source uses its surface id for both `id` and `surface`; a plugin host source uses its exposure owner key `plugin:<plugin id>` for `id` and `null` for `surface`.
 - `controls` is the number of elements with the dom name `core.sidebar.section.control` in the body of the section. For a declared section these are its interactive elements.
 - `mounted` is true while the section draws an accepted value. It is false when the section is cleared. A section is cleared when it has no accepted value: before its first accepted value, after a rejected value, and on a change of source until the first value from the new source is accepted (the transition rule (b) in [status mapping](#status-mapping)).
 - `error` is the text of the current rejection while the last value is rejected, and null otherwise.

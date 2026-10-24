@@ -13,6 +13,17 @@
   owning pointer-press tests pass 6/6, `make e2e-check` and `make docs-check`
   pass, and the retained window run was not repeated.
 
+- F239-52-2: Match `core.sidebars.source.id` with `core.plugin.snapshots`.
+  The chosen plugin-host source uses `plugin:<plugin id>` while snapshot rows
+  use the bare plugin id. Red: the retained two-host run had current Files
+  snapshot rows but timed out because the helper compared `plugin:files` with
+  `files`. The consumer now validates the source id against the status owner,
+  requires a null surface and positive generation, then waits for a matching
+  sequence. The owning test passes 3/3 and rejects an invalid source before
+  waiting; `node --check e2e/projects.test.mjs` passes. `make docs-check` passes.
+  `make e2e-check` passes after merging into the dependency-complete primary
+  checkout. No window runtime was rerun.
+
 - F239-47-2: Enable the declared `input:info` native callback records in the exact eight-vowel activation fixture. The previous P85 Tauri policy logged input only at `error`, which omitted `native.input.callback` records declared at `info`. The fixture now saves bounded key and callback records before evaluating the strict capture-gap result. No activation rerun or product fix is claimed; F239-47-6 remains open.
 
 - F239-47-6/F239-47-10: Record the P85 two-host IME attempt. Both fixed AppKit reference sequences and all ten terminal documents matched. Tauri recorded a 34.660750 ms frame gap and Wails 33.694458 ms, exceeding the unchanged 33 ms limit; visual acceptance remains open. Metadata assigns all vowels the same foreground/background and underlines only the last marked vowel. The callback DTO does not expose AppKit selector names or `committedLength`. A second query replaced the original baseline, and the final frontmost observation conflicts with the runner's restore log; F239-47-24 tracks a valid session baseline. Both hosts and sidecars exited. Structured JSONL logs had zero error-level records, but both native host stderr logs contained `error messaging the mach port for IMKCFRunLoopWakeUpReliable`; the messages remain unclassified, with no established link to the capture gaps.

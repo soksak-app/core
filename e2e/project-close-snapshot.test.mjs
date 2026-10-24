@@ -4,7 +4,7 @@ import test from "node:test";
 import { getClosedProjectSnapshot } from "./project-close-snapshot.mjs";
 
 test("a closed-project pull waits through a stale accepted snapshot for the exact current source", async () => {
-  const source = { id: "files", surface: null, generation: 8 };
+  const source = { id: "plugin:files", surface: null, generation: 8 };
   const accepted = [
     { plugin: "files", status: "tree", surface: null, generation: 8, seq: 12 },
     { plugin: "files", status: "tree", surface: null, generation: 8, seq: 13 },
@@ -40,7 +40,7 @@ test("a closed-project pull waits through a stale accepted snapshot for the exac
 });
 
 test("a closed-project pull ignores watermarks from another source generation", async () => {
-  const source = { id: "files", surface: null, generation: 8 };
+  const source = { id: "plugin:files", surface: null, generation: 8 };
   const foreign = { plugin: "files", status: "tree", surface: null, generation: 7, seq: 99 };
   const s = {
     async until(name, predicate) {
@@ -52,4 +52,16 @@ test("a closed-project pull ignores watermarks from another source generation", 
   };
   await assert.rejects(getClosedProjectSnapshot(s, "files.tree", source, 11,
     () => true, "files.tree did not publish its no-project snapshot"), /no current-source publication/);
+});
+
+test("a closed-project pull rejects a source id that does not match the plugin host contract", async () => {
+  let requested = false;
+  const s = {
+    async until() { requested = true; },
+    async get() { requested = true; },
+  };
+  await assert.rejects(getClosedProjectSnapshot(s, "files.tree",
+    { id: "files", surface: null, generation: 8 }, 11, () => true, "unused"),
+  /has plugin-host source files, expected plugin:files/);
+  assert.equal(requested, false, "an invalid source id started a wait or pull");
 });

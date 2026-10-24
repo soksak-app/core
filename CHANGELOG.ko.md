@@ -13,6 +13,17 @@
   `make e2e-check`와 `make docs-check`도 통과하며 보존된 window run은 재실행하지
   않았다.
 
+- F239-52-2: `core.sidebars.source.id`를 `core.plugin.snapshots`에 맞춘다.
+  선택된 plugin-host source는 `plugin:<plugin id>`를 사용하고 snapshot row는
+  bare plugin id를 사용한다. Red: 보존된 두 host run은 현재 Files snapshot
+  row를 받았지만 helper가 `plugin:files`와 `files`를 비교해 timeout됐다.
+  Consumer는 source id를 status owner와 비교하고 null surface 및 양수
+  generation을 요구한 뒤 matching sequence를 기다린다. Owning test는 3/3
+  통과하며 잘못된 source를 대기 전에 거부하고 `node --check
+  e2e/projects.test.mjs`도 통과한다. `make docs-check`와 dependency-complete
+  primary checkout에서의 `make e2e-check`도 통과한다. Window runtime은 다시
+  실행하지 않았다.
+
 - F239-47-2: 정확한 여덟 모음 activation fixture에서 선언된 `input:info` native callback record를 활성화한다. 이전 P85 Tauri policy는 input을 `error` 수준으로만 기록해 `info`로 선언된 `native.input.callback`을 남기지 않았다. Fixture는 엄격한 capture-gap 결과를 판정하기 전에 제한된 key와 callback record를 저장한다. Activation 재실행이나 제품 수정은 주장하지 않으며 F239-47-6은 열린 상태다.
 
 - F239-47-6/F239-47-10: P85 양 host IME 실행을 기록한다. 고정 AppKit reference와 terminal 문서 10단계는 모두 일치했다. Tauri frame gap은 34.660750 ms, Wails는 33.694458 ms로 변경하지 않은 33 ms 기준을 넘었고 visual acceptance는 열린 상태다. Metadata상 모든 모음의 foreground/background는 같고 마지막 marked 모음만 underline됐다. Callback DTO에는 AppKit selector 이름과 `committedLength`가 없다. 두 번째 조회가 baseline을 대체했고 마지막 frontmost 관측은 runner 복원 로그와 달라 F239-47-24에서 유효한 세션 baseline을 추적한다. 두 host와 sidecar는 종료됐다. Structured JSONL에는 error-level record가 없었지만 두 native host stderr에는 `error messaging the mach port for IMKCFRunLoopWakeUpReliable`가 있었다. 이 메시지는 미분류이며 capture gap과의 연결은 확인되지 않았다.
