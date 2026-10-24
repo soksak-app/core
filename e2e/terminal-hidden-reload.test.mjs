@@ -1,0 +1,90 @@
+// A hidden terminal keeps its sidecar session across a main-page reload. The new page opens that session headless after the
+// host releases the old image generation. Showing the terminal again attaches a current image to the same session.
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { APPS, open } from "@soksak/window-check/app.mjs";
+import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
+import { allRows, tailOf } from "./chains.mjs";
+import { fresh } from "./fixture.mjs";
+import { ensureTerminals } from "./terminal-screen.mjs";
+
+const READS = ["page.start", "page.background.session", "sidecar.vt.request", "sidecar.vt.surface_mode"];
+
+async function waitForRows(s, since, predicate, description) {
+  let last = [];
+  for (;;) {
+    const previous = await s.get("host.log");
+    last = await allRows(s, { channel: "all", since });
+    if (predicate(last)) return last;
+    await s.until("host.log", (value) => value.notices > previous.notices,
+      `${description}; observed ${JSON.stringify(last.map((row) => row.event))}`);
+  }
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: a hidden terminal session detaches and reattaches its image across reload`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s, { settings: { memorySaver: false }, log: EVERY_LEVEL, reads: READS });
+    const [terminal] = await ensureTerminals(s, 1);
+    const surface = terminal.surface;
+    const beforeSession = await s.until("terminal.session", (state) => Boolean(state?.sessionId),
+      "the terminal session did not open", { surface });
+
+    const grid = await s.get("core.grid");
+    const card = grid.cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    assert.ok(card, `no card holds terminal ${surface}`);
+    await s.run("core.card.add-tab", { card: card.id, plugin: "browser" });
+    await s.until("core.surfaces", (items) => items.some((item) => item.visible && item.plugin === "browser"),
+      "the browser tab did not hide the terminal");
+    await s.until("host.window", (host) => host.regions.some((item) => item.surface === surface && item.name === "view"
+      && item.visible === false), `terminal ${surface} remained visible`);
+    const hiddenRegion = (await s.get("host.window")).regions.find((item) => item.surface === surface && item.name === "view");
+    assert.ok(hiddenRegion, `hidden terminal ${surface} has no retained native region`);
+
+    const since = await tailOf(s);
+    const oldDocument = (await s.get("core.window.document")).timeOrigin;
+    await s.run("host.window.reload");
+    const document = await s.until("core.window.document", (value) => value.timeOrigin !== oldDocument
+      && value.readyState === "complete", "the replacement main document did not complete");
+    const replacementPage = String(document.timeOrigin);
+    let rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "page.start"
+      && row.event.fields.time_origin === document.timeOrigin), "the replacement page did not record page.start");
+    const start = rows.find((row) => row.event.event === "page.start" && row.event.fields.time_origin === document.timeOrigin);
+    assert.ok(start, `no page.start for ${replacementPage}`);
+
+    rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "page.background.session"
+      && row.event.fields.tab === surface && row.event.fields.action === "open" && row.event.fields.surface === "absent")
+      && items.some((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+        && row.event.fields.mode === "headless"), `the hidden terminal ${surface} did not open headless`);
+    const background = rows.find((row) => row.event.event === "page.background.session" && row.event.fields.tab === surface
+      && row.event.fields.action === "open" && row.event.fields.surface === "absent");
+    const headless = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+      && row.event.fields.mode === "headless");
+    assert.ok(background && headless, "the replacement page did not open the hidden session headless");
+    const replacementSession = await s.until("terminal.session", (state) => state?.sessionId === beforeSession.sessionId,
+      "the page reload replaced the terminal session", { surface });
+    assert.equal(replacementSession.sessionId, beforeSession.sessionId);
+
+    await s.run("core.tab.select", { tab: surface });
+    const attached = await s.until("host.window", (host) => host.regions.find((item) => item.surface === surface
+      && item.name === "view" && item.visible && item.presented), "the revealed terminal image was not presented");
+    assert.ok(attached.regions.some((item) => item.surface === surface && item.name === "view" && item.visible && item.presented));
+    rows = await waitForRows(s, since, (items) => items.some((row) => row.event.event === "sidecar.vt.surface_mode"
+      && row.event.surface === surface && row.event.fields.mode === "image"),
+    `the revealed terminal ${surface} did not return to image mode`);
+    const image = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
+      && row.event.fields.mode === "image");
+    assert.ok(image, "the terminal did not attach its image after reveal");
+    assert.equal((await s.get("terminal.session", surface)).sessionId, beforeSession.sessionId,
+      "revealing the terminal replaced its sidecar session");
+
+    await s.flushLog();
+    rows = await allRows(s, { channel: "all", since });
+    const failedCalls = rows.filter(({ event }) => ["page.call", "page.command", "host.binding.call", "host.endpoint.call"]
+      .includes(event.event) && event.fields?.ok === false);
+    assert.deepEqual(failedCalls, [], `reload and reveal produced failed runtime calls: ${JSON.stringify(failedCalls)}`);
+    assert.equal(await s.get("core.page.error"), null, "the reload or reveal displayed a page error");
+    t.diagnostic(`${app.name}: page.start ${JSON.stringify(start.event.fields.time_origin)}, headless ${headless.event.fields.mode}, image ${image.event.fields.mode}, session ${beforeSession.sessionId}`);
+  });
+}

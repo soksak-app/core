@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
+  the replacement page start, retained session opening headless, and image
+  presentation after the terminal tab is shown. `node --check`, `make e2e-check`,
+  and `make docs-check` pass. Two-host runtime acceptance remains pending.
 - F239-48-3-8: Pair both real start-module entries through module hooks.
   Both owner tests pass 2/2. The current host audit drops from 14 to 12
   findings, removing the two app-start paths without an allowance. The
