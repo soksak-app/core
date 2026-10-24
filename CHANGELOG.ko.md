@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47-27: native focus action을 input transaction에서 받아들이고, preedit이
+  남아 있는 focus-only report가 key를 확인하지 않게 한다. Focused consumer test는
+  5/5 통과하며 syntax, `make e2e-check`, `make docs-check`도 통과한다.
+  Activation 또는 application 실행은 하지 않았다.
+
 - F239-47-26: IME acceptance consumer가 현재 atomic native-input transaction을
   읽도록 한다. 모든 action과 error를 검증하고 CID 하나를 요구하며, 순서가 있는
   native report를 terminal request와 정확히 대조한다. Focused consumer test는

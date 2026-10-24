@@ -187,6 +187,11 @@ function strictAction(value, label) {
     assert.ok(value.selector.length > 0, `${label}.selector must not be empty`);
     return value;
   }
+  if (value.type === "focus") {
+    exactObject(value, ["type", "focused"], label);
+    assert.equal(typeof value.focused, "boolean", `${label}.focused must be boolean`);
+    return value;
+  }
   throw new Error(`${label}.type is unsupported: ${JSON.stringify(value.type)}`);
 }
 
@@ -265,8 +270,10 @@ export function assertInputTraceDelivery(entries) {
 
 function transactionMatchesKey(transaction, key) {
   if (key === "k") {
-    return transaction.actions.some((action) => (action.type === "key" && action.key === "Char" && action.text === key) ||
-      (action.type === "insert" && action.text.length > 0)) || transaction.preedit.text.length > 0;
+    const keyAction = transaction.actions.some((action) =>
+      (action.type === "key" && action.key === "Char" && action.text === key) ||
+      (action.type === "insert" && action.text.length > 0));
+    return keyAction || (transaction.actions.length === 0 && transaction.preedit.text.length > 0);
   }
   if (key === "Backspace") {
     return transaction.actions.some((action) => (action.type === "key" && action.key === key) ||

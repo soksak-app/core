@@ -261,6 +261,30 @@ test("compose-only transactions with empty action arrays retain the preedit rece
   assert.deepEqual(assertInputTraceDelivery([native, terminal]).native[0].actions, []);
 });
 
+test("native and terminal transactions preserve the ordered focus action", () => {
+  const preedit = { text: "ㅎ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const action = { type: "focus", focused: true };
+  const native = { kind: "native-input", sequence: 5, cids: ["focus-cid"],
+    input: { actions: [action], preedit, errors: [] } };
+  const terminal = { kind: "terminal-input", sequence: 6, cids: ["focus-cid"],
+    input: { operation: "input", actions: [action], preedit } };
+  assert.deepEqual(assertInputTraceDelivery([native, terminal]).native[0].actions, [action]);
+});
+
+test("focus-only transactions do not acknowledge a key from retained preedit", () => {
+  const preedit = { text: "ㅎ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const action = { type: "focus", focused: false };
+  const native = { kind: "native-input", sequence: 7, cids: ["focus-cid"],
+    input: { actions: [action], preedit, errors: [] } };
+  const terminal = { kind: "terminal-input", sequence: 8, cids: ["focus-cid"],
+    input: { operation: "input", actions: [action], preedit } };
+  assert.deepEqual(assertInputTraceDelivery([native, terminal]).native[0].actions, [action]);
+  assert.equal(terminalInputReceiptMatches([native], "k"), false);
+  assert.equal(terminalInputReceiptMatches([terminal], "k"), false);
+});
+
 test("input transaction validation checks every action and correlation identifier", () => {
   const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
     selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
@@ -269,6 +293,9 @@ test("input transaction validation checks every action and correlation identifie
   ], preedit, errors: [] } };
   const malformedTail = { ...valid, input: { ...valid.input, actions: [...valid.input.actions, { type: "unknown" }] } };
   assert.throws(() => terminalInputReceiptMatches([valid, malformedTail], "k"), /actions\[1\]\.type is unsupported/);
+  const invalidFocusTail = { ...valid, input: { ...valid.input, actions: [...valid.input.actions,
+    { type: "focus", focused: "yes" }] } };
+  assert.throws(() => terminalInputReceiptMatches([valid, invalidFocusTail], "k"), /actions\[1\]\.focused must be boolean/);
   assert.throws(() => inputTraceTransactions([{ ...valid, cids: ["one", "two"] }]), /exactly one nonempty correlation/);
   assert.throws(() => inputTraceTransactions([{ ...valid, sequence: 0 }]), /sequence must be a positive safe integer/);
   assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input,
@@ -276,6 +303,8 @@ test("input transaction validation checks every action and correlation identifie
   assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input, actions: [
     { type: "key", key: "Char", text: null, shift: false, alt: false, ctrl: false },
   ] } }]), /actions\[0\]\.text must be text/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input,
+    actions: [{ type: "focus", focused: 1 }] } }]), /actions\[0\]\.focused must be boolean/);
   assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input,
     errors: [{ reason: "native callback failed" }] } }]), /native input transaction failed: native callback failed/);
   assert.throws(() => inputTraceTransactions([{ kind: "native-insert", text: "ㅏ" }]), /obsolete native-insert/);

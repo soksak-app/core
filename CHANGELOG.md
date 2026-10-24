@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-47-27: Accept the native focus action in input transactions and keep
+  focus-only reports from acknowledging a key through retained preedit. The
+  focused consumer tests pass 5/5; syntax, `make e2e-check`, and
+  `make docs-check` pass. No activation or application run was made.
+
 - F239-47-26: Read the current atomic native-input transactions in the IME
   acceptance consumer. Validate every action and error, require one CID, and
   match ordered native reports to exact terminal requests. The focused
