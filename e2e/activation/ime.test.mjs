@@ -13,6 +13,8 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
+import { capturesByInputStage, evaluateVisualStages, indexFrameStatus, planVisualStage, readRetainedSources }
+  from "./ime-visual-capture.mjs";
 import {
   assertTerminalStageCoherent,
   sameTerminalComposition,
@@ -431,6 +433,47 @@ for (const app of Object.values(APPS)) {
         return observation;
       };
 
+      const baselineScreen = await presentedScreen(s, surface);
+      const baselineCursor = await s.get("terminal.cursor", surface);
+      const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
+      assert.ok(promptPrefix.length > 0, "the empty terminal prompt has no visible prefix");
+      const prompt = { row: baselineCursor.row, col: 0, text: promptPrefix };
+      manifest.prompt = prompt;
+      persist("manifest.json", manifest);
+
+      const observedStateEvents = [];
+      const stateObserver = await startTerminalStatusObserver(s, surface, (event) => {
+        observedStateEvents.push(event);
+        for (const notify of [...stateEventWaiters]) notify();
+      });
+      s.cleanup(async () => {
+        stateEventWaiters.clear();
+        await stateObserver.stop();
+      });
+      const waitForStateEvent = async (after, key,
+        missingMessage = "no terminal compose, cursor or screen status notification followed the input") => {
+        try {
+          return await waitForStateEventAfter(observedStateEvents, after, (notify) => {
+            stateEventWaiters.add(notify);
+            return () => stateEventWaiters.delete(notify);
+          }, `${key}: ${missingMessage}`, 1500);
+        } catch (error) {
+          const sample = { key, error: error.message, stateEvents: [...observedStateEvents] };
+          try {
+            sample.compose = await s.get("terminal.compose", surface);
+            sample.cursor = await s.get("terminal.cursor", surface);
+            sample.screen = await s.run("terminal.screen.read", {}, surface);
+            sample.host = await s.get("host.window");
+            sample.region = sample.host.regions.find((item) => item.surface === surface && item.name === "view");
+          } catch (captureError) {
+            sample.captureError = captureError.message;
+          }
+          persist(`status-notification-failure-${key.replaceAll(/[^a-zA-Z0-9-]/g, "-")}.json`, sample);
+          error.message += `; raw status/frame snapshot saved in ${artifactDir}`;
+          throw error;
+        }
+      };
+
       const capture = await s.record();
       let recordingResult = null;
       let capturePreserved = false;
@@ -528,46 +571,6 @@ for (const app of Object.values(APPS)) {
       assert.equal(terminalReady.host.key, true, "the terminal host window is not key before key input");
       assert.equal(terminalReady.host.responder?.surface, surface, "the terminal is not the native responder before key input");
 
-      const observedStateEvents = [];
-      const pendingStateEvents = [];
-      const stateObserver = await startTerminalStatusObserver(s, surface, (event) => {
-        observedStateEvents.push(event);
-        for (const notify of [...stateEventWaiters]) notify();
-      });
-      s.cleanup(async () => {
-        stateEventWaiters.clear();
-        await stateObserver.stop();
-      });
-      const waitForStateEvent = async (after, key,
-        missingMessage = "no terminal compose, cursor or screen status notification followed the input") => {
-        try {
-          return await waitForStateEventAfter(observedStateEvents, after, (notify) => {
-            stateEventWaiters.add(notify);
-            return () => stateEventWaiters.delete(notify);
-          }, `${key}: ${missingMessage}`, 1500);
-        } catch (error) {
-          const sample = { key, error: error.message, stateEvents: [...observedStateEvents] };
-          try {
-            sample.compose = await s.get("terminal.compose", surface);
-            sample.cursor = await s.get("terminal.cursor", surface);
-            sample.screen = await s.run("terminal.screen.read", {}, surface);
-            sample.host = await s.get("host.window");
-            sample.region = sample.host.regions.find((item) => item.surface === surface && item.name === "view");
-          } catch (captureError) {
-            sample.captureError = captureError.message;
-          }
-          persist(`status-notification-failure-${key.replaceAll(/[^a-zA-Z0-9-]/g, "-")}.json`, sample);
-          error.message += `; raw status/frame snapshot saved in ${artifactDir}`;
-          throw error;
-        }
-      };
-      const baselineScreen = await presentedScreen(s, surface);
-      const baselineCursor = await s.get("terminal.cursor", surface);
-      const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
-      assert.ok(promptPrefix.length > 0, "the empty terminal prompt has no visible prefix");
-      const prompt = { row: baselineCursor.row, col: 0, text: promptPrefix };
-      manifest.prompt = prompt;
-      persist("manifest.json", manifest);
       const applyTerminalInput = (referenceState, observation, entries, index) => {
         const actual = visibleInputBeforeCursor(observation.screen, observation.cursor, prompt,
           observation.compose.text, `terminal input ${index}`);
@@ -584,14 +587,18 @@ for (const app of Object.values(APPS)) {
         };
       };
 
+      const visualStages = [];
       for (let index = 0; index < 8; index++) {
         const before = await s.get("terminal.compose", surface);
         await startTrace(`terminal-k-${index + 1}`);
         const eventOffset = observedStateEvents.length;
+        const startedMonotonicNs = process.hrtime.bigint().toString();
         const started = performance.now();
         await s.press("k");
+        const acknowledgedMonotonicNs = process.hrtime.bigint().toString();
         const acknowledged = performance.now();
-        manifest.steps.push({ group: "terminal", index: index + 1, key: "k", started, acknowledged });
+        manifest.steps.push({ group: "terminal", index: index + 1, key: "k", started, acknowledged,
+          startedMonotonicNs, acknowledgedMonotonicNs });
         persist("manifest.json", manifest);
         await waitForStateEvent(eventOffset, `k-${index + 1}`);
         const stateEvents = observedStateEvents.slice(eventOffset);
@@ -605,17 +612,22 @@ for (const app of Object.values(APPS)) {
         assert.equal(comparison.actual, comparison.expected,
           `input ${index + 1} k diverged: terminal committed-plus-preedit ${JSON.stringify(comparison.actual)} ` +
           `differs from AppKit document ${JSON.stringify(comparison.expected)}`);
+        visualStages.push({ ...planVisualStage({ key: `k-${index + 1}`, expectedDocument: comparison.expected,
+          observation, prompt }), startedMonotonicNs });
       }
 
       const beforeBackspace = await s.get("terminal.compose", surface);
       const cursorBeforeBackspace = await s.get("terminal.cursor", surface);
       await startTrace("terminal-Backspace");
       const backspaceEventOffset = observedStateEvents.length;
+      const backspaceStartedMonotonicNs = process.hrtime.bigint().toString();
       const backspaceStarted = performance.now();
       await s.press("Backspace");
+      const backspaceAcknowledgedMonotonicNs = process.hrtime.bigint().toString();
       const backspaceAcknowledged = performance.now();
       manifest.steps.push({ group: "terminal", index: 9, key: "Backspace", started: backspaceStarted,
-        acknowledged: backspaceAcknowledged });
+        acknowledged: backspaceAcknowledged, startedMonotonicNs: backspaceStartedMonotonicNs,
+        acknowledgedMonotonicNs: backspaceAcknowledgedMonotonicNs });
       persist("manifest.json", manifest);
       await waitForStateEvent(backspaceEventOffset, "Backspace");
       const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, beforeBackspace,
@@ -627,16 +639,21 @@ for (const app of Object.values(APPS)) {
       assert.equal(backspaceComparison.actual, backspaceComparison.expected,
         `Backspace diverged: terminal committed-plus-preedit ${JSON.stringify(backspaceComparison.actual)} ` +
         `differs from AppKit document ${JSON.stringify(backspaceComparison.expected)}`);
+      visualStages.push({ ...planVisualStage({ key: "Backspace", expectedDocument: backspaceComparison.expected,
+        observation: backspaceObservation, prompt }), startedMonotonicNs: backspaceStartedMonotonicNs });
 
       const beforeSpace = await s.get("terminal.compose", surface);
       const cursorBeforeSpace = await s.get("terminal.cursor", surface);
       await startTrace("terminal-Space");
       const spaceEventOffset = observedStateEvents.length;
+      const spaceStartedMonotonicNs = process.hrtime.bigint().toString();
       const spaceStarted = performance.now();
       await s.press("Space");
+      const spaceAcknowledgedMonotonicNs = process.hrtime.bigint().toString();
       const spaceAcknowledged = performance.now();
       manifest.steps.push({ group: "terminal", index: 10, key: "Space", started: spaceStarted,
-        acknowledged: spaceAcknowledged });
+        acknowledged: spaceAcknowledged, startedMonotonicNs: spaceStartedMonotonicNs,
+        acknowledgedMonotonicNs: spaceAcknowledgedMonotonicNs });
       persist("manifest.json", manifest);
       await waitForStateEvent(spaceEventOffset, "Space");
       const spaceObservation = await observeTerminal("terminal", "Space", 10, beforeSpace,
@@ -648,12 +665,15 @@ for (const app of Object.values(APPS)) {
       assert.equal(spaceComparison.actual, spaceComparison.expected,
         `Space diverged: terminal committed-plus-preedit ${JSON.stringify(spaceComparison.actual)} ` +
         `differs from AppKit document ${JSON.stringify(spaceComparison.expected)}`);
+      visualStages.push({ ...planVisualStage({ key: "Space", expectedDocument: spaceComparison.expected,
+        observation: spaceObservation, prompt }), startedMonotonicNs: spaceStartedMonotonicNs });
       persist("terminal-final.json", { backspaceObservation, spaceObservation, beforeSpace, cursorBeforeBackspace,
         cursorBeforeSpace });
       assert.equal(observations.length, 10, "the trace omitted an input state or presented frame");
       assert.equal(traces.length, 10, "the trace omitted a native callback batch");
       assert.equal(referenceStates.length, 10, "the trace omitted a same-window AppKit reference state");
       assert.equal(manifest.steps.length, 20, "the trace omitted an acknowledged reference or terminal input");
+      const terminalSequenceEndMonotonicNs = process.hrtime.bigint().toString();
       const { displayed } = await s.presented();
       const recording = await capture.stop({ after: displayed + 100 });
       recordingResult = recording;
@@ -711,6 +731,50 @@ for (const app of Object.values(APPS)) {
       assert.deepEqual(callbackStatus.flatMap((item) => item.frame === null ? [] : [item.frame]),
         framePaths.map((path) => basename(path)),
       `${app.name}: captured frame callbacks and files differ`);
+      let frameStatus;
+      let sources = [];
+      let missingStates = [];
+      let timedStages = [];
+      let visualMeasurements;
+      try {
+        frameStatus = indexFrameStatus(observedStateEvents, prompt, visibleInputBeforeCursor);
+        ({ sources, missingStates } = readRetainedSources(capture.frames, frameStatus));
+        timedStages = visualStages.map((stage, index) => ({ ...stage,
+          endedMonotonicNs: visualStages[index + 1]?.startedMonotonicNs ?? terminalSequenceEndMonotonicNs }));
+        const samplesByStage = capturesByInputStage(frameCallbacks.map(({ callback }) => ({
+          name: callback.frame, callback,
+        })), decoded, timedStages);
+        visualMeasurements = timedStages.map((stage) => evaluateVisualStages({
+          captures: samplesByStage.get(stage.key),
+          sources,
+          stages: [stage],
+          criteria: { colorDistance: 32, minimumGlyphPixels: 2, minimumUnderlineCoverage: 0.75 },
+        })[0]);
+      } catch (error) {
+        persist("visual-measurements.json", {
+          collectionError: { name: error.name, error: error.message },
+          targetStages: visualStages.map(({ key, frame, cells, glyphs, semantic }) =>
+            ({ key, frame, cells, glyphs, semantic })),
+          retainedSourceCount: sources.length,
+          missingSourceStates,
+          sourceStatusRejections: frameStatus?.rejections ?? [],
+          callbackStatus: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
+        });
+        throw error;
+      }
+      persist("visual-measurements.json", {
+        targetStages: timedStages.map(({ key, frame, cells, glyphs, semantic, startedMonotonicNs, endedMonotonicNs }) =>
+          ({ key, frame, cells, glyphs, semantic, startedMonotonicNs, endedMonotonicNs })),
+        retainedSourceCount: sources.length,
+        missingSourceStates,
+        sourceStatusRejections: frameStatus.rejections,
+        sampleCount: frameCallbacks.length,
+        imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
+        visualMeasurements,
+      });
+      assert.equal(visualStages.length, 10, `${app.name}: visual calculator omitted an input stage`);
+      assert.ok(visualMeasurements.every((result) => result.result === "measured"),
+        `${app.name}: rendered glyph/underline proof is incomplete: ${JSON.stringify(visualMeasurements)}`);
       persist("recording.json", { ...recording, frames: preservedCaptureDir, sourceFrames: capture.frames,
         frameFiles: framePaths.map((path) => basename(path)), frameGaps, longestFrameGap, frameCount: decoded.length,
         callbackStatus: preservedCallbackStatus, sourceCallbackStatus: recording.callbackStatus });
