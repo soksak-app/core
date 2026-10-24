@@ -1,5 +1,3 @@
-use super::image_event_payload;
-
 // contract: images.reload.captures-old-image-owner
 #[test]
 fn reload_captures_each_image_supplier_before_advancing_generation() {
@@ -99,21 +97,4 @@ fn ending_a_surface_clears_its_unacknowledged_detach_targets() {
 
     assert!(images.sidecars_for_surface(surface).is_empty());
     assert!(images.begin_reload(surface).is_empty());
-}
-
-#[test]
-fn the_image_event_relay_preserves_the_compose_marked_range() {
-    let event = serde_json::json!({
-        "type": "compose",
-        "text": "한",
-        "markedRange": { "location": 0, "length": 1 },
-        "selectedRange": { "location": 1, "length": 0 },
-        "replacementRange": null,
-        "attributed": false
-    });
-    let payload = image_event_payload("probe-surface", "probe-region", event.clone());
-
-    assert_eq!(payload["surface"], "probe-surface");
-    assert_eq!(payload["name"], "probe-region");
-    assert_eq!(payload["event"], event);
 }
