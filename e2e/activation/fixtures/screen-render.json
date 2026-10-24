@@ -1,0 +1,57 @@
+{
+  "frame": { "generation": 1, "raster": 2, "sequence": 3 },
+  "pixel": {
+    "width": 4,
+    "height": 6,
+    "bytesPerRow": 16,
+    "format": "bgra8",
+    "alpha": "premultiplied",
+    "colorSpace": "sRGB",
+    "origin": "top-left"
+  },
+  "grid": {
+    "rows": 1,
+    "cols": 1,
+    "origin": { "x": 0, "y": 0 },
+    "cellWidth": 4,
+    "cellHeight": 6
+  },
+  "font": {
+    "family": "Menlo",
+    "size": 6,
+    "ascent": 4,
+    "descent": 1,
+    "leading": 1,
+    "baselineFromCellTop": 5
+  },
+  "underline": {
+    "positionFromBaseline": -1,
+    "positionCoordinate": "CoreText y-up",
+    "thickness": 1,
+    "minimumThickness": 1,
+    "colorSource": "glyph.foreground"
+  },
+  "cursor": {
+    "rect": null,
+    "shape": "beam",
+    "visible": false,
+    "blinkVisible": false,
+    "focused": true,
+    "blend": "normal",
+    "color": null,
+    "border": 0
+  },
+  "glyphs": [
+    {
+      "row": 0,
+      "col": 0,
+      "width": 1,
+      "fontRuns": 2,
+      "grapheme": "A़",
+      "foreground": "#ff0000",
+      "background": "#ffffff",
+      "bounds": { "x": 1.25, "y": 1.25, "width": 1.5, "height": 2 },
+      "underline": { "rect": { "x": 0, "y": 5, "width": 4, "height": 1 } }
+    }
+  ]
+}
