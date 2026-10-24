@@ -53,17 +53,17 @@ test('make repeat names the native test of each run, reports its result and elap
 test('repeat-activation-backspace forwards its focused variant and stops at its first failed run', (t) => {
   const build = mkdtempSync(join(tmpdir(), 'soksak-native-activation-repeat-'));
   t.after(() => rmSync(build, { recursive: true }));
-  const executable = fake(build, 'image_region_ime_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "arg:$1 run:$n"; [ "$1" = "--backspace-trace" ] && [ "$n" -lt 2 ]');
+  const executable = fake(build, 'image_region_ime_test', 'counter="$0.count"; n=$(cat "$counter" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$counter"; echo "arg:$1 run:$n"; [ "$1" = "--backspace-trace-abc-baseline" ] && [ "$n" -lt 2 ]');
   const result = spawnSync('make', ['-C', native, 'repeat-activation-backspace', 'COUNT=3', `BUILD=${build}`, '-o', executable], {
     encoding: 'utf8', timeout: 60000,
   });
-  assert.match(result.stdout, /^RUN  image_region_ime_test --backspace-trace \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^PASS image_region_ime_test --backspace-trace \d+\.\d{3}s$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^FAIL image_region_ime_test --backspace-trace \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
-  assert.match(result.stdout, /^  arg:--backspace-trace run:2$/m, 'the failed run output is missing');
+  assert.match(result.stdout, /^RUN  image_region_ime_test --backspace-trace-abc-baseline \(1 running, limit 120\.000s\)$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^PASS image_region_ime_test --backspace-trace-abc-baseline \d+\.\d{3}s$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^FAIL image_region_ime_test --backspace-trace-abc-baseline \d+\.\d{3}s exit 1$/m, result.stdout + result.stderr);
+  assert.match(result.stdout, /^  arg:--backspace-trace-abc-baseline run:2$/m, 'the failed run output is missing');
   assert.equal(result.stdout.split('\n').filter((line) => line.startsWith('RUN  image_region_ime_test')).length, 2, result.stdout);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /FAIL: image_region_ime_test --backspace-trace run 2 of 3; /, result.stdout + result.stderr);
+  assert.match(result.stderr, /FAIL: image_region_ime_test --backspace-trace-abc-baseline run 2 of 3; /, result.stdout + result.stderr);
 });
 
 test('make repeat-suite shows the runner output of every run of the suite, and passes when each test passes', (t) => {

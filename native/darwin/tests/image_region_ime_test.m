@@ -13,6 +13,7 @@
 #import "input_inject.h"
 #import "input_source.h"
 #import "support/ime_reference_state.h"
+#import "support/ime_source_restore.h"
 #import "support/ime_wire_document.h"
 #import "support/records.h"
 #import "webview_geometry.h"
@@ -27,6 +28,8 @@ static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
+
+static BOOL pumpUntil(BOOL (^done)(void), NSDate *deadline);
 
 static NSMutableArray<NSDictionary *> *events = nil;
 
@@ -54,6 +57,64 @@ static NSString *currentSourceID(void) {
     NSString *result = identifier ? [NSString stringWithUTF8String:identifier] : nil;
     free(identifier);
     return result;
+}
+
+static BOOL selectAndAwaitInputSource(NSString *source, NSDate *deadline) {
+    if (!sp_input_source_select(source.UTF8String)) return NO;
+    __block BOOL answered = NO;
+    __block NSString *reason = nil;
+    sp_input_source_await(source.UTF8String, ^(const char *error) {
+        answered = YES;
+        reason = error ? [NSString stringWithUTF8String:error] : nil;
+    });
+    if (!pumpUntil(^BOOL { return answered; }, deadline) || reason) return NO;
+    return [currentSourceID() isEqualToString:source];
+}
+
+static NSArray<NSString *> *outerStateRestoreErrors(NSString *outerSource, NSRunningApplication *outerApplication,
+    NSDate *deadline) {
+    pid_t outerPID = outerApplication.processIdentifier;
+    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, deadline); };
+    SPIMEReadSource readSource = ^NSString * { return currentSourceID(); };
+    SPIMEActivateProcess activate = ^BOOL(pid_t processIdentifier) {
+        if (!outerApplication || outerApplication.processIdentifier != processIdentifier) return NO;
+        if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier) return YES;
+        return [outerApplication activateWithOptions:0]
+            && pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier; }, deadline);
+    };
+    SPIMEReadFrontmostProcess readFrontmost = ^pid_t { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier; };
+    NSMutableArray<NSString *> *errors = [NSMutableArray arrayWithArray:
+        sp_ime_source_select_errors(outerSource, select, readSource)];
+    [errors addObjectsFromArray:sp_ime_source_restore_errors(outerSource, outerSource, outerPID,
+        readSource, activate, readFrontmost, select)];
+    return errors;
+}
+
+static NSArray<NSString *> *baselineAndOuterRestoreErrors(NSString *baselineSource, NSString *outerSource,
+    NSRunningApplication *outerApplication, NSDate *deadline) {
+    pid_t outerPID = outerApplication.processIdentifier;
+    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, deadline); };
+    SPIMEReadSource readSource = ^NSString * { return currentSourceID(); };
+    SPIMEActivateProcess activate = ^BOOL(pid_t processIdentifier) {
+        if (!outerApplication || outerApplication.processIdentifier != processIdentifier) return NO;
+        if (NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier) return YES;
+        return [outerApplication activateWithOptions:0]
+            && pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier == processIdentifier; }, deadline);
+    };
+    SPIMEReadFrontmostProcess readFrontmost = ^pid_t { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier; };
+    return sp_ime_source_restore_errors(baselineSource, outerSource, outerPID,
+        readSource, activate, readFrontmost, select);
+}
+
+static void reportRestoreErrors(NSArray<NSString *> *errors, NSString *phase) {
+    for (NSString *error in errors) check(NO, [NSString stringWithFormat:@"%@ failed: %@", phase, error]);
+}
+
+static void closeTraceWindow(NSWindow *window, void *region, void *mainSurface) {
+    if (region) sp_region_close(region);
+    if (mainSurface) sp_surface_close(mainSurface);
+    [window close];
+    [window release];
 }
 
 // The control text view. It records the callbacks and ranges that the input method sent, unchanged.
@@ -421,24 +482,42 @@ static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void 
 void sp_test_declare_activation(void);
 
 int main(int argc, const char *argv[]) { @autoreleasepool {
-    BOOL focusedTrace = argc == 2 && strcmp(argv[1], "--backspace-trace") == 0;
+    BOOL abcBaselineTrace = argc == 2 && strcmp(argv[1], "--backspace-trace-abc-baseline") == 0;
+    BOOL focusedTrace = abcBaselineTrace;
     if (focusedTrace) traceDeadline = [NSDate dateWithTimeIntervalSinceNow:55];
+    NSString *previousSource = currentSourceID();
+    NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
     sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
     events = [NSMutableArray new];
 
-    NSString *previousSource = currentSourceID();
     if (!previousSource) {
         fprintf(stderr, "FAIL: the selected input source could not be read\n");
         return 1;
     }
-    NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
+    if (focusedTrace && (!previousApp || previousApp.processIdentifier <= 0)) {
+        fprintf(stderr, "FAIL: the original frontmost application could not be read\n");
+        return 1;
+    }
     if (focusedTrace) {
-        printf("PRECHECK: inputSource=%s frontmostPid=%d frontmostBundle=%s window=single-key-window budgetSeconds=55 cleanupSeconds=5\n",
+        printf("PRECHECK: inputSource=%s frontmostPid=%d frontmostBundle=%s abcBaseline=%d window=single-key-window budgetSeconds=55 cleanupSeconds=5\n",
             previousSource.UTF8String, previousApp.processIdentifier,
-            previousApp.bundleIdentifier.UTF8String ?: "unknown");
+            previousApp.bundleIdentifier.UTF8String ?: "unknown", abcBaselineTrace);
+    }
+    if (abcBaselineTrace) {
+        NSDate *setupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
+        NSArray<NSString *> *setupErrors = sp_ime_source_select_errors(ABC,
+            ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, setupDeadline); },
+            ^NSString * { return currentSourceID(); });
+        reportRestoreErrors(setupErrors, @"ABC baseline setup");
+        if (setupErrors.count > 0) {
+            reportRestoreErrors(outerStateRestoreErrors(previousSource, previousApp,
+                [NSDate dateWithTimeIntervalSinceNow:5]), @"outer state cleanup after baseline setup failure");
+            traceDeadline = nil;
+            return 1;
+        }
     }
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
@@ -449,30 +528,48 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
     [window.contentView addSubview:main];
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     [window.contentView addSubview:surface];
-    check(sp_surface_create(main) != NULL, @"the main webview creates the composition");
+    void *mainSurface = sp_surface_create(main);
+    check(mainSurface != NULL, @"the main webview creates the composition");
     webviewAttachSurface(surface, main);
     webviewSetFrame(surface, 0, 0, 500, 400);
     void *region = sp_region_create(surface, "ime", regionEvent, NULL);
     sp_region_place(region, 10, 10, 10, 10, true);
 
+    if (abcBaselineTrace) {
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        check(pump(^BOOL { return NSApp.isActive && window.isKeyWindow; }),
+            @"the IME test window becomes the key window from the ABC baseline");
+        sp_region_focus(region);
+        check(window.firstResponder == (NSResponder *)region,
+            @"the image region becomes first responder before selecting Korean 2-Set");
+    }
     if (!sp_input_source_select(KOREAN_2SET.UTF8String)) {
         fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
         if (focusedTrace) {
-            sp_region_close(region);
-            [window close];
-            [window release];
-            if (previousApp) [previousApp activateWithOptions:0];
+            NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
+            closeTraceWindow(window, region, mainSurface);
+            if (abcBaselineTrace) {
+                reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp, cleanupDeadline),
+                    @"outer state cleanup after Korean source selection failure");
+            } else {
+                reportRestoreErrors(outerStateRestoreErrors(previousSource, previousApp, cleanupDeadline),
+                    @"outer state cleanup after Korean source selection failure");
+            }
+            traceDeadline = nil;
             return 1;
         }
         return 1;
     }
     check(pump(^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; }),
         [NSString stringWithFormat:@"Korean 2-Set is the current input source (got %@)", currentSourceID()]);
-    [NSApp activateIgnoringOtherApps:YES];
-    [window makeKeyAndOrderFront:nil];
-    check(pump(^BOOL { return NSApp.isActive && window.isKeyWindow; }), @"the test window becomes the key window");
-    sp_region_focus(region);
-    check(window.firstResponder == (NSResponder *)region, @"the image region is the first responder");
+    if (!abcBaselineTrace) {
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        check(pump(^BOOL { return NSApp.isActive && window.isKeyWindow; }), @"the test window becomes the key window");
+        sp_region_focus(region);
+        check(window.firstResponder == (NSResponder *)region, @"the image region is the first responder");
+    }
     // Waits until the input context of the region has selected Korean 2-set before sending keys.
     NSTextInputContext *context = ((NSView *)region).inputContext;
     check(pump(^BOOL { return NSTextInputContext.currentInputContext == context
@@ -492,21 +589,28 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
         backspaceTrace(window, control, region);
         traceDeadline = nil;
         NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
-        check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
-        check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
-            @"the previous input source is active before cleanup ends");
-        sp_region_close(region);
-        [window close];
-        [window release];
-        if (previousApp) {
-            [previousApp activateWithOptions:0];
-            check(pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
-                == previousApp.processIdentifier; }, cleanupDeadline),
-                @"the frontmost application is restored before cleanup ends");
+        if (abcBaselineTrace) {
+            reportRestoreErrors(sp_ime_source_select_errors(ABC,
+                ^BOOL(NSString *source) { return selectAndAwaitInputSource(source, cleanupDeadline); },
+                ^NSString * { return currentSourceID(); }), @"ABC baseline setup before outer restoration");
+            closeTraceWindow(window, region, mainSurface);
+            reportRestoreErrors(baselineAndOuterRestoreErrors(ABC, previousSource, previousApp, cleanupDeadline),
+                @"baseline and outer state restoration");
+        } else {
+            check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
+            check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
+                @"the previous input source is active before cleanup ends");
+            closeTraceWindow(window, region, mainSurface);
+            if (previousApp) {
+                [previousApp activateWithOptions:0];
+                check(pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
+                    == previousApp.processIdentifier; }, cleanupDeadline),
+                    @"the frontmost application is restored before cleanup ends");
+            }
+            check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
+                [NSString stringWithFormat:@"the previous input source is active after the frontmost application is restored (got %@)",
+                    currentSourceID()]);
         }
-        check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
-            [NSString stringWithFormat:@"the previous input source is active after the frontmost application is restored (got %@)",
-                currentSourceID()]);
         return failures ? 1 : 0;
     }
     NSUInteger (^controlAnswered)(void) = ^NSUInteger {

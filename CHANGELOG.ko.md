@@ -4,10 +4,16 @@
 
 ## 미배포
 
+- F239-47-8: Focused native repeat이 Korean 2-Set 입력 전에 ABC input-source
+  baseline을 설정하고 확인하도록 한다. Cleanup은 outer app을 복원하고 ABC를
+  확인한 뒤 원래 source와 app을 복원·확인한다. 제어된 native test는 복원 순서와
+  source 선택 및 app 활성화 오류 보고를 검증한다. 이 모드의 activation repeat은
+  아직 실행하지 않았다.
+
 - F239-47-8: Focused native input-source 복원 검사를 위한 추적 repeat target을
-  추가한다. 기존 native `repeat` target은 `--backspace-trace` 인자를 전달하지
-  못한다. `repeat-activation-backspace`는 여덟 번의 k, Backspace, Space 전체
-  검사를 별도 child process로 실행하고 각 결과를 기록하며 첫 실패에서 멈춘다.
+  추가한다. 기존 native `repeat` target은 focused 인자를 전달하지 못한다.
+  `repeat-activation-backspace`는 여덟 번의 k, Backspace, Space 전체 검사를 별도 child
+  process로 실행하고 각 결과를 기록하며 첫 실패에서 멈춘다.
   Owning test는 제어된 실행 파일로 인자 전달과 첫 실패 중단을 검증한다. IME
   acceptance run은 아직 실행하지 않았다.
 

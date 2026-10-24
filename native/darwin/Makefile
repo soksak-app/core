@@ -66,7 +66,9 @@
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
 #   make repeat-activation-backspace COUNT=<n>
-#                         runs the focused eight-k, Backspace and Space activation target in separate processes, stopping at the first failure
+#                         runs the focused ABC-baseline eight-k, Backspace and Space activation target in separate processes, stopping at the first failure
+#   make test-ime-source-restoration
+#                         checks the input-source baseline setup and cleanup ordering with controlled callbacks; it does not activate
 #   make repeat-suite COUNT=<n>
 #                         runs the whole test target n times in a row and reports the run number and the system load at the first failure
 
@@ -86,7 +88,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace test-activation-backspace-reference test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -241,6 +243,7 @@ NATIVE_TESTS = observe_test \
   document_press_test \
   image_region_test \
   ime_reference_state_test \
+  ime_source_restore_test \
   ime_wire_document_test \
   input_source_test \
   clipboard_test \
@@ -294,23 +297,32 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 test-view-focus-restore: $(BUILD)/view_focus_test
 	@$(BUILD)/view_focus_test --frontmost-restore-test
 
-# Focused Korean IME comparison. This activates the application, changes the selected input source,
-# and sends eight k keys, Backspace, and Space to an AppKit reference and an image region in one window.
+# Focused Korean IME comparison. This records the outer input source and frontmost application, establishes ABC,
+# activates the test application, selects Korean 2-set, and sends eight k keys, Backspace, and Space to an AppKit reference and an image region.
 # Run only with approval for an activation-tier input check.
 test-activation-backspace: $(BUILD)/image_region_ime_test
-	@$(BUILD)/image_region_ime_test --backspace-trace
+	@$(BUILD)/image_region_ime_test --backspace-trace-abc-baseline
 
 # Repeat only the focused activation variant. The generic repeat target cannot pass arguments to its executable.
 repeat-activation-backspace: $(BUILD)/image_region_ime_test
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-activation-backspace requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
-	  echo "START: image_region_ime_test --backspace-trace run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace || { echo "FAIL: image_region_ime_test --backspace-trace run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
+	  echo "START: image_region_ime_test --backspace-trace-abc-baseline run $$i of $(COUNT)"; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace-abc-baseline || { echo "FAIL: image_region_ime_test --backspace-trace-abc-baseline run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
-	done; echo "PASS: image_region_ime_test --backspace-trace passed $(COUNT) consecutive runs"
+	done; echo "PASS: image_region_ime_test --backspace-trace-abc-baseline passed $(COUNT) consecutive runs"
 
 test-activation-backspace-reference: $(BUILD)/ime_reference_state_test
 	@$(BUILD)/ime_reference_state_test
+
+test-ime-source-restoration: $(BUILD)/ime_source_restore_test
+	@$(BUILD)/ime_source_restore_test
+
+$(BUILD)/image_region_ime_test: tests/image_region_ime_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
+	@clang $(CFLAGS) -DVIEW_PAGE_CASES='"$(VIEW_PAGE_CASES)"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/no_activation.m tests/support/records.m tests/support/temporary_folder.m tests/support/view_import_map.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
+$(BUILD)/ime_source_restore_test: tests/ime_source_restore_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
+	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
 test-ime-wire-document: $(BUILD)/ime_wire_document_test
 	@$(BUILD)/ime_wire_document_test
