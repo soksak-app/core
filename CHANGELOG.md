@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,
   so a cursor frame and preedit update can arrive without a new screen
