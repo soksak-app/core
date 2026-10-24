@@ -23,6 +23,14 @@ type PluginsRegistryRequest struct {
 	Index any `json:"index"`
 }
 
+// PluginsStarterRequest is the argument of pluginsStarter.
+type PluginsStarterRequest struct {
+	State    string   `json:"state"`
+	Pack     string   `json:"pack"`
+	Registry string   `json:"registry"`
+	Plugins  []string `json:"plugins"`
+}
+
 // PluginsChanged is the value of the plugins-changed event.
 type PluginsChanged struct {
 	Action string `json:"action"`
@@ -105,6 +113,17 @@ func (p *Plugins) UseRegistry(request PluginsRegistryRequest) (any, error) {
 	return map[string]string{"index": url}, nil
 }
 
+// SetStarter records or completes the durable starter job under the plugin-operation lock.
+func (p *Plugins) SetStarter(request PluginsStarterRequest) (*sok.StarterJob, error) {
+	if !p.running.TryLock() {
+		return nil, errPluginOperationRunning
+	}
+	defer p.running.Unlock()
+	return sok.WriteStarterJob(p.configDir, sok.StarterJobRequest{
+		State: request.State, Pack: request.Pack, Registry: request.Registry, Plugins: request.Plugins,
+	})
+}
+
 // PluginsState is the pluginsState call of the page.
 func (h *Host) PluginsState() (*sok.PluginsState, error) {
 	return h.plugins.State()
@@ -126,6 +145,15 @@ func (h *Host) PluginsUseRegistry(requestJSON json.RawMessage) (any, error) {
 		return nil, err
 	}
 	return h.plugins.UseRegistry(request)
+}
+
+// PluginsStarter is the pluginsStarter call of the page.
+func (h *Host) PluginsStarter(requestJSON json.RawMessage) (*sok.StarterJob, error) {
+	request, err := argument[PluginsStarterRequest]("request", requestJSON)
+	if err != nil {
+		return nil, err
+	}
+	return h.plugins.SetStarter(request)
 }
 
 // notifySidecars sends sidecars-changed to every window (docs/spec/installation.md).

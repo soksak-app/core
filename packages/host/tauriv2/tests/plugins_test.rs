@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest};
+use soksak_host_tauriv2::plugins::{Changed, Plugins, RegistryRequest, RunRequest, StarterRequest};
 
 /// Runs the sok command and returns its JSON output.
 fn sok_json(args: &[&str]) -> Value {
@@ -39,7 +39,7 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// The release of tests/fixtures/plugin-probe (plugin probe 0.0.20 without a sidecar) and its registry. The folder is
+/// The current release of tests/fixtures/plugin-probe and its registry. The folder is
 /// deleted when the value is dropped.
 struct Registry {
     index: String,
@@ -60,7 +60,7 @@ fn plugin_registry() -> Registry {
     let entry = json!({
         "id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
         "license": "MIT", "repository": "https://example.invalid/probe",
-        "versions": [{"version": "0.0.20", "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
+        "versions": [{"version": soksak_sok::version::CORE_VERSION, "release": {"url": format!("file://{release}"), "sha256": packed["sha256"]},
             "engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}],
     });
     write_tree(
@@ -113,7 +113,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let (plugins, _) = new_plugins(config.path());
     assert_eq!(
         state_text(&plugins),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}"#
+        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}"#
     );
     let registry = plugin_registry();
     soksak_sok::plugins::use_registry(
@@ -126,19 +126,62 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index));
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
-    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.20");
+    assert_eq!(
+        state["installed"]["plugins"]["probe"]["version"],
+        soksak_sok::version::CORE_VERSION
+    );
     assert_eq!(state["installed"]["plugins"]["probe"]["enabled"], true);
     std::fs::remove_file(&registry.index).unwrap();
     let state: Value = serde_json::from_str(&state_text(&plugins)).unwrap();
     let error = state["index"]["error"].as_str().expect("index error");
     assert!(error.contains(&registry.index), "{error}");
-    assert_eq!(state["installed"]["plugins"]["probe"]["version"], "0.0.20");
+    assert_eq!(
+        state["installed"]["plugins"]["probe"]["version"],
+        soksak_sok::version::CORE_VERSION
+    );
     std::fs::write(config.path().join("plugins/installed.json"), "{").unwrap();
     let error = plugins.state().err().expect("invalid installed.json fails");
     assert!(
         error.contains("installed.json is not valid JSON"),
         "{error}"
     );
+}
+
+#[test]
+fn plugins_starter_persists_pending_and_completed_job() {
+    let config = folder::Folder::new();
+    let registry = plugin_registry();
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &registry.index,
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .unwrap();
+    let (plugins, _) = new_plugins(config.path());
+    let starter_request = |state: &str| StarterRequest {
+        state: state.to_string(),
+        pack: "starter".to_string(),
+        registry: format!("file://{}", registry.index),
+        plugins: vec!["probe".to_string()],
+    };
+    assert_eq!(
+        plugins
+            .set_starter(starter_request("pending"))
+            .unwrap()
+            .state,
+        "pending"
+    );
+    plugins.run(request("install", json!("probe"))).unwrap();
+    assert_eq!(
+        plugins
+            .set_starter(starter_request("complete"))
+            .unwrap()
+            .state,
+        "complete"
+    );
+    assert_eq!(plugins.state().unwrap().starter.unwrap().state, "complete");
+    plugins.run(request("remove", json!("probe"))).unwrap();
+    assert_eq!(plugins.state().unwrap().starter.unwrap().state, "complete");
 }
 
 // contract: plugins.run.changes-like-the-command
@@ -154,7 +197,11 @@ fn plugins_run_changes_the_installation_like_the_command() {
     .unwrap();
     let (plugins, seen) = new_plugins(config.path());
     let installed = plugins.run(request("install", json!("probe"))).unwrap();
-    let want = r#"{"plugin":{"version":"0.0.20","path":"plugins/probe/0.0.20","enabled":true,"sidecars":{}},"sidecars":{}}"#;
+    let want = format!(
+        r#"{{"plugin":{{"version":"{}","path":"plugins/probe/{}","enabled":true,"sidecars":{{}}}},"sidecars":{{}}}}"#,
+        soksak_sok::version::CORE_VERSION,
+        soksak_sok::version::CORE_VERSION
+    );
     assert_eq!(serde_json::to_string(&installed).unwrap(), want);
     for action in ["update", "disable", "enable"] {
         plugins.run(request(action, json!("probe"))).unwrap();

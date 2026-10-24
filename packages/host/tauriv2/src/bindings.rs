@@ -842,6 +842,16 @@ fn plugins_use_registry(
     plugins.use_registry(request)
 }
 
+/// Records or completes the durable starter installation job.
+#[tauri::command(async)]
+fn plugins_starter(
+    plugins: tauri::State<'_, crate::plugins::Plugins>,
+    request: Argument<crate::plugins::StarterRequest>,
+) -> Result<soksak_sok::plugins::StarterJob, String> {
+    let Argument(request) = request;
+    plugins.set_starter(request)
+}
+
 /// Posts the tab notification of the calling window as a system notification.
 #[tauri::command(async)]
 fn notify(

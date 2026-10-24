@@ -126,10 +126,12 @@ test("a call of the main page that carries out an operation sends its identifier
     const { host } = await import("../runtime/index.js?test=main-cids");
     await host.call("windowNew", undefined, { cids: ["p1.1"] });
     await host.call("pluginsRun", { action: "install", plugin: "term" }, { cids: ["p1.2"] });
+    await host.call("pluginsStarter", { state: "pending", pack: "starter", registry: "file:///registry/index.json", plugins: ["term"] });
     await host.call("windowReady");
     assert.deepEqual(calls, [
       ["window_new", { cids: ["p1.1"] }],
       ["plugins_run", { request: { action: "install", plugin: "term" }, cids: ["p1.2"] }],
+      ["plugins_starter", { request: { state: "pending", pack: "starter", registry: "file:///registry/index.json", plugins: ["term"] } }],
       ["window_ready", {}],
     ]);
   } finally {

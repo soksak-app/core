@@ -160,7 +160,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
 #[test]
 fn plugin_install_extracts_checked_releases_and_records_the_state() {
     let platform = soksak_sok::current_platform().expect("platform");
-    let registry = plugin_versions(&["0.2.0"]);
+    let registry = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
     let index = registry.index();
     let config = Folder::new("plugins");
     let used = run_json(&["registry", "use", &index, "--config-dir", config.text()]);
@@ -401,7 +401,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     let config = Folder::new("plugins");
     assert_eq!(
         state_json(&config),
-        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}"#
+        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -434,6 +434,141 @@ fn plugins_state_reports_the_registry_and_the_installation() {
         error.contains("installed.json is not valid JSON"),
         "{error}"
     );
+}
+
+#[test]
+fn plugins_state_reads_and_rejects_invalid_starter_job() {
+    let config = Folder::new("plugins");
+    let path = config.path().join("plugins/starter.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        r#"{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        state_json(&config),
+        r#"{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}"#
+    );
+    for invalid in [
+        r#"{"format":2,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha"]}"#,
+        r#"{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","alpha"]}"#,
+        r#"{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha"],"extra":true}"#,
+        r#"{"format":1,"state":"pending","pack":"starter","registry":"sok://registry","plugins":["alpha"]}"#,
+    ] {
+        std::fs::write(&path, invalid).unwrap();
+        let error = soksak_sok::plugins::read_plugins_state(config.path())
+            .err()
+            .expect("invalid starter job fails");
+        assert!(error.contains(&path.display().to_string()), "{error}");
+    }
+}
+
+#[test]
+fn starter_job_transitions_are_durable_and_bound_to_the_snapshot() {
+    use soksak_sok::plugins::{StarterJobRequest, write_starter_job};
+
+    let config = Folder::new("plugins");
+    let registry = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
+    run_json(&[
+        "registry",
+        "use",
+        &registry.index(),
+        "--config-dir",
+        config.text(),
+    ]);
+    let request = StarterJobRequest {
+        state: "pending".into(),
+        pack: "starter".into(),
+        registry: format!("file://{}", registry.index()),
+        plugins: vec!["probe".into()],
+    };
+    let job = write_starter_job(config.path(), request.clone()).expect("pending job");
+    assert_eq!(job.state, "pending");
+    let path = config.path().join("plugins/starter.json");
+    let before = read_text(&path);
+    let mut wrong = request.clone();
+    wrong.state = "complete".into();
+    wrong.plugins = vec!["other".into()];
+    assert!(write_starter_job(config.path(), wrong).is_err());
+    assert_eq!(read_text(&path), before);
+
+    let complete = StarterJobRequest {
+        state: "complete".into(),
+        ..request.clone()
+    };
+    assert!(write_starter_job(config.path(), complete.clone()).is_err());
+    let platform = soksak_sok::current_platform().expect("platform");
+    soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "install",
+        "probe",
+        soksak_sok::version::CORE_VERSION,
+        &platform,
+    )
+    .expect("install starter plugin");
+    let resumed_state =
+        soksak_sok::plugins::read_plugins_state(config.path()).expect("restart state");
+    assert!(!resumed_state.first_run);
+    assert_eq!(resumed_state.starter.expect("pending job").state, "pending");
+    let other = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &other.index(),
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .expect("change registry");
+    assert!(write_starter_job(config.path(), complete.clone()).is_err());
+    assert_eq!(read_text(&path), before);
+    soksak_sok::plugins::use_registry(
+        config.path(),
+        &request.registry,
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .expect("restore registry");
+    soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "disable",
+        "probe",
+        soksak_sok::version::CORE_VERSION,
+        "",
+    )
+    .expect("disable starter plugin");
+    assert_eq!(
+        write_starter_job(config.path(), complete.clone())
+            .unwrap()
+            .state,
+        "complete"
+    );
+    assert_eq!(
+        write_starter_job(config.path(), complete).unwrap().state,
+        "complete"
+    );
+    assert!(write_starter_job(config.path(), request).is_err());
+
+    let legacy = Folder::new("plugins");
+    soksak_sok::plugins::use_registry(
+        legacy.path(),
+        &registry.index(),
+        &soksak_sok::fetch::Fetcher::default(),
+    )
+    .expect("configure legacy profile");
+    soksak_sok::plugins::run_plugin_action(
+        legacy.path(),
+        "install",
+        "probe",
+        soksak_sok::version::CORE_VERSION,
+        &platform,
+    )
+    .expect("install legacy plugin");
+    let pending = StarterJobRequest {
+        state: "pending".into(),
+        pack: "starter".into(),
+        registry: format!("file://{}", registry.index()),
+        plugins: vec!["probe".into()],
+    };
+    assert!(write_starter_job(legacy.path(), pending).is_err());
+    assert!(!legacy.path().join("plugins/starter.json").exists());
 }
 
 // contract: cli.plugin.action-runs-the-command

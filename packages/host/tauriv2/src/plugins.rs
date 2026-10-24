@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, TryLockError};
 
 use serde_json::Value;
-use soksak_sok::plugins::{self, PluginActionResult, PluginsState};
+use soksak_sok::plugins::{self, PluginActionResult, PluginsState, StarterJob, StarterJobRequest};
 
 /// The arguments of the pluginsRun call. plugin is received without a fixed type so that a value that is not a string
 /// is rejected.
@@ -21,6 +21,15 @@ pub struct RunRequest {
 #[derive(Debug, serde::Deserialize)]
 pub struct RegistryRequest {
     pub index: Value,
+}
+
+/// The arguments of the pluginsStarter call.
+#[derive(Debug, serde::Deserialize)]
+pub struct StarterRequest {
+    pub state: String,
+    pub pack: String,
+    pub registry: String,
+    pub plugins: Vec<String>,
 }
 
 /// The value of the plugins-changed event.
@@ -89,6 +98,28 @@ impl Plugins {
             &soksak_sok::fetch::Fetcher::default(),
         )?;
         Ok(serde_json::json!({ "index": url }))
+    }
+
+    /// Records or completes the durable starter job under the plugin-operation lock.
+    pub fn set_starter(&self, request: StarterRequest) -> Result<StarterJob, String> {
+        let _running = match self.running.try_lock() {
+            Ok(guard) => guard,
+            Err(TryLockError::WouldBlock) => {
+                return Err("another plugin operation is running".to_string());
+            }
+            Err(TryLockError::Poisoned(error)) => {
+                return Err(format!("plugin operation state: {error}"));
+            }
+        };
+        plugins::write_starter_job(
+            &self.config_dir,
+            StarterJobRequest {
+                state: request.state,
+                pack: request.pack,
+                registry: request.registry,
+                plugins: request.plugins,
+            },
+        )
     }
 
     /// Runs the same operation as sok plugin <action> <plugin> and returns its output.

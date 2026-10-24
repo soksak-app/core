@@ -79,6 +79,7 @@ const COMMAND = {
   debugRead: "debug_read",
   pluginsRun: "plugins_run",
   pluginsUseRegistry: "plugins_use_registry",
+  pluginsStarter: "plugins_starter",
 };
 
 // The argument names differ per command. The Rust signature determines the names.
@@ -159,6 +160,7 @@ const ARG = {
   debugRead: (request) => ({ request }),
   pluginsRun: (request) => ({ request }),
   pluginsUseRegistry: (request) => ({ request }),
+  pluginsStarter: (request) => ({ request }),
 };
 
 /**

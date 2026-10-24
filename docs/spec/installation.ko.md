@@ -107,6 +107,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | File | 소유자 | 번호 | file class |
 | --- | --- | --- | --- |
 | `plugins/installed.json` | 코어 | `format` | numbered |
+| `plugins/starter.json` | 코어 | `format` | numbered |
 | `plugins/registry.json` | 코어 | `format` | numbered |
 | `log-policy.json` | 코어 | `schema` | numbered |
 | `settings.json`, `<project root>/.soksak/settings.json` | 코어 | `format` | numbered |
@@ -141,11 +142,12 @@ Host는 시작할 때 켜진 설치 plugin의 `plugin.json` `dependencies`가 �
 
 ## 애플리케이션 안의 plugin 작업
 
-두 host는 각자 command line의 installer library(`packages/sok`)로 plugin 작업을 실행한다. 그래서 애플리케이션 안의 작업과 같은 `sok plugin` 명령은 설정 폴더를 똑같이 바꾼다. Runtime adapter는 host 호출 둘과 event 하나를 제공한다:
+두 host는 각자 command line의 installer library(`packages/sok`)로 plugin 작업을 실행한다. 그래서 애플리케이션 안의 작업과 같은 `sok plugin` 명령은 설정 폴더를 똑같이 바꾼다. Runtime adapter는 다음 host 호출과 event를 제공한다:
 
 | Host 호출 또는 event | 의미 |
 | --- | --- |
-| `pluginsState()` | `{ registry, index, installed, firstRun }`을 돌려준다. `registry`는 `plugins/registry.json`의 `index` URL이고 없으면 `null`이다. `index`는 검사한 registry index이고, registry가 없으면 `null`, 읽거나 검사하지 못하면 `{ "error": "<message>" }`다. `installed`는 `plugins/installed.json`의 내용이고, 없으면 현재 형식의 빈 installed 문서다. `firstRun`은 `plugins/installed.json`이 없는 동안 `true`다. `installed.json`을 읽지 못하면 그 message로 호출을 거부한다 |
+| `pluginsState()` | `{ registry, index, installed, firstRun, starter }`를 돌려준다. 기존 필드는 의미를 유지한다. `starter`는 starter job이 없으면 `null`, 있으면 현재 `{ format: 1, state, pack, registry, plugins }` job이다. 상태 파일을 읽지 못하면 경로와 오류를 포함해 호출을 거부한다 |
+| `pluginsStarter({ state, pack, registry, plugins })` | `installed.json`이 없을 때만 `state: "pending"`인 starter job을 만들거나, 모든 plugin 설치 후 정확히 일치하는 pending job을 `complete`로 바꾼다. 요청한 registry URL은 설정된 registry와 같아야 한다. 기존 job은 같은 pack, registry, 순서가 같은 plugin 목록만 허용하며 다른 전이는 두 상태 파일을 바꾸지 않고 거부한다. 같은 pending 또는 complete 요청은 반복해도 결과가 같고, complete job을 pending으로 되돌릴 수 없다. Complete는 나열된 plugin이 모두 `installed.json`에 있어야 하며 enabled 여부는 요구하지 않는다. Host는 다른 plugin 작업과 이 호출을 직렬화하고 파일을 원자적으로 교체한다. 쓰기가 실패하면 caller는 job 시작이나 완료를 진행하지 않는다 |
 | `pluginsRun({ action, plugin })` | Plugin id에 대해 `install`, `update`, `remove`, `enable`, `disable`을 애플리케이션의 core version과 platform으로 실행하고, 같은 `sok plugin` 명령의 출력을 돌려준다. 다른 `action`이나 비어 있지 않은 문자열이 아닌 plugin id는 아무것도 바꾸지 않고 호출을 거부한다. 실패한 작업은 같은 명령의 message로 호출을 거부하고, `installed.json`은 그 명령이 정한 대로 남는다 |
 | `pluginsUseRegistry({ index })` | `sok registry use <index>`처럼 registry index를 정하고 그 출력 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다 |
 | `plugins-changed` | `pluginsRun`이 `installed.json`을 바꾼 뒤 모든 창에 `{ action, plugin }`과 함께 보낸다 |
@@ -211,5 +213,8 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 ## 첫 실행
 
-`environment.json`의 `starter`가 starter pack을 정한다. 창이 시작할 때 `pluginsState`가 `firstRun`을 보고하면, workbench는 space를 만들기 전에 registry index에서 그 pack의 모든 plugin을 pack의 순서대로 `pluginsRun`으로 설치하고, 설치한 plugin을 불러오도록 page를 다시 불러온다. 첫 설치가 `installed.json`을 쓰므로, 이후의 시작은 모든 plugin을 지운 뒤라도 아무것도 설치하지 않는다. `environment.json`이 `registry`에 기본 registry를 정하고 `pluginsState`가 registry가 없다고 보고하면, workbench는 먼저 `pluginsUseRegistry`로 그 registry를 정하고 상태를 다시 읽는다. 두 registry가 모두 없으면 창은 plugin 없이 시작하고 `first run: no registry is set; the starter pack <name> was not installed`를 기록하며, plugin이 없는 창이 그 이유를 밝히도록 애플리케이션 오류 `플러그인 레지스트리가 없어 시작 플러그인 묶음 <name>을 설치하지 못했습니다. sok registry use 로 레지스트리를 정한 뒤 다시 시작하세요.`를 보인다. 애플리케이션은 network 없이도 시작한다. 기본 registry를 정하지 못하거나, registry index를 읽지 못하거나, index에 그 pack이 없거나, pack의 plugin 설치가 실패하면, 창은 설치하지 못한 plugin 없이 시작하고 `first run: the starter pack <name> was not installed: <error>`를 기록하며 애플리케이션 오류 `시작 플러그인 묶음 <name>을 설치하지 못했습니다 · <error>. 연결된 뒤 다시 시작하면 다시 설치합니다.`를 보인다. `installed.json`을 쓰지 않은 시작은 다시 첫 실행이므로 다음 시작이 pack을 설치한다. `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.
+`environment.json`의 `starter`가 starter pack을 정한다. `plugins/installed.json`과 starter job이 모두 없는 첫 실행에서 workbench는 첫 plugin을 설치하기 전에 pack 이름, 현재 registry URL, 순서가 있는 plugin ID를 `plugins/starter.json`의 pending job으로 기록한다. 파일은 `{ "format": 1, "state": "pending" | "complete", "pack": "<name>", "registry": "<url>", "plugins": ["<id>", ...] }`다. `format`은 1이어야 하고 state는 `pending` 또는 `complete`여야 한다. pack, registry, 각 plugin ID는 비어 있지 않은 문자열이어야 하며 plugin ID는 중복되지 않고 순서를 유지한다. 다른 field는 허용하지 않는다. Reader는 잘못된 field나 값을 file과 함께 보고한다. 파일이 없으면 pending job이 없는 상태이며 `installed.json`에서 변환하지 않는다.
 
+각 `pluginsRun` 성공은 다음 plugin을 시작하기 전에 installed 상태를 쓴다. 설치가 실패하면 job을 pending으로 남기며, 재시작은 pending job의 installed 상태에 없는 ID만 재개한다. 모든 ID가 설치되면 일치하는 job을 complete로 바꾸고, 설치가 `installed.json`을 바꾼 경우 page를 다시 불러와 plugin을 로드한다. 완료된 job은 다시 강제하지 않으므로 사용자가 나중에 plugin을 제거하거나 끈 선택을 보존한다. Pending job은 저장된 pack과 plugin 목록을 재개하며 registry URL은 현재 설정과 같아야 한다. Registry가 다르면 job을 pending으로 두고, 설정 registry를 바꾸거나 다른 index에서 설치하지 않은 채 오류를 보고한다.
+
+`installed.json`은 있지만 job 파일이 없는 상태는 대기 job이 없다는 뜻이며 starter 설치를 시작하지 않는다. 기존 profile에서 사용자가 제거한 plugin을 다시 설치하지 않는다. 이 job 계약 전에 생긴 부분 starter 설치는 설치 완료 뒤 사용자가 plugin을 제거한 상태와 구분할 수 없으므로 자동 복구하지 않는다. `environment.json`이 `registry`에 기본 registry를 정하고 `pluginsState`가 registry가 없다고 보고하면 workbench는 먼저 `pluginsUseRegistry`로 registry를 정하고 상태를 다시 읽는다. Registry가 없거나 registry index 또는 starter pack을 읽지 못하면 window는 pack을 설치하지 않고 `first run: the starter pack <name> was not installed: <error>`를 기록하며 애플리케이션 오류 `시작 플러그인 묶음 <name>을 설치하지 못했습니다 · <error>. 연결된 뒤 다시 시작하면 다시 설치합니다.`를 보인다. Job을 만들지 않았으므로 다음 first run에서 다시 시도할 수 있다. Pending job을 기록한 뒤 plugin 설치가 실패해도 같은 message를 보이고 다음 시작에 pending job을 재개한다(`installed.json`이 있어도 재개한다). `starter`가 없는 environment나 host가 없는 환경은 아무것도 설치하지 않는다.

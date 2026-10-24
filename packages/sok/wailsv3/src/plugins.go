@@ -24,6 +24,11 @@ import (
 // installations read.
 const RegistryFile = "plugins/registry.json"
 
+// StarterJobFile stores the pending or completed first-run starter installation.
+const StarterJobFile = "plugins/starter.json"
+
+const StarterJobFormat = 1
+
 // configDirOf is --config-dir or the configuration directory of this application.
 func configDirOf(values map[string]string, options Options) (string, error) {
 	if dir, ok := values["config-dir"]; ok {
@@ -156,7 +161,25 @@ type PluginsState struct {
 	Index     any             `json:"index"`
 	Installed *InstalledState `json:"installed"`
 	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
-	FirstRun bool `json:"firstRun"`
+	FirstRun bool        `json:"firstRun"`
+	Starter  *StarterJob `json:"starter"`
+}
+
+// StarterJob is the durable snapshot of a starter pack installation.
+type StarterJob struct {
+	Format   int      `json:"format"`
+	State    string   `json:"state"`
+	Pack     string   `json:"pack"`
+	Registry string   `json:"registry"`
+	Plugins  []string `json:"plugins"`
+}
+
+// StarterJobRequest is the requested state transition of pluginsStarter.
+type StarterJobRequest struct {
+	State    string   `json:"state"`
+	Pack     string   `json:"pack"`
+	Registry string   `json:"registry"`
+	Plugins  []string `json:"plugins"`
 }
 
 // ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
@@ -166,12 +189,16 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 	if err != nil {
 		return nil, err
 	}
+	starter, err := ReadStarterJob(configDir)
+	if err != nil {
+		return nil, err
+	}
 	path := filepath.Join(configDir, Installed)
 	_, statErr := os.Stat(path)
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fileError(path, statErr)
 	}
-	state := &PluginsState{Installed: installed, FirstRun: statErr != nil}
+	state := &PluginsState{Installed: installed, FirstRun: statErr != nil, Starter: starter}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:
@@ -185,6 +212,147 @@ func ReadPluginsState(configDir string) (*PluginsState, error) {
 		}
 	}
 	return state, nil
+}
+
+// ValidateStarterJob checks the current on-disk starter job form.
+func ValidateStarterJob(value any) (*StarterJob, error) {
+	root, err := object(StarterJobFile, value)
+	if err != nil {
+		return nil, err
+	}
+	if err := only(StarterJobFile, root, "format", "state", "pack", "registry", "plugins"); err != nil {
+		return nil, err
+	}
+	if format, ok := root["format"].(json.Number); !ok || format.String() != "1" {
+		return nil, fmt.Errorf("%s: format must be %d", StarterJobFile, StarterJobFormat)
+	}
+	state, ok := text(root["state"])
+	if !ok || state != "pending" && state != "complete" {
+		return nil, fmt.Errorf("%s state: must be pending or complete", StarterJobFile)
+	}
+	pack, ok := text(root["pack"])
+	if !ok {
+		return nil, fmt.Errorf("%s pack: must be a non-empty string", StarterJobFile)
+	}
+	registry, ok := text(root["registry"])
+	if !ok {
+		return nil, fmt.Errorf("%s registry: must be a non-empty URL", StarterJobFile)
+	}
+	if err := CheckLocation(registry); err != nil {
+		return nil, fmt.Errorf("%s registry: %w", StarterJobFile, err)
+	}
+	values, err := array(StarterJobFile+" plugins", root["plugins"])
+	if err != nil {
+		return nil, err
+	}
+	plugins := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		id, ok := value.(string)
+		if !ok || !isIdentifier(id) {
+			return nil, fmt.Errorf("%s plugins: id must be a lowercase identifier", StarterJobFile)
+		}
+		if _, ok := seen[id]; ok {
+			return nil, fmt.Errorf("%s plugins: duplicate id %s", StarterJobFile, id)
+		}
+		seen[id] = struct{}{}
+		plugins = append(plugins, id)
+	}
+	return &StarterJob{Format: StarterJobFormat, State: state, Pack: pack, Registry: registry, Plugins: plugins}, nil
+}
+
+// ReadStarterJob reads the durable starter job. Absence means no pending or completed job.
+func ReadStarterJob(configDir string) (*StarterJob, error) {
+	path := filepath.Join(configDir, StarterJobFile)
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fileError(path, err)
+	}
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s is not valid JSON", path)
+	}
+	job, err := ValidateStarterJob(value)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return job, nil
+}
+
+// WriteStarterJob creates a starter snapshot or completes that exact snapshot.
+func WriteStarterJob(configDir string, request StarterJobRequest) (*StarterJob, error) {
+	requestBytes, err := json.Marshal(map[string]any{"format": StarterJobFormat, "state": request.State, "pack": request.Pack, "registry": request.Registry, "plugins": request.Plugins})
+	if err != nil {
+		return nil, err
+	}
+	requestValue, err := DecodeJSON(requestBytes)
+	if err != nil {
+		return nil, err
+	}
+	requested, err := ValidateStarterJob(requestValue)
+	if err != nil {
+		return nil, err
+	}
+	registry, exists, err := readRegistryURL(configDir)
+	if err != nil {
+		return nil, err
+	}
+	if !exists || registry != requested.Registry {
+		return nil, errors.New("starter job registry does not match the current registry")
+	}
+	existing, err := ReadStarterJob(configDir)
+	if err != nil {
+		return nil, err
+	}
+	installed, err := ReadInstalled(configDir)
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(configDir, StarterJobFile)
+	if existing == nil {
+		if requested.State != "pending" {
+			return nil, errors.New("starter job can only start as pending")
+		}
+		if _, err := os.Stat(filepath.Join(configDir, Installed)); err == nil {
+			return nil, errors.New("starter job cannot start after plugin installation has begun")
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, fileError(filepath.Join(configDir, Installed), err)
+		}
+	} else {
+		if existing.Pack != requested.Pack || existing.Registry != requested.Registry || !slices.Equal(existing.Plugins, requested.Plugins) {
+			return nil, errors.New("starter job request does not match the stored snapshot")
+		}
+		if existing.State == "complete" {
+			if requested.State == "complete" {
+				return existing, nil
+			}
+			return nil, errors.New("completed starter job cannot be reset")
+		}
+		if requested.State == "pending" {
+			return existing, nil
+		}
+	}
+	if requested.State == "complete" {
+		for _, id := range requested.Plugins {
+			if _, ok := installed.Plugins[id]; !ok {
+				return nil, fmt.Errorf("starter job cannot complete: plugin %s is not installed", id)
+			}
+		}
+	}
+	var out bytes.Buffer
+	if err := printJSON(&out, requested); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fileError(filepath.Dir(path), err)
+	}
+	if err := replaceFile(path, out.Bytes()); err != nil {
+		return nil, err
+	}
+	return requested, nil
 }
 
 // RunPluginAction runs the same operation as sok plugin <action> <id> and returns its output. action is one of install,

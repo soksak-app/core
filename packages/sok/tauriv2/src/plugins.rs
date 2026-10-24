@@ -22,6 +22,9 @@ use crate::{Error, Options, config_dir_of};
 
 /// The file in the configuration folder that holds the address of the registry index that installation reads.
 pub const REGISTRY_FILE: &str = "plugins/registry.json";
+/// The file in the configuration folder that holds the first-run starter job.
+pub const STARTER_JOB_FILE: &str = "plugins/starter.json";
+pub const STARTER_JOB_FORMAT: u64 = 1;
 
 /// An absolute `file:` URL. Path characters that have a meaning in a URL, and spaces, are written as %XX.
 fn file_url(path: &Path) -> Result<String, String> {
@@ -135,6 +138,26 @@ pub struct PluginsState {
     /// True when plugins/installed.json does not exist. The application installs the starter pack then.
     #[serde(rename = "firstRun")]
     pub first_run: bool,
+    pub starter: Option<StarterJob>,
+}
+
+/// The durable snapshot of a starter pack installation.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct StarterJob {
+    pub format: u64,
+    pub state: String,
+    pub pack: String,
+    pub registry: String,
+    pub plugins: Vec<String>,
+}
+
+/// The requested state transition of pluginsStarter.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct StarterJobRequest {
+    pub state: String,
+    pub pack: String,
+    pub registry: String,
+    pub plugins: Vec<String>,
 }
 
 /// Missing when there is no registry, Checked when the index was read and checked, and the error when it could not be read or checked.
@@ -150,6 +173,7 @@ pub enum IndexState {
 /// field, and when the installation state cannot be read, the function fails.
 pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
     let installed = read_installed(config_dir)?;
+    let starter = read_starter_job(config_dir)?;
     let first_run = !config_dir
         .join(INSTALLED)
         .try_exists()
@@ -170,7 +194,158 @@ pub fn read_plugins_state(config_dir: &Path) -> Result<PluginsState, String> {
         index,
         installed,
         first_run,
+        starter,
     })
+}
+
+/// Reads the durable starter job. Absence means that there is no pending or completed job.
+pub fn read_starter_job(config_dir: &Path) -> Result<Option<StarterJob>, String> {
+    let path = config_dir.join(STARTER_JOB_FILE);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
+    };
+    let value: Value = serde_json::from_slice(&bytes)
+        .map_err(|_| format!("{} is not valid JSON", path.display()))?;
+    validate_starter_job(&value)
+        .map(Some)
+        .map_err(|error| format!("{}: {error}", path.display()))
+}
+
+/// Checks the current on-disk starter job form.
+pub fn validate_starter_job(value: &Value) -> Result<StarterJob, String> {
+    let root = value
+        .as_object()
+        .ok_or_else(|| format!("{STARTER_JOB_FILE}: expected object"))?;
+    if root.len() != 5
+        || root
+            .keys()
+            .any(|key| !["format", "state", "pack", "registry", "plugins"].contains(&key.as_str()))
+    {
+        return Err(format!(
+            "{STARTER_JOB_FILE}: expected only format, state, pack, registry and plugins"
+        ));
+    }
+    if root.get("format").and_then(Value::as_u64) != Some(STARTER_JOB_FORMAT) {
+        return Err(format!(
+            "{STARTER_JOB_FILE}: format must be {STARTER_JOB_FORMAT}"
+        ));
+    }
+    let state = root
+        .get("state")
+        .and_then(Value::as_str)
+        .filter(|state| *state == "pending" || *state == "complete")
+        .ok_or_else(|| format!("{STARTER_JOB_FILE} state: must be pending or complete"))?;
+    let pack = root
+        .get("pack")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{STARTER_JOB_FILE} pack: must be a non-empty string"))?;
+    let registry = root
+        .get("registry")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{STARTER_JOB_FILE} registry: must be a non-empty URL"))?;
+    check_location(registry).map_err(|error| format!("{STARTER_JOB_FILE} registry: {error}"))?;
+    let values = root
+        .get("plugins")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{STARTER_JOB_FILE} plugins: expected array"))?;
+    let mut plugins = Vec::with_capacity(values.len());
+    let mut seen = BTreeSet::new();
+    for value in values {
+        let id = value
+            .as_str()
+            .filter(|id| crate::install::is_identifier(id))
+            .ok_or_else(|| {
+                format!("{STARTER_JOB_FILE} plugins: id must be a lowercase identifier")
+            })?;
+        if !seen.insert(id) {
+            return Err(format!("{STARTER_JOB_FILE} plugins: duplicate id {id}"));
+        }
+        plugins.push(id.to_string());
+    }
+    Ok(StarterJob {
+        format: STARTER_JOB_FORMAT,
+        state: state.to_string(),
+        pack: pack.to_string(),
+        registry: registry.to_string(),
+        plugins,
+    })
+}
+
+/// Creates a starter snapshot or completes that exact snapshot.
+pub fn write_starter_job(
+    config_dir: &Path,
+    request: StarterJobRequest,
+) -> Result<StarterJob, String> {
+    let request_value = serde_json::to_value(&request).map_err(|error| error.to_string())?;
+    let mut request_object = request_value
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "starter job request must be an object".to_string())?;
+    request_object.insert("format".to_string(), json!(STARTER_JOB_FORMAT));
+    let requested = validate_starter_job(&Value::Object(request_object))?;
+    let current_registry = read_registry_url(config_dir)?;
+    if current_registry.as_deref() != Some(requested.registry.as_str()) {
+        return Err("starter job registry does not match the current registry".to_string());
+    }
+    let existing = read_starter_job(config_dir)?;
+    let installed = read_installed(config_dir)?;
+    let path = config_dir.join(STARTER_JOB_FILE);
+    match existing.as_ref() {
+        None => {
+            if requested.state != "pending" {
+                return Err("starter job can only start as pending".to_string());
+            }
+            match config_dir.join(INSTALLED).try_exists() {
+                Ok(false) => {}
+                Ok(true) => {
+                    return Err(
+                        "starter job cannot start after plugin installation has begun".to_string(),
+                    );
+                }
+                Err(error) => {
+                    return Err(crate::files::file_error(
+                        config_dir.join(INSTALLED).display(),
+                        &error,
+                    ));
+                }
+            }
+        }
+        Some(existing) => {
+            if existing.pack != requested.pack
+                || existing.registry != requested.registry
+                || existing.plugins != requested.plugins
+            {
+                return Err("starter job request does not match the stored snapshot".to_string());
+            }
+            if existing.state == "complete" {
+                if requested.state == "complete" {
+                    return Ok(existing.clone());
+                }
+                return Err("completed starter job cannot be reset".to_string());
+            }
+            if requested.state == "pending" {
+                return Ok(existing.clone());
+            }
+        }
+    }
+    if requested.state == "complete" {
+        for id in &requested.plugins {
+            if !installed.plugins.contains_key(id) {
+                return Err(format!(
+                    "starter job cannot complete: plugin {id} is not installed"
+                ));
+            }
+        }
+    }
+    let mut out = vec![];
+    print_json(&mut out, &requested)?;
+    create_parent(&path)?;
+    replace_file(&path, &out)?;
+    Ok(requested)
 }
 
 /// The output of sok plugin <action> <id>. install and update output the installation result, and the others output a plugin entry or null.

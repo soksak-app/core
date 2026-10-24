@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -100,7 +101,7 @@ func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	index := pluginVersions(t, "0.2.0")
+	index := pluginVersionsFor(t, sok.CoreVersion, "0.2.0")
 	config := t.TempDir()
 	if result := runJSON(t, "registry", "use", index, "--config-dir", config); result["index"] != "file://"+index {
 		t.Fatalf("registry use %v", result)
@@ -296,7 +297,7 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateJSON(t, config); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
@@ -332,6 +333,105 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	}
 	if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
 		t.Fatalf("state with an invalid installed.json: %v", err)
+	}
+}
+
+func TestPluginsStateReadsAndRejectsInvalidStarterJob(t *testing.T) {
+	config := t.TempDir()
+	path := filepath.Join(config, "plugins", "starter.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	job := `{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}`
+	if err := os.WriteFile(path, []byte(job), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}`
+	if got := stateJSON(t, config); got != want {
+		t.Fatalf("state with a pending starter job = %s, want %s", got, want)
+	}
+	for _, invalid := range []string{
+		`{"format":2,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha"]}`,
+		`{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","alpha"]}`,
+		`{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha"],"extra":true}`,
+		`{"format":1,"state":"pending","pack":"starter","registry":"sok://registry","plugins":["alpha"]}`,
+	} {
+		if err := os.WriteFile(path, []byte(invalid), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sok.ReadPluginsState(config); err == nil || !strings.Contains(err.Error(), filepath.Join(config, "plugins/starter.json")) {
+			t.Fatalf("state with invalid starter job %s: %v", invalid, err)
+		}
+	}
+}
+
+func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
+	config := t.TempDir()
+	index := pluginVersionsFor(t, sok.CoreVersion, "0.2.0")
+	runJSON(t, "registry", "use", index, "--config-dir", config)
+	request := sok.StarterJobRequest{State: "pending", Pack: "starter", Registry: "file://" + index, Plugins: []string{"probe"}}
+	job, err := sok.WriteStarterJob(config, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := sok.ReadPluginsState(config)
+	if err != nil || job.State != "pending" || state.Starter == nil || state.Starter.State != "pending" || state.Starter.Pack != "starter" || state.Starter.Registry != "file://"+index || !reflect.DeepEqual(state.Starter.Plugins, []string{"probe"}) {
+		t.Fatalf("pending starter job = %#v, state %#v, error %v", job, state, err)
+	}
+	path := filepath.Join(config, sok.StarterJobFile)
+	before := readText(t, path)
+	wrong := request
+	wrong.Plugins = []string{"other"}
+	if _, err := sok.WriteStarterJob(config, sok.StarterJobRequest{State: "complete", Pack: wrong.Pack, Registry: wrong.Registry, Plugins: wrong.Plugins}); err == nil {
+		t.Fatal("completion accepted a different job snapshot")
+	}
+	if got := readText(t, path); got != before {
+		t.Fatalf("mismatched completion changed starter job: %s", got)
+	}
+	if _, err := sok.RunPluginAction(config, "install", "probe", sok.CoreVersion, mustPlatform(t)); err != nil {
+		t.Fatal(err)
+	}
+	state, err = sok.ReadPluginsState(config)
+	if err != nil || state.FirstRun || state.Starter == nil || state.Starter.State != "pending" {
+		t.Fatalf("pending job after an earlier successful install = %#v, %v", state, err)
+	}
+	otherIndex := pluginVersions(t, "0.2.0")
+	if _, err := sok.UseRegistry(config, "file://"+otherIndex, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.WriteStarterJob(config, sok.StarterJobRequest{State: "complete", Pack: request.Pack, Registry: request.Registry, Plugins: request.Plugins}); err == nil {
+		t.Fatal("completion accepted a changed current registry")
+	}
+	if got := readText(t, path); got != before {
+		t.Fatalf("registry mismatch changed starter job: %s", got)
+	}
+	if _, err := sok.UseRegistry(config, request.Registry, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.RunPluginAction(config, "disable", "probe", sok.CoreVersion, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.WriteStarterJob(config, sok.StarterJobRequest{State: "complete", Pack: request.Pack, Registry: request.Registry, Plugins: request.Plugins}); err != nil {
+		t.Fatalf("completion rejected a present but disabled plugin: %v", err)
+	}
+	if state, err := sok.ReadPluginsState(config); err != nil || state.Starter == nil || state.Starter.State != "complete" {
+		t.Fatalf("completed job after read: %#v, %v", state, err)
+	}
+	if _, err := sok.WriteStarterJob(config, request); err == nil {
+		t.Fatal("a completed job was reset to pending")
+	}
+	legacy := t.TempDir()
+	if _, err := sok.UseRegistry(legacy, request.Registry, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.RunPluginAction(legacy, "install", "probe", sok.CoreVersion, mustPlatform(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.WriteStarterJob(legacy, request); err == nil {
+		t.Fatal("an existing profile without a starter job was reclassified as a first run")
+	}
+	if _, err := os.Stat(filepath.Join(legacy, sok.StarterJobFile)); !os.IsNotExist(err) {
+		t.Fatalf("legacy profile gained a starter job: %v", err)
 	}
 }
 

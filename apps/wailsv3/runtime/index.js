@@ -110,6 +110,7 @@ const METHOD = {
   debugRead: "DebugRead",
   pluginsRun: "PluginsRun",
   pluginsUseRegistry: "PluginsUseRegistry",
+  pluginsStarter: "PluginsStarter",
 };
 
 /* Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload). */

@@ -96,11 +96,13 @@ test("a call of the main page that carries out an operation sends its identifier
     const { host } = await import("../runtime/index.js?test=main-cids");
     await host.call("windowNew", undefined, { cids: ["p1.1"] });
     await host.call("pluginsRun", { action: "install", plugin: "term" }, { cids: ["p1.2"] });
+    await host.call("pluginsStarter", { state: "pending", pack: "starter", registry: "file:///registry/index.json", plugins: ["term"] });
     await host.call("windowReady");
     const service = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings.Call";
     assert.deepEqual(calls, [
       [service, "WindowNew", [], ["p1.1"]],
       [service, "PluginsRun", [{ action: "install", plugin: "term" }], ["p1.2"]],
+      [service, "PluginsStarter", [{ state: "pending", pack: "starter", registry: "file:///registry/index.json", plugins: ["term"] }], []],
       [service, "WindowReady", [], []],
     ]);
   } finally {

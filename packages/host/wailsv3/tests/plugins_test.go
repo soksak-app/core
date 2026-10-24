@@ -5,6 +5,7 @@ package host_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,16 +31,17 @@ func sokJSON(t *testing.T, args ...string) map[string]any {
 	return value
 }
 
-// pluginRegistry builds the release of fixtures/plugin-probe (the plugin probe 0.0.20 without a sidecar) and its registry, and
+// pluginRegistry builds the current release of fixtures/plugin-probe and its registry, and
 // returns the paths of index.json and the release. go test runs in the folder of the Go package, so the fixture is below it.
 func pluginRegistry(t *testing.T) (index, release string) {
 	t.Helper()
+	version := sok.CoreVersion
 	releases, registry := t.TempDir(), t.TempDir()
 	packed := sokJSON(t, "plugin", "pack", "fixtures/plugin-probe", releases)
 	release = packed["release"].(string)
 	writeInstalled(t, registry, map[string]string{
 		"plugins/probe.json": `{"id": "probe", "package": "plugin-probe", "name": "Probe", "description": "검사용 plugin.",
-			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.0.20",
+			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "` + version + `",
 			"release": {"url": "file://` + release + `", "sha256": "` + packed["sha256"].(string) + `"},
 			"engines": {"soksak": ">=0.0.1 <1.0.0"}, "sidecars": {}}]}`,
 		"revoked.json": `{"plugins": [], "sidecars": []}`,
@@ -93,7 +95,7 @@ func stateText(t *testing.T, plugins *host.Plugins) string {
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
 	plugins, _ := newPlugins(t, config)
-	if text := stateText(t, plugins); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true}` {
+	if text := stateText(t, plugins); text != `{"registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}` {
 		t.Fatalf("state without a registry %s", text)
 	}
 	index, _ := pluginRegistry(t)
@@ -116,7 +118,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	if state.Registry != "file://"+index || state.Index["plugins"].([]any)[0].(map[string]any)["id"] != "probe" {
 		t.Fatalf("state with a registry %+v", state)
 	}
-	if plugin := state.Installed.Plugins["probe"]; plugin.Version != "0.0.20" || !plugin.Enabled {
+	if plugin := state.Installed.Plugins["probe"]; plugin.Version != sok.CoreVersion || !plugin.Enabled {
 		t.Fatalf("installed %+v", state.Installed)
 	}
 	if err := os.Remove(index); err != nil {
@@ -130,6 +132,39 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	}
 	if _, err := plugins.State(); err == nil || !strings.Contains(err.Error(), "installed.json is not valid JSON") {
 		t.Fatalf("state with an invalid installed.json: %v", err)
+	}
+}
+
+func TestPluginsStarterPersistsPendingAndCompletedJob(t *testing.T) {
+	config := t.TempDir()
+	index, _ := pluginRegistry(t)
+	if _, err := sok.UseRegistry(config, index, sok.DefaultFetcher); err != nil {
+		t.Fatal(err)
+	}
+	plugins, _ := newPlugins(t, config)
+	request := host.PluginsStarterRequest{State: "pending", Pack: "starter", Registry: "file://" + index, Plugins: []string{"probe"}}
+	job, err := plugins.SetStarter(request)
+	if err != nil || job.State != "pending" {
+		t.Fatalf("pending job = %#v, %v", job, err)
+	}
+	if _, err := plugins.Run(host.PluginsRunRequest{Action: "install", Plugin: "probe"}); err != nil {
+		t.Fatal(err)
+	}
+	request.State = "complete"
+	job, err = plugins.SetStarter(request)
+	if err != nil || job.State != "complete" {
+		t.Fatalf("completed job = %#v, %v", job, err)
+	}
+	state, err := plugins.State()
+	if err != nil || state.Starter == nil || state.Starter.State != "complete" {
+		t.Fatalf("state after completion = %#v, %v", state, err)
+	}
+	if _, err := plugins.Run(host.PluginsRunRequest{Action: "remove", Plugin: "probe"}); err != nil {
+		t.Fatal(err)
+	}
+	state, err = plugins.State()
+	if err != nil || state.Starter == nil || state.Starter.State != "complete" || len(state.Installed.Plugins) != 0 {
+		t.Fatalf("manual removal changed completed starter state: %#v, %v", state, err)
 	}
 }
 
@@ -149,7 +184,7 @@ func TestPluginsRunChangesTheInstallationLikeTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"plugin":{"version":"0.0.20","path":"plugins/probe/0.0.20","enabled":true,"sidecars":{}},"sidecars":{}}`
+	want := fmt.Sprintf(`{"plugin":{"version":"%s","path":"plugins/probe/%s","enabled":true,"sidecars":{}},"sidecars":{}}`, sok.CoreVersion, sok.CoreVersion)
 	if string(data) != want {
 		t.Fatalf("install result %s", data)
 	}
