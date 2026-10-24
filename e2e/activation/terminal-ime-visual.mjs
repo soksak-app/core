@@ -61,6 +61,37 @@ function validateCapture(capture) {
   "capture content bounds are outside the image");
 }
 
+export function mapCaptureRaster(capture, source) {
+  validateCapture(capture);
+  assert.ok(source && Number.isInteger(source.width) && Number.isInteger(source.height) &&
+    Number.isFinite(source.scale) && source.scale > 0 &&
+    [source.screenBounds?.x, source.screenBounds?.y, source.screenBounds?.width, source.screenBounds?.height]
+      .every(Number.isFinite) && source.screenBounds.width > 0 && source.screenBounds.height > 0,
+  "source raster screen bounds and scale are invalid");
+  assert.equal(source.screenBounds.width * source.scale, source.width,
+    "source raster width differs from its screen bounds");
+  assert.equal(source.screenBounds.height * source.scale, source.height,
+    "source raster height differs from its screen bounds");
+  assert.equal(capture.scaleFactor, source.scale, "capture/source pixel scales differ");
+  for (const field of ["format", "alpha", "colorSpace"]) {
+    assert.equal(capture[field], source[field], `capture/source ${field} differs`);
+  }
+  const origin = {
+    x: (capture.screenRect.x - capture.contentRect.x - source.screenBounds.x) * source.scale,
+    y: (capture.screenRect.y - capture.contentRect.y - source.screenBounds.y) * source.scale,
+  };
+  assert.ok(Number.isInteger(origin.x) && Number.isInteger(origin.y),
+    "capture/source frame origin mapping is fractional");
+  const bytes = new Uint8Array(capture.width * capture.height * 4);
+  for (let row = 0; row < capture.height; row++) {
+    const sourceOffset = row * capture.bytesPerRow;
+    const targetOffset = row * capture.width * 4;
+    bytes.set(capture.data.subarray(sourceOffset, sourceOffset + capture.width * 4), targetOffset);
+  }
+  return { width: capture.width, height: capture.height, origin, bytes,
+    format: capture.format, alpha: capture.alpha, colorSpace: capture.colorSpace };
+}
+
 function cropCell(raster, cell, label) {
   const { width, height, data, grid, bytesPerRow = width * 4 } = raster;
   assert.ok(Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0,
@@ -263,16 +294,14 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
       "renderer effective glyph colors are invalid");
     const bounds = glyph.bounds;
     assert.ok(bounds === null || (bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) &&
-      bounds.width > 0 && bounds.height > 0), "renderer glyph ink rectangle is invalid");
-    if (bounds !== null) rasterizeCellBounds(bounds, grid.cellWidth * glyph.width, grid.cellHeight,
-      "renderer glyph bounds");
+      bounds.width > 0 && bounds.height > 0 && Number.isFinite(bounds.x + bounds.width) &&
+      Number.isFinite(bounds.y + bounds.height)), "renderer glyph ink rectangle is invalid");
     assert.ok(glyph.underline && Object.hasOwn(glyph.underline, "rect"), "renderer glyph underline is missing");
     const glyphUnderline = glyph.underline.rect;
     assert.ok(glyphUnderline === null || (glyphUnderline &&
       [glyphUnderline.x, glyphUnderline.y, glyphUnderline.width, glyphUnderline.height].every(Number.isFinite) &&
-      glyphUnderline.width > 0 && glyphUnderline.height > 0), "renderer glyph underline rectangle is invalid");
-    if (glyphUnderline !== null) rasterizeCellBounds(glyphUnderline, grid.cellWidth * glyph.width,
-      grid.cellHeight, "renderer glyph underline");
+      glyphUnderline.width > 0 && glyphUnderline.height > 0 && Number.isFinite(glyphUnderline.x + glyphUnderline.width) &&
+      Number.isFinite(glyphUnderline.y + glyphUnderline.height)), "renderer glyph underline rectangle is invalid");
   }
   for (const expected of expectedGlyphs) {
     assert.ok(render.glyphs.some((glyph) => glyph.row === expected.row && glyph.col === expected.col &&
@@ -311,18 +340,18 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
   return { result: "declared", frame };
 }
 
-/** Maps a floating renderer rect to covered pixels, then clips it to the owning cell. */
+/** Maps a floating renderer rect to covered pixels, then clips it to the available raster. */
 export function rasterizeCellBounds(bounds, cellWidth, cellHeight, label = "renderer bounds") {
   assert.ok(Number.isInteger(cellWidth) && cellWidth > 0 && Number.isInteger(cellHeight) && cellHeight > 0,
     `${label}: cell dimensions must be positive integers`);
   assert.ok(bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) &&
-    bounds.width > 0 && bounds.height > 0, `${label}: floating rectangle is invalid`);
-  const left = Math.max(0, Math.floor(bounds.x));
-  const top = Math.max(0, Math.floor(bounds.y));
-  const right = Math.min(cellWidth, Math.ceil(bounds.x + bounds.width));
-  const bottom = Math.min(cellHeight, Math.ceil(bounds.y + bounds.height));
-  assert.ok(right > left && bottom > top, `${label}: rectangle covers no cell pixels`);
-  return { x: left, y: top, width: right - left, height: bottom - top };
+    bounds.width > 0 && bounds.height > 0 && Number.isFinite(bounds.x + bounds.width) &&
+    Number.isFinite(bounds.y + bounds.height), `${label}: floating rectangle is invalid`);
+  const left = Math.min(cellWidth, Math.max(0, Math.floor(bounds.x)));
+  const top = Math.min(cellHeight, Math.max(0, Math.floor(bounds.y)));
+  const right = Math.max(0, Math.min(cellWidth, Math.ceil(bounds.x + bounds.width)));
+  const bottom = Math.max(0, Math.min(cellHeight, Math.ceil(bounds.y + bounds.height)));
+  return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
 }
 
 function hexRgb(color) {
@@ -343,7 +372,7 @@ function captureArtifactRgb(bytes, offset) {
   return [unpremultiply(bytes[offset + 2]), unpremultiply(bytes[offset + 1]), unpremultiply(bytes[offset])];
 }
 
-export function measureRenderedCell(cellPixels, render, target, criteria) {
+export function measureRenderedCell(capture, source, render, target, criteria) {
   if (render === null) return { result: "no-proof", reason: "renderer-metadata-unavailable" };
   assert.ok(target?.frame && target.cursor, "frame-bound terminal cursor state is required");
   validateRenderMetadata(render, target.frame, target.cursor,
@@ -351,6 +380,7 @@ export function measureRenderedCell(cellPixels, render, target, criteria) {
   const glyph = render.glyphs.find((entry) => entry.row === target.row && entry.col === target.col &&
     entry.grapheme === target.grapheme);
   if (glyph.bounds === null) return { result: "no-proof", reason: "same-frame-glyph-ink-bounds-missing" };
+  const cellPixels = mapCaptureRaster(capture, source);
   const expectedArtifact = rendererCaptureRepresentation(render.pixel);
   for (const [field, value] of Object.entries(expectedArtifact)) {
     assert.equal(cellPixels[field], value, `capture artifact ${field} differs from renderer pixel representation`);
@@ -359,17 +389,29 @@ export function measureRenderedCell(cellPixels, render, target, criteria) {
   const { cellWidth, cellHeight } = render.grid;
   const gridX = render.grid.origin.x;
   const gridY = render.grid.origin.y;
+  const rasterOrigin = cellPixels.origin;
   assert.ok(Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 &&
     bytes instanceof Uint8Array && bytes.length === width * height * 4,
   "cell pixels must be tightly packed BGRA8 capture bytes");
-  assert.equal(width, cellWidth * glyph.width, "cell crop width differs from renderer glyph width");
-  assert.equal(height, cellHeight, "cell crop height differs from renderer grid");
+  assert.ok(rasterOrigin && Number.isInteger(rasterOrigin.x) && Number.isInteger(rasterOrigin.y),
+    "cell pixel raster origin is required in frame coordinates");
   assert.equal(typeof target.marked, "boolean", "cell marked state is required");
   const foreground = hexRgb(glyph.foreground);
   const background = hexRgb(glyph.background);
-  const glyphRect = rasterizeCellBounds(glyph.bounds, cellWidth * glyph.width, cellHeight, "glyph bounds");
-  const underlineRect = glyph.underline.rect === null ? null :
-    rasterizeCellBounds(glyph.underline.rect, cellWidth * glyph.width, cellHeight, "underline bounds");
+  const rasterBounds = (bounds) => rasterizeCellBounds({
+    x: gridX + target.col * cellWidth + bounds.x - rasterOrigin.x,
+    y: gridY + target.row * cellHeight + bounds.y - rasterOrigin.y,
+    width: bounds.width,
+    height: bounds.height,
+  }, width, height);
+  const glyphRect = rasterBounds(glyph.bounds);
+  const underlineRect = glyph.underline.rect === null ? null : rasterBounds(glyph.underline.rect);
+  if (glyphRect.width === 0 || glyphRect.height === 0) {
+    return { result: "no-proof", reason: "same-frame-glyph-ink-outside-raster" };
+  }
+  if (underlineRect && (underlineRect.width === 0 || underlineRect.height === 0)) {
+    return { result: "no-proof", reason: "same-frame-underline-outside-raster" };
+  }
   assert.ok(Number.isInteger(criteria.colorDistance) && criteria.colorDistance > 0,
     "consumer colorDistance must be positive");
   assert.ok(Number.isInteger(criteria.minimumGlyphPixels) && criteria.minimumGlyphPixels > 0,
@@ -378,10 +420,8 @@ export function measureRenderedCell(cellPixels, render, target, criteria) {
     criteria.minimumUnderlineCoverage <= 1, "consumer minimumUnderlineCoverage must be in (0, 1]");
   const cursor = render.cursor;
   const isCursorPixel = (x, y) => cursor.rect && cursor.visible && cursor.blinkVisible && cursor.shape !== "hidden" &&
-    x + gridX + target.col * cellWidth >= cursor.rect.x &&
-    x + gridX + target.col * cellWidth < cursor.rect.x + cursor.rect.width &&
-    y + gridY + target.row * cellHeight >= cursor.rect.y &&
-    y + gridY + target.row * cellHeight < cursor.rect.y + cursor.rect.height;
+    x + rasterOrigin.x >= cursor.rect.x && x + rasterOrigin.x < cursor.rect.x + cursor.rect.width &&
+    y + rasterOrigin.y >= cursor.rect.y && y + rasterOrigin.y < cursor.rect.y + cursor.rect.height;
   const matchesForeground = (pixel, x, y) => {
     const inverse = isCursorPixel(x, y) && cursor.shape === "block" && cursor.blend === "difference";
     const effectiveForeground = inverse ? foreground.map((channel) => 255 - channel) : foreground;

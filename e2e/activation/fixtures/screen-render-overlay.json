@@ -50,8 +50,8 @@
       "grapheme": "한",
       "foreground": "#d0d0d0",
       "background": "#808080",
-      "bounds": { "x": 0.25, "y": 1.25, "width": 6.5, "height": 3.5 },
-      "underline": { "rect": { "x": 0, "y": 5, "width": 8, "height": 1 } }
+      "bounds": { "x": -1.25, "y": -0.25, "width": 10.5, "height": 3.5 },
+      "underline": { "rect": { "x": -0.5, "y": 5, "width": 9.25, "height": 1 } }
     },
     {
       "row": 0,
