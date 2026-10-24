@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-47-22: Clarify that a provider's presentation caret is runtime state
+  outside the generic screen projection and replay hash. The owning projection
+  test confirms that an object or null presentation caret does not change the
+  hash, while changing the raw engine cursor does. This documents existing
+  projection behavior; it is not a behavior-fix Red.
+
 - F212.10-core-3-5: Remove a view's exposure registrations when its current
   native process ends. The registration belongs to that process, so keeping it
   while its generation is absent lets source selection choose an ended view.

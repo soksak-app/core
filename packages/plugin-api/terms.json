@@ -182,6 +182,12 @@
       "allowed": []
     },
     {
+      "term": "presentation caret",
+      "definition": "A provider-defined runtime grid coordinate used to place an input caret in a raster presentation overlay; it is distinct from the engine cursor and is not part of the generic screen hash or replay inputs.",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "migration definition",
       "definition": "The data a release ships for one stored file when its format number rises: from, to and an ordered list of named operations.",
       "rejected": [

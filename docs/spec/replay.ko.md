@@ -2,7 +2,7 @@
 
 [English](replay.md)
 
-화면을 만드는 sidecar는 session의 입력을 완전하게 저장하고 만든 화면마다 hash를 저장하며, page는 받은 화면마다 hash를 저장한다. 재생(replay)은 저장된 입력에서 session의 화면을 다시 만들어 저장된 모든 hash를 재생한 hash와 비교한다. frame 내용은 저장하지 않으므로([logging](logging.ko.md#catalog), [관측 감사](../plans/observability-audit.ko.md)의 결정), 재생이 화면을 재현하기 전까지 저장된 hash는 아무것도 검증하지 않는다. 이 문서는 기록, 화면 hash, 재생 실행 파일, 명령을 정의한다. event 자체는 sidecar와 plugin의 카탈로그가 선언하며([logging](logging.ko.md#catalog)), 이 저장소는 둘 다 이름으로 부르지 않는다.
+화면을 만드는 sidecar는 session 입력을 완전하게 저장하고 자신이 만든 확정 engine grid마다 hash를 저장하며 page도 받은 각 확정 grid의 hash를 저장한다. Replay는 저장된 입력에서 engine grid를 재구축해 모든 저장 hash를 재생한 hash와 비교한다. Input-method composition과 presentation caret 같은 일시적 raster overlay는 확정된 engine cell이 아니며 이 generic contract의 replay input도 아니다. 따라서 screen hash 밖에 남는다. Frame 내용은 저장하지 않으므로([logging](logging.ko.md#catalog), [관측 감사](../plans/observability-audit.ko.md)의 결정), replay가 확정 grid를 재현하기 전까지 저장된 hash는 아무것도 검증하지 않는다. 이 문서는 기록, 화면 hash, replay 실행 파일과 명령을 정의한다. Event 자체는 sidecar와 plugin의 catalog가 선언하며([logging](logging.ko.md#catalog)), 이 저장소는 어느 쪽도 이름으로 부르지 않는다.
 
 ## 기록
 
@@ -73,14 +73,14 @@ Session은 식별자가 유지되는 동안 이어지고, 그 session을 담당�
 
 ## 보기 상태
 
-sidecar가 만드는 화면은 그려지는 그대로의 화면이다. viewport의 칸이며, 선택된 칸은 강조색이고 모든 색은 theme을 거쳐 정해진다. 이 화면의 세 상태는 출력 바이트나 크기 변경에서 오지 않는다. *선택*, *viewport*(스크롤백의 offset), *theme*이다. 셋 중 하나가 바뀔 때마다 그 변경은 자기 재생 입력이므로 위의 hash 정의는 바뀌지 않고, 재생은 입력을 적용해 그려진 칸에 이른다.
+Screen hash는 viewport의 확정 cell을 덮으며 선택된 칸은 강조색이고 모든 색은 theme을 거쳐 정해진다. Sidecar는 이 cell 위에 input-method composition 같은 일시적 presentation overlay를 그릴 수 있다. Overlay와 presentation caret은 확정 cell이나 공통 replay input이 아니므로 hash가 이를 검증한다고 주장하지 않는다. 확정 grid의 세 상태는 출력 바이트나 크기 변경에서 오지 않는다. *선택*, *viewport*(스크롤백 offset), *theme*이다. 하나가 바뀔 때마다 자체 replay input이 되므로 hash 정의는 그대로이며 replay는 입력 적용으로 확정 cell에 이른다.
 
 - **선택.** `action`은 `start`, `update`, `end`, `clear`다. `start`와 `update`는 sidecar가 적용하는 순간 포인터에서 정한 `edge`(그 순간 격자의 열 수까지의 칸 경계, 0부터)와 `row`(viewport의 행, 0부터 행 수 - 1까지)를 가진다. 재생에는 픽셀 척도가 없다. `end`는 제스처를 끝내며 그 뒤의 `update`는 거부한다. `end`와 `clear`는 둘 다 갖지 않는다. sidecar는 효과가 있었던 호출만 저장한다. 격자 밖이거나 시작 없는 update는 입력이 아니라 sidecar의 오류다. 출력, 크기 변경, 대체 화면 전환이 선택을 유지하거나 옮기거나 지우는지, `end`에서 빈 선택이 지워지는 것은 재생 실행 파일이 재현하는 엔진의 동작이며 입력이 아니다. 칸의 hyperlink는 hash에 들어가지 않으므로 link의 어긋남은 발견되지 않는다.
 - **viewport.** `lines`는 0이 아닌 정수이고 양수는 더 오래된 줄 쪽이며, 엔진이 보유한 줄로 제한한 뒤의 스크롤백 offset 변화다. `newest`는 가장 새 출력으로의 이동에서 `true`다. sidecar는 원인이 무엇이든(휠, 가장 새 출력으로 스크롤하는 키, page의 요청) 적용한 이동을 저장한다. 아무것도 바꾸지 못한 이동은 저장하지 않는다. 휠 event 여러 개를 입력 하나로 저장하는 것은 그 유효한 합일 때만 허용된다. 출력은 viewport 입력을 만들지 않는다. 출력에 따르는 offset 변화와 스크롤백 한도에서 줄이 밀려 나가는 것은 재생 실행 파일이 재현하는 엔진의 동작이다. 대체 화면이 활성인 동안에는 스크롤백이 없으므로 viewport 입력을 저장하지 않는다.
 - **theme.** `colors`는 sidecar가 theme을 거쳐 정하는 색의 완전한 집합으로, 소문자 `#rrggbb` 값의 객체이며 최소한 `foreground`, `background`, `selection`을 가지고, 커서 색과 palette의 각 항목(`ansi0`~`ansi255`)은 더 있는 member이며 sidecar는 색을 정하는 데 쓰는 모든 항목을 적으므로 사용자 정의 palette도 재생된다. theme의 이름이 아니라 완전한 집합인 것은 사람이 정의한 theme에는 재생이 찾을 수 있는 이름이 없기 때문이다. 모든 session의 첫 입력, 곧 `sequence` 1은 theme이며, theme이 바뀔 때마다 또 하나가 온다. theme 입력은 theme만 바꾼다. 프로그램이 자기 출력 sequence로 정한 색은 엔진에 남아 엔진이 주는 우선순위를 따른다. 엔진이 행 끝에서 줄이는 빈 칸은 theme에 달려 있고 hash는 채워진 격자를 덮으므로, theme은 줄이기를 통해서도 hash에 들어간다.
 - **순서.** sidecar는 입력을 받은 순서가 아니라 엔진에 적용한 순서로, 모든 종류에 하나의 lock 아래에서 `sequence`를 정한다.
-- **커서.** hash의 커서는 viewport의 커서다. `visible`은 프로그램이 정한 표시 여부이고 커서 행이 viewport 밖이면 `false`다(그때 `row`는 `0`이고 `col`은 커서의 열). 깜박임 단계, focus, 입력기의 preedit는 hash에 들어가지 않는다.
-- **page.** sidecar가 page에 보내는 화면 메시지([영속 서비스](persistent-services.ko.md#화면-메시지))는 hash가 덮는 칸(grapheme, 너비, 정해진 색, 속성), 커서, frame 기록의 `sequence`를 담고, 선택의 강조는 이미 칸에 들어 있다. page hash는 page가 *받은* 격자의 hash다. page는 메시지에서 `screenFromMessage`와 `screenHash`로 계산해 메시지의 `sequence`와 함께 저장한다. 따라서 같은 `sequence`의 sidecar hash와 다르면 host와 page 사이의 중계에서 손실이나 변경(중간에 바뀌거나 빠진 칸, 색, 속성, 커서, 크기, 또는 page가 거부한 메시지)을 찾은 것이다. 래스터 자체는 비교가 덮는 범위 밖이다. 픽셀은 sidecar가 그리므로 래스터의 결함(잘못된 글리프, 올바른 칸의 잘못된 위치)은 두 hash를 같게 두며 탐지되지 않는다.
+- **커서.** hash의 커서는 viewport의 engine cursor다. `visible`은 프로그램이 정한 표시 여부이고 커서 행이 viewport 밖이면 `false`다(그때 `row`는 `0`이고 `col`은 커서의 열). 깜박임 단계, focus, preedit, provider-specific presentation caret은 hash에 들어가지 않는다.
+- **page.** sidecar가 page에 보내는 화면 메시지([영속 서비스](persistent-services.ko.md#화면-메시지))는 hash가 덮는 확정 cell(grapheme, 너비, 정해진 색, 속성), engine cursor와 frame 기록의 `sequence`를 담으며 선택 강조는 이미 cell에 들어 있다. Page hash는 page가 *받은* 확정 grid의 hash다. `screenFromMessage`와 `screenHash`가 grid를 projection하고 hash해 메시지 `sequence`와 함께 저장한다. 따라서 같은 `sequence`의 sidecar hash와 다르면 확정 grid 중계의 손실이나 변경(cell, 색, 속성, engine cursor, 크기 또는 page가 거부한 메시지)을 찾은 것이다. Provider-specific overlay와 caret은 grid를 바꾸지 않고 raster에 보일 수 있으며 해당 presentation pixel은 replay 비교 범위 밖이다.
 - **엔진.** 스크롤백 한도와 첫 theme 입력 전의 기본 theme은 sidecar의 재생 실행 파일에 속하며, 그것은 session을 만든 엔진이기도 하다. 재생은 session을 저장한 sidecar 버전에 대해 정의된다. 다른 버전의 session은 어긋날 수 있고 그 어긋남은 그렇게 보고된다.
 - **class.** 이 입력들은 완전하게 저장하는 class `input`으로 저장한다. class `io`와 `input`을 저장하지 않는 정책은 순번에 빈틈을 남기고, 재생은 처음 빠진 `sequence`에서 session을 거부하며, session의 입력을 덮는 `log.dropped`도 버린 개수를 담은 오류로 거부한다. [logging](logging.ko.md#class와-정책)에서 class `frame`인 휠과 포인터 이동은 sidecar가 적용하기 전 page의 event이고, 적용된 변경에 대해 sidecar가 저장하는 입력은 class `input`이다. 재생 실행 파일은 모르는 종류의 `sequence`를 가진 session의 event를 거부하며 무시하지 않는다. 재생 명령은 실행 파일을 시작하기 전에 session의 입력에 `replaySessionProblem`을 실행한다.
 

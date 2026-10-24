@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-22: Provider presentation caret은 generic screen projection과
+  replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는
+  object 또는 null presentation caret이 hash를 바꾸지 않고 raw engine cursor
+  변경은 hash를 바꾸는지 확인한다. 기존 projection 동작을 기록하며 동작 수정
+  Red는 아니다.
+
 - F212.10-core-3-5: 현재 native process가 끝나면 view의 exposure
   registration을 제거한다. Registration은 해당 process에 속하므로 generation이
   없는 동안 남겨두면 source 선택이 종료된 view를 선택할 수 있다. Owning

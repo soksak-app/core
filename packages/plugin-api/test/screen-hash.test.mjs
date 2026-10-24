@@ -51,6 +51,31 @@ test("a screen message gives the screen that the hash takes, without the members
   assert.match(await screenHash(screen), /^[0-9a-f]{64}$/);
 });
 
+test("screen projection excludes a presentation caret but hashes the engine cursor", async () => {
+  const first = message();
+  first.cursor.caret = { row: 0, col: 0 };
+  const movedPresentationCaret = message();
+  movedPresentationCaret.cursor.caret = { row: 0, col: 1 };
+  const absentPresentationCaret = message();
+  absentPresentationCaret.cursor.caret = null;
+  const firstScreen = screenFromMessage(first);
+  const movedScreen = screenFromMessage(movedPresentationCaret);
+  const absentScreen = screenFromMessage(absentPresentationCaret);
+
+  assert.deepEqual(firstScreen, movedScreen, "the projection retained the provider presentation caret");
+  assert.equal(await screenHash(firstScreen), await screenHash(movedScreen),
+    "moving the presentation caret changed the committed-grid hash");
+  assert.deepEqual(firstScreen, absentScreen, "the projection retained a null presentation caret");
+  assert.equal(await screenHash(firstScreen), await screenHash(absentScreen),
+    "a null presentation caret changed the committed-grid hash");
+
+  const movedEngineCursor = message();
+  movedEngineCursor.cursor.caret = { row: 0, col: 0 };
+  movedEngineCursor.cursor.col = 0;
+  assert.notEqual(await screenHash(firstScreen), await screenHash(screenFromMessage(movedEngineCursor)),
+    "changing the raw engine cursor did not change the screen hash");
+});
+
 test("a screen message without a sequence is refused with the member named", () => {
   const without = message();
   delete without.sequence;
