@@ -490,7 +490,11 @@ export const surfaces = native ? {
     /** The language of the application menu. The host ignores a repeated send of the same language. */
     menuLanguage: (language) => tellInTurn("setMenuLanguage", language),
 
-    place(record) {
+    async place(record) {
+      const viewRecords = record.surfaces.filter(({ surface }) => surface?.composition?.kind === "view");
+      const surfaceModules = viewRecords.length ? await import("./surface-modules.js") : null;
+      const mountedSurface = surfaceModules?.mountedSurface ?? (() => null);
+      const waitSurfaceCompositionDeclared = surfaceModules?.waitSurfaceCompositionDeclared ?? (() => Promise.resolve());
       const surfaces = record.surfaces.map((s) => ({
         id: s.id,
         dim: s.dim,
@@ -503,6 +507,18 @@ export const surfaces = native ? {
         ...(s.start ? { start: s.start } : {}),
       }));
 
+      // A preparation precedes the plane draw, which creates a new view's mount. Keep an unmounted view out of this native
+      // request; the drawn commit sends it after mountSurface has registered the view and its listener setup can complete.
+      const deferredViews = record.drawn === false
+        ? record.surfaces.filter(({ id, surface }) => {
+          if (surface?.composition?.kind !== "view") return false;
+          const mounted = mountedSurface(id);
+          return !mounted || mounted.disposed;
+        }).map(({ id }) => id)
+        : [];
+      const deferredIds = new Set(deferredViews);
+      const requestedSurfaces = surfaces.filter(({ id }) => !deferredIds.has(id));
+
       // place is called on every render, and on every frame while a divider is dragged.
       // A request identical to the previous one is not sent.
       const request = {
@@ -511,15 +527,15 @@ export const surfaces = native ? {
         settled: record.settled !== false,
         // The image raster must commit after the DOM frame of the page. Other
         // surfaces can commit consecutive frames immediately.
-        waitForPresentation: record.surfaces.some(({ surface, visible }) =>
+        waitForPresentation: record.surfaces.some(({ id, surface, visible }) => !deferredIds.has(id) &&
           visible === true && surface?.composition?.kind === "view" &&
           surface.composition.regions?.some(({ kind }) => kind === "image") === true),
         overlays: windowOverlays(),
-        surfaces,
+        surfaces: requestedSurfaces,
         // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
         titlebar: record.titlebar,
       };
-      const key = JSON.stringify(request);
+      const key = JSON.stringify({ request, deferredViews });
       if (key !== last) {
         last = key;
         // layoutTurn is the transaction order of surface preparation and display.
@@ -528,9 +544,9 @@ export const surfaces = native ? {
         const hasView = record.surfaces.some(({ surface }) => surface?.composition?.kind === "view");
         const scheduled = layoutTurn.then(async () => {
           if (hasView) {
-            const { waitSurfaceCompositionDeclared } = await import("./surface-modules.js");
             await Promise.all(record.surfaces
-              .filter(({ surface }) => surface?.composition?.kind === "view")
+              .filter(({ id, surface }) => surface?.composition?.kind === "view"
+                && !deferredIds.has(id))
               .map(({ id }) => waitSurfaceCompositionDeclared(id)));
             let reply;
             do {
@@ -551,7 +567,7 @@ export const surfaces = native ? {
         layoutTurn = layoutStepEnd(scheduled);
       }
       if (record.drawn && !layoutPresented) {
-        const preparedLayout = layoutFrame;
+        const preparedLayout = Promise.all([layoutResult, layoutFrame]).then(([, frame]) => frame);
         const presentedLayout = preparedLayout.then((frame) =>
           tell("presentSurfaces", {
             ticket: frame.ticket,
@@ -569,8 +585,10 @@ export const surfaces = native ? {
       // Handles the synchronization and the display call together so that a new synchronization does not replace the native ticket
       // before the previous ticket is committed.
       const result = layoutResult;
-      return result.then((placed) =>
-        placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) }))).catch((error) => {
+      return result.then((placed) => ({
+        placements: placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) })),
+        deferred: deferredViews,
+      })).catch((error) => {
           if (result === layoutResult) { last = ""; layoutPresented = false; }
           throw error;
         });
@@ -591,7 +609,7 @@ export const surfaces = native ? {
   theme: () => {},
   menuLanguage: () => {},
   // Without a host, the place where this document seats the surface is the actual place. The compositor records that reply.
-  place: (record) => record.surfaces.map((s) => ({ id: s.id, ...s.applied })),
+  place: (record) => ({ placements: record.surfaces.map((s) => ({ id: s.id, ...s.applied })), deferred: [] }),
   waitPresented: async () => null,
   forget: () => {},
 };

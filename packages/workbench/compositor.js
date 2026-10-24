@@ -217,6 +217,47 @@ function deliver(mine, snapshot, titlebar) {
   return commit(mine, snapshot, !running, titlebar);
 }
 
+function placementAnswer(record, answer) {
+  if (!answer || typeof answer !== "object" || Array.isArray(answer)
+      || Object.keys(answer).sort().join(",") !== "deferred,placements"
+      || !Array.isArray(answer.deferred) || !Array.isArray(answer.placements)) {
+    throw new TypeError("surface placement result must contain placements and deferred arrays");
+  }
+  const deferred = new Set(answer.deferred);
+  if (answer.deferred.some((id) => typeof id !== "string" || id === "")) {
+    throw new TypeError("surface placement result has an invalid deferred id");
+  }
+  if (deferred.size !== answer.deferred.length) throw new TypeError("surface placement result repeats a deferred id");
+  if (deferred.size && record.drawn) throw new Error("a drawn surface placement cannot defer a surface");
+  const expectedIds = new Set(record.surfaces.map(({ id }) => id));
+  if (expectedIds.size !== record.surfaces.length) throw new Error("surface placement request repeats an id");
+  for (const id of deferred) {
+    const surface = record.surfaces.find((candidate) => candidate.id === id);
+    if (!surface || !app.kinds.includes(surface.plugin) || surface.surface.composition?.kind !== "view") {
+      throw new Error(`surface placement cannot defer ${id}`);
+    }
+  }
+  if (answer.placements.some((placement) => !placement || typeof placement !== "object"
+      || typeof placement.id !== "string" || placement.id === "")) {
+    throw new TypeError("surface placement result has an invalid placement id");
+  }
+  const placedIds = new Set(answer.placements.map(({ id }) => id));
+  if (placedIds.size !== answer.placements.length) throw new TypeError("surface placement result repeats a placement id");
+  for (const id of placedIds) if (!expectedIds.has(id)) throw new Error(`surface placement result contains unexpected id ${id}`);
+  for (const id of expectedIds) {
+    if (deferred.has(id) && placedIds.has(id)) throw new Error(`surface placement result both places and defers ${id}`);
+    if (!placedIds.has(id) && !deferred.has(id)) throw new Error(`surface placement result is missing ${id}`);
+  }
+  if (deferred.size) {
+    record.surfaces = record.surfaces.filter(({ id }) => !deferred.has(id));
+    if (record.seq === aheadSeq) {
+      aheadComplete = false;
+      aheadRecord = null;
+    }
+  }
+  return answer.placements;
+}
+
 /**
  * Prepares the next card placement. An existing surface whose position cannot be calculated is hidden first.
  * titlebar is the height of the first row that the next drawing will show, and the host sets the window title
@@ -327,7 +368,8 @@ function commit(mine, snapshot, final, titlebar) {
     // commit leaves the drawnSeq.
     const entry = { rects: null, drawnSeq: record.drawn ? record.seq : 0 };
     sentPlacement = entry;
-    return answered.then((placed) => {
+    return answered.then((answer) => {
+      const placed = placementAnswer(record, answer);
       seat(record, placed);
       // The DOM at callback time may already have drawn the next placement, so the coordinates are kept here.
       const origin = plane.getBoundingClientRect();
@@ -338,6 +380,11 @@ function commit(mine, snapshot, final, titlebar) {
       if (entry.drawnSeq) clipNextFrame(entry.drawnSeq, entry.rects);
       return placed;
     });
+  }
+  if (answered !== null && answered !== undefined) {
+    const placed = placementAnswer(record, answered);
+    seat(record, placed);
+    return placed;
   }
   // When the drawing commit equals the request sent just before and nothing was sent, the screen shows the
   // placement of that request. Its holes are written, or, if the answer has not arrived yet, when it arrives.

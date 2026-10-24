@@ -4,6 +4,20 @@
 
 ## 미배포
 
+- F212.10-core-3-3: 그려지지 않은 preparation에서 mount 전 view를 실제 native
+  geometry를 만들지 않고 deferred로 처리한다. Plane은 preparation이 시작된 뒤
+  drawing 중 새 view를 생성하고 mount한다. Red: 변경 전 host placement test는
+  mount 전에 composition readiness를 기다려 실패했고, held-disposal fixture는
+  replacement 없이 disposed된 old entry로 composition wait가 성공함을 보였다.
+  Green: preparation은 deferred view ID를 실제 placement와 분리해 반환하고,
+  compositor는 이를 applied/predicted geometry에서 제외한다. 그려진 commit은
+  mount 등록과 composition readiness를 기다리며, disposed entry는 replacement가
+  등록되기 전 wait를 만족하지 않는다. Placement 결과는 누락, 추가, 중복 및 잘못된
+  deferred ID를 거부한다. 그려진 view가 dispose되면 오류가 호출자에게 전달되고
+  처리되지 않은 preparation Promise를 남기지 않는다. Focused host,
+  remount-composition, compositor, native-paint, no-bridge 검사는 각각
+  4/4, 1/1, 4/4, 8/8, 4/4 통과한다. Runtime 재검증은 남아 있고 host wire format은
+  바뀌지 않았다.
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen

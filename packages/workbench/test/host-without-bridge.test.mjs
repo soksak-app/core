@@ -12,7 +12,9 @@ const { native, report, surfaces } = await import("../host.js");
 test("without a host, place answers the rectangles the page seated", () => {
   assert.equal(native, false);
   const record = { surfaces: [{ id: "a", applied: { x: 1, y: 2, w: 3, h: 4 } }, { id: "b", applied: { x: 5, y: 6, w: 7, h: 8 } }] };
-  assert.deepEqual(surfaces.place(record), [{ id: "a", x: 1, y: 2, w: 3, h: 4 }, { id: "b", x: 5, y: 6, w: 7, h: 8 }]);
+  assert.deepEqual(surfaces.place(record), {
+    placements: [{ id: "a", x: 1, y: 2, w: 3, h: 4 }, { id: "b", x: 5, y: 6, w: 7, h: 8 }], deferred: [],
+  });
 });
 
 test("without a host, report writes the line to the console as an error", () => {

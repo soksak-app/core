@@ -255,6 +255,7 @@ onCommit((record) => {
   const refusedViews = new Set(all.filter((entry) => entry.surface.composition?.kind === "view"
     && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
   for (const id of refusedViews) ids.add(id);
+  record.surfaces = record.surfaces.filter(({ id }) => !refusedViews.has(id));
   const placed = surfacePlacementsForHost(all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)), projects.active());
   return afterDeclaredSnapshotIngress(() => placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: placed })).then((answer) => {
     for (const surface of record.surfaces) if (!refusedViews.has(surface.id)) authorizeSurface(surface.id);

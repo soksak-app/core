@@ -4,6 +4,21 @@
 
 ## Unreleased
 
+- F212.10-core-3-3: Defer an unmounted view during undrawn preparation
+  without inventing native geometry. The plane creates and mounts a new view
+  during drawing, after preparation has begun. Red: the unchanged host
+  placement test started composition readiness before that mount and failed;
+  a held-disposal fixture also showed that the old disposed entry could satisfy
+  a composition wait without a replacement.
+  Green: preparation reports the deferred view ID separately from actual
+  placements; the compositor excludes it from applied and predicted geometry,
+  and the drawn commit waits for mount registration and composition readiness.
+  A disposed entry cannot satisfy the wait before its replacement registers.
+  Placement results reject missing, extra, duplicate and invalid deferred IDs.
+  A disposed drawn view rejects through the caller without leaving an
+  unhandled preparation promise. The focused host, remount-composition,
+  compositor, native-paint and no-bridge tests pass (4/4, 1/1, 4/4, 8/8 and
+  4/4). Runtime revalidation is pending; the host wire format is unchanged.
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,
