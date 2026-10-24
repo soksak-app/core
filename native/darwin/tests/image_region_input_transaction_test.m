@@ -278,6 +278,58 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the next key scope processes normally after the failure (document %@, transaction %@)",
             view.string, transaction]);
 
+    // A marked-text replacement cannot rewrite a character already committed past the native boundary.
+    sp_region_close(region);
+    region = sp_region_create(surface, "input-transaction-marked-replacement", receiveRegionEvent, NULL);
+    check(region != NULL, @"the marked-replacement region is created through the exported interface");
+    view = (NSTextView *)region;
+    context = [[[SPControlledInputContext alloc] initWithClient:view] autorelease];
+    context.sourceIdentifier = @"com.apple.inputmethod.Korean.2SetKorean";
+    sp_region_set_input_context(region, context);
+    [window makeFirstResponder:view];
+    client = (id<NSTextInputClient>)region;
+    [client insertText:@"가" replacementRange:NSMakeRange(NSNotFound, 0)];
+    [client insertText:@"나" replacementRange:NSMakeRange(NSNotFound, 0)];
+    [client insertText:@"다" replacementRange:NSMakeRange(NSNotFound, 0)];
+    check([view.string isEqual:@"가나다"],
+        [NSString stringWithFormat:@"the marked-replacement fixture seeds a committed Hangul prefix (got %@)", view.string]);
+    NSString *beforeMarkedReplacement = [[view.string copy] autorelease];
+    [reports removeAllObjects];
+    context.callback = ^(id<NSTextInputClient> inputClient) {
+        [inputClient setMarkedText:@"invalid" selectedRange:NSMakeRange(7, 0)
+            replacementRange:NSMakeRange(0, 1)];
+        [inputClient insertText:@"later" replacementRange:NSMakeRange(NSNotFound, 0)];
+    };
+    NSArray<NSDictionary *> *markedReplacementRecords = capturedEvents(^{
+        [view keyDown:keyEvent(40, @"ㅏ", 0)];
+    });
+    transaction = reports.count == 1 ? reports[0] : nil;
+    actions = transaction[@"actions"];
+    check([view.string isEqual:beforeMarkedReplacement],
+        [NSString stringWithFormat:@"a rejected marked replacement preserves the committed prefix and input document (before %@, after %@)",
+            beforeMarkedReplacement, view.string]);
+    check([(NSArray *)transaction[@"errors"] count] == 1
+        && [transaction[@"errors"][0][@"reason"] containsString:@"replaced committed text at 0 (committed 1)"]
+        && actions.count == 0,
+        [NSString stringWithFormat:@"the marked replacement reports one committed-prefix error and no action (got %@)", transaction]);
+    BOOL rejectedMarkedCallbackUnchanged = NO;
+    BOOL rejectedFollowingCallbackUnchanged = NO;
+    for (NSDictionary *record in markedReplacementRecords) {
+        NSDictionary *fields = record[@"fields"];
+        if (![record[@"name"] isEqual:@"native.input.callback"]) continue;
+        BOOL unchanged = [fields[@"before"][@"document"] isEqual:fields[@"after"][@"document"]]
+            && [fields[@"before"][@"committed"] isEqual:fields[@"after"][@"committed"]]
+            && [fields[@"before"][@"marked"] isEqual:fields[@"after"][@"marked"]]
+            && [fields[@"before"][@"selected"] isEqual:fields[@"after"][@"selected"]];
+        if ([fields[@"call"] isEqual:@"setMarkedText"] && [fields[@"dropped"] isEqual:@"committed text replacement"]
+            && unchanged) rejectedMarkedCallbackUnchanged = YES;
+        if ([fields[@"call"] isEqual:@"insertText"] && [fields[@"text"] isEqual:@"later"]
+            && [fields[@"dropped"] isEqual:@"input scope already failed"] && unchanged) rejectedFollowingCallbackUnchanged = YES;
+    }
+    check(rejectedMarkedCallbackUnchanged && rejectedFollowingCallbackUnchanged,
+        [NSString stringWithFormat:@"the marked replacement and later callback are recorded as rejected without mutation (got %@)",
+            markedReplacementRecords]);
+
     sp_region_close(region);
     sp_surface_close(composition);
     [window close];

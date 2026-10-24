@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-47-28: Reject a replacement at `committedLength` before AppKit.
+  The previous path let AppKit replace
+  committed `가` with `invalid`, then reported an out-of-range marked-text
+  error after mutation. The callback now reports the committed-prefix error,
+  preserves the document and last valid preedit, and latches later callbacks
+  in the same scope. The controlled exported-region Red/Green case passes.
+
 - F239-47-27: Accept the native focus action in input transactions and keep
   focus-only reports from acknowledging a key through retained preedit. The
   focused consumer tests pass 5/5; syntax, `make e2e-check`, and

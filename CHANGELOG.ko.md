@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-28: `committedLength` 앞의 replacement를 AppKit 전에 거부한다.
+  기존 경로는 AppKit이 확정 `가`를 `invalid`로
+  바꾸게 한 뒤 marked range 오류를 보고했다. 이제 callback은 committed-prefix
+  error를 보고하고 문서와 마지막 유효 preedit을 보존하며 같은 scope의 후속
+  callback을 latch한다. Exported-region controlled Red/Green test가 통과한다.
+
 - F239-47-27: native focus action을 input transaction에서 받아들이고, preedit이
   남아 있는 focus-only report가 key를 확인하지 않게 한다. Focused consumer test는
   5/5 통과하며 syntax, `make e2e-check`, `make docs-check`도 통과한다.

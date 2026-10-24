@@ -1057,6 +1057,17 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         [self logInput:@"setMarkedText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
     }
+    if (replacementRange.location != NSNotFound && replacementRange.location < self.committedLength) {
+        NSString *reason = [NSString stringWithFormat:@"input method replaced committed text at %lu (committed %lu)",
+            (unsigned long)replacementRange.location, (unsigned long)self.committedLength];
+        [self failInput:reason where:"input method" text:[NSString stringWithFormat:
+            @"%@: text \"%@\" replacement %@ state %@", reason, [self jsonEscapedString:text],
+            [self jsonRange:replacementRange], [self inputState]]];
+        [self logInput:@"setMarkedText" fields:[fields stringByAppendingFormat:
+            @",\"dropped\":\"committed text replacement\",\"reason\":\"%@\"",
+            [self jsonEscapedString:reason]] before:before];
+        return;
+    }
     [super setMarkedText:string selectedRange:selectedRange replacementRange:replacementRange];
     [self reportPreedit];
     [self logInput:@"setMarkedText" fields:fields before:before];
