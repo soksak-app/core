@@ -136,11 +136,15 @@
   disposable copy of the F239-27 profile used the official CLI to replace the
   old browser and sidecar cohort with the frozen candidate packages. The
   check's registry, installed versions, loaded plugin states, ready surfaces,
-  page error status and verifier status assertions passed. `finishSession`
-  failed its required application error audit because the host boot log
-  contains `plugin host files: no project is shown` before the disposable
-  project was activated. The startup error remains unclassified under Files
-  P44; this run does not complete F239-28.
+  page error status and verifier status assertions passed in two runs. Both
+  failed `finishSession` because the boot log contained `plugin host files: no
+  project is shown` before project activation. The latest P44 cohort recorded
+  it at host JSONL sequence 15; later status showed `core.page.error` null and
+  `core.verify.failed` zero. The operator confirmed all five plugin and sidecar
+  LaunchServices names, then the host and both sidecars exited with no endpoint
+  or lock remaining. Offline frozen install, `make e2e-check` and `make
+  docs-check` pass. The startup error remains unclassified under Files P44; this
+  does not complete F239-28.
 
 - F268: Publish a screen message with a non-null frame and cursor preedit,
   paired with a hash case for the screen it projects to. Red: the unchanged

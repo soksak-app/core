@@ -125,10 +125,14 @@
   F239-27 profile의 disposable 복사본에서 official CLI로 기존 browser 및
   sidecar cohort를 frozen candidate package로 교체했다. Check의 registry,
   설치 version, loaded plugin 상태, ready surface, page error 상태와 verifier
-  상태 assertion은 통과했다. `finishSession`은 disposable project를 활성화하기
-  전 host boot log에 기록된 `plugin host files: no project is shown` 때문에
-  필수 application error audit에서 실패했다. Startup 오류는 Files P44에서
-  원인을 분류하지 않은 상태이며 이 실행은 F239-28을 완료하지 않는다.
+  상태 assertion은 두 번의 실행에서 통과했다. 두 실행 모두 project 활성화 전
+  boot log에 기록된 `plugin host files: no project is shown` 때문에
+  `finishSession`에서 실패했다. 최신 P44 cohort는 이를 host JSONL sequence 15에
+  기록했고 이후 status는 `core.page.error` null, `core.verify.failed` 0이었다.
+  Operator는 다섯 plugin/sidecar LaunchServices 이름을 확인했고 host와 두 sidecar는
+  endpoint와 lock을 남기지 않고 종료했다. Offline frozen install, `make e2e-check`,
+  `make docs-check`가 통과한다. Startup 오류는 Files P44에서 원인을 분류하지
+  않았으며 F239-28은 미완료다.
 
 - F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
   투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract
