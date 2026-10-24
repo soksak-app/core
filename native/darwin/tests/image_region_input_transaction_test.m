@@ -216,6 +216,68 @@ int main(void) { @autoreleasepool {
     check(!sentCommittedInsert,
         [NSString stringWithFormat:@"the rejected callback sends no committed insert report (got %@)", invalidRecords]);
 
+    // A callback failure rejects the remaining synchronous callbacks in that same keyDown scope.
+    sp_region_close(region);
+    region = sp_region_create(surface, "input-transaction-failure-prefix", receiveRegionEvent, NULL);
+    check(region != NULL, @"the callback-failure region is created through the exported interface");
+    view = (NSTextView *)region;
+    context = [[[SPControlledInputContext alloc] initWithClient:view] autorelease];
+    context.sourceIdentifier = @"com.apple.inputmethod.Korean.2SetKorean";
+    sp_region_set_input_context(region, context);
+    [window makeFirstResponder:view];
+    id<NSTextInputClient> client = (id<NSTextInputClient>)region;
+    [client insertText:@"가" replacementRange:NSMakeRange(NSNotFound, 0)];
+    [client insertText:@"나" replacementRange:NSMakeRange(NSNotFound, 0)];
+    [client insertText:@"다" replacementRange:NSMakeRange(NSNotFound, 0)];
+    check([view.string isEqual:@"가나다"],
+        [NSString stringWithFormat:@"the failure fixture seeds a revisable Hangul document (got %@)", view.string]);
+    __block NSString *documentBeforeFailureKey = nil;
+    [reports removeAllObjects];
+    context.callback = ^(id<NSTextInputClient> inputClient) {
+        [inputClient insertText:@"라" replacementRange:NSMakeRange(NSNotFound, 0)];
+        documentBeforeFailureKey = [view.string copy];
+        [inputClient insertText:@"invalid" replacementRange:NSMakeRange(0, 1)];
+        [inputClient insertText:@"마" replacementRange:NSMakeRange(NSNotFound, 0)];
+    };
+    NSArray<NSDictionary *> *failedScopeRecords = capturedEvents(^{
+        [view keyDown:keyEvent(40, @"ㅏ", 0)];
+    });
+    transaction = reports.count == 1 ? reports[0] : nil;
+    actions = transaction[@"actions"];
+    check([view.string isEqual:documentBeforeFailureKey],
+        [NSString stringWithFormat:@"a callback after an input failure does not mutate the accepted prefix (before %@, after %@)",
+            documentBeforeFailureKey, view.string]);
+    check(actions.count == 1 && [actions[0][@"type"] isEqual:@"insert"]
+        && [actions[0][@"text"] isEqual:@"나"]
+        && [transaction[@"preedit"][@"text"] isEqual:@"다라"]
+        && [(NSArray *)transaction[@"errors"] count] == 1,
+        [NSString stringWithFormat:@"the transaction retains its valid prefix and last valid preedit only (got %@)", transaction]);
+    BOOL rejectedLaterCallback = NO;
+    for (NSDictionary *record in failedScopeRecords) {
+        NSDictionary *fields = record[@"fields"];
+        if ([record[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"]
+            && [fields[@"text"] isEqual:@"마"] && [fields[@"dropped"] isEqual:@"input scope already failed"]
+            && [fields[@"before"][@"document"] isEqual:fields[@"after"][@"document"]]
+            && [fields[@"before"][@"committed"] isEqual:fields[@"after"][@"committed"]]
+            && [fields[@"before"][@"marked"] isEqual:fields[@"after"][@"marked"]]
+            && [fields[@"before"][@"selected"] isEqual:fields[@"after"][@"selected"]]) rejectedLaterCallback = YES;
+    }
+    check(rejectedLaterCallback,
+        [NSString stringWithFormat:@"the later callback is logged as rejected with unchanged state (got %@)", failedScopeRecords]);
+    [documentBeforeFailureKey release];
+
+    // A new native input scope starts clean after the failed scope.
+    context.callback = ^(id<NSTextInputClient> inputClient) {
+        [inputClient insertText:@"바" replacementRange:NSMakeRange(NSNotFound, 0)];
+    };
+    [reports removeAllObjects];
+    [view keyDown:keyEvent(40, @"ㅏ", 0)];
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([view.string isEqual:@"가나다라바"] && [(NSArray *)transaction[@"errors"] count] == 0
+        && [transaction[@"preedit"][@"text"] isEqual:@"라바"],
+        [NSString stringWithFormat:@"the next key scope processes normally after the failure (document %@, transaction %@)",
+            view.string, transaction]);
+
     sp_region_close(region);
     sp_surface_close(composition);
     [window close];

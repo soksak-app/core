@@ -9,9 +9,10 @@
   최종 세 글자 marked text를 별도 report로 보냈다. Region은 순서가 있는 insert,
   key, command, focus action, 최종 strict preedit snapshot 하나, 별도 callback
   error를 보낸다. Responder 변경, input-source 변경, close commit도 같은 경계를
-  사용하며 확정 구간 replacement 오류는 native 문서 변경 전에 종료한다.
-  Diagnostic input-context 주입은 non-diagnostic build에서 제외하고 기본 context는
-  AppKit으로 둔다. Red와 Green은 F239-47-25에 기록했다. Transaction, Hangul,
+  사용한다. 확정 구간 replacement 오류는 native 문서 변경 전에 종료하고 같은
+  scope의 후속 callback을 상태 변경 없이 거부 기록한다. 새 scope는 실패 latch를
+  초기화한다. Diagnostic input-context 주입은 non-diagnostic build에서 제외하고
+  기본 context는 AppKit으로 둔다. Red와 Green은 F239-47-25에 기록했다. Transaction, Hangul,
   decoration, image-region native test가 통과한다. Live Wails/Tauri acceptance는
   F239-47-6에서 계속 진행한다.
 

@@ -66,6 +66,7 @@
 @property(retain) NSMutableArray *inputActions;
 @property(retain) NSMutableArray *inputErrors;
 @property(retain) NSDictionary *inputPreedit;
+@property(copy) NSString *inputFailureReason;
 @property(copy) NSString *lastValidPreeditJSON;
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
@@ -89,6 +90,7 @@
 - (BOOL)handleBecomeFirstResponder;
 - (BOOL)handleResignFirstResponder;
 - (void)handleReportPreedit;
+- (BOOL)rejectCallbackAfterInputFailure:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (void)passToInputMethod:(NSEvent *)event;
 - (void)failInput:(NSString *)reason where:(const char *)where text:(NSString *)text;
 - (void)handleCommand:(SEL)selector;
@@ -284,6 +286,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [_inputActions release];
     [_inputErrors release];
     [_inputPreedit release];
+    [_inputFailureReason release];
     [_lastValidPreeditJSON release];
     // Releases the immutable snapshot after the contents of the layer are cleared.
     self.imageLayer.contents = nil;
@@ -485,6 +488,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             self.inputActions = [NSMutableArray array];
             self.inputErrors = [NSMutableArray array];
             self.inputPreedit = nil;
+            self.inputFailureReason = nil;
         }
     }
     return opens && self.activeCid != nil;
@@ -499,6 +503,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         self.inputActions = nil;
         self.inputErrors = nil;
         self.inputPreedit = nil;
+        self.inputFailureReason = nil;
     }
 }
 
@@ -570,6 +575,16 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, name, cid.UTF8String ?: "", fields.UTF8String);
 }
 
+- (BOOL)rejectCallbackAfterInputFailure:(NSString *)call fields:(NSString *)fields before:(NSString *)before {
+    if (!self.inputFailureReason) return NO;
+    NSString *prefix = fields.length ? [fields stringByAppendingString:@","] : @"";
+    NSString *record = [NSString stringWithFormat:
+        @"%@\"dropped\":\"input scope already failed\",\"failure\":\"%@\"",
+        prefix, [self jsonEscapedString:self.inputFailureReason]];
+    [self logInput:call fields:record before:before];
+    return YES;
+}
+
 // Records a report to the page as the event `native.input.report`, and sends it with the correlation identifier of the input
 // as the member `cids`. A report that is dropped is recorded as dropped.
 - (void)report:(const char *)json {
@@ -584,6 +599,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             NSString *reason = [NSString stringWithFormat:@"native input report is invalid JSON: %@", parseError.localizedDescription];
             sp_log_error("input transaction", reason.UTF8String);
             [self.inputErrors addObject:@{ @"reason": reason }];
+            if (!self.inputFailureReason) self.inputFailureReason = reason;
             return;
         }
         NSString *type = [value isKindOfClass:NSDictionary.class] ? value[@"type"] : nil;
@@ -607,7 +623,9 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             return;
         }
         if ([type isEqual:@"error"]) {
-            [self.inputErrors addObject:@{ @"reason": value[@"reason"] ?: @"input callback failed" }];
+            NSString *reason = value[@"reason"] ?: @"input callback failed";
+            [self.inputErrors addObject:@{ @"reason": reason }];
+            if (!self.inputFailureReason) self.inputFailureReason = reason;
             return;
         }
         if ([type isEqual:@"key"] || [type isEqual:@"command"] || [type isEqual:@"focus"]) {
@@ -621,7 +639,9 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         }
         sp_log_error("input transaction", [NSString stringWithFormat:@"unsupported report type %@ in input scope",
             type ?: @"<invalid JSON>"].UTF8String);
-        [self.inputErrors addObject:@{ @"reason": @"native input scope emitted an unsupported report" }];
+        NSString *reason = @"native input scope emitted an unsupported report";
+        [self.inputErrors addObject:@{ @"reason": reason }];
+        if (!self.inputFailureReason) self.inputFailureReason = reason;
         return;
     }
     [self deliverReport:text cid:cid];
@@ -908,6 +928,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)handleCommand:(SEL)selector {
+    if (self.inputFailureReason) {
+        NSString *fields = [NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"",
+            [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""]];
+        [self rejectCallbackAfterInputFailure:@"doCommandBySelector" fields:fields before:[self inputState]];
+        return;
+    }
     // A noop: command that no unhandled key accompanies is dropped below, and the record says so.
     BOOL dropped = !self.unhandledKey && selector == @selector(noop:);
     [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"%@",
@@ -958,6 +984,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *fields = [NSString stringWithFormat:@"\"text\":%@,\"attributed\":%@,\"replacementRange\":%@",
         text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
         [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false", [self jsonRange:range]];
+    if ([self rejectCallbackAfterInputFailure:@"insertText" fields:fields before:before]) return;
     if (!text) {
         [self logInput:@"insertText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
@@ -1025,6 +1052,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         @"\"text\":%@,\"attributed\":%@,\"selectedRange\":%@,\"replacementRange\":%@",
         text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
         attributed ? @"true" : @"false", [self jsonRange:selectedRange], [self jsonRange:replacementRange]];
+    if ([self rejectCallbackAfterInputFailure:@"setMarkedText" fields:fields before:before]) return;
     if (!text) {
         [self logInput:@"setMarkedText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
@@ -1037,6 +1065,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)unmarkText {
     BOOL opened = [self enterInput];
     NSString *before = [self inputState];
+    if ([self rejectCallbackAfterInputFailure:@"unmarkText" fields:@"" before:before]) {
+        [self leaveInput:opened];
+        return;
+    }
     BOOL wasUnmarking = self.unmarking;
     self.unmarking = YES;
     @try {

@@ -11,9 +11,11 @@
   and focus actions with one final strict preedit snapshot and separate
   callback errors. Responder changes, input-source changes and close commits
   use the same boundary; a committed-range replacement error stops before
-  mutating the native document. Diagnostic input-context injection is absent
-  from non-diagnostic builds, and AppKit remains the default context. Red and
-  Green are recorded in F239-47-25. The transaction, Hangul, decoration and
+  mutating the native document and rejects later callbacks in that scope with
+  an unchanged-state record. A new scope clears the failure latch. Diagnostic
+  input-context injection is absent from non-diagnostic builds, and AppKit
+  remains the default context. Red and Green are recorded in F239-47-25. The
+  transaction, Hangul, decoration and
   image-region native tests pass. Live Wails/Tauri acceptance remains open in
   F239-47-6.
 
