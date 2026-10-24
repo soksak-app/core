@@ -4928,6 +4928,84 @@ const FEATURE_LINKS = [
     expected: "The break audit runs each test file with a 20-second deadline in isolated parallel copies, reports progress, and catches all 142 declared breaks without an aggregate timeout or silent result.",
     levels: ["unit"],
   },
+  {
+    id: "F239-38",
+    implementation: [
+      { file: "packages/sok/wailsv3/src/log_policy.go", symbol: '"host.test.start", "host.test.end"' },
+      { file: "packages/sok/tauriv2/src/event_log.rs", symbol: '"host.test.start"' },
+      { file: "packages/host/wailsv3/src/test_mark.go", symbol: "func EmitTestMark" },
+      { file: "packages/host/tauriv2/src/test_mark.rs", symbol: "pub fn emit_test_mark" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/tests/test_mark_test.go", id: "TestATestMarkIsAnEventAndTheReplyNamesItsPosition" },
+      { file: "packages/host/wailsv3/tests/test_mark_test.go", id: "TestATestMarkIsStoredWhenLifecycleIsOff" },
+      { file: "packages/host/tauriv2/tests/test_mark_test.rs", id: "a_test_mark_is_an_event_and_the_reply_names_its_position" },
+      { file: "packages/host/tauriv2/tests/test_mark_test.rs", id: "a_test_mark_is_stored_when_lifecycle_is_off" },
+    ],
+    expected: "Both hosts store and flush host.test.start and host.test.end at info under lifecycle=error and lifecycle=off, return their event positions, and still gate ordinary lifecycle/info records.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-39",
+    implementation: [
+      { file: "packages/workbench/exposure.js", symbol: "onRegistrationChange(listener)" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "entry.declared?.reconcile()" },
+    ],
+    tests: [{ file: "packages/workbench/test/sidebar-sections.test.mjs", id: "a declared section selects and pulls a host that registers after the section is drawn" }],
+    expected: "A drawn declared section reselects and pulls its host status source after registration changes, and the same test verifies repeated registration, source changes, and cleanup.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-40",
+    implementation: [
+      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func pluginHostErrorText" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "fn plugin_host_error_text" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/plugin_host_channel_test.go", id: "TestPluginHostViewErrorNamesItsPluginOnce" },
+      { file: "packages/host/wailsv3/src/plugin_host_test.go", id: "TestViewErrorWithoutAReasonIsRefused" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_view_error_names_its_plugin_once" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_view_error_without_a_reason_is_refused" },
+    ],
+    expected: "Both host channels include the known plugin identity once in a view.error reason and refuse an empty reason; the JavaScript source of a generic Script error remains unknown.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-40-1",
+    implementation: [{ file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) processPersistent" }],
+    tests: [{ file: "packages/host/wailsv3/src/sidecar_reply_test.go", id: "TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts" }],
+    expected: "The Wails persistent-service start refuses a zero HelloTimeout before starting a service, and its owning test calls the current processPersistent function signature and checks that error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F263",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "while (reply !== themeReply)" },
+      { file: "packages/workbench/host.js", symbol: 'return tell("syncSurfaces", request)' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "view placement waits for the latest host theme reply" },
+      { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "view placement rechecks the theme after its reply continuation" },
+      { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "a failed theme reply refuses view placement and reports the host error" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "the start document draws the project synchronously while the host theme reply is pending" },
+    ],
+    expected: "View placement waits for the latest host theme reply and refuses placement when that reply fails, while the start document keeps its synchronous first DOM draw.",
+    levels: ["unit"],
+  },
+  {
+    id: "F264",
+    implementation: [
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.21"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const LATEST_PUBLISHED = "0.0.20"' },
+    ],
+    tests: [
+      { file: "scripts/test/versions.test.mjs", id: "the development contract has a distinct identity from the latest published release" },
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
+      { file: "scripts/test/versions.test.mjs", id: "workspace Cargo.lock package versions match the release candidate" },
+    ],
+    expected: "The development release candidate is 0.0.21, distinct from latest published 0.0.20, and the tracked version tests audit workspace manifests and Cargo.lock against that candidate.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

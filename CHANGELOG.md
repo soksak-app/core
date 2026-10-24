@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F267.2: Link the completed F239-38, F239-39, F239-40, F239-40-1, F263 and F264
+  capabilities to their implementation symbols and existing
+  owning tests. The parity audit resolves all six links and reports four
+  remaining inventory issues, including the separate F266 classification.
+  No behavior tests or production code changed.
+
 - F267.1: Repair the F148 and F163 behavior evidence links.
   The original parity output named the stale F148 test title and F163 source
   symbol. The links now resolve to the current test and source; the current

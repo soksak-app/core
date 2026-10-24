@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F267.2: 완료된 F239-38, F239-39, F239-40, F239-40-1, F263, F264
+  capability를 implementation symbol과 기존 소유 test에 연결했다. Parity
+  audit는 여섯 link를 확인하고 별도 F266 분류를 포함한 inventory 오류
+  네 건을 보고한다. 동작 test나 production code는 변경하지 않았다.
+
 - F267.1: F148과 F163 behavior evidence link를 수정한다.
   원래 parity 출력은 오래된 F148 test 이름과 F163 source symbol을
   지목했다. 두 link는 현재 test와 source를 가리키며 현재 audit의 feature-link
