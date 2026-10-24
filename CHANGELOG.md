@@ -4,6 +4,22 @@
 
 ## Unreleased
 
+- F239-47-30-3-1: Verify the display-link artifact through the E2E consumer.
+  The focused helper tests pass 7/7, and the capture-stop case passes on both
+  hosts. The consumer preserves available metadata with 24 Wails and 22 Tauri
+  observations, no omissions, and inactive applications. This proves artifact
+  publication and preservation, not display cadence, frame presentation,
+  source-image identity, or IME acceptance.
+- F239-47-35 and F239-47-32: Accept the frame-matched input-only cursor baseline
+  when renderer metadata is null. The approved gesture now records all ten
+  same-window AppKit checkpoints on both hosts. Both runs still fail the 33 ms
+  capture-gap limit (33.71754166483879 ms Wails; 33.65716664493084 ms Tauri),
+  so visual acceptance remains open. The run uses core and host 0.0.21,
+  terminal 0.0.21, and VT 0.0.17 on macOS 26.6.2 arm64.
+- F212.10-core-3-13: Track the project-start composition error recorded by the
+  hidden Browser placement case on both hosts. The current run is not accepted;
+  the responsible mount or layout-commit ordering is not yet established.
+
 - F239-47-35: Bind the initial cursor observer to the accepted screen frame.
   The input-only baseline now accepts `render: null` when the cursor frame
   exactly matches the screen frame; any present renderer frame must also match.

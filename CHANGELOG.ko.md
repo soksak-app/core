@@ -4,6 +4,22 @@
 
 ## 미배포
 
+- F239-47-30-3-1: E2E consumer에서 display-link artifact를 검증한다.
+  집중 helper test 7/7과 양 host capture-stop case가 통과한다. Consumer는
+  누락 없이 inactive application의 Wails 관측 24개와 Tauri 관측 22개의
+  available metadata를 보존한다. 이는 artifact 게시·보존만 입증하며 display
+  cadence, frame presentation, source-image identity 또는 IME acceptance는
+  입증하지 않는다.
+- F239-47-35 및 F239-47-32: renderer metadata가 null이어도 frame이 일치하는
+  input-only cursor baseline을 허용한다. 승인된 gesture는 양 host에서 같은
+  window의 AppKit checkpoint 열 개를 기록했다. 두 실행은 33 ms capture-gap
+  기준을 넘어서 실패했다(Wails 33.71754166483879 ms, Tauri 33.65716664493084 ms).
+  Visual acceptance는 열린 상태다. macOS 26.6.2 arm64의 core/host 0.0.21,
+  terminal 0.0.21, VT 0.0.17에서 실행했다.
+- F212.10-core-3-13: 숨겨진 Browser 배치 검사에서 양 host가 기록한
+  project-start composition 오류를 추적한다. 현재 실행은 통과하지 않았으며
+  원인인 mount 또는 layout-commit 순서는 아직 입증되지 않았다.
+
 - F239-47-35: 초기 cursor observer를 승인된 screen frame에 묶는다.
   Input-only baseline은 cursor frame이 screen frame과 정확히 일치할 때
   `render: null`을 허용하며, renderer frame이 있으면 같은 frame이어야 한다.
