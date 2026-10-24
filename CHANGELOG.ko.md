@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-31: Terminal status sample에 key 시작 offset을 유지한다.
+  Screen notification 뒤 cursor notification이 오면 observer가 stage offset을
+  다시 계산해 screen event를 제외할 수 있었다. Observer는 이제 모든 reread에서
+  두 notification을 유지한다. Red는 screen-then-cursor 순서를 재현한다.
+  Stage-window, coherent-reread 및 in-sample notification 집중 test가 3/3
+  통과한다. Status와 frame 검사는 변경하지 않았다.
+
 - F212.10-core-3-7: native source generation으로 view call 진단 기록을 짝짓는다.
   재생성된 view의 회신이 종료된 generation의 같은 id 호출을 끝낼 수 있었다.
   Workbench는 view call, reply 및 유효 source 취소 기록에 generation을 넣고

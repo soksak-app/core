@@ -348,6 +348,14 @@ export function waitForObservedStatusEvent(events, after, subscribe, name, predi
   });
 }
 
+/** Returns every notification delivered since the physical input stage began. */
+export function terminalStageEvents(events, stageOffset) {
+  assert.ok(Array.isArray(events), "terminal observer events must be an array");
+  assert.ok(Number.isInteger(stageOffset) && stageOffset >= 0 && stageOffset <= events.length,
+    "terminal stage event offset must be within the observer stream");
+  return events.slice(stageOffset);
+}
+
 /** Starts the status event stream used to observe terminal input. */
 export async function startTerminalStatusObserver(session, surface, onEvent = () => {}) {
   await session.until("terminal.compose", (compose) => compose?.text === "",

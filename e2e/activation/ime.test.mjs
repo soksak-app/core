@@ -33,6 +33,7 @@ import {
   waitForObservedStatusEvent,
   waitForStateEvent as waitForStateEventAfter,
   waitForTerminalStage,
+  terminalStageEvents,
 } from "./terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
@@ -379,8 +380,7 @@ for (const app of Object.values(APPS)) {
       const observations = [];
       const referenceStates = [];
       const stateEventWaiters = new Set();
-      const observeTerminal = async (group, key, index, baseline, stateEvents, expectedDocument) => {
-        const eventOffset = observedStateEvents.length - stateEvents.length;
+      const observeTerminal = async (group, key, index, baseline, eventOffset, expectedDocument) => {
         let attempt = 0;
         const readSnapshot = async () => {
           attempt += 1;
@@ -391,7 +391,7 @@ for (const app of Object.values(APPS)) {
           const currentCursor = await s.get("terminal.cursor", surface);
           const host = await s.get("host.window");
           const region = host.regions.find((item) => item.surface === surface && item.name === "view");
-          const currentEvents = observedStateEvents.slice(eventOffset);
+          const currentEvents = terminalStageEvents(observedStateEvents, eventOffset);
           const snapshot = {
             attempt,
             baseline,
@@ -677,11 +677,10 @@ for (const app of Object.values(APPS)) {
           acknowledgedMachAbsoluteNs: acknowledgedBoundary.machAbsoluteNs });
         persist("manifest.json", manifest);
         await waitForStateEvent(eventOffset, `k-${index + 1}`);
-        const stateEvents = observedStateEvents.slice(eventOffset);
         const entries = await stopTrace(`terminal-k-${index + 1}`);
         assert.ok(terminalInputReceiptMatches(entries, "k"),
           `terminal key k ${index + 1} has no matching native or terminal input callback`);
-        const observation = await observeTerminal("terminal", "k", index + 1, knownState, stateEvents,
+        const observation = await observeTerminal("terminal", "k", index + 1, knownState, eventOffset,
           referenceStates[index].document);
         knownState = { compose: observation.compose, cursor: observation.cursor, screen: observation.screen };
         const comparison = applyTerminalInput(referenceStates[index], observation, entries, index + 1);
@@ -715,7 +714,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(terminalInputReceiptMatches(backspaceEntries, "Backspace"),
         "Backspace has no matching key or deleteBackward input transaction");
       const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, knownState,
-        observedStateEvents.slice(backspaceEventOffset), referenceStates[8].document);
+        backspaceEventOffset, referenceStates[8].document);
       knownState = { compose: backspaceObservation.compose, cursor: backspaceObservation.cursor,
         screen: backspaceObservation.screen };
       const backspaceComparison = applyTerminalInput(referenceStates[8], backspaceObservation, backspaceEntries, 9);
@@ -747,7 +746,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(terminalInputReceiptMatches(spaceEntries, "Space"),
         "Space has no matching key or space-insert input transaction");
       const spaceObservation = await observeTerminal("terminal", "Space", 10, knownState,
-        observedStateEvents.slice(spaceEventOffset), referenceStates[9].document);
+        spaceEventOffset, referenceStates[9].document);
       const spaceComparison = applyTerminalInput(referenceStates[9], spaceObservation, spaceEntries, 10);
       persist("comparison-10.json", { key: "Space", expected: referenceStates[9], ...spaceComparison,
         terminal: spaceObservation, callbacks: spaceEntries });

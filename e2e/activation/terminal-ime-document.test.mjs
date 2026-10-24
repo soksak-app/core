@@ -18,6 +18,7 @@ import {
   waitForObservedStatusEvent,
   waitForStateEvent,
   waitForTerminalStage,
+  terminalStageEvents,
 } from "./terminal-ime-document.mjs";
 
 function screen(rows) {
@@ -87,6 +88,21 @@ test("waits for the seven-vowel Backspace document after a coherent eight-vowel 
   assert.equal(accepted.document, sevenVowels);
   assert.equal(accepted.coherent, true);
   assert.equal(terminalStageMatchesReference(accepted, sevenVowels), true);
+});
+
+test("keeps notifications that arrive after the first status wakes the input stage", { timeout: 5000 }, () => {
+  const events = [];
+  const keyStartOffset = events.length;
+  const screenEvent = { name: "terminal.screen", value: [[cell("$"), cell(" "), cell("ㅏ", 2)]] };
+  const cursorEvent = { name: "terminal.cursor", value: { row: 0, col: 4, preedit: null } };
+
+  events.push(screenEvent);
+  assert.equal(events.at(keyStartOffset), screenEvent, "the screen notification wakes the first event wait");
+  events.push(cursorEvent);
+
+  const stageEvents = terminalStageEvents(events, keyStartOffset);
+  assert.deepEqual(stageEvents, [screenEvent, cursorEvent],
+    "the original key-start offset must retain the screen and later cursor notifications");
 });
 
 test("reads visible input from terminal.screen.read rows and appends preedit once", () => {

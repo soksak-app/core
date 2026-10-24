@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-31: Keep the original key-start offset for terminal status samples.
+  A cursor notification arriving after the screen notification could make the
+  observer recalculate the stage offset and exclude that screen event. The
+  observer now retains both notifications through every reread. Red reproduces
+  the screen-then-cursor interleave; the focused stage-window, coherent-reread
+  and in-sample notification tests pass 3/3. Status and frame checks are
+  unchanged.
+
 - F212.10-core-3-7: Pair view call diagnostics by their native source generation.
   A reply from a recreated view could otherwise settle a call with the same id
   from an ended generation. The Workbench records generation on view call,
