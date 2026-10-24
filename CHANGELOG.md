@@ -9,13 +9,32 @@
   implementations, uncovered tests, or feature-link findings. Both example
   procedures match the current discovered counts. `make parity-check` passes.
 
-- F212.10-core-3-2: Measure every sealed native view call after page reload.
-  The consumer seals calls before cleanup, classifies them against the
-  replacement page start using the shared host clock and page clock bound, and
-  waits for an exact page-generation settlement plus native `posted` evidence
-  for replies. Cancellation-only records remain valid when emitted before a
-  receipt. The owner test passes 13/13; runtime all-call acceptance remains
-  pending.
+- F212.10-core-3-2: Measure sealed native view calls after page reload.
+  The owner test passes 13/13. The exact reload case passes on Wails and Tauri
+  (2/2), sealing and settling 139 calls per host. Each reply has a unique
+  current-page generation and matching `posted` dispatch. Wails uses a 1 ms
+  clock bound (`trip_us: 0`, `resolution_us: 1000`); Tauri uses 1.5 ms
+  (`trip_us: 1000`, `resolution_us: 1000`). Owner Red fixtures found invalid
+  rejection of a zero-trip clock and fractional page identity, unrelated
+  cancellation rejection, and false ambiguity from an old-page tuple; all
+  corrected owner cases pass. No sealed call is ambiguous, missing or within
+  the uncertainty interval. A first run failed before call
+  selection because the test policy gated `page.log.clock`; the fixture now
+  stores lifecycle info and declares that record. This was a preparation
+  failure, not evidence of lost calls. Five additional Tauri calls occur after
+  the seal by the test-end mark; their disposition remains unclassified and
+  outside the measured claim. Both run audits pass, both hosts and their
+  sidecars end, no endpoints remain, and the shared frontmost baseline is
+  unchanged. Runtime scope is macOS 26.6.2 arm64, core 0.0.21, browser/editor
+  0.0.7, Files 0.0.8 with sidecar 0.0.8, HWP 0.0.5, terminal 0.0.21 with VT
+  sidecar 0.0.17. Wails SHA-256
+  `c9a52f7419fb7489dce971d73af8bfa517fcfda8afaa2de066ca397d666a7583`, Tauri
+  SHA-256 `30732658fd845c20a1957400a01859b900515b9e1e8e3227afa7ab93f756a1ab`,
+  and P47 registry index SHA-256
+  `4c192acd4fd8e121811641b38b18067d8c36e9b53b431aa75958cc2a22027c94`
+  identify the tested artifacts. The case takes 2557.870083 ms on Wails and
+  2830.997916 ms on Tauri. `make e2e-check` and `make docs-check` pass; the full
+  window suite was not run.
 
 - F267.9: Align feature evidence links with current implementation and tests.
   Corrected mappings where existing owning tests prove the recorded behavior

@@ -797,8 +797,8 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { call: "debug" }, reads: ["page.start", "page.view.call", "page.view.reply", "page.view.call.cancel",
-      "host.view.call", "host.view.reply.dispatch"] });
+    await fresh(s, { log: { call: "debug", lifecycle: "info" }, reads: ["page.start", "page.log.clock", "page.view.call",
+      "page.view.reply", "page.view.call.cancel", "host.view.call", "host.view.reply.dispatch"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     const before = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });

@@ -9,12 +9,30 @@
   finding이 없다. 두 examples 절차 문서가 발견 count와 일치한다.
   `make parity-check`가 통과한다.
 
-- F212.10-core-3-2: page reload 뒤 seal한 모든 native view call을 측정한다.
-  Consumer는 cleanup 전에 call을 seal하고 shared host clock과 page clock
-  bound로 replacement page 시작 이후 call을 분류한 뒤 exact page-generation
-  settlement를 기다린다. Reply는 native `posted` 증거도 요구한다. Receipt보다
-  먼저 발생하는 cancellation-only record는 유효하다. 소유 test는 13/13
-  통과했으며 전체 call runtime 수용 검증은 남아 있다.
+- F212.10-core-3-2: page reload 뒤 seal한 native view call을 측정한다.
+  소유 test는 13/13 통과했다. Red fixture는 zero-trip clock과 fractional
+  page identity를 잘못 거부하는 경우, 무관한 cancellation을 잘못 검사하는
+  경우, old-page tuple 때문에 current-page match를 모호하다고 판단하는 경우를
+  재현했다. 수정 후 소유 case가 모두 통과한다. 정확한 reload case는 Wails와
+  Tauri에서 2/2 통과했고 host마다 139개 call을 seal해 모두 settle했다. 각 reply는 현재
+  page의 고유 generation과 일치하는 `posted` dispatch를 갖는다. Wails clock
+  bound는 1 ms (`trip_us: 0`, `resolution_us: 1000`)이고 Tauri는 1.5 ms
+  (`trip_us: 1000`, `resolution_us: 1000`)다. Sealed call에는 모호하거나,
+  누락되거나, uncertainty interval 안에 있는 call이 없다. 첫 실행은 test
+  policy가 `page.log.clock`을 gate해 call selection 전에 실패했다. Fixture가
+  lifecycle info를 저장하고 해당 record를 선언하도록 수정했다. 이는 call
+  손실 증거가 아닌 측정 준비 실패다. Tauri에는 test-end mark까지 seal 뒤에
+  추가 call 5개가 기록됐고, disposition은 미분류이며 측정 claim 범위 밖이다.
+  양 run audit가 통과했고 host와 sidecar가 종료됐으며 endpoint가 남지 않고
+  공유 frontmost baseline이 유지됐다. Runtime 범위는 macOS 26.6.2 arm64,
+  core 0.0.21, browser/editor 0.0.7, Files 0.0.8 및 sidecar 0.0.8, HWP 0.0.5,
+  terminal 0.0.21 및 VT sidecar 0.0.17이다. Wails SHA-256
+  `c9a52f7419fb7489dce971d73af8bfa517fcfda8afaa2de066ca397d666a7583`, Tauri
+  SHA-256 `30732658fd845c20a1957400a01859b900515b9e1e8e3227afa7ab93f756a1ab`,
+  P47 registry index SHA-256 `4c192acd4fd8e121811641b38b18067d8c36e9b53b431aa75958cc2a22027c94`
+  가 tested artifact를 식별한다. 실행 시간은 Wails 2557.870083 ms, Tauri
+  2830.997916 ms다. `make e2e-check`와 `make docs-check`가 통과했고 전체
+  window suite는 실행하지 않았다.
 
 - F267.9: 현재 implementation과 test에 맞게 feature evidence link를 정합한다.
   기존 owning test가 기록된 동작을 증명하는 mapping을 수정하고 F239-47-34만
