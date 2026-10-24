@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F240-11: 현재 owner 근거에 맞춰 실행 계획을 정합화한다. F239-47-9에는
+  보존된 activation Red/Green log와 platform을 기록하며 terminal 동작은
+  주장하지 않는다. F212.12-2-2-4-8-2-2 상세 상태는 active checklist 한 곳에
+  둔다. Terminal P76/P77의 local current-source 검사는 통과했고 pinned/public
+  SDK 검증은 열린 상태다. 다른 owner의 check 호출을 local 검증 결과로 세지 않는다.
+  `make docs-check`는 문서 112개, error record 413개, record check 1759개로 통과한다. Runtime code는 변경하지 않았다.
+
 - F240-10: 6단계 실행 순서를 갱신해 1–5단계는 local 구현과
   검증으로, delivery·authorization·approval gate는 별도로 기록한다. 계획에는
   현재 plugin Makefile 검사, flowmark check 통합, terminal의 local API literal
@@ -41,13 +48,17 @@
   `screen-hash-contract.test.mjs`가 57/57 통과한다. `make docs-check`도
   통과한다. 제품 로직은 바꾸지 않았다.
 
-- F239-47-9: Native activation 비교의 native insert, Backspace, Space event
-  sequence를 AppKit `NSTextView` document model에 적용한다. Red: 이전
+- F239-47-9: Native activation 비교에 native insert, Backspace, Space event
+  sequence를 적용하는 AppKit `NSTextView` document model을 사용한다. Red: 이전
   insert-plus-compose projection은 Backspace 뒤 `ㅏ` 여덟 개, 이후 여덟 개와
-  공백 하나를 유지했다. Green: 비활성 소유 test에서 AppKit의
-  `insertText:replacementRange:`와 `deleteBackward:`가 고정 document/cursor
-  checkpoint 열 개를 만든다. Focused activation target도 이 model을 사용하지만
-  아직 다시 실행하지 않았다. 이 model은 terminal PTY 출력을 검증하지 않는다.
+  공백 하나를 유지했다. Green: 소유 focused target이 고정 document/cursor
+  checkpoint 열 개를 모두 통과했다. macOS 26.6.2 (25G83), arm64에서
+  `make -C native/darwin test-activation-backspace`는 assertion 105개, 실패 0개,
+  boot 누락 진단 0개로 통과했다. 보존된 반복 log SHA-256은
+  `f882b898cf61baf569c2cc4c10922139f772ec5a69d3f681cac979fb1db0ef39`다.
+  초기화되지 않은 Red는 assertion 95개 실패와 boot 누락 진단 202개를 기록했다(Red log SHA-256 `4afee178d73ea3ce292a65931eeb9ece003b860162af1a9dde88627ed1fb0678`).
+  이는 native document model만 검증하며 terminal PTY나 IME 동작을 입증하지 않는다.
+  F239-47-8과 F239-47-2는 계속 열린 상태다.
 
 - F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
   투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract

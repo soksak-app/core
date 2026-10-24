@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F240-11: Reconcile the execution plan with current owner evidence. F239-47-9
+  now records its preserved activation Red/Green log and platform without
+  claiming terminal behavior. The detailed F212.12-2-2-4-8-2-2 status appears
+  once in the active checklist. Terminal P76/P77 local current-source checks
+  pass, while pinned/public-SDK validation remains open; other owners’ check
+  invocations are not treated as local validation results. `make docs-check`
+  passes 112 files, 413 error records and 1759 record checks. No runtime code
+  changed.
+
 - F240-10: Updated the six-stage execution order to use local implementation and
   validation as stages 1–5 and list delivery, authorization and approval gates
   separately. The plan reflects the existing plugin Makefile checks, the
@@ -47,11 +56,16 @@
 - F239-47-9: Apply the native insert, Backspace and Space event sequence to an
   AppKit `NSTextView` document model in the native activation comparison.
   Red: the old insert-plus-compose projection retained eight `ㅏ` after
-  Backspace and eight plus a space afterward. Green: AppKit's
-  `insertText:replacementRange:` and `deleteBackward:` produce the fixed ten
-  document and cursor checkpoints in the non-activating owning test. The
-  focused activation target now uses that model, but has not been rerun yet.
-  This model does not assert terminal PTY output.
+  Backspace and eight plus a space afterward. Green: the owning focused target
+  passes all ten fixed document/cursor checkpoints. On macOS 26.6.2 (25G83),
+  arm64, `make -C native/darwin test-activation-backspace` passed with 105
+  assertions, zero failures, and zero missing-boot diagnostics; the preserved
+  repeat log SHA-256 is
+  `f882b898cf61baf569c2cc4c10922139f772ec5a69d3f681cac979fb1db0ef39`.
+  The uninitialized Red recorded 95 failed assertions and 202 missing-boot
+  diagnostics (SHA-256
+  `4afee178d73ea3ce292a65931eeb9ece003b860162af1a9dde88627ed1fb0678`). This validates the native document model only, not terminal PTY
+  or IME behavior; F239-47-8 and F239-47-2 remain open.
 
 - F268: Publish a screen message with a non-null frame and cursor preedit,
   paired with a hash case for the screen it projects to. Red: the unchanged
