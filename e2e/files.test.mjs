@@ -238,15 +238,65 @@ for (const app of Object.values(APPS)) {
     const name = `grid-${process.pid}`;
     writeFileSync(join(project.root, name), "grid\n");
     s.cleanup(() => rmSync(join(project.root, name), { force: true }));
-    await s.run("files.refresh");
-    const tree = await s.until("files.tree", (value) => value?.entries.some((entry) => entry.path === name), "the tree did not list the file");
+    assert.equal(await s.run("files.refresh"), null);
+    const treeElement = (snapshot) => snapshot.value?.elements.find((element) => element.kind === "tree" && element.key === "files");
+    const treeNodePath = (snapshot, path) => {
+      const tree = treeElement(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      const find = (nodes, parents = []) => {
+        for (const node of nodes ?? []) {
+          const keys = [...parents, node.key];
+          if (node.params?.path === path) return keys;
+          const nested = find(node.children, keys);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      const keys = find(tree.nodes);
+      assert.ok(keys, `${path} is not a node of the declared tree`);
+      return keys;
+    };
+    const controlRect = (address) => s.request("dom.rect", { name: "core.sidebar.section.control", address });
+    const treeRootRect = (snapshot) => {
+      const tree = treeElement(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      return controlRect({ sidebar: "left", section: "files.tree", key: tree.key });
+    };
+    const treeLabelRect = (snapshot, path) => {
+      const tree = treeElement(snapshot);
+      return controlRect({ sidebar: "left", section: "files.tree", key: tree.key,
+        path: treeNodePath(snapshot, path), role: "label" });
+    };
+    const firstVisibleNodeRect = (snapshot) => {
+      const tree = treeElement(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      const node = tree.nodes?.[0];
+      assert.ok(node, "files.tree has no first visible node");
+      const role = node.branch ? "expand" : node.command || node.open ? "label" : null;
+      assert.ok(role, "the first visible node has no declared geometry control");
+      return controlRect({ sidebar: "left", section: "files.tree", key: tree.key,
+        path: [node.key], role });
+    };
+    let tree = await s.get("files.tree");
+    assert.ok(treeNodePath(tree, name), "the tree snapshot did not list the file");
+    const sidebars = await s.until("core.sidebars", (value) => {
+      const section = value.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+      return section?.mounted && section.text.includes(name);
+    }, "the Files tree section did not render the file snapshot");
+    tree = await s.get("files.tree");
     await s.run("files.bookmarks.add", { path: name });
     s.cleanup(() => s.run("files.bookmarks.remove", { path: name }));
-    const sidebars = await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "left")
+    await s.until("core.sidebars", (value) => value.find((item) => item.sidebar === "left")
       ?.sections.find((item) => item.id === "files.bookmarks")?.text.includes(name), "the bookmark did not show");
+    const bookmarks = await s.get("files.bookmarks");
+    const bookmarkList = bookmarks.value?.elements.find((element) => element.kind === "list");
+    const bookmark = bookmarkList?.items.find((item) => item.label === name);
+    assert.ok(bookmarkList && bookmark, "files.bookmarks did not publish the file");
+    assert.equal(bookmark.command, "files.bookmarks.remove", "the bookmark label is not the declared remove control");
+    const removeRect = await controlRect({ sidebar: "left", section: "files.bookmarks", key: bookmarkList.key,
+      path: [bookmark.key], role: "label" });
     await s.presented();
     const { path } = await s.request("diagnostics.capture.still", {});
-    s.cleanup(() => rmSync(dirname(path), { recursive: true, force: true }));
     const image = readPng(path);
     const scale = image.width / (await s.get("host.window")).content.width;
 
@@ -257,36 +307,40 @@ for (const app of Object.values(APPS)) {
       headerIndex += item.sections.length;
     }
     const header = await s.rect("core.sidebar.section.header", headerIndex);
-    const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
-    const star = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
+    const holder = await treeRootRect(tree);
+    const rowBox = await treeLabelRect(tree, name);
+    const projectLine = tree.value.elements.find((element) => element.kind === "status-line" && element.key === "project");
+    assert.ok(projectLine, "files.tree has no project status line");
+    const titleRect = await s.request("dom.rect", { name: "core.sidebar.section.status-line",
+      address: { sidebar: "left", section: "files.tree", key: projectLine.key } });
+    const firstNode = await firstVisibleNodeRect(tree);
     // The grid is the first column where the collapse indicator of the section head is drawn. The head text and the first display of the tree rows also start at that column.
     const chevron = firstInk(image, scale, header);
     const grid = chevron;
-    const title = firstInk(image, scale, { x: holder.x, y: star.y, width: star.x - holder.x, height: star.height });
-    const row = firstInk(image, scale, { x: holder.x, y: holder.y, width: holder.width / 2, height: ROW });
-    const measured = { header: header.x, chevron, title, row };
+    const title = firstInk(image, scale, titleRect);
+    const row = firstInk(image, scale, firstNode);
+    const measured = { header, chevron, titleBox: titleRect, title, holder, firstNode, row };
     assert.ok(chevron !== null && Math.abs(chevron - header.x - 10) <= 4, `the section chevron is not near its 10-point padding: ${JSON.stringify(measured)}`);
     for (const [label, x] of Object.entries({ title, row })) {
       assert.ok(x !== null && Math.abs(x - grid) <= 1, `${label} starts at ${x}, not at the grid ${grid}: ${JSON.stringify(measured)}`);
     }
     assert.ok(holder.x <= header.x + 0.5 && holder.width >= header.width - 1, `the section body pads the tree: holder ${JSON.stringify(holder)}, header ${JSON.stringify(header)}`);
 
-    // Text size: a bookmark row and a tree row that draw the same name with 12pt sidebar text have the same ink width. The last group of each row is the whole name.
+    // Text size: a bookmark row and the fixture file row that draw the same name with 12pt sidebar text have the same ink width. The last group of each row is the whole name.
     // In a 1x capture, gaps between 12pt glyphs are up to 3px, and the gap between the icon and the name is 8pt, so gaps of 4pt or less are joined.
     const WORD_GAP = 4;
-    const at = tree.entries.findIndex((entry) => entry.path === name);
-    const treeRuns = inkRuns(image, scale, { x: holder.x, y: holder.y + at * ROW, width: holder.width, height: ROW }, WORD_GAP * scale);
-    const bookmarks = await s.get("files.bookmarks");
-    const remove = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(name)));
-    const bookmarkRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x - header.x - 2, height: remove.height }, WORD_GAP * scale);
+    const treeRuns = inkRuns(image, scale, { x: holder.x, y: rowBox.y, width: holder.width, height: ROW }, WORD_GAP * scale);
+    const bookmarkRuns = inkRuns(image, scale,
+      { x: header.x, y: removeRect.y, width: removeRect.x - header.x - 2, height: removeRect.height }, WORD_GAP * scale);
     // The delete button of a bookmark is apart from the path. In the whole row, it measures between the last ink column before the left boundary of the button and the first ink column from the boundary.
     // A group that crosses the boundary is split at the boundary.
-    const rowRuns = inkRuns(image, scale, { x: header.x, y: remove.y, width: remove.x + remove.width - header.x, height: remove.height }, 0);
-    const boundary = Math.round(remove.x * scale);
+    const rowRuns = inkRuns(image, scale,
+      { x: header.x, y: removeRect.y, width: removeRect.x + removeRect.width - header.x, height: removeRect.height }, 0);
+    const boundary = Math.round(removeRect.x * scale);
     const pathEnd = Math.max(...rowRuns.filter(([start]) => start < boundary).map(([, end]) => Math.min(end, boundary - 1)));
     const removeStart = Math.min(...rowRuns.filter(([, end]) => end >= boundary).map(([start]) => Math.max(start, boundary)));
     const separation = (removeStart - pathEnd - 1) / scale;
-    assert.ok(separation >= 6, `the bookmark remove button is ${separation} pt from its path: runs ${JSON.stringify(rowRuns)}, remove ${JSON.stringify(remove)}`);
+    assert.ok(separation >= 6, `the bookmark remove control is ${separation} pt from its path: runs ${JSON.stringify(rowRuns)}, control ${JSON.stringify(removeRect)}`);
     const width = ([start, end]) => (end - start + 1) / scale;
     const treeLabel = width(treeRuns.at(-1));
     const bookmarkLabel = width(bookmarkRuns.at(-1));
@@ -299,6 +353,7 @@ for (const app of Object.values(APPS)) {
     const section = await s.rect("core.sidebar.section", headerIndex);
     assert.ok(holder.y + holder.height >= section.y + section.height - 1,
       `the tree ends at ${holder.y + holder.height}, before its section ends at ${section.y + section.height}`);
+    rmSync(dirname(path), { recursive: true, force: true });
   });
 }
 

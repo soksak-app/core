@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-37-1: 단일 Files tree geometry window case를 현재 snapshot 계약으로
+  옮기고 검증한다. Red: Wails와 Tauri의 declared tree control은 각각 6개였지만
+  변경 전 positional baseline은 4개를 예상했다. Green: current snapshot과
+  declared control rectangle을 사용하는 focused case가 두 host에서 통과한다.
+  12-point 글자 폭, 20-point row band, 6-point remove-control 간격, body 무패딩,
+  fill-height, 1-point ink 정렬 기준을 유지한다. Host error-level log는 비어 있고
+  host, sidecar, endpoint 정리가 완료됐다. 이 결과는 해당 candidate case만 다루며
+  전체 Files suite와 release는 검증되지 않았다.
+
 - F239-37-7: Tree가 포함된 declared body의 공통 padding을 제거하고 declared
   control의 browser button styling을 초기화한다. Red: 변경 전 owning style
   test 두 개가 declared body padding 14 px와 declared button의

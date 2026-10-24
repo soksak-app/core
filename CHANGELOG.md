@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-37-1: Migrate and verify the single Files tree geometry window case.
+  Red: Wails and Tauri each exposed six declared tree controls while the
+  unchanged positional baseline expected four. Green: the focused case passes
+  on both hosts using the current snapshots and declared control rectangles.
+  It retains the 12-point text width, 20-point row band, 6-point remove-control
+  gap, unpadded body, fill-height and one-point ink alignment criteria. Host
+  error-level logs are empty and hosts, sidecars and endpoints are cleaned up.
+  The result covers this candidate case only; the Files suite and release
+  remain unverified.
+
 - F239-37-7: Remove the generic padding from declared bodies that contain a
   tree and reset browser button styling for declared controls. Red: the
   unchanged owning style tests fail 2/2 with 14 px of declared body padding
