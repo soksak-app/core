@@ -459,15 +459,23 @@
   읽었다. 이전 Korean 결과에는 query command와 출력이 없어 보고는 repeat target을
   기다리며 열린 상태다. Cleanup 순서는 변경하지 않는다.
 
-- F212.10-editor-1: Editor window check은 key 입력 전에 선언된
-  `editor.content` rectangle을 native click하고 해당 view가 native responder가
-  될 때까지 기다린다. Main page reload 뒤에도 같은 절차를 적용한다. 보존된 두
-  host 실행에서 이 setup 뒤 최초 편집과 저장 복구가 진행됐지만, reload 뒤 click을
-  추가하기 전에는 `z`가 main-window responder로 전달됐다. 해당 실행은 두 host에서
-  background-session `imageAttached` 거부 뒤 `runtime.textSize.read`와
-  `runtime.native.on` timeout도 기록했다. 별도 실패는 F212.10-core-5-5에서
-  추적한다. 새 reload 뒤 setup과 전체 window check는 아직 검증되지 않았으며 editor
-  원인은 지정하지 않는다.
+- F212.10-editor-1: Editor window check은 reload 뒤에도 key 입력 전에
+  선언된 `editor.content` rectangle을 클릭하고 해당 view가 native responder가
+  될 때까지 기다린다. Red: reload 뒤 click을 추가하기 전에는 `z`가 editor 대신
+  main-window responder로 전달됐다. 이전 image 거부와 view-call timeout은 별도
+  관측으로 남는다. Green: 명시된 editor case가 Wails/Tauri에서 각각 3317.278583
+  ms와 3031.537 ms에 통과했다. 각 editor 실행은 예상된 permission-denied 저장
+  거부만 기록했고 동일한 Terminal baseline(PID 935)을 복원했다. Runtime은
+  macOS Darwin 25.6 arm64의 app 0.0.21, P84 runtime registry, terminal 0.0.19와
+  VT 0.0.15를 사용했다. Bundle manifest의 embedded registry는 다르며 runtime
+  profile이 P84 index를 명시적으로 선택했다. Run stdout SHA-256:
+  `d471bea185a2317cf427754f05ecf1a968b5045527f0b55d298b50175a1f52bf`;
+  Wails/Tauri host log SHA-256:
+  `f1e007a0bd7736f89e5c772322db800d33bb8c79a9fb5837149aca0169eeb51a` /
+  `d8329a820f38e982e22f74180248a820074f830d31d5105082b6b95eb3feda3a`.
+  이후 Wails exposure error는 별도 F239-37-2 page에서 발생했으므로 editor case에
+  귀속하지 않는다. 이 결과는 다른 editor lifecycle, Files, IME 또는 release
+  검사를 완료하지 않는다.
 
 - F239-37-1: 단일 Files tree geometry window case를 현재 snapshot 계약으로
   옮기고 검증한다. Red: Wails와 Tauri의 declared tree control은 각각 6개였지만

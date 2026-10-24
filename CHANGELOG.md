@@ -504,16 +504,25 @@
   ABC. A prior Korean result lacks its query command and output, so the report
   remains open pending a repeat target; no cleanup-order change is made.
 
-- F212.10-editor-1: The editor window check now clicks the declared
+- F212.10-editor-1: The editor window check clicks the declared
   `editor.content` rectangle and waits for that view to become the native
-  responder before sending keys, including after a main-page reload. In the
-  preserved two-host run, this setup let initial editing and save recovery
-  proceed; after reload, `z` instead went to the main-window responder before
-  the post-reload click was added. That run also recorded a background-session
-  `imageAttached` refusal followed by `runtime.textSize.read` and
-  `runtime.native.on` timeouts on both hosts. F212.10-core-5-5 tracks that
-  separate failure. The new post-reload setup and the full window check remain
-  unverified; no editor cause is assigned.
+  responder before sending keys, including after a main-page reload. Red:
+  before the post-reload click was added, `z` reached the main-window responder
+  instead of the editor. The earlier image refusal and view-call timeouts remain
+  separate observations. Green: the named editor case passes on Wails and
+  Tauri in 3317.278583 ms and 3031.537 ms. Each editor run logs only its expected
+  permission-denied save refusal; both restore the same Terminal baseline (PID
+  935). The runtime used app 0.0.21 on macOS Darwin 25.6 arm64, with the P84
+  runtime registry and terminal 0.0.19 / VT 0.0.15. The bundle manifest
+  identifies a different embedded registry; the runtime profile explicitly
+  selected the P84 index. Run stdout SHA-256:
+  `d471bea185a2317cf427754f05ecf1a968b5045527f0b55d298b50175a1f52bf`;
+  Wails/Tauri host log SHA-256:
+  `f1e007a0bd7736f89e5c772322db800d33bb8c79a9fb5837149aca0169eeb51a` /
+  `d8329a820f38e982e22f74180248a820074f830d31d5105082b6b95eb3feda3a`.
+  The later Wails exposure error is on the separate F239-37-2 page and does not
+  belong to the editor case. This result does not close other editor lifecycle,
+  Files, IME, or release checks.
 
 - F239-37-1: Migrate and verify the single Files tree geometry window case.
   Red: Wails and Tauri each exposed six declared tree controls while the
