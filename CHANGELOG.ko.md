@@ -18,6 +18,14 @@
   invoke한다. 두 소유 runtime-contract test는 반환된 origin snapshot도 확인하며
   각각 1/1 통과한다.
 
+- F239-46-3: 메인 page가 보내는 subscription event에 current view source
+  generation을 넣는다. Red: 변경 전 surface restart test에서 pending old-document
+  event와 replacement document event 모두 generation이 없었다. Green: 같은 test가
+  old pending send의 generation 1과 current send의 generation 2를 확인한다. 늦은
+  old subscription callback은 취소되며 replacement에 도달하지 않는다. Surface-view
+  test 파일은 21/21 통과한다. 별도 `no current native source generation` startup
+  오류는 아직 검증되지 않았다.
+
 - F239-37-4: 같은 key의 tree child보다 유일한 root control을 먼저 풀이한다.
   Red: 변경 전 section-address test가 root 주소를 거부하고 중복 root 모호성을
   보고하지 않았다. Green: 정확한 child 주소와 row-only path 누락 거부를 포함해

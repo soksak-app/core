@@ -348,7 +348,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       read: () => LOG_LEVELS.filter((level) => eventEnabled(level)),
       on: (listener) => Promise.resolve(logGate.onChange(listener)),
     },
-    push: (event, data) => scoped.native.call("viewEvent", { event, data }),
+    push: (event, data) => scoped.native.call("viewEvent", { generation: viewGeneration, event, data }),
     closing,
     cancel: (event) => emitEvent("debug", "page.view.event.cancel", {
       plugin: surface.pluginId, surface: surface.surfaceId, event,

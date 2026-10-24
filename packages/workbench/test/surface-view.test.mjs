@@ -836,14 +836,17 @@ test("a view process end cancels its pending work across restart and accepts new
     await oldEventStartedPromise;
     const ended = nativeListeners.get("view-process-ended");
     assert.equal(typeof ended, "function", "the mounted surface listens for host view-process end");
+    assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register");
     ended({ surface: surfaceId });
 
     // A restarted document sends a new subscription before the old handler settles.
-    call({ id: 12, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
+    call({ surface: surfaceId, generation: 2, id: 12, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await settle(() => replies.some(({ id }) => id === 12));
     newDocumentReady = true;
     resolveOldSend(null);
     oldEventReject(new Error(`surface ${surfaceId} has no ready document`));
+    await new Promise((resolve) => setImmediate(resolve));
+    sidecarListeners[0].listener({ id: "late-old" });
     await new Promise((resolve) => setImmediate(resolve));
 
     const currentListener = sidecarListeners.at(-1);
@@ -851,6 +854,8 @@ test("a view process end cancels its pending work across restart and accepts new
     await settle(() => calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "new"));
     currentListener.listener({ id: "live-refusal" });
     await settle(() => reported.length > 0);
+    const sentSidecarMessages = calls.filter(({ name }) => name === "viewEvent")
+      .map(({ payload }) => ({ generation: payload.generation, id: payload.data.body.id }));
 
     assert.deepEqual({
       staleReplies: replies.filter(({ id }) => id === 11),
@@ -859,12 +864,20 @@ test("a view process end cancels its pending work across restart and accepts new
       newListenerActive: sidecarListeners.at(-1).active,
       oldCallCanceled: emitted.some(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11),
       oldEventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
+      sidecarEventCancellationCount: emitted.filter(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message").length,
       reports: reported,
       newEventDelivered: calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "new"),
+      sentSidecarMessages,
+      lateOldEventDelivered: calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "late-old"),
     }, {
       staleReplies: [], staleReplyReachedReplacement: false, oldListenerActive: false, newListenerActive: true,
       oldCallCanceled: true, oldEventCanceled: true,
+      sidecarEventCancellationCount: 2,
       reports: ["view event sidecar.message: current view document refused the event"], newEventDelivered: true,
+      sentSidecarMessages: [
+        { generation: 1, id: "old" }, { generation: 2, id: "new" }, { generation: 2, id: "live-refusal" },
+      ],
+      lateOldEventDelivered: false,
     });
   } finally {
     globalThis.dispatchEvent = previousDispatch;

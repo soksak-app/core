@@ -17,6 +17,15 @@
   arguments; Tauri invokes `declared_source_origins` with `{}`. Both owning
   runtime-contract tests pass 1/1 and assert the returned origin snapshot.
 
+- F239-46-3: Include the current view source generation in subscription events
+  sent by the main page. Red: the unchanged surface restart test observed no
+  generation on either the pending old-document event or the replacement
+  document event. Green: the same test verifies generation 1 for the old
+  pending send and generation 2 for current sends; a late old subscription
+  callback is canceled and never reaches the replacement. The surface-view
+  test file passes 21/21. The separate `no current native source generation`
+  startup error remains unverified.
+
 - F239-37-4: Resolve unique root controls before same-key tree children.
   Red: the unchanged section-address test rejected the root address and did
   not report duplicate-root ambiguity. Green: the owning test passes 8/8,
