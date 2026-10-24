@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-48-1: Place OS-dependent process-wait tests under `tests/platform/<os>/`
+  declared Cargo integration targets, and move macOS bundle
+  preparation tests to `scripts/test/platform/darwin/`. Register the nested
+  Node path and update test parity. On macOS, `make platforms`, the shared
+  process-wait tests (4/4), Darwin process-wait tests (3/3), bundle preparation
+  tests (2/2), nested test discovery (1/1), and `make docs-check` pass. Linux
+  and Windows target-host behavior checks remain pending; cross-target checks
+  could not run without their C compiler toolchains. `make parity-check`
+  retains eight existing findings with no uncovered tests or implementations.
+
 - F212.12-2-1-2: Add an optional activated view-focus test path. It checks
   activation completion, page press receipt, first-responder state and key
   receipt while preserving the existing inactive-path and surface-reveal

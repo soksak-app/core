@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F239-48-1: OS별 process-wait test를 `tests/platform/<os>/` 명시 Cargo
+  integration target으로 배치하고 macOS bundle-preparation test를
+  `scripts/test/platform/darwin/`으로 이동한다. Nested Node 경로를 등록하고 test
+  parity를 갱신한다. macOS에서 `make platforms`, 공통 process-wait test 4/4,
+  Darwin process-wait test 3/3, bundle-preparation test 2/2, nested test discovery
+  1/1, `make docs-check`가 통과한다. Linux/Windows target 동작 검증은 target host
+  실행이 남아 있고, cross-target 검사는 각 C compiler toolchain이 없어 실행하지
+  못했다. `make parity-check`는 uncovered test/implementation 없이 기존 finding
+  여덟 개를 보고한다.
+
 - F212.12-2-1-2: 선택적 activated view-focus test 경로를 추가한다. Activation
   완료, page press 수신, first-responder 상태, key 수신을 검사하며 기존
   비활성 경로와 surface-reveal assertion을 유지한다. Focused binary가 빌드되고

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm -F soksak build",
     "test": "node scripts/node-tests.mjs",
-    "test:scripts": "node --test scripts/test/*.test.mjs",
+    "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs",
     "verify:windows": "node scripts/node-tests.mjs --script verify --concurrency 1 --timeout 600",
     "verify:activation": "node scripts/node-tests.mjs --script verify:activation --concurrency 1 --timeout 600",
     "fuzz": "pnpm -F soksak fuzz",

@@ -297,6 +297,8 @@ macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하�
 
 `scripts/check-platforms.mjs`는 `platform/<os>/` 밖에서 `_darwin`, `_windows` 등의 운영체제 접미사가 붙은 파일 이름과 Go 파일의 `runtime.GOOS` 및 운영체제 build tag, Rust 파일의 운영체제 `cfg`, JavaScript 파일의 실행 가능한 Node `process.platform` member expression을 보고한다. JavaScript는 syntax로 분석하므로 string과 comment는 selector가 아니다. 유일한 metadata 예외는 `environment()` 함수가 반환하는 object의 `platform` property에 쓰는 `process.platform`, 그리고 test 경로의 `assert.equal(result.environment.platform, process.platform)` 또는 `assert.strictEqual`이다. test 경로 안의 selector를 포함해 다른 모든 실행 가능한 사용은 finding이다. `native/<os>/`, `scripts/check-build-environment.sh`, `platform/platform.{go,rs,js}`, 검사 파일 자신은 건너뛴다. `Cargo.toml`은 읽지 않으므로 대상별 의존성 표는 허용된다.
 
+플랫폼별 test는 소유 package의 `tests/platform/<os>/` 또는 root script의 해당 `platform/<os>/` directory에 둔다. Cargo target이나 test-runner 경로를 명시적으로 등록한다. 공통 directory의 test는 운영체제를 선택하거나 가정하지 않는 동작을 검증한다.
+
 ## native/darwin
 
 `native/darwin`은 두 호스트가 호출하는 공용 macOS 라이브러리다. 최소 macOS 버전은 14.4다. `capture.m`이 macOS 14.4에서 추가된 `SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:`를 호출하기 때문이다. Makefile은 이 값을 `MACOS_MINIMUM`에 선언하고 라이브러리와 두 애플리케이션을 그 값으로 build한다. 두 애플리케이션의 `Info.plist`는 `LSMinimumSystemVersion`에, `apps/tauriv2/tauri.conf.json`은 `bundle.macOS.minimumSystemVersion`에 같은 값을 선언하는데, Tauri bundler가 그 값으로 애플리케이션을 build하기 때문이다. 번들이 다른 값을 선언하거나, 애플리케이션 실행 파일이 다른 macOS version으로 build되었거나, 번들의 다른 실행 파일이 더 새 version으로 build되었으면 `make release-check`가 실패한다.

@@ -18,6 +18,18 @@ path = "src/sok.rs"
 name = "sok"
 path = "src/main.rs"
 
+[[test]]
+name = "process_wait_darwin"
+path = "tests/platform/darwin/process_wait_test.rs"
+
+[[test]]
+name = "process_wait_linux"
+path = "tests/platform/linux/process_wait_test.rs"
+
+[[test]]
+name = "process_wait_windows"
+path = "tests/platform/windows/process_wait_test.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }

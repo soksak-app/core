@@ -96,10 +96,14 @@ test("the error of a failed test is kept when its file is killed at its limit be
 
 test("the root names its own test files in test:scripts because its test script runs this runner", () => {
   const root = workspace();
-  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
+  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs" } }));
   put(root, "scripts/test/x.test.mjs", "");
+  put(root, "scripts/test/platform/darwin/bundle-preparation.test.mjs", "");
   const { tests } = discoverNodeTests({ root, packages: ["."] });
-  assert.deepEqual(tests.map((item) => [item.name, item.cwd]), [["scripts/test/x.test.mjs", join(root, ".")]]);
+  assert.deepEqual(tests.map((item) => [item.name, item.cwd]), [
+    ["scripts/test/platform/darwin/bundle-preparation.test.mjs", join(root, ".")],
+    ["scripts/test/x.test.mjs", join(root, ".")],
+  ]);
 });
 
 test("another script of the packages that have it is discovered, and quotes around a glob are not part of the path", () => {
@@ -166,7 +170,7 @@ test("a change under a package selects the test files of that package only", () 
 
 test("a change selects the deepest package that holds it, and a change outside every package selects the root", () => {
   const root = workspace();
-  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs" } }));
+  put(root, "package.json", JSON.stringify({ name: "root", scripts: { test: "node scripts/node-tests.mjs", "test:scripts": "node --test scripts/test/*.test.mjs scripts/test/platform/darwin/*.test.mjs" } }));
   put(root, "scripts/test/s.test.mjs", "");
   put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test test/" } }));
   put(root, "a/test/one.test.mjs", "");
