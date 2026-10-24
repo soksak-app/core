@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F240-10: 6단계 실행 순서를 갱신해 1–5단계는 local 구현과
+  검증으로, delivery·authorization·approval gate는 별도로 기록한다. 계획에는
+  현재 plugin Makefile 검사, flowmark check 통합, terminal의 local API literal
+  검사 작업, Files local build 근거와 VT local package link/build 절차를 반영한다.
+  F270은 source audit focused tests 11개, `make e2e-check`, `make docs-check`
+  통과로 완료됐다. 이 계획은 publication이나 runtime acceptance를 주장하지 않는다.
+
 - F270: E2E source audit가 Acorn 8.18.0으로 timeout callback의 JavaScript
   syntax를 검사하고 local Promise helper와 연결된 `then`/`catch` callback까지
   직접 호출 흐름을 따라간다. Promise `reject` 함수로 이어지는 경로와

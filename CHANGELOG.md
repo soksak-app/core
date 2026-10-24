@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F240-10: Updated the six-stage execution order to use local implementation and
+  validation as stages 1–5 and list delivery, authorization and approval gates
+  separately. The plan reflects the existing plugin Makefile checks, the
+  flowmark check integration, the terminal local-API literal-check work, and
+  Files local-build evidence and the VT local package-link/build procedure. F270 is complete:
+  its 11 focused source-audit tests, `make e2e-check` and `make docs-check`
+  pass. The plan does not claim publication or runtime acceptance.
+
 - F270: The E2E source audit uses Acorn 8.18.0 to check timeout callbacks as
   JavaScript syntax and follows direct calls through local Promise helpers and
   their attached `then`/`catch` callbacks. It accepts a path to the Promise's
