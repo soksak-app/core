@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-47-38: Escape the percent in the fixed zsh prompt fixture. Red: the
+  behavioral wrapper test rendered `zle-check` instead of `zle-check% `.
+  Green: zsh prompt escaping now renders the literal marker; the fixture tests
+  pass 2/2 and the activation document helper tests pass 35/35. No application
+  or activation run was performed.
 - F239-47-36: Add a named clean-zsh ZLE variant of the existing eight-vowel,
   Backspace and Space activation scenario. Both scenarios share the same
   AppKit checkpoints, terminal observations, capture assertions and 33 ms

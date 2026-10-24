@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47-38: 고정 zsh prompt fixture의 percent를 escape한다. Red:
+  behavioral wrapper test가 `zle-check% ` 대신 `zle-check`를 출력했다.
+  Green: zsh prompt escaping이 literal marker를 출력하며 fixture test는 2/2,
+  activation document helper test는 35/35 통과한다. Application이나 activation은
+  실행하지 않았다.
 - F239-47-36: 기존 여덟 모음·Backspace·Space activation 시나리오에
   고정 clean-zsh ZLE variant를 추가한다. 두 시나리오는 같은 AppKit checkpoint,
   terminal 관측, capture assertion, 33 ms frame-gap 기준을 공유한다. zsh wrapper는
