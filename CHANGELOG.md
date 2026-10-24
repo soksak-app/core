@@ -15,6 +15,16 @@
   `make docs-check` passes. The preserved Wails application error has not been
   rechecked against this source change.
 
+- F239-51: Import the Files tree lookup from its owning helper after extraction.
+  The retained two-host runtime attempt failed in the old helper with
+  `ReferenceError: treeNodes is not defined`. The focused helper test passes
+  5/5 and `make docs-check` passes; the same runtime case has not been rerun, so
+  runtime acceptance remains under F239-51-1.
+
+- F239-51-1: Track runtime acceptance of the tree lookup correction separately.
+  The pre-correction two-host attempt is Red evidence; no post-correction window
+  run is recorded.
+
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
   test confirms that an object or null presentation caret does not change the

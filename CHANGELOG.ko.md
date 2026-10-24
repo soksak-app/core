@@ -13,6 +13,15 @@
   test는 각각 1/1, `source-origins.test.mjs`는 5/5이며 `make docs-check`도
   통과한다. 보존된 Wails application 오류는 이 source 변경으로 다시 확인하지 않았다.
 
+- F239-51: helper 추출 이후 Files tree lookup을 소유 helper에서 import한다.
+  보존된 두 host runtime attempt는 수정 전 helper에서
+  `ReferenceError: treeNodes is not defined`로 실패했다. Focused helper test는
+  5/5, `make docs-check`는 통과했지만 같은 runtime case는 재실행하지 않아
+  runtime acceptance는 F239-51-1에서 추적한다.
+
+- F239-51-1: tree lookup 수정의 runtime acceptance를 별도로 추적한다. 수정 전
+  두 host attempt는 Red 증거이며 수정 후 window run 기록은 없다.
+
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는
   object 또는 null presentation caret이 hash를 바꾸지 않고 raw engine cursor
