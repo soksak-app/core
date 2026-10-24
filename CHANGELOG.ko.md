@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F212.12-2-1-2: 선택적 activated view-focus test 경로를 추가한다. Activation
+  완료, page press 수신, first-responder 상태, key 수신을 검사하며 기존
+  비활성 경로와 surface-reveal assertion을 유지한다. Focused binary가 빌드되고
+  기본 비활성 경로는 9/9 통과했다. Activation 경로는 실행하지 않았으며 수용
+  항목은 열린 상태다.
+
 - F240-11: 현재 owner 근거에 맞춰 실행 계획을 정합화한다. F239-47-9에는
   보존된 activation Red/Green log와 platform을 기록하며 terminal 동작은
   주장하지 않는다. F212.12-2-2-4-8-2-2 상세 상태는 active checklist 한 곳에

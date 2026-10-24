@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F212.12-2-1-2: Add an optional activated view-focus test path. It checks
+  activation completion, page press receipt, first-responder state and key
+  receipt while preserving the existing inactive-path and surface-reveal
+  assertions. The focused binary builds and the default non-activation path
+  passes 9/9. The activation path has not run; its acceptance item remains
+  open.
+
 - F240-11: Reconcile the execution plan with current owner evidence. F239-47-9
   now records its preserved activation Red/Green log and platform without
   claiming terminal behavior. The detailed F212.12-2-2-4-8-2-2 status appears
