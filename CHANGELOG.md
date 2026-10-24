@@ -168,6 +168,14 @@
   non-activation view-focus check passes 9/9. The activation variant remains
   unrun.
 
+- F239-37-2: Migrate the two-tree Files window check from plugin-host status
+  watches to declared Files snapshots and core sidebar acceptance events. The
+  check retains cross-tree expansion and selection, disk removal, bookmark
+  display, and visible-row measurements against declared tree nodes and
+  control rectangles. `node --check` passes for the changed E2E modules;
+  `make e2e-check` and `make docs-check` pass. No Red/Green run or window
+  runtime acceptance is recorded here.
+
 - F240-11: Reconcile the execution plan with current owner evidence. F239-47-9
   now records its preserved activation Red/Green log and platform without
   claiming terminal behavior. The detailed F212.12-2-2-4-8-2-2 status appears

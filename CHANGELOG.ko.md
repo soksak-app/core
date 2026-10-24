@@ -154,6 +154,13 @@
   요구한다. 이미 전면인 이전 process는 추가 activation 없이 복원된 것으로 처리하고 이전 PID 부재는 실패다. Fault test 14/14, 기본 비활성
   view-focus check 9/9가 통과했다. Activation variant는 실행하지 않았다.
 
+- F239-37-2: 두 tree Files window check를 plugin-host status watch에서
+  declared Files snapshot 및 core sidebar acceptance event로 옮긴다. 두 tree의
+  확장·선택 일치, 디스크 삭제, bookmark 표시, 선언된 tree node와 control
+  rectangle 기준 visible row 측정은 유지한다. 변경된 E2E module의 `node --check`,
+  `make e2e-check`, `make docs-check`가 통과한다. Red/Green 실행이나 window
+  runtime acceptance는 기록하지 않는다.
+
 - F240-11: 현재 owner 근거에 맞춰 실행 계획을 정합화한다. F239-47-9에는
   보존된 activation Red/Green log와 platform을 기록하며 terminal 동작은
   주장하지 않는다. F212.12-2-2-4-8-2-2 상세 상태는 active checklist 한 곳에

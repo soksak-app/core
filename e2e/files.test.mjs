@@ -33,8 +33,6 @@ const controlIndex = (sidebars, sidebar, section, at) => {
 };
 
 /* Order of the interactive elements of the file tree section: the section box that receives the selection, the star, refresh, and the element that holds the tree. */
-const STAR = 1;
-const REFRESH = 2;
 const HOLDER = 3;
 /* Height (pt) of a tree row. It is the row height of the sidebar list (ui/sections/tree.js of the files plugin repository). */
 const ROW = 20;
@@ -358,112 +356,242 @@ for (const app of Object.values(APPS)) {
   });
 }
 
-/** The number of rows with ink, counted from the top of the element that holds the tree in the capture. It stops at the first empty row. */
-function drawnRows(image, scale, holder) {
-  let rows = 0;
-  while ((rows + 1) * ROW <= holder.height) {
-    const band = { x: holder.x, y: holder.y + rows * ROW, width: holder.width, height: ROW };
-    if (inkRuns(image, scale, band, 1).length === 0) break;
-    rows++;
-  }
-  return rows;
-}
-
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: two mounted trees of one project show files.tree and bookmark through native clicks`, async (t) => {
+  test(`${app.name}: two mounted trees of one project show files.tree and bookmark through native clicks`,
+    { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    await terminalCardSidebar(s);
-    // Puts only the file tree in the inner left sidebar of the terminal card. Together with the tree of the left fixed sidebar, two are mounted.
-    const sets = (await s.get("core.settings")).values.sets;
-    await s.run("core.settings.set", { patch: { sets: sets.map((set) => set.id === "set-files" ? { ...set, sections: ["files.tree"] } : set) },
-      scope: "common" });
-    const project = await s.get("core.project");
+    const project = await s.until("core.project", (value) => value?.root, "the fixture project was not shown");
+    await terminalCardSidebar(s, { sections: ["files.tree"] });
     const folder = `pair-${process.pid}`;
     const directory = join(project.root, folder);
-    mkdirSync(directory);
-    writeFileSync(join(directory, "a.txt"), "a\n");
     s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
-    await s.run("files.refresh");
-    let tree = await s.until("files.tree", (value) => value?.entries.some((entry) => entry.path === folder),
-      "files.tree did not list the folder");
-    const mountedTrees = (value) => ["left", "terminal:left"].every((id) => value.find((item) => item.sidebar === id)
-      ?.sections.find((item) => item.id === "files.tree")?.mounted);
-    // The tree writes the head title and changes the rows in the callback that received the files.tree value. When the titles of both trees are visible,
-    // both trees have received the value.
-    const titled = (value) => mountedTrees(value) && ["left", "terminal:left"].every((id) => value.find((item) => item.sidebar === id)
-      ?.sections.find((item) => item.id === "files.tree")?.text.includes(project.root.split("/").at(-1)));
-    let sidebars = await s.until("core.sidebars", titled, "the left and inset trees did not receive files.tree");
-    const holders = async () => {
-      const value = await s.get("core.sidebars");
-      return Promise.all(["left", "terminal:left"].map((id) =>
-        s.rect("core.sidebar.section.control", controlIndex(value, id, "files.tree", HOLDER))));
+    const treeSidebars = ["left", "terminal:left"];
+    const sectionOf = (sidebars, sidebar, section) => sidebars.find((item) => item.sidebar === sidebar)
+      ?.sections.find((item) => item.id === section);
+    const treeElement = (snapshot) => snapshot.value?.elements.find((element) => element.kind === "tree" && element.key === "files");
+    const treeNodePath = (snapshot, path) => {
+      const tree = treeElement(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      const find = (nodes, parents = []) => {
+        for (const node of nodes ?? []) {
+          const keys = [...parents, node.key];
+          if (node.params?.path === path) return keys;
+          const nested = find(node.children, keys);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      const keys = find(tree.nodes);
+      assert.ok(keys, `${path} is not a node of files.tree`);
+      return keys;
     };
+    const treeNode = (snapshot, path) => {
+      const find = (nodes) => {
+        for (const node of nodes ?? []) {
+          if (node.params?.path === path) return node;
+          const nested = find(node.children);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      return find(treeElement(snapshot)?.nodes);
+    };
+    const visibleNodes = (snapshot) => {
+      const rows = [];
+      const visit = (nodes, parents = []) => {
+        for (const node of nodes ?? []) {
+          const path = [...parents, node.key];
+          rows.push({ node, path });
+          if (node.expanded === true) visit(node.children, path);
+        }
+      };
+      visit(treeElement(snapshot)?.nodes);
+      return rows;
+    };
+    const cursorOf = (sidebars, sidebar, status) => {
+      const section = sectionOf(sidebars, sidebar, status);
+      return { source: JSON.stringify(section?.source ?? null), seq: section?.acceptedSeq ?? null };
+    };
+    const cursorsOf = (sidebars, status) => Object.fromEntries(treeSidebars.map((sidebar) =>
+      [sidebar, cursorOf(sidebars, sidebar, status)]));
+    const sectionAdvanced = (sidebars, sidebar, status, cursor) => {
+      const section = sectionOf(sidebars, sidebar, status);
+      if (!section?.mounted || !Number.isInteger(section.acceptedSeq)) return false;
+      const source = JSON.stringify(section.source ?? null);
+      return source !== cursor.source || cursor.seq === null || section.acceptedSeq > cursor.seq;
+    };
+    const waitAcceptedSnapshot = async (status, before, accepts, message) => {
+      let cursor = before;
+      for (;;) {
+        const sidebars = await s.until("core.sidebars", (value) => treeSidebars.every((sidebar) =>
+          sectionAdvanced(value, sidebar, status, cursor[sidebar])), message);
+        const snapshot = await s.get(status);
+        assert.ok(Number.isInteger(snapshot.version), `${status} has no snapshot version`);
+        const allAccepted = treeSidebars.every((sidebar) =>
+          sectionOf(sidebars, sidebar, status)?.acceptedSeq >= snapshot.version);
+        if (allAccepted && accepts(snapshot, sidebars)) return { snapshot, sidebars, cursor: cursorsOf(sidebars, status) };
+        cursor = cursorsOf(sidebars, status);
+      }
+    };
+    const controlRect = (address) => s.request("dom.rect", { name: "core.sidebar.section.control", address });
+    const clickControl = async (address) => {
+      const rect = await controlRect(address);
+      assert.ok(rect.width > 0 && rect.height > 0, `control ${JSON.stringify(address)} has no area`);
+      await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    };
+    const rootAddress = (sidebar, snapshot, command) => {
+      const button = snapshot.value?.elements.find((element) => element.kind === "button" && element.command === command);
+      assert.ok(treeElement(snapshot) && button, `files.tree has no root button for ${command}`);
+      return { sidebar, section: "files.tree", key: button.key };
+    };
+    const nodeAddress = (sidebar, snapshot, path, role = "label") => {
+      const tree = treeElement(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      return { sidebar, section: "files.tree", key: tree.key, path: treeNodePath(snapshot, path), role };
+    };
+    const treeRects = async (snapshot) => {
+      const tree = treeElement(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      const rows = visibleNodes(snapshot);
+      assert.ok(rows.length > 0, "files.tree has no visible declared rows");
+      return Promise.all(treeSidebars.map(async (sidebar) => {
+        const holder = await controlRect({ sidebar, section: "files.tree", key: tree.key });
+        const controls = await Promise.all(rows.map(({ node, path }) => {
+          const role = node.branch === true || node.children?.length > 0 ? "expand" : "label";
+          return controlRect({ sidebar, section: "files.tree", key: tree.key, path, role });
+        }));
+        return { holder, controls };
+      }));
+    };
+    const waitTree = async (before, predicate, message) => waitAcceptedSnapshot("files.tree", before,
+      (snapshot, sidebars) => predicate(snapshot) && treeSidebars.every((sidebar) => {
+        const section = sectionOf(sidebars, sidebar, "files.tree");
+        return section?.mounted && section.text.includes(project.root.split("/").at(-1));
+      }), message);
     /** The number of rows that the two trees drew. The capture is removed before the check ends. */
-    const rowsDrawn = async () => {
+    const rowsDrawn = async (snapshot) => {
       await s.presented();
       const window = await s.get("host.window");
       if (window.occluded) throw new Error(`${app.name}'s window is completely covered by ${coveredBy(s, window)}; nothing was measured`);
       const { path } = await s.request("diagnostics.capture.still", {});
+      let passed = false;
       try {
         const image = readPng(path);
         const scale = image.width / (await s.get("host.window")).content.width;
-        const header = await s.rect("core.sidebar.section.header", 0);
+        const currentSidebars = await s.get("core.sidebars");
+        let headerIndex = 0;
+        for (const sidebar of currentSidebars.filter((value) => value.layout === "list")) {
+          const at = sidebar.sections.findIndex((section) => section.id === "files.tree");
+          if (sidebar.sidebar === "left") {
+            assert.ok(at >= 0, "the left sidebar has no Files tree section header");
+            headerIndex += at;
+            break;
+          }
+          headerIndex += sidebar.sections.length;
+        }
+        const header = await s.rect("core.sidebar.section.header", headerIndex);
         if (firstInk(image, scale, header) === null) {
           throw new Error(`${app.name}'s capture shows no page (window ${JSON.stringify({ occluded: window.occluded, active: window.active, key: window.key })}); nothing was measured`);
         }
-        return (await holders()).map((holder) => drawnRows(image, scale, holder));
+        const nodes = visibleNodes(snapshot);
+        const trees = await treeRects(snapshot);
+        const drawn = trees.map(({ holder, controls }) => controls.filter((rect) =>
+          inkRuns(image, scale, { x: holder.x, y: rect.y, width: holder.width, height: rect.height }, 1).length > 0).length);
+        const details = JSON.stringify({ nodes: nodes.map(({ node }) => ({ key: node.key, path: node.params?.path,
+          expanded: node.expanded === true })), trees: trees.map(({ holder, controls }) => ({ holder, controls })), drawn });
+        try {
+          assert.deepEqual(drawn, [nodes.length, nodes.length],
+            `${app.name}: the left and inset trees drew ${drawn} rows for ${nodes.length} visible declared nodes`);
+        } catch (error) {
+          throw new Error(`${error.message}; measurements ${details}; capture retained at ${path}`, { cause: error });
+        }
+        passed = true;
+        return drawn;
+      } catch (error) {
+        if (error.message.includes("capture retained at")) throw error;
+        throw new Error(`${error.message}; capture retained at ${path}`, { cause: error });
       } finally {
-        rmSync(dirname(path), { recursive: true, force: true });
+        if (passed) rmSync(dirname(path), { recursive: true, force: true });
       }
     };
-    const same = async (what) => {
-      const value = await s.get("files.tree");
-      const drawn = await rowsDrawn();
-      assert.deepEqual(drawn, [value.entries.length, value.entries.length],
-        `${what}: the left and inset trees drew ${drawn} rows for ${value.entries.length} entries ${JSON.stringify(value.entries.map((e) => e.path))} of ${value.root} (error ${value.error})`);
+    const same = async (what, value) => {
+      const drawn = await rowsDrawn(value);
+      assert.equal(drawn[0], drawn[1], `${what}: the two rendered trees drew different row counts ${drawn}`);
       return value;
     };
-    await same("after the listing");
 
-    // When a folder is opened with a native click in the inset tree, files.tree expands it, and both trees expand together.
-    const [, inset] = await holders();
-    const at = tree.entries.findIndex((entry) => entry.path === folder);
-    await s.click(inset.x + inset.width / 2, inset.y + (at + 0.5) * ROW);
-    tree = await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === `${folder}/a.txt`),
-      "a click on the folder in the inset tree did not open it");
-    await same("after the inset tree opened the folder");
-
-    // A folder deleted on disk disappears from both trees together.
-    rmSync(directory, { recursive: true, force: true });
-    tree = await s.until("files.tree", (value) => !value.entries.some((entry) => entry.path.startsWith(folder)),
-      "the removed folder stayed in files.tree");
-    await same("after the folder was removed on disk");
-
-    // Bookmark: selects a file with a native click in the inset tree and presses the star of the inset tree.
+    let sidebars = await s.get("core.sidebars");
+    let cursor = cursorsOf(sidebars, "files.tree");
     mkdirSync(directory);
     writeFileSync(join(directory, "a.txt"), "a\n");
-    await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === folder), "the folder did not come back");
-    sidebars = await s.get("core.sidebars");
-    const [, insetNow] = await holders();
-    const clickInset = async (value, path) => {
-      const index = value.entries.findIndex((entry) => entry.path === path);
-      assert.ok(index >= 0, `${path} is not a row`);
-      await s.click(insetNow.x + insetNow.width / 2, insetNow.y + (index + 0.5) * ROW);
-    };
-    // Presses the inset tree while another card has the focus. The press moves the focus to the shell card and redraws the sidebar.
+    assert.equal(await s.run("files.refresh"), null);
+    let state = await waitTree(cursor, (snapshot) => treeNode(snapshot, folder) !== null,
+      "files.tree did not list the folder in both mounted trees");
+    let tree = await same("after the listing", state.snapshot);
+
+    // A native click on the inset branch expands the same snapshot in both mounted trees.
+    cursor = state.cursor;
+    await clickControl(nodeAddress("terminal:left", tree, folder, "expand"));
+    state = await waitTree(cursor, (snapshot) => treeNode(snapshot, folder)?.expanded === true
+      && treeNode(snapshot, `${folder}/a.txt`) !== null,
+    "a native click on the inset tree branch did not expand it in both trees");
+    tree = await same("after the inset tree opened the folder", state.snapshot);
+
+    // A folder deleted on disk disappears from both trees together.
+    cursor = state.cursor;
+    rmSync(directory, { recursive: true, force: true });
+    state = await waitTree(cursor, (snapshot) => treeNode(snapshot, folder) === null,
+      "the removed folder stayed in both rendered trees");
+    tree = await same("after the folder was removed on disk", state.snapshot);
+
+    // Bookmark: select with a native click in the inset tree and press the left tree's declared bookmark command.
+    cursor = state.cursor;
+    mkdirSync(directory);
+    writeFileSync(join(directory, "a.txt"), "a\n");
+    assert.equal(await s.run("files.refresh"), null);
+    state = await waitTree(cursor, (snapshot) => treeNode(snapshot, folder) !== null,
+      "the refreshed tree did not list the folder again");
+    tree = state.snapshot;
+    cursor = state.cursor;
+    await clickControl(nodeAddress("terminal:left", tree, folder, "expand"));
+    state = await waitTree(cursor, (snapshot) => treeNode(snapshot, `${folder}/a.txt`) !== null,
+      "the inset tree did not show the file after expansion");
+    tree = await same("after the inset tree opened the folder again", state.snapshot);
+
+    // Select the file with the inset tree while another card has the focus.
     await s.run("core.card.focus", { card: "browser" });
-    await clickInset(await s.get("files.tree"), folder);
-    const file = { path: `${folder}/a.txt` };
-    await clickInset(await s.until("files.tree", (value) => value.entries.some((entry) => entry.path === file.path),
-      "the inset tree did not open the folder again"), file.path);
-    // The selection is state of the project, so both trees show it together, and the star of either tree bookmarks that file.
-    await s.until("files.selection", (value) => value === file.path, "the selection in the inset tree did not reach files.selection");
-    const star = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
-    await s.click(star.x + star.width / 2, star.y + star.height / 2);
-    await s.until("files.bookmarks", (value) => value.includes(file.path),
-      `a native click on ${file.path} in the inset tree and on the left tree's star did not bookmark it`);
-    s.cleanup(() => s.run("files.bookmarks.remove", { path: file.path }));
+    await s.until("core.grid", (grid) => grid.cards.find((card) => card.id === "browser")?.focused,
+      "core.card.focus did not focus the browser card");
+    const file = `${folder}/a.txt`;
+    sidebars = await s.get("core.sidebars");
+    cursor = cursorsOf(sidebars, "files.tree");
+    await clickControl(nodeAddress("terminal:left", tree, file));
+    state = await waitTree(cursor, (snapshot) => treeNode(snapshot, file)?.selected === true,
+      "the native inset-tree selection was not accepted by both trees");
+    tree = await same("after the inset tree selected the file", state.snapshot);
+
+    // Add bookmark sections only after the fixture project is active, and wait for both sections to accept the snapshot.
+    sidebars = await s.get("core.sidebars");
+    cursor = Object.fromEntries(treeSidebars.map((sidebar) => {
+      const section = sectionOf(sidebars, sidebar, "files.bookmarks");
+      return [sidebar, { source: JSON.stringify(section?.source ?? null), seq: null }];
+    }));
+    const settings = (await s.get("core.settings")).values;
+    await s.run("core.settings.set", { patch: { sets: settings.sets.map((set) => set.id === "set-files"
+      ? { ...set, sections: ["files.tree", "files.bookmarks"] } : set) }, scope: "common" });
+    const bookmarkState = await waitAcceptedSnapshot("files.bookmarks", cursor, () => true,
+      "both bookmark sections did not accept the initial snapshot");
+    sidebars = bookmarkState.sidebars;
+    cursor = bookmarkState.cursor;
+    s.cleanup(() => s.run("files.bookmarks.remove", { path: file }));
+    await clickControl(rootAddress("left", tree, "files.bookmarks.add"));
+    const bookmarked = await waitAcceptedSnapshot("files.bookmarks", cursor,
+      (snapshot) => snapshot.value?.elements.some((element) => element.kind === "list"
+        && element.items.some((item) => item.label === file)),
+      `a native click on ${file} in the inset tree and the left tree's star did not bookmark it`);
+    assert.ok(treeSidebars.every((sidebar) => sectionOf(bookmarked.sidebars, sidebar, "files.bookmarks")?.text.includes(file)),
+      "both bookmark sections did not display the selected file");
   });
 }
 
