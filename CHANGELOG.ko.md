@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F212.12-2-1-2: Native view-focus test의 선택적 activation variant는 아직 검증되지 않았다. 기록된 통합 시도는 다른 앱이 frontmost여서 해당 test 전에 거부됐고, 앞선 data-store test는 timeout됐다. Wails `AcceptFirstMouse` 후보는 main webview를 설정했지만 검증 대상 계약은 plugin `SPDocumentView`에 있으므로 원복했다. Main page의 별도 첫 클릭 실패는 재현되지 않았으며 해당 후보의 source 변경은 남아 있지 않다.
 - F239-38: Wails와 Tauri는 모든 log policy에서 선언된 info level의 `host.test.start`, `host.test.end`를 저장하므로 lifecycle이 error 또는 off여도 진단 window check가 flush된 mark 위치를 받는다. 일반 lifecycle/info event는 계속 gate되고 수를 기록한다. Red: 변경 전 두 host 소유 검사가 start mark를 거부했다. Green: Wails는 두 policy의 mark 검사를 통과하고 Tauri `test_mark_test`는 4/4 통과하며 `make docs-check`도 통과한다. 보존된 window-release 실행은 fixture 준비 전에 실패해 release assertion을 실행하지 않았다.
 - F239-26-4: 직접 shutdown check는 host 또는 terminal-service 대기가 실패해도 캡처한 application log를 감사한다. wait 실패를 첫 원인으로 보존하고 audit의 application error line도 결과에 포함한다. Red: controlled shutdown wait가 application error를 기록했지만 변경 전 runner는 timeout만 보고했다. Green: 같은 실행이 timeout을 먼저 보고하고 error line도 보존하며 소유 shutdown test는 6/6 통과한다.
 

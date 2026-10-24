@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F212.12-2-1-2: The optional activation variant of the native view-focus test remains unverified. The recorded aggregate attempt was refused before the test because another application was frontmost, and the preceding data-store test timed out. The Wails `AcceptFirstMouse` candidate was reverted because it configured the main webview while the verified contract belongs to plugin `SPDocumentView`; no main-page first-click failure was reproduced. No source change remains from the candidate.
 - F239-38: Wails and Tauri store `host.test.start` and `host.test.end` at their declared info level under every log policy, so diagnostic window checks receive flushed mark positions even when lifecycle is error or off. Ordinary lifecycle/info events remain gated and are counted. Red: both unchanged owning host tests refused the start mark. Green: Wails passes marker checks under both policies; Tauri `test_mark_test` passes 4/4; `make docs-check` passes. The preserved window-release attempt failed before fixture setup and did not exercise release assertions.
 - F239-26-4: The direct shutdown check audits captured application logs even when the host or terminal-service wait fails. It preserves the wait failure as the primary cause and includes application error lines from the audit. Red: a controlled shutdown wait wrote an application error but the unchanged runner reported only the timeout. Green: the same run reports the timeout first and retains the error line; the owning shutdown tests pass 6/6.
 
