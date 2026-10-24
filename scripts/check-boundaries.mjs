@@ -167,22 +167,22 @@ function trackedSources(root) {
     .filter((file) => !file.split("/").some((segment) => SKIP_DIRS.has(segment)));
 }
 
-// The folders of the core packages that tests belong to: a folder under packages/ or packages/<group>/ with a package.json,
-// go.mod or Cargo.toml. The Go and Rust packages of sok and the host have no package.json.
+// The folders of declared core packages that tests belong to. Workspace package manifests include applications and the
+// root e2e package; Go and Rust package manifests cover the native packages that have no package.json.
 const PACKAGE_MARKERS = ["package.json", "go.mod", "Cargo.toml"];
 export function corePackageFolders(root = ROOT) {
-  const folders = [];
-  const isPackage = (dir) => PACKAGE_MARKERS.some((marker) => existsSync(join(dir, marker)));
-  const subdirs = (dir) => existsSync(dir)
-    ? readdirSync(dir).map((name) => join(dir, name)).filter((path) => statSync(path).isDirectory())
-    : [];
-  for (const dir of subdirs(join(root, "packages"))) {
-    if (isPackage(dir)) folders.push({ dir: relative(root, dir), kind: "core", name: relative(root, dir) });
-    for (const inner of subdirs(dir)) {
-      if (isPackage(inner)) folders.push({ dir: relative(root, inner), kind: "core", name: relative(root, inner) });
-    }
-  }
-  return folders;
+  const tracked = execFileSync("git", ["ls-files", "-z"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  }).split("\0").filter((file) => file !== "");
+  const folders = new Set(tracked
+    .filter((file) => PACKAGE_MARKERS.includes(posix.basename(file)))
+    .map((file) => posix.dirname(file))
+    .filter((dir) => dir !== "."));
+  return [...folders]
+    .sort((a, b) => a.localeCompare(b))
+    .map((dir) => ({ dir, kind: "core", name: dir }));
 }
 
 // A line that reads a file or names a path to open: a file-access call, a URL or module path, or a process. A string that a

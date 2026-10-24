@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-48-5-1: Discover test owners from tracked package manifests, including
+  the root e2e package, before checking cross-package path reads. Red: the
+  production owner list omitted `e2e`; the owning test failed on the actual
+  browser cohort test path. Green: the focused checker test passes 18/18 and
+  `make boundaries` passes for 16 components. Window checks may name installed
+  components, but that exception does not permit implementation-path reads.
+
 - F239-48-5: Exclude only declared application window checks from the core
   package-name boundary audit. Classification requires an `e2e/` test source,
   an import of `open` from `@soksak/window-check/app.mjs`, and a call through

@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-48-5-1: 다른 package 경로 읽기를 검사하기 전에 tracked package manifest에서
+  test owner를 찾는다. Root `e2e` package도 포함한다. Red: production owner 목록이
+  `e2e`를 빠뜨려 실제 browser cohort test 경로의 owner test가 실패했다. Green:
+  focused checker test 18/18과 16 components 대상 `make boundaries`가 통과한다.
+  Window check는 설치된 component 이름을 참조할 수 있지만 구현 경로 읽기는 허용되지 않는다.
+
 - F239-48-5: 선언된 application window check만 core package-name boundary audit에서
   제외한다. 분류 조건은 `e2e/` test source, `@soksak/window-check/app.mjs`의 `open`
   import, imported binding의 실제 호출이다. Red: 변경 전 audit는 browser cohort

@@ -1,12 +1,12 @@
 // Tests of the module exports of scripts/check-boundaries.mjs. Importing the module runs no check and prints nothing.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { checkNames, checkTestPathReads, components, corePackageNames } from "../check-boundaries.mjs";
+import { checkNames, checkTestPathReads, components, corePackageFolders, corePackageNames } from "../check-boundaries.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
@@ -170,4 +170,15 @@ test("checkTestPathReads does not refuse a path that a test names as the key of 
   };
   const errors = checkTestPathReads(components, testFiles(Object.keys(sources)), (file) => sources[file]);
   assert.deepEqual(errors.map((error) => error.split(":")[0]), ["packages/plugin-api/test/read.test.mjs"]);
+});
+
+test("checkTestPathReads discovers the declared e2e owner from the production package list", () => {
+  const owners = corePackageFolders();
+  assert.ok(owners.some((owner) => owner.dir === "e2e"), "the declared e2e package owns its window checks");
+  const file = "e2e/browser-cohort-upgrade.test.mjs";
+  const source = `${readFileSync(new URL(`../../${file}`, import.meta.url), "utf8")}\n` +
+    `readFileSync(new URL("../packages/plugin-api/index.js", import.meta.url));\n`;
+  assert.deepEqual(checkTestPathReads(owners, [file], () => source), [
+    `${file}:${source.split("\n").length - 1}: test of e2e reads a path of packages/plugin-api: ../packages/plugin-api/index.js`,
+  ], "the main owner discovery must reject implementation reads by an e2e test");
 });
