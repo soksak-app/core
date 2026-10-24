@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F239-48-3-7: Add Tauri MockRuntime IPC coverage for the starter binding's
+  invalid request argument. The Tauri and Wails owner tests pass 1/1 each.
+  The host structure audit drops from 12 to 11 findings. The inventory check
+  passes with 100 lanes, 697 implementation files, and 995 test files.
 - F239-48-3-6: Place the Go diagnostics input-reference parser test beside
   its contract owner, matching the Rust test module. The host audit drops
   from 13 to 12 findings. The unchanged Go owner test passes 1/1. The
