@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- F212.10-editor-1: The editor window check now clicks the declared
+  `editor.content` rectangle and waits for that view to become the native
+  responder before sending keys, including after a main-page reload. In the
+  preserved two-host run, this setup let initial editing and save recovery
+  proceed; after reload, `z` instead went to the main-window responder before
+  the post-reload click was added. That run also recorded a background-session
+  `imageAttached` refusal followed by `runtime.textSize.read` and
+  `runtime.native.on` timeouts on both hosts. F212.10-core-5-5 tracks that
+  separate failure. The new post-reload setup and the full window check remain
+  unverified; no editor cause is assigned.
+
 - F239-37-1: Migrate and verify the single Files tree geometry window case.
   Red: Wails and Tauri each exposed six declared tree controls while the
   unchanged positional baseline expected four. Green: the focused case passes
