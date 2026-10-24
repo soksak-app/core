@@ -69,6 +69,12 @@ function mountFailureError(surfaceId, record) {
   return new Error(`surface ${surfaceId} mount attempt ${record.attempt} failed during ${record.phase}: ${record.reason}`);
 }
 
+function viewCallCancellationFields(plugin, surface, event, generation = event?.generation) {
+  const fields = { plugin, surface, id: event?.id, command: String(event?.command ?? "") };
+  if (Number.isSafeInteger(generation) && generation > 0) fields.generation = generation;
+  return fields;
+}
+
 function authorizationFor(id) {
   let gate = authorization.get(id);
   if (!gate) {
@@ -466,9 +472,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   const answering = scoped.native.on("view-call", (event) => {
     const currentSource = currentSourceGeneration();
     if (!Number.isSafeInteger(event?.generation) || event.generation < 1 || event.generation !== currentSource) {
-      emitEvent("debug", "page.view.call.cancel", {
-        plugin: surface.pluginId, surface: surface.surfaceId, id: event?.id, command: String(event?.command ?? ""),
-      });
+      emitEvent("debug", "page.view.call.cancel", viewCallCancellationFields(surface.pluginId, surface.surfaceId, event));
       return;
     }
     refreshViewCommands(currentSource);
@@ -480,14 +484,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       return;
     }
     if (closing.aborted) {
-      emitEvent("debug", "page.view.call.cancel", {
-        plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
-      });
+      emitEvent("debug", "page.view.call.cancel", viewCallCancellationFields(surface.pluginId, surface.surfaceId, event));
       return;
     }
-    // The receipt of a call and its reply are records of the page at the debug level, so a call that never replies is the last
-    // receipt without a reply (docs/spec/logging.md#policy).
-    emitEvent("debug", "page.view.call", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command) });
+    // The receipt, reply and cancellation records identify the view incarnation at the debug level (docs/spec/logging.md#policy).
+    emitEvent("debug", "page.view.call", {
+      plugin: surface.pluginId, surface: surface.surfaceId, generation: event.generation,
+      id: event.id, command: String(event.command),
+    });
     // A surface that declares surface.unload reads its tab state from the store, which the page opens during its start (projects.js).
     // Its call waits until the store has been tried, as the mount does, so a call during the start is not answered before the store.
     const receivedGeneration = documentGeneration;
@@ -509,20 +513,21 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     ).then((reply) => {
       if (closing.aborted || receivedGeneration !== documentGeneration ||
           receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
-        emitEvent("debug", "page.view.call.cancel", {
-          plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
-        });
+        emitEvent("debug", "page.view.call.cancel",
+          viewCallCancellationFields(surface.pluginId, surface.surfaceId, event, receivedSourceGeneration));
         return null;
       }
       return scoped.native.call("viewReply", { ...reply, generation: receivedSourceGeneration }).then(() => {
-        emitEvent("debug", "page.view.reply", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, outcome: "error" in reply ? "error" : "result" });
+        emitEvent("debug", "page.view.reply", {
+          plugin: surface.pluginId, surface: surface.surfaceId, generation: receivedSourceGeneration,
+          id: event.id, outcome: "error" in reply ? "error" : "result",
+        });
       });
     }).catch((error) => {
       if (closing.aborted || receivedGeneration !== documentGeneration ||
           receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
-        emitEvent("debug", "page.view.call.cancel", {
-          plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
-        });
+        emitEvent("debug", "page.view.call.cancel",
+          viewCallCancellationFields(surface.pluginId, surface.surfaceId, event, receivedSourceGeneration));
         return;
       }
       // default: a refusal that is not an Error carries its value as the text.

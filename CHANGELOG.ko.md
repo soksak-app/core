@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F212.10-core-3-7: native source generation으로 view call 진단 기록을 짝짓는다.
+  재생성된 view의 회신이 종료된 generation의 같은 id 호출을 끝낼 수 있었다.
+  Workbench는 view call, reply 및 유효 source 취소 기록에 generation을 넣고
+  window-check는 page, plugin, surface, generation, id로 짝짓는다. 집중
+  Workbench tests 3/3, window-check tests 4/4, `make events-check`와
+  `make docs-check`가 통과한다. Runtime reload 수용 검증은 F212.10-core-3-2에
+  남는다.
+
 - F239-37-3: Enter를 보내기 전에 선택된 Files tree label에 focus를 준다.
   Attempt03은 editor disabled 및 선택 node의 선언된 `files.open` action을
   확인했지만 failure row는 나타나지 않았다. Owning helper test는 `core.focus`

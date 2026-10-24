@@ -767,10 +767,11 @@
       "fields": {
         "plugin": "string",
         "surface": "string",
+        "generation": "number",
         "id": "number",
         "command": "string"
       },
-      "description": "The workbench received a call request of a view (docs/spec/native-surfaces.md#view-surfaces, view call). A call with this record and no page.view.reply of the same plugin, surface and id has not replied."
+      "description": "The workbench received a call request of a view (docs/spec/native-surfaces.md#view-surfaces, view call). generation is the accepted native view source incarnation. A call with this record and no page.view.reply or page.view.call.cancel of the same page, plugin, surface, generation and id has not replied."
     },
     "page.view.reply": {
       "layer": "page",
@@ -779,17 +780,18 @@
       "fields": {
         "plugin": "string",
         "surface": "string",
+        "generation": "number",
         "id": "number",
         "outcome": "string"
       },
-      "description": "The workbench sent the reply of a view call to the view; outcome is result or error, and the reply carries the same id as its page.view.call."
+      "description": "The workbench sent the reply of a view call to the view; generation is the source incarnation and outcome is result or error. The reply carries the same page, plugin, surface, generation and id as its page.view.call."
     },
     "page.view.call.cancel": {
       "layer": "page",
       "class": "call",
       "level": "debug",
-      "fields": { "plugin": "string", "surface": "string", "id": "number", "command": "string" },
-      "description": "Closing the surface canceled the reply of this received view call; no reply was sent to the ended view."
+      "fields": { "plugin": "string", "surface": "string", "generation?": "number", "id": "number", "command": "string" },
+      "description": "The workbench canceled this view call without sending a reply. generation is the captured source incarnation when the canceled event carried a valid generation; an invalid or absent generation remains absent."
     },
     "page.view.event.cancel": {
       "layer": "page",

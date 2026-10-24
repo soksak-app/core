@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F212.10-core-3-7: Pair view call diagnostics by their native source generation.
+  A reply from a recreated view could otherwise settle a call with the same id
+  from an ended generation. The Workbench records generation on view call,
+  reply and valid-source cancellation events; window-check pairs them by page,
+  plugin, surface, generation and id. The focused Workbench tests pass 3/3,
+  window-check tests pass 4/4, and `make events-check` and `make docs-check`
+  pass. Runtime reload acceptance remains under F212.10-core-3-2.
+
 - F239-37-3: Focus the selected Files tree label before sending Enter.
   Attempt03 showed the editor disabled and the selected node's declared
   `files.open` action, but the failure row did not appear. The owning helper

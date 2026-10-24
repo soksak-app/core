@@ -384,7 +384,7 @@ test("a view surface reports phase ready after its view declares its composition
 });
 
 // The receipt of a view call and its reply are written at the debug level, so a call that never replies shows as a receipt without a reply.
-test("a view call writes a debug receipt and a debug reply record with its id", { timeout: 5000 }, async (t) => {
+test("a view call writes receipt and reply records with its source generation", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
@@ -427,15 +427,15 @@ test("a view call writes a debug receipt and a debug reply record with its id", 
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
-    listeners.get("view-call")({ id: 7, command: "runtime.settings.read", params: null });
+    listeners.get("view-call")({ generation: 1, id: 7, command: "runtime.settings.read", params: null });
     // The reply is sent after the call has settled, so the test waits for the viewReply call.
     await replyArrived;
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.call"), [{ level: "debug", event: "page.view.call",
-      fields: { plugin: pluginId, surface: surfaceId, id: 7, command: "runtime.settings.read" } }]);
+      fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, command: "runtime.settings.read" } }]);
     assert.deepEqual(emitted.filter(({ event }) => event === "page.view.reply"), [{ level: "debug", event: "page.view.reply",
-      fields: { plugin: pluginId, surface: surfaceId, id: 7, outcome: "result" } }]);
-    assert.deepEqual(replies.map(({ id }) => id), [7]);
+      fields: { plugin: pluginId, surface: surfaceId, generation: 1, id: 7, outcome: "result" } }]);
+    assert.deepEqual(replies, [{ id: 7, result: {}, generation: 1 }]);
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
@@ -1142,9 +1142,9 @@ test("a view process end cancels its pending work across restart and accepts new
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const call = nativeListeners.get("view-call");
-    call({ id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
+    call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await settle(() => sidecarListeners.length === 1);
-    call({ id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { id: "old" } } });
+    call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { id: "old" } } });
     await oldSendStartedPromise;
     sidecarListeners[0].listener({ id: "old" });
     await oldEventStartedPromise;
@@ -1177,7 +1177,8 @@ test("a view process end cancels its pending work across restart and accepts new
       staleReplyReachedReplacement: calls.some(({ name }) => name === "staleReplyReachedReplacement"),
       oldListenerActive: sidecarListeners[0].active,
       newListenerActive: sidecarListeners.at(-1).active,
-      oldCallCanceled: emitted.some(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11),
+      oldCallCancellation: emitted.filter(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11)
+        .map(({ fields }) => ({ generation: fields.generation, id: fields.id })),
       oldEventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
       sidecarEventCancellationCount: emitted.filter(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message").length,
       reports: reported,
@@ -1186,7 +1187,7 @@ test("a view process end cancels its pending work across restart and accepts new
       lateOldEventDelivered: calls.some(({ name, payload }) => name === "viewEvent" && payload.data.body.id === "late-old"),
     }, {
       staleReplies: [], staleReplyReachedReplacement: false, oldListenerActive: false, newListenerActive: true,
-      oldCallCanceled: true, oldEventCanceled: true,
+      oldCallCancellation: [{ generation: 1, id: 11 }], oldEventCanceled: true,
       sidecarEventCancellationCount: 2,
       reports: ["view event sidecar.message: current view document refused the event"], newEventDelivered: true,
       sentSidecarMessages: [
@@ -1396,10 +1397,10 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
     seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const call = listeners.get("view-call");
-    call({ id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
+    call({ generation: 1, id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
     await new Promise((resolve) => setImmediate(resolve));
     sidecarListeners.get("probe")({ n: 1 });
-    call({ id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 2 } } });
+    call({ generation: 1, id: 11, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 2 } } });
     await sendStartedPromise;
     await disposeSurface(surfaceId);
     ended = true;
@@ -1409,9 +1410,10 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
     assert.deepEqual({
       staleHostCalls,
       reported,
-      callCanceled: emitted.some(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11),
+      callCancellation: emitted.filter(({ event, fields }) => event === "page.view.call.cancel" && fields.id === 11)
+        .map(({ fields }) => ({ generation: fields.generation, id: fields.id })),
       eventCanceled: emitted.some(({ event, fields }) => event === "page.view.event.cancel" && fields.event === "sidecar.message"),
-    }, { staleHostCalls: [], reported: [], callCanceled: true, eventCanceled: true });
+    }, { staleHostCalls: [], reported: [], callCancellation: [{ generation: 1, id: 11 }], eventCanceled: true });
   } finally {
     globalThis.dispatchEvent = previousDispatch;
     globalThis.ErrorEvent = previousError;
