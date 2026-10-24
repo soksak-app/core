@@ -127,14 +127,21 @@
 - F212.10-core-3-12: 초기 project context가 확정되고 레이아웃을 불러올 때까지
   첫 native view composition과 background sidecar open을 보류한다. Project open이
   거부되면 library 정리 뒤 gate를 열고, page initialization 실패는 gate를 reject한다.
-  Focused owner test는 6/6 통과한다. FIFO core/host 0.0.21 cohort의 정확한 F3-4
-  case는 양 host 모두 실패했다. Wails는 host sequence 66의 surface tab-xrezdv,
-  Tauri는 sequence 37의 tab-okntn7에서 undeclared composition error를 기록했다.
-  양 run audit은 이 application error로 실패했다. F212.10-core-3-13은 일치하는
-  placement-order race를 고치지만 유일한 trigger라는 증거는 없다. Application
-  acceptance를 주장하지 않는다.
+  Focused owner test는 6/6 통과한다. 초기 two-host run은 undeclared composition 오류로
+  실패했다. Trace에서 page가 terminal composition을 accept하고 성공한 complete sync에서
+  mounted surface를 생략한 뒤 disposal이나 새 declaration 없이 다시 포함한 것을 확인했다.
+  F212.10-core-3-13의 관련 ordering 수정만으로는 충분하지 않았고 F212.10-core-3-15가
+  complete sync 동안 mount된 view를 유지한다. Rebuilt trace-on F3-4 check는 이제 양 host에서
+  application error 없이 통과한다.
 
-- F212.10-core-3-4: 두 memory-saver 설정에서 저장된 비활성 Browser view를 확인하는 focused two-host window check를 추가한다. Enabled에서는 unloaded/no native surface, disabled에서는 loaded/ready/invisible native placement를 확인하며 active terminal은 두 경우 모두 ready 상태로 보이고 배치된다. Runtime acceptance는 대기 중이며 first-frame pixel은 주장하지 않는다.
+- F212.10-core-3-4: 두 memory-saver 설정에서 저장된 비활성 Browser view를 확인한다.
+  macOS 26.6.2 arm64에서 trace-on case가 Wails와 Tauri 모두 통과한다. Enabled 상태에서는
+  Browser tab이 native surface 없이 unloaded로 남고, disabled 상태에서는 Browser가 load되어
+  accepted sync에 hidden surface로 포함된다. Active terminal은 ready/visible이다. 두 run에
+  application error와 dropped trace record가 없고 cleanup은 두 host와 sidecar를 종료하고
+  캡처한 baseline을 복원했다. 실행 시간은 4330.452625 ms와 4363.63625 ms다. Core/host는
+  0.0.21이며 plugin과 bundle hash는 F212.10-core-3-15 feature 항목에 기록한다.
+  First-frame pixel은 주장하지 않는다.
 
 - F239-47-30-3-1: 공개 display-link stop artifact의 consumer 검증을 추가한다. Stop 오류 뒤 incomplete artifact를 보존하는 case를 포함해 focused helper test가 7/7 통과한다. Two-host runtime check는 대기 중이며 cadence acceptance를 주장하지 않는다.
 - F239-47-30-3: ScreenCaptureKit callback record와 별도로 capture 수명 동안

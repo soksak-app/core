@@ -133,15 +133,24 @@
 - F212.10-core-3-12: Hold first native view composition and background sidecar
   opens until the initial project context is committed and its layout is loaded.
   Release the startup gate after library cleanup on a rejected project open and
-  reject it when page initialization fails. Focused owner tests pass 6/6.
-  The exact F3-4 case on the FIFO core/host 0.0.21 cohort failed on both hosts:
-  Wails recorded one undeclared composition error for surface tab-xrezdv at host
-  sequence 66; Tauri recorded the same error for tab-okntn7 at sequence 37. Both
-  run audits failed on that application error. F212.10-core-3-13 fixes a matching
-  placement-order race but is not proven to be the sole trigger. No application
-  acceptance is claimed.
+  reject it when page initialization fails. Focused owner tests pass 6/6. The
+  initial two-host run failed on an undeclared composition error. Trace records
+  showed the page accept a terminal composition, omit the mounted surface in a
+  successful complete sync, then re-include it without disposal or redeclaration.
+  F212.10-core-3-13 fixed a related ordering race but was insufficient alone;
+  F212.10-core-3-15 retains mounted views across complete syncs. The rebuilt
+  trace-on F3-4 check now passes on both hosts without application errors.
 
-- F212.10-core-3-4: Add a focused two-host window check for a saved inactive Browser view under both memory-saver settings. It verifies unloaded/no native surface when enabled, and loaded/ready/invisible native placement when disabled; the active terminal stays ready and visible. Runtime acceptance remains pending, and the check makes no first-frame pixel claim.
+- F212.10-core-3-4: Verify a saved inactive Browser view under both memory-saver
+  settings. On macOS 26.6.2 arm64, the trace-on case passes on Wails and Tauri:
+  enabled mode leaves the Browser tab unloaded without a native surface, while
+  disabled mode loads it and includes it in an accepted hidden-surface sync;
+  the active terminal remains ready and visible. Both runs have no application
+  errors or dropped trace records, and cleanup ends both hosts and sidecars and
+  restores the captured baseline. Runtime durations were 4330.452625 ms and
+  4363.63625 ms. Tested core/host version is 0.0.21; plugin and bundle hashes
+  are recorded in the F212.10-core-3-15 feature entry. No first-frame pixel
+  claim is made.
 
 - F239-47-30-3-1: Add consumer validation for the public display-link stop artifact. The focused helper tests pass 7/7, including preservation of an incomplete artifact when stop reports an error. The two-host runtime check remains pending; no cadence acceptance is claimed.
 - F239-47-30-3: Add a capture-lifetime public AppKit display-link trace beside
