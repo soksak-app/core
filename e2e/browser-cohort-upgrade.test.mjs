@@ -5,10 +5,8 @@ import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 
-const app = APPS.wailsv3;
-
-if (app) {
-  test("wailsv3: the browser upgrade keeps the candidate starter cohort ready", { timeout: 90000 }, async (t) => {
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the browser upgrade keeps the candidate starter cohort ready`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     const registry = process.env.SOKSAK_CANDIDATE_REGISTRY;
     assert.ok(registry, "SOKSAK_CANDIDATE_REGISTRY must name the frozen local candidate index");
