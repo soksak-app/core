@@ -4,6 +4,27 @@
 
 ## Unreleased
 
+- F239-52-2: Match `core.sidebars.source.id` with `core.plugin.snapshots`.
+  The chosen plugin-host source uses `plugin:<plugin id>` while snapshot rows
+  use the bare plugin id. Red: the retained two-host run had current Files
+  snapshot rows but timed out because the helper compared `plugin:files` with
+  `files`. The consumer now validates the source id against the status owner,
+  requires a null surface and positive generation, then waits for a matching
+  sequence. The owning test passes 3/3 and rejects an invalid source before
+  waiting; `node --check e2e/projects.test.mjs` passes. `make docs-check` passes.
+  `make e2e-check` remains pending in the primary dependency environment. No
+  window runtime was rerun.
+
+- F239-52-2: Match `core.sidebars.source.id` with `core.plugin.snapshots`.
+  The chosen plugin-host source uses `plugin:<plugin id>` while snapshot rows
+  use the bare plugin id. Red: the retained two-host run had current Files
+  snapshot rows but timed out because the helper compared `plugin:files` with
+  `files`. The consumer now validates the source id against the status owner,
+  requires a null surface and positive generation, then waits for a matching
+  sequence. The owning test passes 3/3 and rejects an invalid source before
+  waiting. `make e2e-check` and `make docs-check` remain pending. No window
+  runtime was rerun.
+
 - F239-47-6/F239-47-10: Record the P85 two-host IME attempt. Both fixed AppKit reference sequences and all ten terminal documents matched. Tauri recorded a 34.660750 ms frame gap and Wails 33.694458 ms, exceeding the unchanged 33 ms limit; visual acceptance remains open. Metadata assigns all vowels the same foreground/background and underlines only the last marked vowel. The callback DTO does not expose AppKit selector names or `committedLength`. A second query replaced the original baseline, and the final frontmost observation conflicts with the runner's restore log; F239-47-24 tracks a valid session baseline. Both hosts and sidecars exited. Structured JSONL logs had zero error-level records, but both native host stderr logs contained `error messaging the mach port for IMKCFRunLoopWakeUpReliable`; the messages remain unclassified, with no established link to the capture gaps.
 
 - F239-47-6: Record a blue underline observed beneath `preedit` in the terminal prompt path on a fresh Wails window. The corresponding terminal base cells had no underline, inverse or link flag, while `terminal.cursor.preedit` held `ㅏㅏㅏ`. Capture began after the mark was already present; its three non-activating frames produced no source raster or candidates and recorded no source drops. The painter remains unknown and visual acceptance remains open.
