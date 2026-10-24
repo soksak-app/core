@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F267.1: F148과 F163 behavior evidence link를 수정한다.
+  원래 parity 출력은 오래된 F148 test 이름과 F163 source symbol을
+  지목했다. 두 link는 현재 test와 source를 가리키며 현재 audit의 feature-link
+  오류는 0건이다. 다른 F267 child에 10건이 남았다. docs 검사가 통과한다.
+
 - G1.4-101-1-1: tao Cargo patch를 제거하고 crates.io의 tao 0.37.2를 사용한다. 릴리스 기록은 tao 이슈 1327의 닫힌 창 메모리 증가 수정을 포함한다고 명시한다. Red: 이 릴리스 전의 과거 실패를 새로운 Red로 재사용하지 않았다. Green: 두 host를 tao 0.37.2로 다시 빌드하고 추적 `window-release.test.mjs`의 Tauri와 Wails 검사를 통과했다(macOS 26.6.2 arm64, 파일 1개, 9.872초). `make docs-check`가 통과한다.
 
 - F212.12-2-1-2: Native view-focus test의 선택적 activation variant는 아직 검증되지 않았다. 기록된 통합 시도는 다른 앱이 frontmost여서 해당 test 전에 거부됐고, 앞선 data-store test는 timeout됐다. Wails `AcceptFirstMouse` 후보는 main webview를 설정했지만 검증 대상 계약은 plugin `SPDocumentView`에 있으므로 원복했다. Main page의 별도 첫 클릭 실패는 재현되지 않았으며 해당 후보의 source 변경은 남아 있지 않다.

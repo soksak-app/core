@@ -1511,7 +1511,7 @@ const FEATURE_LINKS = [
       { file: "scripts/check-versions.mjs", symbol: "export const RELEASE" },
     ],
     tests: [
-      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release version" },
+      { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
     ],
     expected: "Every declared workspace version is the version of the release that carries the records of the application log.",
     levels: ["unit"],
@@ -3079,7 +3079,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F163",
-    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "first run: the starter pack ${pack} was not installed: ${error?.message ?? error}" }],
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "first run: the starter pack ${failedPack} was not installed: ${error?.message ?? error}" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a first run that cannot read the registry starts the window without the pack and states why" }],
     expected: "A first run without a network, or with a registry that cannot be read, starts the window without the starter pack, states why, and installs the pack at the next start.",
     levels: ["unit"],

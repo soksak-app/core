@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F267.1: Repair the F148 and F163 behavior evidence links.
+  The original parity output named the stale F148 test title and F163 source
+  symbol. The links now resolve to the current test and source; the current
+  audit reports 0 feature-link issues and 10 remaining issues assigned to
+  other F267 children. The docs check passes.
+
 - G1.4-101-1-1: Removed the tao Cargo patch and resolved tao 0.37.2 from crates.io. Its release notes state that it fixes the closed-window memory growth in tao issue 1327. Red: no historical failure was recreated as a new Red; the recorded unpinned failure predates this release. Green: rebuilt both hosts with tao 0.37.2 and passed the tracked `window-release.test.mjs` checks on Tauri and Wails (macOS 26.6.2 arm64, 1 file, 9.872 s). `make docs-check` passes.
 
 - F212.12-2-1-2: The optional activation variant of the native view-focus test remains unverified. The recorded aggregate attempt was refused before the test because another application was frontmost, and the preceding data-store test timed out. The Wails `AcceptFirstMouse` candidate was reverted because it configured the main webview while the verified contract belongs to plugin `SPDocumentView`; no main-page first-click failure was reproduced. No source change remains from the candidate.
