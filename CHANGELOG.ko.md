@@ -92,13 +92,15 @@
   두 log audit이 error record 없이 통과했고 process wait은 양 host와 sidecar가
   종료됐음을 확인한다. 전체 Files suite 통과를 뜻하지 않는다.
 
-- F239-47-30: exact pixel 기준을 바꾸지 않고 색 경로 실험 두 가지를
+- F239-47-30: exact pixel 기준을 바꾸지 않고 색 경로 실험 결과를
   기록한다. 비활성 WKWebView 비교에서 명시적 sRGB window backing은 캡처된
   Display P3 빨강·초록 표본을 바꾸었고 중립 회색은 유지됐다. 같은 source의
   16-bit-float image를 image-region layer에 지정한 뒤 BGRA8로 되돌리면
   12,288-byte source와 정확히 같았지만 ScreenCaptureKit crop은 여전히
-  1,821개 픽셀이 달랐다. 두 결과 모두 production 원인을 밝히지 못한다.
-  9픽셀 Red fixture는 격리 상태로 유지하며 항목은 열린 상태다.
+  1,821개 픽셀이 달랐다. native-surfaces capture 계약상 이 unmatched 결과는
+  실험 관측이지 제품 Red나 source 부재의 증명이 아니다. 원인은 모른다.
+  지원되지 않는 unconditional-match 실험은 제거했고 원시 측정값은
+  보존했다. Identity acceptance와 F30은 열린 상태다.
 
 - F239-47-28: `committedLength` 앞의 replacement를 AppKit 전에 거부한다.
   기존 경로는 AppKit이 확정 `가`를 `invalid`로
