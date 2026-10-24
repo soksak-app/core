@@ -4,11 +4,16 @@
 
 ## 미배포
 
-- F239-52: `status.get`으로 no-project Files snapshot을 읽는다. Project-close
-  check가 Files section이 `core.sidebars`에서 사라진 것을 확인한 뒤 실행한다.
-  Plugin host는 declared UI snapshot을 push하고 `status.watch`를 거부한다.
-  이전 check는 두 Files status에 지원하지 않는 method를 사용했다. Focused
-  consumer test는 2/2, `make docs-check`는 통과한다. Window check는 재실행하지 않았다.
+- F239-52: 지원되지 않는 plugin-host `status.watch` 호출을 closed-project
+  Files snapshot용 `status.get` pull로 교체한다. 보존된 runtime attempt는
+  plugin host가 contract에 따라 거부하는 `status.watch`에서 실패했다.
+  Controlled consumer test는 2/2 통과하지만 project release 뒤 pull이 host의
+  snapshot publication 뒤에 실행된다는 test 증거는 없다. 순서 검증은 진행 중이다.
+  `make docs-check`는 통과하고 window check는 재실행하지 않았다.
+
+- F239-52-1: Project release와 plugin-host snapshot publication 사이의
+  event-driven barrier 누락을 추적한다. Project release는 null project를
+  전달하지만 publication을 기다리지 않으며 post-release 순서 결과는 주장하지 않는다.
 
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는

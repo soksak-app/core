@@ -4,12 +4,17 @@
 
 ## Unreleased
 
-- F239-52: Read no-project Files snapshots with `status.get` after the
-  project-close check observes that Files sections left `core.sidebars`.
-  Plugin hosts push declared UI snapshots and refuse `status.watch`; the
-  previous check used that unsupported method for both Files statuses. The
-  focused consumer test passes 2/2 and `make docs-check` passes. The window
-  check was not rerun.
+- F239-52: Replace unsupported plugin-host `status.watch` calls with
+  `status.get` pulls for the closed-project Files snapshots. The retained
+  runtime attempt failed on `status.watch`, which plugin hosts refuse by
+  contract. The controlled consumer test passes 2/2, but no test establishes
+  that a pull after project release follows the host's snapshot publication;
+  that ordering remains pending. `make docs-check` passes. The window check
+  was not rerun.
+
+- F239-52-1: Track the missing event-driven barrier between project release and
+  plugin-host snapshot publication. Project release posts the null project but
+  does not await publication; no post-release ordering result is claimed.
 
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
