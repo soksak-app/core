@@ -13,16 +13,15 @@
   유지한다. Correlator와 문서 검사가 통과했으며 새 Wails/Tauri runtime
   acceptance는 남아 있다.
 
-- F239-47-33: F8-9 ddd + Korean 2-Set gksrmf sequence (ddd한글),
-  F143 gksk resyllabification (하나), 이전에 승인된
-  eight-vowel gesture를 사용하는 host별 10회 project close/reopen lifecycle
-  cycle의 승인 전용 e2e selector를 추가한다. Case는 정의했지만 실행하지
-  않았으므로 activation 또는 lifecycle acceptance를 주장하지 않는다. F143은
-  AppKit reference와 terminal 모두 Enter를 보내며 reference newline, terminal의
-  Enter 전 문서와 shell 출력을 확인한다. Lifecycle selector는 검증된 transaction envelope에서 native input action을
-  읽고, committed screen cells와 current marked text를 AppKit document와
-  비교하고, 전체 gesture capture를 보존하며, project close/reopen을 두 번
-  수행한다. Overlay operation을 수행한다고 주장하지 않는다.
+- F239-47-33: F8-9 ddd + Korean 2-Set gksrmf sequence (ddd한글), F143 gksk
+  resyllabification (하나), 이전에 승인된 eight-vowel gesture를 사용하는 host별 10회 project
+  close/reopen lifecycle cycle의 승인 전용 e2e selector를 추가한다. Case는 정의했지만 실행하지
+  않았다. F239-47-32에 기록한 별도 P87 runtime은 이 selector나
+  close/reopen cycle을 실행하지 않았다. F143은 AppKit reference와 terminal 모두 Enter를 보내며
+  reference newline, terminal의 Enter 전 문서와 shell 출력을 확인한다. Lifecycle selector는
+  검증된 transaction envelope에서 native input action을 읽고, committed screen cells와
+  current marked text를 AppKit document와 비교하고, 전체 gesture capture를 보존하며,
+  project close/reopen을 두 번 수행한다. Overlay operation을 수행한다고 주장하지 않는다.
 
 - F239-47-30-1: 한 번 호출하는 diagnostic method로 AppKit window color
   space를 보고한다. Window를 바꾸지 않고 localized name과 사용할 수 있는 ICC
@@ -31,19 +30,26 @@
   `window_facts_test`가 통과하고, `cargo fmt --check -p soksak-host-tauriv2`와
   `make docs-check`가 통과한다. 양 host endpoint의 runtime 검증은 대기 중이다.
 
-- F239-47-32: Image region에 marked-buffer-only input client를 둔다.
-  누적 `NSTextView` document가 unmarked committed text를 preedit으로 노출했다.
-  Region은 이제 local UTF-16 marked buffer, 검증된 replacement 및 substring
-  query, 순서 있는 commit 경계, terminal-history context가 없는 `NSView`
-  `NSTextInputClient`를 사용한다. 닫을 때 pending text를 한 번 commit하고,
-  responder를 분리하고, marked state를 버리고 diagnostic context override를
-  해제한다. Red는 retained-suffix 보고를 재현하며 pending commit을 끈 control은
-  close commit과 teardown assertion에 실패한다. Green: input-transaction과
-  Hangul 및 basic region 집중 owner가 3/3 통과한다. 일반 `NSTextView`
-  reference는 `NSNotFound`가 현재 marked composition을 대체함을 확인했고,
-  네 번의 vowel 입력 document는 각 key마다 reference와 일치한다. Korean OS
-  resyllabification과 과거 WebKit close-cycle은 F239-47-32 및 F239-47-33에서
-  계속 열려 있다. Activation acceptance는 아니다.
+- F239-47-32: Image region에 marked-buffer-only input client를 둔다. 누적
+  `NSTextView` document가 unmarked committed text를 preedit으로 노출했다. Region은 이제
+  local UTF-16 marked buffer, 검증된 replacement 및 substring query, 순서 있는 commit
+  경계, terminal-history context가 없는 `NSView` `NSTextInputClient`를 사용한다. 닫을 때
+  pending text를 한 번 commit하고, responder를 분리하고, marked state를 버리고 diagnostic
+  context override를 해제한다. Red는 retained-suffix 보고를 재현하며 pending commit을 끈
+  control은 close commit과 teardown assertion에 실패한다. Green: input-transaction과
+  Hangul 및 basic region 집중 owner가 3/3 통과한다. P87 cohort의 marked-buffer
+  candidate runtime은 macOS 26.6.2 arm64, core 및 Wails/Tauri host 0.0.21,
+  terminal 0.0.21, VT 0.0.17에서 실행됐고 staged `image_region.m` SHA-256은
+  `63894214c9d9038d97cdb9e342c6cc6952a77c542375cea55662b3a872637f3e`다. 양
+  host에서 여덟 k, Backspace, Space의 모든 document checkpoint가 같은 window의 AppKit
+  reference와 일치했다. Capture pixel sample은 k4에서 caret cell 14→16, Backspace에서
+  24→22 이동을 보였다. 두 전체 gesture check는 변경하지 않은 33 ms capture-gap 한계를 넘겨
+  실패했다(Wails 33.755542 ms, Tauri 34.232958 ms). 보존 trace의 read-only
+  projection은 sample 요약이며 별도 acceptance 결과가 아니다. 이 실행은 F143 gksk
+  resyllabification을 검사하지 않았고 visual acceptance도 통과하지 않았다. 일반 `NSTextView`
+  reference는 `NSNotFound`가 현재 marked composition을 대체함을 확인했고, 네 번의 vowel 입력
+  document는 각 key마다 reference와 일치한다. Korean OS resyllabification과 과거 WebKit
+  close-cycle은 F239-47-32 및 F239-47-33에서 계속 열려 있다. 이 부분 실행은 acceptance가 아니다.
 
 - F239-47-31: Terminal status sample에 key 시작 offset을 유지한다.
   Screen notification 뒤 cursor notification이 오면 observer가 stage offset을

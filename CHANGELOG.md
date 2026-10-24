@@ -13,16 +13,18 @@
   identity and shell continuation checks. The correlator test and documentation
   checks pass; fresh Wails and Tauri runtime acceptance remains pending.
 
-- F239-47-33: Add approval-gated e2e selectors for the F8-9 ddd + Korean
-  2-Set gksrmf sequence (ddd한글), F143 gksk resyllabification (하나),
-  and ten project close/reopen lifecycle cycles per
-  host using the previously approved eight-vowel gesture. The cases are
-  defined but have not been run; no activation or lifecycle acceptance is
-  claimed. F143 now sends Enter to both the AppKit reference and terminal; the reference must end with a newline, while the terminal checks its pre-Enter text and shell output. The lifecycle selector reads native input actions from validated
-  transaction envelopes, compares committed screen cells plus current marked
-  text with the AppKit document, preserves the full gesture capture, and
-  performs two project close/reopen passes. It makes no overlay-operation
-  claim.
+- F239-47-33: Add approval-gated e2e selectors for F8-9 gksrmf and F143 gksk
+  input sequences plus ten project
+  close/reopen lifecycle cycles per host using the previously approved
+  eight-vowel gesture. The cases are defined but have not been run. The
+  separate P87 runtime recorded under F239-47-32 did not execute these
+  selectors or any close/reopen cycle. F143 now sends
+  Enter to both the AppKit reference and terminal; the reference must end with
+  a newline, while the terminal checks its pre-Enter text and shell output.
+  The lifecycle selector reads native input actions from validated transaction
+  envelopes, compares committed screen cells plus current marked text with the
+  AppKit document, preserves the full gesture capture, and performs two
+  project close/reopen passes. It makes no overlay-operation claim.
 
 - F239-47-30-1: Report the AppKit window color space through a one-shot
   diagnostic method. The query returns its localized name and the SHA-256
@@ -33,20 +35,30 @@
   `make docs-check` pass. Both-host endpoint runtime verification remains
   pending.
 
-- F239-47-32: Give image regions a marked-buffer-only input client.
-  The accumulated `NSTextView` document exposed unmarked committed text as
+- F239-47-32: Give image regions a marked-buffer-only input client. The
+  accumulated `NSTextView` document exposed unmarked committed text as
   preedit. The region now implements `NSTextInputClient` on `NSView` with a
   local UTF-16 marked buffer, validated replacement and substring queries,
   ordered commit boundaries, and no terminal-history context. Closing commits
-  pending text once, detaches the responder, discards marked state, and releases
-  the diagnostic context override. Red reproduces the retained-suffix report
-  and, with pending commit disabled, fails close-commit and teardown assertions.
-  An ordinary `NSTextView` reference confirms that `NSNotFound` replaces the
-  current marked composition, and the four-key vowel document matches the
-  reference at every key. Green: the focused input-transaction, Hangul, and
-  basic region owners pass 3/3. Korean OS resyllabification and the historical
-  WebKit close-cycle remain open under F239-47-32 and F239-47-33; this is not
-  activation acceptance.
+  pending text once, detaches the responder, discards marked state, and
+  releases the diagnostic context override. Red reproduces the retained-suffix
+  report and, with pending commit disabled, fails close-commit and teardown
+  assertions. An ordinary `NSTextView` reference confirms that `NSNotFound`
+  replaces the current marked composition, and the four-key vowel document
+  matches the reference at every key. Green: the focused input-transaction,
+  Hangul, and basic region owners pass 3/3. On the marked-buffer candidate
+  runtime from the P87 cohort (macOS 26.6.2 arm64; core and Wails/Tauri hosts
+  0.0.21, terminal 0.0.21, VT 0.0.17; staged `image_region.m` SHA-256
+  `63894214c9d9038d97cdb9e342c6cc6952a77c542375cea55662b3a872637f3e`), both
+  hosts matched all eight k, Backspace and Space document checkpoints to the
+  same-window AppKit reference. Capture pixel samples showed caret movement
+  from cell 14 to 16 during k4 and 24 to 22 during Backspace. Both
+  full-gesture checks failed the unchanged 33 ms capture-gap limit: Wails
+  33.755542 ms and Tauri 34.232958 ms. The read-only projection of preserved
+  traces summarizes these samples and is not an independent acceptance result.
+  This run did not test F143 gksk resyllabification or pass visual acceptance.
+  Korean OS resyllabification and the historical WebKit close-cycle remain
+  open under F239-47-32 and F239-47-33. The partial run is not acceptance.
 
 - F239-47-31: Keep the original key-start offset for terminal status samples.
   A cursor notification arriving after the screen notification could make the
