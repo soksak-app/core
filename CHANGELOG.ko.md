@@ -21,6 +21,16 @@
   문자열을 보고한다. Application build/launch 및 activation-tier 입력 검사는
   실행하지 않았다.
 
+- F267.3: F266을 closure-audit aggregate로 분류하고 정확한 ID만 behavior
+  link 요구에서 제외한다. F266은 선택된 `[-]` record의 closure evidence를
+  검토하며 제품 동작을 만들지 않는다. 제외가 behavior capability를 숨길 수
+  있다는 반론은 기존 regression으로 검증한다. link가 없는 top-level `X1`은
+  계속 feature link를 요구한다. Red: 변경 전 main parity audit는 F266을
+  link 없는 완료 capability로 보고했다. Green: focused aggregate test가 1/1
+  통과하고 parity는 415개 link에서 feature link 오류 0건과 무관한 inventory
+  count 오류 두 건을 보고한다. F240-8 실행 순서는 일시적인 branch 상태
+  없이 dependency를 기록한다. `make docs-check`가 통과한다.
+
 - F239-37-5: 그려진 각 tree root에 선언된 key를 붙인다. Red: owning
   `drawValue` test가 exposed control 목록에서 tree root를 풀이하지 못했다.
   Green: 여러 tree와 redraw 전후 root 및 path/role child 주소가 풀이되며

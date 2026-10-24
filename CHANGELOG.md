@@ -22,6 +22,17 @@
   references in two Workbench tests. No application build, launch, or activation-
   tier input test was run.
 
+- F267.3: Classify F266 as a closure-audit aggregate and exempt only its exact
+  ID from behavior-link requirements. F266 reviews closure evidence for
+  selected `[-]` records and creates no product behavior. The objection that
+  an exemption could hide a behavior capability is covered by the existing
+  regression: unlinked top-level `X1` still requires a feature link. Red: the
+  unchanged main parity audit reported F266 as an unlinked completed
+  capability. Green: the focused aggregate test passes 1/1; parity reports
+  zero feature-link errors across 415 links and two unrelated inventory-count
+  errors. The F240-8 execution order records the dependency without transient
+  branch status. `make docs-check` passes.
+
 - F239-37-5: Add the declared key to each rendered tree root. Red: the owning
   `drawValue` test could not resolve a tree root through the exposed controls.
   Green: roots and path/role child controls resolve across redraws and multiple
