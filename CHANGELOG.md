@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- F239-47-25: Publish native input callbacks as one transaction per outer
+  scope. The fourth Korean vowel previously emitted a committed insert with
+  a two-unit intermediate preedit, then a second report with the final
+  three-unit marked text. The region now sends ordered insert, key, command
+  and focus actions with one final strict preedit snapshot and separate
+  callback errors. Responder changes, input-source changes and close commits
+  use the same boundary; a committed-range replacement error stops before
+  mutating the native document. Diagnostic input-context injection is absent
+  from non-diagnostic builds, and AppKit remains the default context. Red and
+  Green are recorded in F239-47-25. The transaction, Hangul, decoration and
+  image-region native tests pass. Live Wails/Tauri acceptance remains open in
+  F239-47-6.
+
 - F239-37-3: Require the reloaded page to report the editor disabled before
   testing the Files failure row. The retained Wails and Tauri runs timed out
   with no failure row, while both installed editor manifests declare `*`;

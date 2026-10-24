@@ -84,8 +84,15 @@ static NSUInteger bluePixelCount(NSBitmapImageRep *image) {
     return count;
 }
 
-static NSDictionary *lastEventOfType(NSString *type) {
-    for (NSDictionary *event in events.reverseObjectEnumerator) if ([event[@"type"] isEqual:type]) return event;
+static NSDictionary *lastInputTransaction(void) {
+    for (NSDictionary *event in events.reverseObjectEnumerator) if ([event[@"type"] isEqual:@"input"]) return event;
+    return nil;
+}
+
+static NSDictionary *lastInsertAction(NSDictionary *transaction) {
+    for (NSDictionary *action in [transaction[@"actions"] reverseObjectEnumerator]) {
+        if ([action[@"type"] isEqual:@"insert"]) return action;
+    }
     return nil;
 }
 
@@ -143,8 +150,9 @@ int main(void) { @autoreleasepool {
     [view setMarkedText:first selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
     NSBitmapImageRep *firstFrame = render(view);
     check(firstFrame != nil, @"the offscreen image region renders the first controlled marked-text frame");
-    check([lastEventOfType(@"compose")[@"text"] isEqual:@"ㅏ"]
-        && [lastEventOfType(@"compose")[@"markedRange"][@"length"] unsignedIntegerValue] == 1,
+    NSDictionary *firstInput = lastInputTransaction();
+    check([firstInput[@"preedit"][@"text"] isEqual:@"ㅏ"]
+        && [firstInput[@"preedit"][@"markedRange"][@"length"] unsignedIntegerValue] == 1,
         @"the first marked-text callback still reports its composition and marked range");
     NSString *compositeMeasurement = @"no rendered bitmap";
     BOOL sentinelVisible = firstFrame && hasSentinelAtLayerCenter(firstFrame, view, imageLayer, &compositeMeasurement);
@@ -162,8 +170,9 @@ int main(void) { @autoreleasepool {
     [view setMarkedText:second selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
     NSBitmapImageRep *secondFrame = render(view);
     check(secondFrame != nil, @"the offscreen image region renders the repeated marked-text frame");
-    check([lastEventOfType(@"compose")[@"text"] isEqual:@"ㅏㅏ"]
-        && [lastEventOfType(@"compose")[@"markedRange"][@"length"] unsignedIntegerValue] == 2,
+    NSDictionary *secondInput = lastInputTransaction();
+    check([secondInput[@"preedit"][@"text"] isEqual:@"ㅏㅏ"]
+        && [secondInput[@"preedit"][@"markedRange"][@"length"] unsignedIntegerValue] == 2,
         @"the repeated marked-text callback still reports its composition and marked range");
     NSUInteger secondBlue = secondFrame ? bluePixelCount(secondFrame) : 0;
     check(secondBlue == 0, [NSString stringWithFormat:
@@ -176,7 +185,7 @@ int main(void) { @autoreleasepool {
     NSUInteger clearedBlue = clearedFrame ? bluePixelCount(clearedFrame) : 0;
     check(clearedBlue == 0, [NSString stringWithFormat:
         @"Enter-equivalent input leaves no native underline pixels (measured %lu)", (unsigned long)clearedBlue]);
-    check([lastEventOfType(@"insert")[@"text"] isEqual:@"ㅏㅏ"],
+    check([[lastInsertAction(lastInputTransaction()) objectForKey:@"text"] isEqual:@"ㅏㅏ"],
         @"Enter-equivalent input still commits the complete marked text once");
 
     sp_region_close(region);

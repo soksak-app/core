@@ -87,6 +87,10 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 # with it.
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
+DIAGNOSTIC ?= 1
+ifeq ($(DIAGNOSTIC),1)
+CFLAGS     += -DSOKSAK_DIAGNOSTIC
+endif
 
 .PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
@@ -188,6 +192,7 @@ $(BUILD)/image_capture_match_test: tests/image_capture_match_test.m $(BUILD)/lib
 # runs only the entries that contain the text.
 NATIVE_TESTS = observe_test \
   ime_cli_test \
+  image_region_input_transaction_test \
   image_region_hangul_test \
   activity_observers_test \
   activity_observers_allocation_test \

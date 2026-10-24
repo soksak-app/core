@@ -25,13 +25,21 @@ static void regionEvent(void *context, const char *json) {
 
 static NSString *committed(void) {
     NSMutableString *text = [NSMutableString string];
-    for (NSDictionary *event in events) if ([event[@"type"] isEqual:@"insert"]) [text appendString:event[@"text"]];
+    for (NSDictionary *event in events) {
+        if (![event[@"type"] isEqual:@"input"]) continue;
+        for (NSDictionary *action in event[@"actions"]) {
+            if ([action[@"type"] isEqual:@"insert"]) [text appendString:action[@"text"]];
+        }
+    }
     return text;
 }
 
 static NSArray *errors(void) {
     NSMutableArray *found = [NSMutableArray array];
-    for (NSDictionary *event in events) if ([event[@"type"] isEqual:@"error"]) [found addObject:event[@"reason"]];
+    for (NSDictionary *event in events) {
+        if (![event[@"type"] isEqual:@"input"]) continue;
+        for (NSDictionary *error in event[@"errors"]) [found addObject:error[@"reason"]];
+    }
     return found;
 }
 
