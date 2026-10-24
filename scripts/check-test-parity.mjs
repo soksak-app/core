@@ -37,7 +37,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/rust-repeat.test.mjs", "scripts/test/windows-build-check.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/bundle-preparation.test.mjs"], { sharedTests: true }),
+  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs"], { testLanguage: "js-ts" }),
   lane("native library pkg-config", "build", ["native/darwin/Makefile"], ["scripts/test/native-pkgconfig.test.mjs"], { testLanguage: "js-ts" }),
   lane("workspace audit scripts", "js-ts", [
@@ -2667,8 +2667,8 @@ const FEATURE_LINKS = [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "rmSync(contents, { recursive: true, force: true })" },
     ],
     tests: [
-      { file: "scripts/test/bundle-preparation.test.mjs", id: "bundle preparation refuses a running bundle executable before removing Contents" },
-      { file: "scripts/test/bundle-preparation.test.mjs", id: "bundle preparation recreates Contents when no process uses the bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation refuses a running bundle executable before removing Contents" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation recreates Contents when no process uses the bundle" },
     ],
     expected: "The Makefile bundle preparation refuses with the active process PID and target path before removing Contents, preserves the running bundle files, and recreates Contents when no process uses the bundle.",
     levels: ["unit"],

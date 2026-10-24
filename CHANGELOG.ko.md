@@ -27,6 +27,17 @@
   owning style test 두 항목과 `make boundaries` 16개 component가 통과하며,
   `make docs-check`도 통과한다. Boundary 기준은 바꾸지 않았다.
 
+- F239-48-1: OS별 process-wait test를 `tests/platform/<os>/` 명시 Cargo
+  integration target으로 배치하고 macOS bundle-preparation test를
+  `scripts/test/platform/darwin/`으로 이동한다. Nested Node 경로를 등록하고 test
+  parity를 갱신한다. macOS에서 `make platforms`, 공통 process-wait test 4/4,
+  Darwin process-wait test 3/3, bundle-preparation test 2/2, nested test discovery
+  1/1, `make docs-check`가 통과한다. Linux target cross-check는 Zig로 통과했다.
+  Windows cross-check는 package에 도달한 뒤 기존 `event_log.rs`와 `ownership.rs`의
+  Unix 전용 filesystem extension 때문에 test target 전에 실패한다. Linux/Windows
+  target host 동작 검증은 남아 있다. `make parity-check`는 uncovered test/implementation 없이 기존 finding
+  여덟 개를 보고한다.
+
 - F212.12-2-1-2: 선택적 activated view-focus test 경로를 추가한다. Activation
   완료, page press 수신, first-responder 상태, key 수신을 검사하며 기존
   비활성 경로와 surface-reveal assertion을 유지한다. Focused binary가 빌드되고

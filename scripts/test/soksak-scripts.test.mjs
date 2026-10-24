@@ -441,18 +441,11 @@ test("release marker scanner finds capture code in an executable without symbols
   assert.match(errors[0], /window capture/);
 });
 
-test("platform audit clears benchmark metadata and preserves other known findings", { timeout: 5000 }, async () => {
+test("platform audit finds no selectors outside platform directories", { timeout: 5000 }, async () => {
   const result = await run(node, [join(root, "scripts/check-platforms.mjs")]);
   const output = `${result.stdout}\n${result.stderr}`;
-  assert.doesNotMatch(output, /packages\/workbench\/benchmark\/declared-ui\.mjs/);
-  assert.doesNotMatch(output, /packages\/workbench\/test\/declared-ui-benchmark\.test\.mjs/);
-  if (result.code === 0) {
-    assert.match(output, /Platform checks passed: \d+ files/);
-    return;
-  }
-  assert.equal(result.code, 1, output);
-  assert.equal((output.match(/packages\/sok\/tauriv2\/tests\/process_wait_test\.rs:/g) ?? []).length, 2, output);
-  assert.equal((output.match(/scripts\/test\/bundle-preparation\.test\.mjs:/g) ?? []).length, 2, output);
+  assert.equal(result.code, 0, output);
+  assert.match(output, /Platform checks passed: \d+ files/);
 });
 
 test("platform audit permits direct runtime metadata but rejects all other selectors", { timeout: 2000 }, () => {
