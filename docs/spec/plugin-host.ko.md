@@ -71,6 +71,8 @@ plugin host 페이지는 자신이 선언한 status, command, dom 항목을 chan
 
 plugin host는 surface가 아니다. plugin host가 등록한 이름에 대한 `surface` 없는 요청은, 그 이름을 등록한 surface 페이지와 state module이 없을 때 그 등록이 답한다([choosing a surface](exposure.ko.md#표면-선택)). `surface`를 naming하는 요청은 plugin host가 답하지 않는다. plugin host는 `command.run`에 등록된 command를 선언된 시간 제한 안에서 channel로 실행해 답하고, `status.get`에는 그 status의 pull([declared UI snapshots](#declared-ui-snapshots))로 답하며 그 reply `{seq, value}`를 `{value, version: seq}`로 돌려준다. plugin host는 status를 declared UI snapshot으로 보내므로, plugin host만 답할 `status.watch`, `status.unwatch`, dom 요청은 `plugin host <plugin id> does not serve <method>`로 거부된다.
 
+status.get의 exposure registry와 endpoint는 files.tree처럼 qualified status 이름을 사용한다. Workbench는 declared-ui.snapshot.request를 호출하기 전에 등록한 plugin id와 separator를 제거한다. status 매개변수는 snapshot store가 사용하는 plugin-local 이름(tree)이다. Qualified 이름을 두 번째 key로 시도하지 않는다.
+
 ## Declared UI snapshots
 
 Native message callback은 이를 등록한 local host instance에 묶인다. Native message callback, host 생성 및 host dispose는 main thread에서 실행되므로 instance 확인과 동기 dispatch는 replacement와 직렬화된다. Dispose 뒤 해당 instance에서 늦게 온 callback은 같은 plugin의 host가 다시 만들어졌더라도 dispatch 전에 취소하며 performance tracing이 켜져 있으면 `host.trace.plugin-host.message-stale {plugin}`을 쓴다. retired provider의 명시적 오류는 plugin 식별자와 함께 기록하지만 replacement host를 종료하거나 다시 시작하지 않는다. Window record가 이미 제거된 뒤에도 Tauri host는 callback이 캡처한 plugin id로 명시적 provider 오류를 기록하며 일반 늦은 message는 취소한다.

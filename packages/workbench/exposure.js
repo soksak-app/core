@@ -133,7 +133,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       // default: a command request without params runs the command with null, the value of no params.
       if (method === "command.run") return await commands.run(params.name, params.params ?? null);
       if (method === "status.get") {
-        const reply = await commands.run(SNAPSHOT_REQUEST_COMMAND, { status: params.name });
+        const reply = await commands.run(SNAPSHOT_REQUEST_COMMAND, { status: params.name.slice(plugin.length + 1) });
         // The snapshot reply is {seq, value} (docs/spec/plugin-host.md#declared-ui-snapshots); any other reply is refused.
         if (typeof reply !== "object" || reply === null || !Number.isInteger(reply.seq) || reply.seq < 0 || !("value" in reply)) {
           throw new ExposureError(EXPOSURE_ERRORS.failed, `plugin host ${plugin} answered status ${params.name} without {seq, value}`);

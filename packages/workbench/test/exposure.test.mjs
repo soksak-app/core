@@ -338,6 +338,31 @@ test("a view mark is owned by its mount: the dispose of an earlier mount of the 
   assert.equal(await dispatchSurfaceRequest(request), false, "a surface without a view mark and without a port took the request");
 });
 
+test("plugin-host status.get pulls the plugin-local snapshot name", { timeout: 10000 }, async () => {
+  const requested = [];
+  const made = coreRegistry(fakeHost());
+  const forget = keepHostCommands("probe", {
+    run: async (command, params) => {
+      requested.push({ command, params });
+      return { seq: 4, value: ["local tree"] };
+    },
+    receive: () => {},
+    close: () => {},
+  });
+  try {
+    made.hostRegistered({ plugin: "probe", kind: "status", name: "probe.lines" });
+    assert.deepEqual(
+      await made.handle({ method: "status.get", params: { name: "probe.lines" } }),
+      { result: { value: ["local tree"], version: 4 } },
+    );
+    assert.deepEqual(requested, [
+      { command: "declared-ui.snapshot.request", params: { status: "lines" } },
+    ], "the snapshot pull must use the plugin-local status key");
+  } finally {
+    forget();
+  }
+});
+
 test("a plugin host answers only a request without surface for a name that no surface registered", async () => {
   const forwarded = [];
   const made = coreRegistry(fakeHost(({ surface, method }) => {
