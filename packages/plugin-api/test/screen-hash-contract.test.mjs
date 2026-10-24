@@ -50,6 +50,33 @@ const EXPECTED_IDS = [
   "screen.message.scrollback-offset-0",
   "screen.message.scrollback-offset-zero-hidden-cursor",
   "screen.message.empty-scrollback",
+  "screen.hash.letter-x-hidden-cursor.sha256",
+  "screen.hash.blank-hidden-cursor.sha256",
+  "screen.hash.attribute-flags.sha256",
+  "screen.hash.wide-cell-continuation.sha256",
+  "screen.hash.multiline-rows.sha256",
+  "screen.hash.single-row-five-cells.sha256",
+  "screen.hash.blank-caret-8x4.sha256",
+  "screen.hash.blank-two-cell-cursor.sha256",
+  "screen.hash.linked-word.sha256",
+];
+
+const MESSAGE_HASH_PAIRS = [
+  ["screen.message.letter-x-cursor-hidden", "screen.hash.letter-x-hidden-cursor.sha256"],
+  ["screen.message.scrollback-offset-3", "screen.hash.blank-hidden-cursor.sha256"],
+  ["screen.message.scrollback-offset-25", "screen.hash.blank-hidden-cursor.sha256"],
+  ["screen.message.blank-hidden-cursor", "screen.hash.blank-hidden-cursor.sha256"],
+  ["screen.message.scrollback-background-offset-25", "screen.hash.blank-hidden-cursor.sha256"],
+  ["screen.message.scrollback-offset-zero-hidden-cursor", "screen.hash.blank-hidden-cursor.sha256"],
+  ["screen.message.attribute-flags", "screen.hash.attribute-flags.sha256"],
+  ["screen.message.wide-cell-continuation", "screen.hash.wide-cell-continuation.sha256"],
+  ["screen.message.multiline-rows", "screen.hash.multiline-rows.sha256"],
+  ["screen.message.frame-screen-read", "screen.hash.single-row-five-cells.sha256"],
+  ["screen.message.null-frame-screen-read", "screen.hash.single-row-five-cells.sha256"],
+  ["screen.message.caret-8x4", "screen.hash.blank-caret-8x4.sha256"],
+  ["screen.message.blank-underlined-cursor", "screen.hash.blank-two-cell-cursor.sha256"],
+  ["screen.message.hollow-block-cursor", "screen.hash.blank-two-cell-cursor.sha256"],
+  ["screen.message.linked-word", "screen.hash.linked-word.sha256"],
 ];
 
 export async function runScreenHashCase(testCase) {
@@ -96,4 +123,20 @@ test("screenHash frame and preedit message pairs with its projected screen hash"
   const [{ screen }] = await runScreenHashCase(messageCase);
   assert.deepEqual(hashCase.steps[0].hash.screen, screen);
   assert.equal(hashCase.steps[0].output.hash, await screenHash(screen));
+});
+
+test("screenHash publishes one unique hash input for each valid message projection", async () => {
+  const hashInputs = CONTRACT.cases.flatMap(({ id, steps }) => steps.flatMap((step) =>
+    step.hash ? [{ id, screen: step.hash.screen }] : []));
+  for (const [messageId, hashId] of MESSAGE_HASH_PAIRS) {
+    const messageCase = CONTRACT.cases.find(({ id }) => id === messageId);
+    const hashCase = CONTRACT.cases.find(({ id }) => id === hashId);
+    assert.ok(messageCase, `${messageId} is published`);
+    assert.ok(hashCase, `${hashId} is published`);
+    const [{ screen }] = await runScreenHashCase(messageCase);
+    assert.deepEqual(hashCase.steps[0].hash.screen, screen, `${hashId} does not hash ${messageId}'s projection`);
+    assert.equal(hashCase.steps[0].output.hash, await screenHash(screen), `${hashId} is not the SDK hash`);
+    const matches = hashInputs.filter(({ screen: candidate }) => JSON.stringify(candidate) === JSON.stringify(screen));
+    assert.deepEqual(matches.map(({ id }) => id), [hashId], `${messageId} projection has an ambiguous hash input`);
+  }
 });

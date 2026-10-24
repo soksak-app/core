@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F269: Add nine unique `screen.hash` cases for 15 existing valid message
+  projections that lacked hash inputs. Repeated projections share one case,
+  preventing ambiguous SDK test calls. Red: the unchanged owning test failed
+  because `screen.hash.letter-x-hidden-cursor.sha256` was absent. Green: the
+  projection mapping test recomputes each digest with `screenHash` and passes
+  with `screen-hash-contract.test.mjs` (57/57); `make docs-check` passes.
+  No product logic changes.
+
 - F268: Publish a screen message with a non-null frame and cursor preedit,
   paired with a hash case for the screen it projects to. Red: the unchanged
   owning contract test failed because the message case was absent. Green: the

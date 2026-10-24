@@ -3551,6 +3551,717 @@
           }
         }
       ]
+    },
+    {
+      "id": "screen.hash.letter-x-hidden-cursor.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "x",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "8aad7a078b32f253d75e12f1cd8ab3768e2dbd2c044180a7a57c132b318017ac"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.blank-hidden-cursor.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 1,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "2baa3509094301f700ba8dc0eb443c93067cc1f6fee60b4315bd67ad2b6446a9"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.attribute-flags.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 3,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "Z",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 45
+                },
+                {
+                  "grapheme": "Y",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 210
+                },
+                {
+                  "grapheme": "N",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "261af7e00935f792cb41b0b877794cd73f99524412ef2ec7b9b605476deee4b9"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.wide-cell-continuation.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 6,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "A",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "B",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "한",
+                  "width": 2,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 0,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "09805a3fbe33503fe0a661346f5a1bf70db595f1f85802c9a986f4fbb7adb9e0"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.multiline-rows.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 3,
+              "cols": 5,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "2",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "3",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "f041ddcf0119d5b7da582dfb9d1a90f927159b0346da19491574cc54bf93f578"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.single-row-five-cells.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 5,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "l",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "i",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "n",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "e",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "1",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "f4b8bedc43059f4811070dce1d597a15aa03cda69206494dd5148e24d9f686a8"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.blank-caret-8x4.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 4,
+              "cols": 8,
+              "cursor": {
+                "row": 3,
+                "col": 7,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "2c099faa97700563a04ddae7809ff0378ec7ed18c20ec8d21e9fe254e50cc550"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.blank-two-cell-cursor.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 2,
+              "cursor": {
+                "row": 0,
+                "col": 1,
+                "visible": true
+              },
+              "cells": [
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "1afef0a108afc8d7b8c2e49c9a230ceded88f286c15c191d952d360e82b27b10"
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.linked-word.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 7,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "a",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": " ",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "L",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "I",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "N",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "K",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": " ",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "27fe81f7aea10a93fff440ae699b1e8d8f2f64eb5e2188c96efbbf731eebdcd9"
+          }
+        }
+      ]
     }
   ]
 }

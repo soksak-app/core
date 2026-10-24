@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F269: 기존 유효 message projection 15개에 빠져 있던 고유 `screen.hash`
+  case 아홉 개를 추가한다. 같은 projection은 case 하나를 공유해 SDK test의
+  ambiguous call을 막는다. Red: 변경 전 owning test는
+  `screen.hash.letter-x-hidden-cursor.sha256` 부재로 실패했다. Green:
+  projection mapping test는 `screenHash`로 digest를 다시 계산하고 전체
+  `screen-hash-contract.test.mjs`가 57/57 통과한다. `make docs-check`도
+  통과한다. 제품 로직은 바꾸지 않았다.
+
 - F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
   투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract
   test는 message case가 없어 실패했다. Green: paired assertion과
