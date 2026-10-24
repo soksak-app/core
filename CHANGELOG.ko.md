@@ -2900,5 +2900,16 @@
   project-switch 13/13, project-close 8/8, operations 6/6, browser windows
   3/3; Wails project test 5/5; Tauri project, readiness, ownership, null,
   release, binding, geometry test 통과. 집중 로그는 `/tmp/F262-10-*`에 보존한다.
-  F28 runtime Files 오류는 조사 중이며 이 변경의 원인으로 연결하지 않는다.
+  이후 P45/P75/S78.1 cohort의 fresh Wails/Tauri host에서 runtime acceptance를
+  수행했다. 같은 disposable project를 `core.project.open`으로 연 뒤 추적 F28
+  status check가 host마다 1/1 통과했다. Wails executable SHA-256
+  `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24`, Tauri
+  executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce`,
+  candidate index SHA-256
+  `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`를 사용했다.
+  두 host는 ready surface, `core.page.error` null, `core.verify.failed` 0을
+  확인했다. 전체 host/sidecar JSONL audit는 error-level record 0개였다(Wails
+  27개, Tauri 17개). 정상 종료 뒤 process와 endpoint는 남지 않았다. 이전
+  P44/P45 오류는 과거 기록으로 보존하며 정확한 원인을 소급해 단정하지 않는다.
+  IME 입력은 보내지 않았다.
 - F239-28: browser cohort status check를 두 host에서 실행한다. Wails와 Tauri가 Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce`, candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`에서 추적 check를 통과했다. 각 실행은 설치된 plugin/sidecar version, ready surface 및 application error 0개를 확인했다. 두 host와 sidecar가 종료됐고 endpoint와 lock은 남지 않았다. 기존 cohort 실패는 과거 증거로 보존하며 public release를 주장하지 않는다.

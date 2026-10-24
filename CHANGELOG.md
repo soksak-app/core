@@ -2961,6 +2961,18 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   Green: Workbench project-order 8/8, plugin-data 6/6, project-switch 13/13,
   project-close 8/8, operations 6/6, browser windows 3/3; Wails project tests
   5/5; Tauri project, readiness, ownership, null, release, binding, and geometry
-  tests pass. Focused logs are preserved under `/tmp/F262-10-*`. The F28 runtime
-  Files error remains under investigation and is not attributed to this change.
+  tests pass. Focused logs are preserved under `/tmp/F262-10-*`. Runtime
+  acceptance then used the P45/P75/S78.1 cohort on fresh Wails and Tauri hosts.
+  The tracked F28 status check passed 1/1 per host after opening the same
+  disposable project through `core.project.open`. Wails executable SHA-256
+  `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24`, Tauri
+  executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce`,
+  and candidate index SHA-256
+  `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6` identify
+  the tested artifacts. Both hosts verified ready surfaces, `core.page.error`
+  null and `core.verify.failed` zero. Full host/sidecar JSONL audits contained
+  zero error-level records (27 Wails files, 17 Tauri files); all processes and
+  endpoints were absent after normal shutdown. Earlier P44/P45 errors remain
+  historical and their exact cause is not retroactively assigned. No IME input
+  was sent.
 - F239-28: Run the browser cohort status check on either host. Wails and Tauri both passed the tracked check on Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce` with candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`; each run verified the installed plugin and sidecar versions, ready surfaces, and zero application errors. Both hosts and sidecars exited and left no endpoints or locks. The preserved earlier cohort failures remain historical evidence; this validation does not claim a public release.
