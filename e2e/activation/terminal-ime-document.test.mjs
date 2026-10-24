@@ -343,6 +343,46 @@ test("a status notification delivered during a sample satisfies the sample's ori
   assert.equal(event.value.text, "ㅏ");
 });
 
+test("the observer waits for the initial screen status after watch acknowledgements", async () => {
+  const listeners = new Set();
+  const events = [];
+  const wakeups = new Set();
+  const values = {
+    "terminal.compose": { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    "terminal.cursor": { row: 0, col: 2, focused: true, frame: { generation: 1, raster: 2, sequence: 3 },
+      render: { frame: { generation: 1, raster: 2, sequence: 3 } }, preedit: null },
+    "terminal.screen": [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }]],
+  };
+  const session = {
+    window: "main",
+    client: { on(_name, listener) { listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      assert.ok(["status.watch", "status.unwatch"].includes(method));
+      return null;
+    },
+    async until(name, predicate) {
+      assert.equal(name, "terminal.compose");
+      assert.equal(predicate(values[name]), true);
+      return values[name];
+    },
+  };
+  const observer = await startTerminalStatusObserver(session, "surface-1", (event) => {
+    events.push(event);
+    for (const wake of [...wakeups]) wake();
+  });
+  assert.equal(events.some((event) => event.name === "terminal.screen"), false,
+    "watch acknowledgement must not be mistaken for the initial value notification");
+  const waiting = waitForObservedStatusEvent(events, 0, (wake) => {
+    wakeups.add(wake);
+    return () => wakeups.delete(wake);
+  }, "terminal.screen", Array.isArray, "initial screen status", 100);
+  const event = { window: "main", surface: "surface-1", name: "terminal.screen", value: values["terminal.screen"] };
+  for (const listener of listeners) listener(event);
+  const screenEvent = await waiting;
+  assert.deepEqual(screenEvent.value, values["terminal.screen"]);
+  await observer.stop();
+});
+
 test("counts wide cells by their declared width across a wrapped input row", () => {
   const dto = screen([[cell("$"), cell(" ")], [cell("界", 2)]]);
   const cursor = { row: 1, col: 2 };

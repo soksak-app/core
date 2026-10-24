@@ -192,15 +192,21 @@ export function persistThenRequireVisualProof(measurements, record, persist, lab
     `${label}: rendered glyph/underline proof is incomplete: ${JSON.stringify(measurements)}`);
 }
 
-/** Indexes a source snapshot only when screen rows and frame-bound cursor metadata came from one screen event. */
+/** Indexes frame-bound cursor metadata with only the latest earlier screen rows observed on the active status stream. */
 export function indexFrameStatus(events, prompt, visibleInputBeforeCursor) {
   const states = new Map();
   const rejections = [];
   let compose = null;
+  let screenStatus = null;
+  let lastCursorFrame = null;
   for (let index = 0; index < events.length; index++) {
     const event = events[index];
     if (event.name === "terminal.compose") {
       compose = event.value;
+      continue;
+    }
+    if (event.name === "terminal.screen") {
+      screenStatus = { index, rows: event.value };
       continue;
     }
     if (event.name !== "terminal.cursor") continue;
@@ -211,21 +217,27 @@ export function indexFrameStatus(events, prompt, visibleInputBeforeCursor) {
       continue;
     }
     const key = frameKey(cursor.frame, "terminal.cursor");
+    if (lastCursorFrame && cursor.frame.generation === lastCursorFrame.generation &&
+        cursor.frame.raster === lastCursorFrame.raster && cursor.frame.sequence < lastCursorFrame.sequence) {
+      rejections.push({ frame: key, eventIndex: index, reason: "cursor-frame-sequence-regressed" });
+      continue;
+    }
     if (!sameFrame(cursor.frame, cursor.render.frame)) {
       rejections.push({ frame: key, eventIndex: index, reason: "cursor-and-render-frame-differ" });
       continue;
     }
-    if (index === 0 || events[index - 1].name !== "terminal.screen") {
-      rejections.push({ frame: key, eventIndex: index, reason: "matching-screen-event-is-not-adjacent" });
+    lastCursorFrame = cursor.frame;
+    if (screenStatus === null) {
+      rejections.push({ frame: key, eventIndex: index, reason: "prior-screen-status-is-missing" });
       continue;
     }
     if (!compose || !terminalComposeMatchesPreedit(compose, cursor)) {
       rejections.push({ frame: key, eventIndex: index, reason: "compose-and-cursor-preedit-differ" });
       continue;
     }
-    const rows = events[index - 1].value;
+    const rows = screenStatus.rows;
     if (!Array.isArray(rows)) {
-      rejections.push({ frame: key, eventIndex: index - 1, reason: "screen-rows-are-invalid" });
+      rejections.push({ frame: key, eventIndex: screenStatus.index, reason: "screen-rows-are-invalid" });
       continue;
     }
     const screen = { rows };
@@ -262,7 +274,8 @@ export function indexFrameStatus(events, prompt, visibleInputBeforeCursor) {
       },
     };
     states.set(key, { frame: cursor.frame, render: cursor.render, semantic,
-      eventIndexes: { screen: index - 1, cursor: index } });
+      eventIndexes: { screen: screenStatus.index, cursor: index },
+      screenRowsReused: screenStatus.index !== index - 1 });
   }
   states.rejections = rejections;
   return states;

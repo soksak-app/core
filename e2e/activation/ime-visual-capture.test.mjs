@@ -141,7 +141,7 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
   }
 });
 
-testWithTimeout("cursor frame state uses only adjacent screen and cursor events with the same render identity", () => {
+testWithTimeout("cursor frame state uses prior screen rows and the exact cursor render identity", () => {
   const frame = renderFixture.frame;
   const cursor = { row: 0, col: 1, focused: true, visible: false, blinkVisible: false,
     shape: "beam", frame, render: renderFixture,
@@ -157,10 +157,74 @@ testWithTimeout("cursor frame state uses only adjacent screen and cursor events 
   const missingScreen = indexFrameStatus([events[0], events[2]], { row: 0, col: 0, text: "$" }, () => "ㅏ");
   assert.equal(missingScreen.size, 0);
   assert.deepEqual(missingScreen.rejections, [{ frame: "1/2/3", eventIndex: 1,
-    reason: "matching-screen-event-is-not-adjacent" }]);
+    reason: "prior-screen-status-is-missing" }]);
   assert.equal(indexFrameStatus([events[0], events[1], { ...events[2], value: {
     ...cursor, frame: { ...frame, sequence: frame.sequence + 1 },
   } }], { row: 0, col: 0, text: "$" }, () => "ㅏ").size, 0);
+});
+
+testWithTimeout("indexes an advanced cursor frame against prior rows when identical rows suppress screen status", () => {
+  const frame = renderFixture.frame;
+  const rows = [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }]];
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const cursor = { row: 0, col: 2, focused: true, visible: false, blinkVisible: false,
+    shape: "beam", frame, render: renderFixture, preedit };
+  const events = [
+    { name: "terminal.screen", value: rows },
+    { name: "terminal.compose", value: preedit },
+    { name: "terminal.cursor", value: cursor },
+  ];
+
+  const states = indexFrameStatus(events, { row: 0, col: 0, text: "$ " }, () => "ㅏ");
+  assert.equal(states.get("1/2/3")?.semantic.document, "ㅏ");
+  assert.deepEqual(states.get("1/2/3")?.eventIndexes, { screen: 0, cursor: 2 });
+  assert.equal(states.get("1/2/3")?.screenRowsReused, true);
+});
+
+testWithTimeout("rejects future rows but reuses identical rows across a frame generation change", () => {
+  const frame = renderFixture.frame;
+  const rows = [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }]];
+  const empty = { text: "", markedRange: null, selectedRange: null,
+    replacementRange: null, attributed: false };
+  const compose = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const cursorFor = (identity, preedit) => ({ row: 0, col: 2, focused: true,
+    visible: false, blinkVisible: false, shape: "beam", frame: identity,
+    render: { ...renderFixture, frame: identity }, preedit });
+  const priorCursor = cursorFor(frame, empty);
+  const advanced = { ...frame, generation: frame.generation + 1, sequence: 1 };
+  const changedCursor = cursorFor(advanced, compose);
+  const prompt = { row: 0, col: 0, text: "$ " };
+
+  const noPriorRows = indexFrameStatus([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.cursor", value: changedCursor },
+    { name: "terminal.screen", value: rows },
+  ], prompt, () => "ㅏ");
+  assert.equal(noPriorRows.size, 0, "future screen rows cannot source an earlier cursor event");
+  assert.equal(noPriorRows.rejections[0].reason, "prior-screen-status-is-missing");
+
+  const changedGeneration = indexFrameStatus([
+    { name: "terminal.screen", value: rows },
+    { name: "terminal.compose", value: empty },
+    { name: "terminal.cursor", value: priorCursor },
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.cursor", value: changedCursor },
+  ], prompt, () => "ㅏ");
+  const advancedKey = `${advanced.generation}/${advanced.raster}/${advanced.sequence}`;
+  assert.equal(changedGeneration.get(advancedKey)?.semantic.document, "ㅏ");
+  assert.deepEqual(changedGeneration.get(advancedKey)?.eventIndexes, { screen: 0, cursor: 4 });
+  assert.equal(changedGeneration.get(advancedKey)?.screenRowsReused, true);
+
+  const regressed = indexFrameStatus([
+    { name: "terminal.screen", value: rows },
+    { name: "terminal.compose", value: empty },
+    { name: "terminal.cursor", value: priorCursor },
+    { name: "terminal.cursor", value: cursorFor({ ...frame, sequence: frame.sequence - 1 }, empty) },
+  ], prompt, () => "");
+  assert.equal(regressed.has(`${frame.generation}/${frame.raster}/${frame.sequence - 1}`), false);
+  assert.equal(regressed.rejections.at(-1).reason, "cursor-frame-sequence-regressed");
 });
 
 testWithTimeout("stage planning covers the complete Hangul span, preedit underline, and one guard cell", () => {

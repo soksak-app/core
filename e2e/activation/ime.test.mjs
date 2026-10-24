@@ -463,6 +463,33 @@ for (const app of Object.values(APPS)) {
         stateEventWaiters.clear();
         await stateObserver.stop();
       });
+      const initialScreenEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
+        (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
+        "terminal.screen", (rows) => Array.isArray(rows), "initial terminal screen status", 1500);
+      const initialComposeEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
+        (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
+        "terminal.compose", (compose) => compose && typeof compose === "object",
+        "initial terminal compose status", 1500);
+      const initialCursorEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
+        (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
+        "terminal.cursor", (cursor) => cursor?.frame && cursor?.render?.frame,
+        "initial frame-bound terminal cursor status", 1500);
+      assert.deepEqual(initialScreenEvent.value, baselineScreen.rows,
+        "the observed initial terminal screen differs from the pre-key baseline rows");
+      assert.equal(sameTerminalComposition(terminalCompositionState(initialComposeEvent.value, initialCursorEvent.value),
+        terminalCompositionState(baselineCompose, baselineCursor)), true,
+      "initial compose/cursor observer state differs from the pre-key baseline");
+      assert.deepEqual(initialCursorEvent.value.frame, initialCursorEvent.value.render.frame,
+        "initial cursor render does not belong to its frame");
+      persist("observer-baseline.json", {
+        screenEventIndex: observedStateEvents.indexOf(initialScreenEvent),
+        composeEventIndex: observedStateEvents.indexOf(initialComposeEvent),
+        cursorEventIndex: observedStateEvents.indexOf(initialCursorEvent),
+        screenRows: initialScreenEvent.value,
+        compose: initialComposeEvent.value,
+        cursor: initialCursorEvent.value,
+        baselineRowsMatched: true,
+      });
       const waitForStateEvent = async (after, key,
         missingMessage = "no terminal compose, cursor or screen status notification followed the input") => {
         try {

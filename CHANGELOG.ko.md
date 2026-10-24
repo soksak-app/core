@@ -4,6 +4,17 @@
 
 ## 미배포
 
+- F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
+  rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen
+  notification 없이 cursor frame과 preedit이 갱신될 수 있다. Activation caller는
+  입력 전에 initial screen, compose, frame-bound cursor event를 기다린다.
+  Red: 변경 전 indexer는 인접한 screen notification이 없다는 이유로 동일한
+  prior rows, compose event, 증가한 cursor frame을 거부했다. Green: 관측 stream의
+  최신 이전 screen event만 사용하고 index와 재사용 provenance를 보존하며,
+  이전/future rows 부재와 같은 generation/raster 내 sequence 회귀를 거부하고
+  exact cursor/render frame 검사를 유지한다. Visual capture test 11/11, observer
+  test 20/20 통과한다. `make e2e-check`와 `make docs-check`도 통과한다. Activation
+  rerun은 하지 않았으며 F239-47-6은 계속 열린다.
 - F239-47-16: AppKit reference focus가 돌아온 뒤 raw terminal cursor
   observer 구독을 유지한다. 이전 caller는 raw request가 이미 구독한 cursor
   status에 managed `Client.watch` 기반 `s.until`을 사용했다. 이때 보낸
