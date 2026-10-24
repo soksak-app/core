@@ -2369,3 +2369,7 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - F212.16-11: Update the refusal assertion for the canonical `soksak://`
   view origin. Red: the focused test expected `sok://`. Green: the plugin-api
   package test passes 809/809.
+- F239-40-1: Align the zero-HelloTimeout Go test with `processPersistent`.
+  Red: the Wails host test package did not
+  compile because the test supplied a removed fourth argument. Green: the
+  focused owning test passes 1/1 and retains its refusal assertion.

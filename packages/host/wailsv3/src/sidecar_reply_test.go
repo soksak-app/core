@@ -78,7 +78,7 @@ func TestASidecarErrorTextCutAtTheBoundIsMarked(t *testing.T) {
 // so the start of a persistent service refuses the value with a named error before it spawns anything.
 func TestAZeroHelloTimeoutIsRefusedBeforeAServiceStarts(t *testing.T) {
 	c := &Sidecars{}
-	_, err := c.processPersistent("probe-service", "probe-service", "soksak://sidecar/probe-service", nil)
+	_, err := c.processPersistent("probe-service", "probe-service", nil)
 	if err == nil || !strings.Contains(err.Error(), "HelloTimeout is not set") {
 		t.Fatalf("a persistent start with a zero HelloTimeout returned %v, want an error that names HelloTimeout is not set", err)
 	}

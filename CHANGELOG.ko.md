@@ -2370,3 +2370,7 @@
 - F212.16-11: canonical `soksak://` view origin에 맞게 refusal assertion을
   수정한다. Red: focused test가 `sok://`를 기대했다. Green: plugin-api
   package test가 809/809로 통과한다.
+- F239-40-1: zero-HelloTimeout Go 시험이 현재 `processPersistent` signature를
+  사용하도록 한다. Red: 시험이 삭제된 네 번째 인자를 전달해 Wails host
+  test package가 compile되지 않았다. Green: refusal assertion을 유지한 소유
+  시험이 1/1 통과한다.
