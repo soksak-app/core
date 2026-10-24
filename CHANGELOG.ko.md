@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F266: 선택된 `[-]` 기록 16개를 상태 변경 없이 감사했다. F73과 F131은 원래 실패 load가 포함된 owning suite 전체 실행 3회 이상과 재발 시 사용할 기록을 명시한다. 나머지 14개인 F69, F77, F78, F134, F142, F147, F160.7-1, F161.27, F161.56, F161.62, F161.59, F196.10.1, F160.6.5, F252-2-1에는 전체 suite 또는 load 근거가 모두 기록되지 않아 각각 열린 audit follow-up을 추가했다. F160.6.5는 load 27–44의 focused repeat 20회와 load 25–34의 crate 전체 실행 3회를 적었지만 원래 실패는 약 40으로, 전체 실행에서 비슷한 load를 검증했는지 근거가 없다. 실행은 하지 않았고 새 실패를 닫지 않았다.
 - F239-26-3: normal-shutdown runner는 성공하거나 실패한 뒤 열린 모든 client를 닫으며 terminal-service client도 포함한다. Close 실패를 보고하고 앞선 shutdown 또는 audit 실패를 결과 오류에 보존한다. Red: controlled shutdown-wait 실패 뒤 두 client가 모두 열린 상태였다. Green: 둘 다 닫히며 close-failure test가 두 오류를 보존한다. 소유 shutdown test는 5/5 통과한다.
 - F239-26-1: 직접 실행하는 normal shutdown은 시작 offset부터 process 종료까지 application error event를 읽고 새 error line이 있으면 실패한다. 기존 window check event reader를 사용하며 이전 로그의 error는 이번 실행에서 제외한다. Red: 변경 전 controlled-client orchestration은 `error host shutdown: quit failed`를 기록하고도 fulfilled되어 `assert.rejects`에서 `Missing expected rejection`으로 실패했다. Green: 같은 orchestration은 해당 event line과 함께 거부하고 이전 error는 무시하며 소유 shutdown test가 3/3 통과한다. `make docs-check`는 112 files와 1722 record check를 통과한다. 두 host runtime acceptance는 F239-26-2에서 계속 추적한다.
 - F239-32: macOS arm64에서 Wails 0.0.21 first-project 추적 검사를 한 번 실행해 1/1 통과했다. 같은 창에서 library가 교체됐고 `core.project.open`은 235ms에 응답했으며 page error가 없고 frontmost 기준을 복원했다. timing/system-load trace, stdout, host JSONL, debug JSONL, stderr를 보존했다. 이는 한 번의 미재현이며 과거 10초 timeout 원인은 아직 모른다. 반복 target을 마칠 때까지 항목은 열린 상태다.
