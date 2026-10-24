@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde_json::value::RawValue;
 
-use super::{Failure, ImageDetachWaiter, Message, Owner, SidecarDeclaration, Sidecars};
+use super::super::{Failure, ImageDetachWaiter, Message, Owner, SidecarDeclaration, Sidecars};
 
 #[derive(Clone)]
 struct TestOwner;
