@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-48-2: The generic tree fixture in `declared-ui-style.test.mjs` used
+  `files` as its tree and `expandedByTree` key, but `scripts/workspace-registry.json` declares it as a plugin id
+  and `make boundaries` rejected it as a plugin reference in a core test. Red:
+  the unchanged boundary check failed at lines 10 and 28 of that file. Rename
+  both keys to neutral `tree-example` while preserving tree and expansion
+  assertions. Green: both owning style-test cases and `make boundaries` across
+  16 components pass; `make node-repeat FILE=packages/workbench/test/declared-ui-style.test.mjs NAME=declared COUNT=1` and `make docs-check` pass. The boundary rule is unchanged.
+
 - F212.12-2-1-2: Add an optional activated view-focus test path. It checks
   activation completion, page press receipt, first-responder state and key
   receipt while preserving the existing inactive-path and surface-reveal
