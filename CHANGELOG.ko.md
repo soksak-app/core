@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전
+  데이터 snapshot, 닫은 뒤의 빈 no-project snapshot, 오래된 row 부재와 깨끗한
+  application error audit을 요구한다. 기존 Files P42–P45 test는 null 및 오래된
+  작업 동작을 결정적으로 검증하며, 양 host project-close acceptance는 대기 중이다.
 - F239-37-3: 파일 열기 실패 check를 제거된 `files.selection`
   및 `files.open` status 대기에서 선언된 `files.tree` snapshot으로 옮긴다. 더 큰 `core.sidebars`
   `acceptedSeq`를 기다린 뒤 `files.tree` snapshot과 rendered section의 message row를 확인하고,
