@@ -6,6 +6,8 @@
 #include <unistd.h>
 #import "event_ring.h"
 #import "image_region.h"
+#import "input_inject.h"
+#import "input_press_context.h"
 #import "support/records.h"
 #import "webview_geometry.h"
 
@@ -1664,6 +1666,71 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"press focus A->B: region B reports its focus gain (events %@)", collectedEvents]);
         sp_region_close(regionA16);
         sp_region_close(regionB16);
+    }
+
+    // Diagnostic pointer dispatch calls the hit view directly, so the pressed view must retain the region's focus
+    // context without relying on NSApp.currentEvent.
+    {
+        void *region17 = sp_region_create(surface, "direct-pointer-focus", testEvent, NULL);
+        sp_region_place(region17, 100, 150, 100, 50, true);
+        sp_region_focus(region17);
+        [collectedEvents removeAllObjects];
+        sp_input_press_context outer17 = {0}, inner17 = {0};
+        double contextX17 = 0, contextY17 = 0;
+        sp_input_press_context_push(&outer17, window, 11, 12);
+        BOOL foundOuter17 = sp_input_press_context_point(window, &contextX17, &contextY17)
+            && contextX17 == 11 && contextY17 == 12;
+        sp_input_press_context_push(&inner17, window, 31, 32);
+        BOOL foundInner17 = sp_input_press_context_point(window, &contextX17, &contextY17)
+            && contextX17 == 31 && contextY17 == 32;
+        sp_input_press_context_pop(&inner17);
+        BOOL restoredOuter17 = sp_input_press_context_point(window, &contextX17, &contextY17)
+            && contextX17 == 11 && contextY17 == 12;
+        sp_input_press_context_pop(&outer17);
+        check(foundOuter17 && foundInner17 && restoredOuter17 && !sp_input_press_context_point(window, NULL, NULL),
+            @"direct pointer focus: nested synthetic press context restores the previous point");
+        NSEvent *currentEvent17 = NSApp.currentEvent;
+        double facts17[6] = {0};
+        sp_region_frame(region17, facts17);
+        double x17 = facts17[0] + facts17[2] / 2;
+        double y17 = facts17[1] + facts17[3] / 2;
+        __block BOOL nextMainTurn17 = NO;
+        NSArray *inputRecords17 = capturedEvents(^{
+            check(sp_input_pointer(window, x17, y17, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
+                @"direct pointer focus: the press reaches the hit view");
+            check(sp_input_pointer(window, x17, y17, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+                @"direct pointer focus: the release reaches the pressed view");
+            dispatch_async(dispatch_get_main_queue(), ^{ nextMainTurn17 = YES; });
+            NSDate *deadline17 = [NSDate dateWithTimeIntervalSinceNow:1.0];
+            while (!nextMainTurn17 && deadline17.timeIntervalSinceNow > 0) {
+                [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+            }
+        });
+        check(nextMainTurn17, @"direct pointer focus: the responder restoration turn completed");
+        check(!sp_input_press_context_point(window, NULL, NULL),
+            @"direct pointer focus: the press context is removed after view dispatch");
+        check(NSApp.currentEvent == currentEvent17,
+            @"direct pointer focus: synthetic dispatch leaves the AppKit current event unchanged");
+        BOOL reportedLoss17 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedLoss17 = YES;
+        }
+        NSMutableArray *responderCallbacks17 = [NSMutableArray array];
+        for (NSDictionary *record in inputRecords17) {
+            if (![record[@"name"] isEqual:@"native.input.callback"]) continue;
+            NSDictionary *fields = record[@"fields"];
+            NSString *call = fields[@"call"];
+            if (![call isEqual:@"becomeFirstResponder"] && ![call isEqual:@"resignFirstResponder"]) continue;
+            [responderCallbacks17 addObject:@{ @"call": call, @"before": fields[@"before"][@"focus"],
+                @"after": fields[@"after"][@"focus"] }];
+        }
+        check(!reportedLoss17,
+            [NSString stringWithFormat:@"direct pointer focus: a press inside the focused region does not report focus loss (events %@, responder callbacks %@)",
+                collectedEvents, responderCallbacks17]);
+        check(window.firstResponder == (NSResponder *)region17,
+            [NSString stringWithFormat:@"direct pointer focus: the region remains first responder after the click (got %@)",
+                NSStringFromClass(window.firstResponder.class)]);
+        sp_region_close(region17);
     }
 
     [window close];

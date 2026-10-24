@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-1: hit view에 직접 전달되는 diagnostic pointer press 중 image
+  region focus를 유지한다. Red: 변경 전 owning test가 region 안의 press 뒤
+  focus loss와 다른 first responder를 관찰했다. Green: scoped press context가
+  region focus를 유지하고 중첩 상태를 복원하며 `NSApp.currentEvent`를 바꾸지
+  않는다. 집중 `image_region_test`와 `input_inject_test`가 통과한다. 이 결과는
+  diagnostic input을 검증하며 physical HID는 검증하지 않는다.
+
 - F239-35-5: project-folder/bookmark window case가 key, path, role로 declared
   control에 주소를 지정하고 해당 DOM rectangle을 얻어 native click을 보낸다.
   Label 선택과 branch 확장을 분리한다. Red: legacy Wails/Tauri baseline은

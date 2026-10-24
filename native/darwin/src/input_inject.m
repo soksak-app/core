@@ -14,12 +14,42 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "input_press_context.h"
 #import "observe.h"
 #import "application_log.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
 #import "private/coregraphics.h"
 #import "private/webkit.h"
+
+static _Thread_local sp_input_press_context *currentPressContext = NULL;
+
+void sp_input_press_context_push(sp_input_press_context *context, void *window, double x, double y) {
+    NSCAssert(NSThread.isMainThread, @"synthetic press contexts belong to the main thread");
+    context->previous = currentPressContext;
+    context->window = window;
+    context->x = x;
+    context->y = y;
+    currentPressContext = context;
+}
+
+void sp_input_press_context_pop(sp_input_press_context *context) {
+    NSCAssert(NSThread.isMainThread, @"synthetic press contexts belong to the main thread");
+    NSCAssert(currentPressContext == context, @"synthetic press contexts must be restored in nested order");
+    currentPressContext = context->previous;
+    context->previous = NULL;
+}
+
+bool sp_input_press_context_point(void *window, double *x, double *y) {
+    NSCAssert(NSThread.isMainThread, @"synthetic press contexts belong to the main thread");
+    for (sp_input_press_context *context = currentPressContext; context; context = context->previous) {
+        if (context->window != window) continue;
+        if (x) *x = context->x;
+        if (y) *y = context->y;
+        return true;
+    }
+    return false;
+}
 
 // Converts coordinates relative to the top-left of the content area into window coordinates. Follows the coordinate system direction of the content view.
 static NSPoint windowPoint(NSWindow *window, double x, double y) {
@@ -141,12 +171,20 @@ static sp_input_result pointerInput(void *handle, double x, double y, int phase,
             // A delivered release ends an open press. A rejected release leaves the press open, so the next press reports that fact.
             if (objc_getAssociatedObject(window, pressedViewKey(button))) { held->why = "a press of this button is still open"; return SP_INPUT_PRESS_OPEN; }
             objc_setAssociatedObject(window, pressedViewKey(button), hit, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            // -[NSWindow sendEvent:] makes the pressed view the first responder if it accepts, and then delivers the press.
-            // This path delivers directly to the view, so it follows the same order. The surface web view of the host does not
-            // become the first responder on a press alone. The window and the application are not activated.
-            if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
-            if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, 1, 1)];
-            else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, 1, 1)];
+            // -[NSApplication sendEvent:] is not used because it fails to deliver a synthetic first click to an inactive
+            // window. The explicit context lets click-through native regions classify the synchronous responder change
+            // without changing NSApp.currentEvent.
+            sp_input_press_context context = {0};
+            sp_input_press_context_push(&context, window, point.x, point.y);
+            @try {
+                // -[NSWindow sendEvent:] normally makes the pressed view first responder before the press. This path
+                // delivers directly to the view, so it follows that order without activating the window or application.
+                if (hit != window.firstResponder && hit.acceptsFirstResponder) [window makeFirstResponder:hit];
+                if (right) [hit rightMouseDown:mouseEvent(window, NSEventTypeRightMouseDown, point, 1, 1)];
+                else [hit mouseDown:mouseEvent(window, NSEventTypeLeftMouseDown, point, 1, 1)];
+            } @finally {
+                sp_input_press_context_pop(&context);
+            }
             return SP_INPUT_DELIVERED;
         case 2:
             if (right) [hit rightMouseDragged:mouseEvent(window, NSEventTypeRightMouseDragged, point, 0, 1)];

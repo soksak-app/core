@@ -12,6 +12,7 @@
 #import "event_ring.h"
 #import "image_capture_match.h"
 #import "image_region.h"
+#import "input_press_context.h"
 #import "observe.h"
 #import "webview_geometry.h"
 
@@ -170,21 +171,28 @@ static NSHashTable *spLiveRegions = nil;
 // Is the point of a press event inside a live image region of the same window? Returns that region (including the
 // region itself, nil if none). Only the point of a mouse press is considered.
 static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
-    NSEvent *event = NSApp.currentEvent;
-    if (!event || event.window != view.window) return nil;
-    switch (event.type) {
-        case NSEventTypeLeftMouseDown:
-        case NSEventTypeRightMouseDown:
-        case NSEventTypeOtherMouseDown:
-            break;
-        default:
-            return nil;
+    double x = 0, y = 0;
+    NSPoint windowPoint;
+    if (sp_input_press_context_point(view.window, &x, &y)) {
+        windowPoint = NSMakePoint(x, y);
+    } else {
+        NSEvent *event = NSApp.currentEvent;
+        if (!event || event.window != view.window) return nil;
+        switch (event.type) {
+            case NSEventTypeLeftMouseDown:
+            case NSEventTypeRightMouseDown:
+            case NSEventTypeOtherMouseDown:
+                break;
+            default:
+                return nil;
+        }
+        windowPoint = event.locationInWindow;
     }
-    NSPoint point = [view convertPoint:event.locationInWindow fromView:nil];
+    NSPoint point = [view convertPoint:windowPoint fromView:nil];
     if (NSPointInRect(point, view.bounds)) return view;
     for (SPImageRegion *other in spLiveRegions) {
         if (other == view || !other.window || other.window != view.window || other.closed) continue;
-        NSPoint inOther = [other convertPoint:event.locationInWindow fromView:nil];
+        NSPoint inOther = [other convertPoint:windowPoint fromView:nil];
         if (NSPointInRect(inOther, other.bounds)) return other;
     }
     return nil;

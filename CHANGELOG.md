@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-1: Preserve image-region focus during diagnostic pointer presses
+  delivered directly to the hit view. Red: the unchanged owning test observed
+  focus loss and a different first responder after an in-region press. Green:
+  the scoped press context preserves the region focus, restores nested state,
+  and leaves `NSApp.currentEvent` unchanged. Focused `image_region_test` and
+  `input_inject_test` pass. This verifies diagnostic input, not physical HID.
+
+
 - F239-35-5: The project-folder and bookmark window case now addresses
   declared controls by key, path and role, obtains their DOM rectangles and
   sends native clicks. Label selection and branch expansion are separate.
