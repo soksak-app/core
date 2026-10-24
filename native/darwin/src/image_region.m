@@ -207,6 +207,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 
 @implementation SPImageRegion
 
+- (void)drawRect:(NSRect)dirtyRect {
+    // TextKit state belongs to input only; the sidecar image is rendered by the child image layer.
+}
+
 - (id)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (!self) return nil;

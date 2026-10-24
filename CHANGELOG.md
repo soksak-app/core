@@ -5,6 +5,19 @@
 ## Unreleased
 
 - F239-47-6: Record a blue underline observed beneath `preedit` in the terminal prompt path on a fresh Wails window. The corresponding terminal base cells had no underline, inverse or link flag, while `terminal.cursor.preedit` held `ㅏㅏㅏ`. Capture began after the mark was already present; its three non-activating frames produced no source raster or candidates and recorded no source drops. The painter remains unknown and visual acceptance remains open.
+- F239-47-23: Keep the native image-region input document visually
+  transparent while preserving AppKit composition state. The unchanged owning
+  offscreen test measured 78 blue underline pixels for attributed `ㅏ` and 162
+  for `ㅏㅏ`; the same frames retained the composition reports and a known-color
+  sidecar IOSurface. The offscreen composite showed its green sentinel at the
+  mapped image-layer center. AppKit converted source DeviceRGB `#20c020` into
+  `(0.417, 0.773, 0.318)` in the `NSCalibratedRGBColorSpace` cache, so the test
+  checks the documented green-channel separation after conversion. The focused
+  test passes after `drawRect:` stops TextKit drawing, with zero underline
+  pixels, committed text and marked ranges, and the composited sidecar layer
+  intact. No activation or OS input method was used. P85 reported
+  `attributed:false`, so the actual moving blue paint remains uncorrelated;
+  live two-host visual acceptance remains under F239-47-6.
 
 - F212.10-core-3-6: Retire a view's exposure registrations in the same
   synchronous workbench transition that accepts its exact source-generation

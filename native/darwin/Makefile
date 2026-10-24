@@ -243,6 +243,7 @@ NATIVE_TESTS = observe_test \
   document_typing_test \
   document_press_test \
   image_region_test \
+  image_region_decoration_test \
   ime_reference_state_test \
   ime_source_restore_test \
   ime_wire_document_test \
