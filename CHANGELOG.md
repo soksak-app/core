@@ -4,20 +4,20 @@
 
 ## Unreleased
 
-- F239-47: Record the reported terminal IME visibility symptom and its
-  unresolved cause. The acceptance identifies an AppKit reference, native
-  input trace, terminal preedit, PTY state and full-gesture recording needed
-  to locate the failing boundary. The activation case reads committed cells
-  only through the reported cursor row and compares its preedit separately.
-  Red: the unchanged helper trimmed the shell prompt space before the first
-  vowel and rejected the prompt-only stage. Green: the helper preserves actual
-  whitespace, maps wide cells by column width, and ignores empty padding rows;
-  its focused fixture passes 1/1. Space ends preedit and advances the PTY cursor;
-  native/PTY insert traces contain the four vowels, while Space is a key rather
-  than inserted text. `node --check`,
-  `make docs-check` and `git diff --check` pass. The activation case is not run.
-  `make e2e-check` remains blocked by the existing timeout rule at
-  `e2e/normal-shutdown-runner.mjs:95`. No activation or product code changed.
+- F239-47: On macOS 26.6.2 arm64, the prior approved activation recording with
+  installed terminal 0.0.15 shows a transient compose-display loss, while
+  native and PTY insert traces retain the complete
+  `ㅏㅏㅏㅏ ` input. Before P70, Tauri's AppKit reference advanced through all
+  four vowels, but terminal compose/cursor preedit became empty after vowel
+  three and its fourth-vowel frame showed only two committed vowel cells.
+  Wails failed the terminal focus wait and reached the capture limit, so it did
+  not complete a comparable key sequence. The terminal owner corrected
+  insert-triggered compose clearing in P70; that candidate is not released.
+  The consumer test now correlates each presented screen read to a received
+  sidecar frame, cursor and compose state. Its helper fixtures pass 3/3, and
+  `node --check` and `git diff --check` pass. A fresh P70 candidate activation
+  run remains pending. `make e2e-check` is still blocked by the existing
+  timeout rule at `e2e/normal-shutdown-runner.mjs:95`.
 
 - F239-47-3: Report AppKit's marked range in composition events. The native
   event carries the full retained suffix and the exact text-relative UTF-16

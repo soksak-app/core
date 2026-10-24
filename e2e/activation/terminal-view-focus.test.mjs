@@ -1,6 +1,6 @@
 // Activation-tier comparison of identical native keys in a same-window AppKit control and terminal view.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -17,7 +17,7 @@ const REPEATED_VOWEL_KEYS = ["k", "k", "k", "k"];
 const REPEATED_VOWELS = "ㅏㅏㅏㅏ";
 const INPUT_RECORDS = ["native.record.info", "native.input.key_down", "native.input.report", "host.input.relay",
   "host.window.event", "host.trace.region", "host.trace.sidecar.send", "page.call", "page.log.clock",
-  "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write", "sidecar.vt.pty_read"];
+  "host.trace.sidecar.receive", "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write", "sidecar.vt.pty_read"];
 
 async function step(t, name, action) {
   const started = performance.now();
@@ -86,7 +86,7 @@ function cellTextBetweenColumns(cells, start, end) {
   return cells.slice(first, last).map((cell) => cell.ch === undefined ? "" : cell.ch).join("");
 }
 
-function visibleInputBeforeCursor(screen, cursor, prompt) {
+function visibleInputBeforeCursor(screen, cursor, prompt, composeText = "") {
   assert.ok(Number.isInteger(cursor.row) && Number.isInteger(cursor.col),
     `terminal cursor has no cell position: ${JSON.stringify(cursor)}`);
   assert.ok(cursor.row >= prompt.row && cursor.row < screen.lines.length,
@@ -101,7 +101,7 @@ function visibleInputBeforeCursor(screen, cursor, prompt) {
   const committed = rows.join("");
   assert.ok(committed.startsWith(prompt.text),
     `terminal cursor prefix lost its initial shell prompt: ${JSON.stringify({ prompt, cursor, committed })}`);
-  return `${committed.slice(prompt.text.length)}${cursor.preedit?.text ?? ""}`;
+  return `${committed.slice(prompt.text.length)}${composeText}`;
 }
 
 test("visible input preserves the prompt, handles wide cells, and ignores later blanks", () => {
@@ -111,8 +111,80 @@ test("visible input preserves the prompt, handles wide cells, and ignores later 
     [{ ch: undefined, width: 10 }],
   ] };
   const prompt = { row: 0, col: 0, text: cellTextBetweenColumns(screen.lines[0], 0, 2) };
-  assert.equal(visibleInputBeforeCursor(screen, { row: 0, col: 2, preedit: { text: "ㅏ" } }, prompt), "ㅏ");
-  assert.equal(visibleInputBeforeCursor(screen, { row: 1, col: 2, preedit: { text: "ㅏ" } }, prompt), "界ㅏ");
+  assert.equal(visibleInputBeforeCursor(screen, { row: 0, col: 2 }, prompt, "ㅏ"), "ㅏ");
+  assert.equal(visibleInputBeforeCursor(screen, { row: 1, col: 2 }, prompt, "ㅏ"), "界ㅏ");
+  const mixed = { lines: [[{ ch: "$", width: 1 }, { ch: " ", width: 1 },
+    { ch: "ㅏ", width: 1 }, { ch: "ㅏ", width: 1 }]] };
+  const mixedPrompt = { row: 0, col: 0, text: "$ " };
+  assert.equal(visibleInputBeforeCursor(mixed, { row: 0, col: 4 }, mixedPrompt, "ㅏ"), "ㅏㅏㅏ");
+  assert.equal(visibleInputBeforeCursor(mixed, { row: 0, col: 4 }, mixedPrompt, ""), "ㅏㅏ");
+});
+
+test("sidecar screen facts preserve the numeric row count and frame cursor", () => {
+  const facts = inputEventFacts([{
+    event: "host.trace.sidecar.receive",
+    ts_us: 1000,
+    mono_ns: 125000,
+    fields: {
+      surface: "tab-ime",
+      body: {
+        event: "screen",
+        sequence: 7,
+        rows: 1,
+        cols: 3,
+        cells: [{ grapheme: "$", width: 1 }, { grapheme: " ", width: 1 }, { grapheme: "ㅏ", width: 1 }],
+        frame: { generation: 3, raster: 3, sequence: 12 },
+        cursor: { row: 0, col: 8, preedit: { text: "ㅏ" } },
+      },
+    },
+  }], "tab-ime");
+  assert.deepEqual(facts, [{
+    at: 1,
+    mono_ns: 125000,
+    layer: "sidecar.screen",
+    sequence: 7,
+    rowCount: 1,
+    frame: { generation: 3, raster: 3, sequence: 12 },
+    cursor: { row: 0, col: 8, preedit: { text: "ㅏ" } },
+    lines: ["$ ㅏ"],
+  }]);
+});
+
+function frameMatches(left, right) {
+  return left?.generation === right?.generation && left?.raster === right?.raster &&
+    left?.sequence === right?.sequence;
+}
+
+function assertTerminalStageCoherent(stage, screenEvents, name) {
+  assert.equal(stage.compose.text, stage.cursor.preedit?.text ?? "",
+    `${name}: page composition and sidecar cursor preedit must agree`);
+  const matchingFrames = screenEvents.filter((event) => frameMatches(event.frame, stage.frame));
+  assert.ok(matchingFrames.length > 0,
+    `${name}: no sidecar screen event names presented frame ${JSON.stringify(stage.frame)}`);
+  assert.ok(matchingFrames.some((event) => event.rowCount === stage.rows.length &&
+    event.cursor?.row === stage.cursor.row && event.cursor?.col === stage.cursor.col &&
+    (event.cursor?.preedit?.text ?? "") === (stage.cursor.preedit?.text ?? "") &&
+    JSON.stringify(event.lines) === JSON.stringify(stage.screen)),
+  `${name}: sidecar screen rows and cursor do not match the presented frame`);
+}
+
+test("terminal stage requires matching screen, cursor, and compose state", () => {
+  const stage = {
+    frame: { generation: 2, raster: 4, sequence: 12 },
+    rows: [{}, {}],
+    screen: ["$ ㅏ", ""],
+    cursor: { row: 0, col: 2, preedit: { text: "ㅏ" } },
+    compose: { text: "ㅏ" },
+  };
+  const event = { rowCount: 2, frame: { ...stage.frame }, lines: stage.screen,
+    cursor: { row: 0, col: 2, preedit: { text: "ㅏ" } } };
+  assert.doesNotThrow(() => assertTerminalStageCoherent(stage, [event], "fixture"));
+  assert.throws(() => assertTerminalStageCoherent(stage, [{ ...event, frame: { ...event.frame, sequence: 11 } }], "fixture"),
+    /no sidecar screen event names presented frame/);
+  assert.throws(() => assertTerminalStageCoherent(stage, [{ ...event, lines: ["$", ""] }], "fixture"),
+    /screen rows and cursor do not match/);
+  assert.throws(() => assertTerminalStageCoherent({ ...stage, compose: { text: "" } }, [event], "fixture"),
+    /page composition and sidecar cursor preedit must agree/);
 });
 
 function inputEventFacts(events, surface) {
@@ -162,6 +234,13 @@ function inputEventFacts(events, surface) {
         text: Buffer.from(fields.hex ?? "", "hex").toString("latin1"), sequence: fields.sequence });
     } else if (event.event === "host.window.event") {
       facts.push({ at, layer: "host.window.event", fields });
+    } else if (event.event === "host.trace.sidecar.receive" && fields.surface === surface &&
+      fields.body?.event === "screen") {
+      const body = fields.body;
+      facts.push({ at, mono_ns: event.mono_ns, layer: "sidecar.screen", sequence: body.sequence,
+        frame: body.frame, cursor: body.cursor, rowCount: body.rows,
+        lines: Array.from({ length: body.rows }, (_, row) => body.cells.slice(row * body.cols, (row + 1) * body.cols)
+          .map((cell) => cell.grapheme === "" ? " ".repeat(cell.width) : cell.grapheme).join("").trimEnd()) });
     }
   }
   return facts;
@@ -182,8 +261,9 @@ async function observeInput(s, t, name, surface, action) {
   statuses.push({ at: performance.now() - started, value: await s.get("host.window"), initial: true });
   requests.hostWindow = () => statuses.at(-1)?.value;
   let failure;
+  let result;
   try {
-    await action(requests);
+    result = await action(requests);
   } catch (error) {
     failure = error;
   } finally {
@@ -199,27 +279,45 @@ async function observeInput(s, t, name, surface, action) {
       hostWindowChanges: statuses.map(({ at, value, ...rest }) => ({ at, ...rest, ...hostWindowFacts(value, surface) })),
       inputEvents,
     })}`);
+    if (result && typeof result === "object") result.inputEvents = inputEvents;
   }
   if (failure) throw failure;
+  return result;
 }
 
 async function recordGesture(s, t, name, action) {
   const capture = await s.record();
-  await action();
-  const { displayed } = await s.presented();
-  const result = await capture.stop({ after: displayed + 100 });
-  const framePaths = frames(capture.frames);
-  const frameNames = framePaths.map((framePath) => basename(framePath));
-  const decoded = framePaths.map(readFrame);
-  assert.equal(decoded.length, result.count, `${name}: every captured frame must decode`);
-  assert.ok(decoded.length >= 2, `${name}: the recording must cover the full gesture`);
-  assert.equal(result.limited, false, `${name}: capture reached its limit`);
-  assert.equal(result.callbackStatus, join(capture.frames, "callback-status.jsonl"), `${name}: stop must name the callback trace`);
-  const callbackTrace = readFileSync(result.callbackStatus, "utf8");
-  assert.notEqual(callbackTrace.trim(), "", `${name}: the callback trace must not be empty`);
-  const callbackStatus = callbackTrace.trim().split("\n").map((line) => JSON.parse(line));
-  assert.ok(callbackStatus.length <= 4096, `${name}: callback trace exceeded its declared bound`);
-  for (const [index, callback] of callbackStatus.entries()) {
+  let actionResult;
+  let actionError;
+  try {
+    actionResult = await action();
+  } catch (error) {
+    actionError = error;
+  }
+  let result;
+  let captureError;
+  try {
+    const { displayed } = await s.presented();
+    result = await capture.stop({ after: displayed + 100 });
+  } catch (error) {
+    captureError = error;
+  }
+  if (actionError && captureError) throw new AggregateError([actionError, captureError], `${name}: action and capture stop failed`);
+  if (captureError) throw captureError;
+  let captureValidationError;
+  try {
+    const framePaths = frames(capture.frames);
+    const frameNames = framePaths.map((framePath) => basename(framePath));
+    const decoded = framePaths.map(readFrame);
+    assert.equal(decoded.length, result.count, `${name}: every captured frame must decode`);
+    assert.ok(decoded.length >= 2, `${name}: the recording must cover the full gesture`);
+    assert.equal(result.limited, false, `${name}: capture reached its limit`);
+    assert.equal(result.callbackStatus, join(capture.frames, "callback-status.jsonl"), `${name}: stop must name the callback trace`);
+    const callbackTrace = readFileSync(result.callbackStatus, "utf8");
+    assert.notEqual(callbackTrace.trim(), "", `${name}: the callback trace must not be empty`);
+    const callbackStatus = callbackTrace.trim().split("\n").map((line) => JSON.parse(line));
+    assert.ok(callbackStatus.length <= 4096, `${name}: callback trace exceeded its declared bound`);
+    for (const [index, callback] of callbackStatus.entries()) {
     assert.equal(callback.sequence, index + 1, `${name}: callback sequence must be contiguous`);
     assert.ok(callback.status === null || Number.isInteger(callback.status), `${name}: status must be an integer or null`);
     assert.ok(callback.displayTime === null || (typeof callback.displayTime === "string" && /^\d+$/.test(callback.displayTime)),
@@ -246,29 +344,29 @@ async function recordGesture(s, t, name, action) {
         `${name}: a recorded frame callback must have an exact display time`);
       assert.ok(frameNames.includes(callback.frame), `${name}: callback names a frame that was not recorded: ${callback.frame}`);
     }
-  }
-  const frameCallbacks = callbackStatus.flatMap((callback, index) => callback.frame === null ? [] : [{ callback, index }]);
-  assert.deepEqual(frameCallbacks.map(({ callback }) => callback.frame), frameNames,
+    }
+    const frameCallbacks = callbackStatus.flatMap((callback, index) => callback.frame === null ? [] : [{ callback, index }]);
+    assert.deepEqual(frameCallbacks.map(({ callback }) => callback.frame), frameNames,
     `${name}: callback frame filenames must match the recorded files one-to-one and in order`);
-  assert.equal(frameCallbacks.length, decoded.length, `${name}: every decoded frame must have exactly one callback`);
-  const gaps = decoded.slice(1).map((frame, index) => ({
+    assert.equal(frameCallbacks.length, decoded.length, `${name}: every decoded frame must have exactly one callback`);
+    const gaps = decoded.slice(1).map((frame, index) => ({
     from: frameNames[index], to: frameNames[index + 1], milliseconds: frame.time - decoded[index].time,
     callbacks: callbackStatus.slice(frameCallbacks[index].index + 1, frameCallbacks[index + 1].index)
       .map(({ sequence, status, displayTime, frame: emittedFrame }) => ({ sequence, status, displayTime, frame: emittedFrame })),
-  }));
-  const rawDifference = (later, earlier) => (BigInt(later) - BigInt(earlier)).toString();
-  const callbackTiming = frameCallbacks.map(({ callback }) => ({
+    }));
+    const rawDifference = (later, earlier) => (BigInt(later) - BigInt(earlier)).toString();
+    const callbackTiming = frameCallbacks.map(({ callback }) => ({
     sequence: callback.sequence,
     frame: callback.frame,
     arrivalAfterDisplayRaw: rawDifference(callback.callbackTime, callback.displayTime),
     synchronousProcessingRaw: rawDifference(callback.writeCompleteTime, callback.writeStartTime),
-  }));
-  t.diagnostic(`${name} callback arrival/synchronous-processing deltas: ${JSON.stringify({
+    }));
+    t.diagnostic(`${name} callback arrival/synchronous-processing deltas: ${JSON.stringify({
     timebase: { numerator: callbackStatus[0].machTimebaseNumerator, denominator: callbackStatus[0].machTimebaseDenominator },
     frames: callbackTiming,
-  })}`);
-  const missedBound = gaps.filter((gap) => gap.milliseconds > 33);
-  const overBoundTiming = missedBound.map((gap) => {
+    })}`);
+    const missedBound = gaps.filter((gap) => gap.milliseconds > 33);
+    const overBoundTiming = missedBound.map((gap) => {
     const index = frameNames.indexOf(gap.from);
     const from = frameCallbacks[index].callback;
     const to = frameCallbacks[index + 1].callback;
@@ -284,24 +382,33 @@ async function recordGesture(s, t, name, action) {
       toProcessingRaw: rawDifference(to.writeCompleteTime, to.writeStartTime),
       timebase: { numerator: from.machTimebaseNumerator, denominator: from.machTimebaseDenominator },
     };
-  });
-  const statusCounts = callbackStatus.reduce((counts, { status }) => {
+    });
+    const statusCounts = callbackStatus.reduce((counts, { status }) => {
     const key = status === null ? "missing" : String(status);
     counts[key] = (counts[key] ?? 0) + 1;
     return counts;
-  }, {});
-  const noFrameCounts = callbackStatus.filter(({ frame: emittedFrame }) => emittedFrame === null)
-    .reduce((counts, { status }) => {
+    }, {});
+    const noFrameCounts = callbackStatus.filter(({ frame: emittedFrame }) => emittedFrame === null)
+      .reduce((counts, { status }) => {
       const key = status === null ? "missing" : String(status);
       counts[key] = (counts[key] ?? 0) + 1;
       return counts;
-    }, {});
-  t.diagnostic(`${name} callback trace: ${JSON.stringify({ callbacks: callbackStatus.length, statusCounts, noFrameCounts,
-    over33ms: missedBound, overBoundTiming })}`);
-  const measuredLongestGap = Math.max(...gaps.map(({ milliseconds }) => milliseconds));
-  assert.ok(result.longestGap <= 33, `${name}: frame gap ${result.longestGap}ms exceeds 33ms`);
-  assert.ok(measuredLongestGap <= 33, `${name}: decoded frame gap ${measuredLongestGap}ms exceeds 33ms`);
-  t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, longestGap: result.longestGap })}`);
+      }, {});
+    t.diagnostic(`${name} callback trace: ${JSON.stringify({ callbacks: callbackStatus.length, statusCounts, noFrameCounts,
+      over33ms: missedBound, overBoundTiming })}`);
+    const measuredLongestGap = Math.max(...gaps.map(({ milliseconds }) => milliseconds));
+    assert.ok(result.longestGap <= 33, `${name}: frame gap ${result.longestGap}ms exceeds 33ms`);
+    assert.ok(measuredLongestGap <= 33, `${name}: decoded frame gap ${measuredLongestGap}ms exceeds 33ms`);
+    t.diagnostic(`${name}: ${JSON.stringify({ frames: result.count, longestGap: result.longestGap })}`);
+  } catch (error) {
+    captureValidationError = error;
+  }
+  if (actionError && captureValidationError) {
+    throw new AggregateError([actionError, captureValidationError], `${name}: action and capture validation failed`);
+  }
+  if (captureValidationError) throw captureValidationError;
+  if (actionError) throw actionError;
+  return actionResult;
 }
 
 for (const app of Object.values(APPS)) {
@@ -430,9 +537,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(await s.request("diagnostics.input.reference", { action: "read" }), { open: false });
 
     let imeTracing = false;
-    await step(t, `${app.name}: terminal repeated-vowel gesture`, () => recordGesture(s, t,
-      "terminal repeated-vowel gesture", () => observeInput(s, t, "terminal repeated-vowel gesture", surface,
-        async () => {
+    const terminalResult = await step(t, `${app.name}: terminal focus and repeated-vowel gesture`, () =>
+      observeInput(s, t, "terminal repeated-vowel gesture", surface, async () => {
           const current = (await s.get("core.surfaces")).find((item) => item.surface === surface);
           assert.ok(current?.visible && current.composition === "view" && current.applied,
             "the terminal must expose its current applied native frame");
@@ -446,7 +552,7 @@ for (const app of Object.values(APPS)) {
             "Korean 2-set must be selected for the terminal");
           const initialScreen = await presentedScreen(s, surface);
           const initialCursor = await s.get("terminal.cursor", surface);
-          const promptText = cellTextBetweenColumns(initialScreen.lines[initialCursor.row], 0, initialCursor.col);
+          const promptText = cellTextBetweenColumns(initialScreen.rows[initialCursor.row], 0, initialCursor.col);
           assert.ok(promptText.trimEnd().endsWith("$"),
             `the terminal cursor must start at its shell prompt: ${JSON.stringify({ promptText, initialCursor })}`);
           const prompt = { row: initialCursor.row, col: 0, text: promptText };
@@ -464,6 +570,8 @@ for (const app of Object.values(APPS)) {
             }
           });
 
+          const gesture = await step(t, `${app.name}: record terminal repeated-vowel keys`, () =>
+            recordGesture(s, t, "terminal repeated-vowel keys", async () => {
           const terminalStages = [];
           for (const [index, key] of REPEATED_VOWEL_KEYS.entries()) {
             await s.press(key);
@@ -473,16 +581,23 @@ for (const app of Object.values(APPS)) {
             const stage = {
               index: index + 1,
               key,
-              screen: textLines({ lines: screen.lines }),
+              reference: referenceStages[index],
+              frame: screen.frame,
+              rows: screen.rows,
+              screen: textLines({ lines: screen.rows }),
               cursor,
               compose,
             };
             terminalStages.push(stage);
-            const visibleText = visibleInputBeforeCursor(screen, cursor, prompt);
-            assert.equal(visibleText, referenceStages[index].document,
-              `terminal text before Space differs from AppKit after vowel ${index + 1}: ` +
-              JSON.stringify({ expected: referenceStages[index].document, stage }));
-            t.diagnostic(`${app.name}: terminal before Space after vowel ${index + 1}: ${JSON.stringify(stage)}`);
+            t.diagnostic(`${app.name}: terminal before Space after vowel ${index + 1}: ${JSON.stringify({
+              index: stage.index,
+              key: stage.key,
+              referenceDocument: stage.reference.document,
+              frame: stage.frame,
+              screen: stage.screen,
+              cursor: stage.cursor,
+              compose: stage.compose,
+            })}`);
           }
 
           const beforeSpace = terminalStages.at(-1).cursor;
@@ -492,33 +607,65 @@ for (const app of Object.values(APPS)) {
             "the terminal did not display all four vowels before another key");
           const afterSpace = await s.until("terminal.cursor", (cursor) => cursor.row > beforeSpace.row ||
             cursor.col > beforeSpace.col, "Space did not advance the terminal PTY cursor", { surface });
-          assert.equal((await s.get("terminal.compose", surface)).text, "",
-            "Space must end the terminal preedit before another key");
-          const occurrences = committedLines.reduce((count, line) =>
-            count + line.split(REPEATED_VOWELS).length - 1, 0);
-          assert.equal(occurrences, 1, "the terminal must display the committed vowels exactly once");
-          assert.equal((await s.get("terminal.session", surface)).error, undefined,
-            "the native repeated-vowel input must not report a session error");
+          const committedCompose = await s.get("terminal.compose", surface);
           imeTracing = false;
           const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
-          assert.equal(trace.overflow, false, "the terminal IME trace must not overflow");
+          const sessionError = (await s.get("terminal.session", surface)).error;
           const nativeInserts = trace.entries.filter((entry) => entry.kind === "native-insert")
             .map((entry) => entry.text).join("");
           const ptyInserts = trace.entries.filter((entry) => entry.kind === "terminal-input" &&
             entry.input.type === "insert").map((entry) => entry.input.text).join("");
-          // Space is forwarded as a key, not counted as inserted text. Its PTY effect is checked by the cursor advance above.
-          assert.equal(nativeInserts, REPEATED_VOWELS,
-            "the native input client must commit exactly the four reference vowels");
-          assert.equal(ptyInserts, REPEATED_VOWELS,
-            "the terminal PTY input queue must receive exactly the four vowels");
-          t.diagnostic(`${app.name}: repeated-vowel terminal result ${JSON.stringify({
-            stages: terminalStages,
-            committedLines,
-            afterSpace,
-            nativeInserts,
-            ptyInserts,
-            trace: trace.entries,
-          })}`);
-        })));
+          const stageInput = terminalStages.map(({ rows, cursor, compose }) =>
+            visibleInputBeforeCursor({ lines: rows }, cursor, prompt, compose.text));
+          return { terminalStages, stageInput, committedLines, afterSpace, committedCompose,
+            nativeInserts, ptyInserts, trace, sessionError };
+            }));
+          return gesture;
+      }));
+    const screenEvents = terminalResult.inputEvents.filter((event) => event.layer === "sidecar.screen");
+    for (const stage of terminalResult.terminalStages) {
+      assertTerminalStageCoherent(stage, screenEvents, `${app.name}: vowel ${stage.index}`);
+    }
+    writeFileSync(join(s.app.configDir, "terminal-ime-stage-observations.json"), JSON.stringify({
+      referenceStages,
+      terminalStages: terminalResult.terminalStages,
+      screenEvents,
+      stageInput: terminalResult.stageInput,
+      committedLines: terminalResult.committedLines,
+      afterSpace: terminalResult.afterSpace,
+      committedCompose: terminalResult.committedCompose,
+      nativeInserts: terminalResult.nativeInserts,
+      ptyInserts: terminalResult.ptyInserts,
+      trace: terminalResult.trace.entries,
+    }, null, 2));
+    assert.equal(terminalResult.trace.overflow, false, "the terminal IME trace must not overflow");
+    assert.equal(terminalResult.committedCompose.text, "",
+      "Space must end the terminal preedit before another key");
+    const occurrences = terminalResult.committedLines.reduce((count, line) =>
+      count + line.split(REPEATED_VOWELS).length - 1, 0);
+    assert.equal(occurrences, 1, "the terminal must display the committed vowels exactly once");
+    assert.equal((await s.get("terminal.session", surface)).error, undefined,
+      "the native repeated-vowel input must not report a session error");
+    assert.equal(terminalResult.nativeInserts, `${REPEATED_VOWELS} `,
+      "the native input client must commit the four reference vowels and Space exactly");
+    assert.equal(terminalResult.ptyInserts, `${REPEATED_VOWELS} `,
+      "the terminal PTY input queue must receive the four vowels and Space exactly");
+    assert.equal(terminalResult.sessionError, undefined,
+      "the native repeated-vowel input must not report a session error");
+    assert.deepEqual(terminalResult.stageInput,
+      referenceStages.map(({ document }) => document),
+      "terminal cell text plus its separate composition must match the AppKit stages before Space");
+    t.diagnostic(`${app.name}: repeated-vowel terminal result ${JSON.stringify({
+      stages: terminalResult.terminalStages.map(({ index, key, reference, frame, screen, cursor, compose }) => ({
+        index, key, reference: reference.document, frame, screen, cursor, compose,
+      })),
+      screenEvents,
+      committedLines: terminalResult.committedLines,
+      afterSpace: terminalResult.afterSpace,
+      committedCompose: terminalResult.committedCompose,
+      nativeInserts: terminalResult.nativeInserts,
+      ptyInserts: terminalResult.ptyInserts,
+      trace: terminalResult.trace.entries,
+    })}`);
   });
 }

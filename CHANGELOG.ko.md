@@ -4,17 +4,18 @@
 
 ## 미배포
 
-- F239-47: 보고된 terminal IME 표시 증상과 미확인 원인을 기록한다. 수용
-  기준은 실패 경계를 찾기 위해 AppKit 기준 입력, native input trace, terminal
-  preedit, PTY 상태 및 전체 입력 녹화를 요구한다. Activation case는 커서 행까지만
-  committed cell을 읽고 preedit는 따로 비교한다. Red: 변경 전 helper는 첫 모음
-  단계의 prompt 공백을 잘라 prompt-only 상태를 거부했다. Green: 실제 whitespace를
-  보존하고 wide cell을 column width로 계산하며 빈 padding row를 무시한다. 소유 fixture
-  검사는 1/1 통과한다. Space가 preedit를 끝내고 PTY cursor를 이동시키며 native와
-  PTY insert trace에는 네 모음만 포함된다. Space는 inserted text가 아니라 key다.
-  `node --check`, `make docs-check`, `git diff --check`가 통과한다. Activation case는
-  실행하지 않았다. `make e2e-check`는 기존 `e2e/normal-shutdown-runner.mjs:95`
-  timeout 규칙에서 실패한다. Activation이나 제품 코드는 변경하지 않았다.
+- F239-47: macOS 26.6.2 arm64에서 설치 terminal 0.0.15로 수행한 이전 승인
+  activation 녹화는 terminal compose 표시가 일시적으로 사라졌지만 native와 PTY
+  insert trace에는 전체 `ㅏㅏㅏㅏ ` 입력이 보존되었음을
+  보여준다. P70 이전 Tauri AppKit 기준은 네 모음을 모두 반영했지만 terminal
+  compose/cursor preedit은 세 번째 모음 뒤 비었고 네 번째 모음 frame에는 확정된
+  모음 cell 두 개만 있었다. Wails는 terminal focus 대기에 실패하고 capture limit에
+  도달해 비교 가능한 키 입력을 완료하지 못했다. Terminal 소유자는 insert가 compose를
+  지우는 동작을 P70에서 수정했으며 candidate는 아직 release되지 않았다. Consumer
+  test는 각 presented screen read를 수신 sidecar frame, cursor 및 compose 상태와
+  연결한다. Helper fixture 3/3, `node --check`, `git diff --check`가 통과한다. 새 P70
+  candidate activation run은 대기 중이다. `make e2e-check`는 기존
+  `e2e/normal-shutdown-runner.mjs:95` timeout 규칙에서 계속 막혀 있다.
 
 - F239-47-3: AppKit marked range를 composition event로 보고한다. Native event는
   보관 suffix 전체와 text 기준 실제 UTF-16 marked range를 담고, AppKit에
