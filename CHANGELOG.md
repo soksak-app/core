@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-52: Read no-project Files snapshots with `status.get` after the
+  project-close check observes that Files sections left `core.sidebars`.
+  Plugin hosts push declared UI snapshots and refuse `status.watch`; the
+  previous check used that unsupported method for both Files statuses. The
+  focused consumer test passes 2/2 and `make docs-check` passes. The window
+  check was not rerun.
+
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
   test confirms that an object or null presentation caret does not change the

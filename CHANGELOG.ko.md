@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-52: `status.get`으로 no-project Files snapshot을 읽는다. Project-close
+  check가 Files section이 `core.sidebars`에서 사라진 것을 확인한 뒤 실행한다.
+  Plugin host는 declared UI snapshot을 push하고 `status.watch`를 거부한다.
+  이전 check는 두 Files status에 지원하지 않는 method를 사용했다. Focused
+  consumer test는 2/2, `make docs-check`는 통과한다. Window check는 재실행하지 않았다.
+
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는
   object 또는 null presentation caret이 hash를 바꾸지 않고 raw engine cursor
