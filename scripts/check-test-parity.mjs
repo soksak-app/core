@@ -2096,7 +2096,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/image_region.m", symbol: "native.input.report" },
     ],
     tests: [
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: a noop: command is recorded as dropped" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: reporting through a closed region is recorded as dropped" },
     ],
     expected: "The native library records an input that a region drops with its reason.",
     levels: ["unit"],
@@ -2128,13 +2128,13 @@ const FEATURE_LINKS = [
   {
     id: "F143",
     implementation: [
-      { file: "native/darwin/src/image_region.m", symbol: "selectedSourceComposesOnlyHangul] && through > self.committedLength" },
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" },
     ],
     tests: [
-      { file: "native/darwin/tests/image_region_hangul_test.m", id: "the committed text is 하나 and the space, each once and in order" },
-      { file: "native/darwin/tests/image_region_hangul_test.m", id: "the syllable two before the newest insert is committed" },
+      { file: "native/darwin/tests/image_region_hangul_test.m", id: "Korean resyllabification replaces the local marked syllable" },
+      { file: "native/darwin/tests/image_region_hangul_test.m", id: "the resolved Korean syllables commit once in order" },
     ],
-    expected: "While a source that composes only Hangul is selected, the image region keeps the syllable before the newest insert revisable, so a revision of it after a later append commits each syllable once and in order.",
+    expected: "The controlled marked-buffer test applies a Korean resyllabification replacement to the local marked syllable and commits the resolved syllables once in order. It does not establish the separate real input-source acceptance.",
     levels: ["unit"],
   },
   {
@@ -2689,24 +2689,16 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-3",
     implementation: [
-      { file: "native/darwin/src/image_region.m", symbol: "- (void)reportPreedit {" },
-      { file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) imageChanged(key ImageKey, event string)" },
-      { file: "packages/host/tauriv2/src/images.rs", symbol: "fn image_event_payload(" },
-      { file: "packages/plugin-api/view.js", symbol: "runtime.native.on(\"image-event\"" },
+      { file: "native/darwin/src/image_region.m", symbol: "- (NSString *)preeditSnapshotJSON:(BOOL *)changedOut" },
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" },
     ],
     tests: [
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: compose reports null while retaining an unmarked suffix" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: compose reports the actual partial marked range relative to its suffix" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: an unchanged compose text reports its changed selected range" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: markedRange uses UTF-16 offsets relative to the retained suffix" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: an invalid native marked range reports an input error and emits no compose event" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: unmark reports null once when selection and retained suffix are unchanged" },
-      { file: "packages/host/wailsv3/src/images_relay_test.go", id: "TestImageChangedPreservesComposeMarkedRangeOnOwningSurface" },
-      { file: "packages/host/tauriv2/src/images_test.rs", id: "the_image_event_relay_preserves_the_compose_marked_range" },
-      { file: "packages/plugin-api/test/view.test.mjs", id: "composition.create of a view attaches its declared regions and places one snapshot through view calls" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "the transaction carries only the final marked snapshot" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "input query returns exact marked-buffer UTF-16 text" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "partial mark replacement keeps both surrounding characters visible" },
     ],
-    expected: "Native composition reports the retained suffix and its actual marked range, and both host relays and the plugin API preserve the composition event body.",
-    levels: ["native", "unit"],
+    expected: "The input client reports the complete local marked buffer and its UTF-16 marked and selected ranges in the final input transaction; it does not retain already committed terminal text as composition state.",
+    levels: ["native"],
   },
   {
     id: "F239-43",
@@ -4932,16 +4924,14 @@ const FEATURE_LINKS = [
   {
     id: "F8",
     implementation: [
-      { file: "native/darwin/src/image_region.m", symbol: "commitThrough" },
-      { file: "native/darwin/src/image_region.m", symbol: "reportPreedit" },
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)commitPending" },
     ],
     tests: [
       { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Backspace during a composition edits it to 하 without PTY input" },
-      { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Escape during a composition commits it once and is reported after it" },
+      { file: "native/darwin/tests/image_region_ime_test.m", id: "image region: Enter commits the edited syllable once and is reported after it" },
       { file: "e2e/activation/ime.test.mjs", id: "a Korean syllable typed right after an input-source switch reaches the PTY once" },
-      { file: "e2e/activation/marked-text.test.mjs", id: "marked text that the input method ends is written to the PTY once" },
     ],
-    expected: "The real macOS Korean input method composes in the terminal region with its preedit shown, edits with Backspace, commits each syllable exactly once before a following key such as Escape or Enter, and never writes uncommitted text to the PTY on both hosts; the AppKit control in the same window produces the same document.",
+    expected: "The image-region client commits its local marked buffer once before following input, while Backspace can edit the current composition without sending a PTY key. The real-input-source result remains separately verified by its activation case.",
     levels: ["native", "application"],
   },
   {
@@ -5181,6 +5171,190 @@ const FEATURE_LINKS = [
       { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit keeps a local helper's rejection bound to its definition scope" },
     ],
     expected: "The E2E source audit recognizes Promise rejection forwarded through local timeout helpers while preserving lexical binding and rejection-scope checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-15",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalObserverStatusesMatch(" }],
+    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "a fresh compose and cursor update can use unchanged known PTY rows" }],
+    expected: "The terminal observer accepts a fresh semantic composition update against unchanged known PTY rows while checking the current cursor state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-16",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function startTerminalStatusObserver(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "a managed cursor until releases the observer's raw cursor watch" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "focus waits on the existing raw status stream after reference handoff" },
+    ],
+    expected: "The terminal status observer retains ownership of its raw status subscriptions while the consumer waits for cursor focus after the reference handoff.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-17",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function indexFrameStatus(" }],
+    tests: [
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "indexes an advanced cursor frame against prior rows when identical rows suppress screen status" },
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "rejects future rows but reuses identical rows across a frame generation change" },
+    ],
+    expected: "Visual status indexing associates a cursor frame with the valid preceding screen rows even when identical rows suppress a new screen event, and rejects future row state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-18",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function selectCoherentTerminalObservation(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "returns the latest coherent reread and its accepted event slice" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "does not select a terminal observation before reread and presentation are coherent" },
+    ],
+    expected: "The selected terminal observation is the latest coherent reread, screen, region and accepted event slice; an incoherent earlier read is not returned.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-19",
+    implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "export function planVisualStage(" }],
+    tests: [
+      { file: "e2e/activation/ime-visual-capture.test.mjs", id: "stage planning accepts prior base rows with the exact current overlay frame" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "requires coherent base screen presentation without equating a later overlay frame" },
+    ],
+    expected: "Visual stages retain the exact cursor overlay frame and use prior base-screen rows without requiring those distinct frames to have equal sequence identities.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-20",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export async function waitForTerminalStage(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "keeps notifications that arrive after the first status wakes the input stage" },
+    ],
+    expected: "The stage waits for the same-window AppKit document after each input instead of accepting an earlier coherent intermediate state.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-23",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)drawRect:(NSRect)dirtyRect" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "the native input view paints no blue marked-text underline" },
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "repeated input paints no blue native underline pixels" },
+      { file: "native/darwin/tests/image_region_decoration_test.m", id: "the offscreen image-region composite shows the sidecar sentinel at the image-layer center" },
+    ],
+    expected: "The native input document paints no marked-text underline while retaining the sidecar image in the offscreen region composite and preserving composition state.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-25",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)publishInput" }],
+    tests: [
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "one physical key publishes one input transaction" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "insert and deleteBackward command remain ordered in one transaction" },
+      { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "post-error callback is rejected without buffer mutation" },
+    ],
+    expected: "One physical input scope publishes ordered actions and one final strict preedit snapshot, and callbacks after a latched error cannot mutate it.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-26",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputReceiptMatches(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "one terminal input request acknowledges a committed character key" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "input transaction validation checks every action and correlation identifier" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "native report and terminal request preserve actions, preedit and CID" },
+    ],
+    expected: "The acceptance consumer matches current native input transactions and the single corresponding terminal request using ordered actions, final preedit and correlation identity.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-27",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictAction(value, label)" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "native and terminal transactions preserve the ordered focus action" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "focus-only transactions do not acknowledge a key from retained preedit" },
+    ],
+    expected: "The strict input transaction reader preserves ordered focus actions and does not count focus-only events as character-key receipts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-28",
+    implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" }],
+    tests: [{ file: "native/darwin/tests/image_region_input_transaction_test.m", id: "a replacement before the committed prefix is rejected before AppKit mutates it" }],
+    expected: "A marked-text replacement before the committed prefix is rejected before AppKit changes the local marked buffer.",
+    levels: ["native"],
+  },
+  {
+    id: "F239-47-29",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "function strictTraceSequence(value, label)" }],
+    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "zero-based input trace sequence keeps the native report before its terminal request" }],
+    expected: "The input trace accepts a zero-based native sequence followed by its later terminal request and rejects invalid or non-increasing sequence numbers.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-30-1",
+    implementation: [
+      { file: "native/darwin/src/window_facts.m", symbol: "sp_window_color_space_facts(void *handle)" },
+      { file: "packages/host/wailsv3/src/diagnostics.go", symbol: "diagnostics.native.window-color-space" },
+      { file: "packages/host/tauriv2/src/diagnostics.rs", symbol: "native_window_color_space(window)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_facts_test.m", id: "the one-shot facts report the actual AppKit color space and ICC digest without changing it" },
+      { file: "packages/host/wailsv3/src/diagnostics_test.go", id: "TestNativeWindowColorSpaceMethodIsDeclared" },
+      { file: "packages/host/tauriv2/src/endpoint.rs", id: "diagnostics.native-window-color-space.reports-appkit-profile" },
+    ],
+    expected: "The diagnostic query reports the actual AppKit color-space name and ICC fingerprint without changing the host window's color policy.",
+    levels: ["native", "unit"],
+  },
+  {
+    id: "F239-47-30-2",
+    implementation: [{ file: "scripts/check-host-parity.mjs", symbol: "export function goEndpointMethods(" }],
+    tests: [{ file: "scripts/test/check-host-parity.test.mjs", id: "hyphenated diagnostic endpoint methods are read from both hosts" }],
+    expected: "The host parity parser recognizes a declared diagnostic method containing hyphens in both Go and Rust host sources.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-31",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalStageEvents(events, stageOffset)" }],
+    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "a status notification delivered during a sample satisfies the sample's original event offset" }],
+    expected: "A status notification that arrives after the first event wakes a wait remains in the current physical-key stage using its original event offset.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-51",
+    implementation: [{ file: "e2e/files-open-failure.mjs", symbol: "export function treeNodes(snapshot)" }],
+    tests: [
+      { file: "e2e/files-open-failure.test.mjs", id: "the Files tree node lookup finds a nested path in its declared snapshot" },
+      { file: "e2e/files-open-failure.test.mjs", id: "file-open failure check reads the declared tree snapshot, not removed status values" },
+    ],
+    expected: "The Files open-failure consumer finds the nested selected path in the declared tree snapshot and does not read removed status values.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-52",
+    implementation: [{ file: "e2e/project-close-snapshot.mjs", symbol: "export async function getClosedProjectSnapshot(" }],
+    tests: [
+      { file: "e2e/project-close-snapshot.test.mjs", id: "a closed-project pull waits through a stale accepted snapshot for the exact current source" },
+      { file: "e2e/project-close-snapshot.test.mjs", id: "a closed-project pull rejects a source id that does not match the plugin host contract" },
+    ],
+    expected: "The project-close consumer pulls the declared Files status through the exact current plugin-host source and rejects a mismatched source before pulling.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-53",
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "async click(x, y)" }],
+    tests: [
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for an already-held button before pressing" },
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for a button released between its press and release" },
+    ],
+    expected: "A high-level native click waits for the host to report no pressed buttons before its down and up phases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-55",
+    implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
+    tests: [
+      { file: "e2e/test/run.test.mjs", id: "runE2E rejects missing or partial metadata before injected operations" },
+      { file: "e2e/test/run.test.mjs", id: "run requires both run metadata values before baseline probe or child start" },
+      { file: "e2e/test/run.test.mjs", id: "run forwards valid run metadata unchanged" },
+    ],
+    expected: "The E2E runner requires both nonempty run metadata values before probing the baseline or starting a child, and forwards a valid pair unchanged.",
     levels: ["unit"],
   },
 ];
@@ -5670,7 +5844,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // Aggregate review and release records, withdrawn items, guidance changes (R4, R6), and fixture-only
 // corrections (F239-47-5) do not add product behavior and need no feature link. Every completed
 // product capability still requires one.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F239-47-5"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F239-47-5", "F239-47-34"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

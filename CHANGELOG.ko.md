@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F267.9: 현재 implementation과 test에 맞게 feature evidence link를 정합한다.
+  기존 owning test가 기록된 동작을 증명하는 mapping을 수정하고 F239-47-34만
+  문서 정정으로 분류했다. Focused parity test는 2/2 통과하며 연결되지 않은
+  capability negative control을 유지한다. 현재 owning test가 동작을
+  assertion하지 않아 F153과 F239-47-28은 미해결로 남는다. F267.5 소유
+  inventory count 오류 두 건도 parity에 남는다. 제품 동작은 바뀌지 않았다.
+
 - F212.10-core-3-10: generation이 지정된 native view-reply post 결과를 기록한다.
   필수 `page`는 현재 main document를 식별한다. `posted`는 native post API가
   message를 수락했다는 뜻이고 `discarded`는 stale target이다. Workbench와 두

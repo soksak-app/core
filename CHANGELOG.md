@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F267.9: Align feature evidence links with current implementation and tests.
+  Corrected mappings where existing owning tests prove the recorded behavior
+  and classified only F239-47-34 as a documentation correction. The focused
+  parity tests pass 2/2 and retain the unlinked-capability negative control.
+  F153 and F239-47-28 remain unresolved because their current owning tests do
+  not assert the recorded behavior. Parity also retains the two inventory
+  count findings owned by F267.5. No product behavior changed.
+
 - F212.10-core-3-10: Record generation-bound native view-reply post results.
   The required `page` identifies the current main document. `posted` means the
   native post API accepted the message; `discarded` identifies a stale target.
