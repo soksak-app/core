@@ -380,6 +380,9 @@ export function measureRenderedCell(capture, source, render, target, criteria) {
   assert.ok(target?.frame && target.cursor, "frame-bound terminal cursor state is required");
   validateRenderMetadata(render, target.frame, target.cursor,
     [{ row: target.row, col: target.col, grapheme: target.grapheme }]);
+  const targetFrame = frameIdentity(target.frame, "terminal.cursor.frame");
+  assert.equal(frameIdentity(source?.frame, "source raster frame"), targetFrame,
+    "source raster belongs to a different frame");
   const glyph = render.glyphs.find((entry) => entry.row === target.row && entry.col === target.col &&
     entry.grapheme === target.grapheme);
   if (glyph.bounds === null) return { result: "no-proof", reason: "same-frame-glyph-ink-bounds-missing" };

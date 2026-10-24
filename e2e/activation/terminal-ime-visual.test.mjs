@@ -94,6 +94,7 @@ function compositionRaster({ glyph = true, underline = true, wrongUnderline = fa
 
 function alignedSource(render, capture) {
   return {
+    frame: render.frame,
     width: render.pixel.width,
     height: render.pixel.height,
     scale: capture.scaleFactor,
@@ -369,11 +370,18 @@ testWithTimeout("raw glyph ink bounds preserve signed overhang and clip only to 
     alpha: "premultiplied-first", colorSpace: "sRGB", scaleFactor: 2,
     screenRect: { x: 90, y: 35, width: 20, height: 10 },
     contentRect: { x: 1, y: 1, width: 18, height: 8 } };
-  const source = { ...raster(12, 6, 3, 1, new Uint8Array(12 * 6 * 4)), scale: 2,
+  const source = { ...raster(12, 6, 3, 1, new Uint8Array(12 * 6 * 4)), frame: render.frame, scale: 2,
     screenBounds: { x: 100, y: 40, width: 6, height: 3 } };
   const mapped = mapCaptureRaster(capture, source);
   assert.deepEqual(mapped.origin, { x: -22, y: -12 });
   assert.equal(mapped.bytes.length, 40 * 20 * 4, "capture padding is removed without changing pixel order");
+  const target = { frame: render.frame, row: 0, col: 1, grapheme: "한", marked: true, cursor };
+  for (const field of ["generation", "raster", "sequence"]) {
+    const staleSource = { ...source, frame: { ...source.frame, [field]: source.frame[field] + 1 } };
+    assert.throws(() => measureRenderedCell(capture, staleSource, render, target,
+      { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 }),
+    /source raster belongs to a different frame/);
+  }
   assert.deepEqual(measureRenderedCell(capture, source, render, { frame: render.frame, row: 0, col: 1,
     grapheme: "한", marked: true, cursor },
   { colorDistance: 32, minimumGlyphPixels: 1, minimumUnderlineCoverage: 0.75 }),
