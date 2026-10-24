@@ -34,7 +34,7 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  * is discarded, as is a pull reply whose seq is lower than the last accepted value. state() reports the section state of core.sidebars:
  * mounted while the section draws an accepted value, and the text of the current rejection while the last value is rejected.
  */
-export function createDeclaredSection({ statusId, body, options, choose, channel, pull, expanded, skipped, failed }) {
+export function createDeclaredSection({ statusId, body, options, choose, channel, pull, expanded, skipped, failed, changed }) {
   const owner = statusId.slice(0, statusId.indexOf("."));
   const status = statusId.slice(statusId.indexOf(".") + 1);
   const receiveOptions = { ...options, owner, status };
@@ -44,6 +44,11 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
   let lastSeq = 0;
   let accepted = null;
   let rejected = null;
+  let subscription = "none";
+  let pullState = { phase: "idle", seq: null, valueNull: null };
+  let acceptedSeq = null;
+
+  const notify = () => changed?.();
 
   function accept(seq, value, source = current) {
     const ok = receive(body, value, {
@@ -55,6 +60,7 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     });
     if (ok) {
       lastSeq = seq;
+      acceptedSeq = seq;
       accepted = value;
       rejected = null;
     } else {
@@ -62,6 +68,7 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
       // The section shows the text that the display path wrote (docs/spec/declared-ui.md, rejection).
       rejected = body.textContent;
     }
+    notify();
   }
 
   /** Calls the pull of the current source; its reply is accepted only while that source is still chosen. */
@@ -69,19 +76,29 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     if (pull === null || current === null) return;
     const pulled = current;
     const mine = generation;
+    pullState = { phase: "pending", seq: null, valueNull: null };
+    notify();
     pull(pulled).then((reply) => {
       // A reply with value null means that the source has no value yet (docs/spec/declared-ui.md): the section stays cleared.
-      if (mine !== generation || reply.value === null) return;
+      if (mine !== generation) return;
+      pullState = { phase: "resolved", seq: reply.seq, valueNull: reply.value === null };
+      notify();
+      if (reply.value === null) return;
       if (reply.seq < lastSeq) return;
       accept(reply.seq, reply.value, pulled);
     }, (error) => {
-      if (mine === generation) failed(error);
+      if (mine === generation) {
+        pullState = { phase: "failed", seq: null, valueNull: null };
+        notify();
+        failed(error);
+      }
     });
   }
 
   /** Ends the chosen source: its channel is released, the section is cleared, and the error is withdrawn. The next source supplies expansion values. */
   function leave() {
     if (current === null) return;
+    const cancelledPull = pullState.phase === "pending";
     if (stop !== null) stop();
     stop = null;
     current = null;
@@ -89,9 +106,13 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     lastSeq = 0;
     accepted = null;
     rejected = null;
+    subscription = "none";
+    pullState = { phase: cancelledPull ? "cancelled" : "idle", seq: null, valueNull: null };
+    acceptedSeq = null;
     changeSource(statusId);
     body.replaceChildren();
     hideError(body, `declared UI ${statusId}`);
+    notify();
   }
 
   function reconcile() {
@@ -101,9 +122,13 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     if (next === null) return;
     current = next;
     generation += 1;
+    pullState = { phase: "idle", seq: null, valueNull: null };
+    acceptedSeq = null;
     const mine = generation;
     const link = channel(next);
     if (link !== null) {
+      subscription = "pending";
+      notify();
       const ready = link.onMessage((message) => {
         // The window ingress validates and acknowledges snapshots before routing them to sections. A source can have several
         // section recipients, so a section only accepts its own status and never acknowledges the shared push.
@@ -117,16 +142,27 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
           return;
         }
         stop = unsubscribe;
+        subscription = "ready";
+        notify();
         pullCurrent();
       }, (error) => {
-        if (mine === generation) failed(error);
+        if (mine === generation) {
+          subscription = "failed";
+          notify();
+          failed(error);
+        }
       });
       return;
     }
+    notify();
     pullCurrent();
   }
 
   /** The state that core.sidebars reports (docs/spec/declared-ui.md, sidebar section form). */
-  const state = () => ({ mounted: accepted !== null, error: rejected });
+  const state = () => ({
+    mounted: accepted !== null, error: rejected,
+    source: current,
+    subscription, pull: { ...pullState }, acceptedSeq,
+  });
   return { reconcile, close: leave, state };
 }

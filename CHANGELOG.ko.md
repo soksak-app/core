@@ -4,6 +4,18 @@
 
 ## 미배포
 
+- F239-35-1: `core.sidebars`가 선택한 declared-status source, snapshot
+  subscription 단계, pull 진행 단계와 reply metadata, 마지막 accepted sequence를
+  보고한다. Status value를 복사하지 않고 단계 변경을 sidebar status subscriber에
+  알린다. Source 변경은 진행 중인 pull을 취소하고 accepted sequence를 비우며
+  늦은 reply를 무시한다. Red: 변경 전 sidebar test에 `source` field가 없었고,
+  첫 declared-section 실행은 전체 state assertion이 `mounted`와 `error`만
+  기대해 실패했다. Green: `declared-section.test.mjs` 26/26과
+  `sidebar-sections.test.mjs` 12/12가 subscription 및 pull의 모든 단계, null
+  reply, accepted sequence, reset과 status notification을 검증한다.
+  `make exposure-check`와 `make docs-check`도 통과한다. 이 진단 인터페이스는
+  F239-35 window failure의 원인을 입증하지 않는다.
+
 - F239-26-9: no-terminal shutdown runner는 quit 전에 main window의 sidecar
   session 목록이 비어 있고 persistent service endpoint file이 없는지
   확인한 뒤 사전조건을 기록한다. Plugin 설치 상태로 runtime 부재를 추론하지

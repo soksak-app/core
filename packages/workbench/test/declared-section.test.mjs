@@ -90,7 +90,7 @@ async function harness({ deferSubscription = false } = {}) {
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), listenerRegistrations: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), listenerRegistrations: [], pulls: [], expanded: [], pullReply: null, pullError: null, subscriptionError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
@@ -101,6 +101,7 @@ async function harness({ deferSubscription = false } = {}) {
     channel: (source) => ({
       onMessage: (listener) => {
         world.listenerRegistrations.push({ source: source.id, listener });
+        if (world.subscriptionError) return Promise.reject(world.subscriptionError);
         if (!world.deferSubscription) {
           world.channels.set(source.id, listener);
           return () => { world.channels.delete(source.id); };
@@ -149,6 +150,10 @@ test("a section with no registered source shows nothing, pulls nothing, and subs
   assert.equal(h.body.textContent, "", "the section drew something without a source");
   assert.deepEqual(h.world.pulls, [], "a value was pulled without a source");
   assert.equal(h.world.channels.size, 0, "a channel was subscribed without a source");
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: null, subscription: "none",
+    pull: { phase: "idle", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "the no-source state did not expose the idle delivery stages");
 });
 
 test("sections sharing a source acknowledge only snapshots of their own status", async () => {
@@ -425,9 +430,17 @@ test("the first push is subscribed before the source is pulled", async () => {
   h.section.reconcile();
   await settle();
   assert.deepEqual(h.world.pulls, [], "the source was pulled before its snapshot listener was ready");
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "pending",
+    pull: { phase: "idle", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "the pending subscription state is not exposed before the pull starts");
   h.world.deferredSubscriptions[0]();
   await settle();
   assert.deepEqual(h.world.pulls, ["view-a"], "the source was not pulled after subscription readiness");
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "ready",
+    pull: { phase: "pending", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "the ready subscription and pending pull states are not exposed");
   h.push("view-a", 1, list(["first-push"]));
   assert.deepEqual(h.labels(), ["first-push"], "the ready listener did not draw the first push");
   h.world.deferred[0]({ seq: 0, value: null });
@@ -497,9 +510,68 @@ test("a pull reply with value null leaves the section cleared until the first pu
   h.world.pullReply = { seq: 0, value: null };
   h.section.reconcile();
   await settle();
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "ready",
+    pull: { phase: "resolved", seq: 0, valueNull: true }, acceptedSeq: null,
+  }, "a successful null reply did not leave the section cleared with resolved pull state");
   assert.equal(h.body.textContent, "", "the section drew a null value");
   h.push("view-a", 1, list(["first"]));
   assert.deepEqual(h.labels(), ["first"], "the first push was not drawn");
+  assert.deepEqual(h.section.state(), {
+    mounted: true, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "ready",
+    pull: { phase: "resolved", seq: 0, valueNull: true }, acceptedSeq: 1,
+  }, "the first push did not advance the accepted sequence after a null pull");
+});
+
+test("a source change cancels a pending pull and ignores its later reply", async () => {
+  const h = await harness();
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.world.deferPull = true;
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "ready",
+    pull: { phase: "pending", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "the outstanding pull is not reported as pending");
+
+  h.world.registrants = [];
+  h.world.active = null;
+  h.section.reconcile();
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: null, subscription: "none",
+    pull: { phase: "cancelled", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "the source change did not report cancellation and reset the source state");
+  h.world.deferred[0]({ seq: 1, value: list(["stale"]) });
+  await settle();
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: null, subscription: "none",
+    pull: { phase: "cancelled", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "a cancelled pull reply changed the cleared section");
+
+  h.world.registrants = ["view-b"];
+  h.world.active = "view-b";
+  h.section.reconcile();
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-b", surface: "view-b" }, subscription: "pending",
+    pull: { phase: "idle", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "a newly selected source inherited the cancelled pull state");
+  h.section.close();
+});
+
+test("a failed snapshot subscription is reported without starting a pull", async () => {
+  const h = await harness();
+  h.world.registrants = ["view-a"];
+  h.world.active = "view-a";
+  h.world.subscriptionError = new Error("snapshot subscription failed");
+  h.section.reconcile();
+  await settle();
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "failed",
+    pull: { phase: "idle", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "a rejected subscription was not reported in the section state");
+  assert.deepEqual(h.world.pulls, [], "a pull started after the snapshot subscription failed");
+  assert.deepEqual(h.world.failures, ["snapshot subscription failed"], "the subscription error was not reported");
 });
 
 test("a rejected value is shown in the section, and a change of source withdraws it", async () => {
@@ -626,15 +698,27 @@ test("the section reports mounted while it draws an accepted value and the rejec
   h.world.pullReply = { seq: 1, value: list(["a"]) };
   h.section.reconcile();
   await settle();
-  assert.deepEqual(h.section.state(), { mounted: true, error: null }, "an accepted value is not reported as mounted");
+  assert.deepEqual(h.section.state(), {
+    mounted: true, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "ready",
+    pull: { phase: "resolved", seq: 1, valueNull: false }, acceptedSeq: 1,
+  }, "an accepted value or its source delivery state is not reported");
   h.push("view-a", 2, { elements: [{ kind: "chart", key: "x" }] });
-  assert.deepEqual(h.section.state(), { mounted: false, error: '/elements/0/kind: unknown kind "chart"' }, "the rejection is not reported");
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: '/elements/0/kind: unknown kind "chart"', source: { id: "view-a", surface: "view-a" },
+    subscription: "ready", pull: { phase: "resolved", seq: 1, valueNull: false }, acceptedSeq: 1,
+  }, "the rejection or its source delivery state is not reported");
   h.push("view-a", 3, list(["b"]));
-  assert.deepEqual(h.section.state(), { mounted: true, error: null }, "the next accepted value did not clear the reported error");
+  assert.deepEqual(h.section.state(), {
+    mounted: true, error: null, source: { id: "view-a", surface: "view-a" }, subscription: "ready",
+    pull: { phase: "resolved", seq: 1, valueNull: false }, acceptedSeq: 3,
+  }, "the next accepted value did not clear the reported error or advance its sequence");
   h.world.registrants = ["view-b"];
   h.world.active = "view-b";
   h.section.reconcile();
-  assert.deepEqual(h.section.state(), { mounted: false, error: null }, "a change of source is not reported as cleared");
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-b", surface: "view-b" }, subscription: "pending",
+    pull: { phase: "idle", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "a source change did not clear the accepted value and reset delivery state");
 });
 
 test("a change of source that removes the focused tree control moves focus to the document body", async () => {
@@ -678,6 +762,10 @@ test("a failed pull leaves the section cleared, reports its error once, and is n
   assert.equal(h.body.textContent, "", "the section drew the previous source's value after a failed pull");
   assert.deepEqual(h.world.failures, ["snapshot store read failed"], "the failed pull was not reported once");
   assert.deepEqual(h.world.pulls, ["view-a", "view-b"], "the failed pull was not made once");
+  assert.deepEqual(h.section.state(), {
+    mounted: false, error: null, source: { id: "view-b", surface: "view-b" }, subscription: "ready",
+    pull: { phase: "failed", seq: null, valueNull: null }, acceptedSeq: null,
+  }, "the failed pull stage was not reported by the chosen section");
   mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   try {
     mock.timers.tick(60000);

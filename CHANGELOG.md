@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- F239-35-1: `core.sidebars` reports the chosen declared-status source, snapshot
+  subscription stage, pull phase and reply metadata, and last accepted sequence.
+  Stage changes notify sidebar status subscribers without copying status values.
+  A source change cancels a pending pull, clears its accepted sequence, and
+  ignores the late reply. Red: the unchanged sidebar test found no `source`
+  field; the first declared-section run then found its full-state assertion
+  still expected only `mounted` and `error`. Green: `declared-section.test.mjs`
+  passes 26/26 and `sidebar-sections.test.mjs` passes 12/12, covering all
+  subscription and pull phases, null replies, accepted sequences, reset and
+  status notifications. `make exposure-check` and `make docs-check` pass. This
+  diagnostic interface does not establish the cause of the F239-35 window
+  failure.
+
 - F239-26-9: The no-terminal shutdown runner now requires an empty main-window
   sidecar session list and no persistent service endpoint files before quit,
   then records that precondition. It does not infer runtime absence from

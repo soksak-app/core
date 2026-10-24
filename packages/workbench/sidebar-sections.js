@@ -112,6 +112,7 @@ function mountDeclared(entry, record) {
     }),
     channel: transport.channel,
     pull: transport.pull,
+    changed: notify,
     // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
     skipped: (count) => trace("declared-ui.snapshot.skipped", { plugin: owner, status, count }),
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: `${statusId}: ${error.message}` })),
@@ -332,6 +333,12 @@ export function sidebarsState() {
           // Whether the tab text fits in the tab width. It is true if wrapping or shrinking cuts it off.
           clipped: entry.tab ? entry.tab.scrollWidth > entry.tab.clientWidth || entry.tab.scrollHeight > entry.tab.clientHeight : false,
           controls: entry.body.querySelectorAll('[data-expose="core.sidebar.section.control"]').length,
+          ...(declared ? {
+            source: declared.source,
+            subscription: declared.subscription,
+            pull: declared.pull,
+            acceptedSeq: declared.acceptedSeq,
+          } : {}),
           };
         }),
       };

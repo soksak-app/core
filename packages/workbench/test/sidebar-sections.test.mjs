@@ -28,7 +28,7 @@ mock.module("../host.js", { namedExports: { report: (line) => { logged.push(line
 
 const { registry } = await import("../exposure.js");
 const { registerSection } = await import("../registry.js");
-const { drawSet, sidebarsState, clearSet } = await import("../sidebar-sections.js");
+const { drawSet, sidebarsState, clearSet, onSectionsChange } = await import("../sidebar-sections.js");
 
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 registry.declare("probe", {
@@ -362,5 +362,67 @@ test("a declared section whose pull fails reports the error once through the pag
   } finally {
     clearSet(container);
     container.remove();
+  }
+});
+
+test("core.sidebars reports the selected source and pending snapshot stages", async () => {
+  const plugin = "probe-diagnostic-state";
+  declareDeclaredPlugin(plugin, "view-diagnostic-state");
+  const listeners = new Map();
+  let resolvePull;
+  const observed = [];
+  onSectionsChange(() => {
+    const section = sidebarsState().find((item) => item.sidebar === "rail-diagnostic-state")?.sections[0];
+    if (section) observed.push(section);
+  });
+  declaredWorld.channel = (source) => ({
+    onMessage: (listener) => {
+      listeners.set(source.id, listener);
+      return () => listeners.delete(source.id);
+    },
+  });
+  declaredWorld.pull = () => new Promise((resolve) => { resolvePull = resolve; });
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  try {
+    drawSet(container, "rail-diagnostic-state", {
+      id: "set-diagnostic-state", title: "진단", layout: "list", sections: [`${plugin}.view`],
+    }, { card: "rail-diagnostic-state", surface: "view-diagnostic-state", orientation: "vertical" });
+    await settle();
+
+    const report = sidebarsState().find((item) => item.sidebar === "rail-diagnostic-state").sections[0];
+    assert.deepEqual(report.source, { id: "view-diagnostic-state", surface: "view-diagnostic-state" },
+      "core.sidebars does not report the selected declared-status source");
+    assert.equal(report.subscription, "ready", "core.sidebars does not report the acknowledged snapshot subscription");
+    assert.deepEqual(report.pull, { phase: "pending", seq: null, valueNull: null },
+      "core.sidebars does not report the pending initial snapshot pull");
+    assert.equal(typeof resolvePull, "function", "the selected source did not start its initial snapshot pull");
+    assert.ok(observed.some((state) => state.subscription === "ready" && state.pull?.phase === "pending"),
+      "core.sidebars did not notify when the snapshot subscription became ready and the pull started");
+
+    resolvePull({ seq: 1, value: null });
+    await settle();
+    const noValue = sidebarsState().find((item) => item.sidebar === "rail-diagnostic-state").sections[0];
+    assert.deepEqual(noValue.pull, { phase: "resolved", seq: 1, valueNull: true },
+      "core.sidebars did not report a successful null snapshot reply");
+    assert.equal(noValue.acceptedSeq, null, "a null snapshot reply was reported as an accepted value");
+    assert.ok(observed.some((state) => state.pull?.phase === "resolved" && state.pull.valueNull === true),
+      "core.sidebars did not notify when the null snapshot reply settled");
+
+    listeners.get("view-diagnostic-state")({
+      event: "declared-ui.snapshot", plugin, status: "lines", seq: 2,
+      value: { elements: [{ kind: "list", key: "rows", empty: "none", items: [{ key: "row", label: "accepted" }] }] },
+      skipped: 0,
+    });
+    const accepted = sidebarsState().find((item) => item.sidebar === "rail-diagnostic-state").sections[0];
+    assert.equal(accepted.mounted, true, "the valid snapshot was not drawn");
+    assert.equal(accepted.acceptedSeq, 2, "core.sidebars did not report the accepted snapshot sequence");
+    assert.equal(accepted.text, "accepted", "the accepted snapshot content was not drawn");
+  } finally {
+    resolvePull?.({ seq: 1, value: null });
+    clearSet(container);
+    container.remove();
+    listeners.clear();
   }
 });
