@@ -38,6 +38,8 @@
   대상으로 한 번의 비활성 check가 정확한 응답 형식, 없는 window 오류, OS color
   profile을 고정하지 않은 query 전후의 안정된 `host.window` facts를 확인한다.
   양 host error audit는 통과했고 test process는 endpoint 파일을 제거한 채 종료됐다.
+  ICC digest pattern 전에 string 타입을 확인하도록 consumer assertion을 강화한 뒤
+  같은 양 host case를 다시 통과했다. 두 error audit는 비어 있고 cleanup 결과도 같다.
 
 - F239-47-32: Image region에 marked-buffer-only input client를 둔다. 누적
   `NSTextView` document가 unmarked committed text를 preedit으로 노출했다. Region은 이제

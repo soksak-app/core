@@ -22,7 +22,8 @@ function assertColorSpaceFacts(facts) {
   }
   assert.equal(typeof facts.name, "string", "the AppKit color-space name must be a string or null");
   assert.ok(facts.name.length > 0, "the AppKit color-space name must not be empty");
-  assert.ok(facts.iccSHA256 === null || /^[0-9a-f]{64}$/.test(facts.iccSHA256),
+  assert.ok(facts.iccSHA256 === null ||
+    (typeof facts.iccSHA256 === "string" && /^[0-9a-f]{64}$/.test(facts.iccSHA256)),
     "the ICC profile fingerprint must be a lowercase SHA-256 string or null");
 }
 

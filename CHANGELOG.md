@@ -43,7 +43,9 @@
   arm64 Wails and Tauri bundles validates the exact response shape, missing
   window error and unchanged stable `host.window` facts without pinning the OS
   color profile. Both host error audits pass, and the test processes end with
-  their endpoints removed.
+  their endpoints removed. After requiring a string ICC hash before the digest
+  pattern, the same two-host case passes again with empty error audits and the
+  same cleanup results.
 
 - F239-47-32: Give image regions a marked-buffer-only input client. The
   accumulated `NSTextView` document exposed unmarked committed text as
