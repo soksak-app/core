@@ -8,9 +8,11 @@
   Corrected mappings where existing owning tests prove the recorded behavior
   and classified only F239-47-34 as a documentation correction. The focused
   parity tests pass 2/2 and retain the unlinked-capability negative control.
-  F153 and F239-47-28 remain unresolved because their current owning tests do
-  not assert the recorded behavior. Parity also retains the two inventory
-  count findings owned by F267.5. No product behavior changed.
+  Current owning tests now assert F153's active/keyWindow fields and F239-47-28's
+  invalid local marked-buffer replacement rejection. The focused audit tests
+  pass 2/2. The exact F267 audit aggregate is classified without exempting the
+  X1 product capability. Only the two inventory-count findings owned by F267.5
+  remain. No product behavior changed.
 
 - F267.10: Verify native input callback state and replacement rejection.
   The owning region tests assert that callback before/after records contain

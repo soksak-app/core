@@ -1872,7 +1872,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "native/darwin/tests/input_inject_test.m", id: "a key record names the first responder that receives the key" },
-      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: the state records whether the application is active and whether the window is the key window" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 8: callback before/after state records AppKit active and key-window booleans" },
     ],
     expected: "The records of the input path name the first responder, the active state of the application and the key window.",
     levels: ["unit"],
@@ -5276,8 +5276,8 @@ const FEATURE_LINKS = [
   {
     id: "F239-47-28",
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "- (void)handleSetMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange" }],
-    tests: [{ file: "native/darwin/tests/image_region_input_transaction_test.m", id: "a replacement before the committed prefix is rejected before AppKit mutates it" }],
-    expected: "A marked-text replacement before the committed prefix is rejected before AppKit changes the local marked buffer.",
+    tests: [{ file: "native/darwin/tests/image_region_input_transaction_test.m", id: "invalid marked replacement and later callback are explicitly rejected without mutation" }],
+    expected: "A setMarkedText replacement outside the owned marked buffer is rejected before mutation, and later callbacks in that input scope are rejected without changing the buffer.",
     levels: ["native"],
   },
   {
@@ -5841,10 +5841,11 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
   return errors;
 }
 
-// Aggregate review and release records, withdrawn items, guidance changes (R4, R6), and fixture-only
-// corrections (F239-47-5) do not add product behavior and need no feature link. Every completed
-// product capability still requires one.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F239-47-5", "F239-47-34"]);
+// Aggregate review records (F13, F266, F267), release records, withdrawn items,
+// guidance changes (R4, R6), and fixture-only corrections (F239-47-5) do not
+// add product behavior and need no feature link. Every completed product
+// capability still requires one.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read

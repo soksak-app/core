@@ -7,9 +7,11 @@
 - F267.9: 현재 implementation과 test에 맞게 feature evidence link를 정합한다.
   기존 owning test가 기록된 동작을 증명하는 mapping을 수정하고 F239-47-34만
   문서 정정으로 분류했다. Focused parity test는 2/2 통과하며 연결되지 않은
-  capability negative control을 유지한다. 현재 owning test가 동작을
-  assertion하지 않아 F153과 F239-47-28은 미해결로 남는다. F267.5 소유
-  inventory count 오류 두 건도 parity에 남는다. 제품 동작은 바뀌지 않았다.
+  capability negative control을 유지한다. 현재 owning test는 F153의
+  active/keyWindow와 F239-47-28의 잘못된 local marked-buffer replacement 거부를
+  assertion한다. 정확한 F267 audit aggregate만 분류하고 X1 제품 capability는
+  예외 처리하지 않는다. Focused audit test는 2/2 통과하며 F267.5 소유
+  inventory count 오류 두 건만 parity에 남는다. 제품 동작은 바뀌지 않았다.
 
 - F267.10: native input callback 상태와 replacement 거부를 검증한다. 소유
   region test는 callback before/after record에 AppKit 상태와 일치하는 boolean
