@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F270: The E2E source audit uses Acorn 8.18.0 to check timeout callbacks as
+  JavaScript syntax and follows direct calls through local Promise helpers and
+  their attached `then`/`catch` callbacks. It accepts a path to the Promise's
+  reject function or a report-only observation, and rejects resolve-only,
+  non-settling, shadowed-reject and unrelated-text cases. Red: the unchanged
+  owner tests rejected `finish(reject, error)` and accepted a nearby
+  `"reject("` string. Green: the focused owning tests pass 3/3, `make e2e-check`
+  passes, and `make docs-check` passes 112 files, 413 error records and 1755
+  record checks. The source `finish` helper remains because it performs one
+  settlement and shared timer/subscription cleanup. Timeout values and
+  status-event behavior are unchanged.
+
 - F269: Add nine unique `screen.hash` cases for 15 existing valid message
   projections that lacked hash inputs. Repeated projections share one case,
   preventing ambiguous SDK test calls. Red: the unchanged owning test failed

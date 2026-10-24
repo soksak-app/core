@@ -27,5 +27,8 @@
   "dependencies": {
     "@soksak/client": "workspace:*",
     "@soksak/window-check": "workspace:*"
+  },
+  "devDependencies": {
+    "acorn": "8.18.0"
   }
 }

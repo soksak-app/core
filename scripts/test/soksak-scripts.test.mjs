@@ -236,6 +236,48 @@ test("window-source audit rejects forbidden control paths", { timeout: 5000 }, a
   assert.match(result.stdout, /Window check sources use only the endpoint/);
 });
 
+test("window-source audit accepts a Promise reject forwarded through a local timeout helper", { timeout: 1000 }, () => {
+  const direct = 'new Promise((resolve, reject) => { setTimeout(() => reject(new Error("no later status")), 1500); });';
+  assert.deepEqual(auditE2ESource(direct, "e2e/timeout-case.mjs"), []);
+  const source = `
+new Promise((resolve, reject) => {
+  const finish = (callback, value) => {
+    clearTimeout(timer);
+    callback(value);
+  };
+  const timer = setTimeout(() => finish(reject, new Error("no later status")), 1500);
+});
+`;
+  assert.deepEqual(auditE2ESource(source, "e2e/activation/terminal-ime-document.mjs"), []);
+  const completion = `
+new Promise((resolve, reject) => {
+  const finish = (settle) => Promise.resolve().then(settle);
+  const check = () => finish(() => reject(new Error("deadline reached")));
+  setTimeout(() => check(), 1500);
+});
+`;
+  assert.deepEqual(auditE2ESource(completion, "e2e/timeout-case.mjs"), []);
+});
+
+test("window-source audit requires a timeout to reject rather than only resolve, wait, or mention rejection", { timeout: 1000 }, () => {
+  const sources = [
+    'new Promise((resolve) => { setTimeout(() => resolve(null), 1500); });',
+    'setTimeout(() => {}, 1500);',
+    'setTimeout(() => {}, 1500); const note = "reject(";',
+    'new Promise((resolve, reject) => { setTimeout(() => { const reject = () => {}; reject(); }, 1500); });',
+    'new Promise((resolve, reject) => { const finish = (callback) => {}; setTimeout(() => finish(reject), 1500); });',
+    'new Promise((resolve, reject) => { const finish = (callback, value) => callback(value); setTimeout(() => finish(resolve, null), 1500); });',
+  ];
+  for (const source of sources) {
+    assert.equal(auditE2ESource(source, "e2e/timeout-case.mjs").length, 1, source);
+  }
+});
+
+test("window-source audit permits a timeout that only records an observation", { timeout: 1000 }, () => {
+  assert.deepEqual(auditE2ESource('setTimeout(() => report("sample"), 1500);', "e2e/timeout-case.mjs"), []);
+  assert.equal(auditE2ESource('setTimeout(() => {}, 1500); const note = "report(";', "e2e/timeout-case.mjs").length, 1);
+});
+
 test("window-source audit rejects a source path of another repository component", { timeout: 1000 }, () => {
   for (const line of [
     'import { THEMES } from "../packages/workbench/settings.js";',

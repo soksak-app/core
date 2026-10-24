@@ -14,6 +14,10 @@ importers:
       '@soksak/window-check':
         specifier: workspace:*
         version: link:packages/window-check
+    devDependencies:
+      acorn:
+        specifier: 8.18.0
+        version: 8.18.0
 
   apps/browser:
     dependencies:
@@ -388,6 +392,11 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  acorn@8.18.0:
+    resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
+    engines: {node: '>=0.4.0'}
+    hasBin: true
+
   bidi-js@1.0.3:
     resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
 
@@ -690,6 +699,8 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
+
+  acorn@8.18.0: {}
 
   bidi-js@1.0.3:
     dependencies:

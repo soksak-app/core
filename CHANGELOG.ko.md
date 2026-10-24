@@ -4,6 +4,18 @@
 
 ## 미배포
 
+- F270: E2E source audit가 Acorn 8.18.0으로 timeout callback의 JavaScript
+  syntax를 검사하고 local Promise helper와 연결된 `then`/`catch` callback까지
+  직접 호출 흐름을 따라간다. Promise `reject` 함수로 이어지는 경로와
+  관찰용 report-only timer를 허용하고 resolve-only, 미완료, shadowed reject,
+  무관한 text는 거부한다. Red: 변경 전 owning tests가
+  `finish(reject, error)`를 거부하고 가까운 `"reject("` string을 허용했다.
+  Green: focused owning tests 3/3과 `make e2e-check`가 통과하며
+  `make docs-check`는 문서 112개, error record 413개, record check 1755개를
+  통과한다. Source `finish` helper는 단일 settlement와 timer/subscription
+  공통 cleanup을 수행하므로 유지한다. Timeout 값과 status-event 동작은
+  바꾸지 않았다.
+
 - F269: 기존 유효 message projection 15개에 빠져 있던 고유 `screen.hash`
   case 아홉 개를 추가한다. 같은 projection은 case 하나를 공유해 SDK test의
   ambiguous call을 막는다. Red: 변경 전 owning test는
