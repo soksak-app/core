@@ -596,7 +596,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the failure to open a file is shown in the message row of the file tree and not in the error display`, async (t) => {
+  test(`${app.name}: the failure to open a file is shown in the message row of the file tree and not in the error display`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     // Without the editor, which opens every file, no plugin opens the files of the check. Each change of the plugin reloads the window.

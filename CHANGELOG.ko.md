@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-37-3: 파일 열기 실패 window check에 test별 120초 timeout을 지정한다.
+  이 annotation 변경은 새 test나 runtime 결과를 주장하지 않는다.
 - F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전
   데이터 snapshot, 닫은 뒤의 빈 no-project snapshot, 오래된 row 부재와 깨끗한
   application error audit을 요구한다. 기존 Files P42–P45 test는 null 및 오래된

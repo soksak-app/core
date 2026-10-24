@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-37-3: Give the file-open failure window check its own 120-second
+  timeout. This annotation change does not claim a new test or runtime result.
 - F262-6: Extend the existing project-close window check to require mounted
   Files sections, populated snapshots before close, empty no-project snapshots
   after close, no stale rows, and a clear application error audit. Existing
