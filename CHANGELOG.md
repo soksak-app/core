@@ -15,6 +15,16 @@
   exact composition-frame correlation and captured glyph measurement remain
   open in F239-47-6. This change does not prove the marked glyph was visible.
 
+- F267.7: Classify F239-47-5 as a fixture-only boundary correction rather
+  than product behavior. The fixture update replaces sibling-plugin IDs in
+  Workbench tests with neutral keys and preserves their assertions. Red: the
+  unchanged parity checker reported F239-47-5 as a completed capability
+  without a feature link. Green: an exact-ID exemption removes that finding;
+  the classifier regression still rejects an unlinked completed product
+  capability (X1). Focused test passes 1/1. Parity reports no uncovered
+  implementations, tests, or feature links; bilingual examples counts remain
+  for F267.5.
+
 
 - F212.10-editor-1: The editor window check now clicks the declared
   `editor.content` rectangle and waits for that view to become the native

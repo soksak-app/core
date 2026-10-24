@@ -144,9 +144,9 @@ test("completed capability entries all have feature evidence links", { timeout: 
   assert.ok(!inventory.featureLinks.some((feature) => feature.id === "V3"));
 });
 
-test("completed top-level audit aggregates F13 and F266 are exempt while other top-level capabilities need feature links", { timeout: 1000 }, () => {
+test("completed audit aggregates and fixture corrections are exempt while unlinked product capabilities need feature links", { timeout: 1000 }, () => {
   assert.deepEqual(
-    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] F266 — audit\n- [o] X1 — capability\n"),
+    auditCompletedFeatureLinks([], "- [o] F13 — aggregate\n- [o] F266 — audit\n- [o] F239-47-5 — fixture correction\n- [o] X1 — capability\n"),
     ["X1: completed capability has no feature link"],
   );
 });

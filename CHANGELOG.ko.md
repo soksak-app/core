@@ -14,6 +14,15 @@
   frame을 허용한다. Exact composition-frame correlation과 captured glyph
   측정은 F239-47-6에 남아 있다. 이 변경은 marked glyph가 보였음을 입증하지 않는다.
 
+- F267.7: F239-47-5를 제품 동작이 아닌 fixture 전용 boundary correction으로
+  분류한다. 이 변경은 Workbench test의 sibling-plugin ID를 중립 key로 바꾸고
+  기존 assertion을 보존한다. Red: 변경하지 않은 parity checker는 F239-47-5를
+  feature link가 없는 완료 capability로 보고했다. Green: 정확히 해당 ID만
+  예외 처리해 finding을 없앴다. 분류 회귀 검사는 연결되지 않은 완료 제품
+  capability X1을 계속 거부하며 focused test가 1/1 통과한다. Audit은 미등록
+  implementation, test, feature link가 없다고 보고한다. 양언어 examples count는
+  F267.5에 남긴다.
+
 
 - F212.10-editor-1: Editor window check은 key 입력 전에 선언된
   `editor.content` rectangle을 native click하고 해당 view가 native responder가

@@ -5605,9 +5605,10 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
   return errors;
 }
 
-// Aggregate review and release records, withdrawn items and changes of agent guidance (R4, R6) are not capabilities and
-// therefore do not need a behavior link. Every completed capability must have one otherwise.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266"]);
+// Aggregate review and release records, withdrawn items, guidance changes (R4, R6), and fixture-only
+// corrections (F239-47-5) do not add product behavior and need no feature link. Every completed
+// product capability still requires one.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F205", "F252","F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F239-47-5"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66) and the window checks of plugins (F110). Core cannot read
