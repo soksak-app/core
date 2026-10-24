@@ -18,6 +18,8 @@
 
 제목 표시줄의 프로젝트 목록 버튼과 프로젝트 추가는 현재 작업을 유지하면서 같은 창에 라이브러리를 표시한다. 프로젝트 선택이나 작업 화면 복귀로 작업 화면을 복원한다. 새 창은 항상 프로젝트 미선택 창을 생성한다. macOS에서 모든 창을 닫아도 이 동작을 사용할 수 있도록 앱을 유지한다. 라이브러리 푸터, Command/Ctrl+Shift+N, macOS Dock 메뉴는 같은 동작을 실행한다. 라이브러리는 프로젝트 작업 화면에서 돌아온 경우에도 항상 공통 설정을 사용한다. 작업 화면으로 복귀하면 해당 프로젝트의 덮어쓰기를 다시 적용한다.
 
+프로젝트 열기에는 네이티브 ownership 단계와 페이지 데이터 단계가 있다. `projectOpen`은 ownership을 기록해 `{local, staged}`를 반환하지만 확정된 shown project를 바꾸지 않고 project message도 보내지 않는다. `staged`는 이번 호출이 아직 `projectShown`으로 확정되지 않은 ownership을 예약했을 때 `true`이고, 이미 확정된 owner를 다시 여는 호출은 `false`다. 새 owner의 geometry는 reservation 전에 적용한다. Geometry 적용이 실패하면 새로 만든 별도 창은 닫고, 재사용한 창은 이전 geometry를 복원한다. Local open이 성공한 뒤 메인 페이지는 선언된 project-data context를 준비하고 프로젝트 settings scope를 선택한 다음 context를 설치하고 `projectShown({id, root, title})`을 호출한다. 그때 host가 shown project를 확정해 ready plugin host에 게시한다. `projectShown` 전에 ready가 된 plugin host는 이전에 확정된 프로젝트를 받으며, 확정된 프로젝트가 없으면 `null`을 받는다. Native open이 실패하면 이전 data context와 확정된 shown project를 유지한다. Settings 선택이나 native 검증이 commit 전에 실패하면 페이지는 이전 settings/data context를 복원하고 새로 staged된 owner만 release한다. 각 plugin data call은 시작 시점의 active context를 캡처한다. Context 설치 전에 시작한 call은 이전 프로젝트의 access function을 유지하고 이후 call은 준비된 context를 사용한다. 다른 창이 소유한 요청은 해당 창이 `project-activate`를 처리하고 자체 data context를 준비한 뒤에만 게시한다. 시작 시에는 페이지가 이 순서를 마친 뒤 `windowReady`를 호출하므로 새 plugin host는 확정된 프로젝트를 따라잡는다.
+
 프로젝트에서 연 터미널이나 셸 표면은, 디렉터리를 알린 표면에서 쪼갠 경우가 아니면 프로젝트의 정규 루트에서 시작한다([탭 알림](plugins.ko.md#탭-알림)).
 
 ## 공통 외관

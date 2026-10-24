@@ -1,6 +1,6 @@
 //! Project windows, the window registry, ready/close/exit, window state and window buttons.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
@@ -65,6 +65,8 @@ pub(crate) struct WindowData {
     pub surface_plugins: Mutex<HashMap<String, String>>,
     /// The folder root of each project that the window holds, by project id (docs/plans/plugin-host-routes.md rule 3).
     pub projects: Mutex<HashMap<String, String>>,
+    /// Project ownership reservations that the page has not committed through `project_shown`.
+    pub staged_projects: Mutex<HashSet<String>>,
     /// The project that the window shows, empty when it shows none (docs/plans/plugin-host-routes.md F229-1). A release of the
     /// shown project clears it, and the root, at once.
     pub shown: Mutex<String>,
@@ -1024,9 +1026,23 @@ pub(crate) struct Geometry {
 pub(crate) struct OpenProject {
     id: String,
     root: String,
-    title: String,
     separate: bool,
     geometry: Option<Geometry>,
+}
+
+/// The project that a page has selected after loading its project data context.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ProjectShown {
+    project: Option<ShownProject>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ShownProject {
+    id: String,
+    root: String,
+    title: String,
 }
 
 /// Opens a project. An already open project activates its owning window, and a separate request creates a new window
@@ -1071,30 +1087,17 @@ fn project_open_on_main(
         let owner = window
             .get_window(&label)
             .ok_or("project window is closed")?;
-        record_project(&owner, &request.id, &folder.root)?;
-        *window_data(&owner)?
-            .root
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the root webview of the window, which this call
-            // replaces; the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner) = folder.root;
-        *window_data(&owner)?
-            .shown
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the shown project, which this call replaces; the
-            // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner) = request.id.clone();
-        crate::plugin_host_channel::post_project_to_plugin_hosts(&owner)?;
-        owner
-            .set_title(&format!("{} / Tauri v2", request.title))
-            .map_err(|e| e.to_string())?;
-        crate::exposure::windows_changed(window.app_handle());
+        let data = window_data(&owner)?;
+        let staged = register_project_open(&data, &request.id, &folder.root, false);
         if label != window.label() {
             emit_window(&owner, "project-activate", &request.id).map_err(|e| e.to_string())?;
             owner.show().map_err(|e| e.to_string())?;
             owner.set_focus().map_err(|e| e.to_string())?;
         }
-        return Ok(serde_json::json!({"local": label == window.label()}));
+        return Ok(serde_json::json!({
+            "local": label == window.label(),
+            "staged": staged,
+        }));
     }
     let occupied = registry
         .owners
@@ -1104,24 +1107,53 @@ fn project_open_on_main(
         .unwrap_or_else(PoisonError::into_inner)
         .values()
         .any(|label| label == window.label());
-    let owner = if request.separate && occupied {
+    let separate = request.separate && occupied;
+    let owner = if separate {
         let label = format!("project-{}", request.id);
         new_window(
             window.app_handle(),
             &label,
             &format!("index.html?project={}", request.id),
-            &request.title,
+            WINDOW_TITLE,
         )?
     } else {
         window.clone()
     };
-    record_project(&owner, &request.id, &folder.root)?;
-    *window_data(&owner)?
-        .shown
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the shown project, which this call replaces; the panic
-        // hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner) = request.id.clone();
+    let data = window_data(&owner)?;
+    let geometry = request
+        .geometry
+        .filter(|geometry| geometry.width > 0.0 && geometry.height > 0.0);
+    let previous_geometry = if !separate && geometry.is_some() {
+        Some((
+            owner.inner_size().map_err(|error| error.to_string())?,
+            owner.outer_position().map_err(|error| error.to_string())?,
+        ))
+    } else {
+        None
+    };
+    configure_project_window(
+        geometry,
+        separate,
+        |geometry| {
+            owner
+                .set_size(LogicalSize::new(geometry.width, geometry.height))
+                .map_err(|error| error.to_string())?;
+            owner
+                .set_position(tauri::LogicalPosition::new(geometry.x, geometry.y))
+                .map_err(|error| error.to_string())
+        },
+        || {
+            let Some((size, position)) = previous_geometry else {
+                return Err("previous window geometry was not captured".into());
+            };
+            owner.set_size(size).map_err(|error| error.to_string())?;
+            owner
+                .set_position(position)
+                .map_err(|error| error.to_string())
+        },
+        || owner.close().map_err(|error| error.to_string()),
+    )?;
+    let staged = register_project_open(&data, &request.id, &folder.root, true);
     registry
         .owners
         .lock()
@@ -1129,38 +1161,157 @@ fn project_open_on_main(
         // panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .insert(request.id, owner.label().into());
-    *window_data(&owner)?
-        .root
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the root webview of the window, which this call
-        // replaces; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner) = folder.root;
-    owner
-        .set_title(&format!("{} / Tauri v2", request.title))
-        .map_err(|e| e.to_string())?;
     crate::exposure::windows_changed(window.app_handle());
-    if let Some(g) = request.geometry.filter(|g| g.width > 0.0 && g.height > 0.0) {
-        owner
-            .set_size(LogicalSize::new(g.width, g.height))
-            .map_err(|e| e.to_string())?;
-        owner
-            .set_position(tauri::LogicalPosition::new(g.x, g.y))
-            .map_err(|e| e.to_string())?;
-    }
     notify_workspace(window.app_handle());
-    Ok(serde_json::json!({"local": owner.label() == window.label()}))
+    Ok(serde_json::json!({
+        "local": owner.label() == window.label(),
+        "staged": staged,
+    }))
 }
 
-/// Records the folder root of the project id that the window holds (docs/plans/plugin-host-routes.md rule 3).
-fn record_project(owner: &Window, id: &str, root: &str) -> Result<(), String> {
-    window_data(owner)?
-        .projects
+/// Registers project ownership without changing the project selected by the page.
+fn register_project_open(data: &WindowData, id: &str, root: &str, new_owner: bool) -> bool {
+    data.projects
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the project roots, which this call amends; the panic hook
-        // records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .insert(id.to_string(), root.to_string());
+    let mut staged = data
+        .staged_projects
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if new_owner {
+        staged.insert(id.to_string());
+    }
+    staged.contains(id)
+}
+
+fn configure_project_window(
+    geometry: Option<Geometry>,
+    created: bool,
+    configure: impl FnOnce(&Geometry) -> Result<(), String>,
+    restore_existing: impl FnOnce() -> Result<(), String>,
+    close_created: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    if let Some(geometry) =
+        geometry.filter(|geometry| geometry.width > 0.0 && geometry.height > 0.0)
+    {
+        if let Err(error) = configure(&geometry) {
+            let cleanup = if created {
+                close_created()
+            } else {
+                restore_existing()
+            };
+            return match cleanup {
+                Ok(()) => Err(error),
+                Err(cleanup_error) => Err(format!(
+                    "{error}; project window cleanup failed: {cleanup_error}"
+                )),
+            };
+        }
+    }
     Ok(())
+}
+
+fn release_project_reservation(data: &WindowData, id: &str) {
+    data.projects
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(id);
+    data.staged_projects
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .remove(id);
+}
+
+/// Commits the project selected by the page and publishes it only after the committed state is visible.
+fn commit_project_shown(
+    data: &WindowData,
+    project: Option<&ShownProject>,
+    set_title: impl FnOnce(&str) -> Result<(), String>,
+    publish: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let title = if let Some(project) = project {
+        let root = data
+            .projects
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&project.id)
+            .cloned()
+            .ok_or_else(|| format!("project {} is not owned by this window", project.id))?;
+        if root != project.root {
+            return Err(format!(
+                "project {} root does not match the root recorded by this window",
+                project.id
+            ));
+        }
+        format!("{} / Tauri v2", project.title)
+    } else {
+        WINDOW_TITLE.to_string()
+    };
+    set_title(&title)?;
+    if let Some(project) = project {
+        *data.shown.lock().unwrap_or_else(PoisonError::into_inner) = project.id.clone();
+        *data.root.lock().unwrap_or_else(PoisonError::into_inner) = project.root.clone();
+        data.staged_projects
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&project.id);
+    } else {
+        data.shown
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+        data.root
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+    }
+    publish()
+}
+
+fn project_shown_on_main(window: &Window, request: ProjectShown) -> Result<(), String> {
+    if let Some(project) = request.project.as_ref() {
+        if project.id.is_empty()
+            || !project
+                .id
+                .bytes()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        {
+            return Err("invalid project id".into());
+        }
+        let owner = window
+            .state::<Windows>()
+            .owners
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&project.id)
+            .cloned();
+        if owner.as_deref() != Some(window.label()) {
+            return Err(format!(
+                "project {} is not owned by this window",
+                project.id
+            ));
+        }
+        let canonical = project_folder(window.app_handle(), project.root.clone())?;
+        if canonical.root != project.root {
+            return Err(format!("project {} root is not canonical", project.id));
+        }
+    }
+    let data = window_data(window)?;
+    commit_project_shown(
+        &data,
+        request.project.as_ref(),
+        |title| window.set_title(title).map_err(|error| error.to_string()),
+        || crate::plugin_host_channel::post_project_to_plugin_hosts(window),
+    )?;
+    crate::exposure::windows_changed(window.app_handle());
+    Ok(())
+}
+
+/// Commits the page-selected project on the main thread after its data context is ready.
+pub(crate) fn project_shown(window: &Window, request: ProjectShown) -> Result<(), String> {
+    let host = window.clone();
+    crate::exposure::on_main(window, move || project_shown_on_main(&host, request))
 }
 
 /// Releases the link between a project id and a window. A window with no remaining project shows the library, so the
@@ -1173,16 +1324,10 @@ pub(crate) fn project_release(window: &Window, id: String) -> Result<(), String>
         if let Some(owner) = window.app_handle().get_window(&label) {
             // The plugin sessions of the project end with it, when the holding window owns them (docs/plans/plugin-host-routes.md
             // rule 7).
-            window_data(&owner)?
-                .projects
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the project roots, which this call amends; the
-                // panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&id);
+            let data = window_data(&owner)?;
+            release_project_reservation(&data, &id);
             // A release of the shown project clears the shown root at once, even when another project is still held: the window
             // shows no project until the page shows one explicitly (docs/plans/plugin-host-routes.md F229-1).
-            let data = window_data(&owner)?;
             let shown_released = clear_released_shown(
                 &mut data
                     .shown
@@ -1738,3 +1883,7 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 #[cfg(test)]
 #[path = "windows_records_test.rs"]
 mod records_test;
+
+#[cfg(test)]
+#[path = "../tests/project_data_order/project_data_order_test.rs"]
+mod project_data_order_test;

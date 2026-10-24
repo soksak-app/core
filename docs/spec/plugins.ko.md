@@ -339,7 +339,8 @@ plugin 저장소의 catalog 검사(`soksak-events`)는 `runtime.log.<level>(`와
 | `folder(root)` | 프로젝트 디렉터리의 `{ root, identity }`를 반환한다. 브라우저 애플리케이션은 앞뒤 공백을 제거한 경로와 식별자 `path:<공백 제거 경로>`를 반환한다 |
 | `chooseFolder()` | 폴더 선택 대화상자를 표시한다. 브라우저 애플리케이션은 호출을 거부한다 |
 | `createFolder({ parent, name })` | 프로젝트 폴더를 만든다. 브라우저 애플리케이션은 호출을 거부한다 |
-| `openProject({ id, root, title, geometry, separate, current })` | 프로젝트를 열고 `{ local }`을 반환한다. 호출한 창이 프로젝트를 표시하면 `local`은 `true`다. 브라우저 애플리케이션은 별도 창으로 여는 프로젝트를 새 탭에서 연다 |
+| `openProject({ id, root, geometry, separate, current })` | 프로젝트 owner를 열거나 예약하고 `{ local, staged }`를 반환한다. `local`은 호출 창이 열기를 소유하면 `true`이고, `staged`는 그 owner가 `projectShown`으로 프로젝트를 확정할 때까지 `true`다. 브라우저 애플리케이션은 별도 창으로 여는 프로젝트를 새 탭에서 연다 |
+| `projectShown(project)` | `{id, root, title}` 또는 `null`을 창이 표시하는 프로젝트로 확정하고 ready plugin host에 보낸다. 페이지는 일치하는 준비된 project-data context를 설치한 뒤에만 호출한다. |
 | `releaseProject(id)` | 호출한 창의 프로젝트 소유를 해제한다 |
 
 워크벤치는 이 내보내는 값만 사용하고 런타임에 따라 분기하지 않는다. `host`가 `null`이면 사이드카를 선언한 플러그인의 표면은 실행할 수 없다. 그 사이드카, 네이티브 영역, 공개 전달에 호스트가 필요하기 때문이다. 워크벤치는 그 표면의 모듈을 가져오지 않으며, 표면 자리는 자리 표시 "<플러그인 이름> 표면은 네이티브 호스트가 있어야 열립니다"를 보이고, 표면은 `ready`를 보고하며 포커스를 받지 않고, 자리 표시는 탭과 함께 사라진다. 호스트가 없으면 `report`는 그 줄을 오류로 콘솔에 쓴다.

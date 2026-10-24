@@ -89,12 +89,12 @@ func folderError(path string, err error) error {
 type ProjectOpen struct {
 	ID       string          `json:"id"`
 	Root     string          `json:"root"`
-	Title    string          `json:"title"`
 	Separate bool            `json:"separate"`
 	Geometry *WindowGeometry `json:"geometry"`
 }
 type ProjectOpened struct {
-	Local bool `json:"local"`
+	Local  bool `json:"local"`
+	Staged bool `json:"staged"`
 }
 
 func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (ProjectOpened, error) {
@@ -120,18 +120,14 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	if owner != nil {
 		local := owner == current
 		owner.projects[req.ID] = folder.Root
-		owner.mu.Lock()
-		owner.shown, owner.root = req.ID, folder.Root
-		owner.mu.Unlock()
+		staged := owner.pendingProjects[req.ID]
 		h.mu.Unlock()
-		owner.postProjectToPluginHosts()
-		owner.setTitle(req.Title + titleSuffix)
 		if !local {
 			owner.Emit("project-activate", req.ID)
 			owner.window.Show()
 			owner.window.Focus()
 		}
-		return ProjectOpened{Local: local}, nil
+		return ProjectOpened{Local: local, Staged: staged}, nil
 	}
 	separate := req.Separate && len(current.projects) > 0
 	h.mu.Unlock()
@@ -141,13 +137,12 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 	}
 	h.mu.Lock()
 	owner.projects[req.ID] = folder.Root
-	owner.mu.Lock()
-	owner.shown, owner.root = req.ID, folder.Root
-	owner.mu.Unlock()
+	if owner.pendingProjects == nil {
+		owner.pendingProjects = make(map[string]bool)
+	}
+	owner.pendingProjects[req.ID] = true
 	h.owners[req.ID] = owner
 	h.mu.Unlock()
-	owner.postProjectToPluginHosts()
-	owner.setTitle(req.Title + titleSuffix)
 	if req.Geometry != nil && req.Geometry.Width > 0 && req.Geometry.Height > 0 {
 		application.InvokeSync(func() {
 			// A Wails window size is in integer logical pixels, so the stored size is set to the nearest integer.
@@ -157,7 +152,72 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 		})
 	}
 	h.notifyWorkspace()
-	return ProjectOpened{Local: owner == current}, nil
+	return ProjectOpened{Local: owner == current, Staged: true}, nil
+}
+
+type ProjectShown struct {
+	Project json.RawMessage `json:"project"`
+}
+
+type ShownProject struct {
+	ID    string `json:"id"`
+	Root  string `json:"root"`
+	Title string `json:"title"`
+}
+
+// ProjectShown commits the project displayed by a page after its project data is ready.
+func (h *Host) ProjectShown(ctx context.Context, reqJSON json.RawMessage) error {
+	var req ProjectShown
+	if err := json.Unmarshal(reqJSON, &req); err != nil {
+		return fmt.Errorf("request is invalid: %w", err)
+	}
+	if len(req.Project) == 0 {
+		return fmt.Errorf("request project is missing")
+	}
+	current, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	h.opening.Lock()
+	defer h.opening.Unlock()
+	if string(req.Project) == "null" {
+		current.mu.Lock()
+		current.shown, current.root = "", ""
+		current.mu.Unlock()
+		current.setTitle(windowTitle)
+		current.postProjectToPluginHosts()
+		return nil
+	}
+	var project ShownProject
+	if err := json.Unmarshal(req.Project, &project); err != nil {
+		return fmt.Errorf("request project is invalid: %w", err)
+	}
+	if !validProjectID(project.ID) {
+		return fmt.Errorf("invalid project id")
+	}
+	folder, err := ResolveProjectFolder(project.Root)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	owner := h.owners[project.ID]
+	if owner != current {
+		h.mu.Unlock()
+		return fmt.Errorf("project %s is not owned by this window", project.ID)
+	}
+	root, ok := current.projects[project.ID]
+	if !ok || root != folder.Root {
+		h.mu.Unlock()
+		return fmt.Errorf("project %s root does not match its owned folder", project.ID)
+	}
+	current.mu.Lock()
+	current.shown, current.root = project.ID, folder.Root
+	current.mu.Unlock()
+	delete(current.pendingProjects, project.ID)
+	h.mu.Unlock()
+	current.setTitle(project.Title + titleSuffix)
+	current.postProjectToPluginHosts()
+	return nil
 }
 
 func validProjectID(id string) bool {
@@ -181,6 +241,7 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	owner := h.owners[id]
 	if owner != nil {
 		delete(owner.projects, id)
+		delete(owner.pendingProjects, id)
 	}
 	delete(h.owners, id)
 	empty := owner != nil && len(owner.projects) == 0

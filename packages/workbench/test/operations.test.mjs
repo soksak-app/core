@@ -98,14 +98,18 @@ test("the window and project calls of the host take the identifiers of their ope
   await windows.newWindow(cids);
   await windows.close(cids);
   await windows.closeKept(cids);
-  await windows.openProject({ id: "prj", root: "/r", title: "t", separate: false, geometry: null }, cids);
+  await windows.openProject({ id: "prj", root: "/r", separate: false, geometry: null }, cids);
+  await windows.projectShown({ id: "prj", root: "/r", title: "t" });
+  await windows.projectShown(null);
   await windows.releaseProject("prj", cids);
   await windows.askRemoveProject("prj", cids);
   assert.deepEqual(sent, [
     ["windowNew", undefined, { cids }],
     ["windowClose", undefined, { cids }],
     ["windowCloseKept", undefined, { cids }],
-    ["projectOpen", { id: "prj", root: "/r", title: "t", separate: false, geometry: null }, { cids }],
+    ["projectOpen", { id: "prj", root: "/r", separate: false, geometry: null }, { cids }],
+    ["projectShown", { project: { id: "prj", root: "/r", title: "t" } }, undefined],
+    ["projectShown", { project: null }, undefined],
     ["projectRelease", "prj", { cids }],
     ["projectRemoveAsk", "prj", { cids }],
   ]);

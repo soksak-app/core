@@ -8,10 +8,8 @@ import { log } from "./host.js";
 /** The declared project data of each plugin, from its plugin.json data field. */
 const declaredData = new Map();
 let options = null;
-// The visible project {id, root}, or null; it is set with shownProject.
-let shownProject = null;
-// The project data functions of each plugin for the visible project (dataOf), set while the project is shown.
-const dataAccess = new Map();
+// The project-data context that plugin-host calls currently use.
+let activeContext = { project: null, access: new Map() };
 let turn = Promise.resolve();
 
 /**
@@ -91,15 +89,14 @@ function dataOf(project, plugin, declared, failures) {
   return { get: read, set: write };
 }
 
-async function show(project) {
-  // default: a window without a project has no shown project object (null).
-  shownProject = project ?? null;
-  dataAccess.clear();
-  if (!project) return;
+async function prepare(project) {
+  const context = { project: project ?? null, access: new Map() };
+  if (!project) return context;
   for (const [plugin, declared] of declaredData) {
     const failures = await checkStored(project, plugin, declared);
-    dataAccess.set(plugin, dataOf(project, plugin, declared, failures));
+    context.access.set(plugin, dataOf(project, plugin, declared, failures));
   }
+  return context;
 }
 
 /**
@@ -108,26 +105,46 @@ async function show(project) {
  */
 export const pluginHostData = {
   async get(plugin, key) {
-    return (await accessOf(plugin)).get(key);
+    const context = activeContext;
+    return accessOf(plugin, context).get(key);
   },
   async set(plugin, key, value) {
-    return (await accessOf(plugin)).set(key, value);
+    const context = activeContext;
+    return accessOf(plugin, context).set(key, value);
   },
 };
 
-async function accessOf(plugin) {
-  await turn;
-  if (shownProject === null) throw new Error(`plugin host ${plugin}: no project is shown`);
-  const access = dataAccess.get(plugin);
+function accessOf(plugin, context) {
+  if (context.project === null) throw new Error(`plugin host ${plugin}: no project is shown`);
+  const access = context.access.get(plugin);
   if (access !== undefined) return access;
   // A plugin that declares no project data has no key to read, so every key is refused as not declared.
-  if (!declaredData.has(plugin)) return dataOf(shownProject, plugin, {}, new Map());
-  throw new Error(`plugin ${plugin} data of project ${shownProject.id} is not loaded`);
+  if (!declaredData.has(plugin)) return dataOf(context.project, plugin, {}, new Map());
+  throw new Error(`plugin ${plugin} data of project ${context.project.id} is not loaded`);
 }
 
-/** Reports the project {id, root} that the window shows, or null. They are handled in the order received. */
-export function showData(project) {
-  const done = turn.then(() => show(project));
+/** Prepares a project's declared data without changing the project that plugin-host calls currently use. */
+export function prepareData(project) {
+  const done = turn.then(() => prepare(project));
   turn = done.catch((error) => dispatchEvent(new ErrorEvent("error", { message: `plugin data: ${error.message}` })));
   return done;
+}
+
+/** Installs a successfully prepared project-data context as the owner of subsequent plugin-host calls. */
+export function commitData(context) {
+  if (!context || !(context.access instanceof Map)) throw new Error("invalid prepared project data context");
+  const previous = activeContext;
+  activeContext = context;
+  return previous;
+}
+
+/** Restores the prior context when publishing an installed context fails before the host changes its shown project. */
+export function restoreData(installed, previous) {
+  if (!installed || !previous || activeContext !== installed) throw new Error("project data context cannot be restored after another project commit");
+  activeContext = previous;
+}
+
+/** Reports the project {id, root} that the window shows, or null. Preparation and installation are serialized. */
+export async function showData(project) {
+  commitData(await prepareData(project));
 }

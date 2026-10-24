@@ -9,7 +9,7 @@ globalThis.document = dom.window.document;
 globalThis.dispatchEvent = (event) => dom.window.dispatchEvent(event);
 globalThis.ErrorEvent = dom.window.ErrorEvent;
 
-const { configureData, declareProjectData, pluginHostData, showData } = await import("../plugin-data.js");
+const { commitData, configureData, declareProjectData, pluginHostData, prepareData, showData } = await import("../plugin-data.js");
 
 const stored = new Map();
 configureData({
@@ -63,4 +63,74 @@ test("a value stored without a format entry is read as format 1 of the declared 
   await showData({ id: "p3", root: "/work/p3" });
   assert.deepEqual(await pluginHostData.get("bare", "legacy"), ["d"]);
   await showData(null);
+});
+
+test("a data call invoked during preparation stays bound to the previous project", async () => {
+  stored.set("p1/probe", { ...stored.get("p1/probe"), note: { format: 1, value: "old value" } });
+  stored.set("p-new/probe", { note: "new value" });
+  await showData({ id: "p1", root: "/work/p1" });
+
+  let started;
+  const preparing = new Promise((resolve) => { started = resolve; });
+  let release;
+  const wait = new Promise((resolve) => { release = resolve; });
+  configureData({
+    data: {
+      get: (id, plugin) => stored.get(`${id}/${plugin}`) ?? {},
+      set: async (id, plugin, key, value) => {
+        if (id === "p-new" && plugin === "probe") {
+          started();
+          await wait;
+        }
+        stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value });
+      },
+    },
+  });
+
+  const change = showData({ id: "p-new", root: "/work/new" });
+  await preparing;
+  const inFlight = pluginHostData.get("probe", "note");
+  release();
+  await change;
+  assert.equal(await inFlight, "old value");
+});
+
+test("a write started before preparation keeps its project after the new context commits", async () => {
+  await showData({ id: "p1", root: "/work/p1" });
+  let started;
+  const writing = new Promise((resolve) => { started = resolve; });
+  let release;
+  const wait = new Promise((resolve) => { release = resolve; });
+  configureData({
+    data: {
+      get: (id, plugin) => stored.get(`${id}/${plugin}`) ?? {},
+      set: async (id, plugin, key, value) => {
+        if (id === "p1" && plugin === "probe") {
+          started();
+          await wait;
+        }
+        stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value });
+      },
+    },
+  });
+  const write = pluginHostData.set("probe", "note", "written to previous project");
+  await writing;
+  const next = await prepareData({ id: "p-new", root: "/work/new" });
+  commitData(next);
+  release();
+  await write;
+  assert.deepEqual(stored.get("p1/probe").note, { format: 1, value: "written to previous project" });
+  assert.equal(await pluginHostData.get("probe", "note"), "new value");
+});
+
+test("failed data preparation leaves the active project-data owner unchanged", async () => {
+  configureData({ data: {
+    get: (id, plugin) => {
+      if (id === "p-bad" && plugin === "probe") throw new Error("project data read failed");
+      return stored.get(`${id}/${plugin}`) ?? {};
+    },
+    set: async (id, plugin, key, value) => { stored.set(`${id}/${plugin}`, { ...stored.get(`${id}/${plugin}`), [key]: value }); },
+  } });
+  await assert.rejects(prepareData({ id: "p-bad", root: "/work/bad" }), /project data read failed/);
+  assert.equal(await pluginHostData.get("probe", "note"), "new value");
 });

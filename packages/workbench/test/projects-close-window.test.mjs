@@ -23,6 +23,7 @@ mock.module("@soksak/runtime", {
     windows: {
       folder: async (root) => ({ root, identity: PROJECT.identity }),
       openProject: async (request, cids) => { hostCids.push(["openProject", cids]); return { local: true }; },
+      projectShown: async () => {},
       newWindow: async (cids) => { hostCids.push(["newWindow", cids]); },
       state: async () => { events.push("geometry"); return null; },
       close: async (cids) => { events.push("close"); hostCids.push(["close", cids]); },
@@ -42,7 +43,8 @@ mock.module("../host.js", {
     report: () => {} },
 });
 mock.module("../plugin-data.js", {
-  namedExports: { configureData: () => {}, showData: async () => {} },
+  namedExports: { configureData: () => {}, prepareData: async (project) => ({ project }), commitData: () => null,
+    restoreData: () => {}, showData: async () => {} },
 });
 mock.module("../page-log.js", {
   namedExports: { flushEvents: async () => { events.push("logflush"); }, emitEvent: () => {} },

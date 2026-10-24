@@ -22,10 +22,12 @@ export function hostWindows(host) {
     createFolder: (request) => host.call("projectCreate", request),
     /**
      * Opens a project. The host decides from the window ownership whether to open it in this window,
-     * and returns whether it must be opened in this window as `{ local }`.
+     * and returns `{ local, staged }` to identify local ownership and a new reservation.
      */
-    openProject: ({ id, root, title, separate, geometry }, cids) =>
-      host.call("projectOpen", { id, root, title, separate, geometry }, { cids }),
+    openProject: ({ id, root, separate, geometry }, cids) =>
+      host.call("projectOpen", { id, root, separate, geometry }, { cids }),
+    /** Publishes the project whose data context the main page has installed. */
+    projectShown: (project) => host.call("projectShown", { project }),
     releaseProject: (id, cids) => host.call("projectRelease", id, { cids }),
     /** Asks another window that shows the project whether the project may be removed, and fulfills with true if it may be removed. */
     askRemoveProject: (id, cids) => host.call("projectRemoveAsk", id, { cids }),

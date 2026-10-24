@@ -286,6 +286,8 @@ type Surfaces struct {
 	title string
 	// projects holds the projects that this window shows, by project id, with the folder root of each (docs/plans/plugin-host-routes.md rule 3).
 	projects map[string]string
+	// pendingProjects holds owner reservations that have not been committed by ProjectShown. Host.mu protects it.
+	pendingProjects map[string]bool
 	// shown is the project that the window shows, empty when it shows none, and root is its folder root. owner.mu protects both.
 	// A release of the shown project clears both at once (docs/plans/plugin-host-routes.md F229-1).
 	shown string

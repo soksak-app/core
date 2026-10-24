@@ -20,11 +20,11 @@ test("the browser runtime identifies a folder by its trimmed path and creates no
 
 test("a separate project opens in another tab only when this tab shows a different project", async () => {
   const opened = browserGlobals();
-  assert.deepEqual(await windows.openProject({ id: "p1", separate: false, current: "p0" }), { local: true });
-  assert.deepEqual(await windows.openProject({ id: "p1", separate: true, current: null }), { local: true });
-  assert.deepEqual(await windows.openProject({ id: "p1", separate: true, current: "p1" }), { local: true });
+  assert.deepEqual(await windows.openProject({ id: "p1", separate: false, current: "p0" }), { local: true, staged: false });
+  assert.deepEqual(await windows.openProject({ id: "p1", separate: true, current: null }), { local: true, staged: false });
+  assert.deepEqual(await windows.openProject({ id: "p1", separate: true, current: "p1" }), { local: true, staged: false });
   assert.deepEqual(opened, []);
-  assert.deepEqual(await windows.openProject({ id: "p1", separate: true, current: "p0" }), { local: false });
+  assert.deepEqual(await windows.openProject({ id: "p1", separate: true, current: "p0" }), { local: false, staged: false });
   assert.deepEqual(opened, [["https://example.test/index.html?project=p1", "soksak-p1"]]);
 });
 
