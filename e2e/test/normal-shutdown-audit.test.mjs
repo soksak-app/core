@@ -75,3 +75,66 @@ test("normal shutdown ignores an application error written before the audit offs
     rmSync(configDir, { recursive: true, force: true });
   }
 });
+
+test("normal shutdown closes both clients when the shutdown wait fails", async () => {
+  const { configDir } = fixture();
+  const serviceEndpoint = join(configDir, "services", "terminal", "endpoint.json");
+  mkdirSync(join(configDir, "services", "terminal"), { recursive: true });
+  writeFileSync(serviceEndpoint, "{}\n");
+  const clients = [];
+  const connectClient = async () => {
+    const client = {
+      endpoint: { pid: 200 },
+      request: async () => null,
+      ended: new Promise(() => {}),
+      closed: false,
+      close() { this.closed = true; },
+    };
+    clients.push(client);
+    return client;
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      prepareTerminal: async () => ({ surface: "tab-terminal", sessionId: "session-terminal" }),
+      waitForShutdown: async () => { throw new Error("controlled shutdown timeout"); },
+      env: { SOKSAK_SHUTDOWN_TERMINAL: "1" },
+      write: () => {},
+    }), /controlled shutdown timeout/);
+    assert.equal(clients.length, 2);
+    assert.deepEqual(clients.map((client) => client.closed), [true, true],
+      "the endpoint and terminal-service clients both close after a shutdown failure");
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test("normal shutdown reports client-close errors without hiding a shutdown failure", async () => {
+  const { configDir } = fixture();
+  const client = {
+    endpoint: { pid: 200 },
+    request: async () => null,
+    close() { throw new Error("controlled client-close failure"); },
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      waitForShutdown: async () => { throw new Error("controlled shutdown failure"); },
+      env: {},
+      write: () => {},
+    }), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors[0].message, "controlled shutdown failure");
+      assert.match(error.errors[1].message, /could not close the application client: controlled client-close failure/);
+      return true;
+    });
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
