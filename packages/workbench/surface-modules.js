@@ -22,6 +22,7 @@ import { documentRegions } from "./document-regions.js";
 import { trace } from "./performance.js";
 const mounted = new Map();
 const mounting = new Map();
+let nextMountAttempt = 0;
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
 const placeholders = new Map();
 
@@ -33,6 +34,38 @@ const mountListeners = new Set();
 export function onSurfaceMounted(listener) {
   mountListeners.add(listener);
   return () => mountListeners.delete(listener);
+}
+
+function createMountRegistration() {
+  let announce;
+  let announced = false;
+  const registered = new Promise((resolve) => { announce = resolve; });
+  const record = {
+    attempt: null, state: "reserved", entry: null, phase: null, reason: null, registered,
+    announce(outcome) {
+      if (announced) return;
+      announced = true;
+      record.registered = null;
+      announce(outcome);
+    },
+  };
+  return record;
+}
+
+function recordMountFailure(entry, phase, error) {
+  const record = entry.mountRegistration;
+  if (!record || record.attempt === null || record.state === "failed") return;
+  const reason = String(error?.message ?? error);
+  record.state = "failed";
+  record.phase = phase;
+  record.reason = reason;
+  emitEvent("error", "page.surface.mount.failed", {
+    plugin: entry.pluginId, surface: entry.surfaceId, attempt: record.attempt, phase, reason,
+  });
+}
+
+function mountFailureError(surfaceId, record) {
+  return new Error(`surface ${surfaceId} mount attempt ${record.attempt} failed during ${record.phase}: ${record.reason}`);
 }
 
 function authorizationFor(id) {
@@ -493,20 +526,34 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
 
 export function mountSurface(slot, surface, options = {}) {
   const surfaceId = surface?.surfaceId;
-  let announce;
-  const registration = new Promise((resolve) => { announce = resolve; });
+  let registration = null;
   if (typeof surfaceId === "string" && surfaceId) {
-    mounting.set(surfaceId, registration);
+    const entry = mounted.get(surfaceId);
+    const current = mounting.get(surfaceId);
+    if (entry && !entry.disposed && entry.mountRegistration === current && current?.state !== "failed") registration = current;
+    else if (current?.state === "reserved" && current.entry === null) registration = current;
+    else {
+      registration = createMountRegistration();
+      mounting.set(surfaceId, registration);
+    }
   }
-  const pending = mountSurfaceNow(slot, surface, options, () => announce({ ok: true }));
-  pending.then(() => announce({ ok: true }), (error) => announce({ ok: false, error }));
-  registration.then(() => {
-    if (typeof surfaceId === "string" && mounting.get(surfaceId) === registration) mounting.delete(surfaceId);
+  const pending = mountSurfaceNow(slot, surface, options, registration, () => registration?.announce({ ok: true }));
+  if (registration) pending.then(() => {
+    if (registration.state === "pending" && registration.entry && !registration.entry.disposed) registration.state = "mounted";
+    if (registration.state === "reserved" && registration.attempt === null && mounting.get(surfaceId) === registration) {
+      registration.state = "resolved";
+      registration.announce({ ok: true });
+      mounting.delete(surfaceId);
+    }
+  }, (error) => {
+    if (registration.entry && registration.attempt !== null) recordMountFailure(registration.entry, "mount", error);
+    registration.announce({ ok: false, error });
+    if (registration.attempt === null && mounting.get(surfaceId) === registration) mounting.delete(surfaceId);
   });
   return pending;
 }
 
-async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, registered) {
+async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, registration, registered) {
   // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
   // A surface is a view: its page runs in its view, and the workbench mounts no module (docs/spec/plugins.md#surface-ownership).
   if (!slot) throw new TypeError("surface mount requires a slot");
@@ -646,8 +693,14 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
     const compositionDisposed = new Promise((resolve) => { resolveCompositionDisposed = resolve; });
     entry = { slot, host, shadow, context, closing, lifetime, state, exposure: null, composition: compositionReady.promise,
       compositionDisposed, resolveCompositionDisposed,
-      mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false, surfaceId: surface.surfaceId,
+      mounted: null, ready: null, authorized: false, disposed: false, compositionDeclared: false,
+      surfaceId: surface.surfaceId, pluginId: surface.pluginId, mountRegistration: registration,
       setViewport: (next) => { viewport = next; } };
+    if (registration) {
+      registration.attempt = ++nextMountAttempt;
+      registration.entry = entry;
+      registration.state = "pending";
+    }
     mounted.set(surface.surfaceId, entry);
     try {
       onState(context.status.read());
@@ -672,18 +725,21 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
           await closeView();
         };
       }, async (error) => {
-        await closeView().catch((cleanupError) => {
+        const cleanup = closeView().catch((cleanupError) => {
           dispatchEvent(new ErrorEvent("error", { message: `view listener cleanup after registration failure: ${cleanupError?.message ?? cleanupError}` }));
         });
         if (entry.disposed) {
+          await cleanup;
           dispatchEvent(new ErrorEvent("error", { message: `view listener registration after dispose: ${error?.message ?? error}` }));
         } else if (entry.compositionDeclared) {
+          recordMountFailure(entry, "listener-registration", error);
+          const releasing = releaseFailedMount(entry, { present: true, value: error }, cleanup);
           context.status.report("error", error);
           for (const listener of mountListeners) listener(surface.surfaceId, error);
-          await releaseFailedMount(entry, { present: true, value: error }).catch((releaseError) => {
+          await releasing.catch((releaseError) => {
             dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after listener registration failure: ${releaseError?.message ?? releaseError}` }));
           });
-        }
+        } else await cleanup;
         return null;
       });
       const listenerFailure = listenerCollection.settled.then(
@@ -723,15 +779,18 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
       entry.mounted = Promise.race([mountReadiness, listenerFailure]);
       entry.ready = entry.mounted.catch(async (error) => {
           if (entry.disposed) return null;
+          recordMountFailure(entry, "mount", error);
+          const releasing = releaseFailedMount(entry, { present: true, value: error });
           context.status.report("error", error);
           for (const listener of mountListeners) listener(surface.surfaceId, error);
-          await releaseFailedMount(entry, { present: true, value: error }).catch((releaseError) => {
+          await releasing.catch((releaseError) => {
             dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after a failed mount: ${releaseError.message}` }));
           });
           throw error;
         });
       registered();
     } catch (error) {
+      recordMountFailure(entry, "mount", error);
       await releaseFailedMount(entry, { present: true, value: error }).catch((releaseError) => {
         dispatchEvent(new ErrorEvent("error", { message: `surface ${surface.surfaceId} release after a failed mount: ${releaseError.message}` }));
       });
@@ -760,17 +819,23 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
 export async function waitSurfaceCompositionDeclared(surfaceId) {
   let entry = mounted.get(surfaceId);
   if (entry && !entry.disposed && entry.ready) {
+    if (entry.mountRegistration?.state === "failed") throw mountFailureError(surfaceId, entry.mountRegistration);
     await waitForCompositionEntry(entry);
     return;
   }
   const pending = mounting.get(surfaceId);
-  if (pending) {
-    const outcome = await pending;
+  if (pending?.registered) {
+    const outcome = await pending.registered;
     if (!outcome.ok) throw outcome.error;
   }
   if (placeholders.has(surfaceId)) return;
   entry = mounted.get(surfaceId);
-  if (!entry) throw new Error(`surface ${surfaceId} is not mounted`);
+  if (!entry) {
+    const failed = mounting.get(surfaceId);
+    if (failed?.state === "failed") throw mountFailureError(surfaceId, failed);
+    throw new Error(`surface ${surfaceId} is not mounted`);
+  }
+  if (entry.mountRegistration?.state === "failed") throw mountFailureError(surfaceId, entry.mountRegistration);
   await waitForCompositionEntry(entry);
 }
 
@@ -796,15 +861,21 @@ export function suspendSurface(surfaceId) {
  * mounted surfaces, so the next mount of the surface starts a new mount instead of returning this failed one. The approval of the
  * surface stays, because the host still holds the surface, and the tab reports and the error stay for the display.
  */
-async function releaseFailedMount(entry, failure) {
+function releaseFailedMount(entry, failure, beforeRelease = Promise.resolve()) {
+  if (entry.disposing) return entry.disposing;
   entry.disposed = true;
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure });
+  const disposing = Promise.resolve().then(async () => {
+    await beforeRelease;
+    if (entry.exposure) entry.exposure.dispose();
+    await entry.context.exposure.dispose();
+    entry.state();
+    entry.host.remove();
+    if (mounted.get(entry.surfaceId) === entry) mounted.delete(entry.surfaceId);
+  });
+  entry.disposing = disposing;
   entry.closing.abort();
-  if (entry.exposure) entry.exposure.dispose();
-  await entry.context.exposure.dispose();
-  entry.state();
-  entry.host.remove();
-  if (mounted.get(entry.surfaceId) === entry) mounted.delete(entry.surfaceId);
+  return disposing;
 }
 
 /**
@@ -817,13 +888,16 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
   placeholders.get(surfaceId)?.remove();
   placeholders.delete(surfaceId);
   const entry = mounted.get(surfaceId);
-  if (!entry) return;
+  if (!entry) {
+    if (mounting.get(surfaceId)?.state === "failed") mounting.delete(surfaceId);
+    return;
+  }
   if (released) entry.lifetime.released = true;
   if (entry.disposing) return entry.disposing;
   entry.disposed = true;
   if (!entry.compositionDeclared) entry.resolveCompositionDisposed({ disposed: true, failure: null });
-  entry.closing.abort();
-  entry.disposing = (async () => {
+  if (mounting.get(surfaceId) === entry.mountRegistration) mounting.delete(surfaceId);
+  entry.disposing = Promise.resolve().then(async () => {
     // It does not wait for approval here. A removed tab must not keep a layout commit alive only because
     // the view was never permitted to mount.
     if (entry.exposure) entry.exposure.dispose();
@@ -837,7 +911,8 @@ export async function disposeSurface(surfaceId, { mode, released = false } = {})
     else forgetTab(surfaceId);
     authorization.delete(surfaceId);
     if (mounted.get(surfaceId) === entry) mounted.delete(surfaceId);
-  })();
+  });
+  entry.closing.abort();
   return entry.disposing;
 }
 
@@ -850,6 +925,9 @@ export async function disposeSurfacesExcept(surfaceIds, { released = false } = {
     if (surfaceIds.has(id)) continue;
     placeholder.remove();
     placeholders.delete(id);
+  }
+  for (const [id, registration] of mounting) {
+    if (!surfaceIds.has(id) && registration.state === "failed") mounting.delete(id);
   }
   const stale = [...mounted.keys()].filter((id) => !surfaceIds.has(id));
   await Promise.all(stale.map((id) => disposeSurface(id, { released })));

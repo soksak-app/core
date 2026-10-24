@@ -662,6 +662,19 @@
       },
       "description": "The reconciliation at load removed the session file of a tab that no layout of projects.json holds."
     },
+    "page.surface.mount.failed": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "plugin": "string",
+        "surface": "string",
+        "attempt": "number",
+        "phase": "string",
+        "reason": "string"
+      },
+      "description": "A new surface mount entry failed. attempt increases in the main-page document for each new entry. phase is mount when failure prevents composition readiness, including a listener-registration failure before readiness, and listener-registration when native listener registration fails after readiness. reason is the original failure text. The workbench records this event before releasing the entry; it does not display the event."
+    },
     "page.tab.keep.changed": {
       "layer": "page",
       "class": "lifecycle",
