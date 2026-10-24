@@ -48,7 +48,7 @@ In a plugin repository, `make test` runs the plugin's tests and `make check` run
 | `hwp` | `scripts/check-manifest.mjs`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records`, `scripts/check-test-cases.mjs` |
 | `terminal` | `scripts/check-test-cases.mjs` with `CORE_PLUGIN_API_DIR`, `view-check.js`, `soksak-exposure`, `soksak-engines`, `soksak-events --census`, `soksak-records` |
 
-Terminal `make check` runs `view-check.js` from the SDK directory selected by `CORE_PLUGIN_API_DIR`. It does not run the `soksak-view-check` package bin. The public SDK pin lacks this checker and `contract/clipboard.json`; F238-c-11-1 tracks the core release and owner pin updates needed for the pinned checks.
+Terminal `make check` directly runs `view-check.js` from the SDK directory selected by `CORE_PLUGIN_API_DIR`, with the plugin literal and screen-message vectors as inputs. `@soksak/plugin-api` exposes `view-check.js` as the `soksak-view-check` package bin; a package using that bin includes the checker target and its runtime files.
 
 A checkout places the repositories in these sibling folders, and a workflow that needs more than one repository checks them out the same way, so the relative folders of `scripts/workspace-registry.json` hold everywhere.
 
