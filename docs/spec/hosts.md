@@ -26,6 +26,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     workspace.go   settings and project storage       workspace.rs
     surfaces.go    surface sync, presentation, place  surfaces.rs
     documents.go   document regions of surfaces       documents.rs
+    image_detach.go image detach requests              image_detach.rs
     modals.go      native modals                      modals.rs
     shapes.go      outlines above surfaces            shapes.rs
     theme.go       theme storage and delivery         theme.rs

@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-48-3-2: Rust image-detach 구현과 owner test를 대응하는 module에 두고,
+  Wails start-barrier test를 Rust start test와 나란히 이동한다. Focused Go와
+  Rust image-detach/start test가 각각 7/7 통과한다. Paired-host 감사 finding은
+  22개에서 18개로 줄었으며 이 unit의 경로 finding 네 개가 사라지고 나머지는
+  계속 열린다. 동작이나 감사 허용 기준은 바꾸지 않았다.
+
 - F239-47-32: Native input transaction이 callback action과 최종 preedit을
   한 번의 표시 단위로 묶지만, 비동기 PTY output은 이후 event와 frame으로
   도착할 수 있음을 명확히 한다. 공개 macOS callback batching 구현을 비규범적

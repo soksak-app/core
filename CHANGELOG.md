@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-48-3-2: Place the Rust image-detach implementation and owner test in
+  matching modules, and move the Wails start-barrier test beside the Rust
+  start tests. The focused Go and Rust image-detach/start tests pass 7/7 each.
+  The paired-host audit drops from 22 findings to 18; this unit's four path
+  findings are gone, while the other findings remain open. No behavior or
+  audit allowance changed.
+
 - F239-47-32: Clarify that native input transactions group callback actions
   and final preedit for a presentation, while asynchronous PTY output may
   arrive in later events and frames. Record public macOS callback-batching

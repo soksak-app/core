@@ -26,6 +26,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     workspace.go   설정과 프로젝트 저장               workspace.rs
     surfaces.go    표면 동기화, 표시, 배치            surfaces.rs
     documents.go   표면의 문서 영역                   documents.rs
+    image_detach.go 이미지 detach 요청               image_detach.rs
     modals.go      네이티브 모달                      modals.rs
     shapes.go      표면 위 외곽선                     shapes.rs
     theme.go       테마 저장과 전달                   theme.rs
