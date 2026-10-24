@@ -63,6 +63,11 @@
 @property(copy) NSString *unhandledKey;     // The report of a special key given to the input method first. Reported if the input method does not handle it.
 @property NSUInteger reports;               // The number of reports sent. Used to check whether the input context answered a key.
 @property(copy) NSString *activeCid;        // The correlation identifier of the input being processed; nil outside one.
+@property(retain) NSMutableArray *inputActions;
+@property(retain) NSMutableArray *inputErrors;
+@property(retain) NSDictionary *inputPreedit;
+@property(copy) NSString *inputFailureReason;
+@property(copy) NSString *lastValidPreeditJSON;
 - (void)applyInsets;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
@@ -77,9 +82,15 @@
 - (void)logInput:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (BOOL)enterInput;
 - (void)leaveInput:(BOOL)opened;
+- (void)publishInput;
+- (void)deliverReport:(NSString *)json cid:(NSString *)cid;
 - (NSString *)currentCid;
 - (void)emitInput:(const char *)name fields:(NSString *)fields;
 - (void)handleKeyDown:(NSEvent *)event;
+- (BOOL)handleBecomeFirstResponder;
+- (BOOL)handleResignFirstResponder;
+- (void)handleReportPreedit;
+- (BOOL)rejectCallbackAfterInputFailure:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (void)passToInputMethod:(NSEvent *)event;
 - (void)failInput:(NSString *)reason where:(const char *)where text:(NSString *)text;
 - (void)handleCommand:(SEL)selector;
@@ -250,6 +261,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.importsGraphics = NO;
     self.displaysLinkToolTips = NO;
     self.reportedPreedit = @"";
+    self.lastValidPreeditJSON = @"{\"text\":\"\",\"markedRange\":null,\"selectedRange\":{\"location\":0,\"length\":0},\"replacementRange\":null,\"attributed\":false}";
     sp_observe_notification_selector("image_region.input_source", SP_OBSERVE_RECORD, self, @selector(inputSourceChanged:),
         NSTextInputContextKeyboardSelectionDidChangeNotification, nil);
     self.editable = YES;
@@ -271,6 +283,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [_reportedPreedit release];
     [_unhandledKey release];
+    [_inputActions release];
+    [_inputErrors release];
+    [_inputPreedit release];
+    [_inputFailureReason release];
+    [_lastValidPreeditJSON release];
     // Releases the immutable snapshot after the contents of the layer are cleared.
     self.imageLayer.contents = nil;
     if (_snapshot) CGImageRelease(_snapshot);
@@ -465,12 +482,90 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 // this call opened the input, and the caller closes it with leaveInput. A call inside an open input joins that input.
 - (BOOL)enterInput {
     BOOL opens = self.activeCid == nil;
-    if (opens) self.activeCid = [self currentCid];
+    if (opens) {
+        self.activeCid = [self currentCid];
+        if (self.activeCid) {
+            self.inputActions = [NSMutableArray array];
+            self.inputErrors = [NSMutableArray array];
+            self.inputPreedit = nil;
+            self.inputFailureReason = nil;
+        }
+    }
     return opens && self.activeCid != nil;
 }
 
 - (void)leaveInput:(BOOL)opened {
-    if (opened) self.activeCid = nil;
+    if (!opened) return;
+    @try {
+        [self publishInput];
+    } @finally {
+        self.activeCid = nil;
+        self.inputActions = nil;
+        self.inputErrors = nil;
+        self.inputPreedit = nil;
+        self.inputFailureReason = nil;
+    }
+}
+
+- (void)publishInput {
+    if (self.inputActions.count == 0 && self.inputErrors.count == 0
+        && !self.inputPreedit) return;
+    NSDictionary *preedit = self.inputPreedit;
+    if (!preedit) {
+        NSData *data = [self.lastValidPreeditJSON dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *error = nil;
+        preedit = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+        if (error) sp_log_error("input transaction", [NSString stringWithFormat:
+            @"the stored preedit snapshot is invalid: %@", error.localizedDescription].UTF8String);
+    }
+    if (![preedit isKindOfClass:NSDictionary.class]) {
+        NSString *reason = @"the final preedit snapshot is not a JSON object";
+        sp_log_error("input transaction", reason.UTF8String);
+        return;
+    }
+    NSDictionary *transaction = @{
+        @"type": @"input",
+        @"actions": self.inputActions ?: @[],
+        @"preedit": preedit,
+        @"errors": self.inputErrors ?: @[],
+        @"cids": @[self.activeCid],
+    };
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:transaction options:0 error:&error];
+    if (!data) {
+        sp_log_error("input transaction", [NSString stringWithFormat:
+            @"the native input transaction could not be serialized: %@", error.localizedDescription ?: @"serialization failed"].UTF8String);
+        return;
+    }
+    NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    [self deliverReport:json cid:self.activeCid];
+}
+
+- (void)deliverReport:(NSString *)json cid:(NSString *)cid {
+    NSError *error = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+        options:NSJSONReadingMutableContainers error:&error];
+    if (error || ![parsed isKindOfClass:NSDictionary.class]) {
+        sp_log_error("input transaction", [NSString stringWithFormat:
+            @"native input report cannot be delivered as a JSON object: %@", error.localizedDescription ?: @"invalid JSON object"].UTF8String);
+        return;
+    }
+    NSMutableDictionary *payload = [parsed mutableCopy];
+    if (cid && !payload[@"cids"]) [payload setObject:@[cid] forKey:@"cids"];
+    NSData *payloadData = [NSJSONSerialization dataWithJSONObject:payload options:0 error:&error];
+    [payload release];
+    if (!payloadData) {
+        sp_log_error("input transaction", [NSString stringWithFormat:
+            @"native input report cannot be serialized: %@", error.localizedDescription ?: @"serialization failed"].UTF8String);
+        return;
+    }
+    NSString *report = [[[NSString alloc] initWithData:payloadData encoding:NSUTF8StringEncoding] autorelease];
+    NSDictionary *record = @{ @"report": report, @"dropped": @((BOOL)(self.closed || !self.event)) };
+    NSData *recorded = [NSJSONSerialization dataWithJSONObject:record options:0 error:NULL];
+    NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
+    sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, "native.input.report", cid.UTF8String ?: "", fields.UTF8String);
+    if (self.closed || !self.event) return;
+    self.event(self.context, report.UTF8String);
 }
 
 // Stores one event of the input class with the correlation identifier of the input being processed.
@@ -480,23 +575,76 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, name, cid.UTF8String ?: "", fields.UTF8String);
 }
 
+- (BOOL)rejectCallbackAfterInputFailure:(NSString *)call fields:(NSString *)fields before:(NSString *)before {
+    if (!self.inputFailureReason) return NO;
+    NSString *prefix = fields.length ? [fields stringByAppendingString:@","] : @"";
+    NSString *record = [NSString stringWithFormat:
+        @"%@\"dropped\":\"input scope already failed\",\"failure\":\"%@\"",
+        prefix, [self jsonEscapedString:self.inputFailureReason]];
+    [self logInput:call fields:record before:before];
+    return YES;
+}
+
 // Records a report to the page as the event `native.input.report`, and sends it with the correlation identifier of the input
 // as the member `cids`. A report that is dropped is recorded as dropped.
 - (void)report:(const char *)json {
     NSString *cid = [self currentCid];
-    // The disjunction of C is an int, and @(int) writes a number; the catalog declares the member as a boolean.
-    NSData *recorded = [NSJSONSerialization dataWithJSONObject:@{ @"report": @(json), @"dropped": @((BOOL)(self.closed || !self.event)) } options:0 error:NULL];
-    NSString *fields = [[[NSString alloc] initWithData:recorded encoding:NSUTF8StringEncoding] autorelease];
-    sp_event_cids(SP_CLASS_INPUT, SP_EVENT_INFO, "native.input.report", cid.UTF8String ?: "", fields.UTF8String);
-    if (self.closed || !self.event) return;
     self.reports++;
-    // The report is a JSON object that ends with its closing brace; the identifier is added as its last member.
     NSString *text = @(json);
-    NSRange end = [text rangeOfString:@"}" options:NSBackwardsSearch];
-    if (cid && end.location != NSNotFound) {
-        text = [NSString stringWithFormat:@"%@,\"cids\":[\"%@\"]}", [text substringToIndex:end.location], cid];
+    if (self.activeCid && self.inputActions && self.inputErrors) {
+        NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
+        NSError *parseError = nil;
+        NSDictionary *value = [NSJSONSerialization JSONObjectWithData:data options:0 error:&parseError];
+        if (parseError) {
+            NSString *reason = [NSString stringWithFormat:@"native input report is invalid JSON: %@", parseError.localizedDescription];
+            sp_log_error("input transaction", reason.UTF8String);
+            [self.inputErrors addObject:@{ @"reason": reason }];
+            if (!self.inputFailureReason) self.inputFailureReason = reason;
+            return;
+        }
+        NSString *type = [value isKindOfClass:NSDictionary.class] ? value[@"type"] : nil;
+        if ([type isEqual:@"compose"]) {
+            NSMutableDictionary *snapshot = [value mutableCopy];
+            [snapshot removeObjectForKey:@"type"];
+            [snapshot removeObjectForKey:@"cids"];
+            self.inputPreedit = [snapshot autorelease];
+            return;
+        }
+        if ([type isEqual:@"insert"]) {
+            NSDictionary *snapshot = value[@"preedit"];
+            if ([snapshot isKindOfClass:NSDictionary.class]) self.inputPreedit = snapshot;
+            NSMutableDictionary *action = [value mutableCopy];
+            [action removeObjectForKey:@"type"];
+            [action removeObjectForKey:@"cids"];
+            [action removeObjectForKey:@"preedit"];
+            [action setObject:type forKey:@"type"];
+            [self.inputActions addObject:action];
+            [action release];
+            return;
+        }
+        if ([type isEqual:@"error"]) {
+            NSString *reason = value[@"reason"] ?: @"input callback failed";
+            [self.inputErrors addObject:@{ @"reason": reason }];
+            if (!self.inputFailureReason) self.inputFailureReason = reason;
+            return;
+        }
+        if ([type isEqual:@"key"] || [type isEqual:@"command"] || [type isEqual:@"focus"]) {
+            NSMutableDictionary *action = [value mutableCopy];
+            [action removeObjectForKey:@"type"];
+            [action removeObjectForKey:@"cids"];
+            [action setObject:type forKey:@"type"];
+            [self.inputActions addObject:action];
+            [action release];
+            return;
+        }
+        sp_log_error("input transaction", [NSString stringWithFormat:@"unsupported report type %@ in input scope",
+            type ?: @"<invalid JSON>"].UTF8String);
+        NSString *reason = @"native input scope emitted an unsupported report";
+        [self.inputErrors addObject:@{ @"reason": reason }];
+        if (!self.inputFailureReason) self.inputFailureReason = reason;
+        return;
     }
-    self.event(self.context, text.UTF8String);
+    [self deliverReport:text cid:cid];
 }
 
 // Records a failure of the input as the event `native.record.error` with the correlation identifier of the input, so the
@@ -516,6 +664,17 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (BOOL)becomeFirstResponder {
+    BOOL opened = [self enterInput];
+    BOOL result = NO;
+    @try {
+        result = [self handleBecomeFirstResponder];
+    } @finally {
+        [self leaveInput:opened];
+    }
+    return result;
+}
+
+- (BOOL)handleBecomeFirstResponder {
     NSString *before = [self inputState];
     BOOL result = [super becomeFirstResponder];
     [self logInput:@"becomeFirstResponder" fields:[NSString stringWithFormat:@"\"result\":%@", result ? @"true" : @"false"] before:before];
@@ -527,6 +686,17 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (BOOL)resignFirstResponder {
+    BOOL opened = [self enterInput];
+    BOOL result = NO;
+    @try {
+        result = [self handleResignFirstResponder];
+    } @finally {
+        [self leaveInput:opened];
+    }
+    return result;
+}
+
+- (BOOL)handleResignFirstResponder {
     NSString *before = [self inputState];
     [self commitPending];
     BOOL result = [super resignFirstResponder];
@@ -758,6 +928,12 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 }
 
 - (void)handleCommand:(SEL)selector {
+    if (self.inputFailureReason) {
+        NSString *fields = [NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"",
+            [self jsonEscapedString:NSStringFromSelector(selector)], [self jsonEscapedString:self.unhandledKey ?: @""]];
+        [self rejectCallbackAfterInputFailure:@"doCommandBySelector" fields:fields before:[self inputState]];
+        return;
+    }
     // A noop: command that no unhandled key accompanies is dropped below, and the record says so.
     BOOL dropped = !self.unhandledKey && selector == @selector(noop:);
     [self logInput:@"doCommandBySelector" fields:[NSString stringWithFormat:@"\"selector\":\"%@\",\"unhandledKey\":\"%@\"%@",
@@ -808,6 +984,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *fields = [NSString stringWithFormat:@"\"text\":%@,\"attributed\":%@,\"replacementRange\":%@",
         text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
         [string isKindOfClass:NSAttributedString.class] ? @"true" : @"false", [self jsonRange:range]];
+    if ([self rejectCallbackAfterInputFailure:@"insertText" fields:fields before:before]) return;
     if (!text) {
         [self logInput:@"insertText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
@@ -826,6 +1003,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             (unsigned long)range.location, (unsigned long)self.committedLength];
         [self failInput:reason where:"input method" text:[NSString stringWithFormat:@"%@: text \"%@\" replacement %@ state %@",
             reason, [self jsonEscapedString:text], [self jsonRange:range], [self inputState]]];
+        return;
     }
     [super insertText:string replacementRange:range];
     if (self.hasMarkedText) {
@@ -874,6 +1052,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         @"\"text\":%@,\"attributed\":%@,\"selectedRange\":%@,\"replacementRange\":%@",
         text ? [NSString stringWithFormat:@"\"%@\"", [self jsonEscapedString:text]] : @"null",
         attributed ? @"true" : @"false", [self jsonRange:selectedRange], [self jsonRange:replacementRange]];
+    if ([self rejectCallbackAfterInputFailure:@"setMarkedText" fields:fields before:before]) return;
     if (!text) {
         [self logInput:@"setMarkedText" fields:[fields stringByAppendingString:@",\"dropped\":\"not text\""] before:before];
         return;
@@ -886,6 +1065,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 - (void)unmarkText {
     BOOL opened = [self enterInput];
     NSString *before = [self inputState];
+    if ([self rejectCallbackAfterInputFailure:@"unmarkText" fields:@"" before:before]) {
+        [self leaveInput:opened];
+        return;
+    }
     BOOL wasUnmarking = self.unmarking;
     self.unmarking = YES;
     @try {
@@ -981,12 +1164,23 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     self.reportedSelectedRange = localSelected;
     [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":%@",
         [self jsonEscapedString:preedit], changed ? @"true" : @"false"] before:nil];
-    return [NSString stringWithFormat:@"{\"text\":\"%@\",\"markedRange\":%@,\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
+    NSString *snapshot = [NSString stringWithFormat:@"{\"text\":\"%@\",\"markedRange\":%@,\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
         [self jsonEscapedString:preedit], [self jsonRange:localMarked], [self jsonRange:localSelected]];
+    self.lastValidPreeditJSON = snapshot;
+    return snapshot;
 }
 
 // Reports the retained suffix and its exact AppKit composition and selection state.
 - (void)reportPreedit {
+    BOOL opened = [self enterInput];
+    @try {
+        [self handleReportPreedit];
+    } @finally {
+        [self leaveInput:opened];
+    }
+}
+
+- (void)handleReportPreedit {
     BOOL changed = NO;
     NSString *snapshot = [self preeditSnapshotJSON:&changed];
     if (!snapshot || !changed) return;
@@ -1403,10 +1597,12 @@ void sp_region_caret(void *handle, double x, double y, double w, double h) {
     view.caretHeight = h;
 }
 
+#ifdef SOKSAK_DIAGNOSTIC
 void sp_region_set_input_context(void *handle, void *context) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     ((SPImageRegion *)handle).givenInputContext = (NSTextInputContext *)context;
 }
+#endif
 
 void sp_region_text(void *handle, const char *utf8) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
@@ -1436,7 +1632,12 @@ void sp_region_frame(void *handle, double *out) {
 void sp_region_close(void *handle) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
-    [view commitPending];
+    BOOL opened = [view enterInput];
+    @try {
+        [view commitPending];
+    } @finally {
+        [view leaveInput:opened];
+    }
     view.closed = YES;
     view.event = NULL;
     NSView *clipView = view.superview;  // The clip view that sp_region_create made.

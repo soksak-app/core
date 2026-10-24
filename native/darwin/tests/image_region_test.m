@@ -77,36 +77,37 @@ static NSArray *reportsWithoutCids(NSArray<NSString *> *reports) {
     return plain;
 }
 
-// List of the committed strings of insert events after from.
+// List of committed insert actions in input transactions after from.
 static NSArray *committedTexts(NSUInteger from) {
     NSMutableArray *texts = [NSMutableArray array];
     for (NSUInteger i = from; i < collectedEvents.count; i++) {
         NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
             options:0 error:NULL];
-        if ([event[@"type"] isEqual:@"insert"]) [texts addObject:event[@"text"] ?: NSNull.null];
+        for (NSDictionary *action in event[@"actions"]) {
+            if ([action[@"type"] isEqual:@"insert"]) [texts addObject:action[@"text"] ?: NSNull.null];
+        }
     }
     return texts;
 }
 
-// Composition string of the last composition snapshot after from. nil if there is none.
+// Composition string of the last input transaction after from. nil if there is none.
 static NSString *lastPreedit(NSUInteger from) {
     NSString *text = nil;
     for (NSUInteger i = from; i < collectedEvents.count; i++) {
         NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
             options:0 error:NULL];
-        if ([event[@"type"] isEqual:@"compose"]) text = event[@"text"];
-        if ([event[@"type"] isEqual:@"insert"]) text = event[@"preedit"][@"text"];
+        if ([event[@"type"] isEqual:@"input"]) text = event[@"preedit"][@"text"];
     }
     return text;
 }
 
-// The last native composition report after from, including the retained text and its exact range state.
+// The final native preedit snapshot after from, including retained text and exact range state.
 static NSDictionary *lastComposeEvent(NSUInteger from) {
     NSDictionary *composition = nil;
     for (NSUInteger i = from; i < collectedEvents.count; i++) {
         NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
             options:0 error:NULL];
-        if ([event[@"type"] isEqual:@"compose"]) composition = event;
+        if ([event[@"type"] isEqual:@"input"]) composition = event[@"preedit"];
     }
     return composition;
 }
@@ -580,15 +581,19 @@ int main(int argc, char **argv) { @autoreleasepool {
             method_setImplementation(nativeMarkedRangeMethod, originalNativeMarkedRange);
             imp_removeBlock(invalidNativeMarkedRange);
             BOOL reportedInvalidMarkedRange = NO;
-            BOOL emittedInvalidCompose = NO;
+            BOOL preservedLastValidPreedit = NO;
             for (NSUInteger index = beforeInvalidMarkedRange; index < collectedEvents.count; index++) {
                 NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[index] dataUsingEncoding:NSUTF8StringEncoding]
                     options:0 error:NULL];
-                if ([event[@"type"] isEqual:@"error"] && [event[@"reason"] containsString:@"marked range"]) reportedInvalidMarkedRange = YES;
-                if ([event[@"type"] isEqual:@"compose"]) emittedInvalidCompose = YES;
+                for (NSDictionary *error in event[@"errors"]) {
+                    if ([error[@"reason"] containsString:@"marked range"]) reportedInvalidMarkedRange = YES;
+                }
+                if ([event[@"type"] isEqual:@"input"] && [(NSArray *)event[@"actions"] count] == 0
+                    && [event[@"preedit"][@"text"] isEqual:@"x"]
+                    && [event[@"preedit"][@"markedRange"][ @"length"] isEqual:@1]) preservedLastValidPreedit = YES;
             }
-            check(reportedInvalidMarkedRange && !emittedInvalidCompose,
-                @"TEST 8: an invalid native marked range reports an input error and emits no compose event");
+            check(reportedInvalidMarkedRange && preservedLastValidPreedit,
+                @"TEST 8: an invalid native marked range reports an error and retains the last valid preedit snapshot");
         }
         sp_region_close(invalidRangeRegion);
         void *unmarkRegion = sp_region_create(surface, "test8-unmark", testEvent, NULL);
@@ -606,9 +611,9 @@ int main(int argc, char **argv) { @autoreleasepool {
         for (NSUInteger index = beforeUnmarkState; index < collectedEvents.count; index++) {
             NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[index] dataUsingEncoding:NSUTF8StringEncoding]
                 options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"compose"]) {
+            if ([event[@"type"] isEqual:@"input"]) {
                 unmarkComposeCount++;
-                [unmarkComposeEvents addObject:event];
+                [unmarkComposeEvents addObject:event[@"preedit"]];
             }
         }
         check([unmarkView.string isEqual:@"c"] && !unmarkView.hasMarkedText
@@ -625,49 +630,64 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSUInteger beforeCommittedInsert = collectedEvents.count;
         [(id<NSTextInputClient>)atomicView insertText:@"X" replacementRange:NSMakeRange(NSNotFound, 0)];
         NSDictionary *committedInsert = nil;
-        NSUInteger composeReportsAfterInsert = 0;
+        NSUInteger transactionsAfterInsert = 0;
         for (NSUInteger i = beforeCommittedInsert; i < collectedEvents.count; i++) {
             NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
                 options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"insert"]) committedInsert = event;
-            if ([event[@"type"] isEqual:@"compose"]) composeReportsAfterInsert++;
+            if ([event[@"type"] isEqual:@"input"]) {
+                for (NSDictionary *action in event[@"actions"]) if ([action[@"type"] isEqual:@"insert"]) committedInsert = action;
+                committedInsert = committedInsert ? [[committedInsert mutableCopy] autorelease] : nil;
+                if (committedInsert) [(NSMutableDictionary *)committedInsert setObject:event[@"preedit"] forKey:@"preedit"];
+                transactionsAfterInsert++;
+            }
         }
         NSDictionary *insertPreedit = committedInsert[@"preedit"];
         check([committedInsert[@"text"] isEqual:@"abc"] && [insertPreedit[@"text"] isEqual:@"X"]
             && insertPreedit[@"markedRange"] == NSNull.null && insertPreedit[@"selectedRange"] != nil
             && insertPreedit[@"replacementRange"] == NSNull.null && [insertPreedit[@"attributed"] isEqual:@NO]
-            && composeReportsAfterInsert == 0,
-            [NSString stringWithFormat:@"TEST 8: one committed insert carries the resulting strict preedit snapshot without a duplicate compose report (got %@)",
+            && transactionsAfterInsert == 1,
+            [NSString stringWithFormat:@"TEST 8: one input transaction carries the committed insert and resulting strict preedit snapshot (got %@)",
                 [collectedEvents subarrayWithRange:NSMakeRange(beforeCommittedInsert, collectedEvents.count - beforeCommittedInsert)]]);
         NSUInteger beforeSamePreeditCommit = collectedEvents.count;
         [(id<NSTextInputClient>)atomicView insertText:@"X" replacementRange:NSMakeRange(NSNotFound, 0)];
         NSDictionary *samePreeditInsert = nil;
-        NSUInteger samePreeditComposeCount = 0;
+        NSUInteger samePreeditTransactionCount = 0;
         for (NSUInteger i = beforeSamePreeditCommit; i < collectedEvents.count; i++) {
             NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
                 options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"insert"]) samePreeditInsert = event;
-            if ([event[@"type"] isEqual:@"compose"]) samePreeditComposeCount++;
+            if ([event[@"type"] isEqual:@"input"]) {
+                for (NSDictionary *action in event[@"actions"]) if ([action[@"type"] isEqual:@"insert"]) samePreeditInsert = action;
+                if (samePreeditInsert) {
+                    samePreeditInsert = [[samePreeditInsert mutableCopy] autorelease];
+                    [(NSMutableDictionary *)samePreeditInsert setObject:event[@"preedit"] forKey:@"preedit"];
+                }
+                samePreeditTransactionCount++;
+            }
         }
         check([samePreeditInsert[@"text"] isEqual:@"X"] && [samePreeditInsert[@"preedit"][@"text"] isEqual:@"X"]
-            && samePreeditComposeCount == 0,
-            [NSString stringWithFormat:@"TEST 8: a new commit is sent when the retained preedit text is unchanged (got %@)",
+            && samePreeditTransactionCount == 1,
+            [NSString stringWithFormat:@"TEST 8: a new commit is sent once when retained preedit text is unchanged (got %@)",
                 [collectedEvents subarrayWithRange:NSMakeRange(beforeSamePreeditCommit, collectedEvents.count - beforeSamePreeditCommit)]]);
         NSUInteger beforeBackspace = collectedEvents.count;
         [atomicView setValue:@"{\"type\":\"key\",\"key\":\"Backspace\",\"shift\":false,\"alt\":false,\"ctrl\":false}" forKey:@"unhandledKey"];
         [(id<NSTextInputClient>)atomicView doCommandBySelector:@selector(deleteBackward:)];
         NSUInteger pendingInsertIndex = NSNotFound, backspaceIndex = NSNotFound;
+        NSUInteger insertActionIndex = NSNotFound, backspaceActionIndex = NSNotFound;
         NSDictionary *clearedPreedit = nil;
         for (NSUInteger i = beforeBackspace; i < collectedEvents.count; i++) {
             NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
                 options:0 error:NULL];
-            if ([event[@"type"] isEqual:@"insert"]) {
-                pendingInsertIndex = i;
-                clearedPreedit = event[@"preedit"];
+            if ([event[@"type"] isEqual:@"input"]) {
+                NSArray *actions = event[@"actions"];
+                for (NSUInteger actionIndex = 0; actionIndex < actions.count; actionIndex++) {
+                    NSDictionary *action = actions[actionIndex];
+                    if ([action[@"type"] isEqual:@"insert"]) { pendingInsertIndex = i; insertActionIndex = actionIndex; }
+                    if ([action[@"type"] isEqual:@"key"] && [action[@"key"] isEqual:@"Backspace"]) { backspaceIndex = i; backspaceActionIndex = actionIndex; }
+                }
+                if (pendingInsertIndex != NSNotFound) clearedPreedit = event[@"preedit"];
             }
-            if ([event[@"type"] isEqual:@"key"] && [event[@"key"] isEqual:@"Backspace"]) backspaceIndex = i;
         }
-        check(pendingInsertIndex != NSNotFound && backspaceIndex > pendingInsertIndex
+        check(pendingInsertIndex != NSNotFound && backspaceIndex == pendingInsertIndex && backspaceActionIndex > insertActionIndex
             && [clearedPreedit[@"text"] isEqual:@""] && clearedPreedit[@"markedRange"] == NSNull.null,
             [NSString stringWithFormat:@"TEST 8: clearing the committed suffix reports its empty preedit before the pending Backspace (got %@)",
                 [collectedEvents subarrayWithRange:NSMakeRange(beforeBackspace, collectedEvents.count - beforeBackspace)]]);
@@ -705,7 +725,12 @@ int main(int argc, char **argv) { @autoreleasepool {
                 NSDictionary *fields = event[@"fields"];
                 if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"setMarkedText"]) markedEvent = event;
                 if ([event[@"name"] isEqual:@"native.input.callback"] && [fields[@"call"] isEqual:@"insertText"]) insertedEvent = event;
-                if ([event[@"name"] isEqual:@"native.input.report"] && [fields[@"report"] containsString:@"\"type\":\"compose\""] && !composeReport) composeReport = event;
+                if ([event[@"name"] isEqual:@"native.input.report"]) {
+                    NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[fields[@"report"] dataUsingEncoding:NSUTF8StringEncoding]
+                        options:0 error:NULL];
+                    if ([payload[@"type"] isEqual:@"input"] && [payload[@"preedit"][@"text"] containsString:@"한"]
+                        && !composeReport) composeReport = event;
+                }
             }
             BOOL everyEventHasOneCid = captured.count > 0;
             for (NSDictionary *event in captured) {
@@ -726,7 +751,12 @@ int main(int argc, char **argv) { @autoreleasepool {
                 @"TEST 8: two callbacks of the input method are two inputs with two identifiers");
             NSString *composePage = nil;
             for (NSUInteger i = beforeCapture; i < collectedEvents.count; i++) {
-                if ([collectedEvents[i] containsString:@"\"type\":\"compose\""]) { composePage = collectedEvents[i]; break; }
+                NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+                    options:0 error:NULL];
+                if ([payload[@"type"] isEqual:@"input"] && [payload[@"preedit"][@"text"] containsString:@"한"]) {
+                    composePage = collectedEvents[i];
+                    break;
+                }
             }
             NSDictionary *pageEvent = composePage ? [NSJSONSerialization JSONObjectWithData:[composePage dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
             check(composeReport && [pageEvent[@"cids"] isEqualToArray:composeReport[@"cids"]],
@@ -753,9 +783,13 @@ int main(int argc, char **argv) { @autoreleasepool {
             check([inserted[@"call"] isEqual:@"insertText"] && [inserted[@"text"] isEqual:@"한글"]
                 && [inserted[@"replacementRange"][@"location"] isEqual:@0] && [inserted[@"replacementRange"][@"length"] isEqual:@1],
                 @"TEST 8: insertText is recorded with its text and its replacement range");
-            BOOL reportedCompose = NO;
-            for (NSString *report in reports) if ([report containsString:@"\"type\":\"compose\""] && [report containsString:@"\\ud55c"]) reportedCompose = YES;
-            check(reportedCompose, [NSString stringWithFormat:@"TEST 8: every report to the page is recorded as sent (got %@)", reports]);
+            BOOL reportedPreedit = NO;
+            for (NSString *report in reports) {
+                NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:[report dataUsingEncoding:NSUTF8StringEncoding]
+                    options:0 error:NULL];
+                if ([payload[@"type"] isEqual:@"input"] && [payload[@"preedit"][@"text"] containsString:@"한"]) reportedPreedit = YES;
+            }
+            check(reportedPreedit, [NSString stringWithFormat:@"TEST 8: the final preedit transaction is recorded as sent (got %@)", reports]);
         }
         [window makeFirstResponder:nil];
 
@@ -967,10 +1001,13 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 10: exactly 1 event for Up arrow (got %lu)", [collectedEvents count]]);
         if ([collectedEvents count] > 0) {
             NSString *eventStr = [collectedEvents objectAtIndex:0];
-            BOOL isKeyEvent = [eventStr rangeOfString:@"\"type\":\"key\""].location != NSNotFound;
+            NSDictionary *keyTransaction = [NSJSONSerialization JSONObjectWithData:[eventStr dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+            NSDictionary *keyAction = [keyTransaction[@"actions"] firstObject];
+            BOOL isKeyEvent = [keyTransaction[@"type"] isEqual:@"input"] && [keyAction[@"type"] isEqual:@"key"];
             BOOL hasKeyUp = [eventStr rangeOfString:@"\"key\":\"Up\""].location != NSNotFound;
             BOOL noInsert = [eventStr rangeOfString:@"\"insert\""].location == NSNotFound;
-            BOOL correctFlags = [eventStr rangeOfString:@"\"shift\":false,\"alt\":false,\"ctrl\":false"].location != NSNotFound;
+            BOOL correctFlags = [keyAction[@"shift"] isEqual:@NO] && [keyAction[@"alt"] isEqual:@NO]
+                && [keyAction[@"ctrl"] isEqual:@NO];
             check(isKeyEvent && hasKeyUp && noInsert && correctFlags,
                 [NSString stringWithFormat:@"TEST 10: event is correct key event (got: %@)", eventStr]);
         }
@@ -1246,10 +1283,11 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 13b: exactly 1 explicit error for unsupported Ctrl key (got %lu)", [collectedEvents count]]);
         if ([collectedEvents count] > 0) {
             NSString *eventStr = [collectedEvents objectAtIndex:0];
-            BOOL isError = [eventStr rangeOfString:@"\"type\":\"error\""].location != NSNotFound;
+            NSDictionary *errorTransaction = [NSJSONSerialization JSONObjectWithData:[eventStr dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+            BOOL isError = [errorTransaction[@"type"] isEqual:@"input"] && [(NSArray *)errorTransaction[@"errors"] count] == 1;
             BOOL hasKeyCode = [eventStr rangeOfString:@"native keyCode=104"].location != NSNotFound;
             BOOL hasScalar = [eventStr rangeOfString:@"character=U+3155"].location != NSNotFound;
-            BOOL noKeyFallback = [eventStr rangeOfString:@"\"type\":\"key\""].location == NSNotFound;
+            BOOL noKeyFallback = [(NSArray *)errorTransaction[@"actions"] count] == 0;
             check(isError && hasKeyCode && hasScalar && noKeyFallback,
                 [NSString stringWithFormat:@"TEST 13b: unsupported Ctrl input reports its physical key and character without forwarding a substitute (got: %@)", eventStr]);
         }

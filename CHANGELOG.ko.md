@@ -14,6 +14,17 @@
   전에 비어 있지 않은 run metadata 두 값을 함께 요구한다. 전달된 ID와 폴더는
   child에 그대로 유지된다. 소유 실행기 test는 10/10 통과하고 syntax,
   `make e2e-check`, `make docs-check`도 통과한다. Application은 실행하지 않았다.
+- F239-47-25: 가장 바깥 scope마다 native input callback을 transaction 하나로
+  보낸다. 기존 네 번째 모음 입력은 확정 insert와 두 글자 중간 preedit을 보낸 뒤
+  최종 세 글자 marked text를 별도 report로 보냈다. Region은 순서가 있는 insert,
+  key, command, focus action, 최종 strict preedit snapshot 하나, 별도 callback
+  error를 보낸다. Responder 변경, input-source 변경, close commit도 같은 경계를
+  사용한다. 확정 구간 replacement 오류는 native 문서 변경 전에 종료하고 같은
+  scope의 후속 callback을 상태 변경 없이 거부 기록한다. 새 scope는 실패 latch를
+  초기화한다. Diagnostic input-context 주입은 non-diagnostic build에서 제외하고
+  기본 context는 AppKit으로 둔다. Red와 Green은 F239-47-25에 기록했다. Transaction, Hangul,
+  decoration, image-region native test가 통과한다. Live Wails/Tauri acceptance는
+  F239-47-6에서 계속 진행한다.
 
 - F239-37-3: Files failure row를 검사하기 전에 reload된 page가 editor를
   disabled라고 보고하도록 요구한다. 보존된 Wails와 Tauri 실행은 failure row
