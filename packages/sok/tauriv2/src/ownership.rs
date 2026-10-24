@@ -5,7 +5,6 @@
 
 use std::fs::{self, File, TryLockError};
 use std::io::{Seek, SeekFrom, Write};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -70,14 +69,7 @@ pub(crate) fn own_configuration(config_dir: &Path) -> Result<Box<dyn FnOnce() + 
     let path = config_dir.join("process.lock");
     let system = platform::current()?;
     for _ in 0..LOCK_ATTEMPTS {
-        let file: File = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
+        let file: File = system.open_process_lock_file(&path)?;
         match file.try_lock() {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {

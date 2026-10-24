@@ -55,6 +55,14 @@ pub trait Platform {
     fn lock_file(&self, file: &std::fs::File) -> Result<(), String>;
     /// Whether the open file is the file at the path (the same device and the same index).
     fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String>;
+    /// Creates and restricts the event-log directory to the current user (mode 0700 on Unix).
+    fn prepare_log_directory(&self, path: &std::path::Path) -> Result<(), String>;
+    /// Creates a new event-log file for appending with private access (mode 0600 on Unix).
+    fn create_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String>;
+    /// Opens an event-log file for appending, creating it with private access when absent.
+    fn append_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String>;
+    /// Opens or creates the configuration ownership lock with private access (mode 0600 on Unix).
+    fn open_process_lock_file(&self, path: &std::path::Path) -> Result<std::fs::File, String>;
     /// Starts a new instance of the application bundle with the arguments. It activates the new instance only when
     /// activate is set.
     fn open_application(

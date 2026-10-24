@@ -44,6 +44,34 @@ impl Platform for Windows {
         Err("file identity is not implemented on windows".into())
     }
 
+    fn prepare_log_directory(&self, path: &std::path::Path) -> Result<(), String> {
+        Err(format!(
+            "event log directory {} is not implemented on windows",
+            path.display()
+        ))
+    }
+
+    fn create_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        Err(format!(
+            "event log file {} is not implemented on windows",
+            path.display()
+        ))
+    }
+
+    fn append_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        Err(format!(
+            "event log file {} is not implemented on windows",
+            path.display()
+        ))
+    }
+
+    fn open_process_lock_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        Err(format!(
+            "process lock file {} is not implemented on windows",
+            path.display()
+        ))
+    }
+
     fn paths_dir(&self) -> Result<PathBuf, String> {
         Err("path entries are not implemented on windows".into())
     }

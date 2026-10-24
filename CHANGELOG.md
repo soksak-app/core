@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-48-4: Move private event-log and process-lock file operations behind
+  the Tauri CLI platform interface. Darwin and Linux keep the existing
+  0700/0600 behavior; Windows reports explicit unsupported errors, consistent
+  with the private-file platform contract. The unchanged Windows process-wait
+  target failed to compile on Unix-only filesystem extensions. The Windows
+  `process_wait_windows` target and `sok` binary now type-check. Focused event
+  directory, event-file and process-lock permission tests pass 3/3 on macOS.
+  The Windows process-wait test has not run on Windows; the checklist item
+  remains active.
+
 - F239-47-30-3-1: Verify the display-link artifact through the E2E consumer.
   The focused helper tests pass 7/7, and the capture-stop case passes on both
   hosts. The consumer preserves available metadata with 24 Wails and 22 Tauri
