@@ -84,7 +84,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation test-activation-backspace benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -285,6 +285,12 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 	@$(BUILD)/document_view_test --activation
 	@$(BUILD)/image_region_test --activation
 	@$(BUILD)/image_region_ime_test
+
+# Focused Korean IME comparison. This activates the application, changes the selected input source,
+# and sends eight k keys, Backspace, and Space to an AppKit reference and an image region in one window.
+# Run only with approval for an activation-tier input check.
+test-activation-backspace: $(BUILD)/image_region_ime_test
+	@$(BUILD)/image_region_ime_test --backspace-trace
 
 repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac

@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-2: Add `test-activation-backspace` as a focused Korean IME
+  comparison between an AppKit text view and an image region in one window,
+  plus an e2e terminal case for both hosts. The native case records callback
+  batches and compares document/selection with committed text and preedit; the
+  e2e case records terminal states and each presented frame. Neither case is
+  run because it activates the application and changes the selected source.
+  No production correction is established.
+
 - F239-47-5: Replace the Files identifiers in core Workbench tree and
   section-address fixtures with synthetic identifiers. The fixtures still
   cover root keys, multiple trees across redraw, exact status-line resolution

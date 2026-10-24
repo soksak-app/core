@@ -8,13 +8,16 @@
 // and then checks that the image region commits exactly the order reported by the user (Hangul after ddd).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "event_ring.h"
 #import "image_region.h"
 #import "input_inject.h"
 #import "input_source.h"
+#import "support/records.h"
 #import "webview_geometry.h"
 
 static NSString *const ABC = @"com.apple.keylayout.ABC";
 static NSString *const KOREAN_2SET = @"com.apple.inputmethod.Korean.2SetKorean";
+static NSDate *traceDeadline = nil;
 
 static int failures = 0;
 
@@ -33,7 +36,9 @@ static void regionEvent(void *context, const char *json) {
 
 // Takes and processes application events while waiting. Activation and input method responses arrive as events.
 static BOOL pump(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    NSDate *localDeadline = [NSDate dateWithTimeIntervalSinceNow:10];
+    NSDate *deadline = traceDeadline && [traceDeadline compare:localDeadline] == NSOrderedAscending
+        ? traceDeadline : localDeadline;
     while (!done() && deadline.timeIntervalSinceNow > 0) {
         NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
             untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
@@ -52,35 +57,40 @@ static NSString *currentSourceID(void) {
 // The control text view. It records the callbacks and ranges that the input method sent, unchanged.
 @interface SPRecordingTextView : NSTextView
 @property(retain) NSMutableArray *calls;
+- (void)recordCall:(NSString *)call;
 @end
 @implementation SPRecordingTextView
+- (void)recordCall:(NSString *)call {
+    [self.calls addObject:[NSString stringWithFormat:@"%@ => document %@ marked %@ selected %@", call, self.string,
+        self.hasMarkedText ? NSStringFromRange(self.markedRange) : @"none", NSStringFromRange(self.selectedRange)]];
+}
 - (void)insertText:(id)string replacementRange:(NSRange)range {
-    [self.calls addObject:[NSString stringWithFormat:@"insert(%@, replace %@)",
-        [string isKindOfClass:NSAttributedString.class] ? [string string] : string, NSStringFromRange(range)]];
     [super insertText:string replacementRange:range];
+    [self recordCall:[NSString stringWithFormat:@"insert(%@, replace %@)",
+        [string isKindOfClass:NSAttributedString.class] ? [string string] : string, NSStringFromRange(range)]];
 }
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selected replacementRange:(NSRange)range {
-    [self.calls addObject:[NSString stringWithFormat:@"mark(%@, selected %@, replace %@)",
+    [super setMarkedText:string selectedRange:selected replacementRange:range];
+    [self recordCall:[NSString stringWithFormat:@"mark(%@, selected %@, replace %@)",
         [string isKindOfClass:NSAttributedString.class] ? [string string] : string,
         NSStringFromRange(selected), NSStringFromRange(range)]];
-    [super setMarkedText:string selectedRange:selected replacementRange:range];
 }
 - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actual {
     NSAttributedString *result = [super attributedSubstringForProposedRange:range actualRange:actual];
-    [self.calls addObject:[NSString stringWithFormat:@"read(%@) -> %@", NSStringFromRange(range), result.string]];
+    [self recordCall:[NSString stringWithFormat:@"read(%@) -> %@", NSStringFromRange(range), result.string]];
     return result;
 }
 - (void)unmarkText {
-    [self.calls addObject:@"unmark"];
     [super unmarkText];
+    [self recordCall:@"unmark"];
 }
 - (void)doCommandBySelector:(SEL)selector {
-    [self.calls addObject:NSStringFromSelector(selector)];
     [super doCommandBySelector:selector];
+    [self recordCall:NSStringFromSelector(selector)];
 }
 - (void)keyDown:(NSEvent *)event {
-    [self.calls addObject:[NSString stringWithFormat:@"key(%@)", event.charactersIgnoringModifiers]];
     [super keyDown:event];
+    [self recordCall:[NSString stringWithFormat:@"key(%@)", event.charactersIgnoringModifiers]];
 }
 - (void)dealloc { [_calls release]; [super dealloc]; }
 @end
@@ -210,10 +220,202 @@ static void typeDddHangul(NSWindow *window, NSTextInputContext *context, NSUInte
     for (NSString *key in @[@"g", @"k", @"s", @"r", @"m", @"f", @"Space"]) typeKey(window, key, answered);
 }
 
+static BOOL pumpUntil(BOOL (^done)(void), NSDate *deadline) {
+    while (!done() && deadline.timeIntervalSinceNow > 0) {
+        NSDate *pollUntil = [NSDate dateWithTimeIntervalSinceNow:MIN(0.01, deadline.timeIntervalSinceNow)];
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:pollUntil
+            inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
+    return done();
+}
+
+static BOOL typeKeyUntil(NSWindow *window, NSString *key, NSUInteger (^answered)(void), NSDate *deadline) {
+    if (deadline.timeIntervalSinceNow <= 0) {
+        check(NO, [NSString stringWithFormat:@"the bounded trace deadline expired before %@", key]);
+        return NO;
+    }
+    NSUInteger before = answered();
+    sp_input_result down = sp_input_key(window, key.UTF8String, NULL, 0, true);
+    sp_input_result up = sp_input_key(window, key.UTF8String, NULL, 0, false);
+    if (down != SP_INPUT_DELIVERED || up != SP_INPUT_DELIVERED) {
+        check(NO, [NSString stringWithFormat:@"the bounded trace sends %@ (down %@, up %@)", key,
+            @(down), @(up)]);
+        return NO;
+    }
+    BOOL received = pumpUntil(^BOOL { return answered() > before; }, deadline);
+    check(received, [NSString stringWithFormat:@"the bounded trace receives %@ before its shared deadline", key]);
+    return received;
+}
+
+static void selectSourceUntil(NSString *source, NSTextInputContext *context, NSDate *deadline) {
+    check(sp_input_source_select(source.UTF8String), [NSString stringWithFormat:@"%@ is selected for the bounded trace", source]);
+    check(pumpUntil(^BOOL { return [context.selectedKeyboardInputSource isEqual:source]; }, deadline),
+        [NSString stringWithFormat:@"%@ reaches the current input context before the shared deadline", source]);
+}
+
+static NSDictionary *textViewState(SPRecordingTextView *view) {
+    return @{@"document": view.string ?: @"", @"marked": @(view.hasMarkedText),
+        @"markedRange": NSStringFromRange(view.markedRange), @"selectedRange": NSStringFromRange(view.selectedRange),
+        @"callbacks": [[view.calls copy] autorelease]};
+}
+
+static NSDictionary *regionState(NSUInteger from) {
+    NSString *committed = [valuesOfType(@"insert", from) componentsJoinedByString:@""];
+    NSString *preedit = [valuesOfType(@"compose", from) lastObject] ?: @"";
+    NSDictionary *composition = nil;
+    for (NSUInteger index = from; index < events.count; index++) {
+        if ([events[index][@"type"] isEqual:@"compose"]) composition = events[index];
+    }
+    NSDictionary *selected = composition[@"selectedRange"];
+    NSString *selectedRange = @"{location=not-found, length=0}";
+    if ([selected isKindOfClass:NSDictionary.class]) {
+        NSRange global = NSMakeRange(committed.length + [selected[@"location"] unsignedIntegerValue],
+            [selected[@"length"] unsignedIntegerValue]);
+        selectedRange = NSStringFromRange(global);
+    }
+    return @{@"committed": committed ?: @"", @"preedit": preedit,
+        @"document": [NSString stringWithFormat:@"%@%@", committed ?: @"", preedit],
+        @"selectedRange": selectedRange,
+        @"markedRange": preedit.length ? NSStringFromRange(NSMakeRange(committed.length, preedit.length))
+            : @"{location=not-found, length=0}",
+        @"reports": [events subarrayWithRange:NSMakeRange(from, events.count - from)]};
+}
+
+static void printTrace(NSString *label, NSString *key, NSDictionary *control, NSDictionary *region, NSArray *native) {
+    NSDictionary *trace = @{@"case": label, @"key": key, @"control": control, @"region": region, @"native": native};
+    NSData *data = [NSJSONSerialization dataWithJSONObject:trace options:NSJSONWritingFragmentsAllowed error:NULL];
+    printf("TRACE: %s\n", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] UTF8String]);
+}
+
+static void checkRegionKeyRecords(NSArray<NSDictionary *> *records, NSString *key) {
+    NSMutableArray<NSDictionary *> *keyDown = [NSMutableArray array];
+    NSMutableArray<NSDictionary *> *reports = [NSMutableArray array];
+    for (NSDictionary *record in records) {
+        if ([record[@"name"] isEqual:@"native.input.key_down"]) [keyDown addObject:record];
+        if ([record[@"name"] isEqual:@"native.input.report"]) [reports addObject:record];
+    }
+    check(keyDown.count == 1, [NSString stringWithFormat:@"image region records one native key-down for %@ (got %@)", key, keyDown]);
+    check(reports.count > 0, [NSString stringWithFormat:@"image region records its report for %@ (records %@)", key, records]);
+    if (keyDown.count != 1) return;
+    for (NSDictionary *report in reports) {
+        check([report[@"cids"] isEqual:keyDown.firstObject[@"cids"]],
+            [NSString stringWithFormat:@"%@ callback report retains the key correlation identifier (key %@, report %@)",
+                key, keyDown.firstObject, report]);
+    }
+}
+
+// The focused activation-tier reproduction. It compares the system input method's full text-view document and selection
+// with the image-region's committed and preedit reports after each physical-layout key.
+static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void *region) {
+    NSDate *deadline = traceDeadline;
+    int8_t levels[] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(levels), @"native input trace records are enabled for the bounded run");
+    NSMutableArray<NSDictionary *> *controlStates = [NSMutableArray array];
+    NSMutableArray<NSArray<NSDictionary *> *> *controlNative = [NSMutableArray array];
+    NSUInteger (^controlAnswered)(void) = ^NSUInteger {
+        return [control.calls indexesOfObjectsPassingTest:^BOOL(NSString *call, NSUInteger index, BOOL *stop) {
+            return ![call hasPrefix:@"key("];
+        }].count;
+    };
+
+    [control.inputContext discardMarkedText];
+    control.string = @"";
+    [control.calls removeAllObjects];
+    selectSourceUntil(ABC, control.inputContext, deadline);
+    selectSourceUntil(KOREAN_2SET, control.inputContext, deadline);
+    if (![control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]) return;
+    for (NSUInteger index = 0; index < 8 && deadline.timeIntervalSinceNow > 0; index++) {
+        __block BOOL received = NO;
+        NSArray *native = capturedEvents(^{ received = typeKeyUntil(window, @"k", controlAnswered, deadline); });
+        NSDictionary *controlStateNow = textViewState(control);
+        [controlStates addObject:controlStateNow];
+        [controlNative addObject:native];
+        printTrace(@"AppKit reference", @"k", controlStateNow, @{}, native);
+        if (!received) break;
+    }
+    __block BOOL backspaceReceived = NO;
+    NSArray *controlBackspace = capturedEvents(^{
+        backspaceReceived = typeKeyUntil(window, @"Backspace", controlAnswered, deadline);
+    });
+    NSDictionary *controlAfterBackspace = textViewState(control);
+    [controlStates addObject:controlAfterBackspace];
+    [controlNative addObject:controlBackspace];
+    printTrace(@"AppKit reference", @"Backspace", controlAfterBackspace, @{}, controlBackspace);
+    __block BOOL spaceReceived = NO;
+    NSArray *controlSpace = capturedEvents(^{ spaceReceived = typeKeyUntil(window, @"Space", controlAnswered, deadline); });
+    NSDictionary *controlAfterSpace = textViewState(control);
+    [controlStates addObject:controlAfterSpace];
+    [controlNative addObject:controlSpace];
+    printTrace(@"AppKit reference", @"Space", controlAfterSpace, @{}, controlSpace);
+
+    sp_region_focus(region);
+    NSTextInputContext *regionContext = ((NSView *)region).inputContext;
+    check(pumpUntil(^BOOL { return NSTextInputContext.currentInputContext == regionContext; }, deadline),
+        @"the image region input context becomes current before the trace");
+    selectSourceUntil(ABC, regionContext, deadline);
+    selectSourceUntil(KOREAN_2SET, regionContext, deadline);
+    if (![regionContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]) return;
+    [events removeAllObjects];
+    NSMutableArray<NSDictionary *> *regionStates = [NSMutableArray array];
+    NSMutableArray<NSArray<NSDictionary *> *> *regionNative = [NSMutableArray array];
+    NSUInteger regionStart = events.count;
+    NSUInteger (^regionAnswered)(void) = ^NSUInteger { return events.count; };
+    for (NSUInteger index = 0; index < 8 && deadline.timeIntervalSinceNow > 0; index++) {
+        __block BOOL received = NO;
+        NSArray *native = capturedEvents(^{ received = typeKeyUntil(window, @"k", regionAnswered, deadline); });
+        NSDictionary *state = regionState(regionStart);
+        checkRegionKeyRecords(native, @"k");
+        [regionStates addObject:state];
+        [regionNative addObject:native];
+        printTrace(@"image region", @"k", @{}, state, native);
+        if (!received) break;
+    }
+    __block BOOL regionBackspaceReceived = NO;
+    NSArray *regionBackspace = capturedEvents(^{
+        regionBackspaceReceived = typeKeyUntil(window, @"Backspace", regionAnswered, deadline);
+    });
+    NSDictionary *regionAfterBackspace = regionState(regionStart);
+    checkRegionKeyRecords(regionBackspace, @"Backspace");
+    [regionStates addObject:regionAfterBackspace];
+    [regionNative addObject:regionBackspace];
+    printTrace(@"image region", @"Backspace", @{}, regionAfterBackspace, regionBackspace);
+    __block BOOL regionSpaceReceived = NO;
+    NSArray *regionSpace = capturedEvents(^{ regionSpaceReceived = typeKeyUntil(window, @"Space", regionAnswered, deadline); });
+    NSDictionary *regionAfterSpace = regionState(regionStart);
+    checkRegionKeyRecords(regionSpace, @"Space");
+    [regionStates addObject:regionAfterSpace];
+    [regionNative addObject:regionSpace];
+    printTrace(@"image region", @"Space", @{}, regionAfterSpace, regionSpace);
+
+    check(controlStates.count == 10 && regionStates.count == 10,
+        [NSString stringWithFormat:@"both inputs complete eight k keys, Backspace, and Space before the shared deadline (reference %@ states, region %@ states)",
+            @(controlStates.count), @(regionStates.count)]);
+    check(backspaceReceived && spaceReceived && regionBackspaceReceived && regionSpaceReceived,
+        @"both controls answer Backspace and Space before the shared deadline");
+    NSUInteger count = MIN(controlStates.count, regionStates.count);
+    for (NSUInteger index = 0; index < count; index++) {
+        NSDictionary *reference = controlStates[index];
+        NSDictionary *actual = regionStates[index];
+        BOOL hasPreedit = [actual[@"preedit"] length] > 0;
+        check([reference[@"document"] isEqual:actual[@"document"]]
+            && [reference[@"marked"] boolValue] == hasPreedit
+            && (!hasPreedit || ([reference[@"markedRange"] isEqual:actual[@"markedRange"]]
+                && [reference[@"selectedRange"] isEqual:actual[@"selectedRange"]])),
+            [NSString stringWithFormat:@"input state %lu agrees between AppKit and image region (reference %@; region %@)",
+                (unsigned long)index + 1, reference, actual]);
+    }
+    check(controlStates.count == 10 && regionStates.count == 10,
+        [NSString stringWithFormat:@"the trace records a callback and native event batch for every key (reference %@, region %@)",
+            @([controlNative count]), @([regionNative count])]);
+}
+
 // tests/support/no_activation.m: this check activates the application in make test-activation.
 void sp_test_declare_activation(void);
 
-int main(void) { @autoreleasepool {
+int main(int argc, const char *argv[]) { @autoreleasepool {
+    BOOL focusedTrace = argc == 2 && strcmp(argv[1], "--backspace-trace") == 0;
+    if (focusedTrace) traceDeadline = [NSDate dateWithTimeIntervalSinceNow:55];
     sp_test_declare_activation();
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -226,6 +428,11 @@ int main(void) { @autoreleasepool {
         return 1;
     }
     NSRunningApplication *previousApp = [[NSWorkspace.sharedWorkspace.frontmostApplication retain] autorelease];
+    if (focusedTrace) {
+        printf("PRECHECK: inputSource=%s frontmostPid=%d frontmostBundle=%s window=single-key-window budgetSeconds=55 cleanupSeconds=5\n",
+            previousSource.UTF8String, previousApp.processIdentifier,
+            previousApp.bundleIdentifier.UTF8String ?: "unknown");
+    }
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 100, 500, 400)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -243,6 +450,13 @@ int main(void) { @autoreleasepool {
 
     if (!sp_input_source_select(KOREAN_2SET.UTF8String)) {
         fprintf(stderr, "FAIL: the %s input source is not enabled\n", KOREAN_2SET.UTF8String);
+        if (focusedTrace) {
+            sp_region_close(region);
+            [window close];
+            [window release];
+            if (previousApp) [previousApp activateWithOptions:0];
+            return 1;
+        }
         return 1;
     }
     check(pump(^BOOL { return [currentSourceID() isEqual:KOREAN_2SET]; }),
@@ -267,6 +481,24 @@ int main(void) { @autoreleasepool {
     [window makeFirstResponder:control];
     pump(^BOOL { return NSTextInputContext.currentInputContext == control.inputContext
         && [control.inputContext.selectedKeyboardInputSource isEqual:KOREAN_2SET]; });
+    if (focusedTrace) {
+        backspaceTrace(window, control, region);
+        traceDeadline = nil;
+        NSDate *cleanupDeadline = [NSDate dateWithTimeIntervalSinceNow:5];
+        check(sp_input_source_select(previousSource.UTF8String), @"the previous input source is restored");
+        check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
+            @"the previous input source is active before cleanup ends");
+        sp_region_close(region);
+        [window close];
+        [window release];
+        if (previousApp) {
+            [previousApp activateWithOptions:0];
+            check(pumpUntil(^BOOL { return NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier
+                == previousApp.processIdentifier; }, cleanupDeadline),
+                @"the frontmost application is restored before cleanup ends");
+        }
+        return failures ? 1 : 0;
+    }
     NSUInteger (^controlAnswered)(void) = ^NSUInteger {
         return [control.calls indexesOfObjectsPassingTest:^BOOL(NSString *call, NSUInteger index, BOOL *stop) {
             return ![call hasPrefix:@"key("];

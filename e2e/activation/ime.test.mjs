@@ -273,4 +273,114 @@ for (const app of Object.values(APPS)) {
     await readScreenUntil(s, surface, (lines) => lines.some((line) => line.trimEnd().endsWith("ddd한글은")),
       "committed Korean text did not reach the PTY before another key");
   });
+
+  test(`${app.name}: eight Korean vowels and one Backspace retain an exact input trace`,
+    { timeout: 60000 }, async (t) => {
+      const s = await open(t, app);
+      await fresh(s);
+      const [terminal] = await ensureTerminals(s, 1);
+      const surface = terminal.surface;
+      await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
+        "the shell prompt did not appear before the input trace");
+
+      const original = (await s.request("diagnostics.input.source")).current;
+      s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
+      await s.keepPointerOutside();
+      const view = await s.rect("terminal.view", undefined, surface);
+      const x = view.document.x + view.x + view.width / 2;
+      const y = view.document.y + view.y + view.height / 2;
+      await s.pointer(x, y, "move", { activate: true });
+      await s.click(x, y);
+      await s.until("host.window", (host) => host.active === true &&
+        host.regions.some((region) => region.surface === surface && region.focused),
+      "the terminal did not receive focus in the active key window");
+      assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
+        `the ${KOREAN_2SET} input source is not enabled`);
+
+      let traceActive = false;
+      const traces = [];
+      const startTrace = async () => {
+        const result = await s.run("terminal.ime.trace", { action: "start" }, surface);
+        assert.deepEqual(result, { enabled: true, overflow: false, entries: [] });
+        traceActive = true;
+      };
+      const stopTrace = async (key) => {
+        const result = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+        traceActive = false;
+        assert.equal(result.overflow, false, `${key}: IME trace overflowed`);
+        traces.push({ key, entries: result.entries });
+        t.diagnostic(`${app.name}: CALLBACKS ${JSON.stringify({ key, entries: result.entries })}`);
+        return result.entries;
+      };
+      s.cleanup(async () => {
+        if (traceActive) await stopTrace("cleanup");
+      });
+
+      const observations = [];
+      const observe = async (key, beforeCompose) => {
+        const screen = await presentedScreen(s, surface);
+        const compose = await s.get("terminal.compose", surface);
+        const cursor = await s.get("terminal.cursor", surface);
+        const host = await s.get("host.window");
+        const region = host.regions.find((item) => item.surface === surface && item.name === "view");
+        assert.ok(region?.frame && region.presented,
+          `${key}: terminal image region has no frame presentation: ${JSON.stringify(region)}`);
+        const observation = {
+          key,
+          beforeCompose,
+          compose,
+          cursor,
+          screen: textLines(screen),
+          frame: screen.frame,
+          presented: region.presented,
+          nativeFrame: region.frame,
+        };
+        observations.push(observation);
+        t.diagnostic(`${app.name}: INPUT ${JSON.stringify(observation)}`);
+      };
+
+      await s.until("terminal.compose", (compose) => compose.text === "",
+        "the terminal started with a nonempty preedit", { surface });
+      for (let index = 0; index < 8; index++) {
+        const before = await s.get("terminal.compose", surface);
+        await startTrace();
+        try {
+          await s.press("k");
+          await s.until("terminal.compose", (compose) => compose.text !== before.text,
+            `Korean vowel key ${index + 1} did not change the preedit`, { surface });
+        } finally {
+          await stopTrace(`k-${index + 1}`);
+        }
+        await observe("k", before);
+      }
+
+      const beforeBackspace = await s.get("terminal.compose", surface);
+      const cursorBeforeBackspace = await s.get("terminal.cursor", surface);
+      await startTrace();
+      try {
+        await s.press("Backspace");
+        await s.until("terminal.cursor", (cursor) => JSON.stringify(cursor) !== JSON.stringify(cursorBeforeBackspace),
+          "Backspace produced no terminal cursor or preedit update", { surface });
+      } finally {
+        await stopTrace("Backspace");
+      }
+      await observe("Backspace", beforeBackspace);
+
+      const beforeSpace = await s.get("terminal.compose", surface);
+      const cursorBeforeSpace = await s.get("terminal.cursor", surface);
+      await startTrace();
+      try {
+        await s.press("Space");
+        await s.until("terminal.cursor", (cursor) => JSON.stringify(cursor) !== JSON.stringify(cursorBeforeSpace),
+          "Space produced no terminal cursor update", { surface });
+        await s.until("terminal.compose", (compose) => compose.text === "",
+          "Space did not end the remaining preedit", { surface });
+      } finally {
+        await stopTrace("Space");
+      }
+      await observe("Space", beforeSpace);
+      assert.equal(observations.length, 10, "the trace omitted an input state or presented frame");
+      assert.equal(traces.length, 10, "the trace omitted a native callback batch");
+      t.diagnostic(`${app.name}: input batches ${JSON.stringify(traces)}`);
+    });
 }
