@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-8: Focused native input-source 복원 검사를 위한 추적 repeat target을
+  추가한다. 기존 native `repeat` target은 `--backspace-trace` 인자를 전달하지
+  못한다. `repeat-activation-backspace`는 여덟 번의 k, Backspace, Space 전체
+  검사를 별도 child process로 실행하고 각 결과를 기록하며 첫 실패에서 멈춘다.
+  Owning test는 제어된 실행 파일로 인자 전달과 첫 실패 중단을 검증한다. IME
+  acceptance run은 아직 실행하지 않았다.
+
 - F239-48-3-1: fully qualified `tauri::ipc::Channel<T>`만 framework가
   decode하는 command argument로 취급한다. Tauri 2.12.1은 channel에
   `CommandArg`를 구현하고 JavaScript channel id에서 주입하므로 page JSON

@@ -65,6 +65,8 @@
 #                         after a simulated warn memory pressure of 10 seconds
 #   make repeat TEST=<name>_test COUNT=<n>
 #                         runs one check of the test target n times in a row and reports the run number and the system load at the first failure
+#   make repeat-activation-backspace COUNT=<n>
+#                         runs the focused eight-k, Backspace and Space activation target in separate processes, stopping at the first failure
 #   make repeat-suite COUNT=<n>
 #                         runs the whole test target n times in a row and reports the run number and the system load at the first failure
 
@@ -84,7 +86,7 @@ FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framewor
 MINIMUM    := -mmacosx-version-min=14.4
 CFLAGS     := -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: all test test-activation test-view-focus-restore test-activation-backspace test-activation-backspace-reference test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace test-activation-backspace-reference test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -297,6 +299,15 @@ test-view-focus-restore: $(BUILD)/view_focus_test
 # Run only with approval for an activation-tier input check.
 test-activation-backspace: $(BUILD)/image_region_ime_test
 	@$(BUILD)/image_region_ime_test --backspace-trace
+
+# Repeat only the focused activation variant. The generic repeat target cannot pass arguments to its executable.
+repeat-activation-backspace: $(BUILD)/image_region_ime_test
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-activation-backspace requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+	@i=1; while [ $$i -le $(COUNT) ]; do \
+	  echo "START: image_region_ime_test --backspace-trace run $$i of $(COUNT)"; \
+	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) image_region_ime_test,--backspace-trace || { echo "FAIL: image_region_ime_test --backspace-trace run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
+	  i=$$((i + 1)); \
+	done; echo "PASS: image_region_ime_test --backspace-trace passed $(COUNT) consecutive runs"
 
 test-activation-backspace-reference: $(BUILD)/ime_reference_state_test
 	@$(BUILD)/ime_reference_state_test

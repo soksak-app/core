@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-8: Add a tracked repeat target for the focused native input-source
+  restoration check. The generic native `repeat` target cannot pass the
+  `--backspace-trace` argument. `repeat-activation-backspace` runs each complete
+  eight-k, Backspace and Space case in a separate child process, records each
+  result, and stops at the first failure. Its owning test verifies argument
+  forwarding and first-failure stopping with a controlled executable. The IME
+  acceptance run remains pending.
+
 - F239-48-3-1: Treat only the fully qualified `tauri::ipc::Channel<T>` as a
   framework-decoded command argument. Tauri 2.12.1 implements `CommandArg` for
   this channel and injects it from the JavaScript channel id; it is not a page
