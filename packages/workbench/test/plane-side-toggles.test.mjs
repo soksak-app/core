@@ -39,6 +39,8 @@ test("a draw keeps the pressed card header fold control in the document", { time
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     mountSurface: () => Promise.resolve(),
     disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
   } });

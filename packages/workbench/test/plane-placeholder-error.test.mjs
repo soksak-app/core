@@ -58,6 +58,8 @@ test("a placeholder whose install state cannot be read is an error shown once, a
   // The test does not load surface modules. The placeholder joins the slot of its tab, and the mounted surface of the registered plugin is only recorded.
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     mountSurface: () => Promise.resolve(),
     disposeSurface: () => Promise.resolve(), focusSurface: () => true,
     placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),

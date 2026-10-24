@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F212.10-core-3-12: 초기 project context가 확정되고 레이아웃을 불러올 때까지
+  첫 native view composition과 background sidecar open을 보류한다. Project open이
+  거부되면 library 정리 뒤 gate를 열고, page initialization 실패는 gate를 reject한다.
+  Focused owner test는 6/6 통과했으며 application runtime acceptance는 대기 중이다.
+
 - F239-47-32: Native input transaction이 callback action과 최종 preedit을
   한 번의 표시 단위로 묶지만, 비동기 PTY output은 이후 event와 frame으로
   도착할 수 있음을 명확히 한다. 공개 macOS callback batching 구현을 비규범적

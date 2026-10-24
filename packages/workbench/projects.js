@@ -24,6 +24,11 @@ let writing = Promise.resolve();
 let refreshing = Promise.resolve();
 /* Project that was drawn on the first screen and is not activated yet. The activation of initialise takes it over. */
 let begun = null;
+let initialContextPending = false;
+let initialContextFailed = false;
+let initialContextPromise = Promise.resolve();
+let resolveInitialContext = null;
+let rejectInitialContext = null;
 // The tab state store of the memory saver (docs/spec/projects.md#persistence), opened by initialise.
 let tabStates = null;
 let tabSessions = null;
@@ -45,6 +50,40 @@ export const tabSessionStore = () => tabSessions;
 export const tabStatesReady = () => tabStatesTried;
 /** Resolves with whether the tab state store opened; callers that place startup views must reject a failed open. */
 export const tabStatesOpened = () => tabStatesOpenResult;
+/** Waits until the first project layout has committed its context or has been cleared back to the library. */
+export const waitForInitialProjectContext = () => initialContextPromise;
+export const initialProjectContextReady = () => !initialContextPending && !initialContextFailed;
+export const initialProjectContextFailed = () => initialContextFailed;
+
+function prepareInitialProjectContext(pending) {
+  initialContextPending = pending;
+  initialContextFailed = false;
+  resolveInitialContext = null;
+  rejectInitialContext = null;
+  if (!pending) {
+    initialContextPromise = Promise.resolve();
+    return;
+  }
+  initialContextPromise = new Promise((resolve, reject) => {
+    resolveInitialContext = resolve;
+    rejectInitialContext = reject;
+  });
+  // A failed page initialisation is also consumed by the mounted view and background-session gates.
+  // Attach a handler here so a page with no native consumer does not create an unhandled rejection.
+  initialContextPromise.catch(() => {});
+}
+
+function finishInitialProjectContext(error, rejected = false) {
+  if (!initialContextPending) return;
+  initialContextPending = false;
+  initialContextFailed = rejected;
+  const resolve = resolveInitialContext;
+  const reject = rejectInitialContext;
+  resolveInitialContext = null;
+  rejectInitialContext = null;
+  if (rejected) reject(error);
+  else resolve();
+}
 
 /** The tab ids of the layouts of all spaces of project. */
 function projectTabs(project) {
@@ -146,6 +185,7 @@ export function begin(snapshot) {
       // silent: for a layout that the plane cannot open, the activation of initialise reports the error and the window stays at the library.
     }
   }
+  prepareInitialProjectContext(Boolean(opened));
   // default: when no project was opened, the settings have no project either.
   beginSettings(snapshot, opened?.id ?? null);
   if (!opened) {
@@ -167,6 +207,15 @@ export function begin(snapshot) {
 
 /** Starts the project list of the window over storage; unloadOf(plugin) returns the surface.unload declaration of a plugin. */
 export async function initialise(storage, unloadOf) {
+  try {
+    await initialiseWindow(storage, unloadOf);
+  } catch (error) {
+    finishInitialProjectContext(error, true);
+    throw error;
+  }
+}
+
+async function initialiseWindow(storage, unloadOf) {
   store = storage;
   configureData({
     sidecar: windowSidecar,
@@ -238,6 +287,7 @@ async function leaveBegun() {
   history.replaceState(null, "", location.pathname);
   await selectProject(null);
   await emptyToLibrary();
+  finishInitialProjectContext();
 }
 
 /** Reads the registry again. Resolves true when the active project of this window disappeared from the registry. */
@@ -355,6 +405,9 @@ async function showProject(id, prepared = null, openedProject = null, stagedOwne
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
   changed();
+  // Replace the start-document preview synchronously before waking mounts that could declare native composition.
+  // `presented` also waits for those declarations, so it cannot be the context barrier.
+  if (begun === id) finishInitialProjectContext();
   // A project command completes only after the loaded layout has reached the native compositor.
   // If it returned earlier, the previous frame would be exposed to the caller, and a state with empty regions would be reported as a successful project restore.
   await listener.presented();

@@ -17,6 +17,8 @@ const hostCalls = [];
 const released = [];
 let failOpen = false;
 let failShown = false;
+let failTabStateOpen = false;
+let failTabStateOpenWithUndefined = false;
 let failSelection = null;
 let selectedProject = null;
 let holdShown = false;
@@ -26,6 +28,7 @@ let transitionCall;
 let openLocal = true;
 let activateTarget = null;
 let nativeShown = null;
+let contextPendingAtLibraryEmpty = false;
 let catchUpDuringOpen = false;
 mock.module("@soksak/runtime", {
   namedExports: {
@@ -92,7 +95,11 @@ mock.module("../settings.js", {
 });
 mock.module("../operations.js", { namedExports: { beginOperation: () => "operation" } });
 mock.module("../tab-state.js", {
-  namedExports: { openTabStates: async () => ({ reconcile: async () => {}, flush: async () => {} }) },
+  namedExports: { openTabStates: async () => {
+    if (failTabStateOpenWithUndefined) throw undefined;
+    if (failTabStateOpen) throw new Error("tab-state store open failed");
+    return { reconcile: async () => {}, flush: async () => {} };
+  } },
 });
 mock.module("../tab-session.js", {
   namedExports: { createTabSessions: () => ({ read: () => null, reconcile: async () => {}, flush: async () => {} }) },
@@ -111,14 +118,22 @@ data.declareProjectData("probe", { label: { schema: { type: "string" }, default:
 const projects = await import("../projects.js");
 
 const plane = { layout: null };
+let loadsBeforeInitialContextCommit = 0;
 projects.onSwitch({
   check: () => {},
   save: () => plane.layout ?? layout,
-  load: (next) => { plane.layout = next; },
+  load: (next) => {
+    plane.layout = next;
+    if (!projects.initialProjectContextReady()) loadsBeforeInitialContextCommit++;
+  },
   update: () => {},
   retain: async () => {},
   presented: async () => {},
-  empty: async (show) => { plane.layout = null; show?.(); },
+  empty: async (show) => {
+    contextPendingAtLibraryEmpty = !projects.initialProjectContextReady();
+    plane.layout = null;
+    show?.();
+  },
 });
 
 const store = {
@@ -134,10 +149,75 @@ const store = {
   onChange: () => {},
 };
 
-test("a ready plugin host receives project data after initial project data is prepared", async () => {
-  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
-  await projects.initialise(store);
+test("a page start without a project does not wait for project context", async () => {
+  const previousLocation = globalThis.location;
+  try {
+    globalThis.location = new URL("http://soksak.test/index.html");
+    projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+    assert.equal(projects.initialProjectContextReady(), true);
+    await projects.waitForInitialProjectContext();
+  } finally {
+    globalThis.location = previousLocation;
+  }
+});
 
+test("a failed first activation releases startup waiters after the preview is cleared", async () => {
+  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
+  failSelection = "never";
+  failShown = true;
+  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  const initialContext = projects.waitForInitialProjectContext();
+  await projects.initialise(store);
+  await initialContext;
+  failShown = false;
+  failSelection = null;
+
+  assert.equal(contextPendingAtLibraryEmpty, true,
+    "the initial context gate opened before leaveBegun cleared the preview layout");
+  assert.equal(projects.initialProjectContextReady(), true);
+  assert.equal(projects.active(), null, "a rejected first activation left the preview project active");
+});
+
+test("a failed initialisation rejects the startup context without marking it ready", async () => {
+  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
+  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  const initialContext = projects.waitForInitialProjectContext();
+  failTabStateOpen = true;
+  await assert.rejects(projects.initialise(store), /tab-state store open failed/);
+  failTabStateOpen = false;
+  await assert.rejects(initialContext, /tab-state store open failed/);
+  assert.equal(projects.initialProjectContextReady(), false,
+    "a rejected startup context was exposed as ready to later view and background-session work");
+});
+
+test("an initialisation rejected with undefined does not resolve the startup context", async () => {
+  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
+  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  const initialContext = projects.waitForInitialProjectContext();
+  failTabStateOpenWithUndefined = true;
+  await assert.rejects(projects.initialise(store), (reason) => reason === undefined);
+  failTabStateOpenWithUndefined = false;
+  await assert.rejects(initialContext, (reason) => reason === undefined);
+  assert.equal(projects.initialProjectContextReady(), false,
+    "an initialisation rejected with undefined was exposed as ready");
+  assert.equal(projects.initialProjectContextFailed(), true,
+    "an initialisation rejected with undefined was not recorded as failed");
+});
+
+test("a ready plugin host receives project data after initial project data is prepared", async () => {
+  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
+  loadsBeforeInitialContextCommit = 0;
+  hostCalls.length = 0;
+  nativeShown = null;
+  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  let initialContextResolved = false;
+  const initialContext = projects.waitForInitialProjectContext().then(() => { initialContextResolved = true; });
+  await projects.initialise(store);
+  await initialContext;
+
+  assert.equal(loadsBeforeInitialContextCommit, 2,
+    "the start-document preview and the activated project layout must both load before the initial context gate opens");
+  assert.equal(initialContextResolved, true);
   assert.equal(projects.active()?.id, "prj-alpha");
   assert.deepEqual(await hostCalls.find(({ source }) => source === "window ready catch-up").call, { value: "alpha data" },
     "the initial window-ready project catch-up ran before project data was prepared");

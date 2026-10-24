@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { registerSourceOrigin } from "../source-origins.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
@@ -20,6 +21,8 @@ test("a view call of a surface with surface.unload waits for the tab state store
   let openStore;
   const storeOpened = new Promise((resolve) => { openStore = resolve; });
   const listeners = new Map();
+  let viewCallListenerReady;
+  const viewCallListenerRegistered = new Promise((resolve) => { viewCallListenerReady = resolve; });
   const replies = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -30,6 +33,7 @@ test("a view call of a surface with surface.unload waits for the tab state store
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
       return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
         listeners.set(name, listener);
+        if (name === "view-call") viewCallListenerReady();
         return () => {};
       }, call: async (name, payload) => {
         if (name === "viewReply") replies.push(payload);
@@ -43,11 +47,13 @@ test("a view call of a surface with surface.unload waits for the tab state store
     active: () => null,
     tabStateStore: () => storeNow,
     tabStatesReady: () => storeOpened,
+    waitForInitialProjectContext: async () => {},
   } });
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-tab-state");
   const pluginId = "fixture-tab-state-view";
   const surfaceId = "fixture-tab-state-view-surface";
   recordOrigin(surfaceId, null, "test fixture");
+  registerSourceOrigin(pluginId, surfaceId, 1);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
   const unload = { format: 2, maxBytes: 64 };
@@ -55,7 +61,8 @@ test("a view call of a surface with surface.unload waits for the tab state store
   try {
     authorizeSurface(surfaceId);
     const mounted = mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
-    listeners.get("view-call")({ id: 1, command: "tab.state.read", params: null });
+    await viewCallListenerRegistered;
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "tab.state.read", params: null });
     // The store is still opening: no reply of the call has been sent.
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(replies, [], "the call was answered before the tab state store opened");

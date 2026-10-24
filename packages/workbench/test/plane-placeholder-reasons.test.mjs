@@ -56,6 +56,8 @@ test("the placeholder reasons that are designed states write no error", { timeou
   // The test does not load surface modules. The placeholder replaces the one of its tab in the slot, as the surface modules do.
   t.mock.module("../surface-modules.js", { exports: {
     mountedSurface: () => null,
+    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
+      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
     mountSurface: () => Promise.resolve(),
     disposeSurface: () => Promise.resolve(), focusSurface: () => true,
     placePluginPlaceholder: (slot, surfaceId, element) => {

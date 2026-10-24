@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F212.10-core-3-12: Hold first native view composition and background sidecar
+  opens until the initial project context is committed and its layout is loaded.
+  Release the startup gate after library cleanup on a rejected project open and
+  reject it when page initialization fails. Focused owner tests pass 6/6;
+  application runtime acceptance remains pending.
+
 - F239-47-32: Clarify that native input transactions group callback actions
   and final preedit for a presentation, while asynchronous PTY output may
   arrive in later events and frames. Record public macOS callback-batching

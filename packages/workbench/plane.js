@@ -35,6 +35,7 @@ import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, 
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
+import { initialProjectContextFailed, initialProjectContextReady, waitForInitialProjectContext } from "./projects.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -1068,6 +1069,7 @@ const landing = new WeakMap();
 // A persistent surface actor is owned by the window sidecar and not by a native image surface.
 // So a hidden tab keeps its session without creating a WebView or an image region.
 const backgroundSessions = new Map();
+let backgroundContextWait = null;
 
 // The last decision recorded for each tab with a background declaration, so a settle that changes nothing records nothing.
 const backgroundDecisions = new Map();
@@ -1086,6 +1088,19 @@ function recordBackground(tab, descriptor, action, surface) {
 
 function syncBackgroundSessions() {
   if (!native || !grid) return;
+  if (initialProjectContextFailed()) return;
+  if (!initialProjectContextReady()) {
+    if (!backgroundContextWait) {
+      backgroundContextWait = waitForInitialProjectContext().then(() => {
+        backgroundContextWait = null;
+        syncBackgroundSessions();
+      }, () => {
+        backgroundContextWait = null;
+        // The page initialization owner reports this failure. This subscriber only stops background work and must not report it again.
+      });
+    }
+    return;
+  }
   const tabs = new Map();
   for (const card of grid.cards) for (const tab of tabsOf(card)) tabs.set(tab.id, tab);
   for (const tab of tabs.values()) {

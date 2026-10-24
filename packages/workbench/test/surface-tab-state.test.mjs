@@ -11,7 +11,8 @@ const store = await openTabStates({
   failed: (error) => { throw error; },
   unloadOf: (plugin) => (plugin === "fixture-unload" ? UNLOAD : false),
 });
-mock.module("../projects.js", { namedExports: { active: () => null, tabStateStore: () => store, tabStatesReady: async () => store } });
+mock.module("../projects.js", { namedExports: { active: () => null, tabStateStore: () => store,
+  tabStatesReady: async () => store, waitForInitialProjectContext: async () => {} } });
 mock.module("../environment.js", { namedExports: { pluginDiagnostics: async () => null } });
 const reported = [];
 globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
