@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
+import { hasOpenFailureRow, openFailureRow, waitTreeSnapshot } from "./files-open-failure.mjs";
 import { distance, readPng } from "@soksak/window-check/png.mjs";
 
 /** Presses the center of the element with native input. */
@@ -491,28 +492,64 @@ for (const app of Object.values(APPS)) {
     writeFileSync(join(project.root, folder, "note.zzz"), "note\n");
     writeFileSync(join(project.root, folder, "other.zzz"), "other\n");
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
-    const rowIndex = (tree, row) => tree.entries.findIndex((entry) => entry.path === row);
-    const clickRow = async (tree, row) => {
-      const holder = await s.rect("core.sidebar.section.control", controlIndex(await s.get("core.sidebars"), "left", "files.tree", HOLDER));
-      const at = rowIndex(tree, row);
-      assert.ok(at >= 0, `${row} is not a row of the tree`);
-      await s.click(holder.x + holder.width / 2, holder.y + (at + 0.5) * ROW);
+    const nodeByPath = (snapshot, path) => treeNodes(snapshot).find((node) => node.params?.path === path) ?? null;
+    const nodeKeyPath = (snapshot, path) => {
+      const tree = snapshot.value?.elements.find((element) => element.kind === "tree" && element.key === "files");
+      const find = (nodes, parents = []) => {
+        for (const node of nodes ?? []) {
+          const keys = [...parents, node.key];
+          if (node.params?.path === path) return keys;
+          const nested = find(node.children, keys);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      const keys = find(tree?.nodes);
+      assert.ok(keys, `${path} is not a node of the declared files.tree snapshot`);
+      return keys;
     };
-    await s.run("files.refresh");
-    let tree = await s.until("files.tree", (value) => rowIndex(value, folder) >= 0, "files.tree did not list the folder");
+    const clickRow = async (snapshot, path, role = "label") => {
+      const address = { sidebar: "left", section: "files.tree", key: "files", path: nodeKeyPath(snapshot, path), role };
+      const rect = await s.request("dom.rect", { name: "core.sidebar.section.control", address });
+      assert.ok(rect.width > 0 && rect.height > 0, `${path} ${role} control has no area`);
+      await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    };
+    const acceptedTreeSequence = async () => {
+      const section = (await s.get("core.sidebars")).find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+      assert.ok(Number.isInteger(section?.acceptedSeq), "the Files tree has no accepted snapshot sequence");
+      return section.acceptedSeq;
+    };
+    let accepted = await acceptedTreeSequence();
+    assert.equal(await s.run("files.refresh"), null);
+    let current = await waitTreeSnapshot(s, accepted,
+      (snapshot) => nodeByPath(snapshot, folder) !== null,
+      "files.tree did not list the folder");
+    let tree = current.snapshot;
+    accepted = current.sequence;
     await clickRow(tree, folder);
-    tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/note.zzz`) >= 0, "a click on the folder did not open it");
+    current = await waitTreeSnapshot(s, accepted,
+      (snapshot) => nodeByPath(snapshot, folder)?.selected === true,
+      "a click on the folder did not select it");
+    tree = current.snapshot;
+    accepted = current.sequence;
+    await clickRow(tree, folder, "expand");
+    current = await waitTreeSnapshot(s, accepted,
+      (snapshot) => nodeByPath(snapshot, `${folder}/note.zzz`) !== null,
+      "the folder expand control did not list its file");
+    tree = current.snapshot;
+    accepted = current.sequence;
     await clickRow(tree, `${folder}/note.zzz`);
-    await s.until("files.selection", (value) => value === `${folder}/note.zzz`, "a click on the file did not select it");
-    assert.deepEqual(await s.get("files.open"), { error: null });
+    current = await waitTreeSnapshot(s, accepted,
+      (snapshot) => nodeByPath(snapshot, `${folder}/note.zzz`)?.selected === true,
+      "a click on the file did not select it");
+    accepted = current.sequence;
     // The window check fails on every application error that is logged, so the main document showing the failure would fail it.
-    await s.press("Enter");
-    const failure = await s.until("files.open", (value) => value.error !== null, "Enter on a file that no plugin opens left no failure");
-    assert.match(failure.error, /note\.zzz/, `the failure does not name the file: ${failure.error}`);
-    const message = (await s.get("core.sidebars")).find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree")?.text;
-    assert.match(message, /열 수 없음: /, `the message row does not show the failure: ${message}`);
+    const failed = await openFailureRow(s, `${folder}/note.zzz`, accepted, () => s.press("Enter"));
     // Selecting another path ends the failure.
-    await clickRow(tree, `${folder}/other.zzz`);
-    await s.until("files.open", (value) => value.error === null, "selecting another path did not end the failure");
+    await clickRow(failed.snapshot, `${folder}/other.zzz`);
+    await waitTreeSnapshot(s, failed.sequence,
+      (snapshot, section) => !hasOpenFailureRow(snapshot) && !section.text.includes("열 수 없음: ") &&
+        nodeByPath(snapshot, `${folder}/other.zzz`)?.selected === true,
+      "selecting another path did not end the failure");
   });
 }

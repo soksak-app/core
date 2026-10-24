@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-37-3: 파일 열기 실패 check를 제거된 `files.selection`
+  및 `files.open` status 대기에서 선언된 `files.tree` snapshot으로 옮긴다. 더 큰 `core.sidebars`
+  `acceptedSeq`를 기다린 뒤 `files.tree` snapshot과 rendered section의 message row를 확인하고,
+  다른 경로를 선택하면 메시지가 지워지며 `core.page.error`가 설정되지 않는지
+  검증한다. Red: consumer 경계 test는 기존 대기에서
+  `files.open is a command, not a status`로 실패했다. Green: focused consumer
+  test 2/2와 변경한 JavaScript 세 파일의 syntax check 및 `make e2e-check`가
+  통과한다. Window case는 실행하지 않았으며 runtime acceptance는 대기 중이다.
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen

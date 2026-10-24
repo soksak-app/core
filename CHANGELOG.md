@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-37-3: Migrate the file-open failure check from removed `files.selection`
+  and `files.open` status waits to the declared `files.tree` snapshot. The check
+  waits for a newer accepted sequence, verifies the message row in the snapshot
+  and rendered section, and verifies that selecting another path clears it
+  without setting `core.page.error`. Red: the consumer-boundary test failed on
+  the old wait with `files.open is a command, not a status`. Green: the focused
+  consumer tests pass 2/2, all three changed JavaScript files pass syntax
+  checks, and `make e2e-check` passes. The window case was not run; runtime
+  acceptance remains pending.
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,
