@@ -4,6 +4,9 @@ import { JSDOM } from "jsdom";
 import { clockAnswer } from "./support/records.mjs";
 import { createMemorySaver } from "../memory-saver.js";
 import { memoryPlacement } from "../memory-placement.js";
+import { setSurfaceTextSize } from "../text-size.js";
+
+setSurfaceTextSize(() => 1);
 
 test("a host placement retains mounted dormant views and excludes cold dormant views", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>', { url: "https://example.test/" });
@@ -87,6 +90,77 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     assert.equal(document.querySelector("[data-retained-surface-mounts]"), null, "an unloaded dormant view kept its hidden mount slot");
     retainedMounts.releaseRetainedSurfaceSlots(record, new Set());
     assert.equal(document.querySelector("[data-retained-surface-mounts]"), null, "released hidden mount slots remained in the document");
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("host placement preserves call order across the lazy view-module import", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM('<div id="plane"><div id="slot"></div></div>', { url: "https://example.test/" });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  const id = "retained-race-view";
+  const declarations = new Set();
+  const syncs = [];
+  let mounted = { surfaceId: id, disposed: false };
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: (surfaceId) => surfaceId === id ? mounted : null,
+    waitSurfaceCompositionDeclared: async (surfaceId) => {
+      assert.equal(surfaceId, id);
+    },
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "compositionDeclare") {
+        declarations.add(request.surface);
+        return null;
+      }
+      if (name === "setTheme") return null;
+      if (name === "syncSurfaces") {
+        const ids = request.surfaces.map(({ id: surfaceId }) => surfaceId);
+        syncs.push(ids);
+        for (const { id: surfaceId, composition } of request.surfaces) {
+          if (composition.kind === "view" && !declarations.has(surfaceId)) {
+            throw new Error(`surface ${surfaceId} has no composition declaration in the current page`);
+          }
+        }
+        for (const surfaceId of declarations) if (!ids.includes(surfaceId)) declarations.delete(surfaceId);
+        if (!ids.includes(id)) mounted = { surfaceId: id, disposed: true };
+        return { ticket: syncs.length, placements: request.surfaces.map(({ id: surfaceId, x, y, w, h }) =>
+          ({ id: surfaceId, visible: true, x, y, w, h })),
+        chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar } };
+      }
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const actualHost = await import("../host.js?retained-race");
+  const { placeCompositorRecord } = await import("../compositor.js?retained-race");
+  declarations.add(id);
+  const surface = { id, plugin: "retained-race-plugin", dim: false, visible: true,
+    applied: { x: 0, y: 0, w: 20, h: 20 },
+    surface: { surfaceId: id, pluginId: "retained-race-plugin", composition: { kind: "view", page: "ui/page.html" } },
+    start: { origin: { directory: null } } };
+  const emptyRecord = { surfaces: [], settled: true, drawn: true, titlebar: 40 };
+  const viewRecord = { surfaces: [surface], settled: true, drawn: true, titlebar: 40 };
+
+  try {
+    const host = actualHost.surfaces;
+    await host.theme({ scheme: "dark", tokens: {} });
+    const staleLayout = placeCompositorRecord(viewRecord, [surface], (request) => host.place(request),
+      ["retained-race-plugin"], { mountedSurface: () => mounted, authorize: () => {} })
+      .then(() => null, (error) => error);
+
+    // The first call needs the lazy surface-module import; the newer empty layout must not overtake it while
+    // that import is pending. The current layout then retires the view after its earlier placement is accepted.
+    await host.place(emptyRecord);
+    const staleError = await staleLayout;
+    assert.equal(staleError, null, "the earlier view placement failed before the current layout retired it");
+    assert.deepEqual(syncs, [[id], []], "native sync calls did not preserve host placement invocation order");
+    assert.equal(declarations.has(id), false, "the current empty layout did not retire the old view declaration");
   } finally {
     dom.window.close();
   }

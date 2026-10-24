@@ -21,9 +21,10 @@ test("view placement waits for the latest host theme reply", { timeout: 5000 }, 
   let secondThemeSent;
   const secondThemeStarted = new Promise((resolve) => { secondThemeSent = resolve; });
   t.mock.module("../page-log.js", { namedExports: {
-    rawConsole: { error: () => {}, info: () => {} }, emitEvent: () => {}, reportRecord: async () => {},
+    rawConsole: { error: () => {}, info: () => {} }, emitEvent: () => {}, eventEnabled: () => false,
+    reportRecord: async () => {}, flushEvents: async () => {},
   } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
     on: () => {},
     page: (path) => path,
     call: (name, request) => {
@@ -66,9 +67,10 @@ test("view placement rechecks the theme after its reply continuation", { timeout
   let secondThemeSent;
   const secondThemeStarted = new Promise((resolve) => { secondThemeSent = resolve; });
   t.mock.module("../page-log.js", { namedExports: {
-    rawConsole: { error: () => {}, info: () => {} }, emitEvent: () => {}, reportRecord: async () => {},
+    rawConsole: { error: () => {}, info: () => {} }, emitEvent: () => {}, eventEnabled: () => false,
+    reportRecord: async () => {}, flushEvents: async () => {},
   } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
     on: () => {},
     page: (path) => path,
     call: (name, request) => {
@@ -96,6 +98,8 @@ test("view placement rechecks the theme after its reply continuation", { timeout
     });
     themeReplies[0].resolve(null);
     await secondThemeStarted;
+    themeReplies[1].resolve(null);
+    await Promise.all([first, second, placing]);
     const placementIndex = order.indexOf("syncSurfaces");
     const secondRequestIndex = order.indexOf("second theme requested");
     const secondReplyIndex = order.lastIndexOf("setTheme");
@@ -107,9 +111,6 @@ test("view placement rechecks the theme after its reply continuation", { timeout
       assert.ok(placementIndex < secondReplyIndex,
         "the theme reply was sent before the later theme request");
     }
-
-    themeReplies[1].resolve(null);
-    await Promise.all([first, second, placing]);
     assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1);
   } finally {
     dom.window.close();
@@ -126,15 +127,22 @@ test("a failed theme reply refuses view placement and reports the host error", {
   t.mock.module("../page-log.js", { namedExports: {
     rawConsole: { error: () => {}, info: () => {} },
     emitEvent: () => {},
+    eventEnabled: () => false,
     reportRecord: async (level, line) => { reports.push({ level, line }); notified(); },
+    flushEvents: async () => {},
   } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
     on: () => {},
     page: (path) => path,
     call: (name, request) => {
       calls.push({ name, request });
       if (name === "setTheme") return Promise.reject(new Error("theme setter refused"));
-      if (name === "syncSurfaces") throw new Error("view placement ran after theme failure");
+      if (name === "syncSurfaces") {
+        if (request.surfaces.some(({ composition }) => composition.kind === "view")) {
+          throw new Error("view placement ran after theme failure");
+        }
+        return Promise.resolve(frame(request));
+      }
       throw new Error(`unexpected host call ${name}`);
     },
   } } });
@@ -149,6 +157,9 @@ test("a failed theme reply refuses view placement and reports the host error", {
     assert.equal(placeResult.reason.message, "theme setter refused");
     assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 0, "a view was attached after theme setup failed");
     assert.deepEqual(reports, [{ level: "error", line: "host setTheme failed: Error: theme setter refused" }]);
+    await surfaces.place({ surfaces: [], settled: true, drawn: false, titlebar: 40 });
+    assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1,
+      "a failed placement prevented the next independent layout from entering the host queue");
   } finally {
     dom.window.close();
   }
@@ -164,9 +175,11 @@ test("a failed theme reply with no view still uses the host error path", { timeo
   t.mock.module("../page-log.js", { namedExports: {
     rawConsole: { error: () => {}, info: () => {} },
     emitEvent: () => {},
+    eventEnabled: () => false,
     reportRecord: async (level, line) => { reports.push({ level, line }); notified(); },
+    flushEvents: async () => {},
   } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
     on: () => {},
     page: (path) => path,
     call: (name, request) => {

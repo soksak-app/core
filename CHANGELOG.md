@@ -32,9 +32,11 @@
   capture-gap limit (33.71754166483879 ms Wails; 33.65716664493084 ms Tauri),
   so visual acceptance remains open. The run uses core and host 0.0.21,
   terminal 0.0.21, and VT 0.0.17 on macOS 26.6.2 arm64.
-- F212.10-core-3-13: Track the project-start composition error recorded by the
-  hidden Browser placement case on both hosts. The current run is not accepted;
-  the responsible mount or layout-commit ordering is not yet established.
+- F212.10-core-3-13: Reserve host surface placement order before asynchronous
+  view-module loading. The focused owner Red reproduced an earlier view request
+  syncing after a newer empty layout retired its declaration. Host placement
+  and theme-ordering tests pass after the fix. The earlier two-host project
+  startup error remains unaccepted until rebuilt-host verification.
 
 - F239-47-35: Bind the initial cursor observer to the accepted screen frame.
   The input-only baseline now accepts `render: null` when the cursor frame

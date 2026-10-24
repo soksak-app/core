@@ -31,9 +31,11 @@
   기준을 넘어서 실패했다(Wails 33.71754166483879 ms, Tauri 33.65716664493084 ms).
   Visual acceptance는 열린 상태다. macOS 26.6.2 arm64의 core/host 0.0.21,
   terminal 0.0.21, VT 0.0.17에서 실행했다.
-- F212.10-core-3-13: 숨겨진 Browser 배치 검사에서 양 host가 기록한
-  project-start composition 오류를 추적한다. 현재 실행은 통과하지 않았으며
-  원인인 mount 또는 layout-commit 순서는 아직 입증되지 않았다.
+- F212.10-core-3-13: 비동기 view-module loading 전에 host surface placement
+  순서를 예약한다. Focused owner Red는 더 새로운 빈 layout이 declaration을
+  retire한 뒤 앞선 view request가 sync되는 문제를 재현했다. 수정 후 host 배치와
+  theme 순서 test가 통과했다. 앞선 두-host project startup 오류는 rebuilt-host
+  검증 전까지 통과로 인정하지 않는다.
 
 - F239-47-35: 초기 cursor observer를 승인된 screen frame에 묶는다.
   Input-only baseline은 cursor frame이 screen frame과 정확히 일치할 때

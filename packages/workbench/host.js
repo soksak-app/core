@@ -370,12 +370,19 @@ let themeReply = null;
 let layoutTurn = Promise.resolve();
 let layoutFrame = layoutTurn;
 let layoutResult = layoutTurn;
+let surfacePlacementTurn = Promise.resolve();
 
 /**
  * The ordering promise that is fulfilled when layout step step ends. It is fulfilled on failure too, so that a failed transaction does not block the next independent layout.
  * The caller receives that failure as the reply of the place that contains this step and reports it, so it is not written again here (docs/spec/hosts.md#application-log).
  */
 const layoutStepEnd = (step) => step.then(() => undefined, () => undefined);
+function orderedSurfacePlacement(operation) {
+  const previous = surfacePlacementTurn;
+  let release;
+  surfacePlacementTurn = new Promise((resolve) => { release = resolve; });
+  return previous.then(operation).finally(release);
+}
 let layoutPresented = false;
 /* The window button area and title bar height ({controls, row}) of the most recent preparation whose display the host confirmed. It is committed state, and
    it is null before a display is confirmed (docs/spec/native-surfaces.md#title-bar-height). */
@@ -490,108 +497,110 @@ export const surfaces = native ? {
     /** The language of the application menu. The host ignores a repeated send of the same language. */
     menuLanguage: (language) => tellInTurn("setMenuLanguage", language),
 
-    async place(record) {
-      const viewRecords = record.surfaces.filter(({ surface }) => surface?.composition?.kind === "view");
-      const surfaceModules = viewRecords.length ? await import("./surface-modules.js") : null;
-      const mountedSurface = surfaceModules?.mountedSurface ?? (() => null);
-      const waitSurfaceCompositionDeclared = surfaceModules?.waitSurfaceCompositionDeclared ?? (() => Promise.resolve());
-      const surfaces = record.surfaces.map((s) => ({
-        id: s.id,
-        dim: s.dim,
-        plugin: s.surface.pluginId,
-        composition: s.surface.composition,
-        visible: s.visible,
-        ...toPage(s.applied),
-        // The start values of the view of a view surface (docs/spec/native-surfaces.md#view-surfaces); a surface of another
-        // composition carries none.
-        ...(s.start ? { start: s.start } : {}),
-      }));
+    place(record) {
+      return orderedSurfacePlacement(async () => {
+        const viewRecords = record.surfaces.filter(({ surface }) => surface?.composition?.kind === "view");
+        const surfaceModules = viewRecords.length ? await import("./surface-modules.js") : null;
+        const mountedSurface = surfaceModules?.mountedSurface ?? (() => null);
+        const waitSurfaceCompositionDeclared = surfaceModules?.waitSurfaceCompositionDeclared ?? (() => Promise.resolve());
+        const surfaces = record.surfaces.map((s) => ({
+          id: s.id,
+          dim: s.dim,
+          plugin: s.surface.pluginId,
+          composition: s.surface.composition,
+          visible: s.visible,
+          ...toPage(s.applied),
+          // The start values of the view of a view surface (docs/spec/native-surfaces.md#view-surfaces); a surface of another
+          // composition carries none.
+          ...(s.start ? { start: s.start } : {}),
+        }));
 
-      // A preparation precedes the plane draw, which creates a new view's mount. Keep an unmounted view out of this native
-      // request; the drawn commit sends it after mountSurface has registered the view and its listener setup can complete.
-      const deferredViews = record.drawn === false
-        ? record.surfaces.filter(({ id, surface }) => {
-          if (surface?.composition?.kind !== "view") return false;
-          const mounted = mountedSurface(id);
-          return !mounted || mounted.disposed;
-        }).map(({ id }) => id)
-        : [];
-      const deferredIds = new Set(deferredViews);
-      const requestedSurfaces = surfaces.filter(({ id }) => !deferredIds.has(id));
+        // A preparation precedes the plane draw, which creates a new view's mount. Keep an unmounted view out of this native
+        // request; the drawn commit sends it after mountSurface has registered the view and its listener setup can complete.
+        const deferredViews = record.drawn === false
+          ? record.surfaces.filter(({ id, surface }) => {
+            if (surface?.composition?.kind !== "view") return false;
+            const mounted = mountedSurface(id);
+            return !mounted || mounted.disposed;
+          }).map(({ id }) => id)
+          : [];
+        const deferredIds = new Set(deferredViews);
+        const requestedSurfaces = surfaces.filter(({ id }) => !deferredIds.has(id));
 
-      // place is called on every render, and on every frame while a divider is dragged.
-      // A request identical to the previous one is not sent.
-      const request = {
-        // Whether this is the last update or updates continue. While they continue and the view grows,
-        // the area that has not been rendered yet appears white.
-        settled: record.settled !== false,
-        // The image raster must commit after the DOM frame of the page. Other
-        // surfaces can commit consecutive frames immediately.
-        waitForPresentation: record.surfaces.some(({ id, surface, visible }) => !deferredIds.has(id) &&
-          visible === true && surface?.composition?.kind === "view" &&
-          surface.composition.regions?.some(({ kind }) => kind === "image") === true),
-        overlays: windowOverlays(),
-        surfaces: requestedSurfaces,
-        // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
-        titlebar: record.titlebar,
-      };
-      const key = JSON.stringify({ request, deferredViews });
-      if (key !== last) {
-        last = key;
-        // layoutTurn is the transaction order of surface preparation and display.
-        // It does not also wait for the global command turn: doing so would let an unrelated
-        // host call add one frame per divider step.
-        const hasView = record.surfaces.some(({ surface }) => surface?.composition?.kind === "view");
-        const scheduled = layoutTurn.then(async () => {
-          if (hasView) {
-            await Promise.all(record.surfaces
-              .filter(({ id, surface }) => surface?.composition?.kind === "view"
-                && !deferredIds.has(id))
-              .map(({ id }) => waitSurfaceCompositionDeclared(id)));
-            let reply;
-            do {
-              reply = themeReply;
-              if (!reply) throw new Error("view placement has no host theme reply");
-              await reply;
-            } while (reply !== themeReply);
-          }
-          return tell("syncSurfaces", request);
-        });
-        layoutFrame = scheduled;
-        layoutResult = scheduled.then((frame) => {
-          checkChrome(frame.chrome);
-          notifySurfacePrepared(frame.placements);
-          return frame.placements;
-        });
-        layoutPresented = false;
-        layoutTurn = layoutStepEnd(scheduled);
-      }
-      if (record.drawn && !layoutPresented) {
-        const preparedLayout = Promise.all([layoutResult, layoutFrame]).then(([, frame]) => frame);
-        const presentedLayout = preparedLayout.then((frame) =>
-          tell("presentSurfaces", {
-            ticket: frame.ticket,
-            placements: frame.placements,
-            settled: request.settled,
-            waitForPresentation: request.waitForPresentation,
-          }).then((placed) => {
-            presentedChrome = frame.chrome;
-            return placed;
-          }));
-        layoutResult = presentedLayout;
-        layoutPresented = true;
-        layoutTurn = layoutStepEnd(presentedLayout);
-      }
-      // Handles the synchronization and the display call together so that a new synchronization does not replace the native ticket
-      // before the previous ticket is committed.
-      const result = layoutResult;
-      return result.then((placed) => ({
-        placements: placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) })),
-        deferred: deferredViews,
-      })).catch((error) => {
+        // place is called on every render, and on every frame while a divider is dragged.
+        // A request identical to the previous one is not sent.
+        const request = {
+          // Whether this is the last update or updates continue. While they continue and the view grows,
+          // the area that has not been rendered yet appears white.
+          settled: record.settled !== false,
+          // The image raster must commit after the DOM frame of the page. Other
+          // surfaces can commit consecutive frames immediately.
+          waitForPresentation: record.surfaces.some(({ id, surface, visible }) => !deferredIds.has(id) &&
+            visible === true && surface?.composition?.kind === "view" &&
+            surface.composition.regions?.some(({ kind }) => kind === "image") === true),
+          overlays: windowOverlays(),
+          surfaces: requestedSurfaces,
+          // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
+          titlebar: record.titlebar,
+        };
+        const key = JSON.stringify({ request, deferredViews });
+        if (key !== last) {
+          last = key;
+          // layoutTurn is the transaction order of surface preparation and display.
+          // It does not also wait for the global command turn: doing so would let an unrelated
+          // host call add one frame per divider step.
+          const hasView = record.surfaces.some(({ surface }) => surface?.composition?.kind === "view");
+          const scheduled = layoutTurn.then(async () => {
+            if (hasView) {
+              await Promise.all(record.surfaces
+                .filter(({ id, surface }) => surface?.composition?.kind === "view"
+                  && !deferredIds.has(id))
+                .map(({ id }) => waitSurfaceCompositionDeclared(id)));
+              let reply;
+              do {
+                reply = themeReply;
+                if (!reply) throw new Error("view placement has no host theme reply");
+                await reply;
+              } while (reply !== themeReply);
+            }
+            return tell("syncSurfaces", request);
+          });
+          layoutFrame = scheduled;
+          layoutResult = scheduled.then((frame) => {
+            checkChrome(frame.chrome);
+            notifySurfacePrepared(frame.placements);
+            return frame.placements;
+          });
+          layoutPresented = false;
+          layoutTurn = layoutStepEnd(scheduled);
+        }
+        if (record.drawn && !layoutPresented) {
+          const preparedLayout = Promise.all([layoutResult, layoutFrame]).then(([, frame]) => frame);
+          const presentedLayout = preparedLayout.then((frame) =>
+            tell("presentSurfaces", {
+              ticket: frame.ticket,
+              placements: frame.placements,
+              settled: request.settled,
+              waitForPresentation: request.waitForPresentation,
+            }).then((placed) => {
+              presentedChrome = frame.chrome;
+              return placed;
+            }));
+          layoutResult = presentedLayout;
+          layoutPresented = true;
+          layoutTurn = layoutStepEnd(presentedLayout);
+        }
+        // Handles the synchronization and the display call together so that a new synchronization does not replace the native ticket
+        // before the previous ticket is committed.
+        const result = layoutResult;
+        return result.then((placed) => ({
+          placements: placed.map((p) => ({ id: p.id, visible: p.visible, ...toPlane(p) })),
+          deferred: deferredViews,
+        })).catch((error) => {
           if (result === layoutResult) { last = ""; layoutPresented = false; }
           throw error;
         });
+      });
     },
     // Call it after the surface placement RPC has ended so that the page can keep handling native raster events.
     waitPresented: () => tell("waitPresented"),
