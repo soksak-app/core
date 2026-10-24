@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-6: Fresh Wails window의 terminal prompt 경로 `preedit` 아래에서 관측한 파란 밑줄을 기록한다. 대응하는 terminal base cell에는 underline, inverse, link flag가 없었고 `terminal.cursor.preedit`은 `ㅏㅏㅏ`였다. 표시가 이미 나온 뒤 시작한 세 frame의 non-activating capture에는 source raster나 candidate가 없었고 source drop도 없었다. 표시를 그린 주체는 확인되지 않았으며 visual acceptance는 열린 상태다.
+
 - F212.10-core-3-6: 정확한 현재 source-generation 종료를 받아들이는 동일한
   동기 workbench transition에서 view의 exposure registration을 retire한다.
   Source retirement가 `view-process-ended`보다 먼저라 generation이 사라진 뒤에도
