@@ -23,6 +23,8 @@ The language evidence recorder (`scripts/test-evidence.mjs`) stores those fields
 
 ## Bounded execution
 
+The E2E runner requires nonempty `SOKSAK_RUN_ID` and `SOKSAK_RUN_FOLDER` values together before it probes the frontmost application or starts a test child. Missing or partial metadata fails at the runner boundary. The runner passes the supplied values to the child unchanged; it does not synthesize an identifier or folder. This keeps every window-check child attributable to its run and audit output.
+
 Each independently executed case has its own timeout: 10 seconds for pure unit behavior, 30 seconds for native-process behavior, and 60 seconds for application behavior by default. A longer case must declare its limit and concrete reason. Build time is reported separately and is not a test result. A whole-suite timeout does not replace per-case limits.
 
 The runner emits a start event, progress at least every five seconds while running, and a terminal pass, fail, timeout, or cancellation event. Every event identifies its case and elapsed milliseconds. Child stdout and stderr remain visible. A command exiting successfully is command evidence only, not proof that tests ran or that assertions passed. Language adapters must separately validate discovered test identities and outcomes. Empty or skipped execution cannot validate a required test. Retrying retains the initial failure.

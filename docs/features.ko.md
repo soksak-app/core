@@ -12,6 +12,8 @@
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
+- [o] F239-55 — P0: E2E 실행기가 frontmost application을 조회하거나 child를 시작하기 전에 감사 가능한 run metadata를 요구한다. 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 전달해야 하며, 누락되거나 한쪽만 있는 metadata는 두 동작 전에 실패한다. 전달된 두 값은 child에 그대로 보존하고 기존 baseline 검증을 유지한다. Red: 변경 전 `node --test e2e/test/run.test.mjs`에서 두 값이 모두 없거나 ID만 있거나 폴더만 있어도 baseline을 조회하고 child를 시작함을 확인했다(`/tmp/F239-55-run-metadata-red.log`). Green: 같은 process-boundary case와 exported runner의 호출 순서 및 유효한 값 전달 검사가 10/10 통과한다. `node --check e2e/run.mjs`, `node --check e2e/test/run.test.mjs`, `make e2e-check`, `make docs-check`가 통과한다. 이 단위는 application을 실행하지 않는다.
+
 - [o] F239-51 — P1: helper 추출 이후에도 Files 열기 실패 window check의 tree-node lookup을 호출할 수 있게 한다. 실패 행 검사는 소유 helper 모듈에서 `treeNodes`를 import하지 않고 호출해 snapshot을 검사하기 전에 `ReferenceError`를 냈다. 기대 동작: Files check helper에서 node lookup을 노출하고 import하며, 선언된 `files.tree` snapshot에서 중첩 경로를 확인한다. Red: 보존된 두 host runtime attempt가 수정 전 `nodeByPath`에서 `ReferenceError: treeNodes is not defined`로 실패했다. 새 소유 helper test의 이전 모듈 로딩 실패는 동작 Red가 아니라 setup failure였다. Green: 수정 후 helper를 import하고 추적된 path lookup test가 통과한다. `node --test e2e/files-open-failure.test.mjs`는 5/5, `node --check e2e/files.test.mjs`도 통과한다. 같은 window case는 재실행하지 않았으며 F239-51-1에서 runtime acceptance를 추적한다.
   - [~] F239-51-1 — P1, F239-51 연결: tree-node lookup 수정 후 같은 file-open failure-row window case를 실행하고 두 host에서 check가 완료되는지 확인한다. Red는 F239-51에 보존된 attempt이며, 수정 후 window run을 하지 않아 Green은 대기 중이다.
 

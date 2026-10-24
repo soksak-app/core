@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-55: Require both nonempty run metadata values before the E2E runner
+  probes the frontmost application or starts a child. The runner preserves
+  the supplied ID and folder for the child. The owning runner tests pass 10/10;
+  syntax, `make e2e-check`, and `make docs-check` pass. No application ran.
+
 - F239-37-3: Require the reloaded page to report the editor disabled before
   testing the Files failure row. The retained Wails and Tauri runs timed out
   with no failure row, while both installed editor manifests declare `*`;

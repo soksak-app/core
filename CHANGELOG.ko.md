@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-55: E2E 실행기가 frontmost application을 조회하거나 child를 시작하기
+  전에 비어 있지 않은 run metadata 두 값을 함께 요구한다. 전달된 ID와 폴더는
+  child에 그대로 유지된다. 소유 실행기 test는 10/10 통과하고 syntax,
+  `make e2e-check`, `make docs-check`도 통과한다. Application은 실행하지 않았다.
+
 - F239-37-3: Files failure row를 검사하기 전에 reload된 page가 editor를
   disabled라고 보고하도록 요구한다. 보존된 Wails와 Tauri 실행은 failure row
   없이 timeout되었고 두 설치 editor manifest는 모두 `*`를 선언하지만, 해당
