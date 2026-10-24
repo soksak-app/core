@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- F239-35-5: The project-folder and bookmark window case now addresses
+  declared controls by key, path and role, obtains their DOM rectangles and
+  sends native clicks. Label selection and branch expansion are separate.
+  Red: the legacy Wails and Tauri baseline expects four tree controls, while
+  each current declared DOM reports seven. A one-notification selection check
+  also observed no selected value, and an immediate bookmark click did not add
+  the file; a later run of that same one-shot draft passed, so this was not a
+  reproducible failure. The runner now waits on each newer `core.sidebars` accepted
+  sequence and reads one `files.tree` snapshot until selection is present.
+  Green: the focused case passes on Wails and Tauri (3.722 s and 4.064 s),
+  including native label/expand clicks, bookmark add/remove and reload. The
+  full Files suite remains pending under F239-35 and F239-37.
+
 - F239-35-4-1: Keep the declared UI expansion subscription independent from the DOM exposure relay. Only subscribing to `exposure-request` enables `forwardHostExposure`. Red: an expansion-only host received a forwarded `dom.rect` request instead of the no-subscription error. Green: the same test confirms immediate refusal without emitting an exposure event; plugin-host call tests pass 24/24, `make exposure-check` and `make docs-check` pass. The fake host answers `log {action: "clock"}` with the contract `{ts_us, mono_ns}` through `clockAnswer`; the owning test stderr has no clock-response error.
 
 - F239-35-4: Plugin-host `runtime.native.on` now accepts exactly `exposure-request` and `declared-ui.expanded`; other event names remain refused. Red: the unchanged public plugin-host-call test rejected `declared-ui.expanded` with `native event declared-ui.expanded is not served to a plugin host`. Green: the same owning test passes 23/23 and verifies both subscriptions plus refusal of `document-state`; `make exposure-check` passes. `make docs-check` passes.

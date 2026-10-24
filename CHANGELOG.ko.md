@@ -4,6 +4,18 @@
 
 ## 미배포
 
+- F239-35-5: project-folder/bookmark window case가 key, path, role로 declared
+  control에 주소를 지정하고 해당 DOM rectangle을 얻어 native click을 보낸다.
+  Label 선택과 branch 확장을 분리한다. Red: legacy Wails/Tauri baseline은
+  tree control 4개를 예상했지만 현재 declared DOM은 양쪽 모두 7개를 보고했다.
+  한 번의 notification 뒤 selection을 확인한 초안은 selected 값을 읽지 못했고,
+  바로 bookmark를 click해도 파일을 추가하지 못했다. 같은 one-shot 초안을 뒤에
+  다시 실행했을 때 통과했으므로 재현된 실패는 아니다. Runner는 더 큰
+  `core.sidebars` accepted sequence를 받을 때마다 `files.tree` snapshot을 한 번
+  읽어 selection이 반영될 때까지 기다린다. Green: focused case가 Wails/Tauri에서
+  각각 3.722초와 4.064초에 통과하며 native label/expand click, bookmark 추가/삭제,
+  reload 유지를 확인한다. 전체 Files suite는 F239-35와 F239-37에 남는다.
+
 - F239-35-4-1: declared UI expansion 구독을 DOM exposure relay와 분리한다. `forwardHostExposure`는 `exposure-request`를 구독한 경우에만 허용한다. Red: expansion만 구독한 host가 no-subscription 오류 대신 `dom.rect` 요청을 전달받았다. Green: 같은 test가 즉시 거부와 exposure event 미전달을 확인하고 plugin-host call tests 24/24, `make exposure-check`, `make docs-check`가 통과한다. Fake host는 `clockAnswer`를 사용해 `log {action: "clock"}`에 계약된 `{ts_us, mono_ns}`를 반환하며 owning test stderr에는 clock response 오류가 없다.
 
 - F239-35-4: Plugin-host `runtime.native.on`은 `exposure-request`와 `declared-ui.expanded`만 허용하며 다른 event 이름은 계속 거부한다. Red: 변경 전 public plugin-host-call test는 `native event declared-ui.expanded is not served to a plugin host` 오류로 거부했다. Green: 같은 owning test가 두 구독과 `document-state` 거부를 검증하며 23/23 통과하고 `make exposure-check`도 통과한다. `make docs-check`가 통과한다.

@@ -59,6 +59,66 @@ for (const app of Object.values(APPS)) {
     };
     const bookmarkPaths = (snapshot) => snapshot.value?.elements
       .flatMap((element) => element.kind === "list" ? element.items : []).map((item) => item.label) ?? [];
+    const controlAddress = (section, key, extra = {}) => ({ sidebar: "left", section, key, ...extra });
+    const controlRect = (address) => s.request("dom.rect", { name: "core.sidebar.section.control", address });
+    const clickControl = async (address) => {
+      const rect = await controlRect(address);
+      assert.ok(rect.width > 0 && rect.height > 0, `control ${JSON.stringify(address)} has no area`);
+      await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    };
+    const rootButtonAddress = (snapshot, section, command) => {
+      const button = snapshot.value?.elements.find((element) => element.kind === "button" && element.command === command);
+      assert.ok(button, `${section} has no root button for ${command}`);
+      return controlAddress(section, button.key);
+    };
+    const treeNodeAddress = (snapshot, path, role = "label") => {
+      const tree = filesTree(snapshot);
+      assert.ok(tree, "files.tree has no declared tree element");
+      const find = (nodes, parents = []) => {
+        for (const node of nodes ?? []) {
+          const keys = [...parents, node.key];
+          if (node.params?.path === path) return keys;
+          const nested = find(node.children, keys);
+          if (nested) return nested;
+        }
+        return null;
+      };
+      const keys = find(tree.nodes);
+      assert.ok(keys, `${path} is not a node of the declared tree`);
+      return controlAddress("files.tree", tree.key, { path: keys, role });
+    };
+    const bookmarkAddress = (snapshot, path) => {
+      const list = snapshot.value?.elements.find((element) => element.kind === "list");
+      const item = list?.items.find((value) => value.label === path);
+      assert.ok(list && item, `${path} is not an item of files.bookmarks`);
+      return controlAddress("files.bookmarks", list.key, { path: [item.key], role: "label" });
+    };
+    const acceptedTreeSeq = async () => {
+      const sidebars = await s.get("core.sidebars");
+      const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+      assert.ok(Number.isInteger(section?.acceptedSeq), "the Files section has no accepted snapshot sequence");
+      return section.acceptedSeq;
+    };
+    const treeAfterAcceptedPush = async (sequence, message) => {
+      await s.until("core.sidebars", (sidebars) => {
+        const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+        return Number.isInteger(section?.acceptedSeq) && section.acceptedSeq > sequence;
+      }, message);
+      return s.get("files.tree");
+    };
+    const treeAfterSelection = async (sequence, path, message) => {
+      let accepted = sequence;
+      // Each iteration waits for a status notification and makes one snapshot request; it does not poll or infer command completion from the click reply.
+      for (;;) {
+        const sidebars = await s.until("core.sidebars", (value) => {
+          const section = value.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+          return Number.isInteger(section?.acceptedSeq) && section.acceptedSeq > accepted ? section.acceptedSeq : undefined;
+        }, message);
+        accepted = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree").acceptedSeq;
+        const snapshot = await s.get("files.tree");
+        if (treeNode(snapshot, path)?.selected === true) return snapshot;
+      }
+    };
     const waitForSectionText = (id, predicate, message) => s.until("core.sidebars",
       (sidebars) => predicate(text(sidebars, id) ?? ""), message);
     const treeAfterSectionText = async (id, predicate, message) => {
@@ -72,20 +132,28 @@ for (const app of Object.values(APPS)) {
     const projectLine = tree.value.elements.find((element) => element.kind === "status-line" && element.key === "project");
     assert.equal(projectLine?.text, project.root);
     assert.ok(treeNode(tree, folder), "files.tree did not list the project folder");
+    await s.until("core.sidebars", (sidebars) => {
+      const section = sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+      return section?.mounted && section.controls > 0 && section.text.includes(project.root);
+    }, "the Files tree section did not render the project snapshot");
+    tree = await s.get("files.tree");
 
-    /** Presses the center of the tree row path with a native click. A row is ROW apart from the top of the element that holds it. */
+    /** Clicks the label or expand control of the declared tree node by its public control address. */
     const clickRow = async (value, path) => {
-      const sidebars = await s.get("core.sidebars");
-      const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
-      const index = treeRows(value).findIndex((item) => item.params?.path === path);
-      assert.ok(index >= 0, `${path} is not a row`);
-      await s.click(holder.x + holder.width / 2, holder.y + (index + 0.5) * ROW);
+      await clickControl(treeNodeAddress(value, path));
     };
 
-    // When a folder of the tree is opened with a native click, files.tree.toggle lists that folder.
+    // The label selects the folder; the separate declared expand control requests an expanded snapshot through core.
+    let sequence = await acceptedTreeSeq();
+    let selectedTree = treeAfterSelection(sequence, folder, "the folder label did not publish its selection");
     await clickRow(tree, folder);
+    tree = await selectedTree;
+    sequence = await acceptedTreeSeq();
+    const expandedTree = treeAfterAcceptedPush(sequence, "the folder expand control did not publish its expanded tree");
+    await clickControl(treeNodeAddress(tree, folder, "expand"));
+    tree = await expandedTree;
     tree = await treeAfterSectionText("files.tree", (value) => value.includes("note.txt"),
-      "a click on the folder in the tree did not open it");
+      "the folder expand control did not list its file");
     assert.ok(treeNode(tree, `${folder}/note.txt`), "the declared files.tree snapshot omitted the opened file");
 
     // A file created or deleted outside the application appears or disappears through the watcher without a refresh.
@@ -99,14 +167,16 @@ for (const app of Object.values(APPS)) {
     assert.equal(treeNode(tree, `${folder}/watched.txt`), null, "the declared files.tree snapshot retained the removed file");
 
     // The refresh control runs files.refresh.
-    let sidebars = await s.get("core.sidebars");
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", REFRESH));
+    await clickControl(rootButtonAddress(await s.get("files.tree"), "files.tree", "files.refresh"));
 
     // Bookmark: when a file is selected in the tree and the star is pressed, files.bookmarks.add runs, and it remains after it is read again.
     const note = `${folder}/note.txt`;
     tree = await s.get("files.tree");
+    sequence = await acceptedTreeSeq();
+    selectedTree = treeAfterSelection(sequence, note, "the file label did not publish its selection");
     await clickRow(tree, note);
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
+    tree = await selectedTree;
+    await clickControl(rootButtonAddress(await s.get("files.tree"), "files.tree", "files.bookmarks.add"));
     await waitForSectionText("files.bookmarks", (value) => value.includes(note), "the star did not bookmark the selected file");
     assert.ok(bookmarkPaths(await s.get("files.bookmarks")).includes(note), "the declared files.bookmarks snapshot omitted the file");
     s.cleanup(async () => {
@@ -119,12 +189,11 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.reload");
     await s.until("core.window.document", (doc) => doc.timeOrigin !== before && doc.readyState === "complete",
       "the main document did not reload");
-    sidebars = await s.until("core.sidebars", (value) => text(value, "files.bookmarks")?.includes(note),
+    await s.until("core.sidebars", (value) => text(value, "files.bookmarks")?.includes(note),
       "the bookmark did not survive a reload");
 
     // The delete control runs files.bookmarks.remove.
-    const bookmarks = bookmarkPaths(await s.get("files.bookmarks"));
-    await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(note)));
+    await clickControl(bookmarkAddress(await s.get("files.bookmarks"), note));
     await waitForSectionText("files.bookmarks", (value) => !value.includes(note), "a click on 삭제 did not remove the bookmark");
     assert.ok(!bookmarkPaths(await s.get("files.bookmarks")).includes(note), "the declared files.bookmarks snapshot retained the file");
   });
