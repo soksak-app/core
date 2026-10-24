@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F212.10-core-3-2: page reload 뒤 seal한 모든 native view call을 측정한다.
+  Consumer는 cleanup 전에 call을 seal하고 shared host clock과 page clock
+  bound로 replacement page 시작 이후 call을 분류한 뒤 exact page-generation
+  settlement를 기다린다. Reply는 native `posted` 증거도 요구한다. Receipt보다
+  먼저 발생하는 cancellation-only record는 유효하다. 소유 test는 13/13
+  통과했으며 전체 call runtime 수용 검증은 남아 있다.
+
 - F267.9: 현재 implementation과 test에 맞게 feature evidence link를 정합한다.
   기존 owning test가 기록된 동작을 증명하는 mapping을 수정하고 F239-47-34만
   문서 정정으로 분류했다. Focused parity test는 2/2 통과하며 연결되지 않은

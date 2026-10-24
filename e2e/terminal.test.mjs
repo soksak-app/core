@@ -23,7 +23,9 @@ import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { glyphShape, surfaceBoxes, whitePixels } from "./outside.mjs";
 import { assertHeldStatesShown } from "./drag-measurement.mjs";
 import { terminalProcessSnapshot } from "./terminal-processes.mjs";
-import { acceptedCurrentViewReplies } from "./reload-view-reply.mjs";
+import {
+  acceptedCurrentViewReplies, currentPageNativeViewCalls, currentPageViewCallCoverage,
+} from "./reload-view-reply.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
 import {
   cellBackgrounds, ensureTerminals, isColor, MEASURED_BACKGROUND, readScreenUntil, selectionBackground, setMeasuredBackground,
@@ -795,7 +797,8 @@ for (const app of Object.values(APPS)) {
 
   test(`${app.name}: a page start keeps the terminal sessions that the layouts hold`, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { call: "debug" }, reads: ["page.start", "page.view.call", "page.view.reply", "host.view.reply.dispatch"] });
+    await fresh(s, { log: { call: "debug" }, reads: ["page.start", "page.view.call", "page.view.reply", "page.view.call.cancel",
+      "host.view.call", "host.view.reply.dispatch"] });
     const [terminal] = await ensureTerminals(s, 1);
     const surface = terminal.surface;
     const before = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not open", { surface });
@@ -839,6 +842,23 @@ for (const app of Object.values(APPS)) {
     await s.run("terminal.input", { bytes: `printf '%s\\n' '${marker}'\r` }, surface);
     await readScreenUntil(s, surface, (lines) => lines.join(" ").includes(marker),
       `the retained terminal did not continue its shell after reload`);
+    await s.flushLog();
+    const sealed = readEvents(s.app.configDir, offsets);
+    const nativeCalls = currentPageNativeViewCalls(sealed.events, { page: currentPage });
+    assert.ok(nativeCalls.length > 0, "the replacement page produced no native view calls in the sealed measurement");
+    t.diagnostic(`sealed ${nativeCalls.length} native view calls across ${Object.keys(sealed.offsets).length} event-log offsets`);
+    let observed = [];
+    const coverage = await untilFolderState(join(s.app.configDir, "logs"), () => {
+      const events = readEvents(s.app.configDir, offsets).events;
+      observed = events.filter((event) => event.layer === "page" && event.page === currentPage &&
+        ["page.view.call", "page.view.reply", "page.view.call.cancel"].includes(event.event));
+      return currentPageViewCallCoverage(events, { window: "main", page: currentPage, calls: nativeCalls });
+    }, 30000, () => new Error(`the sealed native view calls did not all receive current-page settlements: ${JSON.stringify({
+      calls: nativeCalls, pageEvents: observed,
+    })}`));
+    assert.equal(coverage.length, nativeCalls.length,
+      "the current page did not settle every native view call through the sealed offset");
+    t.diagnostic(`all ${coverage.length} sealed calls settled on the replacement page`);
   });
 
   test(`${app.name}: hiding three terminals retains native geometry and rasters`, async (t) => {

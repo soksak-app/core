@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F212.10-core-3-2: Measure every sealed native view call after page reload.
+  The consumer seals calls before cleanup, classifies them against the
+  replacement page start using the shared host clock and page clock bound, and
+  waits for an exact page-generation settlement plus native `posted` evidence
+  for replies. Cancellation-only records remain valid when emitted before a
+  receipt. The owner test passes 13/13; runtime all-call acceptance remains
+  pending.
+
 - F267.9: Align feature evidence links with current implementation and tests.
   Corrected mappings where existing owning tests prove the recorded behavior
   and classified only F239-47-34 as a documentation correction. The focused
