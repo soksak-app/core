@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-37-9: Start the existing Files project-close check by opening its
+  disposable project before waiting for mounted sidebar sections. The project
+  library has no plane, so `core.sidebars` correctly reports no drawn sections
+  there. After close, the check now verifies newer declared tree and bookmark
+  snapshots with exact no-project values, no stale rows, no application error,
+  and no Files sections drawn in the library. Red: the prior Wails check timed
+  out on `core.sidebars: []` before opening the test project. Syntax and
+  `make e2e-check` pass; the updated two-host runtime check remains pending.
+
 - F239-37-8: Wait for the current Files tree source to accept a declared UI
   snapshot before using its sequence as a baseline. A source change may leave
   the section cleared with a pending subscription and a null `acceptedSeq`.
