@@ -9,9 +9,8 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write;
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError, sync_channel};
@@ -326,17 +325,8 @@ impl EventLog {
 
     /// Creates the folder (mode 0700) and the file (mode 0600, created new), writes `log.open` and starts the writer thread.
     pub fn start(options: Options) -> Result<EventLog, String> {
-        let reason = |path: &Path, error: std::io::Error| {
-            format!("{}: {}", path.display(), crate::files::os_reason(&error))
-        };
-        std::fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(&options.directory)
-            .map_err(|e| reason(&options.directory, e))?;
-        // A folder that existed before keeps its mode; the log folder of the contract is private.
-        std::fs::set_permissions(&options.directory, std::fs::Permissions::from_mode(0o700))
-            .map_err(|e| reason(&options.directory, e))?;
+        let system = crate::platform::current()?;
+        system.prepare_log_directory(&options.directory)?;
         let path = options
             .directory
             .join(format!("{}-{}.jsonl", options.role, options.boot));
@@ -344,12 +334,7 @@ impl EventLog {
             .directory
             .join(format!("{}-{}.debug.jsonl", options.role, options.boot));
         // The standard library opens the file close-on-exec, so a child process does not inherit it.
-        let file = OpenOptions::new()
-            .create_new(true)
-            .append(true)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|e| reason(&path, e))?;
+        let file = system.create_log_file(&path)?;
         let on_write: Arc<Mutex<Option<WriteObserver>>> = Arc::new(Mutex::new(None));
         let (sender, receiver) = sync_channel(options.queue_events + RESERVED_FOR_REQUESTS);
         let queued_events = Arc::new(AtomicUsize::new(0));
@@ -903,12 +888,10 @@ impl LogFile {
 }
 
 fn open_log_file(path: &Path) -> std::io::Result<File> {
-    // The standard library opens the file close-on-exec, so a child process does not inherit it.
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .mode(0o600)
-        .open(path)
+    // The platform opens the file with private access and close-on-exec, so a child process does not inherit it.
+    crate::platform::current()
+        .and_then(|system| system.append_log_file(path))
+        .map_err(std::io::Error::other)
 }
 
 /// The two files of the writer with the sequence number of the last line, which runs across both.

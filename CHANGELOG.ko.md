@@ -29,6 +29,15 @@
   13개 finding을 보고한다. Tauri owning test는 1/1, `make docs-check`는
   통과했다. Inventory 검사는 lane 100개, 구현 파일 695개, test 파일
   990개로 통과했다.
+- F239-48-4: private event-log과 process-lock 파일 작업을 Tauri CLI
+  platform interface 뒤로 옮긴다. Darwin/Linux의 기존 0700/0600 동작은
+  유지하며 Windows에서는 private-file platform contract에 따라 명시적인
+  unsupported error를 반환한다. 변경 전 Windows process-wait target은 Unix 전용
+  filesystem extension에서 compile에 실패했다. 현재 Windows `process_wait_windows`
+  target과 `sok` binary는 type-check된다. Event directory, event file,
+  process-lock permission 집중 test는 macOS에서 3/3 통과한다. Windows
+  process-wait test는 Windows에서 실행하지 않아 checklist 항목은 active다.
+
 - F239-47-30-3-1: E2E consumer에서 display-link artifact를 검증한다.
   집중 helper test 7/7과 양 host capture-stop case가 통과한다. Consumer는
   누락 없이 inactive application의 Wails 관측 24개와 Tauri 관측 22개의

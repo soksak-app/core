@@ -91,6 +91,49 @@ impl Platform for Linux {
         }
     }
 
+    fn prepare_log_directory(&self, path: &std::path::Path) -> Result<(), String> {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(path)
+            .map_err(|error| crate::files::file_error(path.display(), &error))?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
+    fn create_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .create_new(true)
+            .append(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
+    fn append_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .open(path)
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
+    fn open_process_lock_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(path)
+            .map_err(|error| crate::files::file_error(path.display(), &error))
+    }
+
     /// Reads `CLOCK_MONOTONIC`.
     fn monotonic_nanos(&self) -> Result<u64, String> {
         let mut now = libc::timespec {

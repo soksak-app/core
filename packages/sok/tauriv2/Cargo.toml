@@ -30,6 +30,18 @@ path = "tests/platform/linux/process_wait_test.rs"
 name = "process_wait_windows"
 path = "tests/platform/windows/process_wait_test.rs"
 
+[[test]]
+name = "private_files_darwin"
+path = "tests/platform/darwin/private_files_test.rs"
+
+[[test]]
+name = "private_files_linux"
+path = "tests/platform/linux/private_files_test.rs"
+
+[[test]]
+name = "private_files_windows"
+path = "tests/platform/windows/private_files_test.rs"
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
