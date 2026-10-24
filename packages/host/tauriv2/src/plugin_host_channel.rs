@@ -338,7 +338,7 @@ fn reply(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Value,
         .get("reply")
         .and_then(Value::as_u64)
         .ok_or_else(|| format!("plugin host {plugin}: reply has no integer id"))?;
-    let result = fields.get("result").filter(|value| !value.is_null());
+    let result = fields.get("result");
     match (result, fields.get("error")) {
         (Some(result), None) => Ok(json!({"plugin": plugin, "id": id, "result": result})),
         (None, Some(error)) => {

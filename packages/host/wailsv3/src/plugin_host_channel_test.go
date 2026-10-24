@@ -58,10 +58,20 @@ func TestPluginHostChannelRelaysAReplyToTheMainPage(t *testing.T) {
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
 	}
+	if err := s.pluginHostMessage("probe", hostMessage(`{"reply": 8, "result": null}`)); err != nil {
+		t.Fatalf("relay of a null result: %v", err)
+	}
+	if got := (*events)[1]; got.name != "plugin-host-reply" || !reflect.DeepEqual(got.data, map[string]any{"plugin": "probe", "id": uint64(8), "result": json.RawMessage(`null`)}) {
+		t.Fatalf("null result event %v, want an explicit null result", got)
+	}
 	// A reply with both or neither of result and error, an error without a code or a message, and a reply id that is not an
 	// integer are refused and relay nothing.
 	for _, message := range []string{
 		`{"reply": 7}`,
+		`{"reply": 7, "result": null, "error": {"code": -32000, "message": "x"}}`,
+		`{"reply": 7, "result": 1, "error": null}`,
+		`{"reply": 7, "result": null, "error": null}`,
+		`{"reply": 7, "error": null}`,
 		`{"reply": 7, "result": 1, "error": {"code": -32000, "message": "x"}}`,
 		`{"reply": 7, "error": {"message": "x"}}`,
 		`{"reply": 7, "error": {"code": -32000}}`,
@@ -71,7 +81,7 @@ func TestPluginHostChannelRelaysAReplyToTheMainPage(t *testing.T) {
 			t.Fatalf("reply %s is accepted", message)
 		}
 	}
-	if len(*events) != 1 {
+	if len(*events) != 2 {
 		t.Fatalf("a refused reply was relayed: %v", *events)
 	}
 }

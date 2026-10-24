@@ -44,8 +44,19 @@ fn a_reply_of_the_page_goes_to_the_main_page_as_plugin_host_reply_without_a_surf
             json!({"plugin": "probe", "id": 7, "result": {"sum": 3}})
         ))
     );
+    assert_eq!(
+        channels.receive("probe", &host_message(r#"{"reply": 8, "result": null}"#)),
+        Ok(Received::Emit(
+            "plugin-host-reply",
+            json!({"plugin": "probe", "id": 8, "result": null})
+        ))
+    );
     for message in [
         r#"{"reply": 7}"#,
+        r#"{"reply": 7, "result": null, "error": {"code": -32000, "message": "x"}}"#,
+        r#"{"reply": 7, "result": 1, "error": null}"#,
+        r#"{"reply": 7, "result": null, "error": null}"#,
+        r#"{"reply": 7, "error": null}"#,
         r#"{"reply": 7, "result": 1, "error": {"code": -32000, "message": "x"}}"#,
         r#"{"reply": 7, "error": {"message": "x"}}"#,
         r#"{"reply": 7, "error": {"code": -32000}}"#,

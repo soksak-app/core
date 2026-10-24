@@ -186,10 +186,7 @@ func PluginHostReplyEvent(plugin string, message json.RawMessage) (map[string]an
 	var reply struct {
 		Reply  *uint64         `json:"reply"`
 		Result json.RawMessage `json:"result"`
-		Error  *struct {
-			Code    *int    `json:"code"`
-			Message *string `json:"message"`
-		} `json:"error"`
+		Error  json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(message, &reply); err != nil {
 		return nil, false, fmt.Errorf("plugin host %s: message is not an object: %w", plugin, err)
@@ -198,18 +195,26 @@ func PluginHostReplyEvent(plugin string, message json.RawMessage) (map[string]an
 		return nil, false, nil
 	}
 	id := *reply.Reply
-	hasResult := len(reply.Result) > 0 && string(reply.Result) != "null"
-	if hasResult == (reply.Error != nil) {
+	hasResult := len(reply.Result) > 0
+	hasError := len(reply.Error) > 0
+	if hasResult == hasError {
 		return nil, true, fmt.Errorf("plugin host %s: reply %d has both or neither of a result and an error", plugin, id)
 	}
-	if reply.Error != nil {
-		if reply.Error.Code == nil {
+	if hasError {
+		var failure struct {
+			Code    *int    `json:"code"`
+			Message *string `json:"message"`
+		}
+		if err := json.Unmarshal(reply.Error, &failure); err != nil {
+			return nil, true, fmt.Errorf("plugin host %s: reply %d has an invalid error: %w", plugin, id, err)
+		}
+		if failure.Code == nil {
 			return nil, true, fmt.Errorf("plugin host %s: reply %d has an error without an integer code", plugin, id)
 		}
-		if reply.Error.Message == nil || *reply.Error.Message == "" {
+		if failure.Message == nil || *failure.Message == "" {
 			return nil, true, fmt.Errorf("plugin host %s: reply %d has an error without a message", plugin, id)
 		}
-		return map[string]any{"plugin": plugin, "id": id, "error": map[string]any{"code": *reply.Error.Code, "message": *reply.Error.Message}}, true, nil
+		return map[string]any{"plugin": plugin, "id": id, "error": map[string]any{"code": *failure.Code, "message": *failure.Message}}, true, nil
 	}
 	return map[string]any{"plugin": plugin, "id": id, "result": json.RawMessage(reply.Result)}, true, nil
 }

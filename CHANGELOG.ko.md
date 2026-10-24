@@ -5,6 +5,7 @@
 ## 미배포
 
 - F239-33: `installStarter`는 실패 원문을 보존하고, network 연결과 재시작이 해결책이라고 약속하는 문구를 제거한다. Red: 존재하지 않는 pack과 제어된 manifest format 오류 시험이 변경 전 코드의 근거 없는 안내 문구로 실패했다. Green: 소유 plugin operations test 22/22과 `make docs-check` 문서 112개, 기록 1718개가 통과한다.
+- F239-34: Tauri와 Wails가 plugin-host `result` 멤버의 존재 여부를 구분하므로 `result: null`도 유효한 reply다. 두 멤버가 함께 있거나 모두 없는 reply는 거부하고, 비null 결과와 유효한 error는 보존한다. Red: 변경 전 각 소유 테스트가 `result: null`을 result와 error가 모두 없는 것으로 거부했다. Green: 두 Red/Green 소유 사례, Tauri plugin-host channel 테스트 24/24, Wails plugin-host channel 테스트 14/14와 `make docs-check`가 통과한다. 관찰한 Tauri `files.refresh` channel 오류는 이 parser 결함과 일치하지만 정확한 요청/reply 상관관계는 확인하지 않았다.
 
 - F265-1: records 검사는 JSON object가 아닌 census 선언을 거부하고, 잘못된 `exclude` pattern은 census 파일과 실제 값을 담아 보고한다. Red: 두 오류 문맥 시험이 F265 코드에서 실패했다. Green: records-check 15/15와 `make docs-check` 문서 112개, record 1718개가 통과한다.
 
