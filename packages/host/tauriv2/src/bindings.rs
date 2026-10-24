@@ -25,7 +25,7 @@ use crate::shapes::{self, ShapeRequest};
 use crate::sidecars::WindowSidecars;
 use crate::surfaces::{self, Placement, PreparedSurfaces, PresentRequest, Rect, SyncRequest};
 use crate::theme::{self, Theme};
-use crate::windows::{self, Geometry, OpenProject};
+use crate::windows::{self, Geometry, OpenProject, ProjectShown};
 use crate::workspace;
 
 /// Defines the commands that the page calls and generates their registration. Every command takes a [`BindingCall`] as its
@@ -97,6 +97,16 @@ fn project_open(
 ) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     windows::project_open(&window, request)
+}
+
+/// Commits the project after the page has selected it and loaded its project-data context.
+#[tauri::command(async)]
+fn project_shown(
+    window: Window,
+    request: Argument<ProjectShown>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    windows::project_shown(&window, request)
 }
 
 /// Releases the link between a project and a window.
@@ -919,3 +929,7 @@ fn clipboard_persist_png(
 #[cfg(test)]
 #[path = "../tests/declared_source_stream/bindings_test.rs"]
 mod declared_source_stream_tests;
+
+#[cfg(test)]
+#[path = "../tests/project_data_order/bindings_test.rs"]
+mod project_data_order_tests;

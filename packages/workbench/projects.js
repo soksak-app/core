@@ -6,7 +6,7 @@ import { beginSettings, selectProject, value, flushSettings } from "./settings.j
 import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
-import { configureData, showData } from "./plugin-data.js";
+import { commitData, configureData, prepareData, restoreData, showData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
@@ -93,9 +93,15 @@ async function emptyToLibrary() {
 export function browse() {
   return inTurn(async () => {
     await flush();
-    await showData(null);
+    const previous = { id: activeProjectId, browsing };
+    try {
+      await selectProject(null);
+      await publishProjectData(await prepareData(null), null);
+    } catch (error) {
+      try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
+      throw error;
+    }
     await emptyToLibrary();
-    await selectProject(null);
     changed();
   });
 }
@@ -294,19 +300,42 @@ function activateHere(id) {
   return inTurn(() => showProject(id));
 }
 
-async function showProject(id) {
-  if (id === activeProjectId && !browsing && owned.has(id)) { await selectProject(id); return; }
-  await keep("library replacement");
-  await refresh();
-  const project = projects.find((p) => p.id === id);
+async function showProject(id, prepared = null, openedProject = null, stagedOwner = false) {
+  if (id === activeProjectId && !browsing && owned.has(id)) {
+    const previous = { id: activeProjectId, browsing };
+    try {
+      await selectProject(id);
+      if (prepared) await publishProjectData(prepared, active());
+      else await windows.projectShown(active());
+    } catch (error) {
+      try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
+      throw error;
+    }
+    return;
+  }
+  if (!openedProject) {
+    await keep("library replacement");
+    await refresh();
+  }
+  const project = openedProject ?? projects.find((p) => p.id === id);
   if (!project) throw new Error(`Unknown project: ${id}`);
-  checkProject(project);
-  await selectProject(id);
+  if (!openedProject) checkProject(project);
+  const nextContext = prepared ?? await prepareData({ id, root: project.root });
+  const previous = { id: activeProjectId, browsing };
+  try {
+    await selectProject(id);
+    await publishProjectData(nextContext, project);
+  } catch (error) {
+    try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
+    if (stagedOwner) {
+      try { await windows.releaseProject(id); } catch (cleanupError) { failed(cleanupError); }
+    }
+    throw error;
+  }
   owned.add(id);
   activeProjectId = id;
   browsing = false;
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
-  await showData({ id, root: project.root });
   changed();
   savedLayout = "";
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout);
@@ -314,6 +343,16 @@ async function showProject(id) {
   // A project command completes only after the loaded layout has reached the native compositor.
   // If it returned earlier, the previous frame would be exposed to the caller, and a state with empty regions would be reported as a successful project restore.
   await listener.presented();
+}
+
+async function publishProjectData(context, project) {
+  const previous = commitData(context);
+  try {
+    await windows.projectShown(project ? { id: project.id, root: project.root, title: project.title } : null);
+  } catch (error) {
+    restoreData(context, previous);
+    throw error;
+  }
 }
 
 export function activate(id) {
@@ -346,12 +385,25 @@ async function activateInTurn(id) {
   if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
   const result = await windows.openProject({
     // default: a project whose window was never closed has no stored window position (null).
-    id, root: project.root, title: project.title, geometry: project.geometry ?? null,
+    id, root: project.root, geometry: project.geometry ?? null,
     separate: value("projectOpening") === "windows", current: active() && !owned.has(id) ? activeProjectId : null,
   }, beginOperation("page.project.operation", { action: "open", project: id }));
+  if (!result.local) {
+    if (active()) await showProject(activeProjectId);
+    await store.patch(id, { lastOpened: Date.now() });
+    return;
+  }
+  let prepared;
+  try {
+    prepared = await prepareData({ id, root: project.root });
+  } catch (error) {
+    if (result.staged) {
+      try { await windows.releaseProject(id); } catch (cleanupError) { failed(cleanupError); }
+    }
+    throw error;
+  }
+  await showProject(id, prepared, project, result.staged);
   await store.patch(id, { lastOpened: Date.now() });
-  if (!result.local) { if (active()) await showProject(activeProjectId); return; }
-  await showProject(id);
 }
 
 export async function open({ root, color, layout }) {

@@ -40,6 +40,7 @@ const METHOD = {
   windowNew: "WindowNew", folderChoose: "FolderChoose", projectCreate: "ProjectCreate",
   projectFolder: "ProjectFolder",
   projectOpen: "ProjectOpen",
+  projectShown: "ProjectShown",
   projectRelease: "ProjectRelease",
   projectRemoveAsk: "ProjectRemoveAsk",
   projectRemoveAnswer: "ProjectRemoveAnswer",

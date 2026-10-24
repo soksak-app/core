@@ -2864,3 +2864,14 @@
   shutdown acceptance 통과, source-generation 작업 완료, rebuilt host에서
   남은 Files 검사를 기록한다. Checklist 수정이며 동작 변경이나 Files runtime
   통과 주장은 없다.
+- F262-10: `projectOpen`은 ownership을 예약해도 native shown-project 상태를
+  바꾸지 않는다. Workbench가 project data와 settings를 준비한 뒤
+  `projectShown`으로 프로젝트를 확정·게시하며, 각 data call은 시작 시점의
+  context를 캡처한다. Red: 변경 전 Workbench와 host test에서 plugin callback이
+  null/이전 프로젝트를 읽고, 늦게 준비된 host가 미확정 프로젝트를 따라잡는
+  문제를 재현했다. Geometry fault injection은 설정 실패 뒤 새 Tauri 창이
+  남는 문제도 찾았다. Green: Workbench project-order 8/8, plugin-data 6/6,
+  project-switch 13/13, project-close 8/8, operations 6/6, browser windows
+  3/3; Wails project test 5/5; Tauri project, readiness, ownership, null,
+  release, binding, geometry test 통과. 집중 로그는 `/tmp/F262-10-*`에 보존한다.
+  F28 runtime Files 오류는 조사 중이며 이 변경의 원인으로 연결하지 않는다.

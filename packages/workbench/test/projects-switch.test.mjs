@@ -17,6 +17,7 @@ mock.module("@soksak/runtime", {
         return { root, identity: PROJECT.identity };
       },
       openProject: async (request) => { openRequests.push(request.id); return { local: true }; },
+      projectShown: async () => {},
       releaseProject: async () => {},
       state: async () => null,
       close: async () => {},
@@ -50,6 +51,9 @@ let dataOptions = null;
 mock.module("../plugin-data.js", {
   namedExports: {
     configureData: (values) => { dataOptions = values; },
+    prepareData: async (project) => ({ project }),
+    commitData: (context) => { shownData.push(context.project?.id ?? null); return null; },
+    restoreData: () => {},
     showData: async (project) => { shownData.push(project?.id ?? null); },
   },
 });

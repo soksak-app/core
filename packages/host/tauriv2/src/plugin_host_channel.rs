@@ -1091,6 +1091,13 @@ fn post(window: &Window, plugin: &str, message: &Value) -> Result<(), String> {
 /// Returns the id and the root of the project that the window shows, or None when it shows none (docs/spec/plugin-host.md#configuration).
 pub(crate) fn shown_project(window: &Window) -> Result<Option<SurfaceProject>, String> {
     let data = window_data(window)?;
+    shown_project_from_data(&data)
+}
+
+/// Reads only the project committed by the page. Plugin-host readiness uses this same state reader for catch-up.
+pub(crate) fn shown_project_from_data(
+    data: &crate::windows::WindowData,
+) -> Result<Option<SurfaceProject>, String> {
     let shown = data
         .shown
         .lock()
@@ -1102,14 +1109,18 @@ pub(crate) fn shown_project(window: &Window) -> Result<Option<SurfaceProject>, S
         return Ok(None);
     }
     let root = data
-        .projects
+        .root
         .lock()
-        // default: a lock that a panicking thread poisoned still holds the project roots, which this read only copies; the panic
-        // hook records the panic.
+        // default: a lock that a panicking thread poisoned still holds the committed project root, which this call only copies;
+        // the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
-        .get(&shown)
-        .cloned();
-    Ok(root.map(|root| SurfaceProject { id: shown, root }))
+        .clone();
+    if root.is_empty() {
+        return Err(format!(
+            "window shows project {shown} without a committed root"
+        ));
+    }
+    Ok(Some(SurfaceProject { id: shown, root }))
 }
 
 /// Posts the event project with the id and the root of the shown project, or null, to each plugin of plugins that is ready, and

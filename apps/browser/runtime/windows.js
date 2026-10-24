@@ -25,12 +25,13 @@ export const windows = {
    * A request for a separate window from a tab that has another project open opens a new tab and returns `local: false`.
    */
   async openProject({ id, separate, current }) {
-    if (!separate || current === null || current === id) return { local: true };
+    if (!separate || current === null || current === id) return { local: true, staged: false };
     const target = new URL(location.href);
     target.search = "";
     target.searchParams.set("project", id);
     if (!window.open(target, `soksak-${id}`)) throw new Error("The browser blocked the project window");
-    return { local: false };
+    return { local: false, staged: false };
   },
+  projectShown: async () => {},
   releaseProject: async () => {},
 };

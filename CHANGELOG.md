@@ -2924,3 +2924,15 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   completed. Record the passing eight-mode shutdown acceptance, completed
   source-generation work, and the remaining rebuilt-host Files checks. This
   checklist update changes no behavior and claims no Files runtime pass.
+- F262-10: Keep native shown-project state unchanged while `projectOpen`
+  reserves ownership. Workbench prepares project data and settings before
+  `projectShown` commits and publishes the project; each data call captures
+  its context when invoked. Red: unchanged Workbench and host tests reproduced
+  early plugin callbacks reading null or the previous project, and a late-ready
+  host catching up to an uncommitted project. Geometry fault injection also
+  found a newly created Tauri project window left open after setup failed.
+  Green: Workbench project-order 8/8, plugin-data 6/6, project-switch 13/13,
+  project-close 8/8, operations 6/6, browser windows 3/3; Wails project tests
+  5/5; Tauri project, readiness, ownership, null, release, binding, and geometry
+  tests pass. Focused logs are preserved under `/tmp/F262-10-*`. The F28 runtime
+  Files error remains under investigation and is not attributed to this change.

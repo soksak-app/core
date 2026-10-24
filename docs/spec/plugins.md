@@ -335,7 +335,8 @@ Every workbench page declares one import map equal to `PAGE_IMPORTS`: `soksak`, 
 | `folder(root)` | Returns `{ root, identity }` for a project directory. The browser application returns the trimmed path and the identity `path:<trimmed path>` |
 | `chooseFolder()` | Shows the folder selection dialog. The browser application rejects the call |
 | `createFolder({ parent, name })` | Creates a project folder. The browser application rejects the call |
-| `openProject({ id, root, title, geometry, separate, current })` | Opens a project and returns `{ local }`; `local` is `true` when the calling window shows the project. The browser application opens a separate project in a new tab |
+| `openProject({ id, root, geometry, separate, current })` | Opens or reserves a project owner and returns `{ local, staged }`; `local` is `true` when the calling window owns the open, and `staged` is `true` until that owner commits the project through `projectShown`. The browser application opens a separate project in a new tab |
+| `projectShown(project)` | Commits `{id, root, title}` or `null` as the project the window shows and sends it to ready plugin hosts. The page calls it only after installing the matching prepared project-data context. |
 | `releaseProject(id)` | Releases the calling window's ownership of a project |
 | `askRemoveProject(id)` | Asks the window that shows the project whether the project may be removed and resolves `true` when it may; resolves `true` at once when no other window shows it |
 | `onRemoveProjectRequest(fn)` | Calls `fn(id)` when another window asks whether the project that this window shows may be removed |

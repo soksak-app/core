@@ -108,7 +108,7 @@ plugin host state는 plugin의 host 페이지가 자기 channel을 통해 저장
 
 ## 프로젝트 데이터 호출
 
-plugin host는 두 channel call로 플러그인의 [프로젝트 데이터](plugins.ko.md#프로젝트-데이터)를 읽고 쓴다. 두 call은 메인 페이지가 창이 표시한 프로젝트에 대해 답한다.
+plugin host는 두 channel call로 플러그인의 [프로젝트 데이터](plugins.ko.md#프로젝트-데이터)를 읽고 쓴다. 두 call은 메인 페이지가 창이 표시한 프로젝트에 대해 답한다. `projectOpen`은 ownership을 기록하지만 확정된 shown project를 바꾸거나 project message를 보내지 않으며 ownership이 아직 staged인지 반환한다. Local open이 성공한 뒤 페이지는 선언된 project-data context를 준비하고 settings scope를 선택한 뒤 context를 설치하고 `projectShown({id, root, title})`을 호출한다. 이 호출만 native shown project를 확정하고 ready plugin host에 `project` 메시지를 보낸다. 선택 또는 native publication이 commit 전에 실패하면 이전 settings scope를 복원한다. Library context를 설치한 뒤에는 `projectShown(null)`을 보낸다. 각 data call은 시작 시점의 active context를 캡처한다. Context 설치 전에 시작한 call은 이전 프로젝트의 access function을 유지하고, 설치 후 시작한 call은 새로 준비된 context를 사용한다. 여기에는 `projectShown` command 응답 전에 도착한 callback도 포함된다. 다른 창이 이미 프로젝트를 소유하면 요청 페이지는 그 프로젝트를 게시하지 않는다. 소유 창이 `project-activate`를 처리하고 자체 context를 준비한 뒤 `projectShown`을 호출한다.
 
 - `runtime.data.get {key}`는 키의 값을 돌려준다. 저장된 값이나 기본값이다.
 - `runtime.data.set {key, value}`는 키의 값을 저장하고, 저장소가 쓰기를 받은 뒤 `null`을 돌려준다.
