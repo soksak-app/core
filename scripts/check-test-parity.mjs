@@ -2653,6 +2653,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F271",
+    implementation: [
+      { file: "Makefile", symbol: '--test-target "$$TEST_TARGET"' },
+      { file: "scripts/rust-tests.mjs", symbol: "cargoTargetArgs" },
+    ],
+    tests: [
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat selects only the lib Cargo target before discovery" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat selects only the test:integration Cargo target before discovery" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat keeps package-wide target and doctest discovery by default" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat rejects an invalid Cargo target before invoking Cargo" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "make rust-repeat rejects shell syntax in a Cargo target without executing it" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "runRustTests rejects an explicitly empty Cargo target before invoking Cargo" },
+      { file: "scripts/test/rust-repeat.test.mjs", id: "cargoTargetArgs rejects non-string selectors instead of coercing them" },
+    ],
+    expected: "Rust repeat target selection limits prebuild and discovery before exact test-name filtering while preserving package-wide defaults.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-42-2",
     implementation: [{ file: "packages/workbench/test/declared-source.test.mjs", symbol: "delayListenerRegistration = false;" }],
     tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "the ingress ACKs each valid view event once and routes only its source and status" }],

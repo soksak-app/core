@@ -4,7 +4,7 @@
 // tests of the library (`cargo test --doc -- --list`) run the same way, each as `cargo test --doc -- <name>`, because cargo has no
 // executable for them. A test that does not end is killed at its limit and reported with its name and elapsed time, and the next
 // test still runs.
-// Usage: node scripts/rust-tests.mjs --manifest <Cargo.toml> --package <package> [--features <list>] [--test <name>]
+// Usage: node scripts/rust-tests.mjs --manifest <Cargo.toml> --package <package> [--features <list>] [--test-target lib|test:<name>] [--test <name>]
 //   [--count <n>] [--timeout <seconds>]
 import { execFileSync } from 'node:child_process';
 import { dirname } from 'node:path';
@@ -38,6 +38,18 @@ function cargo(args, { cwd } = {}) {
   return execFileSync('cargo', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 }
 
+/** The Cargo selector for an explicitly requested test target. */
+export function cargoTargetArgs(target) {
+  if (target === undefined) return [];
+  if (typeof target !== 'string') {
+    throw new Error(`--test-target must be a string, found ${JSON.stringify(target)}`);
+  }
+  if (target === 'lib') return ['--lib'];
+  const integration = /^test:([A-Za-z0-9_-]+)$/.exec(target);
+  if (integration) return ['--test', integration[1]];
+  throw new Error(`--test-target must be lib or test:<Cargo target name>, found ${JSON.stringify(target)}`);
+}
+
 /** The package of the manifest, as `cargo metadata` describes it: its folder and whether its library has documentation tests. */
 function packageOf(manifest, pkg) {
   const metadata = JSON.parse(cargo(['metadata', '--no-deps', '--format-version', '1', '--manifest-path', manifest]));
@@ -54,16 +66,18 @@ function packageOf(manifest, pkg) {
  * `<executable> --exact <name>` or, for a documentation test, as `cargo test --doc -- <name>`. Resolves with the exit status: 0 when
  * every test of every run passed and ran.
  */
-export async function runRustTests({ manifest, package: pkg, features, test, count, timeoutMs, write }) {
-  const cargoArgs = ['test', '-q', '--manifest-path', manifest, '-p', pkg, ...(features ? ['--features', features] : [])];
+export async function runRustTests({ manifest, package: pkg, features, testTarget, test, count, timeoutMs, write }) {
+  const targetArgs = cargoTargetArgs(testTarget);
+  const cargoArgs = ['test', '-q', '--manifest-path', manifest, '-p', pkg,
+    ...(features ? ['--features', features] : []), ...targetArgs];
   const executables = testExecutables(cargo([...cargoArgs, '--no-run', '--message-format=json']));
   const { folder: cwd, doctests } = packageOf(manifest, pkg);
-  if (executables.length === 0 && !doctests) throw new Error(`${pkg} has no test executables`);
+  if (executables.length === 0 && (!doctests || testTarget !== undefined)) throw new Error(`${pkg} has no test executables`);
   const listed = executables.flatMap(({ path, target }) => testNames(execFileSync(path, ['--list'], {
     cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'],
   })).map((name) => ({ path, target, name })));
   // A named test that an executable holds needs no listing of the documentation tests.
-  if (doctests && !(test !== undefined && listed.some((item) => item.name === test))) {
+  if (doctests && testTarget === undefined && !(test !== undefined && listed.some((item) => item.name === test))) {
     // Cargo builds the documentation tests while it lists them; a library with none lists nothing.
     for (const name of testNames(cargo([...cargoArgs, '--doc', '--', '--list'], { cwd }))) {
       listed.push({ doc: true, name });
@@ -108,6 +122,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       manifest: { type: 'string', default: 'Cargo.toml' },
       package: { type: 'string' },
       features: { type: 'string' },
+      'test-target': { type: 'string' },
       test: { type: 'string' },
       count: { type: 'string', default: '1' },
       timeout: { type: 'string' },
@@ -121,7 +136,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     throw new Error(`--timeout must be seconds from 0 up to 600, found ${JSON.stringify(values.timeout)}`);
   }
   runRustTests({
-    manifest: values.manifest, package: values.package, features: values.features, test: values.test, count, timeoutMs,
+    manifest: values.manifest, package: values.package, features: values.features, testTarget: values['test-target'],
+    test: values.test, count, timeoutMs,
     write: (line) => process.stdout.write(`${line}\n`),
   }).then((code) => { process.exitCode = code; }, (error) => {
     process.stderr.write(`${error.message}\n`);

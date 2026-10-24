@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- F271: Let `rust-repeat` select one Cargo test target.
+  `TEST_TARGET=lib` and `TEST_TARGET=test:<name>` pass a Cargo selector to the
+  runner's compile-and-discovery request; explicit targets do not enumerate other test
+  binaries or library doctests. Invalid selectors fail before Cargo runs; shell syntax remains data during forwarding. Red: the
+  unchanged runner listed the integration binary for `lib`, the library binary for
+  the integration target, and accepted invalid and empty selectors. The first
+  forwarding change also let shell syntax execute. Before the string-type guard, a
+  second Red showed that `cargoTargetArgs` coerced arrays and objects. Green: the
+  owning runner tests pass 10/10; controlled Cargo fixtures list only the selected executable from one
+  runner build, omit doctests for explicit targets, and retain all targets and doctests by default.
+  Exact-name filtering, per-test timeouts, progress and failure handling remain.
+  The fixtures measure target discovery counts; no real package build time is claimed.
+
 - F239-48-3-2: Place the Rust image-detach implementation and owner test in
   matching modules, and move the Wails start-barrier test beside the Rust
   start tests. The focused Go and Rust image-detach/start tests pass 7/7 each.
