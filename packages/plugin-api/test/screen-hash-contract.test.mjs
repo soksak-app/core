@@ -39,6 +39,8 @@ const EXPECTED_IDS = [
   "screen.message.frame-screen-read",
   "screen.message.null-frame-screen-read",
   "screen.message.frame-screen-good",
+  "screen.message.frame-preedit",
+  "screen.hash.frame-preedit.sha256",
   "screen.message.caret-8x4",
   "screen.message.hollow-block-cursor",
   "screen.message.cursor-preedit-null",
@@ -84,4 +86,14 @@ for (const testCase of CONTRACT.cases) {
 test("screenHash contract runner refuses steps with no operation or multiple operations", async () => {
   await assert.rejects(runScreenHashCase({ id: "invalid-missing", steps: [{ unknown: true }] }), /exactly one operation/);
   await assert.rejects(runScreenHashCase({ id: "invalid-multiple", steps: [{ bytes: { screen: {} }, hash: { screen: {} } }] }), /exactly one operation/);
+});
+
+test("screenHash frame and preedit message pairs with its projected screen hash", async () => {
+  const messageCase = CONTRACT.cases.find(({ id }) => id === "screen.message.frame-preedit");
+  const hashCase = CONTRACT.cases.find(({ id }) => id === "screen.hash.frame-preedit.sha256");
+  assert.ok(messageCase, "frame and preedit message case is published");
+  assert.ok(hashCase, "projected screen hash case is published");
+  const [{ screen }] = await runScreenHashCase(messageCase);
+  assert.deepEqual(hashCase.steps[0].hash.screen, screen);
+  assert.equal(hashCase.steps[0].output.hash, await screenHash(screen));
 });

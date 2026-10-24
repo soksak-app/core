@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
+  투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract
+  test는 message case가 없어 실패했다. Green: paired assertion과
+  `screen-hash-contract.test.mjs`가 통과하고 `make docs-check`도 통과한다.
+  Hash 입력은 `screenFromMessage`가 제공하고 기대 digest는 `screenHash`가
+  생성하므로 결과를 꾸며 내지 않았다. 제품 코드는 바꾸지 않았다.
+
 - F239-47-2: activation observer가 각 status sample 전에 event offset을
   저장해 compose, cursor, screen, host 상태를 읽는 동안 도착한 알림을
   놓치지 않는다. Red: controlled deferred-event case에서 알림 뒤에 wait

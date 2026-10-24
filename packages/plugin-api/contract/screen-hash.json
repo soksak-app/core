@@ -2295,6 +2295,170 @@
       ]
     },
     {
+      "id": "screen.message.frame-preedit",
+      "steps": [
+        {
+          "message": {
+            "value": {
+              "sequence": 1,
+              "segment": "b1",
+              "event": "screen",
+              "frame": {
+                "generation": 3,
+                "raster": 7,
+                "sequence": 12
+              },
+              "rows": 1,
+              "cols": 4,
+              "cursor": {
+                "visible": false,
+                "row": 0,
+                "col": 0,
+                "focused": false,
+                "shape": "Block",
+                "blinking": false,
+                "preedit": {
+                  "text": "한",
+                  "markedRange": {
+                    "location": 0,
+                    "length": 1
+                  },
+                  "selectedRange": {
+                    "location": 1,
+                    "length": 0
+                  },
+                  "replacementRange": null,
+                  "attributed": false
+                }
+              },
+              "cells": [
+                {
+                  "grapheme": "g",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "screen": {
+              "rows": 1,
+              "cols": 4,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "g",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "screen.hash.frame-preedit.sha256",
+      "steps": [
+        {
+          "hash": {
+            "screen": {
+              "rows": 1,
+              "cols": 4,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": false
+              },
+              "cells": [
+                {
+                  "grapheme": "g",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "o",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                },
+                {
+                  "grapheme": "d",
+                  "width": 1,
+                  "fg": null,
+                  "bg": null,
+                  "attributes": 0
+                }
+              ]
+            }
+          },
+          "output": {
+            "hash": "2440c290b16eb674b022305f880284a85571982b128f76512050cafdfee8cec6"
+          }
+        }
+      ]
+    },
+    {
       "id": "screen.message.caret-8x4",
       "steps": [
         {

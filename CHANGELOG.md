@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F268: Publish a screen message with a non-null frame and cursor preedit,
+  paired with a hash case for the screen it projects to. Red: the unchanged
+  owning contract test failed because the message case was absent. Green: the
+  paired assertion and `screen-hash-contract.test.mjs` pass; `make docs-check`
+  passes. `screenFromMessage` supplies the hash input and `screenHash`
+  supplies the expected digest, so no result is fabricated. No product code
+  changes.
+
 - F239-47-2: The activation observer now keeps the event offset from before
   each status sample, so a notification delivered while the sample reads
   compose, cursor, screen and host state is not lost. Red: the controlled
