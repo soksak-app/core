@@ -21,6 +21,7 @@ function fakeClient(fail = () => null) {
       requests.push({ method, ...params });
       const code = method === "input.pointer" ? fail(params, client.buttons) : null;
       if (code !== null) throw Object.assign(new Error(messages[code]), { code });
+      client.afterRequest?.(method, params);
       return null;
     },
     watch: (window, name, predicate) => new Promise((resolve, reject) => {
@@ -109,6 +110,39 @@ test("a refused release keeps the press open until the held button is released",
   // A press of the same button after an ended press is delivered (it is not 1008).
   await s.pointer(10, 20, "down");
   await s.pointer(10, 20, "up");
+});
+
+test("a high-level click waits for an already-held button before pressing", async () => {
+  const client = fakeClient(heldRefuses);
+  const s = new Session(app, client);
+  client.press(0x1);
+  const click = s.click(10, 20);
+  const result = click.then(() => null, (error) => error);
+  await settle();
+  assert.deepEqual(client.requests, [{ method: "status.watch", window: "main", name: "host.buttons" }],
+    "the click sent input while AppKit reported a held button");
+  client.press(0);
+  assert.equal(await result, null);
+  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").map(({ phase }) => phase), ["down", "up"]);
+});
+
+test("a high-level click waits for a button released between its press and release", async () => {
+  const client = fakeClient(heldRefuses);
+  const s = new Session(app, client);
+  client.afterRequest = (method, params) => {
+    if (method === "input.pointer" && params.phase === "down") client.press(0x1);
+  };
+  const click = s.click(10, 20);
+  const result = click.then(() => null, (error) => error);
+  await settle();
+  assert.deepEqual(client.requests, [
+    { method: "status.watch", window: "main", name: "host.buttons" },
+    { method: "input.pointer", window: "main", x: 10, y: 20, phase: "down" },
+    { method: "status.watch", window: "main", name: "host.buttons" },
+  ], "the click sent its release while AppKit reported a held button");
+  client.press(0);
+  assert.equal(await result, null);
+  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").map(({ phase }) => phase), ["down", "up"]);
 });
 
 test("a release that is refused after the buttons are released reports the press that stayed open", async () => {

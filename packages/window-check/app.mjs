@@ -623,7 +623,9 @@ export class Session {
 
   /** A native click with press and release. */
   async click(x, y) {
+    await this.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");
     await this.pointer(x, y, "down");
+    await this.until("host.buttons", (value) => value.mask === 0, "a mouse button stayed pressed");
     await this.pointer(x, y, "up");
   }
 

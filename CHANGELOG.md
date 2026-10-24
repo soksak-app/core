@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-53: Make high-level window-check clicks wait for `host.buttons` to
+  report mask 0 before the press and again before the release. The P85 Files
+  run received native 1007 refusals while another application was frontmost;
+  the low-level `Session.pointer` contract remains an immediate refusal. Two
+  controlled tests reproduce the missing waits before the change and pass
+  afterward, including a button press interleaved between click phases. The
+  owning pointer-press tests pass 6/6, `make e2e-check` and `make docs-check`
+  pass, and the retained window run was not repeated.
+
 - F239-47-2: Enable the declared `input:info` native callback records in the exact eight-vowel activation fixture. The previous P85 Tauri policy logged input only at `error`, which omitted `native.input.callback` records declared at `info`. The fixture now saves bounded key and callback records before evaluating the strict capture-gap result. No activation rerun or product fix is claimed; F239-47-6 remains open.
 
 - F239-47-6/F239-47-10: Record the P85 two-host IME attempt. Both fixed AppKit reference sequences and all ten terminal documents matched. Tauri recorded a 34.660750 ms frame gap and Wails 33.694458 ms, exceeding the unchanged 33 ms limit; visual acceptance remains open. Metadata assigns all vowels the same foreground/background and underlines only the last marked vowel. The callback DTO does not expose AppKit selector names or `committedLength`. A second query replaced the original baseline, and the final frontmost observation conflicts with the runner's restore log; F239-47-24 tracks a valid session baseline. Both hosts and sidecars exited. Structured JSONL logs had zero error-level records, but both native host stderr logs contained `error messaging the mach port for IMKCFRunLoopWakeUpReliable`; the messages remain unclassified, with no established link to the capture gaps.
