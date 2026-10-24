@@ -191,6 +191,102 @@ test("a declared section whose status the active surface did not register stays 
   }
 });
 
+test("a declared section selects and pulls a host that registers after the section is drawn", async () => {
+  const plugin = "probe-late-host";
+  registry.configure({ surfacePlugin: () => plugin });
+  registry.declare(plugin, {
+    status: [{ name: `${plugin}.lines`, description: "Lines.", schema: { type: "array" } }],
+    commands: [{ name: `${plugin}.open`, description: "Opens.", params: { type: "object" }, result: {} }],
+    dom: [],
+  });
+  registerSection({ id: `${plugin}.view`, name: "선언", status: `${plugin}.lines` });
+  const listeners = new Map();
+  const requested = [];
+  const channels = new Map();
+  const value = { elements: [
+    { kind: "list", key: "host-list", empty: "none", items: [{ key: "host-row", label: "host value" }] },
+  ] };
+  declaredWorld.channel = (source) => {
+    channels.set(source.id, (channels.get(source.id) ?? 0) + 1);
+    return {
+      send: (message) => listeners.set(`${source.id}:ack:${message.seq}`, message),
+      onMessage: (listener) => { listeners.set(source.id, listener); return () => listeners.delete(source.id); },
+    };
+  };
+  declaredWorld.pull = (source, status) => {
+    requested.push({ id: source.id, surface: source.surface, status });
+    const reply = source.surface === null ? value : { elements: [
+      { kind: "list", key: "view-list", empty: "none", items: [{ key: "view-row", label: "view value" }] },
+    ] };
+    return Promise.resolve({ seq: 1, value: reply });
+  };
+  const container = document.createElement("div");
+  container.className = "set";
+  document.body.append(container);
+  try {
+    drawSet(container, "rail-late-host", { id: "set-late-host", title: "세트", layout: "list", sections: [`${plugin}.view`] },
+      { card: "rail-late-host", surface: null, orientation: "vertical" });
+    await settle();
+    const report = () => sidebarsState().find((item) => item.sidebar === "rail-late-host").sections[0];
+    assert.equal(report().mounted, false, "the section drew a value before its host registered");
+    assert.deepEqual(requested, [], "the section pulled before its host registered");
+
+    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
+    await settle();
+    assert.deepEqual(requested, [{ id: `plugin:${plugin}`, surface: null, status: "lines" }],
+      "the section did not pull when its host registered as the source");
+    assert.equal(report().mounted, true, "the host's accepted pull value was not mounted");
+    assert.equal(report().text, "host value", "the host's accepted pull value was not drawn");
+    assert.equal(report().controls, 0, "the host's list unexpectedly declared an interactive control");
+
+    listeners.get(`plugin:${plugin}`)({ event: "declared-ui.snapshot", plugin, status: "lines", seq: 2,
+      value: { elements: [{ kind: "list", key: "host-list", empty: "none", items: [{ key: "host-row-2", label: "pushed value" }] }] }, skipped: 0 });
+    assert.equal(report().text, "pushed value", "the host's subscribed snapshot did not replace the pulled value");
+    assert.ok(listeners.has(`plugin:${plugin}:ack:2`), "the host snapshot was not acknowledged");
+
+    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
+    await settle();
+    assert.equal(requested.length, 1, "re-registering the chosen host pulled the same status again");
+    assert.equal(channels.get(`plugin:${plugin}`), 1, "re-registering the chosen host subscribed a second listener");
+
+    registry.registered({ surface: "view-late-host", kind: "status", name: `${plugin}.lines` });
+    drawSet(container, "rail-late-host", { id: "set-late-host", title: "세트", layout: "list", sections: [`${plugin}.view`] },
+      { card: "rail-late-host", surface: "view-late-host", orientation: "vertical" });
+    await settle();
+    assert.deepEqual(requested.at(-1), { id: "view-late-host", surface: "view-late-host", status: "lines" },
+      "the active view did not replace the host as the chosen source");
+    assert.equal(report().text, "view value", "the active view's pulled value was not drawn");
+    assert.equal(listeners.has(`plugin:${plugin}`), false, "the previous host listener stayed subscribed after a source change");
+    assert.ok(listeners.has("view-late-host"), "the new view source was not subscribed");
+
+    registry.registered({ surface: "view-late-host", kind: "status", name: `${plugin}.lines` });
+    await settle();
+    assert.equal(requested.length, 2, "re-registering the chosen view pulled the same status again");
+    assert.equal(channels.get("view-late-host"), 1, "re-registering the chosen view subscribed a second listener");
+    registry.hostUnregistered(plugin);
+    await settle();
+    assert.equal(report().text, "view value", "removing a nonchosen host cleared the active view's value");
+    assert.equal(requested.length, 2, "removing a nonchosen host pulled the active view again");
+
+    registry.registered({ surface: "view-late-host", kind: "status", name: `${plugin}.lines`, closed: true });
+    await settle();
+    assert.equal(report().mounted, false, "the section stayed mounted after its chosen source ended");
+    assert.equal(report().text, "", "the section kept the value of its ended source");
+    assert.equal(listeners.has("view-late-host"), false, "the ended view listener stayed subscribed");
+    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
+    await settle();
+    assert.deepEqual(requested.at(-1), { id: `plugin:${plugin}`, surface: null, status: "lines" },
+      "the replacement host source was not pulled after the view ended");
+    assert.equal(channels.get(`plugin:${plugin}`), 2, "the replacement host did not start one fresh listener");
+    assert.equal(report().text, "host value", "the replacement host's value was not drawn");
+  } finally {
+    clearSet(container);
+    container.remove();
+    registry.registered({ surface: "view-late-host", kind: "status", name: `${plugin}.lines`, closed: true });
+    registry.hostUnregistered(plugin);
+  }
+});
+
 test("an orientation change keeps the accepted declared tree and makes no pull", async () => {
   const plugin = "probe-d3";
   declareDeclaredPlugin(plugin, "view-a");

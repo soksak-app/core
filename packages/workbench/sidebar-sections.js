@@ -17,6 +17,12 @@ const choices = new Map();
 const drawn = new Map();
 const listeners = new Set();
 
+registry.onRegistrationChange(() => {
+  for (const record of drawn.values()) {
+    for (const entry of record.entries) entry.declared?.reconcile();
+  }
+});
+
 const notify = () => { for (const fn of listeners) fn(); };
 
 /** Calls fn when the mount state of a section changes. */

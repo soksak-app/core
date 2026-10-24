@@ -98,6 +98,8 @@ export function createRegistry({ call = null, report = null } = {}) {
   let forwards = 0;
   /* Observers that follow a surface status inside this document. Section modules use them. */
   const observers = new Set();
+  /* Callbacks that reselect sources when an entry registration changes. */
+  const registrationListeners = new Set();
   /* Entries that plugin state modules registered in this document: for each plugin id, the entry table and the read and subscribe of statuses. */
   const pages = new Map();
   /** The entry table when a plugin state module registered the name. */
@@ -401,11 +403,19 @@ export function createRegistry({ call = null, report = null } = {}) {
   const registrationChanged = () => {
     for (const observer of observers) reattach(observer);
     options.registrationChanged();
+    for (const listener of registrationListeners) listener();
   };
 
   return {
     configure(values) {
       options = { ...options, ...values };
+    },
+
+    /** Calls listener after an exposure entry registration changes, and returns its unsubscribe function. */
+    onRegistrationChange(listener) {
+      if (typeof listener !== "function") throw new TypeError("registration change listener must be a function");
+      registrationListeners.add(listener);
+      return () => registrationListeners.delete(listener);
     },
 
     /** Adds declarations. owner is core or a plugin id. */
