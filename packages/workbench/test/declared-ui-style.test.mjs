@@ -7,7 +7,7 @@ const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
 const elements = [
   { kind: "status-line", key: "project", text: "/project" },
   { kind: "button", key: "add", label: "Add", command: "demo.add" },
-  { kind: "tree", key: "files", empty: "none", nodes: [{ key: "directory", label: "directory", command: "demo.select",
+  { kind: "tree", key: "tree-example", empty: "none", nodes: [{ key: "directory", label: "directory", command: "demo.select",
     branch: true, expanded: false, actions: [{ key: "remove", label: "Remove", command: "demo.remove" }] }] },
   { kind: "list", key: "bookmarks", empty: "none", items: [{ key: "file", label: "/project/file", command: "demo.remove" }] },
 ];
@@ -25,7 +25,7 @@ async function draw(t, name) {
   drawValue(body, elements, {
     statusId: "demo.tree",
     bind: () => {},
-    expandedByTree: new Map([["files", new Map([[JSON.stringify(["directory"]), false]])]]),
+    expandedByTree: new Map([["tree-example", new Map([[JSON.stringify(["directory"]), false]])]]),
   });
   return { dom, body };
 }

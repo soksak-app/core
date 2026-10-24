@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-48-2: `declared-ui-style.test.mjs`의 일반 tree fixture는 files를
+  tree key와 `expandedByTree` lookup key로 사용했고, 이는 선언된 plugin id라
+  `make boundaries`에서 core test의 plugin 참조로 거부됐다. Red: 변경 전
+  boundary check는 해당 파일 10행과 28행에서 실패했다. 두 key를 중립
+  `tree-example`으로 바꾸고 tree와 expansion 검증은 그대로 유지한다. Green:
+  owning style test 두 항목과 `make boundaries` 16개 component가 통과하며,
+  `make docs-check`도 통과한다. Boundary 기준은 바꾸지 않았다.
+
 - F212.12-2-1-2: 선택적 activated view-focus test 경로를 추가한다. Activation
   완료, page press 수신, first-responder 상태, key 수신을 검사하며 기존
   비활성 경로와 surface-reveal assertion을 유지한다. Focused binary가 빌드되고
