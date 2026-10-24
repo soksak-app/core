@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-29-2: 선언한 package name과 version에서 packed native process identity
+  tarball을 찾는다. Red: package는 0.0.21을 선언하지만 owning relocation test는
+  0.0.20을 요청했다. Green: 격리 설치와 static consumer link를 포함해 package
+  test가 통과한다.
+
 - F239-47: 새 P70 candidate에서 Wails는 같은 창의 AppKit과 terminal에 한국어
   2벌식 모음 네 번 후 Space를 보내는 승인 gesture를 완료했다. 각 terminal
   screen/cursor/compose 관측은 키 뒤 수렴했고, 최종 AppKit 문서와 PTY insert는

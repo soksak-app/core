@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-29-2: Resolve the packed native process identity tarball from the
+  package's declared name and version. Red: the owning relocation check asked
+  for 0.0.20 although the package declares 0.0.21. Green: the package tests
+  pass, including isolated installation and static consumer linking.
+
 - F239-47: On the fresh P70 candidate, Wails completed the approved same-window
   AppKit and terminal gesture of four Korean 2-set vowels followed by Space.
   Each terminal screen/cursor/compose observation converged after a key, and

@@ -6,7 +6,8 @@ install_root=$(mktemp -d "${TMPDIR:-/tmp}/soksak-process-identity-install.XXXXXX
 trap 'rm -rf "$install_root"' EXIT HUP INT TERM
 install_root=$(CDPATH= cd -- "$install_root" && pwd)
 npm pack --pack-destination "$install_root" > "$install_root/pack.log" 2>&1
-tarball="$install_root/soksak-native-process-identity-darwin-0.0.20.tgz"
+tarball_name=$(node -e 'const { name, version } = require(process.argv[1]); process.stdout.write(`${name.replace(/^@/, "").replace(/\//g, "-")}-${version}.tgz`);' "$package_root/package.json")
+tarball="$install_root/$tarball_name"
 mkdir "$install_root/consumer"
 npm install --prefix "$install_root/consumer" --no-audit --no-fund --no-save "$tarball" > "$install_root/install.log" 2>&1 || {
   cat "$install_root/install.log" >&2
