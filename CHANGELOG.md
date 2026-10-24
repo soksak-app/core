@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- F239-47-18: Use the coherent current reread for a terminal input observation.
+  A transient first compose/cursor read can be stale even when the subsequent
+  reread matches current watched events and the presented screen. The activation
+  caller now selects one coherent snapshot and uses its compose, cursor, screen,
+  region and event slice for the saved observation and final assertion. Red:
+  the owning selector test returned the stale empty first pair and prior event
+  slice instead of a coherent `ㅏ` reread. Green: the focused owning cases pass
+  2/2; the activation source syntax check, `git diff --check` and `make
+  docs-check` pass. Key receipts, frame/render/source checks, visual measurement
+  and the 33 ms frame-gap limit are unchanged. No activation rerun was made;
+  F239-47-6 acceptance remains open.
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,
