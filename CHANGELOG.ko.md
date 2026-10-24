@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-48-3-6: Go diagnostics input-reference parser test를 계약 owner인
+  Rust test module과 맞춰 배치한다. Host audit은 13개에서 12개 finding으로
+  줄었다. 변경하지 않은 Go owner test는 1/1 통과한다. Inventory 검사는
+  lane 100개, 구현 파일 696개, test 파일 991개로 통과한다.
+  `make docs-check`가 통과한다.
 - F239-47-35: 완료된 cursor-baseline predicate를 exported 구현과 두 소유
   frame-identity test에 연결한다. Inventory audit이 누락된 feature link를
   거부했으며 exemption 없이 통과한다.

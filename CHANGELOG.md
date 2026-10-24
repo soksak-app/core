@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-48-3-6: Place the Go diagnostics input-reference parser test beside
+  its contract owner, matching the Rust test module. The host audit drops
+  from 13 to 12 findings. The unchanged Go owner test passes 1/1. The
+  inventory check passes with 100 lanes, 696 implementation files, and
+  991 test files. `make docs-check` passes.
 - F239-47-35: Link the completed cursor-baseline predicate to its exported
   implementation and the two owning frame-identity tests. The inventory audit
   rejected the missing feature link and now passes without an exemption.
