@@ -341,6 +341,63 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
+  test(`${app.name}: a saved project window mounts its active view on first open and reopen`, { timeout: 120000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    await keepCommonSettings(s);
+    const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-project-view-mount-")));
+    const root = join(temporary, "project");
+    mkdirSync(root);
+    s.cleanup(() => rmSync(temporary, { recursive: true, force: true }));
+    s.cleanup(async () => {
+      for (const window of await s.get("host.windows")) {
+        if (window.window !== s.window) await s.on(window.window).close();
+      }
+      await s.windows(1, "project view cleanup left an extra window");
+      for (const project of await s.get("core.projects")) {
+        if (project.root === root) await s.run("core.project.close", { id: project.id });
+      }
+      await s.run("core.projects.flush");
+      assert.equal(await s.get("core.page.error"), null);
+    });
+
+    await settings(s, { projectOpening: "windows" }, "common");
+    const opened = await s.run("core.project.open", { root, color: "#7fe3b0" });
+    let child = s.on(added(await s.windows(2, "new project window did not open"), [s.window]));
+    const assertActiveTerminalViewReady = async (window, phase) => {
+      await window.until("core.grid", (grid) => grid?.cards.length > 0, `${phase}: project cards did not render`);
+      const active = new Set((await window.get("core.grid")).cards.map((card) => card.active).filter(Boolean));
+      const surfaces = await window.until("core.surfaces", (items) => items.some((item) =>
+        active.has(item.surface) && item.plugin === "terminal" && item.visible && item.composition === "view"
+        && item.status.phase === "ready" && item.applied),
+      `${phase}: the active terminal view did not mount and apply its composition`);
+      const surface = surfaces.find((item) =>
+        active.has(item.surface) && item.plugin === "terminal" && item.visible && item.composition === "view"
+        && item.status.phase === "ready" && item.applied);
+      assert.ok(surface, `${phase}: the active terminal view was absent from the satisfied surfaces status`);
+      await window.until("core.surface.document",
+        (value) => value?.readyState === "complete" && value.themed,
+        `${phase}: the active terminal view document did not become ready`, { surface: surface.surface });
+      await window.until("host.window", (state) => state.surfaces.find((item) =>
+        item.id === surface.surface && item.visible && item.frame.width > 0 && item.frame.height > 0),
+      `${phase}: the active terminal native surface was not placed`);
+      assert.equal(await window.get("core.page.error"), null, `${phase}: initial view mount reported an application error`);
+      return surface.surface;
+    };
+
+    const firstSurface = await assertActiveTerminalViewReady(child, "new project window");
+    await child.run("core.projects.flush");
+    await child.close();
+    await s.windows(1, "the first project window did not close");
+
+    await s.run("core.project.activate", { id: opened.id });
+    child = s.on(added(await s.windows(2, "saved project window did not reopen"), [s.window]));
+    const reopenedSurface = await assertActiveTerminalViewReady(child, "reopened saved project window");
+    assert.equal(reopenedSurface, firstSurface, "the saved active view changed its surface ID on reopen");
+  });
+}
+
+for (const app of Object.values(APPS)) {
   test(`${app.name}: a saved layout naming a plugin that is not loaded opens with a placeholder card`, async (t) => {
     const s = await open(t, app);
     await fresh(s);

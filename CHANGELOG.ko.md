@@ -9,6 +9,24 @@
   저장 project metadata를 거부하지 않게 한다. Owning operations case는 1/1
   통과했으며 application runtime 결과는 주장하지 않는다.
 
+- F212.10-core-3-3: 저장 프로젝트의 active terminal view가 처음 열고 다시 열 때
+  mount되고 composition을 선언하며 native surface로 배치되는 focused window
+  check를 추가했다. projectShown 수정이 포함된 Wails/Tauri 앱의 attempt 2가 2/2 통과했다:
+  4265.081 ms와 4917.958 ms다. 재개방 때 같은 surface ID가 ready/applied 상태이고
+  두 document는 complete/themed, visible nonzero native surface, page error null을
+  확인했다. Event audit의 errors, expected, missing은 모두 비어 있다. Attempt 1은
+  0/2였으며 별도로 보존한다. Wails의 status-array predicate는 fixture 오류였고
+  Tauri는 F212.10-core-3-11에서 고친 full projectShown payload 결함을 드러냈다.
+  어느 결과도 이 항목의 product Red가 아니다. Unsent host.view.killed warning은
+  Wails 검사 중 11개와 shutdown 중 1개, Tauri 검사 중 6개와 shutdown 중 2개다.
+  이는 application error가 아니며 F212.10-core-3-2에 기록된 sealed-call coverage
+  범위에는 포함되지 않는다. 두 host와
+  sidecar가 종료되고 endpoint가 사라졌으며 원래 frontmost baseline을 복원했다.
+  Wails SHA-256: 0138fb2b10850b21cb597ed7cf8fde6d56671b6bcacd678b6a3ef2a61787b02b;
+  Tauri SHA-256: 33374b1b549971da8940ae345c35c846a9deb2ccf46240b797718fb9b07d7944;
+  registry index SHA-256: 4c192acd4fd8e121811641b38b18067d8c36e9b53b431aa75958cc2a22027c94.
+  First-frame pixel은 주장하지 않으며 F212.10-core-3-4는 계속 열린다.
+
 - F267.5: 현재 test inventory를 lane 100개, 구현 파일 689개, test 파일
   982개로 기록한다. Parity audit에 미등록 implementation/test와 feature-link
   finding이 없다. 두 examples 절차 문서가 발견 count와 일치한다.

@@ -9,6 +9,23 @@
   strict request decoder from rejecting stored project metadata. The owning
   operations case passes 1/1; no application runtime result is claimed.
 
+- F212.10-core-3-3: Add a focused saved-project window check for active terminal
+  view mount, composition declaration and native placement on first open and
+  reopen. Attempt 2 passes 2/2 on the rebuilt Wails and Tauri apps that include
+  the projectShown correction: 4265.081 ms and 4917.958 ms. The same surface ID is ready and placed on reopen; both
+  documents are complete and themed, page errors are null, and the event audits
+  have no errors, expected errors or missing records. Attempt 1 (0/2) remains separate:
+  the Wails status-array predicate was invalid, while Tauri exposed the full
+  projectShown payload defect fixed by F212.10-core-3-11. Neither was a product
+  Red for this item. Unsent host.view.killed lifecycle warnings are preserved
+  separately and remain outside the sealed-call coverage recorded under
+  F212.10-core-3-2. Both hosts and sidecars ended,
+  endpoints are absent, and the original frontmost baseline was restored.
+  Wails SHA-256: 0138fb2b10850b21cb597ed7cf8fde6d56671b6bcacd678b6a3ef2a61787b02b;
+  Tauri SHA-256: 33374b1b549971da8940ae345c35c846a9deb2ccf46240b797718fb9b07d7944;
+  registry index SHA-256: 4c192acd4fd8e121811641b38b18067d8c36e9b53b431aa75958cc2a22027c94.
+  No first-frame pixel claim is made; F212.10-core-3-4 remains open.
+
 - F267.5: Record the current test inventory as 100 lanes, 689 implementation
   files, and 982 test files. The parity audit reports no uncovered
   implementations, uncovered tests, or feature-link findings. Both example
