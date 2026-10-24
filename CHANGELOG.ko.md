@@ -121,6 +121,15 @@
   이는 native document model만 검증하며 terminal PTY나 IME 동작을 입증하지 않는다.
   F239-47-8과 F239-47-2는 계속 열린 상태다.
 
+- F239-28: 로컬 browser cohort upgrade를 검사하는 tracked Wails check를 추가한다.
+  F239-27 profile의 disposable 복사본에서 official CLI로 기존 browser 및
+  sidecar cohort를 frozen candidate package로 교체했다. Check의 registry,
+  설치 version, loaded plugin 상태, ready surface, page error 상태와 verifier
+  상태 assertion은 통과했다. `finishSession`은 disposable project를 활성화하기
+  전 host boot log에 기록된 `plugin host files: no project is shown` 때문에
+  필수 application error audit에서 실패했다. Startup 오류는 Files P44에서
+  원인을 분류하지 않은 상태이며 이 실행은 F239-28을 완료하지 않는다.
+
 - F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
   투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract
   test는 message case가 없어 실패했다. Green: paired assertion과

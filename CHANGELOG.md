@@ -132,6 +132,16 @@
   `4afee178d73ea3ce292a65931eeb9ece003b860162af1a9dde88627ed1fb0678`). This validates the native document model only, not terminal PTY
   or IME behavior; F239-47-8 and F239-47-2 remain open.
 
+- F239-28: Add a tracked Wails check for the local browser cohort upgrade. A
+  disposable copy of the F239-27 profile used the official CLI to replace the
+  old browser and sidecar cohort with the frozen candidate packages. The
+  check's registry, installed versions, loaded plugin states, ready surfaces,
+  page error status and verifier status assertions passed. `finishSession`
+  failed its required application error audit because the host boot log
+  contains `plugin host files: no project is shown` before the disposable
+  project was activated. The startup error remains unclassified under Files
+  P44; this run does not complete F239-28.
+
 - F268: Publish a screen message with a non-null frame and cursor preedit,
   paired with a hash case for the screen it projects to. Red: the unchanged
   owning contract test failed because the message case was absent. Green: the
