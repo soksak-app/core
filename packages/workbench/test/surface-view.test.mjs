@@ -139,6 +139,81 @@ test("a view mount waits for its actual source registration before serving the f
   }
 });
 
+test("a view declares its composition only after native call listeners are ready", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const registrations = [];
+  const calls = [];
+  const replies = [];
+  let startViewCallRegistration;
+  const viewCallRegistration = new Promise((resolve) => { startViewCallRegistration = resolve; });
+  const actualHost = await import("../host.js");
+  const actualEnvironment = await import("../environment.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: (name, listener) => {
+        if (name === "view-call") startViewCallRegistration();
+        if (name !== "view-call" && name !== "view-reply") {
+          listeners.set(name, listener);
+          return Promise.resolve(() => { if (listeners.get(name) === listener) listeners.delete(name); });
+        }
+        return new Promise((resolve) => registrations.push(() => {
+          listeners.set(name, listener);
+          resolve(() => { if (listeners.get(name) === listener) listeners.delete(name); });
+        }));
+      }, call: async (name, payload) => {
+        calls.push({ name, payload });
+        if (name === "viewReply") replies.push(payload);
+        return null;
+      } } };
+    },
+  } });
+  t.mock.module("../environment.js", { exports: { ...actualEnvironment, pluginDiagnostics: async () => null } });
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-listener-ready");
+  const pluginId = "fixture-view-listener-ready";
+  const surfaceId = "fixture-view-listener-ready-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } };
+  let mounting;
+  try {
+    seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [surfaceId]: 1 } });
+    mounting = mountSurface(document.querySelector("#slot"), surface);
+    authorizeSurface(surfaceId);
+    await viewCallRegistration;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls.some(({ name }) => name === "compositionDeclare"), false,
+      "composition was declared before the native view-call listener registration settled");
+
+    for (const finish of registrations.splice(0)) finish();
+    await mounting;
+    await waitSurfaceCompositionDeclared(surfaceId);
+    assert.ok(listeners.has("view-call"), "view-call listener was not ready when composition was declared");
+    assert.ok(listeners.has("view-reply"), "view-reply listener was not ready when composition was declared");
+    const call = listeners.get("view-call");
+    call({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.textSize.read", params: null });
+    call({ surface: surfaceId, plugin: pluginId, generation: 1, id: 2, command: "runtime.native.on", params: { name: "exposure-request" } });
+    for (let turn = 0; replies.length < 2 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [
+      { id: 1, result: 1, generation: 1 },
+      { id: 2, result: null, generation: 1 },
+    ]);
+  } finally {
+    for (const finish of registrations.splice(0)) finish();
+    if (mounting) await mounting.catch(() => {});
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
 // A view surface has no module: the host loads its page into the view. Mounting it imports nothing and declares its view composition
 // (docs/spec/plugins.md#view-surfaces), so a core command that waits for the declaration of the surface does not wait for a module.
 test("mounting a view surface imports no module and declares its view composition", { timeout: 5000 }, async (t) => {
@@ -965,7 +1040,9 @@ test("a view surface mounted again after its dispose registers its port while th
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   // The registration of view-call settles only when the test releases it, as a native listener does under load.
+  let attempt = 0;
   const releases = [];
+  const activeListeners = new Set();
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -973,9 +1050,16 @@ test("a view surface mounted again after its dispose registers its port while th
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name !== "view-call") return Promise.resolve(() => {});
-        return new Promise((resolve) => releases.push(() => resolve(() => {})));
+      return { ...runtime, native: { ...runtime.native, on: (name, listener) => {
+        const key = `${attempt}:${name}`;
+        if (name !== "view-call") {
+          activeListeners.add(key);
+          return Promise.resolve(() => activeListeners.delete(key));
+        }
+        return new Promise((resolve) => releases.push(() => {
+          activeListeners.add(key);
+          resolve(() => activeListeners.delete(key));
+        }));
       }, call: async () => null } };
     },
   } });
@@ -987,15 +1071,28 @@ test("a view surface mounted again after its dispose registers its port while th
   const composition = { kind: "view", page: "ui/page.html" };
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
+    attempt = 1;
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
-    await mountSurface(document.querySelector("#slot"), surface);
-    await waitSurfaceCompositionDeclared(surfaceId);
+    const firstMount = mountSurface(document.querySelector("#slot"), surface);
+    assert.equal(releases.length, 1, "the first mount did not begin its delayed view-call listener registration");
+    assert.equal(viewCommandGenerationOf(surfaceId), 1, "the first mount did not register its view port before waiting for listeners");
     await disposeSurface(surfaceId);
+    await firstMount;
+
+    attempt = 2;
     authorizeSurface(surfaceId);
     seedViewSource(pluginId, surfaceId);
-    await mountSurface(document.querySelector("#slot"), surface);
+    const secondMount = mountSurface(document.querySelector("#slot"), surface);
+    assert.equal(releases.length, 2, "the replacement mount did not register while the prior listener remained pending");
+    releases[1]();
+    await secondMount;
     await waitSurfaceCompositionDeclared(surfaceId);
+    assert.ok(activeListeners.has("2:view-call"), "the replacement composition did not wait for its own listener");
+    releases[0]();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual([...activeListeners].filter((key) => key.endsWith(":view-call")), ["2:view-call"],
+      "the late listener of the disposed mount stayed active or removed the replacement listener");
   } finally {
     for (const release of releases) release();
     await disposeSurface(surfaceId);

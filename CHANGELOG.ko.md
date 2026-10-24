@@ -4,6 +4,35 @@
 
 ## 미배포
 
+- F239-47-16: AppKit reference focus가 돌아온 뒤 raw terminal cursor
+  observer 구독을 유지한다. 이전 caller는 raw request가 이미 구독한 cursor
+  status에 managed `Client.watch` 기반 `s.until`을 사용했다. 이때 보낸
+  `status.unwatch`가 observer 구독을 해제했다. Red: 변경 전 sequence에서
+  이후 focused cursor event가 사라진다. Green: 기존 observer stream에서 새
+  focused event를 기다리고 stale focus 값은 거부하며 observer cleanup까지 raw
+  watch를 유지한다. Owning `terminal-ime-document.test.mjs`는 19/19 통과한다.
+  Activation rerun이나 IME 동작 acceptance는 주장하지 않으며 F239-47-6은
+  계속 열린다.
+- F239-47-15: 새 terminal notification을 알려진 pre-key 상태와 대조한다.
+  PTY rows가 그대로인 coherent composition update는 허용하고, rows 변경은
+  일치하는 screen event가 있어야 허용한다. Stale notification, blink-only
+  변경, focus 상실, input 상태 누락은 계속 거부하고 semantic state를 받기 전에
+  per-key callback receipt를 요구한다. Red: 변경 전 event 세 개를
+  모두 요구하던 predicate는 새 compose update와 일치하는 cursor state 및 baseline
+  rows가 있는 fixture를 거부했다. Green: owning `terminal-ime-document.test.mjs`
+  17/17 통과, activation 파일 syntax check, `make e2e-check` 및 `make docs-check`
+  통과. 최신 Wails/Tauri runtime 실행은 각각 terminal `k` 한 번 뒤 중단됐으며
+  Backspace/Space에는 도달하지 않았다. F239-47-6 acceptance는 계속 열린다.
+- F212.10-core-3-1: native `view-call` 및 `view-reply` listener 등록을
+  기다린 뒤 view composition을 선언해 native view 생성을 시작한다. 따라서
+  첫 view call이 page listener 준비와 경합하지 않는다. Red: 변경 전
+  `surface-view.test.mjs`는 등록을 지연한 상태에서 composition이 먼저
+  선언되어 실패했다. Green: 같은 fixture는 두 listener가 준비된 뒤에만
+  composition이 선언되고 초기 call 두 개가 응답을 받는지 확인한다. Pending
+  setup 중 dispose와 등록 거부는 mount를 종료하고 성공한 listener를 해제한다.
+  Owning view/remount 검사는 33/33 통과하고 `make docs-check`도 통과한다.
+  이전 두 host timeout 상관관계는 미확인이며 수정 후 runtime 재검증은 하지 않았다.
+
 - F239-47-8: Native IME test가 AppKit에 진입하거나 input source를 읽기 전에
   알 수 없는 인자를 거부한다. Read-only source 조회를 별도 probe 실행 파일로
   분리하고 focused build alias가 절대 실행 파일 target을 dependency로 사용한다.
@@ -97,7 +126,7 @@
   검사 작업, Files local build 근거와 VT local package link/build 절차를 반영한다.
   F270은 source audit focused tests 11개, `make e2e-check`, `make docs-check`
   통과로 완료됐다. 이 계획은 publication이나 runtime acceptance를 주장하지 않는다.
-- F239-47-6: Activation caller를 retained source raster와 frame-bound render metadata에 연결한다. Caller는 source manifest byte와 digest를 검증하고 exact screen/cursor/render 상태만 연결한다. 입력 구간 경계는 기존 host `log` clock `mono_ns`의 Darwin `CLOCK_UPTIME_RAW`/`mach_absolute_time` domain에서 읽고 callback Mach timebase로 capture display time을 변환한다. ROI 후보 및 glyph/underline calculator로 각 input 단계를 평가한다. Owning caller adapter test 10/10이 통과하며 원래 helper의 mixed-clock Red replay와 malformed clock reply와 다른 clock domain 거부, assertion 실패 전 `error`/`no-proof` 저장을 확인한다. Syntax check도 통과한다. Live input은 실행하지 않았으며 양 host acceptance는 남아 있다.
+- F239-47-6: Activation caller는 diagnostic-only `diagnostics.clock` endpoint에서 입력 구간 경계를 읽고 canonical positive base-10 uint64 `mono_ns` text만 허용한다. Reference input 전에 endpoint와 reply를 확인하고 각 terminal key 경계에도 같은 clock을 쓴다. 이전 page-native `log` 요청은 endpoint method가 아니어서 양 host connection을 닫았다. Red: 변경 전 Wails와 Tauri의 owning socket test가 등록되지 않은 endpoint method에서 연결 종료를 재현했다. Green: 양 host endpoint test가 diagnostics build에서 같은 연결의 canonical positive uint64 응답 두 개와 nondecreasing 값을 확인하고, release test는 method가 선언되지 않아 연결이 닫힘을 확인한다. Caller test 10/10, syntax check, `make e2e-check`, `make docs-check`가 통과한다. Assertion 실패 전 `error`/`no-proof` 저장도 확인한다. 이전 양 host run은 AppKit reference 10단계를 마쳤지만 terminal input 전에 중단됐다. Activation 재실행은 하지 않았으며 양 host acceptance는 남아 있다. `make parity-check`는 미등록 test/implementation이나 feature link 없이 기존 examples count 불일치 두 건을 보고한다(기록 100/673/922, 발견 100/687/958). 기록된 count는 변경하지 않았다.
 
 - F239-47-12: Core visual calculator를 실제 VT `screen.render` metadata에 맞춘다. Producer는 소문자 `bgra8`/`premultiplied`, top-level underline metric, glyph별 width/font run/effective draw color/nullable cell-local bounds 및 underline rectangle, cursor draw state를 공개한다. Native capture artifact는 별도 `BGRA8`/`premultiplied-first` contract를 유지하며 consumer는 metadata를 바꾸지 않고 원본 byte를 color 비교용으로 decode한다. Red: producer-shaped fixture가 기존 helper에서 `bgra8`과 `BGRA8` 차이로 실패했다. Green: 같은 fixture와 negative control이 `terminal-ime-visual.test.mjs` 9/9 통과한다. Preedit/inverse color, width-2 glyph fractional geometry, blink-off cursor metadata, measure 전 malformed 거부, difference cursor pixel을 검사한다. `make docs-check`가 통과한다. Live input은 실행하지 않았으며 F239-47-6 acceptance를 완료하지 않는다.
 - F239-47-13: Core visual calculator에서 raw `CTFont`/`CTLine` glyph overhang과 same-frame source provenance를 보존한다. Signed fractional bounds를 leading-cell origin만큼 옮기고 측정 raster coordinate로 변환한 뒤에만 clip한다. Capture raster origin은 source `screenBounds`/scale와 capture `screenRect`/`contentRect`로 계산하며 padded row를 pixel 순서 변경 없이 mapping한다. Source raster identity는 cursor 및 renderer frame identity와 같아야 한다. Red: 변경 전 helper가 유효한 finite overhang을 `renderer glyph bounds: rectangle covers no cell pixels`로 거부했고, 후속 test는 다른 source sequence로 measured result를 만들 수 있음을 보였다. Green: owning fixture가 leading cell 밖의 ink를 측정하고 원래 metadata를 보존하며, raster 교차가 없는 rectangle, non-finite/양수 아닌 geometry, 다른 source generation/raster/sequence를 거부한다. `terminal-ime-visual.test.mjs` 10/10 및 `make docs-check`가 통과한다. Live input은 실행하지 않았다.
@@ -511,7 +540,7 @@
 - F212.12-2-1-2: Native view-focus test의 선택적 activation variant는 아직 검증되지 않았다. 기록된 통합 시도는 다른 앱이 frontmost여서 해당 test 전에 거부됐고, 앞선 data-store test는 timeout됐다. Wails `AcceptFirstMouse` 후보는 main webview를 설정했지만 검증 대상 계약은 plugin `SPDocumentView`에 있으므로 원복했다. Main page의 별도 첫 클릭 실패는 재현되지 않았으며 해당 후보의 source 변경은 남아 있지 않다.
 - F239-43: Go와 Rust plugin-host callback을 등록된 host instance에 묶어 종료된 provider의 늦은 callback이 plugin ID로 재생성된 channel을 찾지 못하게 한다. Red: 변경 전 Wails 통제 callback test는 같은 plugin 재생성 후 이전 instance의 snapshot을 relay했고, Tauri test는 replacement channel에서 이를 수신했다. 새 Tauri owning test는 window record가 제거된 뒤 도착한 provider 오류가 아무 오류도 반환하지 않아 실패했다. Green: 두 host는 stale callback을 취소하고 현재 및 생성 중 메시지를 수락하며, replacement를 닫거나 재시작하지 않고 캡처한 plugin 식별자로 명시적 오류를 보존한다. 일반 late message는 계속 취소한다. Wails stale-instance, creation-time, current queue-full test는 3/3 통과했다. Tauri stale-instance, creation-time, late-error, view-error attribution test가 통과했다. `make events-check`, `make docs-check`가 통과한다. Apple은 WKScriptMessageHandler를 main-actor로 문서화하며 host callback, 생성, dispose 경로도 main thread에서 실행해 identity 검사와 dispatch를 직렬화한다. Native emit 후 framework event delivery는 별도의 reload 경계다.
 - F239-38: Wails와 Tauri는 모든 log policy에서 선언된 info level의 `host.test.start`, `host.test.end`를 저장하므로 lifecycle이 error 또는 off여도 진단 window check가 flush된 mark 위치를 받는다. 일반 lifecycle/info event는 계속 gate되고 수를 기록한다. Red: 변경 전 두 host 소유 검사가 start mark를 거부했다. Green: Wails는 두 policy의 mark 검사를 통과하고 Tauri `test_mark_test`는 4/4 통과하며 `make docs-check`도 통과한다. 보존된 window-release 실행은 fixture 준비 전에 실패해 release assertion을 실행하지 않았다.
-- F239-39: Workbench는 registry entry가 등록되거나 종료될 때 declared section source를 다시 선택한다. 이미 그려진 section이 새로 선택된 host 또는 view에서 값을 pull할 수 있고, source가 바뀌면 이전 snapshot subscription을 해제한다. Red: 바뀌지 않은 workbench consumer test는 section을 그린 뒤 host status가 등록돼도 pull하지 않았다. Green: 같은 test가 늦은 host pull/push, 동일 source 재등록의 중복 방지, view 전환, source 정리와 host 복구를 확인한다. sidebar, exposure, declared-section 검사는 각각 11/11, 34/34, 16/16 통과한다. `make docs-check`가 통과한다. 과거 Wails와 Tauri F35 실패의 registration 순서는 아직 unknown이며 app 검증은 계속 열려 있다.
+- F239-39: Workbench는 registry entry가 등록되거나 종료될 때 declared section source를 다시 선택한다. 이미 그려진 section이 새로 선택된 host 또는 view에서 값을 pull할 수 있고, source가 바뀌면 이전 snapshot subscription을 해제한다. Red: 바뀌지 않은 workbench consumer test는 section을 그린 뒤 host status가 등록돼도 pull하지 않았다. Green: 같은 test가 늦은 host pull/push, 동일 source 재등록의 중복 방지, view 전환, source 정리와 host 복구를 확인한다. sidebar, exposure, declared-section 검사는 각각 11/11, 34/34, 17/17 통과한다. `make docs-check`가 통과한다. 과거 Wails와 Tauri F35 실패의 registration 순서는 아직 unknown이며 app 검증은 계속 열려 있다.
 - F239-41: Workbench는 선택한 source를 pull하기 전에 declared UI snapshot listener readiness를 기다린다. 동기 subscription은 즉시 준비되고 비동기 subscription은 listener 설치 후 unsubscribe 함수를 resolve한다. readiness 전에 source가 바뀌거나 닫히면 완료 시 unsubscribe하고 오래된 source를 pull하지 않는다. Red: 변경 전 section test는 deferred listener가 준비되기 전에 `view-a`를 pull했다. Green: 첫 push를 pull 응답 전에 받아들이고, 더 오래된 pull이 이를 덮어쓰지 않으며, 늦게 완료된 오래된 subscription을 제거하고 새 source를 한 번 pull하고, readiness 전에 닫히면 pull하지 않으며, 반복 reconcile에서 listener와 pull이 하나뿐임을 확인한다. plugin API, declared-section, declared-source 검사는 60/60 통과하고 `make docs-check`가 통과한다. 과거 F35 application 원인은 아직 확인되지 않았다.
 - F239-41-1: Declared-section receiver는 같은 source가 다시 선택됐더라도 이전 source generation에서 온 snapshot callback을 버린다. Red: 통제된 A→B→A test에서 첫 A 등록의 queued callback을 늦은 unsubscribe 전에 전달하자 두 번째 A section에 `stale-a`가 그려졌다. Green: callback은 캡처한 generation을 확인하고 오래된 값을 버리며 현재 A 값을 그린다. Transport도 listener를 닫을 때 이미 queue된 callback을 차단한다. plugin API, declared-section, declared-source 검사는 61/61 통과하고 `make docs-check`가 통과한다.
 - F239-26-4: 직접 shutdown check는 host 또는 terminal-service 대기가 실패해도 캡처한 application log를 감사한다. wait 실패를 첫 원인으로 보존하고 audit의 application error line도 결과에 포함한다. Red: controlled shutdown wait가 application error를 기록했지만 변경 전 runner는 timeout만 보고했다. Green: 같은 실행이 timeout을 먼저 보고하고 error line도 보존하며 소유 shutdown test는 6/6 통과한다.

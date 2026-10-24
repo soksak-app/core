@@ -340,16 +340,17 @@ test("disposing a mount releases resolved listeners before pending registration 
   }
 });
 
-test("a listener failure after readiness reports an error and releases the view", { timeout: 5000 }, async (t) => {
+test("a listener failure before readiness reports an error and releases the view", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
   let rejectProcessEnded;
-  const registrationError = new Error("view-process-ended registration failed after ready");
+  const registrationError = new Error("view-process-ended registration failed before ready");
   const removed = [];
   const states = [];
+  let compositionCalls = 0;
   const unhandled = [];
   const onUnhandled = (error) => unhandled.push(error);
   process.on("unhandledRejection", onUnhandled);
@@ -363,7 +364,10 @@ test("a listener failure after readiness reports an error and releases the view"
       return { ...runtime, native: { ...runtime.native, on: (name) => {
         if (name === "view-process-ended") return new Promise((_, reject) => { rejectProcessEnded = reject; });
         return Promise.resolve(() => removed.push(name));
-      }, call: async () => null } };
+      }, call: async (name) => {
+        if (name === "compositionDeclare") compositionCalls += 1;
+        return null;
+      } } };
     },
   } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?view-listener-after-ready");
@@ -380,14 +384,16 @@ test("a listener failure after readiness reports an error and releases the view"
 
   try {
     authorizeSurface(id);
-    await mountSurface(slot, surface, { onState: (state) => states.push(state) });
-    await waitSurfaceCompositionDeclared(id);
-    assert.equal(states.at(-1).phase, "ready");
+    const mounting = mountSurface(slot, surface, { onState: (state) => states.push(state) });
+    await new Promise((resolve) => setImmediate(resolve));
     rejectProcessEnded(registrationError);
+    await assert.rejects(mounting, /view-process-ended registration failed before ready/);
+    await assert.rejects(waitSurfaceCompositionDeclared(id), /view-process-ended registration failed before ready/);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(states.at(-1).phase, "error", "a post-readiness listener failure must reach surface status");
     assert.equal(states.at(-1).error, registrationError);
     assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort());
+    assert.equal(compositionCalls, 0, "a view with an incomplete listener setup declared its composition");
     assert.equal(viewCommandsOf(id), null, "post-readiness failure retained the view-command layer");
     assert.equal(mountedSurface(id), null, "post-readiness failure retained the mounted entry");
     assert.deepEqual(unhandled, [], "post-readiness listener rejection became unhandled");
@@ -459,13 +465,13 @@ test("disposing a surface ends its already-waiting composition declaration", { t
   }
 });
 
-test("a drawn wait records the original reason when a ready view mount is released", { timeout: 5000 }, async (t) => {
+test("a drawn wait records a listener failure before the native view is declared", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const registrationError = new Error("view-process-ended registration failed after ready");
+  const registrationError = new Error("view-process-ended registration failed before ready");
   const events = [];
   let rejectProcessEnded;
   let holdNextComposition = false;
@@ -522,22 +528,18 @@ test("a drawn wait records the original reason when a ready view mount is releas
 
   try {
     authorizeSurface(id);
-    await mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
-    const { waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-attributed-failure");
-    const completed = waitSurfaceCompositionDeclared(id);
-    await completed;
-    await mountSurface(slot, surface);
+    const failedMount = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
     rejectProcessEnded(registrationError);
     await errorReported;
+    await assert.rejects(failedMount, /view-process-ended registration failed before ready/);
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(mountedSurface(id), null, "the failed view mount remains mounted");
+    assert.equal(mountedSurface(id), null, "the failed view registration mounted a native surface");
     assert.equal(slot.dataset.nativeSurfaceId, id, "the drawn layout no longer names the failed surface");
     assert.deepEqual(events.filter(({ event }) => event === "page.surface.mount.failed"), [{
       level: "error", event: "page.surface.mount.failed",
-      fields: { plugin: id, surface: id, attempt: 1, phase: "listener-registration", reason: registrationError.message },
+      fields: { plugin: id, surface: id, attempt: 1, phase: "mount", reason: registrationError.message },
     }]);
-    await assert.rejects(page.drawn(), new RegExp(`surface ${id} mount attempt 1 failed during listener-registration: ${registrationError.message}`));
-    await completed;
+    await assert.rejects(page.drawn(), new RegExp(`surface ${id} mount attempt 1 failed during mount: ${registrationError.message}`));
 
     holdNextComposition = true;
     authorizeSurface(id);
@@ -559,7 +561,7 @@ test("a drawn wait records the original reason when a ready view mount is releas
   }
 });
 
-test("removing a failed surface from the desired plane clears its retained failure", { timeout: 5000 }, async (t) => {
+test("removing a pre-readiness listener failure from the desired plane clears its retained failure", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
@@ -601,9 +603,10 @@ test("removing a failed surface from the desired plane clears its retained failu
   });
   try {
     authorizeSurface(id);
-    await mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") errorState = true; } });
+    const mounting = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") errorState = true; } });
     rejectProcessEnded(new Error("listener failed before plane departure"));
     while (!errorState) await new Promise((resolve) => setImmediate(resolve));
+    await assert.rejects(mounting, /listener failed before plane departure/);
     await new Promise((resolve) => setImmediate(resolve));
     await assert.rejects(page.drawn(), /listener failed before plane departure/);
     await disposeSurfacesExcept(new Set());
@@ -614,7 +617,7 @@ test("removing a failed surface from the desired plane clears its retained failu
   }
 });
 
-test("a disposed attempt's late listener rejection cannot replace a newer attempt", { timeout: 5000 }, async (t) => {
+test("a disposed pending listener setup cannot replace a newer attempt", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
@@ -672,22 +675,24 @@ test("a disposed attempt's late listener rejection cannot replace a newer attemp
   });
   try {
     authorizeSurface(id);
-    await mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
+    const oldMount = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
     await disposeSurface(id);
+    await oldMount;
     authorizeSurface(id);
-    await mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
+    const newMount = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
     const current = mountedSurface(id);
     rejectOld(new Error("old disposed listener failed"));
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(mountedSurface(id), current, "an old listener failure removed the newer mounted attempt");
     assert.deepEqual(events.filter(({ event }) => event === "page.surface.mount.failed"), [],
       "a listener rejection after normal dispose was classified as a failed mount");
-    rejectNew(new Error("new listener failed after readiness"));
+    rejectNew(new Error("new listener failed before readiness"));
     await errorReported;
+    await assert.rejects(newMount, /new listener failed before readiness/);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(events.filter(({ event }) => event === "page.surface.mount.failed").at(-1)?.fields.attempt, 2,
       "the new mount failure was attributed to the old attempt");
-    await assert.rejects(page.drawn(), /mount attempt 2 failed during listener-registration: new listener failed after readiness/);
+    await assert.rejects(page.drawn(), /mount attempt 2 failed during mount: new listener failed before readiness/);
   } finally {
     await disposeSurface(id);
     dom.window.close();

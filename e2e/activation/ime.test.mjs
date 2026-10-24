@@ -22,8 +22,11 @@ import {
   startTerminalStatusObserver,
   terminalComposeMatchesPreedit,
   terminalCompositionState,
+  terminalInputReceiptMatches,
+  terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
   visibleInputBeforeCursor,
+  waitForObservedStatusEvent,
   waitForStateEvent as waitForStateEventAfter,
 } from "./terminal-ime-document.mjs";
 
@@ -31,7 +34,7 @@ const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 
 async function machAbsoluteBoundary(s) {
-  return hostClockBoundary(await s.request("log", { action: "clock" }));
+  return hostClockBoundary((method, params) => s.request(method, params));
 }
 
 function assertReferenceRanges(state, label) {
@@ -320,6 +323,9 @@ for (const app of Object.values(APPS)) {
       persist("manifest.json", manifest);
       t.diagnostic(`${app.name}: durable input trace directory ${artifactDir}`);
 
+      manifest.clockPreflight = await machAbsoluteBoundary(s);
+      persist("manifest.json", manifest);
+
       const original = (await s.request("diagnostics.input.source")).current;
       s.cleanup(() => s.request("diagnostics.input.source", { select: original }));
       await s.keepPointerOutside();
@@ -364,7 +370,7 @@ for (const app of Object.values(APPS)) {
       const observations = [];
       const referenceStates = [];
       const stateEventWaiters = new Set();
-      const observeTerminal = async (group, key, index, beforeCompose, stateEvents) => {
+      const observeTerminal = async (group, key, index, baseline, stateEvents) => {
         const deadline = Date.now() + 1500;
         const eventOffset = observedStateEvents.length - stateEvents.length;
         let compose;
@@ -386,6 +392,7 @@ for (const app of Object.values(APPS)) {
           const currentEvents = observedStateEvents.slice(eventOffset);
           snapshot = {
             attempt,
+            baseline,
             compose,
             cursor,
             screen,
@@ -395,21 +402,18 @@ for (const app of Object.values(APPS)) {
             stateEvents: currentEvents,
           };
 
-          const compositionStable = sameTerminalComposition(terminalCompositionState(compose, cursor),
+          const firstReadMatchesReread = sameTerminalComposition(terminalCompositionState(compose, cursor),
             terminalCompositionState(currentCompose, currentCursor));
           const cursorMatchesCompose = terminalComposeMatchesPreedit(currentCompose, currentCursor);
-          const latestCompose = currentEvents.findLast((event) => event.name === "terminal.compose")?.value;
-          const latestCursor = currentEvents.findLast((event) => event.name === "terminal.cursor")?.value;
-          const latestScreen = currentEvents.findLast((event) => event.name === "terminal.screen")?.value;
-          const statusesMatch = latestCompose && latestCursor && Array.isArray(latestScreen) &&
-            sameTerminalComposition(terminalCompositionState(latestCompose, latestCursor),
-              terminalCompositionState(currentCompose, currentCursor)) &&
-            JSON.stringify(latestScreen) === JSON.stringify(screen.rows);
+          const statusesMatch = terminalObserverStatusesMatch(currentEvents, baseline,
+            { compose: currentCompose, cursor: currentCursor, screen });
+          const coherentReread = cursorMatchesCompose && statusesMatch;
           const baseScreenPresented = region?.presented?.generation === screen.frame.generation &&
             region.presented.raster === screen.frame.raster && region.presented.sequence >= screen.frame.sequence;
-          snapshot.coherence = { compositionStable, cursorMatchesCompose, statusesMatch, baseScreenPresented };
+          snapshot.coherence = { firstReadMatchesReread, cursorMatchesCompose, coherentReread, statusesMatch,
+            baseScreenPresented };
           persist(`observer-${group}-${String(index).padStart(2, "0")}-${String(attempt).padStart(2, "2")}.json`, snapshot);
-          if (compositionStable && cursorMatchesCompose && statusesMatch && baseScreenPresented) break;
+          if (cursorMatchesCompose && statusesMatch && baseScreenPresented) break;
           assert.ok(Date.now() < deadline,
             `${key}: terminal state did not become coherent (${JSON.stringify(snapshot.coherence)}); snapshots are in ${artifactDir}`);
           await waitForStateEvent(sampleEventOffset, key,
@@ -421,7 +425,7 @@ for (const app of Object.values(APPS)) {
           index,
           key,
           stateEvents: observedStateEvents.slice(eventOffset),
-          beforeCompose,
+          beforeCompose: baseline.compose,
           compose,
           cursor,
           screen,
@@ -440,6 +444,10 @@ for (const app of Object.values(APPS)) {
 
       const baselineScreen = await presentedScreen(s, surface);
       const baselineCursor = await s.get("terminal.cursor", surface);
+      const baselineCompose = await s.get("terminal.compose", surface);
+      assert.equal(terminalComposeMatchesPreedit(baselineCompose, baselineCursor), true,
+        "the pre-key terminal composition baseline must be coherent");
+      let knownState = { compose: baselineCompose, cursor: baselineCursor, screen: baselineScreen };
       const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
       assert.ok(promptPrefix.length > 0, "the empty terminal prompt has no visible prefix");
       const prompt = { row: baselineCursor.row, col: 0, text: promptPrefix };
@@ -558,9 +566,13 @@ for (const app of Object.values(APPS)) {
       await s.pointer(terminalX, terminalY, "move", { activate: true });
       await s.until("host.window", (host) => host.active === true && host.key === true,
         "the application did not regain the active key window");
+      const focusEventOffset = observedStateEvents.length;
       await s.run("terminal.focus", {}, surface);
-      await s.until("terminal.cursor", (cursor) => cursor.focused === true,
-        "the terminal did not regain focus after the reference closed", { surface });
+      await waitForObservedStatusEvent(observedStateEvents, focusEventOffset, (notify) => {
+        stateEventWaiters.add(notify);
+        return () => stateEventWaiters.delete(notify);
+      }, "terminal.cursor", (cursor) => cursor?.focused === true,
+      "the terminal did not regain focus after the reference closed", 1500);
       await s.until("host.window", (host) => host.responder?.surface === surface &&
         host.regions.some((region) => region.surface === surface && region.focused),
       "the terminal did not regain its native responder after the reference closed");
@@ -594,7 +606,6 @@ for (const app of Object.values(APPS)) {
 
       const visualStages = [];
       for (let index = 0; index < 8; index++) {
-        const before = await s.get("terminal.compose", surface);
         await startTrace(`terminal-k-${index + 1}`);
         const eventOffset = observedStateEvents.length;
         const startedBoundary = await machAbsoluteBoundary(s);
@@ -608,8 +619,11 @@ for (const app of Object.values(APPS)) {
         persist("manifest.json", manifest);
         await waitForStateEvent(eventOffset, `k-${index + 1}`);
         const stateEvents = observedStateEvents.slice(eventOffset);
-        const observation = await observeTerminal("terminal", "k", index + 1, before, stateEvents);
         const entries = await stopTrace(`terminal-k-${index + 1}`);
+        assert.ok(terminalInputReceiptMatches(entries, "k"),
+          `terminal key k ${index + 1} has no matching native or terminal input callback`);
+        const observation = await observeTerminal("terminal", "k", index + 1, knownState, stateEvents);
+        knownState = { compose: observation.compose, cursor: observation.cursor, screen: observation.screen };
         const comparison = applyTerminalInput(referenceStates[index], observation, entries, index + 1);
         persist(`comparison-${String(index + 1).padStart(2, "0")}.json`, {
           key: "k", expected: referenceStates[index], ...comparison,
@@ -623,8 +637,7 @@ for (const app of Object.values(APPS)) {
         startedMachAbsoluteNs: startedBoundary.machAbsoluteNs });
       }
 
-      const beforeBackspace = await s.get("terminal.compose", surface);
-      const cursorBeforeBackspace = await s.get("terminal.cursor", surface);
+      const cursorBeforeBackspace = knownState.cursor;
       await startTrace("terminal-Backspace");
       const backspaceEventOffset = observedStateEvents.length;
       const backspaceStartedBoundary = await machAbsoluteBoundary(s);
@@ -638,9 +651,13 @@ for (const app of Object.values(APPS)) {
         acknowledgedMachAbsoluteNs: backspaceAcknowledgedBoundary.machAbsoluteNs });
       persist("manifest.json", manifest);
       await waitForStateEvent(backspaceEventOffset, "Backspace");
-      const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, beforeBackspace,
-        observedStateEvents.slice(backspaceEventOffset));
       const backspaceEntries = await stopTrace("terminal-Backspace");
+      assert.ok(terminalInputReceiptMatches(backspaceEntries, "Backspace"),
+        "Backspace has no matching native-key or deleteBackward terminal callback");
+      const backspaceObservation = await observeTerminal("terminal", "Backspace", 9, knownState,
+        observedStateEvents.slice(backspaceEventOffset));
+      knownState = { compose: backspaceObservation.compose, cursor: backspaceObservation.cursor,
+        screen: backspaceObservation.screen };
       const backspaceComparison = applyTerminalInput(referenceStates[8], backspaceObservation, backspaceEntries, 9);
       persist("comparison-09.json", { key: "Backspace", expected: referenceStates[8], ...backspaceComparison,
         terminal: backspaceObservation, callbacks: backspaceEntries });
@@ -651,8 +668,8 @@ for (const app of Object.values(APPS)) {
         observation: backspaceObservation, prompt }), clockDomain: backspaceStartedBoundary.clockDomain,
       startedMachAbsoluteNs: backspaceStartedBoundary.machAbsoluteNs });
 
-      const beforeSpace = await s.get("terminal.compose", surface);
-      const cursorBeforeSpace = await s.get("terminal.cursor", surface);
+      const beforeSpace = knownState.compose;
+      const cursorBeforeSpace = knownState.cursor;
       await startTrace("terminal-Space");
       const spaceEventOffset = observedStateEvents.length;
       const spaceStartedBoundary = await machAbsoluteBoundary(s);
@@ -666,9 +683,11 @@ for (const app of Object.values(APPS)) {
         acknowledgedMachAbsoluteNs: spaceAcknowledgedBoundary.machAbsoluteNs });
       persist("manifest.json", manifest);
       await waitForStateEvent(spaceEventOffset, "Space");
-      const spaceObservation = await observeTerminal("terminal", "Space", 10, beforeSpace,
-        observedStateEvents.slice(spaceEventOffset));
       const spaceEntries = await stopTrace("terminal-Space");
+      assert.ok(terminalInputReceiptMatches(spaceEntries, "Space"),
+        "Space has no matching native-key or space-insert callback");
+      const spaceObservation = await observeTerminal("terminal", "Space", 10, knownState,
+        observedStateEvents.slice(spaceEventOffset));
       const spaceComparison = applyTerminalInput(referenceStates[9], spaceObservation, spaceEntries, 10);
       persist("comparison-10.json", { key: "Space", expected: referenceStates[9], ...spaceComparison,
         terminal: spaceObservation, callbacks: spaceEntries });

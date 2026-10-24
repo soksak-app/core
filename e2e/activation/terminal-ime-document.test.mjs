@@ -7,8 +7,11 @@ import {
   terminalComposeMatchesPreedit,
   terminalLineBeforeCursor,
   terminalCompositionState,
+  terminalInputReceiptMatches,
+  terminalObserverStatusesMatch,
   visibleInputBeforeCursor,
   startTerminalStatusObserver,
+  waitForObservedStatusEvent,
   waitForStateEvent,
 } from "./terminal-ime-document.mjs";
 
@@ -84,6 +87,118 @@ test("a null protocol preedit matches only a valid empty composition", () => {
   assert.equal(terminalComposeMatchesPreedit({ ...emptyClear, markedRange: { location: 0, length: 0 } }, cursor), false);
 });
 
+test("a fresh compose and cursor update can use unchanged known PTY rows", () => {
+  const baseline = {
+    compose: { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    cursor: { row: 0, col: 8, focused: true, preedit: null },
+    screen: screen([[cell("$"), cell(" ")]]),
+  };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: { ...compose } };
+  const currentScreen = { ...screen([[cell("$"), cell(" ")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+  const freshEvents = [{ name: "terminal.compose", value: compose }];
+
+  assert.deepEqual(currentScreen.rows, baseline.screen.rows, "PTY rows remain unchanged while composition changes");
+  assert.equal(terminalObserverStatusesMatch(freshEvents, baseline, { compose, cursor, screen: currentScreen }), true,
+    "a fresh compose notification and coherent current cursor may reuse unchanged known rows");
+});
+
+test("a fresh cursor event can report a changed preedit without compose or screen events", () => {
+  const baseline = {
+    compose: { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    cursor: { row: 0, col: 8, focused: true, preedit: null },
+    screen: screen([[cell("$"), cell(" ")]]),
+  };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: { ...compose } };
+  const currentScreen = { ...screen([[cell("$"), cell(" ")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: cursor }], baseline,
+    { compose, cursor, screen: currentScreen }), true);
+});
+
+test("a fresh screen event can accompany a coherent composition reread", () => {
+  const baseline = {
+    compose: { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    cursor: { row: 0, col: 8, focused: true, preedit: null },
+    screen: screen([[cell("$"), cell(" ")]]),
+  };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: { ...compose } };
+  const currentScreen = { ...screen([[cell("$"), cell("x")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.screen", value: currentScreen.rows }], baseline,
+    { compose, cursor, screen: currentScreen }), true);
+});
+
+test("per-key IME trace receipts identify the expected native or terminal callback", () => {
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-compose", text: "ㅏ" }], "k"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "compose", text: "ㅏ" } }], "k"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-key", key: "Backspace" }], "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "command", selector: "deleteBackward:" } }],
+    "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-insert", text: " " }], "Space"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "insert", text: " " } }], "Space"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-compose", text: "ㅏ" }], "Backspace"), false);
+  assert.equal(terminalInputReceiptMatches([], "k"), false);
+  assert.throws(() => terminalInputReceiptMatches([], "Enter"), /no receipt rule for key/);
+});
+
+test("a terminal observer requires a fresh semantic input status, not blink-only state", () => {
+  const compose = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: null, blinkVisible: true };
+  const baseline = { compose, cursor, screen: screen([[cell("$"), cell(" ")]]) };
+  const presentationOnlyCursor = { ...cursor, blinkVisible: false };
+  const unchanged = { compose, cursor: presentationOnlyCursor, screen: baseline.screen };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: presentationOnlyCursor }], baseline, unchanged), false);
+  assert.equal(terminalObserverStatusesMatch([], baseline, { ...unchanged, compose: { ...compose, text: "ㅏ" } }), false);
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: { ...cursor, focused: false } }],
+    baseline, { ...unchanged, cursor: { ...cursor, focused: false } }), false,
+  "losing terminal focus cannot count as key input progress");
+});
+
+test("a terminal observer rejects stale changed state and rows without a matching event", () => {
+  const empty = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: null };
+  const baseline = { compose: empty, cursor, screen: screen([[cell("$"), cell(" ")]]) };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const currentCursor = { ...cursor, preedit: { ...compose } };
+  const current = { compose, cursor: currentCursor, screen: baseline.screen };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.compose", value: { ...compose, text: "ㅎ" } }],
+    baseline, current), false, "a stale compose event must not bless a newer state");
+  assert.equal(terminalObserverStatusesMatch([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.cursor", value: { ...currentCursor, col: 9 } },
+  ], baseline, current), false, "a stale cursor event must not bless a newer state");
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.compose", value: compose }], baseline,
+    { ...current, screen: { ...screen([[cell("$"), cell("x")]]), frame: { ...baseline.screen.frame, sequence: 5 } } }), false,
+  "changed PTY rows require their own matching screen notification");
+  assert.equal(terminalObserverStatusesMatch([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.screen", value: [[cell("$"), cell("stale")]] },
+  ], baseline, current), false, "a stale screen event must not bless the current rows");
+  assert.throws(() => terminalObserverStatusesMatch([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.screen", value: null },
+  ], baseline, current), /terminal\.screen notification must be raw cell rows/);
+});
+
+test("a matching screen update can establish changed PTY rows with unchanged composition", () => {
+  const compose = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: null };
+  const baseline = { compose, cursor, screen: screen([[cell("$"), cell(" ")]]) };
+  const currentScreen = { ...screen([[cell("$"), cell("x")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.screen", value: currentScreen.rows }], baseline,
+    { compose, cursor, screen: currentScreen }), true);
+});
+
 test("an initial managed until does not release the manual terminal status watch", async () => {
   const listeners = new Set();
   const requests = [];
@@ -118,6 +233,95 @@ test("an initial managed until does not release the manual terminal status watch
     "managed-watch", "managed-unwatch", "status.watch", "status.watch", "status.watch",
   ]);
   await observer.stop();
+});
+
+test("a managed cursor until releases the observer's raw cursor watch", async () => {
+  const listeners = new Set();
+  const requests = [];
+  const watched = new Set();
+  const session = {
+    window: "main",
+    client: { on(_name, listener) { listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      requests.push({ method, name });
+      if (method === "status.watch") watched.add(name);
+      if (method === "status.unwatch") watched.delete(name);
+      return null;
+    },
+    async until(name, predicate, _message, { surface }) {
+      await this.request("status.watch", { name, surface });
+      const value = name === "terminal.compose" ? { text: "" } : { focused: true };
+      assert.equal(predicate(value), true);
+      await this.request("status.unwatch", { name, surface });
+      return value;
+    },
+  };
+  const observer = await startTerminalStatusObserver(session, "surface-1");
+
+  await session.until("terminal.cursor", (cursor) => cursor.focused === true,
+    "terminal focus did not return", { surface: "surface-1" });
+  if (watched.has("terminal.cursor")) {
+    for (const listener of listeners) listener({ window: "main", surface: "surface-1",
+      name: "terminal.cursor", value: { focused: true } });
+  }
+
+  assert.deepEqual(requests.filter((request) => request.method === "status.watch" || request.method === "status.unwatch"), [
+    { method: "status.watch", name: "terminal.compose" },
+    { method: "status.unwatch", name: "terminal.compose" },
+    { method: "status.watch", name: "terminal.compose" },
+    { method: "status.watch", name: "terminal.cursor" },
+    { method: "status.watch", name: "terminal.screen" },
+    { method: "status.watch", name: "terminal.cursor" },
+    { method: "status.unwatch", name: "terminal.cursor" },
+  ]);
+  assert.equal(watched.has("terminal.cursor"), false);
+  assert.equal(observer.events.some((event) => event.name === "terminal.cursor"), false,
+    "the old managed focus wait drops the cursor notification from the raw observer");
+  await observer.stop();
+});
+
+test("focus waits on the existing raw status stream after reference handoff", async () => {
+  const listeners = new Set();
+  const requests = [];
+  const watched = new Set();
+  const session = {
+    window: "main",
+    client: { on(_name, listener) { listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      requests.push({ method, name });
+      if (method === "status.watch") watched.add(name);
+      if (method === "status.unwatch") watched.delete(name);
+      return null;
+    },
+    async until(name, predicate, _message, { surface }) {
+      await this.request("status.watch", { name, surface });
+      const value = name === "terminal.compose" ? { text: "" } : { focused: true };
+      assert.equal(predicate(value), true);
+      await this.request("status.unwatch", { name, surface });
+      return value;
+    },
+  };
+  const observer = await startTerminalStatusObserver(session, "surface-1");
+  const offset = observer.events.length;
+  let notify;
+  const result = waitForObservedStatusEvent(observer.events, offset, (listener) => {
+    notify = listener;
+    return () => { notify = undefined; };
+  }, "terminal.cursor", (cursor) => cursor?.focused === true, "focus wait", 20);
+  for (const listener of listeners) listener({ window: "main", surface: "surface-1",
+    name: "terminal.cursor", value: { focused: false } });
+  notify();
+  assert.equal(notify !== undefined, true, "stale focus must not resolve or remove the waiter");
+  for (const listener of listeners) listener({ window: "main", surface: "surface-1",
+    name: "terminal.cursor", value: { focused: true } });
+  notify();
+
+  const event = await result;
+  assert.equal(event.value.focused, true);
+  assert.equal(watched.has("terminal.cursor"), true, "focus wait must preserve the raw cursor watch");
+  assert.equal(requests.some((request) => request.method === "status.unwatch" && request.name === "terminal.cursor"), false);
+  await observer.stop();
+  assert.equal(watched.size, 0, "observer cleanup must release each raw watch");
 });
 
 test("a status notification delivered during a sample satisfies the sample's original event offset", async () => {

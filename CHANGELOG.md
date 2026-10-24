@@ -4,6 +4,38 @@
 
 ## Unreleased
 
+- F239-47-16: Keep the raw terminal cursor observer subscribed after
+  AppKit reference focus returns. The old caller used managed
+  `Client.watch` through `s.until` for a cursor status already watched by
+  raw requests; its `status.unwatch` removed the observer's subscription.
+  Red: the unchanged sequence loses the subsequent focused cursor event.
+  Green: wait for a fresh focused event on the existing observer stream,
+  reject stale focus values, and leave the raw watch active until observer
+  cleanup. The owning `terminal-ime-document.test.mjs` passes 19/19. No
+  activation rerun or IME behavior acceptance is claimed; F239-47-6 remains
+  open.
+- F239-47-15: Reconcile fresh terminal notifications with known pre-key state.
+  The observer accepts a coherent composition update when PTY rows remain
+  unchanged, while requiring changed rows to have a matching screen event and
+  rejecting stale notifications, blink-only changes, lost focus and missing
+  input state. Red: the unchanged all-three-event predicate rejected a fresh
+  compose update with coherent cursor state and identical baseline rows.
+  Green: the owning `terminal-ime-document.test.mjs` passes 17/17, the
+  activation file passes syntax checking, and `make e2e-check` and
+  `make docs-check` pass. The latest Wails and Tauri runtime attempts each
+  stopped after one terminal `k`; neither reached Backspace or Space, so
+  F239-47-6 acceptance remains open.
+- F212.10-core-3-1: Wait for native `view-call` and `view-reply` listener
+  registration before declaring a view composition, which starts native view
+  creation. This prevents the first view calls from racing page listener
+  setup. Red: unchanged `surface-view.test.mjs` failed because composition
+  was declared while registration was deferred. Green: the same fixture
+  confirms both listeners are ready before declaration and both initial calls
+  receive replies; pending setup disposal and registration rejection settle
+  the mount and release successful listeners. The owning view and remount
+  tests pass 33/33, and `make docs-check` passes. The earlier two-host timeout
+  correlation remains unverified; no runtime rerun is claimed.
+
 - F239-47-8: Reject unknown native IME test arguments before entering AppKit or
   reading an input source. Move read-only source inspection to a separate probe
   executable, and make the focused build alias depend on absolute executable
@@ -86,7 +118,7 @@
   activation request and wait callback for a non-activation path. Green: the
   helper now returns without changing frontmost state when activation was not
   attempted; after an activation attempt it requires an accepted request and
-  an `NSWorkspaceDidActivateApplicationNotification` for the exact previous PID. The fault test passes 14/14 and the default
+  an `NSWorkspaceDidActivateApplicationNotification` for the exact previous PID. The fault test passes 17/17 and the default
   non-activation view-focus check passes 9/9. The activation variant remains
   unrun.
 
@@ -106,7 +138,7 @@
   Files local-build evidence and the VT local package-link/build procedure. F270 is complete:
   its 11 focused source-audit tests, `make e2e-check` and `make docs-check`
   pass. The plan does not claim publication or runtime acceptance.
-- F239-47-6: Connect the activation caller to retained source rasters and frame-bound render metadata. The caller validates source manifest bytes and digests, records only exact screen/cursor/render state associations, maps capture samples to terminal key intervals using host `log` clock `mono_ns` boundaries in the Darwin `CLOCK_UPTIME_RAW`/`mach_absolute_time` domain, and evaluates each input stage with the ROI candidate and glyph/underline calculators. The owning caller adapter tests pass 10/10, including the unchanged-helper Red replay for mixed clock domains and rejection of malformed clock replies and a different clock domain, and persistence of `error`/`no-proof` results before assertion failure; syntax checks pass. No live input was run; two-host acceptance remains open.
+- F239-47-6: Read input boundaries through the diagnostic-only `diagnostics.clock` endpoint and accept only canonical positive base-10 uint64 `mono_ns` text. The caller checks the endpoint and reply before reference input and uses that same clock for every terminal key boundary; the previous page-native `log` request was not an endpoint method and closed both host connections. Red: unchanged Wails and Tauri owning socket tests closed on the undeclared endpoint method. Green: both endpoint tests pass in diagnostics builds, validating two same-connection canonical positive uint64 replies with nondecreasing values; release tests confirm the method is undeclared and closes the connection. The caller tests pass 10/10, including request selection, strict reply validation, mixed-clock rejection and persistence of `error`/`no-proof` before assertion failure; syntax checks, `make e2e-check` and `make docs-check` pass. The earlier two-host run completed ten AppKit reference states but stopped before terminal input. No activation rerun was made; two-host acceptance remains open. `make parity-check` reports no uncovered tests, implementations or feature links, while retaining the two existing examples count mismatches: 100/673/922 recorded versus 100/687/958 discovered; the recorded counts were not changed.
 
 - F239-47-12: Align the core visual calculator with actual VT `screen.render` metadata. The producer reports lowercase `bgra8`/`premultiplied`, top-level underline metrics, per-glyph width, font runs, effective draw colors, nullable cell-local bounds and underline rectangles, and cursor draw state. Native capture artifacts retain their own `BGRA8`/`premultiplied-first` contract; the consumer decodes the original bytes for color comparison without changing artifact metadata. Red: the producer-shaped fixture failed the unchanged helper at `bgra8` versus `BGRA8`. Green: the same fixture and negative controls pass in `terminal-ime-visual.test.mjs` (9/9), including preedit/inverse colors, wide-glyph fractional geometry, blink-off cursor metadata, malformed-before-measure validation and difference cursor pixels. `make docs-check` passes. No live input was run; this does not complete F239-47-6 acceptance.
 - F239-47-13: Preserve raw `CTFont`/`CTLine` glyph overhang and same-frame source provenance in the core visual calculator. Signed fractional bounds are translated by the leading-cell origin and clipped only after conversion to measured raster coordinates. The capture raster origin is derived from source `screenBounds`/scale and capture `screenRect`/`contentRect`; padded capture rows are mapped without changing pixel order. The source raster identity must match cursor and renderer frame identities. Red: the unchanged helper rejected valid finite overhang with `renderer glyph bounds: rectangle covers no cell pixels`; a follow-up test showed a different source sequence could produce a measured result. Green: the owning fixture measures overhang pixels outside the leading cell, preserves original metadata, returns no proof for an empty raster intersection, rejects non-finite or non-positive geometry and mismatched source generation/raster/sequence; `terminal-ime-visual.test.mjs` passes 10/10 and `make docs-check` passes. No live input was run.

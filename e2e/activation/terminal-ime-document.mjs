@@ -59,6 +59,72 @@ export function terminalComposeMatchesPreedit(compose, cursor) {
   return sameTerminalComposition(current, compositionFields(cursor.preedit, "cursor.preedit"));
 }
 
+/** Checks one fresh status update against the known pre-key state and the current coherent reads. */
+export function terminalObserverStatusesMatch(currentEvents, baseline, current) {
+  assert.ok(Array.isArray(currentEvents), "terminal observer events must be an array");
+  assertScreenCursor(baseline.screen, baseline.cursor, "terminal baseline");
+  assertScreenCursor(current.screen, current.cursor, "terminal current screen");
+  const latestComposeEvent = currentEvents.findLast((event) => event.name === "terminal.compose");
+  const latestCursorEvent = currentEvents.findLast((event) => event.name === "terminal.cursor");
+  const latestScreenEvent = currentEvents.findLast((event) => event.name === "terminal.screen");
+  const latestCompose = latestComposeEvent?.value;
+  const latestCursor = latestCursorEvent?.value;
+  const latestScreen = latestScreenEvent?.value;
+  if (latestComposeEvent) compositionFields(latestCompose, "terminal.compose notification");
+  if (latestCursorEvent) terminalCompositionState(current.compose, latestCursor);
+  if (latestScreenEvent) assert.ok(Array.isArray(latestScreen), "terminal.screen notification must be raw cell rows");
+  const baselineState = terminalCompositionState(baseline.compose, baseline.cursor);
+  const currentState = terminalCompositionState(current.compose, current.cursor);
+  const compositionChanged = !sameTerminalComposition(baselineState, currentState);
+  const rowsChanged = JSON.stringify(baseline.screen.rows) !== JSON.stringify(current.screen.rows);
+
+  if (currentEvents.length === 0 || (!compositionChanged && !rowsChanged)) return false;
+  if (!baseline.cursor.focused || !current.cursor.focused) return false;
+  if (!terminalComposeMatchesPreedit(current.compose, current.cursor)) return false;
+  if (latestComposeEvent && !sameTerminalComposition(
+    terminalCompositionState(latestCompose, current.cursor), currentState)) return false;
+  if (latestCursorEvent && !sameTerminalComposition(
+    terminalCompositionState(current.compose, latestCursor), currentState)) return false;
+  if (!latestComposeEvent && !latestCursorEvent && !latestScreenEvent && !sameTerminalComposition(
+    terminalCompositionState(baseline.compose, current.cursor), currentState)) return false;
+  if (!latestCursorEvent && (baseline.cursor.row !== current.cursor.row || baseline.cursor.col !== current.cursor.col ||
+    baseline.cursor.focused !== current.cursor.focused)) return false;
+
+  if (latestScreenEvent) {
+    return JSON.stringify(latestScreen) === JSON.stringify(current.screen.rows);
+  }
+  const before = baseline.screen;
+  const after = current.screen;
+  return !rowsChanged && before.frame?.generation === after.frame?.generation &&
+    before.frame?.raster === after.frame?.raster &&
+    Number.isInteger(before.frame?.sequence) && Number.isInteger(after.frame?.sequence) &&
+    after.frame.sequence >= before.frame.sequence;
+}
+
+/** Reports whether a per-key IME trace contains a callback that can acknowledge the key just sent. */
+export function terminalInputReceiptMatches(entries, key) {
+  assert.ok(Array.isArray(entries), "terminal IME callback entries must be an array");
+  if (key === "k") {
+    return entries.some((entry) => (entry.kind === "native-key" && entry.key === key) ||
+      (entry.kind === "native-compose" && typeof entry.text === "string" && entry.text !== "") ||
+      (entry.kind === "native-insert" && typeof entry.text === "string" && entry.text !== "") ||
+      (entry.kind === "terminal-input" && ["compose", "insert"].includes(entry.input?.type) &&
+        typeof entry.input.text === "string" && entry.input.text !== ""));
+  }
+  if (key === "Backspace") {
+    return entries.some((entry) => (entry.kind === "native-key" && entry.key === key) ||
+      (entry.kind === "terminal-input" && entry.input?.type === "command" &&
+        entry.input.selector === "deleteBackward:"));
+  }
+  if (key === "Space") {
+    return entries.some((entry) => (entry.kind === "native-key" && entry.key === key) ||
+      (entry.kind === "native-insert" && typeof entry.text === "string" && entry.text.includes(" ")) ||
+      (entry.kind === "terminal-input" && entry.input?.type === "insert" &&
+        typeof entry.input.text === "string" && entry.input.text.includes(" ")));
+  }
+  throw new Error(`terminal IME trace has no receipt rule for key ${JSON.stringify(key)}`);
+}
+
 const TERMINAL_INPUT_STATUSES = ["terminal.compose", "terminal.cursor", "terminal.screen"];
 
 /** Resolves after a status event newer than the caller's sample offset arrives. */
@@ -80,6 +146,35 @@ export function waitForStateEvent(events, after, subscribe, label, timeoutMs = 1
     });
     // A notification may arrive while the subscription is being installed.
     if (events.length > after) finish(resolve, events.at(-1));
+  });
+}
+
+/** Resolves only for a matching status event on the caller's existing observer stream. */
+export function waitForObservedStatusEvent(events, after, subscribe, name, predicate, label, timeoutMs = 1500) {
+  assert.ok(Array.isArray(events), "terminal observer events must be an array");
+  assert.ok(Number.isInteger(after) && after >= 0, "terminal observer event offset must be nonnegative");
+  assert.equal(typeof predicate, "function", "terminal observer predicate must be a function");
+  const matchingEvent = () => events.slice(after).findLast((event) => event.name === name && predicate(event.value));
+  const current = matchingEvent();
+  if (current) return Promise.resolve(current);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let off = () => {};
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      off();
+      callback(value);
+    };
+    const timer = setTimeout(() => finish(reject,
+      new Error(`${label}: no matching ${name} notification on the existing observer stream`)), timeoutMs);
+    off = subscribe(() => {
+      const event = matchingEvent();
+      if (event) finish(resolve, event);
+    });
+    const arrivedDuringSubscribe = matchingEvent();
+    if (arrivedDuringSubscribe) finish(resolve, arrivedDuringSubscribe);
   });
 }
 
