@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F265: records 검사는 census `exclude`가 없으면 아무 파일도 제외하지 않고, 선언된 비문자열 값은 census 파일과 실제 값을 담아 거부한다. Red: 새 소유 시험 2개가 변경 전 검사에서 실패했다. Green: records-check 13/13과 `make docs-check` 문서 112개, record 1718개가 통과한다.
+
 - F264: 작업공간 version을 immutable public tag `v0.0.20`과 구분되는 release candidate `0.0.21`로 맞췄다. Version checker가 두 identity를 명시하고, manifest audit와 workspace Cargo.lock 3개 항목이 candidate를 사용하며, 설치 명세가 candidate와 public release를 구분한다. Red: 변경 전 checker identity가 `0.0.20`과 `0.0.21` 불일치로 실패했다. 원래 Cargo.lock 항목을 되돌린 제어된 replay는 `soksak-host-tauriv2`에서 실패했다. Green: `versions.test.mjs` 7/7, version audit, `make docs-check` 112개 파일과 1718개 record가 통과한다. Tag, release asset, registry 항목은 게시하지 않았다.
 
 - F239-27: 선언된 workspace registry에서 만든 starter package로 실행 중인 Wails 개발 profile을 복구했다. sok CLI가 browser 0.0.6, terminal 0.0.15, files 0.0.7과 files 0.0.8, vt 0.0.12 sidecar를 설치했다. 재실행 뒤 세 plugin은 loaded, terminal과 browser surface는 ready, core.page.error는 null이며 lsappinfo는 soksak://plugin 이름 세 개와 soksak://sidecar 이름 두 개를 표시한다. 앱 registry command로 public index URL을 복원했다. Browser 0.0.6은 현재 workspace source에서 빌드했으며 공개된 0.0.6 archive와 다르다. 이 작업은 correction을 공개하지 않는다. local browser 0.0.7 upgrade와 public component release는 F239-28에서 추적한다. Registry G54는 각 release 뒤 browser 0.0.7, terminal 0.0.15, files 0.0.7과 sidecar 0.0.8, 0.0.12를 등록한다.

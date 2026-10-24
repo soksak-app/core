@@ -141,7 +141,11 @@ export function commitMessageErrors(message) {
 function declaredFiles(repository, tracked) {
   const census = join(repository, "census.json");
   // default: a census declaration without an exclude excludes nothing, so every tracked file is a record of the repository.
-  const exclude = existsSync(census) ? new RegExp(JSON.parse(readFileSync(census, "utf8")).exclude ?? "") : null;
+  const declaration = existsSync(census) ? JSON.parse(readFileSync(census, "utf8")) : null;
+  if (declaration && Object.hasOwn(declaration, "exclude") && typeof declaration.exclude !== "string") {
+    throw new Error(`${census}: exclude must be a string; found ${typeof declaration.exclude} ${JSON.stringify(declaration.exclude)}`);
+  }
+  const exclude = declaration && Object.hasOwn(declaration, "exclude") ? new RegExp(declaration.exclude) : null;
   return exclude ? tracked.filter((file) => !exclude.test(file)) : tracked;
 }
 

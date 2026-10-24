@@ -139,3 +139,23 @@ test("a file the census declaration excludes is not a record of the repository",
   const { errors } = repositoryRecordViolations(repository);
   assert.deepEqual(errors.map((error) => error.split(":")[0]), ["own.md"]);
 });
+
+test("a census declaration without an exclude checks every tracked record", () => {
+  const repository = mkdtempSync(join(tmpdir(), "records-no-exclude-"));
+  execSync("git init -q .", { cwd: repository });
+  writeFileSync(join(repository, "census.json"), JSON.stringify({}));
+  writeFileSync(join(repository, "own.md"), "The plugin package holds pages.\n");
+  execSync("git add .", { cwd: repository });
+  const { files, errors } = repositoryRecordViolations(repository);
+  assert.ok(files.includes("own.md"));
+  assert.deepEqual(errors.map((error) => error.split(":")[0]), ["own.md"]);
+});
+
+test("a census declaration rejects a non-string exclude with its file and value", () => {
+  const repository = mkdtempSync(join(tmpdir(), "records-invalid-exclude-"));
+  execSync("git init -q .", { cwd: repository });
+  writeFileSync(join(repository, "census.json"), JSON.stringify({ exclude: 3 }));
+  writeFileSync(join(repository, "own.md"), "Repository facts.\n");
+  execSync("git add .", { cwd: repository });
+  assert.throws(() => repositoryRecordViolations(repository), /census\.json.*exclude.*number.*3/);
+});
