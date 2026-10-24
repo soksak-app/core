@@ -4,6 +4,7 @@ import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
+import { sourceOrigin } from "./source-origins.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
@@ -355,14 +356,34 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     report: (text) => dispatchEvent(new ErrorEvent("error", { message: text })),
   });
   // The commands of the view. A command is declared through the exposure of the surface, and each request of it runs in the view.
-  const viewCommands = createViewCommands({
-    plugin: surface.pluginId,
-    post: (message) => scoped.native.call("viewRequest", message),
-    timeoutOf: (name) => registry.commandTimeout(name),
-    report: callReporter(surface.pluginId),
-  });
-  // The declared UI pull of a declared section sends through this layer, so it is kept by surface until the answers end.
-  const forgetCommands = keepViewCommands(surface.surfaceId, viewCommands);
+  let viewGeneration = sourceOrigin(surface.pluginId, surface.surfaceId);
+  if (!Number.isSafeInteger(viewGeneration) || viewGeneration < 1) {
+    throw new Error(`surface ${surface.surfaceId} has no current native source generation`);
+  }
+  let viewCommands;
+  let forgetCommands;
+  const installViewCommands = (generation) => {
+    const commands = createViewCommands({
+      plugin: surface.pluginId,
+      generation,
+      post: (message) => scoped.native.call("viewRequest", message),
+      timeoutOf: (name) => registry.commandTimeout(name),
+      report: callReporter(surface.pluginId),
+    });
+    viewCommands = commands;
+    forgetCommands = keepViewCommands(surface.surfaceId, commands, generation);
+  };
+  installViewCommands(viewGeneration);
+  const refreshViewCommands = (generation = sourceOrigin(surface.pluginId, surface.surfaceId)) => {
+    if (!Number.isSafeInteger(generation) || generation < 1 || generation === viewGeneration) return false;
+    const previous = viewCommands;
+    forgetCommands();
+    previous.close();
+    viewGeneration = generation;
+    installViewCommands(generation);
+    return true;
+  };
+  const currentSourceGeneration = () => sourceOrigin(surface.pluginId, surface.surfaceId);
   // The exposure of the view. A forwarded exposure request of the view reaches the view through its exposure-request subscription and is
   // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the page does not
   // forward it again (docs/spec/exposure.md#relay). The mark is set here and not through a main-page placeholder.
@@ -436,6 +457,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     },
   };
   const answering = scoped.native.on("view-call", (event) => {
+    const currentSource = currentSourceGeneration();
+    if (!Number.isSafeInteger(event?.generation) || event.generation < 1 || event.generation !== currentSource) {
+      emitEvent("debug", "page.view.call.cancel", {
+        plugin: surface.pluginId, surface: surface.surfaceId, id: event?.id, command: String(event?.command ?? ""),
+      });
+      return;
+    }
+    refreshViewCommands(currentSource);
     if (event?.cancel === true) {
       // A cancel has no reply: the call that it ends replies cancelled.
       answerViewCall(event, { ...options, pending }).catch((error) => {
@@ -455,10 +484,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     // A surface that declares surface.unload reads its tab state from the store, which the page opens during its start (projects.js).
     // Its call waits until the store has been tried, as the mount does, so a call during the start is not answered before the store.
     const receivedGeneration = documentGeneration;
+    const receivedSourceGeneration = event.generation;
     const receivedPending = pending;
     const receivedOptions = { ...options, pending: receivedPending };
     const runCall = () => {
-      if (closing.aborted || receivedGeneration !== documentGeneration) return Promise.reject(new Error("cancelled"));
+      if (closing.aborted || receivedGeneration !== documentGeneration ||
+          receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
+        return Promise.reject(new Error("cancelled"));
+      }
       return answerViewCall(event, receivedOptions);
     };
     (surface.unload ? tabStatesReady().then(runCall) : runCall()).then(
@@ -467,17 +500,19 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       // default: a rejection that is not an Error replies with its text.
       (error) => ({ id: event.id, error: { code: -32000, message: String(error?.message ?? error) } }),
     ).then((reply) => {
-      if (closing.aborted || receivedGeneration !== documentGeneration) {
+      if (closing.aborted || receivedGeneration !== documentGeneration ||
+          receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
         emitEvent("debug", "page.view.call.cancel", {
           plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
         });
         return null;
       }
-      return scoped.native.call("viewReply", reply).then(() => {
+      return scoped.native.call("viewReply", { ...reply, generation: receivedSourceGeneration }).then(() => {
         emitEvent("debug", "page.view.reply", { plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, outcome: "error" in reply ? "error" : "result" });
       });
     }).catch((error) => {
-      if (closing.aborted || receivedGeneration !== documentGeneration) {
+      if (closing.aborted || receivedGeneration !== documentGeneration ||
+          receivedSourceGeneration !== viewGeneration || receivedSourceGeneration !== currentSourceGeneration()) {
         emitEvent("debug", "page.view.call.cancel", {
           plugin: surface.pluginId, surface: surface.surfaceId, id: event.id, command: String(event.command),
         });
@@ -488,12 +523,14 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     });
   });
   registrations.push(answering);
-  const ending = scoped.native.on("view-process-ended", () => {
+  const ending = scoped.native.on("view-process-ended", (event) => {
+    if (event?.generation !== viewGeneration) return;
     documentRegions.released(surface.surfaceId);
     documentGeneration += 1;
     for (const controller of pending.values()) controller.abort();
     pending.clear();
     pending = new Map();
+    refreshViewCommands();
     subscriptions.restart().catch((error) => {
       dispatchEvent(new ErrorEvent("error", { message: `view subscriptions restart: ${error.message}` }));
     });
@@ -504,6 +541,9 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   }, { once: true });
   // The replies of the view to the commands of the page.
   const replies = scoped.native.on("view-reply", (event) => {
+    const currentSource = currentSourceGeneration();
+    if (!Number.isSafeInteger(event?.generation) || event.generation !== currentSource) return;
+    refreshViewCommands(currentSource);
     try {
       viewCommands.receive(event);
     } catch (error) {
@@ -710,7 +750,15 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
       const stopping = scoped.native.on("view-stopped", (event) => onState(viewStopState(event)));
       registrations.push(stopping);
       // The responsiveness of the view is the state of its surface in core.plugin.views, and the surface keeps no state after its dispose.
-      const responding = scoped.native.on("view-responsiveness", (event) => viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive));
+      const responding = scoped.native.on("view-responsiveness", (event) => {
+        if (!Number.isSafeInteger(event?.generation) || event.generation !== sourceOrigin(surface.pluginId, surface.surfaceId)) {
+          emitEvent("debug", "page.view.event.cancel", {
+            plugin: surface.pluginId, surface: surface.surfaceId, event: "view-responsiveness",
+          });
+          return;
+        }
+        viewResponsiveness(surface.pluginId, surface.surfaceId, event.responsive);
+      });
       registrations.push(responding);
       // A presentation wait that ended without the presentation of the view counts losses.abandoned of the plugin.
       const abandoning = scoped.native.on("view-presentation-abandoned", () => presentationAbandoned(surface.pluginId));

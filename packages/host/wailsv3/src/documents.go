@@ -356,25 +356,51 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	if err := s.documents.Reserve(key); err != nil {
 		return err
 	}
-	handle, err := system.CreateDocument(surface, directory, folder, plugin, channel, func(state string) {
+	generation, err := s.sourceOriginState().create(surfaceID, true)
+	if err != nil {
+		s.documents.Remove(key)
+		return fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
+	}
+	var handle unsafe.Pointer
+	handle, err = system.CreateDocument(surface, directory, folder, plugin, channel, func(state string) {
+		if !s.documents.currentView(surfaceID, handle, generation) {
+			s.traceStaleViewCallback(surfaceID, "state")
+			return
+		}
 		if err := s.viewState(surfaceID, state); err != nil {
 			LogError("view channel", err)
 		}
 	})
+	registeredEvent := false
 	if err == nil {
+		s.documents.registerView(surfaceID, plugin, generation, handle)
+		if !s.documents.Set(key, handle) {
+			s.documents.unregisterView(surfaceID, generation)
+			s.sourceOriginState().retire(surfaceID, true, generation)
+			system.CloseDocument(handle)
+			return fmt.Errorf("surface %q closed while its view was created", surfaceID)
+		}
+	}
+	if err == nil {
+		s.windowEvent("declared-ui-source-registered", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
+		registeredEvent = true
 		err = system.SetViewMessage(handle, func(value string) {
-			s.viewReceived(surfaceID, handle, value)
+			s.viewReceived(surfaceID, handle, plugin, generation, value)
 		})
 	}
 	if err == nil {
 		err = system.SetViewEnded(handle, func() {
 			LogError("view channel", surfaceID+": the view process ended")
-			s.viewFailed(surfaceID, handle)
+			s.viewFailed(surfaceID, handle, generation)
 		})
 	}
 	if err == nil {
 		err = system.SetViewResponsiveness(handle, func(responsive bool) {
-			s.viewResponsiveness(surfaceID, plugin, responsive)
+			if !s.documents.currentView(surfaceID, handle, generation) {
+				s.traceStaleViewCallback(surfaceID, "responsiveness")
+				return
+			}
+			s.viewResponsiveness(surfaceID, plugin, generation, responsive)
 		})
 	}
 	if err == nil {
@@ -384,18 +410,18 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		err = s.addStartScript(handle, surfaceID, start)
 	}
 	if err == nil && !system.LoadDocument(handle, "soksak://"+plugin+"/"+page) {
-		system.CloseDocument(handle)
 		err = fmt.Errorf("view of surface %q cannot load soksak://%s/%s", surfaceID, plugin, page)
 	}
 	if err != nil {
 		s.documents.Remove(key)
+		if s.sourceOriginState().retire(surfaceID, true, generation) && registeredEvent {
+			s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
+		}
+		if handle != nil {
+			system.CloseDocument(handle)
+		}
 		return err
 	}
-	if !s.documents.Set(key, handle) {
-		system.CloseDocument(handle)
-		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
-	}
-	s.RegisterView(surfaceID, plugin)
 	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
 	return nil
 }
@@ -469,7 +495,7 @@ func surfaceStartScript(surface string, start ViewStart) (string, error) {
 
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the
 // view-responsiveness event to the owning surface. It ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
-func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
+func (s *Surfaces) viewResponsiveness(surface, plugin string, generation uint64, responsive bool) {
 	if !responsive {
 		s.endPresentationWait(surface, "unresponsive")
 	}
@@ -478,7 +504,9 @@ func (s *Surfaces) viewResponsiveness(surface, plugin string, responsive bool) {
 	} else {
 		EmitHost(LevelDebug, "host.trace.view.unresponsive", map[string]any{"plugin": plugin, "surface": surface})
 	}
-	s.emitToSurface(surface, "view-responsiveness", map[string]any{"surface": surface, "plugin": plugin, "responsive": responsive})
+	s.emitToSurface(surface, "view-responsiveness", map[string]any{
+		"surface": surface, "plugin": plugin, "generation": generation, "responsive": responsive,
+	})
 }
 
 // syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
@@ -777,6 +805,9 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	// The view of the surface closes with its documents (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
+	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, true, channel.generation) {
+		s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
+	}
 	// The regions close with their documents, so their stream effects are not applied.
 	s.streams.RemoveSurface(surface)
 	handles := s.documents.RemoveSurface(surface)
@@ -1283,8 +1314,10 @@ const viewChannelMarker = 1
 // viewChannel is the channel of one view surface: the plugin of its view and its ready document. An empty document means that no
 // ready document is recorded.
 type viewChannel struct {
-	plugin   string
-	document string
+	plugin     string
+	generation uint64
+	handle     unsafe.Pointer
+	document   string
 	// processReady is set by the first ready message of the view, which writes host.trace.view.process-ready once.
 	processReady bool
 	// navigations is the navigation count that the last document state of the view reported. A higher count starts a new document.
@@ -1301,19 +1334,21 @@ type openViewCall struct {
 }
 
 // trackViewCall records the call request id with command as open. It runs when the request is forwarded to the main page.
-func (d *Documents) trackViewCall(surface string, id uint64, command string) {
+func (d *Documents) trackViewCall(surface string, generation, id uint64, command string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if channel, ok := d.views[surface]; ok {
+	if channel, ok := d.views[surface]; ok && channel.generation == generation {
 		channel.calls[id] = command
+		return true
 	}
+	return false
 }
 
 // answerViewCall records that the main page answered the call request id of the view of surface, so the call is no longer open.
-func (d *Documents) answerViewCall(surface string, id uint64) {
+func (d *Documents) answerViewCall(surface string, generation, id uint64) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if channel, ok := d.views[surface]; ok {
+	if channel, ok := d.views[surface]; ok && channel.generation == generation {
 		delete(channel.calls, id)
 	}
 }
@@ -1342,11 +1377,11 @@ func (d *Documents) endViewCalls(surface string) []openViewCall {
 
 // firstReady reports whether the view of surface has no ready message yet, and records that it has one now. A view without a channel
 // reports false.
-func (d *Documents) firstReady(surface string) bool {
+func (d *Documents) firstReady(surface string, generation uint64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	channel, ok := d.views[surface]
-	if !ok || channel.processReady {
+	if !ok || channel.generation != generation || channel.processReady {
 		return false
 	}
 	channel.processReady = true
@@ -1354,10 +1389,29 @@ func (d *Documents) firstReady(surface string) bool {
 }
 
 // registerView records the plugin of the view of surface. It runs when the view is created.
-func (d *Documents) registerView(surface, plugin string) {
+func (d *Documents) registerView(surface, plugin string, generation uint64, handle unsafe.Pointer) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.views[surface] = &viewChannel{plugin: plugin, calls: map[uint64]string{}}
+	d.views[surface] = &viewChannel{plugin: plugin, generation: generation, handle: handle, calls: map[uint64]string{}}
+}
+
+// unregisterView removes a view channel only when generation still owns the surface.
+func (d *Documents) unregisterView(surface string, generation uint64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if channel, ok := d.views[surface]; !ok || channel.generation != generation {
+		return false
+	}
+	delete(d.views, surface)
+	return true
+}
+
+// currentView checks both the native handle and the host-assigned generation of one view incarnation.
+func (d *Documents) currentView(surface string, handle unsafe.Pointer, generation uint64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	return ok && channel.handle == handle && channel.generation == generation
 }
 
 // view returns the channel of the view of surface, and false when the surface has no view.
@@ -1384,21 +1438,38 @@ func (d *Documents) viewSurfaces() []string {
 }
 
 // setReadyDocument records document as the ready document of the view of surface, and clears the record when document is empty.
-func (d *Documents) setReadyDocument(surface, document string) bool {
+func (d *Documents) setReadyDocument(surface string, generation uint64, document string) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	channel, ok := d.views[surface]
-	if !ok {
+	if !ok || channel.generation != generation {
 		return false
 	}
 	channel.document = document
 	return true
 }
 
+func (d *Documents) currentGeneration(surface string, plugin string, generation uint64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	channel, ok := d.views[surface]
+	return ok && channel.plugin == plugin && channel.generation == generation
+}
+
 // viewReceived handles one message of the sok-view handler of the view handle of surface and writes its failure to the application log.
 // It runs on the UI thread.
-func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, value string) {
-	err := s.ViewMessage(surface, value)
+func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, plugin string, generation uint64, value string) {
+	if !s.documents.currentView(surface, handle, generation) {
+		s.recordRetiredViewMessage(surface, plugin, value)
+		s.traceStaleViewCallback(surface, "message")
+		return
+	}
+	accepted, err := s.viewMessageFrom(surface, plugin, generation, value)
+	if !accepted && err == nil {
+		s.recordRetiredViewMessage(surface, plugin, value)
+		s.traceStaleViewCallback(surface, "message")
+		return
+	}
 	if err == nil {
 		return
 	}
@@ -1406,21 +1477,66 @@ func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, value str
 	var overflow viewOverflow
 	if errors.As(err, &overflow) {
 		// The view has lost messages, so it is closed and created again (docs/spec/plugin-processes.md, rule 4).
-		s.viewFailed(surface, handle)
+		s.viewFailed(surface, handle, generation)
+	}
+}
+
+func (s *Surfaces) traceStaleViewCallback(surface, reason string) {
+	if PerformanceEnabled() {
+		EmitHost(LevelDebug, "host.trace.view.callback-cancelled", map[string]any{"surface": surface, "reason": reason})
+	}
+}
+
+func (s *Surfaces) recordRetiredViewMessage(surface, plugin, value string) {
+	var received struct {
+		Message json.RawMessage `json:"message"`
+		Error   *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(value), &received); err != nil {
+		LogError("view channel", fmt.Errorf("view %s %s: message is not JSON: %w", plugin, surface, err))
+		return
+	}
+	if received.Error != nil {
+		LogError("view channel", fmt.Errorf("view %s %s: %s", plugin, surface, *received.Error))
+		return
+	}
+	if received.Message == nil {
+		LogError("view channel", fmt.Errorf("view %s %s: message has neither message nor error", plugin, surface))
+		return
+	}
+	var event struct {
+		Event  string `json:"event"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(received.Message, &event); err != nil {
+		LogError("view channel", fmt.Errorf("view %s %s: event is not an object: %w", plugin, surface, err))
+		return
+	}
+	if event.Event == "view.error" {
+		if event.Reason == "" {
+			LogError("view channel", fmt.Errorf("view %s %s: view.error has no reason", plugin, surface))
+		} else {
+			LogError(fmt.Sprintf("view %s %s", plugin, surface), event.Reason)
+		}
 	}
 }
 
 // viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view. It runs on the UI
 // thread.
-func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
+func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation uint64) {
 	key := DocumentKey{Surface: surface, Name: viewRegionName}
 	current, err := s.documents.Get(key)
-	if err != nil || current != handle {
+	channel, ok := s.documents.view(surface)
+	if err != nil || current != handle || !ok || channel.generation != generation {
 		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
+		s.traceStaleViewCallback(surface, "ended")
 		return
 	}
 	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
+	if s.sourceOriginState().retire(surface, true, generation) {
+		s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": generation})
+	}
 	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
 	openCalls := s.documents.endViewCalls(surface)
 	if _, err := s.documents.Remove(key); err != nil {
@@ -1439,7 +1555,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 	}
 	s.endPresentationWait(surface, "process-ended")
 	// The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
-	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface})
+	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface, "plugin": channel.plugin, "generation": generation})
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
 	if !lifecycle.fail(surface) {
@@ -1469,31 +1585,39 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer) {
 // (docs/spec/native-surfaces.md#view-surfaces).
 func (s *Surfaces) ViewMessage(surface, value string) error { return s.viewMessage(surface, value) }
 
-// RegisterView records the plugin of the view of surface. The creation of a view calls it before the view can send a message.
-func (s *Surfaces) RegisterView(surface, plugin string) { s.documents.registerView(surface, plugin) }
-
 func (s *Surfaces) viewMessage(surface, value string) error {
+	channel, ok := s.documents.view(surface)
+	if !ok {
+		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
+	}
+	accepted, err := s.viewMessageFrom(surface, channel.plugin, channel.generation, value)
+	if !accepted && err == nil {
+		return fmt.Errorf("%s: view channel message belongs to a retired source generation", surface)
+	}
+	return err
+}
+
+func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, value string) (bool, error) {
 	var received struct {
 		Message json.RawMessage `json:"message"`
 		Error   *string         `json:"error"`
 	}
 	if err := json.Unmarshal([]byte(value), &received); err != nil {
-		return fmt.Errorf("%s: view message is not JSON: %w", surface, err)
+		return false, fmt.Errorf("%s: view message is not JSON: %w", surface, err)
 	}
 	if received.Error != nil {
-		return errors.New(*received.Error)
+		return true, errors.New(*received.Error)
 	}
 	if received.Message == nil {
-		return fmt.Errorf("%s: view message has neither message nor error", surface)
+		return false, fmt.Errorf("%s: view message has neither message nor error", surface)
 	}
-	channel, ok := s.documents.view(surface)
-	if !ok {
-		return fmt.Errorf("%s: view channel message of a surface without a view", surface)
+	if !s.documents.currentGeneration(surface, plugin, generation) {
+		return false, nil
 	}
 	// A reply of the view answers a request of the main page, and goes to the main page as view-reply (docs/spec/native-surfaces.md#view-surfaces).
-	reply, isReply, err := ViewReplyEvent(surface, channel.plugin, received.Message)
+	reply, isReply, err := ViewReplyEvent(surface, plugin, received.Message)
 	if err != nil {
-		return err
+		return true, err
 	}
 	if isReply {
 		// The reply that goes to the view is recorded at the debug level, with its identifier and outcome (docs/spec/logging.md).
@@ -1501,37 +1625,42 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		if _, failed := reply["error"]; failed {
 			outcome = "error"
 		}
-		EmitHost(LevelDebug, "host.view.reply", map[string]any{"plugin": channel.plugin, "surface": surface, "id": reply["id"], "outcome": outcome})
+		reply["generation"] = generation
+		EmitHost(LevelDebug, "host.view.reply", map[string]any{"plugin": plugin, "surface": surface, "id": reply["id"], "outcome": outcome})
 		s.emitToSurface(surface, "view-reply", reply)
-		return nil
+		return true, nil
 	}
-	payload, isCall, err := ViewCallEvent(surface, channel.plugin, received.Message)
+	payload, isCall, err := ViewCallEvent(surface, plugin, received.Message)
 	if err != nil {
-		return err
+		return true, err
 	}
 	if isCall {
 		// A call request goes to the main page of the window, which answers it (docs/spec/native-surfaces.md#view-surfaces). A
 		// cancel carries no command and opens no call.
 		if id, ok := payload["id"].(uint64); ok {
 			if command, ok := payload["command"].(string); ok {
-				s.documents.trackViewCall(surface, id, command)
+				if !s.documents.trackViewCall(surface, generation, id, command) {
+					return false, nil
+				}
 				// The call that goes to the main page is recorded at the debug level, so a call without a reply shows as a record without
 				// its host.view.reply (docs/spec/logging.md).
-				EmitHost(LevelDebug, "host.view.call", map[string]any{"plugin": channel.plugin, "surface": surface, "id": id, "command": command})
+				EmitHost(LevelDebug, "host.view.call", map[string]any{"plugin": plugin, "surface": surface, "id": id, "command": command})
 			}
 		}
+		payload["generation"] = generation
 		s.emitToSurface(surface, "view-call", payload)
-		return nil
+		return true, nil
 	}
-	snapshot, isSnapshot, err := DeclaredSnapshotEvent(surface, channel.plugin, received.Message)
+	snapshot, isSnapshot, err := DeclaredSnapshotEvent(surface, plugin, received.Message)
 	if err != nil {
-		return err
+		return true, err
 	}
 	if isSnapshot {
 		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
 		// (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
+		snapshot["generation"] = generation
 		s.emitToSurface(surface, declaredSnapshotWindowEvent, snapshot)
-		return nil
+		return true, nil
 	}
 	var event struct {
 		Event    string `json:"event"`
@@ -1540,32 +1669,34 @@ func (s *Surfaces) viewMessage(surface, value string) error {
 		Reason   string `json:"reason"`
 	}
 	if err := json.Unmarshal(received.Message, &event); err != nil {
-		return fmt.Errorf("%s: view event is not an object: %w", surface, err)
+		return true, fmt.Errorf("%s: view event is not an object: %w", surface, err)
 	}
 	switch event.Event {
 	case "view.ready":
-		if event.Plugin != channel.plugin || event.Document == "" {
-			return fmt.Errorf("%s: view.ready names plugin %q and document %q, want plugin %q", surface, event.Plugin, event.Document, channel.plugin)
+		if event.Plugin != plugin || event.Document == "" {
+			return true, fmt.Errorf("%s: view.ready names plugin %q and document %q, want plugin %q", surface, event.Plugin, event.Document, plugin)
 		}
-		s.documents.setReadyDocument(surface, event.Document)
-		if s.documents.firstReady(surface) {
+		if !s.documents.setReadyDocument(surface, generation, event.Document) {
+			return false, nil
+		}
+		if s.documents.firstReady(surface, generation) {
 			EmitHost(LevelDebug, "host.trace.view.process-ready", map[string]any{"plugin": event.Plugin, "surface": surface})
 		}
 		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
-		return s.postView(surface, map[string]any{"event": "theme", "data": s.Theme()})
+		return true, s.postViewGeneration(surface, generation, map[string]any{"event": "theme", "data": s.Theme()})
 	case "view.error":
 		if strings.HasPrefix(event.Reason, viewQueueFullPrefix) {
-			return viewOverflow{reason: event.Reason}
+			return true, viewOverflow{reason: event.Reason}
 		}
 		if event.Reason == "" {
-			return fmt.Errorf("%s: view.error has no reason", surface)
+			return true, fmt.Errorf("%s: view.error has no reason", surface)
 		}
 		// A failure of the page before its first call is written on the error display path of the view, with its plugin and surface
 		// (docs/spec/native-surfaces.md#view-surfaces). The view continues, so the message is accepted.
-		LogError(fmt.Sprintf("view %s %s", channel.plugin, surface), event.Reason)
-		return nil
+		LogError(fmt.Sprintf("view %s %s", plugin, surface), event.Reason)
+		return true, nil
 	}
-	return fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
+	return true, fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
 }
 
 // viewState records the navigation state of the view of surface. A navigation that starts after the last state clears the ready record
@@ -1617,22 +1748,47 @@ func (s *Surfaces) postView(surface string, message map[string]any) error {
 	return nil
 }
 
+func (s *Surfaces) postViewGeneration(surface string, generation uint64, message map[string]any) error {
+	ready, stale, err := s.sendToViewGeneration(surface, &generation, message)
+	if err != nil {
+		return err
+	}
+	if stale {
+		return nil
+	}
+	if !ready {
+		return fmt.Errorf("%s has no ready document", surface)
+	}
+	s.viewRecords().recordEnd(surface)
+	return nil
+}
+
 // sendToView posts message to the ready document of the view of surface and reports whether the view has one. A view without a ready
 // document is not an error here, so the theme of a view that is not ready is skipped.
 func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, error) {
-	channel, ok := s.documents.view(surface)
-	if !ok || channel.document == "" {
-		return false, nil
-	}
+	ready, _, err := s.sendToViewGeneration(surface, nil, message)
+	return ready, err
+}
+
+func (s *Surfaces) sendToViewGeneration(surface string, generation *uint64, message map[string]any) (bool, bool, error) {
 	message["sok"] = viewChannelMarker
 	data, err := json.Marshal(message)
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	// The lookup and the post run as one task of the UI thread, as withDocument does: the native post needs the main thread, and
-	// the view is closed on the UI thread, so it is not closed between the lookup and the post.
+	// the view is closed on the UI thread, so it is not closed between the generation check, lookup and post.
 	var postErr error
+	var ready, stale bool
 	s.invoke(func() {
+		channel, ok := s.documents.view(surface)
+		if !ok || (generation != nil && channel.generation != *generation) {
+			stale = generation != nil
+			return
+		}
+		if channel.document == "" {
+			return
+		}
 		handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
 		if err != nil {
 			postErr = err
@@ -1640,9 +1796,11 @@ func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, err
 		}
 		if !system.PostDocument(handle, string(data)) {
 			postErr = fmt.Errorf("%s: the view document refused the message", surface)
+			return
 		}
+		ready = true
 	})
-	return postErr == nil, postErr
+	return ready, stale, postErr
 }
 
 // postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.
@@ -1753,10 +1911,11 @@ func DeclaredSnapshotEvent(surface, plugin string, message json.RawMessage) (map
 
 // ViewReplyRequest is the reply of the main page to a call request of the view of Surface. It has a result or an error, not both.
 type ViewReplyRequest struct {
-	Surface string          `json:"surface"`
-	ID      uint64          `json:"id"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *ViewReplyError `json:"error,omitempty"`
+	Surface    string          `json:"surface"`
+	Generation uint64          `json:"generation"`
+	ID         uint64          `json:"id"`
+	Result     json.RawMessage `json:"result,omitempty"`
+	Error      *ViewReplyError `json:"error,omitempty"`
 }
 
 // ViewReplyError is the error of a view reply, with the code and the message of the call envelope.
@@ -1784,56 +1943,96 @@ func ViewReplyMessage(req ViewReplyRequest) (map[string]any, error) {
 
 // replyView posts the reply of the main page to the view of req.Surface through the ready document of the view.
 func (s *Surfaces) replyView(req ViewReplyRequest) error {
+	if req.Surface == "" {
+		return errors.New("view reply names no surface")
+	}
+	if err := validateViewGeneration("view reply", req.Generation); err != nil {
+		return err
+	}
 	message, err := ViewReplyMessage(req)
 	if err != nil {
 		return err
 	}
-	s.documents.answerViewCall(req.Surface, req.ID)
-	return s.postView(req.Surface, message)
+	if !s.currentViewGeneration(req.Surface, req.Generation) {
+		return nil
+	}
+	s.documents.answerViewCall(req.Surface, req.Generation, req.ID)
+	return s.postViewGeneration(req.Surface, req.Generation, message)
 }
 
 // ViewEventRequest is the event that the main page pushes to the view of Surface. Event names the subscription and Data is its value,
 // which may be any JSON value.
 type ViewEventRequest struct {
-	Surface string          `json:"surface"`
-	Event   string          `json:"event"`
-	Data    json.RawMessage `json:"data"`
+	Surface    string          `json:"surface"`
+	Generation uint64          `json:"generation"`
+	Event      string          `json:"event"`
+	Data       json.RawMessage `json:"data"`
 }
 
 // pushViewEvent posts the event of req to the ready document of its view as {"sok": 1, "event", "data"}. An event without a name or
 // without data is refused. A view without a ready document refuses it, and the caller writes that error to the application log.
-func (s *Surfaces) pushViewEvent(req ViewEventRequest) error {
+func (s *Surfaces) pushViewEvent(req ViewEventRequest) (bool, error) {
+	if req.Surface == "" {
+		return false, errors.New("view event names no surface")
+	}
+	if err := validateViewGeneration("view event", req.Generation); err != nil {
+		return false, err
+	}
 	if req.Event == "" {
-		return errors.New("view event has an empty event name")
+		return false, errors.New("view event has an empty event name")
 	}
 	if len(req.Data) == 0 {
-		return fmt.Errorf("view event %s has no data", req.Event)
+		return false, fmt.Errorf("view event %s has no data", req.Event)
 	}
-	return s.postView(req.Surface, map[string]any{"event": req.Event, "data": req.Data})
+	if !s.currentViewGeneration(req.Surface, req.Generation) {
+		return false, nil
+	}
+	ready, stale, err := s.sendToViewGeneration(req.Surface, &req.Generation, map[string]any{"event": req.Event, "data": req.Data})
+	if err != nil {
+		return false, err
+	}
+	if stale {
+		return false, nil
+	}
+	if !ready {
+		return false, fmt.Errorf("%s has no ready document", req.Surface)
+	}
+	s.viewRecords().recordEnd(req.Surface)
+	return true, nil
 }
 
 // ViewRequestRequest is the command request that the main page sends to the view of Surface. Params is the params of the command, and
 // Cids are the correlation identifiers of the cause of the request, which the request carries only when it has some.
 type ViewRequestRequest struct {
-	Surface string          `json:"surface"`
-	ID      uint64          `json:"id"`
-	Command string          `json:"command"`
-	Params  json.RawMessage `json:"params"`
-	Cids    []string        `json:"cids,omitempty"`
+	Surface    string          `json:"surface"`
+	Generation uint64          `json:"generation"`
+	ID         uint64          `json:"id"`
+	Command    string          `json:"command"`
+	Params     json.RawMessage `json:"params"`
+	Cids       []string        `json:"cids,omitempty"`
 }
 
 // pushViewRequest posts the command request of req to the ready document of its view as {"sok": 1, "id", "command", "params"}, with the
 // member "cids" when req has cids. A request has an id and a command; a request without params carries null. A view without a ready
 // document refuses it, and so does a cids list that a log line cannot hold (docs/spec/logging.md#correlation).
-func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
+func (s *Surfaces) pushViewRequest(req ViewRequestRequest) (any, error) {
+	if req.Surface == "" {
+		return nil, errors.New("view request names no surface")
+	}
+	if err := validateViewGeneration("view request", req.Generation); err != nil {
+		return nil, err
+	}
 	if req.ID == 0 {
-		return errors.New("view request has no id")
+		return nil, errors.New("view request has no id")
 	}
 	if req.Command == "" {
-		return fmt.Errorf("view request %d has an empty command", req.ID)
+		return nil, fmt.Errorf("view request %d has an empty command", req.ID)
 	}
 	if !validCauseCids(req.Cids) {
-		return fmt.Errorf("view request %d cids must be non-empty strings without a quote, a backslash or a control character", req.ID)
+		return nil, fmt.Errorf("view request %d cids must be non-empty strings without a quote, a backslash or a control character", req.ID)
+	}
+	if !s.currentViewGeneration(req.Surface, req.Generation) {
+		return map[string]any{"cancelled": true, "sourceGeneration": req.Generation}, nil
 	}
 	params := req.Params
 	if len(params) == 0 {
@@ -1843,7 +2042,34 @@ func (s *Surfaces) pushViewRequest(req ViewRequestRequest) error {
 	if len(req.Cids) > 0 {
 		message["cids"] = req.Cids
 	}
-	return s.postView(req.Surface, message)
+	ready, stale, err := s.sendToViewGeneration(req.Surface, &req.Generation, message)
+	if err != nil {
+		return nil, err
+	}
+	if stale {
+		return map[string]any{"cancelled": true, "sourceGeneration": req.Generation}, nil
+	}
+	if !ready {
+		return nil, fmt.Errorf("%s has no ready document", req.Surface)
+	}
+	s.viewRecords().recordEnd(req.Surface)
+	return nil, nil
+}
+
+func validateViewGeneration(where string, generation uint64) error {
+	if generation == 0 {
+		return fmt.Errorf("%s has no source generation", where)
+	}
+	if generation > maxSourceGeneration {
+		return fmt.Errorf("%s source generation %d exceeds JavaScript safe integer maximum %d", where, generation, maxSourceGeneration)
+	}
+	return nil
+}
+
+func (s *Surfaces) currentViewGeneration(surface string, generation uint64) bool {
+	current, active := s.sourceOriginState().current(surface, true)
+	channel, exists := s.documents.view(surface)
+	return active && exists && current == generation && channel.generation == generation
 }
 
 // causeCidsOf returns the list of the cids member of a view message: none for an absent member, otherwise the list, which every

@@ -19,14 +19,15 @@ import (
 // other operation of the platform interface is not implemented by it.
 type hostViewPlatform struct {
 	platform.Platform
-	created      []hostViewCreation
-	loaded       []string
-	scripts      []string
-	closed       []unsafe.Pointer
-	messages     []func(string)
-	handle       unsafe.Pointer
-	messageOnSet string
-	refuse       bool
+	created       []hostViewCreation
+	loaded        []string
+	scripts       []string
+	closed        []unsafe.Pointer
+	messages      []func(string)
+	messageOnLoad string
+	handle        unsafe.Pointer
+	messageOnSet  string
+	refuse        bool
 }
 
 type hostViewCreation struct {
@@ -65,7 +66,50 @@ func (p *hostViewPlatform) LoadDocument(document unsafe.Pointer, url string) boo
 		return false
 	}
 	p.loaded = append(p.loaded, url)
+	if p.messageOnLoad != "" && len(p.messages) > 0 {
+		p.messages[len(p.messages)-1](p.messageOnLoad)
+	}
 	return true
+}
+
+// contract: plugin-host.source-registration-precedes-provider-messages
+func TestPluginHostSourceRegistrationPrecedesFirstSnapshotAndStatusRegistration(t *testing.T) {
+	config := hostFixture(t)
+	fake := &hostViewPlatform{
+		messageOnSet:  hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"lines","seq":1,"skipped":0,"value":{"text":"first"}}`),
+		messageOnLoad: hostMessage(`{"id":1,"command":"runtime.native.call","plugin":"probe","params":{"name":"registered","payload":{"kind":"status","name":"probe.lines"}}}`),
+	}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []hostEvent{}
+	s := hostTestSurfaces(config)
+	s.events = func(name string, data any) { events = append(events, hostEvent{name, data}) }
+	s.createPluginHosts(unsafe.Pointer(new(int)), plugins)
+	if len(events) < 3 || events[0].name != "declared-ui-source-registered" || events[1].name != "declared-ui-snapshot" || events[2].name != "plugin-host-call" {
+		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, snapshot, then status registration call (created=%v loaded=%v hosts=%v)", events, fake.created, fake.loaded, s.pluginHosts)
+	}
+	generation := events[0].data.(map[string]any)["generation"]
+	for i, event := range events[:3] {
+		data, ok := event.data.(map[string]any)
+		if !ok || data["plugin"] != "probe" || data["generation"] != generation {
+			t.Fatalf("event %d does not carry the registered source identity: %+v", i, event)
+		}
+	}
+	s.disposePluginHost("probe")
+	if len(events) != 5 || events[3].name != "declared-ui-source-ended" || events[4].name != "plugin-host-ended" {
+		t.Fatalf("source retirement and registration cleanup were ordered %v, want source end then plugin-host end", events)
+	}
+	for i, event := range events[3:] {
+		data, ok := event.data.(map[string]any)
+		if !ok || data["plugin"] != "probe" || data["generation"] != generation {
+			t.Fatalf("end event %d does not carry the retired source identity: %+v", i, event)
+		}
+	}
 }
 
 func (p *hostViewPlatform) CloseDocument(document unsafe.Pointer) {
@@ -246,12 +290,12 @@ func TestPluginHostDelayedMessageFromDisposedInstanceIsNotRelayedAfterRecreate(t
 	}
 	message := hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"old"}}`)
 	oldCallback(message)
-	if len(events) != 0 {
-		t.Fatalf("events after delayed old callback: %v, want none", events)
+	if len(events) != 2 || events[0] != "declared-ui-source-registered" || events[1] != "declared-ui-source-registered" {
+		t.Fatalf("events after delayed old callback: %v, want only both source registrations", events)
 	}
 	fake.messages[1](hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"current"}}`))
-	if len(events) != 1 || events[0] != declaredSnapshotWindowEvent {
-		t.Fatalf("events after current callback: %v, want one declared snapshot", events)
+	if len(events) != 3 || events[2] != declaredSnapshotWindowEvent {
+		t.Fatalf("events after current callback: %v, want one declared snapshot after both registrations", events)
 	}
 	isolateTraceRecords(t)
 	oldCallback(hostMessage(`{"event":"view.error","reason":"queue full for probe"}`))
@@ -279,8 +323,8 @@ func TestPluginHostMessageDuringCreationUsesTheRegisteredInstance(t *testing.T) 
 	s := hostTestSurfaces(config)
 	s.events = func(name string, _ any) { events = append(events, name) }
 	s.createPluginHosts(nil, plugins)
-	if len(events) != 1 || events[0] != declaredSnapshotWindowEvent {
-		t.Fatalf("events before host creation returned: %v, want the registered instance snapshot", events)
+	if len(events) != 2 || events[0] != "declared-ui-source-registered" || events[1] != declaredSnapshotWindowEvent {
+		t.Fatalf("events before host creation returned: %v, want registration before the first snapshot", events)
 	}
 }
 

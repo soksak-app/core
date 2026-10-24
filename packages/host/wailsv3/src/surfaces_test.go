@@ -114,7 +114,7 @@ func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments()}
+	s := &Surfaces{documents: NewDocuments(), events: func(string, any) {}}
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
@@ -155,9 +155,11 @@ func TestViewCompositionDeclaresPageWithOptionalRegions(t *testing.T) {
 // records each message that the host posts to a document.
 type channelPlatform struct {
 	viewPlatform
-	receive    func(string)
-	posted     []string
-	postedOnUI []bool
+	receive       func(string)
+	posted        []string
+	postedOnUI    []bool
+	messageOnSet  string
+	messageOnLoad string
 	// tasks is the number of UI-thread tasks running now, which runUITask counts.
 	tasks int
 }
@@ -175,8 +177,19 @@ func (p *channelPlatform) runUITask(task func()) {
 	task()
 }
 
+func (p *channelPlatform) LoadDocument(document unsafe.Pointer, url string) bool {
+	p.viewPlatform.LoadDocument(document, url)
+	if p.messageOnLoad != "" && p.receive != nil {
+		p.receive(p.messageOnLoad)
+	}
+	return true
+}
+
 func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
 	p.receive = message
+	if p.messageOnSet != "" {
+		message(p.messageOnSet)
+	}
 	return nil
 }
 
@@ -184,6 +197,36 @@ func (p *channelPlatform) PostDocument(document unsafe.Pointer, value string) bo
 	p.posted = append(p.posted, value)
 	p.postedOnUI = append(p.postedOnUI, p.tasks > 0)
 	return true
+}
+
+// contract: view.source-registration-precedes-provider-messages
+func TestViewSourceRegistrationPrecedesFirstSnapshotAndStatusRegistration(t *testing.T) {
+	fake := &channelPlatform{
+		messageOnSet:  hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"lines","seq":1,"skipped":0,"value":{"text":"first"}}`),
+		messageOnLoad: hostMessage(`{"id":1,"command":"runtime.native.call","plugin":"probe","params":{"name":"registered","payload":{"kind":"status","name":"probe.lines"}}}`),
+	}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	events := []hostEvent{}
+	s := &Surfaces{
+		documents: NewDocuments(),
+		views:     map[string]*nativeWebview{"probe-surface": {}},
+		events:    func(name string, data any) { events = append(events, hostEvent{name, data}) },
+	}
+	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) < 3 || events[0].name != "declared-ui-source-registered" || events[1].name != "declared-ui-snapshot" || events[2].name != "view-call" {
+		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, snapshot, then status registration call", events)
+	}
+	generation := events[0].data.(map[string]any)["generation"]
+	for i, event := range events[:3] {
+		data, ok := event.data.(map[string]any)
+		if !ok || data["plugin"] != "probe" || data["surface"] != "probe-surface" || data["generation"] != generation {
+			t.Fatalf("event %d does not carry the registered view identity: %+v", i, event)
+		}
+	}
 }
 
 // newViewChannelSurfaces returns the surfaces of one attached view of plugin probe and the platform that records its messages.
@@ -194,11 +237,19 @@ func newViewChannelSurfaces(t *testing.T) (*Surfaces, *channelPlatform) {
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments(), invoke: fake.runUITask}
+	s := &Surfaces{documents: NewDocuments(), invoke: fake.runUITask, views: map[string]*nativeWebview{"probe-surface": {}}, events: func(string, any) {}}
 	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
 		t.Fatalf("attach view: %v", err)
 	}
 	return s, fake
+}
+
+func viewGeneration(s *Surfaces, surface string) uint64 {
+	channel, ok := s.documents.view(surface)
+	if !ok {
+		return 0
+	}
+	return channel.generation
 }
 
 // contract: view.channel.ready
@@ -353,7 +404,8 @@ func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, clock)
 	first := fake.created[0]
 	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
-	s.viewReceived("probe-surface", first, full)
+	channel, _ := s.documents.view("probe-surface")
+	s.viewReceived("probe-surface", first, channel.plugin, channel.generation, full)
 	if len(fake.closed) != 1 || fake.closed[0] != first {
 		t.Fatalf("closed views after the overflow: %d, want the overflowed view", len(fake.closed))
 	}
@@ -361,7 +413,7 @@ func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
 		t.Fatalf("created views after the overflow: %d, want the view created again", len(fake.created))
 	}
 	// A message that arrives from the view closed by the overflow is a late message and closes nothing.
-	s.viewReceived("probe-surface", first, full)
+	s.viewReceived("probe-surface", first, channel.plugin, channel.generation, full)
 	if len(fake.closed) != 1 || len(fake.created) != 2 {
 		t.Fatalf("a message of the closed view changed the views: closed %d, created %d", len(fake.closed), len(fake.created))
 	}
@@ -448,7 +500,7 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 7, Result: json.RawMessage(`{"count":2}`)}); err != nil {
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 7, Result: json.RawMessage(`{"count":2}`)}); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	if len(fake.posted) != before+1 {
@@ -461,7 +513,7 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	if reply["sok"] != float64(1) || reply["id"] != float64(7) || !reflect.DeepEqual(reply["result"], map[string]any{"count": float64(2)}) {
 		t.Fatalf("reply %v, want sok 1, id 7 and the result", reply)
 	}
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}}); err != nil {
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}}); err != nil {
 		t.Fatalf("error reply: %v", err)
 	}
 	var failed map[string]any
@@ -471,14 +523,14 @@ func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
 	if failed["id"] != float64(8) || failed["error"] == nil {
 		t.Fatalf("error reply %v, want id 8 and the error", failed)
 	}
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 9}); err == nil || err.Error() != "view reply 9 has neither a result nor an error" {
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 9}); err == nil || err.Error() != "view reply 9 has neither a result nor an error" {
 		t.Fatalf("reply without result or error: %v", err)
 	}
 }
 
 // contract: view.call.reply-null-result
 func TestViewReplyWithANullResultKeepsTheNullResult(t *testing.T) {
-	req, err := argument[ViewReplyRequest]("request", json.RawMessage(`{"surface":"probe-surface","id":1,"result":null}`))
+	req, err := argument[ViewReplyRequest]("request", json.RawMessage(`{"surface":"probe-surface","generation":1,"id":1,"result":null}`))
 	if err != nil {
 		t.Fatalf("reply with a null result: %v", err)
 	}
@@ -553,10 +605,31 @@ func TestViewCallInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
 	}
 }
 
+// contract: view.source-generation
+func TestStaleViewCommandsAreCancelledAfterTheViewRestarts(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	oldGeneration := viewGeneration(s, "probe-surface")
+	endView(t, s, fake)
+	newGeneration := viewGeneration(s, "probe-surface")
+	if newGeneration <= oldGeneration {
+		t.Fatalf("replacement generation %d, want newer than %d", newGeneration, oldGeneration)
+	}
+	accepted, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: oldGeneration, Event: "status", Data: json.RawMessage(`{"name":"core.grid","value":{}}`)})
+	if err != nil || accepted {
+		t.Fatalf("stale event: accepted %v, error %v; want rejected without error", accepted, err)
+	}
+	result, err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", Generation: oldGeneration, ID: 1, Command: "probe.run"})
+	want := map[string]any{"cancelled": true, "sourceGeneration": oldGeneration}
+	if err != nil || !reflect.DeepEqual(result, want) {
+		t.Fatalf("stale request: result %v, error %v; want %v without error", result, err, want)
+	}
+}
+
 // contract: view.event.push
 func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
-	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)}); err == nil || err.Error() != "probe-surface has no ready document" {
+	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)}); err == nil || err.Error() != "probe-surface has no ready document" {
 		t.Fatalf("event before ready: %v, want probe-surface has no ready document", err)
 	}
 	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
@@ -564,7 +637,7 @@ func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
-	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "probe.changed", Data: json.RawMessage(`{"count":2}`)}); err != nil {
+	if accepted, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":2}`)}); err != nil || !accepted {
 		t.Fatalf("event: %v", err)
 	}
 	if len(fake.posted) != before+1 {
@@ -577,10 +650,10 @@ func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
 	if posted["sok"] != float64(1) || posted["event"] != "probe.changed" || !reflect.DeepEqual(posted["data"], map[string]any{"count": float64(2)}) {
 		t.Fatalf("event message %v, want sok 1, event probe.changed and the data", posted)
 	}
-	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "", Data: json.RawMessage(`null`)}); err == nil || err.Error() != "view event has an empty event name" {
+	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "", Data: json.RawMessage(`null`)}); err == nil || err.Error() != "view event has an empty event name" {
 		t.Fatalf("event without a name: %v, want view event has an empty event name", err)
 	}
-	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "probe.changed"}); err == nil || err.Error() != "view event probe.changed has no data" {
+	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed"}); err == nil || err.Error() != "view event probe.changed has no data" {
 		t.Fatalf("event without data: %v, want view event probe.changed has no data", err)
 	}
 }
@@ -607,7 +680,7 @@ func TestViewStatusWatchIsForwardedAndStatusValueIsPosted(t *testing.T) {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
-	if err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Event: "status", Data: json.RawMessage(`{"name":"core.grid","value":{"tabs":2}}`)}); err != nil {
+	if accepted, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "status", Data: json.RawMessage(`{"name":"core.grid","value":{"tabs":2}}`)}); err != nil || !accepted {
 		t.Fatalf("status event: %v", err)
 	}
 	if len(fake.posted) != before+1 {
@@ -625,8 +698,8 @@ func TestViewStatusWatchIsForwardedAndStatusValueIsPosted(t *testing.T) {
 // contract: view.command.request
 func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)
-	request := ViewRequestRequest{Surface: "probe-surface", ID: 7, Command: "probe.run", Params: json.RawMessage(`{"a":1}`)}
-	if err := s.pushViewRequest(request); err == nil || err.Error() != "probe-surface has no ready document" {
+	request := ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 7, Command: "probe.run", Params: json.RawMessage(`{"a":1}`)}
+	if _, err := s.pushViewRequest(request); err == nil || err.Error() != "probe-surface has no ready document" {
 		t.Fatalf("request before ready: %v, want probe-surface has no ready document", err)
 	}
 	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`
@@ -634,7 +707,7 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 		t.Fatalf("ready message: %v", err)
 	}
 	before := len(fake.posted)
-	if err := s.pushViewRequest(request); err != nil {
+	if _, err := s.pushViewRequest(request); err != nil {
 		t.Fatalf("request: %v", err)
 	}
 	if len(fake.posted) != before+1 {
@@ -647,19 +720,19 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	if posted["sok"] != float64(1) || posted["id"] != float64(7) || posted["command"] != "probe.run" || !reflect.DeepEqual(posted["params"], map[string]any{"a": float64(1)}) {
 		t.Fatalf("request message %v, want sok 1, id 7, command probe.run and the params", posted)
 	}
-	if err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", ID: 0, Command: "probe.run"}); err == nil || err.Error() != "view request has no id" {
+	if _, err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 0, Command: "probe.run"}); err == nil || err.Error() != "view request has no id" {
 		t.Fatalf("request without an id: %v, want view request has no id", err)
 	}
-	if err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", ID: 8, Command: ""}); err == nil || err.Error() != "view request 8 has an empty command" {
+	if _, err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 8, Command: ""}); err == nil || err.Error() != "view request 8 has an empty command" {
 		t.Fatalf("request without a command: %v, want view request 8 has an empty command", err)
 	}
 	// A request that carries the cids of its cause posts them with the request, and a request without cids posts no member.
 	var caused ViewRequestRequest
-	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","id":9,"command":"probe.run","params":null,"cids":["p1700000000000.7"]}`), &caused); err != nil {
+	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","generation":1,"id":9,"command":"probe.run","params":null,"cids":["p1700000000000.7"]}`), &caused); err != nil {
 		t.Fatalf("request with cids: %v", err)
 	}
 	before = len(fake.posted)
-	if err := s.pushViewRequest(caused); err != nil {
+	if _, err := s.pushViewRequest(caused); err != nil {
 		t.Fatalf("request with cids: %v", err)
 	}
 	var withCids map[string]any
@@ -669,7 +742,7 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	if !reflect.DeepEqual(withCids["cids"], []any{"p1700000000000.7"}) {
 		t.Fatalf("request message %v, want the cids of its cause", withCids)
 	}
-	if err := s.pushViewRequest(request); err != nil {
+	if _, err := s.pushViewRequest(request); err != nil {
 		t.Fatalf("request without cids: %v", err)
 	}
 	var withoutCids map[string]any
@@ -680,10 +753,10 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 		t.Fatalf("request message %v carries cids without a cause", withoutCids)
 	}
 	var refused ViewRequestRequest
-	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","id":10,"command":"probe.run","cids":["p1.7\"x"]}`), &refused); err != nil {
+	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","generation":1,"id":10,"command":"probe.run","cids":["p1.7\"x"]}`), &refused); err != nil {
 		t.Fatalf("request with an invalid cid: %v", err)
 	}
-	if err := s.pushViewRequest(refused); err == nil || err.Error() != "view request 10 cids must be non-empty strings without a quote, a backslash or a control character" {
+	if _, err := s.pushViewRequest(refused); err == nil || err.Error() != "view request 10 cids must be non-empty strings without a quote, a backslash or a control character" {
 		t.Fatalf("request with an invalid cid: %v, want the cids refusal", err)
 	}
 }

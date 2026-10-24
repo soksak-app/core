@@ -9,6 +9,8 @@ import { reportRecord } from "./page-log.js";
 import { createViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
 import { runCommandCall } from "./command-route.js";
+import { registerSourceOrigin, sourceOrigin } from "./source-origins.js";
+import { startDeclaredSnapshotIngress } from "./declared-source.js";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;
@@ -102,6 +104,8 @@ function forgetExposure(plugin) {
  */
 export function forwardHostExposure(plugin, method, params) {
   if (!exposureSubscribers.has(plugin)) return Promise.reject(new Error(`plugin host ${plugin} has no exposure-request subscription`));
+  const generation = hostCommandGeneration(plugin);
+  if (generation === null) return Promise.reject(new Error(`plugin host ${plugin} has no current source generation`));
   const id = ++nextExposureId;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -112,7 +116,7 @@ export function forwardHostExposure(plugin, method, params) {
       plugin,
       resolve: (reply) => { clearTimeout(timer); resolve(reply); },
     });
-    bridge.call("pluginHostEvent", { plugin, event: "exposure-request", data: { id, method, params } }).catch((error) => {
+    bridge.call("pluginHostEvent", { plugin, generation, event: "exposure-request", data: { id, method, params } }).catch((error) => {
       clearTimeout(timer);
       exposureReplies.delete(id);
       // default: a rejection that is not an Error is reported by its text.
@@ -189,10 +193,15 @@ function routeSessionEvent(kind, event, sidecar, session, payload) {
     return;
   }
   const fields = kind === "message" ? { body: payload } : { reason: payload };
+  const generation = hostCommandGeneration(plugin);
+  if (generation === null) {
+    reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: no current source generation`);
+    return;
+  }
   // The event is the sidecar event of the view channel (sidecar.message, sidecar.failure) with the session id in its data, which the
   // page listens to by the id (view-bridge keyOf). The host posts it as the message {sok, event, data}, which requires the data.
   // default: a post that the host refuses is written at error with its reason.
-  bridge.call("pluginHostEvent", { plugin, event: `sidecar.${kind}`, data: { sidecar, id: session, ...fields } }).catch((error) => {
+  bridge.call("pluginHostEvent", { plugin, generation, event: `sidecar.${kind}`, data: { sidecar, id: session, ...fields } }).catch((error) => {
     // default: a rejection that is not an Error is reported by its text, so the record names the failure either way.
     reportRecord("error", `plugin host ${plugin}: sidecar event ${kind} for ${session} not delivered: ${errorText(error)}`);
   });
@@ -217,12 +226,20 @@ function listenSessionEvents() {
 // request to the host (the exposure requests and the declared UI pull) sends through one layer, and each reply of the host
 // reaches one layer.
 const layers = new Map();
+const layerGenerations = new Map();
 
 /** Keeps the command layer of the host of plugin and returns the function that removes it. */
-export function keepHostCommands(plugin, commands) {
+export function keepHostCommands(plugin, commands, generation) {
+  if (!Number.isSafeInteger(generation) || generation < 1) throw new TypeError("plugin host command layer requires a positive source generation");
+  const previous = layers.get(plugin);
+  if (previous && previous !== commands) previous.close();
   layers.set(plugin, commands);
+  layerGenerations.set(plugin, generation);
   return () => {
-    if (layers.get(plugin) === commands) layers.delete(plugin);
+    if (layers.get(plugin) === commands) {
+      layers.delete(plugin);
+      layerGenerations.delete(plugin);
+    }
   };
 }
 
@@ -232,16 +249,22 @@ export function hostCommandsOf(plugin) {
   return layers.get(plugin) ?? null;
 }
 
+/** The generation of the command layer of plugin, or null while it has no layer. */
+export function hostCommandGeneration(plugin) {
+  return layerGenerations.get(plugin) ?? null;
+}
+
 /**
  * Creates the command layer of one plugin host. run(name, params) posts {id, command, params} to the host through
  * pluginHostRequest and resolves with the reply that arrives as the plugin-host-reply event of the plugin; receive(event)
  * takes such an event. close() ends every open call of the host with surface-closed.
  */
-export function createHostCommands({ plugin, timeoutOf }) {
+export function createHostCommands({ plugin, generation, timeoutOf }) {
   if (typeof timeoutOf !== "function") throw new TypeError("createHostCommands requires the timeoutOf function");
+  if (!Number.isSafeInteger(generation) || generation < 1) throw new TypeError("createHostCommands requires a positive source generation");
   const commands = createViewCommands({
     plugin,
-    post: (message) => bridge.call("pluginHostRequest", { plugin, id: message.id, command: message.command, params: message.params }),
+    post: (message) => bridge.call("pluginHostRequest", { plugin, generation, id: message.id, command: message.command, params: message.params }),
     timeoutOf,
     // The call records of the host are the statuses of the plugin (open calls, losses), as the calls of a view are; none is an error.
     report: callReporter(plugin),
@@ -249,8 +272,10 @@ export function createHostCommands({ plugin, timeoutOf }) {
   return {
     run: commands.run,
     receive(event) {
+      if (event.generation !== generation || sourceOrigin(plugin, null) !== generation) return false;
       // The reply of a host page names no surface; receive of the view layer drops it with the plugin.
       commands.receive({ surface: undefined, ...event });
+      return true;
     },
     close: commands.close,
   };
@@ -274,6 +299,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
   }
   // The declared sidecar of the plugin named by a request, with the operations its host may call (rule 8). default: a plugin
   // with no sidecarsOf entries declares none, so every sidecar request of its host is refused by name.
+  const ownedLayers = new Map();
   const declaredSidecar = (plugin, name) => {
     const sidecar = sidecarsOf(plugin).find((entry) => entry.name === name);
     if (!sidecar) throw new Error(`plugin host ${plugin} cannot use sidecar ${name}`);
@@ -322,9 +348,10 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
       // The first served call of a host keeps its command layer, through which the requests of this document run and the
       // replies of the page return.
       let commands = hostCommandsOf(plugin);
-      if (commands === null) {
-        commands = createHostCommands({ plugin, timeoutOf });
-        keepHostCommands(plugin, commands);
+      if (commands === null || hostCommandGeneration(plugin) !== event.generation) {
+        commands = createHostCommands({ plugin, generation: event.generation, timeoutOf });
+        keepHostCommands(plugin, commands, event.generation);
+        ownedLayers.set(plugin, commands);
       }
       if (event.command === "runtime.error") {
         // The listing error of the host page is written through the error display of the main page; the declared tree draws no error (docs/spec/plugin-host.md#channel).
@@ -359,7 +386,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
           const fields = params.payload;
           if (typeof fields !== "object" || fields === null || Array.isArray(fields)) throw new TypeError(`plugin host call ${event.command} registered requires an object`);
           if (fields.kind !== "status" && fields.kind !== "dom") throw new TypeError(`plugin host call ${event.command} registered requires a status or dom kind`);
-          register(plugin, fields.kind, fields.name);
+          register(plugin, fields.kind, fields.name, event.generation);
           return { result: null };
         }
         if (params.name !== "exposureReply") throw new TypeError(`plugin host call ${event.command} ${params.name} is not served`);
@@ -372,7 +399,7 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
       } else if (params.kind !== "status" && params.kind !== "dom") {
         throw new TypeError(`plugin host call ${event.command} requires a status or dom kind`);
       }
-      register(plugin, event.command === "runtime.command.register" ? "command" : params.kind, params.name);
+      register(plugin, event.command === "runtime.command.register" ? "command" : params.kind, params.name, event.generation);
       // default: a handler that registers nothing replies with null, which is the result of a call without a value.
       return { result: null };
     } catch (error) {
@@ -389,35 +416,60 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
       report(new TypeError("plugin host call has no integer id"));
       return;
     }
-    if (event.cancel === true) return;
-    answer(event).then(
-      (reply) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, ...reply }),
-      // default: a rejection that is not an Error replies, and a failed reply is reported, with its text.
-      (error) => bridge.call("pluginHostReply", { plugin: event.plugin, id: event.id, error: { code: FAILED_COMMAND, message: errorText(error) } }),
-    // default: a failed reply that is not an Error is reported with its text.
-    ).catch((error) => report(new Error(`plugin host reply ${event.id}: ${errorText(error)}`)));
+    return startDeclaredSnapshotIngress().then(() => {
+      if (closed) return;
+      if (typeof event.plugin !== "string" || !registerSourceOrigin(event.plugin, null, event.generation)) return;
+      if (event.cancel === true) return;
+      return answer(event).then(
+        (reply) => bridge.call("pluginHostReply", { plugin: event.plugin, generation: event.generation, id: event.id, ...reply }),
+        // default: a rejection that is not an Error replies, and a failed reply is reported, with its text.
+        (error) => bridge.call("pluginHostReply", { plugin: event.plugin, generation: event.generation, id: event.id, error: { code: FAILED_COMMAND, message: errorText(error) } }),
+      // default: a failed reply that is not an Error is reported with its text.
+      ).catch((error) => report(new Error(`plugin host reply ${event.id}: ${errorText(error)}`)));
+    }).catch(report);
   };
   replies = bridge.on("plugin-host-reply", (event) => {
-    const commands = event?.plugin && hostCommandsOf(event.plugin);
-    // A reply whose host has no layer arrived after the layer left. It answers no open call, so it is reported.
-    if (commands) commands.receive(event);
-    else report(new Error(`plugin host reply ${event?.id} arrived after its host layer left`));
+    if (closed) return;
+    startDeclaredSnapshotIngress().then(() => {
+      if (closed) return;
+      const commands = event?.plugin && hostCommandsOf(event.plugin);
+      if (typeof event?.plugin === "string" && sourceOrigin(event.plugin, null) !== event.generation) return;
+      // A reply whose current host has no layer arrived after the layer left. A retired generation is an expected cancellation.
+      if (commands) commands.receive(event);
+      else report(new Error(`plugin host reply ${event?.id} arrived after its host layer left`));
+    }).catch(report);
   });
   // The end of a host removes its registrations and ends the open requests of this document to it.
   const ended = bridge.on("plugin-host-ended", (event) => {
-    if (closed || typeof event?.plugin !== "string") return;
-    const commands = hostCommandsOf(event.plugin);
-    layers.delete(event.plugin);
-    forgetSessions(event.plugin);
-    forgetExposure(event.plugin);
-    // The host closes the plugin sessions that this window owns (docs/plans/plugin-host-routes.md rule 7).
-    bridge.call("pluginHostSidecarClose", { plugin: event.plugin }).catch((error) => report(error));
-    commands?.close();
-    try {
-      unregister(event.plugin);
-    } catch (error) {
-      report(error);
-    }
+    startDeclaredSnapshotIngress().then(() => {
+      if (closed || typeof event?.plugin !== "string" || !Number.isSafeInteger(event.generation) || event.generation < 1) return;
+      const currentOrigin = sourceOrigin(event.plugin, null);
+      const currentLayer = hostCommandGeneration(event.plugin);
+      if ((currentOrigin !== undefined && currentOrigin !== event.generation) ||
+          (currentLayer !== null && currentLayer !== event.generation)) {
+        try {
+          unregister(event.plugin, event.generation);
+        } catch (error) {
+          report(error);
+        }
+        return;
+      }
+      const commands = hostCommandsOf(event.plugin);
+      if (commands && ownedLayers.get(event.plugin) !== commands) return;
+      layers.delete(event.plugin);
+      layerGenerations.delete(event.plugin);
+      ownedLayers.delete(event.plugin);
+      forgetSessions(event.plugin);
+      forgetExposure(event.plugin);
+      // The host closes the plugin sessions that this window owns (docs/plans/plugin-host-routes.md rule 7).
+      bridge.call("pluginHostSidecarClose", { plugin: event.plugin }).catch((error) => report(error));
+      commands?.close();
+      try {
+        unregister(event.plugin, event.generation);
+      } catch (error) {
+        report(error);
+      }
+    }).catch(report);
   });
   Promise.resolve(bridge.on("plugin-host-call", receive)).then((unsubscribe) => {
     if (closed) unsubscribe();
@@ -431,8 +483,24 @@ export function listenPluginHostCalls({ register, unregister, timeoutOf, report,
 // default: a layer closed before its subscription settled has no unsubscribe; the settle unsubscribes it.
       off?.();
       for (const subscription of [replies, ended]) Promise.resolve(subscription).then((unsubscribe) => unsubscribe(), report);
-      for (const commands of layers.values()) commands.close();
-      layers.clear();
+      for (const [plugin, commands] of [...ownedLayers]) {
+        if (layers.get(plugin) !== commands) {
+          ownedLayers.delete(plugin);
+          continue;
+        }
+        forgetExposure(plugin);
+        forgetSessions(plugin);
+        commands.close();
+        const generation = layerGenerations.get(plugin);
+        layers.delete(plugin);
+        layerGenerations.delete(plugin);
+        ownedLayers.delete(plugin);
+        try {
+          unregister(plugin, generation);
+        } catch (error) {
+          report(error);
+        }
+      }
     },
   };
 }

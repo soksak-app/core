@@ -159,13 +159,18 @@ func (s *Surfaces) createPluginHosts(window unsafe.Pointer, plugins []hostPlugin
 // (docs/spec/native-surfaces.md#view-surfaces) and loads soksak://<plugin>/<page> into it. It runs on the UI thread.
 func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, directory, folder string) error {
 	plugin, page := declared.id, declared.page
+	generation, err := s.sourceOriginState().create(plugin, false)
+	if err != nil {
+		return fmt.Errorf("plugin host %s cannot start: %w", plugin, err)
+	}
+	s.windowEvent("declared-ui-source-registered", map[string]any{"plugin": plugin, "generation": generation})
 	handle, err := system.CreatePluginHost(window, directory, folder, plugin, viewChannelScript, func(state string) {
 		// A navigation of the page clears its ready document, so the next ready message is the first record of it
 		// (docs/spec/plugin-host.md#channel, view.channel.ready).
 		s.pluginHostState(plugin, state)
 	})
 	if err == nil {
-		instance := s.pluginHostChannels.register(plugin, declared.state)
+		instance := s.pluginHostChannels.register(plugin, declared.state, generation)
 		err = system.SetViewMessage(handle, func(value string) {
 			if _, messageErr := s.pluginHostReceived(plugin, instance, value); messageErr != nil {
 				LogError("plugin host channel", messageErr)
@@ -188,7 +193,12 @@ func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, 
 	}
 	if err != nil {
 		s.pluginHostChannels.unregister(plugin)
-		system.CloseDocument(handle)
+		if s.sourceOriginState().retire(plugin, false, generation) {
+			s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": plugin, "generation": generation})
+		}
+		if handle != nil {
+			system.CloseDocument(handle)
+		}
 		return err
 	}
 	s.mu.Lock()
@@ -201,6 +211,8 @@ func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, 
 // disposePluginHost closes the plugin host web view of plugin and sends plugin-host-ended {plugin} to the main page, which
 // removes the registrations of the host (docs/spec/plugin-host.md#channel). It runs on the UI thread.
 func (s *Surfaces) disposePluginHost(plugin string) {
+	generation, hasGeneration := s.pluginHostChannels.generation(plugin)
+	retired := hasGeneration && s.sourceOriginState().retire(plugin, false, generation)
 	s.mu.Lock()
 	handle, ok := s.pluginHosts[plugin]
 	delete(s.pluginHosts, plugin)
@@ -208,7 +220,12 @@ func (s *Surfaces) disposePluginHost(plugin string) {
 	s.pluginHostChannels.unregister(plugin)
 	if ok {
 		system.CloseDocument(handle)
-		s.windowEvent("plugin-host-ended", map[string]any{"plugin": plugin})
+		if hasGeneration {
+			if retired {
+				s.windowEvent("declared-ui-source-ended", map[string]any{"plugin": plugin, "generation": generation})
+			}
+			s.windowEvent("plugin-host-ended", map[string]any{"plugin": plugin, "generation": generation})
+		}
 	}
 }
 
@@ -327,6 +344,9 @@ func (s *Surfaces) disposePluginHosts() {
 	s.mu.Unlock()
 	// The main page is replaced or ends with the window, so its registrations of the hosts end with it.
 	for _, plugin := range s.pluginHostChannels.plugins() {
+		if generation, ok := s.pluginHostChannels.generation(plugin); ok {
+			s.sourceOriginState().retire(plugin, false, generation)
+		}
 		s.pluginHostChannels.unregister(plugin)
 	}
 	for _, handle := range handles {
@@ -379,10 +399,11 @@ func (s *Surfaces) pluginHostState(plugin, state string) {
 // PluginHostReplyRequest is the reply of the main page to a call request of the host of Plugin. It has a result or an
 // error, not both.
 type PluginHostReplyRequest struct {
-	Plugin string          `json:"plugin"`
-	ID     uint64          `json:"id"`
-	Result json.RawMessage `json:"result,omitempty"`
-	Error  *ViewReplyError `json:"error,omitempty"`
+	Plugin     string          `json:"plugin"`
+	Generation uint64          `json:"generation"`
+	ID         uint64          `json:"id"`
+	Result     json.RawMessage `json:"result,omitempty"`
+	Error      *ViewReplyError `json:"error,omitempty"`
 }
 
 // answerPluginHostCall posts the reply of req to the ready document of the host of Plugin as {"sok": 1, "id", "result"} or
@@ -391,6 +412,15 @@ type PluginHostReplyRequest struct {
 func (s *Surfaces) answerPluginHostCall(req PluginHostReplyRequest) error {
 	if req.Plugin == "" {
 		return errors.New("plugin host reply names no plugin")
+	}
+	if req.Generation == 0 {
+		return errors.New("plugin host reply has no source generation")
+	}
+	if req.Generation > maxSourceGeneration {
+		return fmt.Errorf("plugin host reply source generation %d exceeds JavaScript safe integer maximum %d", req.Generation, maxSourceGeneration)
+	}
+	if !s.currentPluginHostGeneration(req.Plugin, req.Generation) {
+		return nil
 	}
 	if (req.Result != nil) == (req.Error != nil) {
 		return fmt.Errorf("plugin host reply %d has both or neither of a result and an error", req.ID)
@@ -404,60 +434,89 @@ func (s *Surfaces) answerPluginHostCall(req PluginHostReplyRequest) error {
 	if err := s.postPluginHost(req.Plugin, message); err != nil {
 		return err
 	}
-	s.pluginHostChannels.answerCall(req.Plugin, req.ID)
+	s.pluginHostChannels.answerCall(req.Plugin, req.Generation, req.ID)
 	return nil
+}
+
+func (s *Surfaces) currentPluginHostGeneration(plugin string, generation uint64) bool {
+	current, active := s.sourceOriginState().current(plugin, false)
+	channel, registered := s.pluginHostChannels.generation(plugin)
+	return active && registered && generation > 0 && generation <= maxSourceGeneration && current == generation && channel == generation
 }
 
 // PluginHostRequestRequest is a request of the main page to the host of Plugin, such as the pull of a declared status
 // (docs/spec/plugin-host.md#declared-ui-snapshots). Params is the params of the request.
 type PluginHostRequestRequest struct {
-	Plugin  string          `json:"plugin"`
-	ID      uint64          `json:"id"`
-	Command string          `json:"command"`
-	Params  json.RawMessage `json:"params"`
+	Plugin     string          `json:"plugin"`
+	Generation uint64          `json:"generation"`
+	ID         uint64          `json:"id"`
+	Command    string          `json:"command"`
+	Params     json.RawMessage `json:"params"`
 }
 
 // pushPluginHostRequest posts the request of req to the ready document of the host of Plugin as
 // {"sok": 1, "id", "command", "params"}. A request has an id and a command; a request without params carries null. The
 // page answers it through the sok-view handler as a reply, which the host relays as the event plugin-host-reply.
-func (s *Surfaces) pushPluginHostRequest(req PluginHostRequestRequest) error {
+func (s *Surfaces) pushPluginHostRequest(req PluginHostRequestRequest) (any, error) {
 	if req.Plugin == "" {
-		return errors.New("plugin host request names no plugin")
+		return nil, errors.New("plugin host request names no plugin")
+	}
+	if req.Generation == 0 {
+		return nil, errors.New("plugin host request has no source generation")
+	}
+	if req.Generation > maxSourceGeneration {
+		return nil, fmt.Errorf("plugin host request source generation %d exceeds JavaScript safe integer maximum %d", req.Generation, maxSourceGeneration)
 	}
 	if req.ID == 0 {
-		return errors.New("plugin host request has no id")
+		return nil, errors.New("plugin host request has no id")
 	}
 	if req.Command == "" {
-		return fmt.Errorf("plugin host request %d has an empty command", req.ID)
+		return nil, fmt.Errorf("plugin host request %d has an empty command", req.ID)
+	}
+	if !s.currentPluginHostGeneration(req.Plugin, req.Generation) {
+		return map[string]any{"cancelled": true, "sourceGeneration": req.Generation}, nil
 	}
 	params := req.Params
 	if len(params) == 0 {
 		params = json.RawMessage(`null`)
 	}
-	return s.postPluginHost(req.Plugin, map[string]any{"id": req.ID, "command": req.Command, "params": params})
+	return nil, s.postPluginHost(req.Plugin, map[string]any{"id": req.ID, "command": req.Command, "params": params})
 }
 
 // PluginHostEventRequest is an event that the main page pushes to the host of Plugin, such as the acknowledgement of a
 // declared UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
 type PluginHostEventRequest struct {
-	Plugin string          `json:"plugin"`
-	Event  string          `json:"event"`
-	Data   json.RawMessage `json:"data"`
+	Plugin     string          `json:"plugin"`
+	Generation uint64          `json:"generation"`
+	Event      string          `json:"event"`
+	Data       json.RawMessage `json:"data"`
 }
 
 // pushPluginHostEvent posts the event of req to the ready document of the host of Plugin as {"sok": 1, "event", "data"}.
 // An event without a name or without data is refused.
-func (s *Surfaces) pushPluginHostEvent(req PluginHostEventRequest) error {
+func (s *Surfaces) pushPluginHostEvent(req PluginHostEventRequest) (bool, error) {
 	if req.Plugin == "" {
-		return errors.New("plugin host event names no plugin")
+		return false, errors.New("plugin host event names no plugin")
 	}
 	if req.Event == "" {
-		return errors.New("plugin host event has an empty event name")
+		return false, errors.New("plugin host event has an empty event name")
 	}
 	if len(req.Data) == 0 {
-		return fmt.Errorf("plugin host event %s has no data", req.Event)
+		return false, fmt.Errorf("plugin host event %s has no data", req.Event)
 	}
-	return s.postPluginHost(req.Plugin, map[string]any{"event": req.Event, "data": req.Data})
+	if req.Generation == 0 {
+		return false, fmt.Errorf("plugin host event %s has no source generation", req.Event)
+	}
+	if req.Generation > maxSourceGeneration {
+		return false, fmt.Errorf("plugin host event %s source generation %d exceeds JavaScript safe integer maximum %d", req.Event, req.Generation, maxSourceGeneration)
+	}
+	if !s.currentPluginHostGeneration(req.Plugin, req.Generation) {
+		return false, nil
+	}
+	if err := s.postPluginHost(req.Plugin, map[string]any{"event": req.Event, "data": req.Data}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // pluginHostStates are the saved values of the plugin hosts of the application, one per plugin, which the host page of

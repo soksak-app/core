@@ -376,7 +376,7 @@
         "plugin": "string",
         "surface": "string"
       },
-      "description": "The WebContent process of a view answered its responsiveness check again, so the host sent the view-responsiveness notice with responsive true to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
+      "description": "The WebContent process of a view answered its responsiveness check again, so the host sent the view-responsiveness notice with the view generation and responsive true to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
     },
     "host.trace.view.unresponsive": {
       "layer": "host",
@@ -386,7 +386,7 @@
         "plugin": "string",
         "surface": "string"
       },
-      "description": "The WebContent process of a view stopped answering its responsiveness check, so the host sent the view-responsiveness notice with responsive false to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
+      "description": "The WebContent process of a view stopped answering its responsiveness check, so the host sent the view-responsiveness notice with the view generation and responsive false to the main page of the window (docs/spec/native-surfaces.md#view-surfaces)."
     },
     "host.trace.plugin-host.process-request": {
       "layer": "host",

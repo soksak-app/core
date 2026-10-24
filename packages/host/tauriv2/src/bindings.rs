@@ -500,14 +500,14 @@ fn document_post(webview: Webview, request: Argument<documents::Request>) -> Res
 
 /// Posts a command request of the main page to the view of the request (docs/spec/native-surfaces.md#view-surfaces).
 #[tauri::command(async)]
-fn view_request(webview: Webview, request: Argument<documents::ViewRequest>) -> Result<(), String> {
+fn view_request(webview: Webview, request: Argument<documents::ViewRequest>) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     documents::view_request(&webview, request)
 }
 
 /// Pushes an event of a subscription of a view to the view (docs/spec/native-surfaces.md#view-surfaces).
 #[tauri::command(async)]
-fn view_event(webview: Webview, request: Argument<documents::ViewEventRequest>) -> Result<(), String> {
+fn view_event(webview: Webview, request: Argument<documents::ViewEventRequest>) -> Result<bool, String> {
     let Argument(request) = request;
     documents::view_event(&webview, request)
 }
@@ -535,7 +535,7 @@ fn plugin_host_reply(
 fn plugin_host_request(
     webview: Webview,
     request: Argument<crate::plugin_host_channel::PluginHostRequest>,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     crate::plugin_host_channel::plugin_host_request(&webview, request)
 }
@@ -546,9 +546,31 @@ fn plugin_host_request(
 fn plugin_host_event(
     webview: Webview,
     request: Argument<crate::plugin_host_channel::PluginHostEvent>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let Argument(request) = request;
     crate::plugin_host_channel::plugin_host_event(&webview, request)
+}
+
+/// Returns the current declared-source incarnations and generation floor of the calling window.
+#[tauri::command(async)]
+fn declared_source_origins(
+    webview: Webview,
+) -> Result<crate::windows::DeclaredSourceOriginsSnapshot, String> {
+    let window = webview.window();
+    crate::exposure::authorize_main_caller(webview.label(), window.label(), "declared source origins")?;
+    let task_window = window.clone();
+    crate::exposure::on_main(&window, move || {
+        Ok(crate::windows::window_data(&task_window)?.declared_source_origins.snapshot())
+    })
+}
+
+/// Registers the ordered main-page channel for source lifecycle and message events.
+#[tauri::command(async)]
+fn declared_source_event_stream(
+    webview: Webview,
+    on_message: tauri::ipc::Channel<windows::DeclaredSourceEvent>,
+) -> Result<(), String> {
+    windows::register_declared_source_event_stream(&webview, on_message)
 }
 
 /// Sends a sidecar request of the host of a plugin from the main page (docs/plans/plugin-host-routes.md rule 2).
@@ -893,3 +915,7 @@ fn clipboard_persist_png(
     Ok(serde_json::json!({ "path": clipboard::persist_png(&app, request.data)? }))
 }
 }
+
+#[cfg(test)]
+#[path = "../tests/declared_source_stream/bindings_test.rs"]
+mod declared_source_stream_tests;

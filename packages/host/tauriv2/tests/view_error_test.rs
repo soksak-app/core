@@ -23,7 +23,7 @@ fn a_view_error_message_is_written_on_the_error_display_path_with_its_view() {
     if let Some(config) = std::env::var_os(CHILD) {
         let writer = records::start_writer(std::path::Path::new(&config));
         let channels = ViewChannels::default();
-        channels.register("probe-surface", "probe");
+        channels.register("probe-surface", "probe", 1);
         // The message is accepted: the view continues, and the record carries the view.
         assert_eq!(
             channels.message(

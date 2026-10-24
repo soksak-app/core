@@ -335,6 +335,8 @@ type Surfaces struct {
 	documents *Documents
 	// pluginHosts are the plugin host web views of the window, by plugin id (plugin_host.go).
 	pluginHosts map[string]unsafe.Pointer
+	// sourceOrigins assigns generations to plugin-host and view incarnations and exposes their current window snapshot.
+	sourceOrigins *sourceOrigins
 	// pluginHostChannels are the channels of the plugin host pages of the window, by plugin id (plugin_host_channel.go).
 	pluginHostChannels *pluginHostChannels
 	// pluginHostStates are the saved values of the plugin hosts of the application, shared by every window
@@ -369,6 +371,7 @@ func NewSurfaces(win *application.WebviewWindow, sidecars *Sidecars) *Surfaces {
 		shapes:               map[string]*nativeShape{},
 		documents:            NewDocuments(),
 		pluginHosts:          map[string]unsafe.Pointer{},
+		sourceOrigins:        newSourceOrigins(),
 		pluginHostChannels:   newPluginHostChannels(),
 		streams:              NewDocumentStreams(),
 		images:               NewImages(),

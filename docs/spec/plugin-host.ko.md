@@ -30,6 +30,12 @@ manifest는 `plugin.json`의 `host` 아래에서 plugin host를 선언한다:
 
 host는 plugin당 창당 하나의 plugin host web view를, [view](native-surfaces.ko.md#view-표면)의 구성으로 만든다:
 
+각 plugin-host 및 view source는 window마다 하나씩 증가하는 counter에서 positive generation을 받는다. Generation은 1부터 9007199254740991까지의 JavaScript safe integer다. Host는 native-to-main-page lifecycle, call, reply 및 declared snapshot metadata에 generation을 포함한다. Main page의 `pluginHostReply`, `pluginHostRequest`, `pluginHostEvent` bridge call은 기대 generation을 전달한다. Host는 reply를 전달하거나 request/event를 post하기 전에 generation을 검사하고 오래된 요청이나 event는 취소 결과를 반환한다. Main page는 listener를 설치한 뒤 현재 plugin-host 및 view generation과 발급한 최대 generation을 하나의 시작 snapshot으로 조회한다. Generation은 page message `{sok, event, data}` 또는 `{sok, id, command, params}`에 들어가지 않는다.
+
+Host는 source를 기록한 뒤 provider가 message를 보낼 수 있도록 생성하거나 load하기 전에 `declared-ui-source-registered {plugin, surface?, generation}`를 보낸다. Host는 정확한 generation을 종료한 뒤 같은 identity의 `declared-ui-source-ended`를 보낸다. 이 lifecycle event는 exposure 등록이 아니라 source instance를 나타낸다. View는 surface를 포함하고 plugin host는 생략한다. Plugin-host 종료는 기존 등록 및 request 정리 계약을 위해 `plugin-host-ended`도 보낸다. Main page는 이 lifecycle event listener를 설치한 뒤 `declaredSourceOrigins`를 조회하고 declared UI snapshot과 lifecycle event를 registry 초기화까지 buffer한다.
+
+Tauri main page는 `declaredSourceOrigins`를 조회하기 전에 `declaredSourceEventStream` channel 하나를 등록한다. Host는 `declared-ui-source-registered`, `declared-ui-source-ended`, `declared-ui-snapshot`, `plugin-host-call`, `plugin-host-reply`, `plugin-host-ended`, `view-call`, `view-reply`, `view-process-ended`, `view-stopped`, `view-responsiveness` event를 `{name, value}` envelope로 보내며 기존 event payload와 send 순서를 보존한다. `view-responsiveness` payload는 callback을 만든 view의 generation을 담는다. Host가 receiver를 설치한 뒤에만 channel 등록이 resolve된다. Channel 등록과 원자적 origin query가 모두 끝나기 전에는 page가 view를 시작하거나 plugin host 생성을 위해 window를 ready 상태로 만들지 않는다. Page reload는 이전 channel을 retire한 뒤 새 channel을 등록한다. 등록된 channel이 없을 때의 send와 send 실패는 error로 보고하며 Tauri는 별도 window event로 fallback하지 않는다. Wails는 같은 event record를 FIFO frontend event transport로 보낸다.
+
 - `isView`를 설정한다. 그래서 이 구성만 `core` scheme을 core root resolver로 보낸다.
 - plugin의 plugin id. 페이지의 `soksak://<plugin id>` origin과 core root 응답의 `Access-Control-Allow-Origin`을 정한다.
 - `packages/plugin-api/view-start.js`의 텍스트를 담은 document-start user script. [view channel](native-surfaces.ko.md#view-표면) 스크립트다.
@@ -63,7 +69,7 @@ plugin host reply는 정수 `reply` id와 `result`, `error` 중 정확히 하나
 - theme은 view에 닿는 것과 같이 host 페이지에 닿는다. document-start script가 토큰을 담고, 각 later theme 변경은 각 ready message 뒤에 host message로 보내진다.
 - project도 같은 방식으로 host 페이지에 닿는다. 각 later project 변경은 각 ready message 뒤에 host message `project`로 보내지고, 페이지는 `runtime.project(listener)`로 받는다. listener는 마지막 project를 바로 받으며, 페이지는 이를 위해 host에 call을 보내지 않는다.
 - host가 web view를 만든 뒤 첫 ready message는 view의 첫 ready message가 `host.trace.view.process-ready`를 쓰듯 `host.trace.plugin-host.process-ready {plugin, window}`를 `debug` level로 쓴다.
-- host가 plugin의 제거나 비활성화 또는 queue overflow로 그 plugin host web view를 처분하거나 host의 페이지 프로세스가 끝나면, host는 창의 main page에 event `plugin-host-ended {plugin}`을 보낸다. main page는 `plugin:<plugin id>` 아래의 모든 등록([exposure](#exposure))을 지우고, plugin host의 sidecar 구독을 지우며, view가 닫힐 때처럼 그 host에 대한 자신의 열린 요청을 모두 `surface-closed`로 끝낸다. host의 sidecar 세션은 [sidecars](sidecars.ko.md#plugin-host-sessions)가 정하는 대로 host가 닫는다. 창의 reload나 닫기는 event를 보내지 않는다. 등록을 가진 main page가 그와 함께 교체되거나 끝나기 때문이다.
+- host가 plugin의 제거나 비활성화 또는 queue overflow로 그 plugin host web view를 처분하거나 host의 페이지 프로세스가 끝나면, host는 창의 main page에 event `plugin-host-ended {plugin, generation}`을 보낸다. main page는 `plugin:<plugin id>` 아래의 모든 등록([exposure](#exposure))을 지우고, plugin host의 sidecar 구독을 지우며, view가 닫힐 때처럼 그 host에 대한 자신의 열린 요청을 모두 `surface-closed`로 끝낸다. host의 sidecar 세션은 [sidecars](sidecars.ko.md#plugin-host-sessions)가 정하는 대로 host가 닫는다. 창의 reload나 닫기에서는 등록을 가진 main page가 교체되거나 끝나므로 `plugin-host-ended` event를 보내지 않는다.
 
 ## Exposure
 

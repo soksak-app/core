@@ -22,6 +22,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 		documents: NewDocuments(),
 		lifecycle: newViewLifecycle(clock.now),
 		host:      &Host{configDir: "/config"},
+		events:    func(string, any) {},
 	}
 	native := unsafe.Pointer(new(int))
 	var start ViewStart

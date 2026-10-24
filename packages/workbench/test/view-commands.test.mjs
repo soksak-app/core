@@ -42,6 +42,20 @@ test("a post that the host refuses rejects the command run with the refusal text
   await assert.rejects(commands.run("probe.run", null), { message: "probe-surface has no ready document" });
 });
 
+test("a native stale-source disposition resolves the command without converting it to a pull error", { timeout: 1000 }, async () => {
+  const cancellation = { cancelled: true, sourceGeneration: 4 };
+  const { commands } = setup({ post: async () => cancellation });
+  try {
+    const result = await Promise.race([
+      commands.run("declared-ui.snapshot.request", { status: "lines" }).then((value) => ({ value })),
+      tick().then(() => ({ pending: true })),
+    ]);
+    assert.deepEqual(result, { value: cancellation });
+  } finally {
+    commands.close();
+  }
+});
+
 test("a command without a reply in its declared time limit rejects, and its late reply is counted", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { commands, posted, reports } = setup({ timeoutOf: () => 50 });

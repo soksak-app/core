@@ -683,7 +683,10 @@ struct ViewChannel {
 
 /// The local identity of one native view document. It does not depend on a native handle, which can be reused after release.
 #[derive(Clone, Debug)]
-struct ViewOrigin(std::sync::Arc<()>);
+struct ViewOrigin {
+    instance: std::sync::Arc<()>,
+    generation: u64,
+}
 
 /// The result of checking a native callback before it enters the view channel.
 #[derive(Debug, PartialEq, Eq)]
@@ -855,13 +858,16 @@ impl ViewChannels {
     }
 
     /// Records the plugin of the view of surface. It runs when the view is created.
-    pub fn register(&self, surface: &str, plugin: &str) {
-        self.register_origin(surface, plugin);
+    pub fn register(&self, surface: &str, plugin: &str, generation: u64) {
+        self.register_origin(surface, plugin, generation);
     }
 
     /// Registers a view before its native document loads and returns its local callback identity.
-    fn register_origin(&self, surface: &str, plugin: &str) -> ViewOrigin {
-        let origin = ViewOrigin(std::sync::Arc::new(()));
+    fn register_origin(&self, surface: &str, plugin: &str, generation: u64) -> ViewOrigin {
+        let origin = ViewOrigin {
+            instance: std::sync::Arc::new(()),
+            generation,
+        };
         self.lock().insert(
             surface.to_string(),
             ViewChannel {
@@ -894,20 +900,44 @@ impl ViewChannels {
 
     /// Whether origin still owns the view channel of surface.
     fn is_current(&self, surface: &str, origin: &ViewOrigin) -> bool {
-        self.lock()
-            .get(surface)
-            .is_some_and(|channel| std::sync::Arc::ptr_eq(&channel.origin.0, &origin.0))
+        self.lock().get(surface).is_some_and(|channel| {
+            channel.origin.generation == origin.generation
+                && std::sync::Arc::ptr_eq(&channel.origin.instance, &origin.instance)
+        })
     }
 
     /// Removes the channel only when origin still owns surface.
     fn forget_if_current(&self, surface: &str, origin: &ViewOrigin) {
         let mut channels = self.lock();
-        if channels
-            .get(surface)
-            .is_some_and(|channel| std::sync::Arc::ptr_eq(&channel.origin.0, &origin.0))
-        {
+        if channels.get(surface).is_some_and(|channel| {
+            channel.origin.generation == origin.generation
+                && std::sync::Arc::ptr_eq(&channel.origin.instance, &origin.instance)
+        }) {
             channels.remove(surface);
         }
+    }
+
+    fn forget_generation(&self, surface: &str, generation: u64) -> Option<String> {
+        let mut channels = self.lock();
+        if channels
+            .get(surface)
+            .is_none_or(|channel| channel.origin.generation != generation)
+        {
+            return None;
+        }
+        channels.remove(surface).map(|channel| channel.plugin)
+    }
+
+    pub(crate) fn plugin(&self, surface: &str) -> Option<String> {
+        self.lock()
+            .get(surface)
+            .map(|channel| channel.plugin.clone())
+    }
+
+    fn generation(&self, surface: &str) -> Option<u64> {
+        self.lock()
+            .get(surface)
+            .map(|channel| channel.origin.generation)
     }
 
     /// Records that the view of surface has a ready message, and returns its plugin when this is its first ready message since it was
@@ -937,8 +967,12 @@ impl ViewChannels {
     }
 
     /// Records that the main page answered the call id of the view of surface, so the call is no longer open.
-    pub fn answer_call(&self, surface: &str, id: u64) {
-        if let Some(channel) = self.lock().get_mut(surface) {
+    pub fn answer_call(&self, surface: &str, generation: u64, id: u64) {
+        if let Some(channel) = self
+            .lock()
+            .get_mut(surface)
+            .filter(|channel| channel.origin.generation == generation)
+        {
             channel.calls.remove(&id);
         }
     }
@@ -1330,7 +1364,20 @@ pub(crate) fn sync_view(
         Ok(handle) => handle,
         Err(_) => {
             data.documents.reserve(&key)?;
-            let origin = data.documents.views().register_origin(surface, plugin);
+            let generation = data.declared_source_origins.issue_view(surface)?;
+            let origin = data
+                .documents
+                .views()
+                .register_origin(surface, plugin, generation);
+            if let Err(error) = crate::windows::emit_declared_source_event(
+                window,
+                "declared-ui-source-registered",
+                crate::windows::declared_source_origin_event(plugin, Some(surface), generation),
+            ) {
+                data.documents.views().forget_if_current(surface, &origin);
+                data.declared_source_origins.end_view(surface, generation);
+                return Err(error);
+            }
             match attach_view(
                 window,
                 platform,
@@ -1344,6 +1391,8 @@ pub(crate) fn sync_view(
                 Ok(handle) => {
                     if !data.documents.set(&key, handle) {
                         data.documents.views().forget_if_current(surface, &origin);
+                        data.declared_source_origins.end_view(surface, generation);
+                        emit_source_ended(window, plugin, surface, generation);
                         platform.close_document(handle)?;
                         return Err(format!(
                             "surface {surface:?} closed while its view was created"
@@ -1354,6 +1403,8 @@ pub(crate) fn sync_view(
                 Err(error) => {
                     data.documents.remove(&key)?;
                     data.documents.views().forget_if_current(surface, &origin);
+                    data.declared_source_origins.end_view(surface, generation);
+                    emit_source_ended(window, plugin, surface, generation);
                     return Err(error);
                 }
             }
@@ -1407,6 +1458,7 @@ fn attach_view(
     let message_origin = origin.clone();
     let ended_window = window.clone();
     let ended_surface = surface.to_string();
+    let ended_plugin = plugin.to_string();
     let ended_origin = origin.clone();
     create_view(
         channel,
@@ -1453,6 +1505,7 @@ fn attach_view(
                         &ended_window,
                         platform,
                         &ended_surface,
+                        &ended_plugin,
                         &ended_origin,
                         document,
                     );
@@ -1476,10 +1529,17 @@ fn attach_view(
                     if !responsive {
                         end_presentation_wait(&notice_window, &notice_surface, "unresponsive");
                     }
-                    let payload =
-                        view_responsiveness_notice(&notice_surface, &notice_plugin, responsive);
-                    if let Err(error) = emit_window(&notice_window, "view-responsiveness", payload)
-                    {
+                    let payload = view_responsiveness_notice(
+                        &notice_surface,
+                        &notice_plugin,
+                        notice_origin.generation,
+                        responsive,
+                    );
+                    if let Err(error) = crate::windows::emit_declared_source_event(
+                        &notice_window,
+                        "view-responsiveness",
+                        payload,
+                    ) {
                         log_error("view channel", error);
                     }
                 }),
@@ -1541,7 +1601,10 @@ fn view_message(
     let reply = window_data(window).and_then(|data| data.documents.views().reply(surface, value));
     match reply {
         Ok(Some(payload)) => {
-            if let Err(error) = emit_window(window, "view-reply", payload) {
+            let payload = tag_view_generation(payload, origin.generation);
+            if let Err(error) =
+                crate::windows::emit_declared_source_event(window, "view-reply", payload)
+            {
                 log_error("view channel", error);
             }
             return;
@@ -1556,7 +1619,10 @@ fn view_message(
     let call = window_data(window).and_then(|data| data.documents.views().call(surface, value));
     match call {
         Ok(Some(payload)) => {
-            if let Err(error) = emit_window(window, "view-call", payload) {
+            let payload = tag_view_generation(payload, origin.generation);
+            if let Err(error) =
+                crate::windows::emit_declared_source_event(window, "view-call", payload)
+            {
                 log_error("view channel", error);
             }
             return;
@@ -1573,7 +1639,12 @@ fn view_message(
         window_data(window).and_then(|data| data.documents.views().snapshot(surface, value));
     match snapshot {
         Ok(Some(payload)) => {
-            if let Err(error) = emit_window(window, DECLARED_SNAPSHOT_WINDOW_EVENT, payload) {
+            let payload = tag_view_generation(payload, origin.generation);
+            if let Err(error) = crate::windows::emit_declared_source_event(
+                window,
+                DECLARED_SNAPSHOT_WINDOW_EVENT,
+                payload,
+            ) {
                 log_error("view channel", error);
             }
             return;
@@ -1606,7 +1677,7 @@ fn view_message(
             let overflow = is_queue_full(&error);
             log_error("view channel", error);
             if overflow {
-                view_failed(window, platform, surface, origin, document);
+                view_failed(window, platform, surface, plugin, origin, document);
             }
         }
     }
@@ -1619,6 +1690,7 @@ fn view_failed(
     window: &Window,
     platform: &'static dyn Platform,
     surface: &str,
+    plugin: &str,
     origin: &ViewOrigin,
     document: Handle,
 ) {
@@ -1645,13 +1717,19 @@ fn view_failed(
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
     data.documents.views().forget_if_current(surface, origin);
+    if data
+        .declared_source_origins
+        .end_view(surface, origin.generation)
+    {
+        emit_source_ended(window, plugin, surface, origin.generation);
+    }
     end_presentation_wait(window, surface, "process-ended");
     // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
-    if let Err(error) = emit_window(
-        window,
-        "view-process-ended",
-        view_process_ended_event(surface),
-    ) {
+    let mut ended = view_process_ended_event(surface);
+    ended["generation"] = json!(origin.generation);
+    if let Err(error) =
+        crate::windows::emit_declared_source_event(window, "view-process-ended", ended)
+    {
         log_error("view channel", error);
     }
     if let Err(error) = data.documents.remove(&key) {
@@ -1686,7 +1764,7 @@ fn view_failed(
                 ),
             );
         };
-        if let Err(error) = emit_window(
+        if let Err(error) = crate::windows::emit_declared_source_event(
             window,
             "view-stopped",
             view_stopped_event(surface, &spec.plugin),
@@ -1713,6 +1791,21 @@ fn view_failed(
     ) {
         log_error("view channel", error);
     }
+}
+
+fn emit_source_ended(window: &Window, plugin: &str, surface: &str, generation: u64) {
+    if let Err(error) = crate::windows::emit_declared_source_event(
+        window,
+        "declared-ui-source-ended",
+        crate::windows::declared_source_origin_event(plugin, Some(surface), generation),
+    ) {
+        log_error("view channel", error);
+    }
+}
+
+fn tag_view_generation(mut payload: Value, generation: u64) -> Value {
+    payload["generation"] = json!(generation);
+    payload
 }
 
 /// Posts message to the native document of handle and returns whether the document accepted it. The native post touches a WebKit
@@ -1746,48 +1839,89 @@ fn post_theme(window: &Window, surface: &str) -> Result<(), String> {
 /// Posts the reply of the main page to the view of reply.surface. The main page must be the caller, and the view must have a
 /// ready document, as for the theme (docs/spec/native-surfaces.md#view-surfaces).
 /// Posts a command request of the main page to the view of request.surface (docs/spec/native-surfaces.md#view-surfaces).
-pub(crate) fn view_request(webview: &Webview, request: ViewRequest) -> Result<(), String> {
+pub(crate) fn view_request(webview: &Webview, request: ViewRequest) -> Result<Value, String> {
     let message = view_request_message(&request)?;
-    post_from_main(webview, "view request", &request.surface, message)
+    let posted = post_for_view_generation(
+        webview,
+        "view request",
+        &request.surface,
+        request.generation,
+        message,
+    )?;
+    Ok(view_request_disposition(request.generation, posted))
+}
+
+fn view_request_disposition(generation: u64, posted: bool) -> Value {
+    if posted {
+        Value::Null
+    } else {
+        json!({"cancelled": true, "sourceGeneration": generation})
+    }
 }
 
 pub(crate) fn view_reply(webview: &Webview, reply: ViewReply) -> Result<(), String> {
     let message = view_reply_message(&reply)?;
-    window_data(&webview.window())?
-        .documents
-        .views()
-        .answer_call(&reply.surface, reply.id);
-    post_from_main(webview, "view reply", &reply.surface, message)
+    if post_for_view_generation(
+        webview,
+        "view reply",
+        &reply.surface,
+        reply.generation,
+        message,
+    )? {
+        window_data(&webview.window())?
+            .documents
+            .views()
+            .answer_call(&reply.surface, reply.generation, reply.id);
+    }
+    Ok(())
 }
 
 /// Posts the event of a subscription to the view of event.surface. The main page must be the caller, and the view must have a ready
 /// document, as for a reply (docs/spec/native-surfaces.md#view-surfaces).
-pub(crate) fn view_event(webview: &Webview, event: ViewEventRequest) -> Result<(), String> {
+pub(crate) fn view_event(webview: &Webview, event: ViewEventRequest) -> Result<bool, String> {
     let message = view_event_message(&event)?;
-    post_from_main(webview, "view event", &event.surface, message)
+    post_for_view_generation(
+        webview,
+        "view event",
+        &event.surface,
+        event.generation,
+        message,
+    )
 }
 
-/// Posts message to the ready document of the view of surface, after the main page is confirmed as the caller. The action names the
-/// command in the error of an unauthorized caller.
-fn post_from_main(
+/// Posts only while the exact native view generation is current. The check and post run in one main-thread task.
+fn post_for_view_generation(
     webview: &Webview,
     action: &str,
     surface: &str,
+    generation: u64,
     message: Value,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let window = webview.window();
     exposure::authorize_main_caller(webview.label(), window.label(), action)?;
     let message = message.to_string();
-    let data = window_data(&window)?;
-    data.documents.views().check_post(surface)?;
-    let handle = data
-        .documents
-        .get(&(surface.to_string(), VIEW_NAME.to_string()))?;
-    if post_document_via(|task| on_main(&window, task), handle, message)? {
-        Ok(())
-    } else {
-        Err(format!("{surface}: the view document refused the message"))
-    }
+    let surface = surface.to_string();
+    let task_window = window.clone();
+    on_main(&window, move || {
+        let data = window_data(&task_window)?;
+        crate::plugin_host_channel::post_if_generation_current(
+            generation,
+            data.declared_source_origins.current_view(&surface),
+            || data.documents.views().generation(&surface) == Some(generation),
+            || {
+                data.documents.views().check_post(&surface)?;
+                let handle = data
+                    .documents
+                    .get(&(surface.clone(), VIEW_NAME.to_string()))?;
+                let accepted = platform::current()?.post_document(handle, &message)?;
+                if accepted {
+                    Ok(true)
+                } else {
+                    Err(format!("{surface}: the view document refused the message"))
+                }
+            },
+        )
+    })
 }
 
 /// Posts the current theme to each view of the window that has a ready document. A view without one is skipped, because the theme
@@ -2190,7 +2324,6 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     // A view of the surface ends with it (docs/spec/logging.md#principles).
     data.documents.lifecycle().record_end(surface);
     data.documents.lifecycle().forget(surface);
-    data.documents.views().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();
     // The unregistration and the close happen in one task of the main thread. Other work that uses a document also
@@ -2199,6 +2332,15 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         "document close",
         window
             .run_on_main_thread(move || {
+                if let Some(generation) = data.declared_source_origins.current_view(&surface)
+                    && let Some(plugin) = data
+                        .documents
+                        .views()
+                        .forget_generation(&surface, generation)
+                    && data.declared_source_origins.end_view(&surface, generation)
+                {
+                    emit_source_ended(&host, &plugin, &surface, generation);
+                }
                 // The regions close with the surface, so their stream effects are not applied.
                 data.streams.remove_surface(&surface);
                 let handles = data.documents.remove_surface(&surface);
@@ -2367,6 +2509,7 @@ pub(crate) fn value_field<'de, A: MapAccess<'de>>(map: &mut A) -> Result<Option<
 /// result is the result of a command without a value, so it is kept as a value.
 pub struct ViewReply {
     pub surface: String,
+    pub generation: u64,
     pub id: u64,
     pub result: Option<Value>,
     pub error: Option<ViewReplyError>,
@@ -2384,12 +2527,14 @@ impl<'de> Deserialize<'de> for ViewReply {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut surface = None;
+                let mut generation = None;
                 let mut id = None;
                 let mut result = None;
                 let mut error = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "surface" => surface = map.next_value::<Option<String>>()?,
+                        "generation" => generation = map.next_value::<Option<u64>>()?,
                         "id" => id = map.next_value::<Option<u64>>()?,
                         "result" => result = value_field(&mut map)?,
                         "error" => error = map.next_value::<Option<ViewReplyError>>()?,
@@ -2400,6 +2545,7 @@ impl<'de> Deserialize<'de> for ViewReply {
                 }
                 Ok(ViewReply {
                     surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
+                    generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
                     result,
                     error,
@@ -2421,6 +2567,7 @@ pub struct ViewReplyError {
 /// A null data is a value; an absent data is None and is refused.
 pub struct ViewEventRequest {
     pub surface: String,
+    pub generation: u64,
     pub event: String,
     pub data: Option<Value>,
 }
@@ -2437,11 +2584,13 @@ impl<'de> Deserialize<'de> for ViewEventRequest {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut surface = None;
+                let mut generation = None;
                 let mut event = None;
                 let mut data = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "surface" => surface = map.next_value::<Option<String>>()?,
+                        "generation" => generation = map.next_value::<Option<u64>>()?,
                         "event" => event = map.next_value::<Option<String>>()?,
                         "data" => data = value_field(&mut map)?,
                         _ => {
@@ -2451,6 +2600,7 @@ impl<'de> Deserialize<'de> for ViewEventRequest {
                 }
                 Ok(ViewEventRequest {
                     surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
+                    generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     event: event.ok_or_else(|| de::Error::missing_field("event"))?,
                     data,
                 })
@@ -2464,6 +2614,7 @@ impl<'de> Deserialize<'de> for ViewEventRequest {
 /// of its cause, which are empty when the cause has none (docs/spec/native-surfaces.md#view-surfaces).
 pub struct ViewRequest {
     pub surface: String,
+    pub generation: u64,
     pub id: u64,
     pub command: String,
     pub params: Option<Value>,
@@ -2482,6 +2633,7 @@ impl<'de> Deserialize<'de> for ViewRequest {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut surface = None;
+                let mut generation = None;
                 let mut id = None;
                 let mut command = None;
                 let mut params = None;
@@ -2489,6 +2641,7 @@ impl<'de> Deserialize<'de> for ViewRequest {
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "surface" => surface = map.next_value::<Option<String>>()?,
+                        "generation" => generation = map.next_value::<Option<u64>>()?,
                         "id" => id = map.next_value::<Option<u64>>()?,
                         "command" => command = map.next_value::<Option<String>>()?,
                         "params" => params = value_field(&mut map)?,
@@ -2500,6 +2653,7 @@ impl<'de> Deserialize<'de> for ViewRequest {
                 }
                 Ok(ViewRequest {
                     surface: surface.ok_or_else(|| de::Error::missing_field("surface"))?,
+                    generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
                     command: command.ok_or_else(|| de::Error::missing_field("command"))?,
                     params,
@@ -2516,6 +2670,10 @@ impl<'de> Deserialize<'de> for ViewRequest {
 /// cids. A request has an id and a command, and a request without params carries null. A cids list that a log line cannot hold is
 /// refused (docs/spec/logging.md#correlation).
 pub fn view_request_message(request: &ViewRequest) -> Result<Value, String> {
+    if request.generation == 0 {
+        return Err("view request has no source generation".to_string());
+    }
+    crate::windows::validate_declared_source_generation_limit(request.generation, "view request")?;
     if request.id == 0 {
         return Err("view request has no id".to_string());
     }
@@ -2572,6 +2730,10 @@ pub fn theme_message(theme: &Value) -> Value {
 
 /// Returns the host message of an event push: {"sok", "event", "data"}. An empty name and an absent data are errors.
 pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
+    if event.generation == 0 {
+        return Err("view event has no source generation".to_string());
+    }
+    crate::windows::validate_declared_source_generation_limit(event.generation, "view event")?;
     if event.event.is_empty() {
         return Err("view event has an empty event name".to_string());
     }
@@ -2583,6 +2745,10 @@ pub fn view_event_message(event: &ViewEventRequest) -> Result<Value, String> {
 
 /// Returns the message that the host posts to the view for a reply: {"sok", "id", "result"} or {"sok", "id", "error"}.
 pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
+    if reply.generation == 0 {
+        return Err("view reply has no source generation".to_string());
+    }
+    crate::windows::validate_declared_source_generation_limit(reply.generation, "view reply")?;
     match (&reply.result, &reply.error) {
         (None, None) => Err(format!(
             "view reply {} has neither a result nor an error",
@@ -2607,14 +2773,19 @@ pub fn view_reply_message(reply: &ViewReply) -> Result<Value, String> {
 
 /// Records a responsiveness notice of the view of surface: it writes the trace event of the notice and returns the payload of the
 /// view-responsiveness event that the window receives. The notice ends no call of the view (docs/spec/native-surfaces.md#view-surfaces).
-pub fn view_responsiveness_notice(surface: &str, plugin: &str, responsive: bool) -> Value {
+pub fn view_responsiveness_notice(
+    surface: &str,
+    plugin: &str,
+    generation: u64,
+    responsive: bool,
+) -> Value {
     let fields = json!({"plugin": plugin, "surface": surface});
     if responsive {
         emit_host(Level::Debug, "host.trace.view.responsive", fields);
     } else {
         emit_host(Level::Debug, "host.trace.view.unresponsive", fields);
     }
-    json!({"surface": surface, "plugin": plugin, "responsive": responsive})
+    json!({"surface": surface, "plugin": plugin, "generation": generation, "responsive": responsive})
 }
 
 /// Writes host.trace.view.process-request for the view of surface that is created.
@@ -2791,3 +2962,7 @@ fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
 #[cfg(test)]
 #[path = "view_origin_test.rs"]
 mod view_origin_tests;
+
+#[cfg(test)]
+#[path = "../tests/declared_source_origins/view_generation_test.rs"]
+mod view_generation_tests;

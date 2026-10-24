@@ -281,7 +281,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     // it (docs/spec/plugin-host.md#exposure).
     const hostPlugin = requested === undefined && !surfaces.get(declarationKey(kind, name))?.size
       ? hosts.get(declarationKey(kind, name)) : undefined;
-    if (hostPlugin !== undefined) return forwardHost(hostPlugin, method, params);
+    if (hostPlugin !== undefined) return forwardHost(hostPlugin.plugin, method, params);
     const key = watchKey(name, requested);
     if (method === "status.unwatch") {
       const watch = following.get(key);
@@ -560,19 +560,20 @@ export function createRegistry({ call = null, report = null } = {}) {
      * Registers an entry of the plugin host of plugin under the owner key plugin:<plugin id>
      * (docs/spec/plugin-host.md#exposure). The name must be declared by the plugin.
      */
-    hostRegistered({ plugin, kind, name }) {
+    hostRegistered({ plugin, kind, name, generation }) {
       const key = declarationKey(kind, name);
       if (!declared.has(key)) throw new Error(`plugin ${plugin} registered undeclared ${kind} ${name}`);
       if (ownerOf(name) !== plugin) throw new Error(`plugin ${plugin} cannot register ${name}`);
-      hosts.set(key, plugin);
+      if (!Number.isSafeInteger(generation) || generation < 1) throw new TypeError(`plugin host ${plugin} registration requires a positive generation`);
+      hosts.set(key, { plugin, generation });
       registrationTrace("registered", hostKeyOf(plugin), { kind, name });
       registrationChanged();
     },
 
     /** Removes every registration of the plugin host of plugin, whose channel ended (docs/spec/plugin-host.md#exposure). */
-    hostUnregistered(plugin) {
+    hostUnregistered(plugin, generation) {
       for (const [key, owner] of [...hosts]) {
-        if (owner === plugin) hosts.delete(key);
+        if (owner.plugin === plugin && owner.generation === generation) hosts.delete(key);
       }
       registrationTrace("disposed", hostKeyOf(plugin));
       registrationChanged();
@@ -580,8 +581,8 @@ export function createRegistry({ call = null, report = null } = {}) {
 
     /** The owner key plugin:<plugin id> of the plugin host that registered the entry, or null when none did. */
     hostRegistrant(kind, name) {
-      const plugin = hosts.get(declarationKey(kind, name));
-      return plugin === undefined ? null : hostKeyOf(plugin);
+      const host = hosts.get(declarationKey(kind, name));
+      return host === undefined ? null : { id: hostKeyOf(host.plugin), generation: host.generation };
     },
 
     /**
@@ -589,7 +590,7 @@ export function createRegistry({ call = null, report = null } = {}) {
      * The registration must be under the owner key plugin:<plugin id>, and another owner is refused with the registry error.
      */
     runHosted(name, params, plugin) {
-      if (hosts.get(declarationKey("command", name)) !== plugin) {
+      if (hosts.get(declarationKey("command", name))?.plugin !== plugin) {
         return Promise.reject(new ExposureError(EXPOSURE_ERRORS.unregistered, `owner ${hostKeyOf(plugin)} has not registered command ${name}`));
       }
       return forwardHost(plugin, "command.run", { name, params });
@@ -763,8 +764,8 @@ export async function connectExposure({ report, projectData, ...values }) {
     }
   });
   listenPluginHostCalls({
-    register: (plugin, kind, name) => registry.hostRegistered({ plugin, kind, name }),
-    unregister: (plugin) => registry.hostUnregistered(plugin),
+    register: (plugin, kind, name, generation) => registry.hostRegistered({ plugin, kind, name, generation }),
+    unregister: (plugin, generation) => registry.hostUnregistered(plugin, generation),
     timeoutOf: (name) => registry.commandTimeout(name),
     // default: a rejection that is not an Error is reported with its text.
     report: (error) => report(`plugin host: ${errorText(error)}`),

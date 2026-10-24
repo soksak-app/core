@@ -47,7 +47,7 @@ import {
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
-import { afterDeclaredSnapshotIngress, startDeclaredSnapshotIngress } from "./declared-source.js";
+import { afterDeclaredSnapshotIngress, prepareDeclaredSnapshotIngress } from "./declared-source.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from "./tab-reports.js";
@@ -596,7 +596,7 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
-startDeclaredSnapshotIngress();
+prepareDeclaredSnapshotIngress();
 projects.begin(start.workspace);
 // The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));

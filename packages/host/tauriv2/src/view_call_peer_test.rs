@@ -10,7 +10,7 @@ use crate::event_record::buffered_fields;
 fn a_view_process_end_ends_each_open_view_call_with_its_plugin_and_command() {
     let surface = "peer-probe-surface";
     let channels = ViewChannels::default();
-    channels.register(surface, "probe");
+    channels.register(surface, "probe", 1);
     let payload = channels
         .call(
             surface,
@@ -49,14 +49,14 @@ fn a_view_process_end_ends_each_open_view_call_with_its_plugin_and_command() {
 fn a_view_call_answered_by_the_main_page_is_not_open_at_the_process_end() {
     let surface = "answered-probe-surface";
     let channels = ViewChannels::default();
-    channels.register(surface, "probe");
+    channels.register(surface, "probe", 1);
     channels
         .call(
             surface,
             r#"{"message":{"sok":1,"id":8,"command":"probe.run","params":{}}}"#,
         )
         .expect("the view call is valid");
-    channels.answer_call(surface, 8);
+    channels.answer_call(surface, 1, 8);
     assert!(
         channels.end_calls(surface).is_empty(),
         "an answered call is not open at the process end"

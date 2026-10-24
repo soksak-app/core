@@ -23,7 +23,7 @@ fn a_view_call_and_its_reply_are_recorded_at_debug_with_their_identifier() {
     if let Some(config) = std::env::var_os(CHILD) {
         let writer = records::start_writer(std::path::Path::new(&config));
         let channels = ViewChannels::default();
-        channels.register("probe-surface", "probe");
+        channels.register("probe-surface", "probe", 1);
         assert!(
             channels
                 .call(

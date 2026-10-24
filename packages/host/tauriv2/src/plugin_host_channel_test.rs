@@ -13,7 +13,7 @@ use crate::plugin_host_channel::{
 /// Returns the channels of a window with the host of plugin probe and, when ready is set, the ready document doc-1.
 fn host_channels(ready: bool) -> PluginHostChannels {
     let channels = PluginHostChannels::default();
-    channels.register("probe", None);
+    channels.register("probe", None, 1);
     if ready {
         channels
             .receive(
@@ -41,14 +41,14 @@ fn a_reply_of_the_page_goes_to_the_main_page_as_plugin_host_reply_without_a_surf
         ),
         Ok(Received::Emit(
             "plugin-host-reply",
-            json!({"plugin": "probe", "id": 7, "result": {"sum": 3}})
+            json!({"plugin": "probe", "generation": 1, "id": 7, "result": {"sum": 3}})
         ))
     );
     assert_eq!(
         channels.receive("probe", &host_message(r#"{"reply": 8, "result": null}"#)),
         Ok(Received::Emit(
             "plugin-host-reply",
-            json!({"plugin": "probe", "id": 8, "result": null})
+            json!({"plugin": "probe", "generation": 1, "id": 8, "result": null})
         ))
     );
     for message in [
@@ -85,7 +85,7 @@ fn the_host_forwards_the_sidecar_calls_to_the_main_page() {
             channels.receive("probe", &host_message(&message)),
             Ok(Received::Emit(
                 "plugin-host-call",
-                json!({"plugin": "probe", "id": id, "command": command, "params": params})
+                json!({"plugin": "probe", "generation": 1, "id": id, "command": command, "params": params})
             ))
         );
     }
@@ -108,7 +108,7 @@ fn the_host_forwards_the_project_data_calls_to_the_main_page() {
             channels.receive("probe", &host_message(&message)),
             Ok(Received::Emit(
                 "plugin-host-call",
-                json!({"plugin": "probe", "id": id, "command": command, "params": params})
+                json!({"plugin": "probe", "generation": 1, "id": id, "command": command, "params": params})
             ))
         );
     }
@@ -150,7 +150,7 @@ fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() 
             channels.receive("probe", &host_message(&message)),
             Ok(Received::Emit(
                 "plugin-host-call",
-                json!({"plugin": "probe", "id": id, "command": command, "params": {"name": "probe.x"}})
+                json!({"plugin": "probe", "generation": 1, "id": id, "command": command, "params": {"name": "probe.x"}})
             ))
         );
     }
@@ -168,10 +168,10 @@ fn the_host_forwards_only_the_registration_calls_and_refuses_every_other_call() 
         channels.receive("probe", &host_message(r#"{"id": 5, "cancel": true}"#)),
         Ok(Received::Emit(
             "plugin-host-call",
-            json!({"plugin": "probe", "id": 5, "cancel": true})
+            json!({"plugin": "probe", "generation": 1, "id": 5, "cancel": true})
         ))
     );
-    channels.answer_call("probe", 5);
+    channels.answer_call("probe", 1, 5);
     assert_eq!(
         channels.open_calls("probe"),
         [
@@ -202,7 +202,7 @@ fn the_host_forwards_the_error_call_to_the_main_page() {
         channels.receive("probe", &host_message(&message)),
         Ok(Received::Emit(
             "plugin-host-call",
-            json!({"plugin": "probe", "id": 15, "command": "runtime.error", "params": params})
+            json!({"plugin": "probe", "generation": 1, "id": 15, "command": "runtime.error", "params": params})
         ))
     );
 }
@@ -217,7 +217,7 @@ fn the_host_forwards_the_command_call_to_the_main_page() {
         channels.receive("probe", &host_message(&message)),
         Ok(Received::Emit(
             "plugin-host-call",
-            json!({"plugin": "probe", "id": 16, "command": "runtime.command", "params": params})
+            json!({"plugin": "probe", "generation": 1, "id": 16, "command": "runtime.command", "params": params})
         ))
     );
 }
@@ -233,7 +233,7 @@ fn the_host_forwards_the_log_call_to_the_main_page() {
         channels.receive("probe", &host_message(&message)),
         Ok(Received::Emit(
             "plugin-host-call",
-            json!({"plugin": "probe", "id": 17, "command": "runtime.log", "params": params})
+            json!({"plugin": "probe", "generation": 1, "id": 17, "command": "runtime.log", "params": params})
         ))
     );
 }
@@ -251,7 +251,7 @@ fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
         ),
         Ok(Received::Emit(
             "declared-ui-snapshot",
-            json!({"plugin": "probe", "status": "list", "seq": 2, "skipped": 1, "value": {"x": 1}})
+            json!({"plugin": "probe", "generation": 1, "status": "list", "seq": 2, "skipped": 1, "value": {"x": 1}})
         ))
     );
     // Tauri accepts only alphanumeric characters, '-', '/', ':' and '_' in a window event name, so the name of the relayed snapshot
@@ -282,11 +282,77 @@ fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
     }
 }
 
+// contract: plugin-host.channel.source-generation
+#[test]
+fn a_plugin_host_snapshot_carries_its_native_source_generation() {
+    let channels = PluginHostChannels::default();
+    channels.register("probe", None, 1);
+    let snapshot = channels
+        .receive(
+            "probe",
+            &host_message(
+                r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"n":1}}"#,
+            ),
+        )
+        .expect("the current host snapshot is valid");
+    assert_eq!(
+        snapshot,
+        Received::Emit(
+            "declared-ui-snapshot",
+            json!({"plugin":"probe","generation":1,"status":"items","seq":1,"skipped":0,"value":{"n":1}})
+        ),
+        "the host snapshot has no native source generation"
+    );
+}
+
+// contract: plugin-host.channel.source-generation
+#[test]
+fn an_old_ack_generation_does_not_post_to_a_replacement_host() {
+    let posts = std::cell::Cell::new(0);
+    let stale = crate::plugin_host_channel::post_if_generation_current(
+        1,
+        Some(2),
+        || true,
+        || {
+            posts.set(posts.get() + 1);
+            Ok(true)
+        },
+    );
+    assert_eq!(stale, Ok(false));
+    assert_eq!(posts.get(), 0, "stale ACK reached the replacement provider");
+
+    let current = crate::plugin_host_channel::post_if_generation_current(
+        2,
+        Some(2),
+        || true,
+        || {
+            posts.set(posts.get() + 1);
+            Ok(true)
+        },
+    );
+    assert_eq!(current, Ok(true));
+    assert_eq!(posts.get(), 1, "current ACK was not posted exactly once");
+}
+
+// contract: plugin-host.channel.source-generation
+#[test]
+fn a_stale_pull_returns_an_explicit_source_cancellation() {
+    assert_eq!(
+        crate::plugin_host_channel::request_disposition(7, false),
+        json!({"cancelled": true, "sourceGeneration": 7}),
+    );
+    assert_eq!(
+        crate::plugin_host_channel::request_disposition(7, true),
+        Value::Null,
+        "an accepted pull remains pending for the provider reply"
+    );
+}
+
 // contract: plugin-host.channel.stale-instance-message
 #[test]
 fn a_delayed_callback_from_a_disposed_host_is_not_received_by_a_recreated_host() {
     let channels = PluginHostChannels::default();
-    let old_instance = channels.register("probe", None);
+    let old_instance = channels.register("probe", None, 1);
     channels
         .receive(
             "probe",
@@ -298,7 +364,7 @@ fn a_delayed_callback_from_a_disposed_host_is_not_received_by_a_recreated_host()
     );
     let delayed_callback = || channels.receive_from("probe", &old_instance, &message);
     channels.unregister("probe");
-    let current_instance = channels.register("probe", None);
+    let current_instance = channels.register("probe", None, 2);
     assert!(
         !std::sync::Arc::ptr_eq(&old_instance, &current_instance),
         "a recreated provider has a new local identity independent of its native handle"
@@ -338,7 +404,7 @@ fn a_delayed_callback_from_a_disposed_host_is_not_received_by_a_recreated_host()
 #[test]
 fn a_callback_during_creation_uses_the_registered_instance_before_the_native_handle_is_stored() {
     let channels = PluginHostChannels::default();
-    let instance = channels.register("probe", None);
+    let instance = channels.register("probe", None, 1);
     assert!(matches!(
         channels.receive_from(
             "probe",
@@ -514,14 +580,17 @@ fn the_end_of_the_current_host_tells_the_main_page_and_a_replaced_host_changes_n
         "the end of a replaced webview removed the host"
     );
     assert_eq!(end_host(&hosts, &channels, "probe", Some(11)), Some(11));
-    assert_eq!(ended_event("probe"), json!({"plugin": "probe"}));
+    assert_eq!(
+        ended_event("probe", 1),
+        json!({"plugin": "probe", "generation": 1})
+    );
     // The disposal on a removal of the plugin ends the host without a handle; a second end finds nothing.
     hosts.insert("probe", 13);
-    channels.register("probe", None);
+    channels.register("probe", None, 2);
     assert_eq!(end_host(&hosts, &channels, "probe", None), Some(13));
     assert_eq!(end_host(&hosts, &channels, "probe", None), None);
     // The disposal of every host on a reload removes every channel.
-    channels.register("probe", None);
+    channels.register("probe", None, 3);
     channels.unregister_all();
     assert!(channels.plugins().is_empty());
 }
@@ -531,6 +600,7 @@ fn the_end_of_the_current_host_tells_the_main_page_and_a_replaced_host_changes_n
 fn the_posts_of_the_main_page_are_host_messages_and_need_a_ready_document() {
     let reply = |result: Option<Value>, error: Option<ViewReplyError>| PluginHostReply {
         plugin: "probe".into(),
+        generation: 1,
         id: 7,
         result,
         error,
@@ -552,6 +622,7 @@ fn the_posts_of_the_main_page_are_host_messages_and_need_a_ready_document() {
     assert!(reply_message(&reply(None, None)).is_err());
     let request = |command: &str| PluginHostRequest {
         plugin: "probe".into(),
+        generation: 1,
         id: 9,
         command: command.into(),
         params: Some(json!({"status": "x"})),
@@ -565,6 +636,7 @@ fn the_posts_of_the_main_page_are_host_messages_and_need_a_ready_document() {
     assert!(request_message(&request("")).is_err());
     let event = |name: &str| PluginHostEvent {
         plugin: "probe".into(),
+        generation: 1,
         event: name.into(),
         data: Some(json!({"plugin": "probe", "status": "x", "seq": 1})),
     };
@@ -583,6 +655,89 @@ fn the_posts_of_the_main_page_are_host_messages_and_need_a_ready_document() {
     assert_eq!(host_channels(true).check_post("probe"), Ok(()));
 }
 
+// contract: plugin-host.source-generation
+#[test]
+fn plugin_host_commands_reject_generations_above_the_javascript_safe_integer_limit() {
+    let generation = 9_007_199_254_740_992;
+    let reply = PluginHostReply {
+        plugin: "probe".into(),
+        generation,
+        id: 7,
+        result: Some(json!(null)),
+        error: None,
+    };
+    let request = PluginHostRequest {
+        plugin: "probe".into(),
+        generation,
+        id: 7,
+        command: "declared-ui.snapshot.request".into(),
+        params: Some(json!({"status":"items"})),
+    };
+    let event = PluginHostEvent {
+        plugin: "probe".into(),
+        generation,
+        event: "declared-ui.snapshot.ack".into(),
+        data: Some(json!({"status":"items","seq":1})),
+    };
+
+    assert_eq!(
+        reply_message(&reply),
+        Err("plugin host reply source generation exceeds the JavaScript safe integer limit".into())
+    );
+    assert_eq!(
+        request_message(&request),
+        Err(
+            "plugin host request source generation exceeds the JavaScript safe integer limit"
+                .into()
+        )
+    );
+    assert_eq!(
+        event_message(&event),
+        Err("plugin host event source generation exceeds the JavaScript safe integer limit".into())
+    );
+
+    let at_limit = PluginHostReply {
+        generation: 9_007_199_254_740_991,
+        ..reply
+    };
+    assert!(reply_message(&at_limit).is_ok());
+}
+
+// contract: plugin-host.source-generation
+#[test]
+fn a_late_plugin_host_reply_cannot_remove_a_replacement_calls_record() {
+    let channels = host_channels(true);
+    channels
+        .receive(
+            "probe",
+            &host_message(r#"{"id": 7, "command": "runtime.native.call"}"#),
+        )
+        .expect("the old host call is accepted");
+    channels.register("probe", None, 2);
+    channels
+        .receive(
+            "probe",
+            &host_message(r#"{"event":"view.ready","plugin":"probe","document":"doc-2"}"#),
+        )
+        .expect("the replacement host becomes ready");
+    channels
+        .receive(
+            "probe",
+            &host_message(r#"{"id": 7, "command": "runtime.native.call"}"#),
+        )
+        .expect("the replacement host call is accepted");
+    assert_eq!(channels.generation("probe"), Some(2));
+    assert_eq!(channels.open_calls("probe"), ["runtime.native.call"]);
+
+    channels.answer_call("probe", 1, 7);
+
+    assert_eq!(
+        channels.open_calls("probe"),
+        ["runtime.native.call"],
+        "a reply from the old host removed the replacement call"
+    );
+}
+
 // contract: plugin-host.declared-ui.expanded
 #[test]
 fn the_main_page_posts_declared_ui_expansion_to_the_host() {
@@ -594,6 +749,7 @@ fn the_main_page_posts_declared_ui_expansion_to_the_host() {
     });
     let event = PluginHostEvent {
         plugin: "probe".into(),
+        generation: 1,
         event: "declared-ui.expanded".into(),
         data: Some(data.clone()),
     };
@@ -610,7 +766,7 @@ fn the_main_page_posts_declared_ui_expansion_to_the_host() {
 /// Returns the channels of a window whose host of plugin probe declares declared and has the ready document doc-1.
 fn state_channels(declared: Option<HostState>) -> PluginHostChannels {
     let channels = PluginHostChannels::default();
-    channels.register("probe", declared);
+    channels.register("probe", declared, 1);
     channels
         .receive(
             "probe",

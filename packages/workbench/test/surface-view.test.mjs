@@ -2,10 +2,75 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
+import { registerSourceOrigin, seedSourceOrigins } from "../source-origins.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
+
+function sourceListenerMap() {
+  return new class extends Map {
+    set(name, listener) {
+      return super.set(name, name === "view-call" || name === "view-process-ended"
+        ? (event = {}) => listener({ ...event, generation: event.generation ?? 1 })
+        : listener);
+    }
+  }();
+}
+
+function seedViewSource(plugin, surface, generation = 1) {
+  seedSourceOrigins({ floor: generation, pluginHosts: {}, views: { [surface]: generation } });
+}
+
+test("a queued view call from a retired source generation does not reach the replacement command layer", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = sourceListenerMap();
+  const replies = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../source-origins.js", { namedExports: {
+    sourceOrigin: (_plugin, surface) => surface === "fixture-generation-surface" ? 2 : undefined,
+  } });
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        if (name === "viewReply") replies.push(payload);
+        return null;
+      } } };
+    },
+  } });
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-source-generation");
+  const pluginId = "fixture-generation-plugin";
+  const surfaceId = "fixture-generation-surface";
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } };
+  try {
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
+    await mountSurface(document.querySelector("#slot"), surface);
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.settings.read", params: null });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [], "the old view call reached the replacement command layer");
+
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 2, id: 2, command: "runtime.settings.read", params: null });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [{ id: 2, result: {}, generation: 2 }], "the current view call did not reply with its source generation");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
 
 // A view surface has no module: the host loads its page into the view. Mounting it imports nothing and declares its view composition
 // (docs/spec/plugins.md#view-surfaces), so a core command that waits for the declaration of the surface does not wait for a module.
@@ -39,6 +104,7 @@ test("mounting a view surface imports no module and declares its view compositio
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
     assert.deepEqual(calls.filter(({ name }) => name === "compositionDeclare"), [{
@@ -82,6 +148,7 @@ test("a view surface reports phase ready after its view declares its composition
   try {
     authorizeSurface(surfaceId);
     // The mount resolves after the composition is declared, so the last state is the state after the declaration.
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: (state) => states.push(state) });
     assert.ok(calls.some(({ name }) => name === "compositionDeclare"), "the view did not declare its composition");
     assert.equal(states.at(-1).phase, "ready", `the surface phase after its composition declaration is ${states.at(-1).phase}`);
@@ -98,7 +165,7 @@ test("a view call writes a debug receipt and a debug reply record with its id", 
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const replies = [];
   let replied;
   const replyArrived = new Promise((resolve) => { replied = resolve; });
@@ -133,6 +200,7 @@ test("a view call writes a debug receipt and a debug reply record with its id", 
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     listeners.get("view-call")({ id: 7, command: "runtime.settings.read", params: null });
     // The reply is sent after the call has settled, so the test waits for the viewReply call.
@@ -156,7 +224,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const replies = [];
   let replied;
   const replyArrived = new Promise((resolve) => { replied = resolve; });
@@ -191,6 +259,7 @@ test("a view subscription to the text size resolves with a result", { timeout: 5
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     listeners.get("view-call")({ id: 8, command: "runtime.textSize.on", params: null });
     await replyArrived;
@@ -212,7 +281,7 @@ test("a view that stopped its restarts shows its reason as the error state of it
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -238,6 +307,7 @@ test("a view that stopped its restarts shows its reason as the error state of it
   try {
     authorizeSurface(surfaceId);
     const states = [];
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: (state) => states.push(state) });
     await waitSurfaceCompositionDeclared(surfaceId);
     listeners.get("view-stopped")({ surface: surfaceId, plugin: pluginId, reason });
@@ -248,6 +318,7 @@ test("a view that stopped its restarts shows its reason as the error state of it
     await disposeSurface(surfaceId);
     authorizeSurface(surfaceId);
     const reopened = [];
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: (state) => reopened.push(state) });
     assert.notEqual(reopened.at(-1).phase, "error", "mounting the surface again shows no error");
   } finally {
@@ -264,7 +335,8 @@ test("a view responsiveness notice is the state of its surface until the surface
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
+  const emitted = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -278,6 +350,9 @@ test("a view responsiveness notice is the state of its surface until the surface
       }, call: async () => null } };
     },
   } });
+  const actualPageLog = await import("../page-log.js");
+  t.mock.module("../page-log.js", { exports: { ...actualPageLog,
+    emitEvent: (level, event, fields) => emitted.push({ level, event, fields }) } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?view-responsive");
   const { views } = await import("../plugin-processes.js");
   const pluginId = "fixture-responsive-view";
@@ -289,12 +364,23 @@ test("a view responsiveness notice is the state of its surface until the surface
   const ofSurface = () => views().filter((entry) => entry.surface === surfaceId);
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
     await waitSurfaceCompositionDeclared(surfaceId);
-    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, responsive: false });
+    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, generation: 1, responsive: false });
     assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: false }]);
-    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, responsive: true });
+    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, generation: 1, responsive: true });
     assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: true }]);
+    assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source did not advance its generation");
+    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, generation: 1, responsive: false });
+    assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: true }],
+      "a delayed responsiveness notice of the retired view changed the replacement state");
+    listeners.get("view-responsiveness")({ surface: surfaceId, plugin: pluginId, generation: 2, responsive: false });
+    assert.deepEqual(ofSurface(), [{ plugin: pluginId, surface: surfaceId, responsive: false }],
+      "the current generation responsiveness notice was not applied");
+    assert.deepEqual(emitted.filter(({ event }) => event === "page.view.event.cancel").map(({ fields }) => fields), [
+      { plugin: pluginId, surface: surfaceId, event: "view-responsiveness" },
+    ], "the stale notice cancellation was not recorded");
     await disposeSurface(surfaceId);
     assert.deepEqual(ofSurface(), [], "dispose removes the responsiveness of the surface");
   } finally {
@@ -351,7 +437,7 @@ test("a view registers its exposure through the page and its port consumes forwa
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const calls = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -386,6 +472,7 @@ test("a view registers its exposure through the page and its port consumes forwa
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 1, command: "runtime.native.call",
       params: { name: "registered", payload: { kind: "status", name: `${pluginId}.lines` } } });
@@ -413,7 +500,7 @@ test("a view watch of a status that the exposure does not declare is refused wit
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const calls = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -443,12 +530,13 @@ test("a view watch of a status that the exposure does not declare is refused wit
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.status.watch", params: { name: `${pluginId}.missing` } });
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(calls.filter(({ name }) => name === "viewReply"), [{
       name: "viewReply",
-      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, surface: surfaceId },
+      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, generation: 1, surface: surfaceId },
     }]);
   } finally {
     await disposeSurface(surfaceId);
@@ -464,7 +552,7 @@ test("a view sends only to a sidecar its surface declares and a send to another 
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const replies = [];
   const sent = [];
   const actualHost = await import("../host.js");
@@ -506,15 +594,16 @@ test("a view sends only to a sidecar its surface declares and a send to another 
     params: { id: "probe", sidecar, body: { n: id }, cids: [] } });
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     sendFrom(1, "other-sidecar");
     await settle();
-    assert.deepEqual(replies.at(-1), { id: 1, error: { code: -32000, message: `surface ${surfaceId} cannot send to sidecar other-sidecar` } },
+    assert.deepEqual(replies.at(-1), { id: 1, error: { code: -32000, message: `surface ${surfaceId} cannot send to sidecar other-sidecar` }, generation: 1 },
       "a send to an undeclared sidecar was not refused with its reason");
     assert.deepEqual(sent, [], "a send to an undeclared sidecar reached a sidecar");
     sendFrom(2, "fixture-sidecar");
     await settle();
-    assert.deepEqual(replies.at(-1), { id: 2, result: null }, "a send to the declared sidecar was refused");
+    assert.deepEqual(replies.at(-1), { id: 2, result: null, generation: 1 }, "a send to the declared sidecar was refused");
     assert.deepEqual(sent, [{ id: "probe", body: { n: 2 }, cids: [] }]);
   } finally {
     await disposeSurface(surfaceId);
@@ -530,7 +619,7 @@ test("the region calls of a view run the page operations of its surface", { time
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const calls = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -565,6 +654,7 @@ test("the region calls of a view run the page operations of its surface", { time
   };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const call = listeners.get("view-call");
     call({ surface: surfaceId, plugin: pluginId, id: 1, command: "composition.declaration", params: null });
@@ -574,9 +664,9 @@ test("the region calls of a view run the page operations of its surface", { time
       regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [] } });
     await settle(3);
     assert.deepEqual(replies(), [
-      { id: 1, result: { kind: "view", regions: composition.regions, overlays: [] }, surface: surfaceId },
-      { id: 2, result: { history: false }, surface: surfaceId },
-      { id: 3, result: null, surface: surfaceId },
+      { id: 1, result: { kind: "view", regions: composition.regions, overlays: [] }, generation: 1, surface: surfaceId },
+      { id: 2, result: { history: false }, generation: 1, surface: surfaceId },
+      { id: 3, result: null, generation: 1, surface: surfaceId },
     ]);
     assert.deepEqual(calls.filter(({ name }) => name === "documentAttach"), [
       { name: "documentAttach", payload: { document: "doc", surface: surfaceId } },
@@ -600,7 +690,7 @@ test("a view process end forgets the regions that its surface attached", { timeo
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const calls = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
@@ -633,6 +723,7 @@ test("a view process end forgets the regions that its surface attached", { timeo
   };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 1, command: "document.attach", params: { name: "doc" } });
     await settle(1);
@@ -655,7 +746,7 @@ test("a view process end cancels its pending work across restart and accepts new
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const nativeListeners = new Map();
+  const nativeListeners = sourceListenerMap();
   const sidecarListeners = [];
   const replies = [];
   const calls = [];
@@ -734,6 +825,7 @@ test("a view process end cancels its pending work across restart and accepts new
   };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const call = nativeListeners.get("view-call");
     call({ id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
@@ -815,10 +907,12 @@ test("a view surface mounted again after its dispose registers its port while th
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
     await disposeSurface(surfaceId);
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
   } finally {
@@ -834,7 +928,7 @@ test("a view reply the host refuses is reported through the page error path", { 
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -870,6 +964,7 @@ test("a view reply the host refuses is reported through the page error path", { 
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, id: 3, command: "runtime.native.call",
       params: { name: "registered", payload: { kind: "status", name: `${pluginId}.none` } } });
@@ -890,7 +985,7 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const sidecarListeners = new Map();
   const emitted = [];
   const reported = [];
@@ -948,6 +1043,7 @@ test("closing a view cancels a pending call reply and event delivery", { timeout
     sidecars: ["fixture-sidecar"], composition: { kind: "view", page: "ui/page.html" } };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     const call = listeners.get("view-call");
     call({ id: 10, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } });
@@ -1009,9 +1105,11 @@ test("a failed view mount releases its exposure port, and a retry mounts the sur
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await assert.rejects(mountSurface(document.querySelector("#slot"), surface), /composition declaration/);
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.list", params: {} }), false,
       "the failed mount left its exposure port registered");
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
   } finally {
@@ -1053,6 +1151,7 @@ test("a view surface mounts with the core surface entries that exposure.json dec
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
     assert.deepEqual(registry.namesOf(surfaceId), [], "the main placeholder registered view document entries");
@@ -1075,7 +1174,7 @@ test("a view mount, its core registration and its command registration share one
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const listeners = new Map();
+  const listeners = sourceListenerMap();
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
@@ -1106,6 +1205,7 @@ test("a view mount, its core registration and its command registration share one
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands, dom: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId);
     await mountSurface(document.querySelector("#slot"), surface);
     await waitSurfaceCompositionDeclared(surfaceId);
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 1, method: "status.get", params: { name: "core.surface.document" } }),

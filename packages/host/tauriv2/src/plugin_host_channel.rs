@@ -28,7 +28,7 @@ use crate::plugin_host::{
 use crate::sidecars::{RESTART_LIMIT, RESTART_WINDOW};
 use crate::surfaces::SurfaceProject;
 use crate::view_lifecycle::is_queue_full;
-use crate::windows::{emit_window, window_data};
+use crate::windows::window_data;
 
 /// Returns a plugin-host error reason with the channel identity exactly once.
 fn plugin_host_error_text(plugin: &str, reason: &str) -> String {
@@ -57,6 +57,7 @@ const REFUSAL_CODE: i64 = -32000;
 struct Channel {
     /// The local identity captured by callbacks of this host instance. It remains alive while any callback can run.
     instance: Arc<()>,
+    generation: u64,
     state: Option<HostState>,
     document: String,
     process_ready: bool,
@@ -171,12 +172,13 @@ impl PluginHostChannels {
     }
 
     /// Records the channel of plugin with its declared state. It runs when the host webview is created.
-    pub fn register(&self, plugin: &str, state: Option<HostState>) -> Arc<()> {
+    pub fn register(&self, plugin: &str, state: Option<HostState>, generation: u64) -> Arc<()> {
         let instance = Arc::new(());
         self.lock().insert(
             plugin.to_string(),
             Channel {
                 instance: instance.clone(),
+                generation,
                 state,
                 ..Channel::default()
             },
@@ -189,6 +191,14 @@ impl PluginHostChannels {
         self.lock()
             .get(plugin)
             .is_some_and(|channel| Arc::ptr_eq(&channel.instance, instance))
+    }
+
+    pub fn generation(&self, plugin: &str) -> Option<u64> {
+        self.lock().get(plugin).map(|channel| channel.generation)
+    }
+
+    pub fn matches_generation(&self, plugin: &str, generation: u64) -> bool {
+        self.generation(plugin) == Some(generation)
     }
 
     /// Removes the channel of plugin. It runs when the host webview is disposed.
@@ -250,8 +260,12 @@ impl PluginHostChannels {
     }
 
     /// Records that the main page answered the call id of the host of plugin, so the call is no longer open.
-    pub fn answer_call(&self, plugin: &str, id: u64) {
-        if let Some(channel) = self.lock().get_mut(plugin) {
+    pub fn answer_call(&self, plugin: &str, generation: u64, id: u64) {
+        if let Some(channel) = self
+            .lock()
+            .get_mut(plugin)
+            .filter(|channel| channel.generation == generation)
+        {
             channel.calls.remove(&id);
         }
     }
@@ -287,12 +301,19 @@ impl PluginHostChannels {
             .as_object()
             .ok_or_else(|| format!("plugin {plugin}: message is not an object"))?;
         let field = |name: &str| fields.get(name).filter(|value| !value.is_null());
+        let generation = self
+            .lock()
+            .get(plugin)
+            .map(|channel| channel.generation)
+            .ok_or_else(|| {
+                format!("plugin {plugin}: channel message of a window without the host")
+            })?;
         if fields.contains_key("reply") {
-            return reply(plugin, fields)
+            return reply(plugin, generation, fields)
                 .map(|payload| Received::Emit("plugin-host-reply", payload));
         }
         if field("command").is_some() || field("cancel").is_some() {
-            return self.call(plugin, fields);
+            return self.call(plugin, generation, fields);
         }
         let event = fields
             .get("event")
@@ -300,7 +321,7 @@ impl PluginHostChannels {
             // default: a message without an event name is refused below as the unknown event "".
             .unwrap_or_default();
         match event {
-            DECLARED_SNAPSHOT_MESSAGE => snapshot(plugin, fields)
+            DECLARED_SNAPSHOT_MESSAGE => snapshot(plugin, generation, fields)
                 .map(|payload| Received::Emit(DECLARED_SNAPSHOT_WINDOW_EVENT, payload)),
             "view.ready" => {
                 let named = fields
@@ -367,6 +388,7 @@ impl PluginHostChannels {
     fn call(
         &self,
         plugin: &str,
+        generation: u64,
         fields: &serde_json::Map<String, Value>,
     ) -> Result<Received, String> {
         let field = |name: &str| fields.get(name).filter(|value| !value.is_null());
@@ -382,7 +404,7 @@ impl PluginHostChannels {
             }
             return Ok(Received::Emit(
                 "plugin-host-call",
-                json!({"plugin": plugin, "id": id, "cancel": true}),
+                json!({"plugin": plugin, "generation": generation, "id": id, "cancel": true}),
             ));
         }
         let command = field("command")
@@ -416,21 +438,27 @@ impl PluginHostChannels {
         let params = fields.get("params").cloned().unwrap_or(Value::Null);
         Ok(Received::Emit(
             "plugin-host-call",
-            json!({"plugin": plugin, "id": id, "command": command, "params": params}),
+            json!({"plugin": plugin, "generation": generation, "id": id, "command": command, "params": params}),
         ))
     }
 }
 
 /// Returns the plugin-host-reply payload of a reply of the host of plugin. A reply has an integer id and exactly one of
 /// result and error; an error has an integer code and a message.
-fn reply(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Value, String> {
+fn reply(
+    plugin: &str,
+    generation: u64,
+    fields: &serde_json::Map<String, Value>,
+) -> Result<Value, String> {
     let id = fields
         .get("reply")
         .and_then(Value::as_u64)
         .ok_or_else(|| format!("plugin host {plugin}: reply has no integer id"))?;
     let result = fields.get("result");
     match (result, fields.get("error")) {
-        (Some(result), None) => Ok(json!({"plugin": plugin, "id": id, "result": result})),
+        (Some(result), None) => {
+            Ok(json!({"plugin": plugin, "generation": generation, "id": id, "result": result}))
+        }
         (None, Some(error)) => {
             let code = error.get("code").and_then(Value::as_i64).ok_or_else(|| {
                 format!("plugin host {plugin}: reply {id} has an error without an integer code")
@@ -442,7 +470,9 @@ fn reply(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Value,
                 .ok_or_else(|| {
                     format!("plugin host {plugin}: reply {id} has an error without a message")
                 })?;
-            Ok(json!({"plugin": plugin, "id": id, "error": {"code": code, "message": text}}))
+            Ok(
+                json!({"plugin": plugin, "generation": generation, "id": id, "error": {"code": code, "message": text}}),
+            )
         }
         _ => Err(format!(
             "plugin host {plugin}: reply {id} has both or neither of a result and an error"
@@ -453,7 +483,11 @@ fn reply(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Value,
 /// Returns the declared-ui.snapshot payload of a snapshot of the host of plugin. A snapshot names the plugin, a status,
 /// an integer seq from 1, a skipped count of 0 or more and a value. The host relays the snapshot and writes no event for
 /// it (docs/spec/plugin-host.md#declared-ui-snapshots).
-fn snapshot(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Value, String> {
+fn snapshot(
+    plugin: &str,
+    generation: u64,
+    fields: &serde_json::Map<String, Value>,
+) -> Result<Value, String> {
     let named = fields
         .get("plugin")
         .and_then(Value::as_str)
@@ -484,13 +518,16 @@ fn snapshot(plugin: &str, fields: &serde_json::Map<String, Value>) -> Result<Val
     let value = fields.get("value").ok_or_else(|| {
         format!("plugin host {plugin}: declared UI snapshot of status {status:?} has no value")
     })?;
-    Ok(json!({"plugin": plugin, "status": status, "seq": seq, "skipped": skipped, "value": value}))
+    Ok(
+        json!({"plugin": plugin, "generation": generation, "status": status, "seq": seq, "skipped": skipped, "value": value}),
+    )
 }
 
 /// The reply of the main page to a call request of the host of plugin. It has a result or an error, not both. A null result is a
 /// value, so the reply is read through its map, which keeps it (docs/spec/native-host.md#host-calls).
 pub struct PluginHostReply {
     pub plugin: String,
+    pub generation: u64,
     pub id: u64,
     pub result: Option<Value>,
     pub error: Option<ViewReplyError>,
@@ -508,12 +545,14 @@ impl<'de> Deserialize<'de> for PluginHostReply {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut plugin = None;
+                let mut generation = None;
                 let mut id = None;
                 let mut result = None;
                 let mut error = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "plugin" => plugin = map.next_value::<Option<String>>()?,
+                        "generation" => generation = map.next_value::<Option<u64>>()?,
                         "id" => id = map.next_value::<Option<u64>>()?,
                         "result" => result = value_field(&mut map)?,
                         "error" => error = map.next_value::<Option<ViewReplyError>>()?,
@@ -524,6 +563,7 @@ impl<'de> Deserialize<'de> for PluginHostReply {
                 }
                 Ok(PluginHostReply {
                     plugin: plugin.ok_or_else(|| de::Error::missing_field("plugin"))?,
+                    generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
                     result,
                     error,
@@ -538,6 +578,7 @@ impl<'de> Deserialize<'de> for PluginHostReply {
 /// (docs/spec/plugin-host.md#declared-ui-snapshots). Its params are read through the map, so a null params is kept.
 pub struct PluginHostRequest {
     pub plugin: String,
+    pub generation: u64,
     pub id: u64,
     pub command: String,
     pub params: Option<Value>,
@@ -555,12 +596,14 @@ impl<'de> Deserialize<'de> for PluginHostRequest {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut plugin = None;
+                let mut generation = None;
                 let mut id = None;
                 let mut command = None;
                 let mut params = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "plugin" => plugin = map.next_value::<Option<String>>()?,
+                        "generation" => generation = map.next_value::<Option<u64>>()?,
                         "id" => id = map.next_value::<Option<u64>>()?,
                         "command" => command = map.next_value::<Option<String>>()?,
                         "params" => params = value_field(&mut map)?,
@@ -571,6 +614,7 @@ impl<'de> Deserialize<'de> for PluginHostRequest {
                 }
                 Ok(PluginHostRequest {
                     plugin: plugin.ok_or_else(|| de::Error::missing_field("plugin"))?,
+                    generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     id: id.ok_or_else(|| de::Error::missing_field("id"))?,
                     command: command.ok_or_else(|| de::Error::missing_field("command"))?,
                     params,
@@ -585,6 +629,7 @@ impl<'de> Deserialize<'de> for PluginHostRequest {
 /// through the map, so a null data is kept.
 pub struct PluginHostEvent {
     pub plugin: String,
+    pub generation: u64,
     pub event: String,
     pub data: Option<Value>,
 }
@@ -601,11 +646,13 @@ impl<'de> Deserialize<'de> for PluginHostEvent {
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 let mut plugin = None;
+                let mut generation = None;
                 let mut event = None;
                 let mut data = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "plugin" => plugin = map.next_value::<Option<String>>()?,
+                        "generation" => generation = map.next_value::<Option<u64>>()?,
                         "event" => event = map.next_value::<Option<String>>()?,
                         "data" => data = value_field(&mut map)?,
                         _ => {
@@ -615,6 +662,7 @@ impl<'de> Deserialize<'de> for PluginHostEvent {
                 }
                 Ok(PluginHostEvent {
                     plugin: plugin.ok_or_else(|| de::Error::missing_field("plugin"))?,
+                    generation: generation.ok_or_else(|| de::Error::missing_field("generation"))?,
                     event: event.ok_or_else(|| de::Error::missing_field("event"))?,
                     data,
                 })
@@ -629,6 +677,13 @@ pub fn reply_message(reply: &PluginHostReply) -> Result<Value, String> {
     if reply.plugin.is_empty() {
         return Err("plugin host reply names no plugin".to_string());
     }
+    if reply.generation == 0 {
+        return Err("plugin host reply has no source generation".to_string());
+    }
+    crate::windows::validate_declared_source_generation_limit(
+        reply.generation,
+        "plugin host reply",
+    )?;
     match (&reply.result, &reply.error) {
         (Some(result), None) => Ok(json!({"sok": 1, "id": reply.id, "result": result})),
         (None, Some(error)) => Ok(json!({
@@ -652,6 +707,13 @@ pub fn request_message(request: &PluginHostRequest) -> Result<Value, String> {
     if request.id == 0 {
         return Err("plugin host request has no id".to_string());
     }
+    if request.generation == 0 {
+        return Err("plugin host request has no source generation".to_string());
+    }
+    crate::windows::validate_declared_source_generation_limit(
+        request.generation,
+        "plugin host request",
+    )?;
     if request.command.is_empty() {
         return Err(format!(
             "plugin host request {} has an empty command",
@@ -676,6 +738,13 @@ pub fn event_message(event: &PluginHostEvent) -> Result<Value, String> {
     if event.event.is_empty() {
         return Err("plugin host event has an empty event name".to_string());
     }
+    if event.generation == 0 {
+        return Err("plugin host event has no source generation".to_string());
+    }
+    crate::windows::validate_declared_source_generation_limit(
+        event.generation,
+        "plugin host event",
+    )?;
     let Some(data) = &event.data else {
         return Err(format!("plugin host event {} has no data", event.event));
     };
@@ -702,8 +771,8 @@ pub fn end_host(
 
 /// Returns the payload of the event plugin-host-ended, which tells the main page that the registrations of the host of
 /// plugin ended (docs/spec/plugin-host.md#channel).
-pub fn ended_event(plugin: &str) -> Value {
-    json!({"plugin": plugin})
+pub fn ended_event(plugin: &str, generation: u64) -> Value {
+    json!({"plugin": plugin, "generation": generation})
 }
 
 /// Closes the host webview of plugin and sends plugin-host-ended to the main page. With Some(handle) it ends the host
@@ -713,6 +782,7 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
         Ok(data) => data,
         Err(error) => return log_error("plugin host", error),
     };
+    let generation = data.plugin_host_channels.generation(plugin);
     let Some(handle) = end_host(
         &data.plugin_hosts,
         &data.plugin_host_channels,
@@ -721,6 +791,18 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
     ) else {
         return;
     };
+    if let Some(generation) = generation
+        && data
+            .declared_source_origins
+            .end_plugin_host(plugin, generation)
+        && let Err(error) = crate::windows::emit_declared_source_event(
+            window,
+            "declared-ui-source-ended",
+            crate::windows::declared_source_origin_event(plugin, None, generation),
+        )
+    {
+        log_error("plugin host", error);
+    }
     match platform::current() {
         Ok(platform) => {
             if let Err(error) = platform.close_document(handle) {
@@ -729,7 +811,13 @@ pub(crate) fn end(window: &Window, plugin: &str, handle: Option<Handle>) {
         }
         Err(error) => log_error("plugin host", error),
     }
-    if let Err(error) = emit_window(window, "plugin-host-ended", ended_event(plugin)) {
+    if let Some(generation) = generation
+        && let Err(error) = crate::windows::emit_declared_source_event(
+            window,
+            "plugin-host-ended",
+            ended_event(plugin, generation),
+        )
+    {
         log_error("plugin host", error);
     }
 }
@@ -945,7 +1033,7 @@ pub(crate) fn message(
     };
     let result = match received {
         Received::Emit(name, payload) => {
-            emit_window(window, name, payload).map_err(|error| error.to_string())
+            crate::windows::emit_declared_source_event(window, name, payload)
         }
         Received::Post(message) => post(window, plugin, &message),
         Received::State {
@@ -1086,27 +1174,21 @@ pub(crate) fn post_theme_to_plugin_hosts(window: &Window) -> Result<(), String> 
     Ok(())
 }
 
-/// Posts message from the main page to the host of plugin, after the main page is confirmed as the caller. The action
-/// names the command in the error of an unauthorized caller.
-fn post_from_main(
-    webview: &Webview,
-    action: &str,
-    plugin: &str,
-    message: &Value,
-) -> Result<(), String> {
-    let window = webview.window();
-    crate::exposure::authorize_main_caller(webview.label(), window.label(), action)?;
-    post(&window, plugin, message)
-}
-
 /// Posts the reply of the main page to a call request of the host of reply.plugin, and records that the call is no
 /// longer open.
 pub(crate) fn plugin_host_reply(webview: &Webview, reply: PluginHostReply) -> Result<(), String> {
     let message = reply_message(&reply)?;
-    post_from_main(webview, "plugin host reply", &reply.plugin, &message)?;
-    window_data(&webview.window())?
-        .plugin_host_channels
-        .answer_call(&reply.plugin, reply.id);
+    if post_for_generation(
+        webview,
+        "plugin host reply",
+        &reply.plugin,
+        reply.generation,
+        &message,
+    )? {
+        window_data(&webview.window())?
+            .plugin_host_channels
+            .answer_call(&reply.plugin, reply.generation, reply.id);
+    }
     Ok(())
 }
 
@@ -1114,13 +1196,88 @@ pub(crate) fn plugin_host_reply(webview: &Webview, reply: PluginHostReply) -> Re
 pub(crate) fn plugin_host_request(
     webview: &Webview,
     request: PluginHostRequest,
-) -> Result<(), String> {
+) -> Result<Value, String> {
     let message = request_message(&request)?;
-    post_from_main(webview, "plugin host request", &request.plugin, &message)
+    let posted = post_for_generation(
+        webview,
+        "plugin host request",
+        &request.plugin,
+        request.generation,
+        &message,
+    )?;
+    Ok(request_disposition(request.generation, posted))
+}
+
+pub(crate) fn request_disposition(generation: u64, posted: bool) -> Value {
+    if posted {
+        Value::Null
+    } else {
+        json!({"cancelled": true, "sourceGeneration": generation})
+    }
 }
 
 /// Posts an event of the main page to the host of event.plugin.
-pub(crate) fn plugin_host_event(webview: &Webview, event: PluginHostEvent) -> Result<(), String> {
+pub(crate) fn plugin_host_event(webview: &Webview, event: PluginHostEvent) -> Result<bool, String> {
     let message = event_message(&event)?;
-    post_from_main(webview, "plugin host event", &event.plugin, &message)
+    post_for_generation(
+        webview,
+        "plugin host event",
+        &event.plugin,
+        event.generation,
+        &message,
+    )
+}
+
+/// Checks the private source generation and posts in one main-thread operation, so replacement cannot occur between
+/// validation and delivery. The generation is absent from the provider message.
+fn post_for_generation(
+    webview: &Webview,
+    action: &str,
+    plugin: &str,
+    generation: u64,
+    message: &Value,
+) -> Result<bool, String> {
+    let window = webview.window();
+    crate::exposure::authorize_main_caller(webview.label(), window.label(), action)?;
+    let plugin = plugin.to_string();
+    let message = message.to_string();
+    let task_window = window.clone();
+    crate::exposure::on_main(&window, move || {
+        let data = window_data(&task_window)?;
+        post_if_generation_current(
+            generation,
+            data.declared_source_origins.current_plugin_host(&plugin),
+            || {
+                data.plugin_host_channels
+                    .matches_generation(&plugin, generation)
+            },
+            || {
+                data.plugin_host_channels.check_post(&plugin)?;
+                let handle = data
+                    .plugin_hosts
+                    .get(&plugin)
+                    .ok_or_else(|| format!("plugin {plugin} has no host webview"))?;
+                let accepted = platform::current()?.post_document(handle, &message)?;
+                if accepted {
+                    Ok(true)
+                } else {
+                    Err(format!(
+                        "plugin {plugin}: the host document refused the message"
+                    ))
+                }
+            },
+        )
+    })
+}
+
+pub(crate) fn post_if_generation_current(
+    expected: u64,
+    current: Option<u64>,
+    channel_matches: impl FnOnce() -> bool,
+    post: impl FnOnce() -> Result<bool, String>,
+) -> Result<bool, String> {
+    if current != Some(expected) || !channel_matches() {
+        return Ok(false);
+    }
+    post()
 }

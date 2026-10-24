@@ -17,6 +17,28 @@ type hostEvent struct {
 	data any
 }
 
+func registerPluginHostChannel(s *Surfaces, plugin string, state *hostState) uint64 {
+	generation, err := s.sourceOriginState().create(plugin, false)
+	if err != nil {
+		panic(err)
+	}
+	s.pluginHostChannels.register(plugin, state, generation)
+	return generation
+}
+
+type replacePluginHostOnPost struct {
+	*channelPlatform
+	afterPost func()
+}
+
+func (p *replacePluginHostOnPost) PostDocument(document unsafe.Pointer, value string) bool {
+	accepted := p.channelPlatform.PostDocument(document, value)
+	if p.afterPost != nil {
+		p.afterPost()
+	}
+	return accepted
+}
+
 // channelSurfaces returns a Surfaces whose window has the host of plugin probe with a created web view and, when ready
 // is set, the ready document "doc-1", and the record of the window events that the host sends. fake is the platform of the
 // test, such as the channelPlatform of surfaces_test.go.
@@ -35,7 +57,7 @@ func channelSurfaces(t *testing.T, fake uiFake, ready bool) (*Surfaces, *[]hostE
 		theme:              Theme{Tokens: map[string]string{}},
 		events:             func(name string, data any) { *events = append(*events, hostEvent{name, data}) },
 	}
-	s.pluginHostChannels.register("probe", nil)
+	registerPluginHostChannel(s, "probe", nil)
 	if ready {
 		s.pluginHostChannels.setReadyDocument("probe", "doc-1")
 		s.pluginHostChannels.firstReady("probe")
@@ -54,14 +76,14 @@ func TestPluginHostChannelRelaysAReplyToTheMainPage(t *testing.T) {
 	if err := s.pluginHostMessage("probe", hostMessage(`{"reply": 7, "result": {"sum": 3}}`)); err != nil {
 		t.Fatalf("relay of a reply: %v", err)
 	}
-	want := []hostEvent{{"plugin-host-reply", map[string]any{"plugin": "probe", "id": uint64(7), "result": json.RawMessage(`{"sum": 3}`)}}}
+	want := []hostEvent{{"plugin-host-reply", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(7), "result": json.RawMessage(`{"sum": 3}`)}}}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
 	}
 	if err := s.pluginHostMessage("probe", hostMessage(`{"reply": 8, "result": null}`)); err != nil {
 		t.Fatalf("relay of a null result: %v", err)
 	}
-	if got := (*events)[1]; got.name != "plugin-host-reply" || !reflect.DeepEqual(got.data, map[string]any{"plugin": "probe", "id": uint64(8), "result": json.RawMessage(`null`)}) {
+	if got := (*events)[1]; got.name != "plugin-host-reply" || !reflect.DeepEqual(got.data, map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(8), "result": json.RawMessage(`null`)}) {
 		t.Fatalf("null result event %v, want an explicit null result", got)
 	}
 	// A reply with both or neither of result and error, an error without a code or a message, and a reply id that is not an
@@ -113,10 +135,10 @@ func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 		}
 	}
 	want := []hostEvent{
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(5), "command": "page.exposure.register", "params": json.RawMessage(`{"name": "probe.x"}`)}},
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(6), "command": "runtime.command.register", "params": json.RawMessage(`{"name": "probe.x"}`)}},
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(7), "command": "runtime.native.on", "params": json.RawMessage(`{"name": "probe.x"}`)}},
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(8), "command": "runtime.native.call", "params": json.RawMessage(`{"name": "probe.x"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(5), "command": "page.exposure.register", "params": json.RawMessage(`{"name": "probe.x"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(6), "command": "runtime.command.register", "params": json.RawMessage(`{"name": "probe.x"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(7), "command": "runtime.native.on", "params": json.RawMessage(`{"name": "probe.x"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(8), "command": "runtime.native.call", "params": json.RawMessage(`{"name": "probe.x"}`)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
@@ -129,10 +151,10 @@ func TestPluginHostChannelForwardsOnlyTheRegistrationCalls(t *testing.T) {
 	if err := s.pluginHostMessage("probe", hostMessage(`{"id": 5, "cancel": true}`)); err != nil {
 		t.Fatalf("cancel: %v", err)
 	}
-	if last := (*events)[len(*events)-1]; !reflect.DeepEqual(last, hostEvent{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(5), "cancel": true}}) {
+	if last := (*events)[len(*events)-1]; !reflect.DeepEqual(last, hostEvent{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(5), "cancel": true}}) {
 		t.Fatalf("cancel event %v", last)
 	}
-	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", ID: 5, Result: json.RawMessage(`null`)}); err != nil {
+	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: 1, ID: 5, Result: json.RawMessage(`null`)}); err != nil {
 		t.Fatalf("answer: %v", err)
 	}
 	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"runtime.command.register", "runtime.native.on", "runtime.native.call"}) {
@@ -161,9 +183,9 @@ func TestPluginHostChannelForwardsTheSidecarCalls(t *testing.T) {
 		t.Fatalf("a served sidecar call was refused or answered by the host: %v", fake.posted)
 	}
 	want := []hostEvent{
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(10), "command": "runtime.sidecar.send", "params": json.RawMessage(params)}},
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(11), "command": "runtime.sidecar.on", "params": json.RawMessage(params)}},
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(12), "command": "runtime.sidecar.onFailure", "params": json.RawMessage(params)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(10), "command": "runtime.sidecar.send", "params": json.RawMessage(params)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(11), "command": "runtime.sidecar.on", "params": json.RawMessage(params)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(12), "command": "runtime.sidecar.onFailure", "params": json.RawMessage(params)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
@@ -189,8 +211,8 @@ func TestPluginHostChannelForwardsTheProjectDataCalls(t *testing.T) {
 		t.Fatalf("a served data call was refused or answered by the host: %v", fake.posted)
 	}
 	want := []hostEvent{
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(13), "command": "runtime.data.get", "params": json.RawMessage(`{"key": "note"}`)}},
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(14), "command": "runtime.data.set", "params": json.RawMessage(`{"key": "note", "value": "new"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(13), "command": "runtime.data.get", "params": json.RawMessage(`{"key": "note"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(14), "command": "runtime.data.set", "params": json.RawMessage(`{"key": "note", "value": "new"}`)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
@@ -209,7 +231,7 @@ func TestPluginHostChannelForwardsTheErrorCall(t *testing.T) {
 		t.Fatalf("a served error call was refused or answered by the host: %v", fake.posted)
 	}
 	want := []hostEvent{
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(15), "command": "runtime.error", "params": json.RawMessage(`{"where": "listing", "text": "cannot read folder"}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(15), "command": "runtime.error", "params": json.RawMessage(`{"where": "listing", "text": "cannot read folder"}`)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
@@ -228,7 +250,7 @@ func TestPluginHostChannelForwardsTheCommandCall(t *testing.T) {
 		t.Fatalf("a served command call was refused or answered by the host: %v", fake.posted)
 	}
 	want := []hostEvent{
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(16), "command": "runtime.command", "params": json.RawMessage(`{"name": "core.file.open", "params": {"path": "notes.md"}}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(16), "command": "runtime.command", "params": json.RawMessage(`{"name": "core.file.open", "params": {"path": "notes.md"}}`)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
@@ -247,7 +269,7 @@ func TestPluginHostChannelForwardsTheLogCall(t *testing.T) {
 		t.Fatalf("a served log call was refused or answered by the host: %v", fake.posted)
 	}
 	want := []hostEvent{
-		{"plugin-host-call", map[string]any{"plugin": "probe", "id": uint64(17), "command": "runtime.log", "params": json.RawMessage(`{"level": "info", "event": "input.key", "fields": {"key": "a"}, "cids": ["c.1"]}`)}},
+		{"plugin-host-call", map[string]any{"plugin": "probe", "generation": uint64(1), "id": uint64(17), "command": "runtime.log", "params": json.RawMessage(`{"level": "info", "event": "input.key", "fields": {"key": "a"}, "cids": ["c.1"]}`)}},
 	}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
@@ -260,7 +282,8 @@ func TestPluginHostChannelRelaysADeclaredUISnapshot(t *testing.T) {
 	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "declared-ui.snapshot", "plugin": "probe", "status": "list", "seq": 2, "skipped": 1, "value": {"x": 1}}`)); err != nil {
 		t.Fatalf("snapshot: %v", err)
 	}
-	want := []hostEvent{{"declared-ui-snapshot", map[string]any{"plugin": "probe", "status": "list", "seq": uint64(2), "skipped": uint64(1), "value": json.RawMessage(`{"x": 1}`)}}}
+	generation, _ := s.pluginHostChannels.generation("probe")
+	want := []hostEvent{{"declared-ui-snapshot", map[string]any{"plugin": "probe", "generation": generation, "status": "list", "seq": uint64(2), "skipped": uint64(1), "value": json.RawMessage(`{"x": 1}`)}}}
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatalf("events %v, want %v", *events, want)
 	}
@@ -375,11 +398,11 @@ func TestPluginHostChannelQueueFullClosesTheHost(t *testing.T) {
 	if _, ok := s.pluginHostChannels.channel("probe"); ok {
 		t.Fatalf("the channel of probe is recorded after the queue overflow")
 	}
-	if !reflect.DeepEqual(*events, []hostEvent{{"plugin-host-ended", map[string]any{"plugin": "probe"}}}) {
+	if !reflect.DeepEqual(*events, []hostEvent{{"declared-ui-source-ended", map[string]any{"plugin": "probe", "generation": uint64(1)}}, {"plugin-host-ended", map[string]any{"plugin": "probe", "generation": uint64(1)}}}) {
 		t.Fatalf("events %v, want plugin-host-ended", *events)
 	}
 	// Another view.error reason is an error line that closes nothing.
-	s.pluginHostChannels.register("probe", nil)
+	registerPluginHostChannel(s, "probe", nil)
 	s.pluginHosts["probe"] = unsafe.Pointer(new(int))
 	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "view.error", "reason": "message without the sok marker"}`)); err == nil {
 		t.Fatalf("a view.error without a queue overflow is no error")
@@ -424,20 +447,20 @@ func TestPluginHostChannelEndTellsTheMainPage(t *testing.T) {
 		t.Fatalf("the end of a replaced web view closed %d and sent %v", fake.closed, *events)
 	}
 	s.pluginHostEnded("probe", handle)
-	if fake.closed != 1 || !reflect.DeepEqual(*events, []hostEvent{{"plugin-host-ended", map[string]any{"plugin": "probe"}}}) {
+	if fake.closed != 1 || !reflect.DeepEqual(*events, []hostEvent{{"declared-ui-source-ended", map[string]any{"plugin": "probe", "generation": uint64(1)}}, {"plugin-host-ended", map[string]any{"plugin": "probe", "generation": uint64(1)}}}) {
 		t.Fatalf("the process end closed %d and sent %v, want one close and plugin-host-ended", fake.closed, *events)
 	}
 	// The disposal on a removal of the plugin sends the event; the disposal of every host on a reload sends none.
 	s.pluginHosts["probe"] = unsafe.Pointer(new(int))
-	s.pluginHostChannels.register("probe", nil)
+	registerPluginHostChannel(s, "probe", nil)
 	s.disposePluginHost("probe")
-	if len(*events) != 2 || (*events)[1].name != "plugin-host-ended" {
-		t.Fatalf("the disposal sent %v, want a second plugin-host-ended", *events)
+	if len(*events) != 4 || (*events)[2].name != "declared-ui-source-ended" || (*events)[3].name != "plugin-host-ended" {
+		t.Fatalf("the disposal sent %v, want a second source end and plugin-host-ended", *events)
 	}
 	s.pluginHosts["probe"] = unsafe.Pointer(new(int))
-	s.pluginHostChannels.register("probe", nil)
+	registerPluginHostChannel(s, "probe", nil)
 	s.disposePluginHosts()
-	if len(*events) != 2 {
+	if len(*events) != 4 {
 		t.Fatalf("the disposal of every host sent %v", *events)
 	}
 	if _, ok := s.pluginHostChannels.channel("probe"); ok {
@@ -449,16 +472,17 @@ func TestPluginHostChannelEndTellsTheMainPage(t *testing.T) {
 func TestPluginHostChannelPostsTheMessagesOfTheMainPage(t *testing.T) {
 	fake := &channelPlatform{}
 	s, _ := channelSurfaces(t, fake, true)
-	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", ID: 7, Result: json.RawMessage(`1`)}); err != nil {
+	generation, _ := s.pluginHostChannels.generation("probe")
+	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: generation, ID: 7, Result: json.RawMessage(`1`)}); err != nil {
 		t.Fatalf("reply post: %v", err)
 	}
-	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", ID: 8, Error: &ViewReplyError{Code: -32000, Message: "refused"}}); err != nil {
+	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: generation, ID: 8, Error: &ViewReplyError{Code: -32000, Message: "refused"}}); err != nil {
 		t.Fatalf("error reply post: %v", err)
 	}
-	if err := s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", ID: 9, Command: "declared-ui.snapshot.request", Params: json.RawMessage(`{"status":"x"}`)}); err != nil {
+	if disposition, err := s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", Generation: generation, ID: 9, Command: "declared-ui.snapshot.request", Params: json.RawMessage(`{"status":"x"}`)}); err != nil || disposition != nil {
 		t.Fatalf("request post: %v", err)
 	}
-	if err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Event: "declared-ui.snapshot.ack", Data: json.RawMessage(`{"plugin":"probe","status":"x","seq":1}`)}); err != nil {
+	if accepted, err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Generation: generation, Event: "declared-ui.snapshot.ack", Data: json.RawMessage(`{"plugin":"probe","status":"x","seq":1}`)}); err != nil || !accepted {
 		t.Fatalf("event post: %v", err)
 	}
 	want := []string{
@@ -474,13 +498,15 @@ func TestPluginHostChannelPostsTheMessagesOfTheMainPage(t *testing.T) {
 	empty, _ := channelSurfaces(t, &channelPlatform{}, false)
 	for _, post := range []func() error{
 		func() error {
-			return empty.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", ID: 7, Result: json.RawMessage(`1`)})
+			return empty.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: 1, ID: 7, Result: json.RawMessage(`1`)})
 		},
 		func() error {
-			return empty.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", ID: 8, Command: "x"})
+			_, err := empty.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", Generation: 1, ID: 8, Command: "x"})
+			return err
 		},
 		func() error {
-			return empty.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Event: "x", Data: json.RawMessage(`1`)})
+			_, err := empty.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Generation: 1, Event: "x", Data: json.RawMessage(`1`)})
+			return err
 		},
 	} {
 		if err := post(); err == nil || err.Error() != "plugin probe has no ready document" {
@@ -489,10 +515,16 @@ func TestPluginHostChannelPostsTheMessagesOfTheMainPage(t *testing.T) {
 	}
 	// A reply with neither a result nor an error, a request without a command, and an event without a name are refused.
 	for _, post := range []func() error{
-		func() error { return s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", ID: 7}) },
-		func() error { return s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", ID: 8}) },
 		func() error {
-			return s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Data: json.RawMessage(`1`)})
+			return s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: generation, ID: 7})
+		},
+		func() error {
+			_, err := s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", Generation: generation, ID: 8})
+			return err
+		},
+		func() error {
+			_, err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Data: json.RawMessage(`1`)})
+			return err
 		},
 	} {
 		if err := post(); err == nil {
@@ -505,8 +537,9 @@ func TestPluginHostChannelPostsTheMessagesOfTheMainPage(t *testing.T) {
 func TestPluginHostEventPostsDeclaredUIExpansion(t *testing.T) {
 	fake := &channelPlatform{}
 	s, _ := channelSurfaces(t, fake, true)
+	generation, _ := s.pluginHostChannels.generation("probe")
 	data := json.RawMessage(`{"status":"tree-status","tree":"example-tree","path":["root","child"],"expanded":true}`)
-	if err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Event: "declared-ui.expanded", Data: data}); err != nil {
+	if accepted, err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Generation: generation, Event: "declared-ui.expanded", Data: data}); err != nil || !accepted {
 		t.Fatalf("declared UI expansion post: %v", err)
 	}
 	want := []string{`{"data":{"status":"tree-status","tree":"example-tree","path":["root","child"],"expanded":true},"event":"declared-ui.expanded","sok":1}`}
@@ -515,12 +548,51 @@ func TestPluginHostEventPostsDeclaredUIExpansion(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.declared-ui.source-generation
+func TestPluginHostCommandsRejectAStaleGenerationAndAcceptTheCurrentOne(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, true)
+	oldGeneration, _ := s.pluginHostChannels.generation("probe")
+	currentGeneration, err := s.sourceOriginState().create("probe", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.pluginHostChannels.register("probe", nil, currentGeneration)
+	s.pluginHostChannels.setReadyDocument("probe", "doc-2")
+	ack := PluginHostEventRequest{Plugin: "probe", Generation: oldGeneration, Event: "declared-ui.snapshot.ack", Data: json.RawMessage(`{"plugin":"probe","status":"lines","seq":1}`)}
+	if accepted, err := s.pushPluginHostEvent(ack); err != nil || accepted {
+		t.Fatalf("stale snapshot ACK: accepted=%v err=%v, want a normal stale cancellation", accepted, err)
+	}
+	cancel, err := s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", Generation: oldGeneration, ID: 1, Command: "declared-ui.snapshot.request", Params: json.RawMessage(`{"status":"lines"}`)})
+	if err != nil || !reflect.DeepEqual(cancel, map[string]any{"cancelled": true, "sourceGeneration": oldGeneration}) {
+		t.Fatalf("stale pull disposition %v, err %v", cancel, err)
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("stale ACK or pull reached the replacement provider: %v", fake.posted)
+	}
+	ack.Generation = currentGeneration
+	if accepted, err := s.pushPluginHostEvent(ack); err != nil || !accepted {
+		t.Fatalf("current snapshot ACK: accepted=%v err=%v", accepted, err)
+	}
+	result, err := s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", Generation: currentGeneration, ID: 2, Command: "declared-ui.snapshot.request", Params: json.RawMessage(`{"status":"lines"}`)})
+	if err != nil || result != nil {
+		t.Fatalf("current pull result %v, err %v", result, err)
+	}
+	want := []string{
+		`{"data":{"plugin":"probe","status":"lines","seq":1},"event":"declared-ui.snapshot.ack","sok":1}`,
+		`{"command":"declared-ui.snapshot.request","id":2,"params":{"status":"lines"},"sok":1}`,
+	}
+	if !reflect.DeepEqual(fake.posted, want) {
+		t.Fatalf("current-generation posts %v, want %v", fake.posted, want)
+	}
+}
+
 // stateSurfaces returns the Surfaces of channelSurfaces whose host of plugin probe declares state, when declared is not
 // nil, and has the ready document "doc-1".
 func stateSurfaces(t *testing.T, fake uiFake, declared *hostState) *Surfaces {
 	t.Helper()
 	s, _ := channelSurfaces(t, fake, false)
-	s.pluginHostChannels.register("probe", declared)
+	registerPluginHostChannel(s, "probe", declared)
 	s.pluginHostChannels.setReadyDocument("probe", "doc-1")
 	return s
 }
@@ -595,7 +667,7 @@ func TestPluginHostStateRefusesWithoutDeclarationOverTheLimitAndAnotherFormat(t 
 	}
 	// A value saved with format 1 is refused to a host that declares format 2 after an update of the plugin.
 	stateCall(t, s, fake, 8, "state.write", `{"value": 5}`)
-	s.pluginHostChannels.register("probe", &hostState{format: 2, maxBytes: 8})
+	registerPluginHostChannel(s, "probe", &hostState{format: 2, maxBytes: 8})
 	s.pluginHostChannels.setReadyDocument("probe", "doc-1")
 	if got, want := stateCall(t, s, fake, 9, "state.read", "null"), refusal(9, "plugin probe state format 1 is not 2"); got != want {
 		t.Fatalf("read of another format posted %s, want %s", got, want)
@@ -732,7 +804,7 @@ func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
 func TestPluginHostReplyWithANullResultPostsTheNullResult(t *testing.T) {
 	fake := &channelPlatform{}
 	s, _ := channelSurfaces(t, fake, true)
-	req, err := argument[PluginHostReplyRequest]("request", json.RawMessage(`{"plugin":"probe","id":1,"result":null}`))
+	req, err := argument[PluginHostReplyRequest]("request", json.RawMessage(`{"plugin":"probe","generation":1,"id":1,"result":null}`))
 	if err != nil {
 		t.Fatalf("reply with a null result: %v", err)
 	}
@@ -741,6 +813,59 @@ func TestPluginHostReplyWithANullResultPostsTheNullResult(t *testing.T) {
 	}
 	if len(fake.posted) == 0 || !strings.Contains(fake.posted[len(fake.posted)-1], `"result":null`) {
 		t.Fatalf("posted %v, want the null result", fake.posted)
+	}
+}
+
+// contract: plugin-host.channel.reply-generation-scoped-cleanup
+func TestPluginHostReplyDoesNotCloseACallOfAReplacementGeneration(t *testing.T) {
+	platform := &replacePluginHostOnPost{channelPlatform: &channelPlatform{}}
+	s, _ := channelSurfaces(t, platform, true)
+	oldGeneration, _ := s.pluginHostChannels.generation("probe")
+	s.pluginHostChannels.trackCall("probe", 7, "old.command")
+	var replacement uint64
+	platform.afterPost = func() {
+		platform.afterPost = nil
+		if !s.sourceOriginState().retire("probe", false, oldGeneration) {
+			t.Fatal("the old source generation was not current before replacement")
+		}
+		var err error
+		replacement, err = s.sourceOriginState().create("probe", false)
+		if err != nil {
+			t.Fatalf("create replacement source: %v", err)
+		}
+		channel := s.pluginHostChannels.register("probe", nil, replacement)
+		channel.document = "doc-2"
+		channel.calls[7] = "replacement.command"
+		s.mu.Lock()
+		s.pluginHosts["probe"] = unsafe.Pointer(new(int))
+		s.mu.Unlock()
+	}
+	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: oldGeneration, ID: 7, Result: json.RawMessage(`null`)}); err != nil {
+		t.Fatalf("answer old call: %v", err)
+	}
+	if replacement == 0 {
+		t.Fatal("posting the old answer did not create the controlled replacement")
+	}
+	if calls := s.pluginHostChannels.openCalls("probe"); !reflect.DeepEqual(calls, []string{"replacement.command"}) {
+		t.Fatalf("open calls after the old reply: %v, want the replacement call", calls)
+	}
+}
+
+func TestPluginHostCommandsRefuseGenerationsAboveTheJavaScriptSafeIntegerLimit(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, true)
+	unsafeGeneration := maxSourceGeneration + 1
+	if err := s.answerPluginHostCall(PluginHostReplyRequest{Plugin: "probe", Generation: unsafeGeneration, ID: 1, Result: json.RawMessage(`null`)}); err == nil || !strings.Contains(err.Error(), "exceeds JavaScript safe integer maximum") {
+		t.Fatalf("reply with unsafe generation returned %v", err)
+	}
+	if _, err := s.pushPluginHostRequest(PluginHostRequestRequest{Plugin: "probe", Generation: unsafeGeneration, ID: 2, Command: "declared-ui.snapshot.request"}); err == nil || !strings.Contains(err.Error(), "exceeds JavaScript safe integer maximum") {
+		t.Fatalf("request with unsafe generation returned %v", err)
+	}
+	if _, err := s.pushPluginHostEvent(PluginHostEventRequest{Plugin: "probe", Generation: unsafeGeneration, Event: "declared-ui.snapshot.ack", Data: json.RawMessage(`{"plugin":"probe","status":"lines","seq":1}`)}); err == nil || !strings.Contains(err.Error(), "exceeds JavaScript safe integer maximum") {
+		t.Fatalf("event with unsafe generation returned %v", err)
+	}
+	if len(fake.posted) != 0 {
+		t.Fatalf("a command with an unsafe generation reached the provider: %v", fake.posted)
 	}
 }
 

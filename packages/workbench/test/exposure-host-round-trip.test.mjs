@@ -6,9 +6,14 @@ import test, { mock } from "node:test";
 
 const hostCalls = [];
 const listeners = new Map();
+const generation = 1;
 mock.module("@soksak/runtime", { namedExports: {
   host: {
-    call: (name, arg) => { hostCalls.push({ name, arg }); return Promise.resolve(null); },
+    call: (name, arg) => {
+      hostCalls.push({ name, arg });
+      if (name === "declaredSourceOrigins") return Promise.resolve({ floor: 0, pluginHosts: {}, views: {} });
+      return Promise.resolve(null);
+    },
     on: (name, listener) => {
       let set = listeners.get(name);
       if (!set) listeners.set(name, set = new Set());
@@ -19,7 +24,10 @@ mock.module("@soksak/runtime", { namedExports: {
   page: null,
   windows: {},
 } });
-const emit = (name, event) => { for (const listener of [...(listeners.get(name) ?? [])]) listener(event); };
+const emit = (name, event) => {
+  const sourceEvent = name.startsWith("plugin-host-") && event?.generation === undefined ? { ...event, generation } : event;
+  for (const listener of [...(listeners.get(name) ?? [])]) listener(sourceEvent);
+};
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 const { createRegistry } = await import("../exposure.js");
@@ -35,8 +43,8 @@ test("a dom request of a host-registered entry returns the result of the page's 
   const registry = createRegistry({ call: async () => null, report: (error) => reports.push(error) });
   registry.declare("probe", probeExposes);
   const pluginHost = listenPluginHostCalls({
-    register: (plugin, kind, name) => registry.hostRegistered({ plugin, kind, name }),
-    unregister: (plugin) => registry.hostUnregistered(plugin),
+    register: (plugin, kind, name, generation) => registry.hostRegistered({ plugin, kind, name, generation }),
+    unregister: (plugin, generation) => registry.hostUnregistered(plugin, generation),
     timeoutOf: () => undefined,
     report: (error) => reports.push(error),
     displayError: () => {},
@@ -54,9 +62,10 @@ test("a dom request of a host-registered entry returns the result of the page's 
     const answer = registry.handle({ method: "dom.rect", params: { name: "probe.lines" } });
     await tick();
     const event = hostCalls.slice(sent).find((call) => call.name === "pluginHostEvent");
-    assert.ok(event, "the dom request reached no host page as pluginHostEvent");
+    assert.ok(event, `the dom request reached no host page as pluginHostEvent: ${JSON.stringify({ hostCalls, reports })}`);
     assert.deepEqual(event.arg, {
       plugin: "probe",
+      generation,
       event: "exposure-request",
       data: { id: event.arg.data.id, method: "dom.rect", params: { name: "probe.lines" } },
     });
@@ -78,6 +87,7 @@ test("a dom request of a host-registered entry returns the result of the page's 
     });
     await tick();
     assert.equal(hostCalls.at(-1).name, "pluginHostReply");
+    assert.equal(hostCalls.at(-1).arg.generation, generation);
     assert.equal(hostCalls.at(-1).arg.error.message, `plugin host probe answered no open exposure request ${event.arg.data.id}`);
   } finally {
     emit("plugin-host-ended", { plugin: "probe" });

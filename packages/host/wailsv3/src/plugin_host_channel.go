@@ -21,8 +21,9 @@ import (
 // that the main page has not answered. document is empty while the page has sent no ready message, and state is nil when
 // the host declaration names no state.
 type pluginHostChannel struct {
-	plugin string
-	state  *hostState
+	plugin     string
+	state      *hostState
+	generation uint64
 	// document is the ready document of the page, and processReady records the first ready message since the host was
 	// created, which writes host.trace.plugin-host.process-ready once.
 	document     string
@@ -43,10 +44,10 @@ func newPluginHostChannels() *pluginHostChannels {
 }
 
 // register records the channel of plugin with its declared state. It runs when the host web view is created.
-func (c *pluginHostChannels) register(plugin string, state *hostState) *pluginHostChannel {
+func (c *pluginHostChannels) register(plugin string, state *hostState, generation uint64) *pluginHostChannel {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	channel := &pluginHostChannel{plugin: plugin, state: state, calls: map[uint64]string{}}
+	channel := &pluginHostChannel{plugin: plugin, state: state, generation: generation, calls: map[uint64]string{}}
 	c.byID[plugin] = channel
 	return channel
 }
@@ -63,6 +64,16 @@ func (c *pluginHostChannels) instance(plugin string) *pluginHostChannel {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.byID[plugin]
+}
+
+func (c *pluginHostChannels) generation(plugin string) (uint64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	channel, ok := c.byID[plugin]
+	if !ok {
+		return 0, false
+	}
+	return channel.generation, true
 }
 
 // unregister removes the channel of plugin. It runs when the host web view is disposed.
@@ -137,11 +148,11 @@ func (c *pluginHostChannels) trackCall(plugin string, id uint64, command string)
 	}
 }
 
-// answerCall records that the main page answered the call request id of the host of plugin, so the call is no longer open.
-func (c *pluginHostChannels) answerCall(plugin string, id uint64) {
+// answerCall records that the main page answered the call request id of generation of plugin, so that call is no longer open.
+func (c *pluginHostChannels) answerCall(plugin string, generation, id uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if channel, ok := c.byID[plugin]; ok {
+	if channel, ok := c.byID[plugin]; ok && channel.generation == generation {
 		delete(channel.calls, id)
 	}
 }
@@ -346,6 +357,7 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 		return err
 	}
 	if isReply {
+		reply["generation"] = channel.generation
 		s.windowEvent("plugin-host-reply", reply)
 		return nil
 	}
@@ -354,6 +366,7 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 		return err
 	}
 	if isCall {
+		call["generation"] = channel.generation
 		if id, ok := call["id"].(uint64); ok {
 			if command, ok := call["command"].(string); ok {
 				if pluginHostStateCall(command) {
@@ -382,6 +395,7 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 		return err
 	}
 	if isSnapshot {
+		snapshot["generation"] = channel.generation
 		// A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
 		// (docs/spec/plugin-host.md#declared-ui-snapshots). The host relays the snapshot and writes no event for it.
 		s.windowEvent(declaredSnapshotWindowEvent, snapshot)

@@ -22,7 +22,7 @@ fn traces(name: &str, surface: &str) -> Vec<Value> {
 #[test]
 fn an_unresponsive_and_a_responsive_notice_write_their_trace_and_return_their_window_event() {
     let surface = "responsive-probe-surface";
-    let unresponsive = view_responsiveness_notice(surface, "probe", false);
+    let unresponsive = view_responsiveness_notice(surface, "probe", 5, false);
     assert_eq!(
         unresponsive["surface"], surface,
         "the window event names the surface"
@@ -30,6 +30,10 @@ fn an_unresponsive_and_a_responsive_notice_write_their_trace_and_return_their_wi
     assert_eq!(
         unresponsive["plugin"], "probe",
         "the window event names the plugin"
+    );
+    assert_eq!(
+        unresponsive["generation"], 5,
+        "the window event preserves the captured view generation"
     );
     assert_eq!(
         unresponsive["responsive"], false,
@@ -41,7 +45,7 @@ fn an_unresponsive_and_a_responsive_notice_write_their_trace_and_return_their_wi
         "the unresponsive notice writes its trace once"
     );
 
-    let responsive = view_responsiveness_notice(surface, "probe", true);
+    let responsive = view_responsiveness_notice(surface, "probe", 5, true);
     assert_eq!(
         responsive["responsive"], true,
         "the responsive notice is responsive true"
@@ -50,6 +54,19 @@ fn an_unresponsive_and_a_responsive_notice_write_their_trace_and_return_their_wi
         traces("host.trace.view.responsive", surface),
         vec![json!({"plugin": "probe", "surface": surface})],
         "the responsive notice writes its trace once"
+    );
+}
+
+// contract: view.responsiveness.relay
+#[test]
+fn a_notice_from_a_retired_view_generation_is_not_current() {
+    let channels = ViewChannels::default();
+    let old_origin = channels.register_origin("responsive-probe-surface", "probe", 5);
+    channels.register("responsive-probe-surface", "probe", 6);
+
+    assert!(
+        !channels.is_current("responsive-probe-surface", &old_origin),
+        "a callback captured for a retired generation cannot update the replacement view"
     );
 }
 
@@ -65,7 +82,7 @@ fn creating_a_view_writes_the_request_and_its_first_ready_message_writes_the_rea
     );
 
     let channels = ViewChannels::default();
-    channels.register(surface, "probe");
+    channels.register(surface, "probe", 1);
     assert_eq!(
         channels.first_ready(surface),
         Some("probe".to_string()),

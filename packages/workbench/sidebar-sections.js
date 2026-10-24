@@ -9,6 +9,7 @@ import { createDeclaredSource } from "./declared-source.js";
 import { trace } from "./performance.js";
 import { hasIcon, icon } from "./icons.js";
 import { registry } from "./exposure.js";
+import { sourceOrigin } from "./source-origins.js";
 import { hasSection, section } from "./registry.js";
 
 /* Selected tab and collapsed sections for each sidebar id. */
@@ -105,12 +106,18 @@ function mountDeclared(entry, record) {
     // default: the context of a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
     // The plugin host that registered the status, under plugin:<plugin id>, is the source after the surfaces
     // (docs/spec/declared-ui.md#declared-status).
-    choose: () => chooseSource({
-// default: a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
-      active: record.context.surface ?? null,
-      registrants: registry.registrants("status", statusId),
-      host: registry.hostRegistrant("status", statusId),
-    }),
+    choose: () => {
+      const active = record.context.surface ?? null;
+      const host = registry.hostRegistrant("status", statusId);
+      return chooseSource({
+        // default: a sidebar without a linked surface has no active tab (docs/spec/plugins.md#sections).
+        active,
+        activeGeneration: active === null ? null : sourceOrigin(owner, active),
+        registrants: registry.registrants("status", statusId),
+        host: host?.id ?? null,
+        hostGeneration: host === null ? null : host.generation === sourceOrigin(owner, null) ? host.generation : null,
+      });
+    },
     channel: transport.channel,
     pull: transport.pull,
     changed: () => {

@@ -579,7 +579,7 @@ const NATIVE_VIEW_STATE: &str = r#"{"url":"soksak://probe/ui/page.html","title":
 #[test]
 fn view_channel_keeps_the_ready_document_through_the_progress_of_its_load() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     // The navigation starts before the page script runs, so its state arrives before the ready message.
     let start = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":true"#);
     assert_eq!(channels.state("probe-surface", &start), Ok(()));
@@ -601,7 +601,7 @@ fn view_channel_keeps_the_ready_document_through_the_progress_of_its_load() {
 #[test]
 fn view_channel_refuses_a_state_without_navigations_and_a_lower_count() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     let without = NATIVE_VIEW_STATE.replace(r#","navigations":1"#, "");
     assert_eq!(
         channels.state("probe-surface", &without),
@@ -622,7 +622,7 @@ fn view_channel_refuses_a_state_without_navigations_and_a_lower_count() {
 #[test]
 fn view_channel_clears_the_ready_document_when_a_new_navigation_starts() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     let start = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":true"#);
     assert_eq!(channels.state("probe-surface", &start), Ok(()));
     assert_eq!(
@@ -646,7 +646,7 @@ fn view_channel_clears_the_ready_document_when_a_new_navigation_starts() {
 #[test]
 fn view_channel_accepts_the_native_state_payload_with_a_boolean_loading() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(channels.state("probe-surface", NATIVE_VIEW_STATE), Ok(()));
 }
 
@@ -654,7 +654,7 @@ fn view_channel_accepts_the_native_state_payload_with_a_boolean_loading() {
 #[test]
 fn view_channel_refuses_a_numeric_loading_with_the_surface_and_the_type_error() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     let payload = NATIVE_VIEW_STATE.replace(r#""loading":false"#, r#""loading":1"#);
     let error = channels
         .state("probe-surface", &payload)
@@ -671,7 +671,7 @@ fn view_channel_refuses_a_numeric_loading_with_the_surface_and_the_type_error() 
 #[test]
 fn view_channel_refuses_a_post_before_ready_with_its_text() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.check_post("probe-surface"),
         Err("probe-surface has no ready document".to_string())
@@ -682,7 +682,7 @@ fn view_channel_refuses_a_post_before_ready_with_its_text() {
 #[test]
 fn view_channel_reports_queue_full_and_foreign_frame_with_their_reasons() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.message(
             "probe-surface",
@@ -850,7 +850,7 @@ fn view_stop_event_names_the_surface_plugin_and_reason() {
 #[test]
 fn view_channel_overflow_is_the_queue_full_reason_that_closes_the_view() {
     let channels = ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     let reason = channels
         .message(
             "probe-surface",
@@ -871,7 +871,7 @@ fn view_channel_overflow_is_the_queue_full_reason_that_closes_the_view() {
 #[test]
 fn view_call_request_is_forwarded_with_its_plugin_and_surface() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.call(
             "probe-surface",
@@ -897,7 +897,7 @@ fn view_call_request_is_forwarded_with_its_plugin_and_surface() {
 #[test]
 fn view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.call(
             "probe-surface",
@@ -936,7 +936,7 @@ fn view_call_request_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
 #[test]
 fn view_declared_snapshot_is_forwarded_with_its_surface_and_plugin() {
     let channels = ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.snapshot(
             "probe-surface",
@@ -979,7 +979,7 @@ fn view_declared_snapshot_is_forwarded_with_its_surface_and_plugin() {
 #[test]
 fn view_declared_snapshot_invalid_fields_are_errors_not_forwarded() {
     let channels = ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     for (message, want) in [
         (
             r#"{"event":"declared-ui.snapshot","status":"probe.lines","seq":1,"value":null,"skipped":0}"#,
@@ -1029,6 +1029,7 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
     use soksak_host_tauriv2::documents::{ViewReply, ViewReplyError, view_reply_message};
     let result = ViewReply {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 7,
         result: Some(json!({"count": 2})),
         error: None,
@@ -1039,6 +1040,7 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
     );
     let failed = ViewReply {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 8,
         result: None,
         error: Some(ViewReplyError {
@@ -1054,6 +1056,7 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
     );
     let empty = ViewReply {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 9,
         result: None,
         error: None,
@@ -1082,6 +1085,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
     use soksak_host_tauriv2::documents::{ViewRequest, view_request_message};
     let request = ViewRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 7,
         command: "probe.run".to_string(),
         params: Some(json!({"a": 1})),
@@ -1094,6 +1098,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
     );
     let no_params = ViewRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 7,
         command: "probe.run".to_string(),
         params: None,
@@ -1106,6 +1111,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
     );
     let no_id = ViewRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 0,
         command: "probe.run".to_string(),
         params: None,
@@ -1117,6 +1123,7 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
     );
     let unnamed = ViewRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         id: 8,
         command: String::new(),
         params: None,
@@ -1128,12 +1135,62 @@ fn view_request_message_is_the_host_message_with_its_id_command_and_params() {
     );
 }
 
+// contract: view.source-generation
+#[test]
+fn view_commands_reject_generations_above_the_javascript_safe_integer_limit() {
+    use soksak_host_tauriv2::documents::{
+        ViewEventRequest, ViewReply, ViewRequest, view_event_message, view_reply_message,
+        view_request_message,
+    };
+    let generation = 9_007_199_254_740_992;
+    let request = ViewRequest {
+        surface: "probe-surface".into(),
+        generation,
+        id: 7,
+        command: "probe.run".into(),
+        params: None,
+        cids: Vec::new(),
+    };
+    let reply = ViewReply {
+        surface: "probe-surface".into(),
+        generation,
+        id: 7,
+        result: Some(json!(null)),
+        error: None,
+    };
+    let event = ViewEventRequest {
+        surface: "probe-surface".into(),
+        generation,
+        event: "declared-ui.snapshot.ack".into(),
+        data: Some(json!({"status":"items","seq":1})),
+    };
+
+    assert_eq!(
+        view_request_message(&request),
+        Err("view request source generation exceeds the JavaScript safe integer limit".into())
+    );
+    assert_eq!(
+        view_reply_message(&reply),
+        Err("view reply source generation exceeds the JavaScript safe integer limit".into())
+    );
+    assert_eq!(
+        view_event_message(&event),
+        Err("view event source generation exceeds the JavaScript safe integer limit".into())
+    );
+
+    let at_limit = ViewRequest {
+        generation: 9_007_199_254_740_991,
+        ..request
+    };
+    assert!(view_request_message(&at_limit).is_ok());
+}
+
 // contract: view.command.request
 #[test]
 fn view_request_message_carries_the_cids_of_its_cause_and_refuses_invalid_ones() {
     use soksak_host_tauriv2::documents::{ViewRequest, view_request_message};
     let caused: ViewRequest = serde_json::from_str(
-        r#"{"surface":"probe-surface","id":7,"command":"probe.run","params":{"a":1},"cids":["p1700000000000.7"]}"#,
+        r#"{"surface":"probe-surface","generation":1,"id":7,"command":"probe.run","params":{"a":1},"cids":["p1700000000000.7"]}"#,
     )
     .expect("a request with cids parses");
     assert_eq!(
@@ -1144,7 +1201,7 @@ fn view_request_message_carries_the_cids_of_its_cause_and_refuses_invalid_ones()
         "a request carries the cids of its cause"
     );
     let uncaused: ViewRequest = serde_json::from_str(
-        r#"{"surface":"probe-surface","id":7,"command":"probe.run","params":{"a":1}}"#,
+        r#"{"surface":"probe-surface","generation":1,"id":7,"command":"probe.run","params":{"a":1}}"#,
     )
     .expect("a request without cids parses");
     assert_eq!(
@@ -1153,7 +1210,7 @@ fn view_request_message_carries_the_cids_of_its_cause_and_refuses_invalid_ones()
         "a request without a cause has no cids member"
     );
     let invalid: ViewRequest = serde_json::from_str(
-        r#"{"surface":"probe-surface","id":8,"command":"probe.run","params":{},"cids":["p1.7\"x"]}"#,
+        r#"{"surface":"probe-surface","generation":1,"id":8,"command":"probe.run","params":{},"cids":["p1.7\"x"]}"#,
     )
     .expect("a request with an invalid cid parses");
     assert_eq!(
@@ -1167,7 +1224,7 @@ fn view_request_message_carries_the_cids_of_its_cause_and_refuses_invalid_ones()
 #[test]
 fn view_reply_is_forwarded_as_a_view_reply_event_with_its_plugin_and_surface() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.reply(
             "probe-surface",
@@ -1218,6 +1275,7 @@ fn view_event_message_is_the_host_message_with_its_event_and_data() {
     use soksak_host_tauriv2::documents::{ViewEventRequest, view_event_message};
     let event = ViewEventRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         event: "probe.changed".to_string(),
         data: Some(json!({"count": 2})),
     };
@@ -1228,6 +1286,7 @@ fn view_event_message_is_the_host_message_with_its_event_and_data() {
     );
     let null_data = ViewEventRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         event: "probe.changed".to_string(),
         data: Some(Value::Null),
     };
@@ -1238,6 +1297,7 @@ fn view_event_message_is_the_host_message_with_its_event_and_data() {
     );
     let unnamed = ViewEventRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         event: String::new(),
         data: Some(json!(1)),
     };
@@ -1247,6 +1307,7 @@ fn view_event_message_is_the_host_message_with_its_event_and_data() {
     );
     let no_data = ViewEventRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         event: "probe.changed".to_string(),
         data: None,
     };
@@ -1262,7 +1323,7 @@ fn view_event_message_is_the_host_message_with_its_event_and_data() {
 #[test]
 fn view_status_watch_is_forwarded_and_a_status_value_is_posted() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.call(
             "probe-surface",
@@ -1280,6 +1341,7 @@ fn view_status_watch_is_forwarded_and_a_status_value_is_posted() {
     use soksak_host_tauriv2::documents::{ViewEventRequest, view_event_message};
     let value = ViewEventRequest {
         surface: "probe-surface".to_string(),
+        generation: 1,
         event: "status".to_string(),
         data: Some(json!({"name": "core.grid", "value": {"tabs": 2}})),
     };
@@ -1296,7 +1358,7 @@ fn view_status_watch_is_forwarded_and_a_status_value_is_posted() {
 #[test]
 fn view_call_cancel_is_forwarded_with_its_plugin_and_surface() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     assert_eq!(
         channels.call("probe-surface", r#"{"message":{"id":7,"cancel":true}}"#),
         Ok(Some(json!({
@@ -1313,7 +1375,7 @@ fn view_call_cancel_is_forwarded_with_its_plugin_and_surface() {
 #[test]
 fn view_call_invalid_requests_are_errors_not_forwarded() {
     let channels = soksak_host_tauriv2::documents::ViewChannels::default();
-    channels.register("probe-surface", "probe");
+    channels.register("probe-surface", "probe", 1);
     for message in [
         r#"{"message":{"id":"7","cancel":true}}"#,
         r#"{"message":{"id":7,"cancel":false}}"#,

@@ -152,7 +152,7 @@ func newLifecycleSurfaces(t *testing.T, clock *fakeClock) (*Surfaces, *lifecycle
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(clock.now), host: &Host{configDir: "/config"}, invoke: func(task func()) { task() }}
+	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(clock.now), host: &Host{configDir: "/config"}, invoke: func(task func()) { task() }, events: func(string, any) {}}
 	native := unsafe.Pointer(new(int))
 	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
@@ -381,6 +381,55 @@ func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
 	}
 }
 
+// contract: view.source-generation.restart-order
+func TestViewProcessEndNotifiesThePageBeforeRegisteringTheReplacement(t *testing.T) {
+	clock := &fakeClock{}
+	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s.views = map[string]*nativeWebview{"probe-surface": {}}
+	events := recordWindowEvents(s)
+	endView(t, s, fake)
+	ended, registered := -1, -1
+	var endedGeneration uint64
+	registrations := make([]struct {
+		index      int
+		generation uint64
+	}, 0, 2)
+	for i, event := range *events {
+		switch event.name {
+		case "view-process-ended":
+			ended = i
+			if payload, ok := event.data.(map[string]any); ok {
+				var valid bool
+				endedGeneration, valid = payload["generation"].(uint64)
+				if !valid {
+					t.Fatalf("view-process-ended payload %v has no generation", event.data)
+				}
+			} else {
+				t.Fatalf("view-process-ended payload %T, want object", event.data)
+			}
+		case "declared-ui-source-registered":
+			if payload, ok := event.data.(map[string]any); ok && payload["surface"] == "probe-surface" {
+				generation, valid := payload["generation"].(uint64)
+				if !valid {
+					t.Fatalf("source registration payload %v has no generation", event.data)
+				}
+				registrations = append(registrations, struct {
+					index      int
+					generation uint64
+				}{i, generation})
+			}
+		}
+	}
+	for _, event := range registrations {
+		if event.generation > endedGeneration {
+			registered = event.index
+		}
+	}
+	if ended < 0 || registered < 0 || ended >= registered {
+		t.Fatalf("events after view restart: %v, want view-process-ended before replacement source registration", *events)
+	}
+}
+
 // A process end sends the view-process-ended event to the surface, so the page forgets the regions that the host closed with
 // the view before the view is created again.
 // contract: view.process-ended.forgets-regions
@@ -397,8 +446,8 @@ func TestViewProcessEndSendsTheProcessEndedEvent(t *testing.T) {
 		}
 		ended++
 		payload, ok := event.data.(map[string]any)
-		if !ok || payload["surface"] != "probe-surface" {
-			t.Fatalf("view-process-ended payload %v, want surface probe-surface", event.data)
+		if !ok || payload["surface"] != "probe-surface" || payload["generation"] == nil {
+			t.Fatalf("view-process-ended payload %v, want the surface and generation", event.data)
 		}
 	}
 	if ended != 1 {

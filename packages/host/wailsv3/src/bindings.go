@@ -241,27 +241,27 @@ func (h *Host) ViewReply(ctx context.Context, reqJSON json.RawMessage) error {
 }
 
 // ViewRequest receives a command request that the main page sends to the view of the request (docs/spec/native-surfaces.md#view-surfaces).
-func (h *Host) ViewRequest(ctx context.Context, reqJSON json.RawMessage) error {
+func (h *Host) ViewRequest(ctx context.Context, reqJSON json.RawMessage) (any, error) {
 	req, err := argument[ViewRequestRequest]("request", reqJSON)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	s, err := h.surface(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return s.pushViewRequest(req)
 }
 
 // ViewEvent receives an event that the main page pushes to the view of the request (docs/spec/native-surfaces.md#view-surfaces).
-func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) error {
+func (h *Host) ViewEvent(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[ViewEventRequest]("request", reqJSON)
 	if err != nil {
-		return err
+		return false, err
 	}
 	s, err := h.surface(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	return s.pushViewEvent(req)
 }
@@ -281,16 +281,25 @@ func (h *Host) PluginHostReply(ctx context.Context, reqJSON json.RawMessage) err
 
 // PluginHostRequest receives a request of the main page to a plugin host, such as the pull of a declared status
 // (docs/spec/plugin-host.md#declared-ui-snapshots).
-func (h *Host) PluginHostRequest(ctx context.Context, reqJSON json.RawMessage) error {
+func (h *Host) PluginHostRequest(ctx context.Context, reqJSON json.RawMessage) (any, error) {
 	req, err := argument[PluginHostRequestRequest]("request", reqJSON)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	s, err := h.surface(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return s.pushPluginHostRequest(req)
+}
+
+// DeclaredSourceOrigins returns the current source generations and issued generation floor of the window.
+func (h *Host) DeclaredSourceOrigins(ctx context.Context) (sourceOriginSnapshot, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return sourceOriginSnapshot{}, err
+	}
+	return s.sourceOriginState().snapshot(), nil
 }
 
 // PluginHostSidecarSend receives a sidecar request of the host of a plugin from the main page (docs/plans/plugin-host-routes.md
@@ -325,14 +334,14 @@ func (h *Host) PluginHostSidecarClose(ctx context.Context, pluginJSON json.RawMe
 
 // PluginHostEvent receives an event that the main page pushes to a plugin host, such as the acknowledgement of a declared
 // UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
-func (h *Host) PluginHostEvent(ctx context.Context, reqJSON json.RawMessage) error {
+func (h *Host) PluginHostEvent(ctx context.Context, reqJSON json.RawMessage) (bool, error) {
 	req, err := argument[PluginHostEventRequest]("request", reqJSON)
 	if err != nil {
-		return err
+		return false, err
 	}
 	s, err := h.surface(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	return s.pushPluginHostEvent(req)
 }

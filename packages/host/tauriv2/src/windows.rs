@@ -1,11 +1,12 @@
 //! Project windows, the window registry, ready/close/exit, window state and window buttons.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
+use serde_json::{Value, value::RawValue};
+use tauri::ipc::Channel;
 use tauri::webview::Color;
 use tauri::{
     AppHandle, Emitter, EventTarget, LogicalSize, Manager, Webview, WebviewUrl,
@@ -53,6 +54,10 @@ pub(crate) struct WindowData {
     pub plugin_hosts: crate::plugin_host::PluginHosts,
     /// The channels of the plugin host pages of the window, by plugin id (docs/spec/plugin-host.md#channel).
     pub plugin_host_channels: crate::plugin_host_channel::PluginHostChannels,
+    /// The current declared-source incarnations and the greatest generation issued in this window.
+    pub declared_source_origins: DeclaredSourceOrigins,
+    /// The ordered source events of the current main-page document.
+    pub declared_source_events: DeclaredSourceEventStream,
     /// The surface composition that the main page declared and that the host uses to check the authority of region
     /// calls.
     pub compositions: Mutex<HashMap<String, SurfaceComposition>>,
@@ -66,6 +71,215 @@ pub(crate) struct WindowData {
     /// The complete composition revision applied last for each surface.
     pub composition_revisions: Mutex<HashMap<String, u64>>,
 }
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub(crate) struct DeclaredSourceEvent {
+    pub name: String,
+    pub value: Value,
+}
+
+#[derive(Default)]
+pub(crate) struct DeclaredSourceEventStream(Mutex<Option<Channel<DeclaredSourceEvent>>>);
+
+impl DeclaredSourceEventStream {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Channel<DeclaredSourceEvent>>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(crate) fn install(&self, channel: Channel<DeclaredSourceEvent>) {
+        self.lock().replace(channel);
+    }
+
+    pub(crate) fn retire(&self) {
+        self.lock().take();
+    }
+
+    pub(crate) fn send(&self, name: &str, value: Value) -> Result<(), String> {
+        if !is_declared_source_event(name) {
+            return Err(format!("{name} is not a declared source event"));
+        }
+        let channels = self.lock();
+        let channel = channels
+            .as_ref()
+            .ok_or_else(|| "declared source event channel is not registered".to_string())?;
+        channel
+            .send(DeclaredSourceEvent {
+                name: name.to_string(),
+                value,
+            })
+            .map_err(|error| format!("declared source event {name}: {error}"))
+    }
+}
+
+fn is_declared_source_event(name: &str) -> bool {
+    matches!(
+        name,
+        "declared-ui-source-registered"
+            | "declared-ui-source-ended"
+            | "declared-ui-snapshot"
+            | "plugin-host-call"
+            | "plugin-host-reply"
+            | "plugin-host-ended"
+            | "view-call"
+            | "view-reply"
+            | "view-process-ended"
+            | "view-stopped"
+            | "view-responsiveness"
+    )
+}
+
+pub(crate) fn emit_declared_source_event(
+    window: &Window,
+    name: &str,
+    value: Value,
+) -> Result<(), String> {
+    window_data(window)?
+        .declared_source_events
+        .send(name, value)
+}
+
+pub(crate) fn register_declared_source_event_stream(
+    webview: &Webview,
+    channel: Channel<DeclaredSourceEvent>,
+) -> Result<(), String> {
+    let window = webview.window();
+    crate::exposure::authorize_main_caller(
+        webview.label(),
+        window.label(),
+        "declared source event stream",
+    )?;
+    window_data(&window)?
+        .declared_source_events
+        .install(channel);
+    Ok(())
+}
+
+#[derive(Default)]
+pub(crate) struct DeclaredSourceOrigins(Mutex<DeclaredSourceOriginsState>);
+
+pub(crate) const MAX_DECLARED_SOURCE_GENERATION: u64 = 9_007_199_254_740_991;
+
+pub(crate) fn validate_declared_source_generation_limit(
+    generation: u64,
+    subject: &str,
+) -> Result<(), String> {
+    if generation > MAX_DECLARED_SOURCE_GENERATION {
+        return Err(format!(
+            "{subject} source generation exceeds the JavaScript safe integer limit"
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct DeclaredSourceOriginsState {
+    floor: u64,
+    plugin_hosts: BTreeMap<String, u64>,
+    views: BTreeMap<String, u64>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DeclaredSourceOriginsSnapshot {
+    floor: u64,
+    plugin_hosts: BTreeMap<String, u64>,
+    views: BTreeMap<String, u64>,
+}
+
+pub(crate) fn declared_source_origin_event(
+    plugin: &str,
+    surface: Option<&str>,
+    generation: u64,
+) -> serde_json::Value {
+    let mut payload = serde_json::json!({"plugin": plugin, "generation": generation});
+    if let Some(surface) = surface {
+        payload["surface"] = serde_json::json!(surface);
+    }
+    payload
+}
+
+impl DeclaredSourceOrigins {
+    fn lock(&self) -> std::sync::MutexGuard<'_, DeclaredSourceOriginsState> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub(crate) fn issue_plugin_host(&self, plugin: &str) -> Result<u64, String> {
+        let mut state = self.lock();
+        let generation = state
+            .floor
+            .checked_add(1)
+            .filter(|generation| *generation <= MAX_DECLARED_SOURCE_GENERATION)
+            .ok_or_else(|| {
+                "declared source generation exceeds the JavaScript safe integer limit".to_string()
+            })?;
+        state.floor = generation;
+        state.plugin_hosts.insert(plugin.to_string(), generation);
+        Ok(generation)
+    }
+
+    pub(crate) fn end_plugin_host(&self, plugin: &str, generation: u64) -> bool {
+        let mut state = self.lock();
+        if state.plugin_hosts.get(plugin) != Some(&generation) {
+            return false;
+        }
+        state.plugin_hosts.remove(plugin);
+        true
+    }
+
+    pub(crate) fn take_all_plugin_hosts(&self) -> Vec<(String, u64)> {
+        std::mem::take(&mut self.lock().plugin_hosts)
+            .into_iter()
+            .collect()
+    }
+
+    pub(crate) fn current_plugin_host(&self, plugin: &str) -> Option<u64> {
+        self.lock().plugin_hosts.get(plugin).copied()
+    }
+
+    pub(crate) fn issue_view(&self, surface: &str) -> Result<u64, String> {
+        let mut state = self.lock();
+        let generation = state
+            .floor
+            .checked_add(1)
+            .filter(|generation| *generation <= MAX_DECLARED_SOURCE_GENERATION)
+            .ok_or_else(|| {
+                "declared source generation exceeds the JavaScript safe integer limit".to_string()
+            })?;
+        state.floor = generation;
+        state.views.insert(surface.to_string(), generation);
+        Ok(generation)
+    }
+
+    pub(crate) fn end_view(&self, surface: &str, generation: u64) -> bool {
+        let mut state = self.lock();
+        if state.views.get(surface) != Some(&generation) {
+            return false;
+        }
+        state.views.remove(surface);
+        true
+    }
+
+    pub(crate) fn current_view(&self, surface: &str) -> Option<u64> {
+        self.lock().views.get(surface).copied()
+    }
+
+    pub(crate) fn snapshot(&self) -> DeclaredSourceOriginsSnapshot {
+        let state = self.lock();
+        DeclaredSourceOriginsSnapshot {
+            floor: state.floor,
+            plugin_hosts: state.plugin_hosts.clone(),
+            views: state.views.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/declared_source_origins/declared_source_origins_test.rs"]
+mod declared_source_origins_test;
+
+#[cfg(test)]
+#[path = "../tests/declared_source_stream/stream_test.rs"]
+mod declared_source_stream_test;
 
 /// A reload of the app DOM replaces all plugin documents but does not end the sessions.
 ///
@@ -124,6 +338,18 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         platform.set_surface_hidden_handle(handle, true)?;
         data.images.begin_generation(&surface);
         crate::exposure::surface_closed(&window, &surface);
+        let view_plugin = data.documents.views().plugin(&surface);
+        let view_generation = data.declared_source_origins.current_view(&surface);
+        if let (Some(plugin), Some(generation)) = (view_plugin, view_generation)
+            && data.declared_source_origins.end_view(&surface, generation)
+            && let Err(error) = emit_declared_source_event(
+                &window,
+                "declared-ui-source-ended",
+                declared_source_origin_event(&plugin, Some(&surface), generation),
+            )
+        {
+            log_error("view channel", error);
+        }
         for document in
             crate::documents::remove_surface_for_reload(&data.documents, &data.streams, &surface)
         {
@@ -684,6 +910,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
             let natives = context.clone();
+            let closing_host = host.clone();
             // The records of the window are removed below, before the main-thread step runs, so the step takes them now.
             let closing = window_data(&host);
             log_failure(
@@ -691,7 +918,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
                 platform.enqueue_ui(Box::new(move || {
                     log_failure("surface layout cancel", platform.cancel_layout(owner));
                     match closing {
-                        Ok(data) => dispose_plugin_hosts_of(&data),
+                        Ok(data) => dispose_plugin_hosts_of(&closing_host, &data, false),
                         Err(error) => log_error("plugin host", error),
                     }
                     // A logical surface holds the main webview, so if it is not closed, the main webview and its web
@@ -1077,17 +1304,21 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 /// modals of the previous page.
 pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
-    data.ready.store(false, Ordering::Relaxed);
-    crate::exposure::page_reloaded(window);
-    reload_surface_documents(window)?;
-    dispose_plugin_hosts(window);
-    // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
-    // rule 7).
-    crate::plugin_host_sidecar::close_window_plugin_sessions(
-        &window.state::<crate::sidecars::WindowSidecars>(),
-        window,
-    )?;
-    data.overlay.discard()
+    let cleanup = (|| {
+        data.ready.store(false, Ordering::Relaxed);
+        crate::exposure::page_reloaded(window);
+        reload_surface_documents(window)?;
+        dispose_plugin_hosts(window);
+        // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
+        // rule 7).
+        crate::plugin_host_sidecar::close_window_plugin_sessions(
+            &window.state::<crate::sidecars::WindowSidecars>(),
+            window,
+        )?;
+        data.overlay.discard()
+    })();
+    data.declared_source_events.retire();
+    cleanup
 }
 
 /// Creates the plugin host webview of every loaded plugin whose manifest declares host and that the window has none of.
@@ -1132,7 +1363,20 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
         let theme = theme.clone();
         let start_script = crate::plugin_host::host_start_script(project.as_ref(), &plugin.exposes);
         let host_window = window.clone();
-        let instance = data.plugin_host_channels.register(&plugin.id, plugin.state);
+        let generation = data.declared_source_origins.issue_plugin_host(&plugin.id)?;
+        let instance = data
+            .plugin_host_channels
+            .register(&plugin.id, plugin.state, generation);
+        if let Err(error) = emit_declared_source_event(
+            window,
+            "declared-ui-source-registered",
+            declared_source_origin_event(&plugin.id, None, generation),
+        ) {
+            data.plugin_host_channels.unregister(&plugin.id);
+            data.declared_source_origins
+                .end_plugin_host(&plugin.id, generation);
+            return Err(error);
+        }
         let view = crate::plugin_host::HostView {
             directory: &directory,
             folder: &folder,
@@ -1183,7 +1427,18 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
             |handle, address| platform.load_document(handle, address),
             |handle| platform.close_document(handle),
         );
-        let handle = created.inspect_err(|_| data.plugin_host_channels.unregister(&plugin.id))?;
+        let handle = created.inspect_err(|_| {
+            data.plugin_host_channels.unregister(&plugin.id);
+            data.declared_source_origins
+                .end_plugin_host(&plugin.id, generation);
+            if let Err(error) = emit_declared_source_event(
+                &host_window,
+                "declared-ui-source-ended",
+                declared_source_origin_event(&plugin.id, None, generation),
+            ) {
+                log_error("plugin host", error);
+            }
+        })?;
         data.plugin_hosts.insert(&plugin.id, handle);
         crate::event_record::emit_host(
             crate::event_log::Level::Debug,
@@ -1208,14 +1463,25 @@ pub(crate) fn dispose_plugin_hosts(window: &Window) {
         Ok(data) => data,
         Err(error) => return log_error("plugin host", error),
     };
-    dispose_plugin_hosts_of(&data);
+    dispose_plugin_hosts_of(window, &data, true);
 }
 
 /// Closes every plugin host webview of the window whose records are data.
-fn dispose_plugin_hosts_of(data: &WindowData) {
+fn dispose_plugin_hosts_of(window: &Window, data: &WindowData, notify_page: bool) {
     let handles = data.plugin_hosts.take_all();
     // The main page is replaced or ends with the window, so its registrations of the hosts end with it.
     data.plugin_host_channels.unregister_all();
+    for (plugin, generation) in data.declared_source_origins.take_all_plugin_hosts() {
+        if notify_page
+            && let Err(error) = emit_declared_source_event(
+                window,
+                "declared-ui-source-ended",
+                declared_source_origin_event(&plugin, None, generation),
+            )
+        {
+            log_error("plugin host", error);
+        }
+    }
     if handles.is_empty() {
         return;
     }

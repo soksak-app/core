@@ -177,8 +177,63 @@ function hostInvoke() {
 
 export const host = (() => {
   const invoke = hostInvoke();
-  const listen = createLifecycleListener((event, fn) => window.__TAURI__.event.listen(event, fn,
-    { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
+  const orderedWindowEvents = new Set([
+    "declared-ui-source-registered", "declared-ui-source-ended", "declared-ui-snapshot",
+    "plugin-host-call", "plugin-host-reply", "plugin-host-ended",
+    "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
+  ]);
+  const orderedSubscribers = new Map();
+  let orderedStreamReady = null;
+  const reportListenerError = (event, error) => {
+    const message = `native event ${event}: ${error?.message ?? error}`;
+    globalThis.dispatchEvent?.(new ErrorEvent("error", { message, error }));
+  };
+  const dispatchOrderedEvent = (message) => {
+    if (message === null || typeof message !== "object" || typeof message.name !== "string" || !Object.hasOwn(message, "value")) {
+      reportListenerError("ordered stream", new TypeError("ordered event requires name and value"));
+      return;
+    }
+    if (!orderedWindowEvents.has(message.name)) {
+      reportListenerError("ordered stream", new TypeError(`unknown event ${message.name}`));
+      return;
+    }
+    for (const listener of [...(orderedSubscribers.get(message.name) ?? [])]) {
+      try {
+        const result = listener(message.value);
+        if (result && typeof result.then === "function") result.catch((error) => reportListenerError(message.name, error));
+      } catch (error) {
+        reportListenerError(message.name, error);
+      }
+    }
+  };
+  const registerOrderedListener = (event, listener) => {
+    let subscribers = orderedSubscribers.get(event);
+    if (!subscribers) {
+      subscribers = new Set();
+      orderedSubscribers.set(event, subscribers);
+    }
+    subscribers.add(listener);
+    const ready = Promise.resolve().then(() => {
+      if (orderedStreamReady === null) {
+        const channel = new window.__TAURI__.core.Channel();
+        channel.onmessage = dispatchOrderedEvent;
+        orderedStreamReady = invoke("declared_source_event_stream", { onMessage: channel });
+      }
+      return orderedStreamReady;
+    });
+    return ready.then(() => () => {
+      subscribers.delete(listener);
+      if (subscribers.size === 0) orderedSubscribers.delete(event);
+    }, (error) => {
+      subscribers.delete(listener);
+      if (subscribers.size === 0) orderedSubscribers.delete(event);
+      throw error;
+    });
+  };
+  const listen = createLifecycleListener((event, fn) => orderedWindowEvents.has(event)
+    ? registerOrderedListener(event, fn)
+    : window.__TAURI__.event.listen(event, fn,
+      { target: { kind: "Webview", label: window.__TAURI__.webview.getCurrentWebview().label } }));
   // Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload).
   const mainCalls = settlingCalls((name, arg, options) => {
     const command = COMMAND[name];
@@ -192,7 +247,7 @@ export const host = (() => {
     // Reloads this page after every sent call has received a reply. Calls after that are not sent.
     reload: () => mainCalls.settle().then(() => location.reload()),
     // A Tauri event carries its value in the `payload` field.
-    on: (event, fn) => listen(event, (e) => fn(e.payload)),
+    on: (event, fn) => listen(event, orderedWindowEvents.has(event) ? fn : (e) => fn(e.payload)),
     // The title bar is transparent and the content extends under it, so this
     // document specifies the drag area.
     draggable(el) {

@@ -7,22 +7,30 @@ import { hideError } from "./shown-errors.js";
 /**
  * The chosen source of a declared status: the view of the active tab of the card when that view registered the status, otherwise the
  * plugin host when the plugin has one, otherwise null. A state module registration is not passed here, so it never serves.
- * The source is {id, surface}; the host has no surface.
+ * The source is {id, surface, generation}; the host has no surface.
  */
-export function chooseSource({ active = null, registrants, host = null }) {
-  if (active !== null && registrants.includes(active)) return { id: active, surface: active };
-  if (host !== null) return { id: host, surface: null };
+export function chooseSource({ active = null, activeGeneration = null, registrants, host = null, hostGeneration = null }) {
+  const requireGeneration = (generation, id) => {
+    if (!Number.isSafeInteger(generation) || generation < 1) {
+      throw new TypeError(`declared UI source ${id} has no current native generation`);
+    }
+    return generation;
+  };
+  if (active !== null && registrants.includes(active)) {
+    return { id: active, surface: active, generation: requireGeneration(activeGeneration, active) };
+  }
+  if (host !== null) return { id: host, surface: null, generation: requireGeneration(hostGeneration, host) };
   return null;
 }
 
-const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b.id);
+const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b.id && a.surface === b.surface && a.generation === b.generation);
 
 /**
  * Creates the state of the declared section of statusId (`<plugin>.<name>`) in body.
  *
  *     body          the section element that draws the accepted value
  *     options       the options of receive (declared, hasIcon, bind)
- *     choose()      the chosen source {id, surface}, or null (chooseSource)
+ *     choose()      the chosen source {id, surface, generation}, or null (chooseSource)
  *     channel(source) {onMessage} of the already acknowledged snapshot stream, or null when the source has no channel
  *     pull(source)  a promise of the pull reply {seq, value}
  *     skipped(count) receives the count of the values that a snapshot of the source overwrote while it was in transit
@@ -81,6 +89,11 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     pull(pulled).then((reply) => {
       // A reply with value null means that the source has no value yet (docs/spec/declared-ui.md): the section stays cleared.
       if (mine !== generation) return;
+      if (reply?.cancelled === true) {
+        pullState = { phase: "cancelled", seq: null, valueNull: null };
+        notify();
+        return;
+      }
       pullState = { phase: "resolved", seq: reply.seq, valueNull: reply.value === null };
       notify();
       if (reply.value === null) return;
@@ -132,12 +145,12 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
       const ready = link.onMessage((message) => {
         // The window ingress validates and acknowledges snapshots before routing them to sections. A source can have several
         // section recipients, so a section only accepts its own status and never acknowledges the shared push.
-        if (message.status !== status || mine !== generation || current === null || current.id !== next.id) return;
+        if (message.status !== status || mine !== generation || !sameSource(current, next)) return;
         if (message.skipped > 0) skipped?.(message.skipped);
         accept(message.seq, message.value, next);
       });
       Promise.resolve(ready).then((unsubscribe) => {
-        if (mine !== generation || current === null || current.id !== next.id) {
+        if (mine !== generation || !sameSource(current, next)) {
           unsubscribe();
           return;
         }
@@ -161,7 +174,7 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
   /** The state that core.sidebars reports (docs/spec/declared-ui.md, sidebar section form). */
   const state = () => ({
     mounted: accepted !== null, error: rejected,
-    source: current,
+    source: current === null ? null : { id: current.id, surface: current.surface, generation: current.generation },
     subscription, pull: { ...pullState }, acceptedSeq,
   });
   return { reconcile, close: leave, state };

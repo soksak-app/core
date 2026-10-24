@@ -21,6 +21,13 @@ mock.module("../declared-source.js", { namedExports: {
     pull: (source) => declaredWorld.pull(source, status),
     plugin, status,
   }),
+  startDeclaredSnapshotIngress: () => Promise.resolve(() => {}),
+} });
+mock.module("../source-origins.js", { namedExports: {
+  sourceOrigin: (_plugin, surface) => surface === null ? 3 : 1,
+  registerSourceOrigin: () => true,
+  endSourceOrigin: () => true,
+  seedSourceOrigins: () => {},
 } });
 // Records the lines that the one error display path writes (shown-errors.js reports through host.js).
 const logged = [];
@@ -213,7 +220,7 @@ test("a declared section selects and pulls a host that registers after the secti
     };
   };
   declaredWorld.pull = (source, status) => {
-    requested.push({ id: source.id, surface: source.surface, status });
+    requested.push({ id: source.id, surface: source.surface, generation: source.generation, status });
     const reply = source.surface === null ? value : { elements: [
       { kind: "list", key: "view-list", empty: "none", items: [{ key: "view-row", label: "view value" }] },
     ] };
@@ -230,9 +237,9 @@ test("a declared section selects and pulls a host that registers after the secti
     assert.equal(report().mounted, false, "the section drew a value before its host registered");
     assert.deepEqual(requested, [], "the section pulled before its host registered");
 
-    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
+    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines`, generation: 3 });
     await settle();
-    assert.deepEqual(requested, [{ id: `plugin:${plugin}`, surface: null, status: "lines" }],
+    assert.deepEqual(requested, [{ id: `plugin:${plugin}`, surface: null, generation: 3, status: "lines" }],
       "the section did not pull when its host registered as the source");
     assert.equal(report().mounted, true, "the host's accepted pull value was not mounted");
     assert.equal(report().text, "host value", "the host's accepted pull value was not drawn");
@@ -244,7 +251,7 @@ test("a declared section selects and pulls a host that registers after the secti
       value: { elements: [{ kind: "list", key: "host-list", empty: "none", items: [{ key: "host-row-2", label: "pushed value" }] }] }, skipped: 0 });
     assert.equal(report().text, "pushed value", "the host's subscribed snapshot did not replace the pulled value");
 
-    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
+    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines`, generation: 3 });
     await settle();
     assert.equal(requested.length, 1, "re-registering the chosen host pulled the same status again");
     assert.equal(channels.get(`plugin:${plugin}`), 1, "re-registering the chosen host subscribed a second listener");
@@ -253,7 +260,7 @@ test("a declared section selects and pulls a host that registers after the secti
     drawSet(container, "rail-late-host", { id: "set-late-host", title: "세트", layout: "list", sections: [`${plugin}.view`] },
       { card: "rail-late-host", surface: "view-late-host", orientation: "vertical" });
     await settle();
-    assert.deepEqual(requested.at(-1), { id: "view-late-host", surface: "view-late-host", status: "lines" },
+    assert.deepEqual(requested.at(-1), { id: "view-late-host", surface: "view-late-host", generation: 1, status: "lines" },
       "the active view did not replace the host as the chosen source");
     assert.equal(container.querySelector(".set__body").dataset.commandSource, "view-late-host",
       "the command source did not follow the selected view");
@@ -265,7 +272,7 @@ test("a declared section selects and pulls a host that registers after the secti
     await settle();
     assert.equal(requested.length, 2, "re-registering the chosen view pulled the same status again");
     assert.equal(channels.get("view-late-host"), 1, "re-registering the chosen view subscribed a second listener");
-    registry.hostUnregistered(plugin);
+    registry.hostUnregistered(plugin, 3);
     await settle();
     assert.equal(report().text, "view value", "removing a nonchosen host cleared the active view's value");
     assert.equal(requested.length, 2, "removing a nonchosen host pulled the active view again");
@@ -275,15 +282,15 @@ test("a declared section selects and pulls a host that registers after the secti
     assert.equal(report().mounted, false, "the section stayed mounted after its chosen source ended");
     assert.equal(report().text, "", "the section kept the value of its ended source");
     assert.equal(listeners.has("view-late-host"), false, "the ended view listener stayed subscribed");
-    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
+    registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines`, generation: 3 });
     await settle();
-    assert.deepEqual(requested.at(-1), { id: `plugin:${plugin}`, surface: null, status: "lines" },
+    assert.deepEqual(requested.at(-1), { id: `plugin:${plugin}`, surface: null, generation: 3, status: "lines" },
       "the replacement host source was not pulled after the view ended");
     assert.equal(channels.get(`plugin:${plugin}`), 2, "the replacement host did not start one fresh listener");
     assert.equal(report().text, "host value", "the replacement host's value was not drawn");
     assert.equal(container.querySelector(".set__body").dataset.commandSource, `plugin:${plugin}`,
       "the command source did not follow the replacement host");
-    registry.hostUnregistered(plugin);
+    registry.hostUnregistered(plugin, 3);
     await settle();
     assert.equal(container.querySelector(".set__body").dataset.commandSource, undefined,
       "the command source remained after its selected status source ended");
@@ -291,7 +298,7 @@ test("a declared section selects and pulls a host that registers after the secti
     clearSet(container);
     container.remove();
     registry.registered({ surface: "view-late-host", kind: "status", name: `${plugin}.lines`, closed: true });
-    registry.hostUnregistered(plugin);
+    registry.hostUnregistered(plugin, 3);
   }
 });
 
@@ -402,7 +409,7 @@ test("core.sidebars reports the selected source and pending snapshot stages", as
     await settle();
 
     const report = sidebarsState().find((item) => item.sidebar === "rail-diagnostic-state").sections[0];
-    assert.deepEqual(report.source, { id: "view-diagnostic-state", surface: "view-diagnostic-state" },
+    assert.deepEqual(report.source, { id: "view-diagnostic-state", surface: "view-diagnostic-state", generation: 1 },
       "core.sidebars does not report the selected declared-status source");
     assert.equal(report.subscription, "ready", "core.sidebars does not report the acknowledged snapshot subscription");
     assert.deepEqual(report.pull, { phase: "pending", seq: null, valueNull: null },

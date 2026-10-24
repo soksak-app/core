@@ -5,8 +5,8 @@ use crate::event_record::buffered_fields;
 #[test]
 fn a_retired_view_callback_is_cancelled_before_dispatch() {
     let channels = ViewChannels::default();
-    let retired = channels.register_origin("surface", "probe");
-    let _current = channels.register_origin("surface", "probe");
+    let retired = channels.register_origin("surface", "probe", 1);
+    let _current = channels.register_origin("surface", "probe", 2);
 
     let mut dispatches = 0;
     if accept_view_message(
@@ -39,7 +39,7 @@ fn a_retired_view_callback_is_cancelled_before_dispatch() {
 #[test]
 fn a_current_view_callback_enters_dispatch() {
     let channels = ViewChannels::default();
-    let current = channels.register_origin("surface", "probe");
+    let current = channels.register_origin("surface", "probe", 1);
 
     assert!(accept_view_message(
         &channels,
@@ -54,8 +54,8 @@ fn a_current_view_callback_enters_dispatch() {
 #[test]
 fn a_retired_view_error_keeps_its_producer_reason() {
     let channels = ViewChannels::default();
-    let retired = channels.register_origin("surface", "probe");
-    let _current = channels.register_origin("surface", "probe");
+    let retired = channels.register_origin("surface", "probe", 1);
+    let _current = channels.register_origin("surface", "probe", 2);
 
     let before = buffered_fields("host.record.error").len();
     assert!(
@@ -83,8 +83,8 @@ fn a_retired_view_error_keeps_its_producer_reason() {
 #[test]
 fn a_retired_queue_overflow_does_not_fail_the_current_view() {
     let channels = ViewChannels::default();
-    let retired = channels.register_origin("surface", "probe");
-    let current = channels.register_origin("surface", "probe");
+    let retired = channels.register_origin("surface", "probe", 1);
+    let current = channels.register_origin("surface", "probe", 2);
 
     assert!(!accept_view_message(
         &channels,
@@ -99,12 +99,50 @@ fn a_retired_queue_overflow_does_not_fail_the_current_view() {
     );
 }
 
+// contract: view.call.reply
+#[test]
+fn a_late_view_reply_cannot_remove_a_replacement_calls_record() {
+    let channels = ViewChannels::default();
+    channels.register("surface", "probe", 1);
+    channels
+        .call(
+            "surface",
+            r#"{"message":{"sok":1,"id":7,"command":"runtime.native.call","params":{}}}"#,
+        )
+        .expect("the old view call is accepted");
+    channels.register("surface", "probe", 2);
+    channels
+        .call(
+            "surface",
+            r#"{"message":{"sok":1,"id":7,"command":"runtime.native.call","params":{}}}"#,
+        )
+        .expect("the replacement view call is accepted");
+    assert_eq!(
+        channels
+            .lock()
+            .get("surface")
+            .expect("the replacement view remains registered")
+            .calls
+            .get(&7)
+            .map(String::as_str),
+        Some("runtime.native.call")
+    );
+
+    channels.answer_call("surface", 1, 7);
+
+    assert_eq!(
+        channels.end_calls("surface"),
+        [("probe".to_string(), "runtime.native.call".to_string())],
+        "a reply from the old view removed the replacement call"
+    );
+}
+
 // contract: view.origin.retired-malformed-message-is-reported
 #[test]
 fn a_retired_malformed_message_keeps_its_channel_error() {
     let channels = ViewChannels::default();
-    let retired = channels.register_origin("surface", "probe");
-    let _current = channels.register_origin("surface", "probe");
+    let retired = channels.register_origin("surface", "probe", 1);
+    let _current = channels.register_origin("surface", "probe", 2);
     let before = buffered_fields("host.record.error").len();
 
     assert!(!accept_view_message(
@@ -131,8 +169,8 @@ fn a_retired_malformed_message_keeps_its_channel_error() {
 #[test]
 fn a_retired_transport_error_keeps_its_channel_error() {
     let channels = ViewChannels::default();
-    let retired = channels.register_origin("surface", "probe");
-    let _current = channels.register_origin("surface", "probe");
+    let retired = channels.register_origin("surface", "probe", 1);
+    let _current = channels.register_origin("surface", "probe", 2);
     let before = buffered_fields("host.record.error").len();
 
     assert!(!accept_view_message(
@@ -165,8 +203,8 @@ fn a_retired_malformed_envelope_keeps_its_channel_error() {
         ),
     ] {
         let channels = ViewChannels::default();
-        let retired = channels.register_origin("surface", "probe");
-        let _current = channels.register_origin("surface", "probe");
+        let retired = channels.register_origin("surface", "probe", 1);
+        let _current = channels.register_origin("surface", "probe", 2);
         let before = buffered_fields("host.record.error").len();
 
         assert!(!accept_view_message(

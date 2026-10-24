@@ -33,11 +33,12 @@ func TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost(t *testing.T) {
 	s, fake, _ := newLifecycleSurfaces(t, clock)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	recordWindowEvents(s)
-	s.documents.setReadyDocument("probe-surface", "doc-1")
+	generation := viewGeneration(s, "probe-surface")
+	s.documents.setReadyDocument("probe-surface", generation, "doc-1")
 	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":8,"command":"probe.run","params":{}}}`); err != nil {
 		t.Fatalf("view call: %v", err)
 	}
-	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", ID: 8, Result: []byte(`null`)}); err != nil {
+	if err := s.replyView(ViewReplyRequest{Surface: "probe-surface", Generation: generation, ID: 8, Result: []byte(`null`)}); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	endView(t, s, fake)

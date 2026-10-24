@@ -18,6 +18,7 @@ func TestViewCreationAddsTheThemeScriptBeforeTheLoad(t *testing.T) {
 		documents: NewDocuments(),
 		lifecycle: newViewLifecycle(clock.now),
 		host:      &Host{configDir: "/config"},
+		events:    func(string, any) {},
 		theme:     Theme{Scheme: "dark", Tokens: map[string]string{"surface": "#101010"}},
 	}
 	native := unsafe.Pointer(new(int))

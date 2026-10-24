@@ -66,7 +66,7 @@ func TestEachEndWithoutPresentationAbandonsTheViewJoin(t *testing.T) {
 					t.Fatalf("hide the view: %v", err)
 				}
 			case "unresponsive":
-				s.viewResponsiveness("probe-surface", "probe", false)
+				s.viewResponsiveness("probe-surface", "probe", 1, false)
 			}
 			if fake.joins[0].abandons != 1 {
 				t.Fatalf("the %s end abandoned the native join %d times, want 1", reason, fake.joins[0].abandons)

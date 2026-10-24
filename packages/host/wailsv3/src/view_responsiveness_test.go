@@ -61,8 +61,8 @@ func TestViewResponsivenessNoticeIsRelayedWithoutEndingTheView(t *testing.T) {
 			t.Fatalf("event %d is %q, want view-responsiveness", i, (*events)[i].name)
 		}
 		payload, ok := (*events)[i].data.(map[string]any)
-		if !ok || payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["responsive"] != want {
-			t.Fatalf("event %d payload %v, want surface probe-surface, plugin probe and responsive %v", i, (*events)[i].data, want)
+		if !ok || payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["generation"] != uint64(1) || payload["responsive"] != want {
+			t.Fatalf("event %d payload %v, want surface probe-surface, plugin probe, generation 1 and responsive %v", i, (*events)[i].data, want)
 		}
 	}
 	if len(fake.closed) != 0 || len(fake.created) != 1 {
