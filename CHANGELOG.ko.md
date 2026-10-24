@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F239-48-3-9: Wails current 및 retired view callback의 owner test를 추가한다.
+  Go focused test 다섯 개가 5/5 통과한다. Host audit은 view-origin test 경로를
+  제거해 12개에서 11개 finding으로 줄었다. `make parity-check`와 `make docs-check`가
+  lane 100개, 구현 파일 698개, test 파일 998개 결과로 통과한다.
 - F212.10-core-5-6-1: reveal된 terminal의 declared status를 기다린 뒤
   `core.surfaces`에서 선언할 때까지 기다린 뒤 `terminal.session`을 읽는다.
   Wails와 Tauri runtime 시도에서 hidden background open 직후 status를

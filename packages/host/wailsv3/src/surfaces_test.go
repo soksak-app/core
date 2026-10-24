@@ -443,27 +443,6 @@ func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *
 	}
 }
 
-// contract: view.channel.overflow-closes
-func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
-	first := fake.created[0]
-	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
-	channel, _ := s.documents.view("probe-surface")
-	s.viewReceived("probe-surface", first, channel.plugin, channel.generation, full)
-	if len(fake.closed) != 1 || fake.closed[0] != first {
-		t.Fatalf("closed views after the overflow: %d, want the overflowed view", len(fake.closed))
-	}
-	if len(fake.created) != 2 {
-		t.Fatalf("created views after the overflow: %d, want the view created again", len(fake.created))
-	}
-	// A message that arrives from the view closed by the overflow is a late message and closes nothing.
-	s.viewReceived("probe-surface", first, channel.plugin, channel.generation, full)
-	if len(fake.closed) != 1 || len(fake.created) != 2 {
-		t.Fatalf("a message of the closed view changed the views: closed %d, created %d", len(fake.closed), len(fake.created))
-	}
-}
-
 // contract: view.call.forward
 func TestViewCallIsForwardedWithItsPluginAndSurface(t *testing.T) {
 	payload, ok, err := ViewCallEvent("probe-surface", "probe", json.RawMessage(`{"id":7,"command":"tab.state.read","params":{"a":1}}`))

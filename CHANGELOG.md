@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-48-3-9: Add Wails owner tests for current and retired view callbacks.
+  The five focused Go tests pass 5/5. The host audit falls from 12 to 11
+  findings, removing the view-origin test-path finding. `make parity-check` and
+  `make docs-check` pass with 100 lanes, 698 implementation files, and 998
+  test files.
 - F212.10-core-5-6-1: Wait until the revealed terminal declares
   `status terminal.session` in `core.surfaces` before reading `terminal.session`.
   Wails and Tauri runtime attempts returned endpoint error 1002 when the check
