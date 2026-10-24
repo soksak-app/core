@@ -11,6 +11,20 @@
   `window_facts_test`가 통과하고, `cargo fmt --check -p soksak-host-tauriv2`와
   `make docs-check`가 통과한다. 양 host endpoint의 runtime 검증은 대기 중이다.
 
+- F239-47-32: Image region에 marked-buffer-only input client를 둔다.
+  누적 `NSTextView` document가 unmarked committed text를 preedit으로 노출했다.
+  Region은 이제 local UTF-16 marked buffer, 검증된 replacement 및 substring
+  query, 순서 있는 commit 경계, terminal-history context가 없는 `NSView`
+  `NSTextInputClient`를 사용한다. 닫을 때 pending text를 한 번 commit하고,
+  responder를 분리하고, marked state를 버리고 diagnostic context override를
+  해제한다. Red는 retained-suffix 보고를 재현하며 pending commit을 끈 control은
+  close commit과 teardown assertion에 실패한다. Green: input-transaction과
+  Hangul 및 basic region 집중 owner가 3/3 통과한다. 일반 `NSTextView`
+  reference는 `NSNotFound`가 현재 marked composition을 대체함을 확인했고,
+  네 번의 vowel 입력 document는 각 key마다 reference와 일치한다. Korean OS
+  resyllabification과 과거 WebKit close-cycle은 F239-47-32 및 F239-47-33에서
+  계속 열려 있다. Activation acceptance는 아니다.
+
 - F239-47-31: Terminal status sample에 key 시작 offset을 유지한다.
   Screen notification 뒤 cursor notification이 오면 observer가 stage offset을
   다시 계산해 screen event를 제외할 수 있었다. Observer는 이제 모든 reread에서

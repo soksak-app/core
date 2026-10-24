@@ -13,6 +13,21 @@
   `make docs-check` pass. Both-host endpoint runtime verification remains
   pending.
 
+- F239-47-32: Give image regions a marked-buffer-only input client.
+  The accumulated `NSTextView` document exposed unmarked committed text as
+  preedit. The region now implements `NSTextInputClient` on `NSView` with a
+  local UTF-16 marked buffer, validated replacement and substring queries,
+  ordered commit boundaries, and no terminal-history context. Closing commits
+  pending text once, detaches the responder, discards marked state, and releases
+  the diagnostic context override. Red reproduces the retained-suffix report
+  and, with pending commit disabled, fails close-commit and teardown assertions.
+  An ordinary `NSTextView` reference confirms that `NSNotFound` replaces the
+  current marked composition, and the four-key vowel document matches the
+  reference at every key. Green: the focused input-transaction, Hangul, and
+  basic region owners pass 3/3. Korean OS resyllabification and the historical
+  WebKit close-cycle remain open under F239-47-32 and F239-47-33; this is not
+  activation acceptance.
+
 - F239-47-31: Keep the original key-start offset for terminal status samples.
   A cursor notification arriving after the screen notification could make the
   observer recalculate the stage offset and exclude that screen event. The
