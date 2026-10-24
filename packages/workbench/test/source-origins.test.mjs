@@ -50,7 +50,7 @@ test("a source end observer receives only an exact current retirement after the 
   assert.deepEqual(ended, [], "a stale end notified observers");
   assert.equal(endSourceOrigin("probe", "probe-view", 7), true);
   assert.deepEqual(ended, [{ plugin: "probe", surface: "probe-view", generation: 7, current: undefined }],
-    "the exact source end observer ran before the source was removed");
+    "the exact source end observer did not run after the source was removed");
   off();
   assert.equal(registerSourceOrigin("probe", "probe-view", 8), true);
   assert.equal(endSourceOrigin("probe", "probe-view", 8), true);
