@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F267.8: Link six completed capabilities to their owning implementation and
+  behavior tests: F239-47-12/-13/-14 and F268/-269/-270. Red: the unchanged
+  parity audit reported six missing capability links and no uncovered files.
+  Green: all six links resolve, and the audit reports no capability-link,
+  implementation-coverage or test-coverage issues across 422 links. The global
+  audit still reports the two inventory-count mismatches assigned to F267.5;
+  those counts were not changed. `make docs-check` passes.
+
 - F239-48-2: The generic tree fixture in `declared-ui-style.test.mjs` used
   `files` as its tree and `expandedByTree` key, but `scripts/workspace-registry.json` declares it as a plugin id
   and `make boundaries` rejected it as a plugin reference in a core test. Red:
