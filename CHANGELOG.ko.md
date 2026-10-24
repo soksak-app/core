@@ -11,6 +11,13 @@
   assertion하지 않아 F153과 F239-47-28은 미해결로 남는다. F267.5 소유
   inventory count 오류 두 건도 parity에 남는다. 제품 동작은 바뀌지 않았다.
 
+- F267.10: native input callback 상태와 replacement 거부를 검증한다. 소유
+  region test는 callback before/after record에 AppKit 상태와 일치하는 boolean
+  `active`, `keyWindow`가 있는지 확인하고, 잘못된 marked-text replacement가
+  buffer를 보존하고 오류 하나를 기록하며 action을 내보내지 않고 같은 scope의
+  후속 callback을 차단하는지 확인한다. 기존 동작을 검증하는 coverage이며
+  production source 변경은 없다.
+
 - F212.10-core-3-10: generation이 지정된 native view-reply post 결과를 기록한다.
   필수 `page`는 현재 main document를 식별한다. `posted`는 native post API가
   message를 수락했다는 뜻이고 `discarded`는 stale target이다. Workbench와 두

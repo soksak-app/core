@@ -256,6 +256,42 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"out-of-buffer insert replacement is rejected (transaction %@, records %@)", transaction, invalidReplacementRecords]);
 
     sp_region_close(region);
+    region = sp_region_create(surface, "input-transaction-invalid-mark-replacement", receiveRegionEvent, NULL);
+    check(region != NULL, @"the invalid marked-replacement region is created through the exported interface");
+    view = (NSView *)region;
+    client = (id<NSTextInputClient>)region;
+    context = [[[SPControlledInputContext alloc] initWithClient:client] autorelease];
+    sp_region_set_input_context(region, context);
+    [window makeFirstResponder:view];
+    [client setMarkedText:@"abc" selectedRange:NSMakeRange(2, 0) replacementRange:NSMakeRange(NSNotFound, 0)];
+    [reports removeAllObjects];
+    context.callback = ^(id<NSTextInputClient> inputClient) {
+        [inputClient setMarkedText:@"x" selectedRange:NSMakeRange(1, 0) replacementRange:NSMakeRange(3, 1)];
+        [inputClient insertText:@"later" replacementRange:NSMakeRange(NSNotFound, 0)];
+    };
+    NSArray<NSDictionary *> *invalidMarkRecords = capturedEvents(^{ [view keyDown:keyEvent(40, @"x", 0)]; });
+    transaction = reports.count == 1 ? reports[0] : nil;
+    check([transaction[@"errors"] count] == 1 && [transaction[@"actions"] count] == 0
+        && [transaction[@"preedit"][@"text"] isEqual:@"abc"]
+        && [transaction[@"preedit"][@"selectedRange"][@"location"] isEqual:@2],
+        [NSString stringWithFormat:@"invalid setMarkedText replacement preserves the buffer, selection, and empty action list (transaction %@)", transaction]);
+    BOOL rejectedMarkCallback = NO;
+    BOOL rejectedLaterInsertCallback = NO;
+    for (NSDictionary *record in invalidMarkRecords) {
+        NSDictionary *fields = record[@"fields"];
+        if (![record[@"name"] isEqual:@"native.input.callback"]) continue;
+        BOOL unchanged = [fields[@"before"][@"markedText"] isEqual:fields[@"after"][@"markedText"]]
+            && [fields[@"before"][@"marked"] isEqual:fields[@"after"][@"marked"]]
+            && [fields[@"before"][@"selected"] isEqual:fields[@"after"][@"selected"]];
+        if ([fields[@"call"] isEqual:@"setMarkedText"]
+            && [fields[@"dropped"] isEqual:@"unsupported replacement range"] && unchanged) rejectedMarkCallback = YES;
+        if ([fields[@"call"] isEqual:@"insertText"] && [fields[@"text"] isEqual:@"later"]
+            && [fields[@"dropped"] isEqual:@"input scope already failed"] && unchanged) rejectedLaterInsertCallback = YES;
+    }
+    check(rejectedMarkCallback && rejectedLaterInsertCallback,
+        [NSString stringWithFormat:@"invalid marked replacement and later callback are explicitly rejected without mutation (records %@)", invalidMarkRecords]);
+
+    sp_region_close(region);
     region = sp_region_create(surface, "input-transaction-failure-prefix", receiveRegionEvent, NULL);
     check(region != NULL, @"the callback-failure region is created through the exported interface");
     view = (NSView *)region;

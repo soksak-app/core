@@ -26,6 +26,12 @@ static int failures = 0;
 static NSUInteger countedSurfaceObserverRegistrations = 0;
 static IMP originalAddObserverImplementation = NULL;
 
+static BOOL jsonBooleanMatches(id value, BOOL expected) {
+    return [value isKindOfClass:NSNumber.class]
+        && CFGetTypeID((CFTypeRef)value) == CFBooleanGetTypeID()
+        && [value boolValue] == expected;
+}
+
 static void countSurfaceObserverRegistration(id self, SEL selector, id observer, SEL observerSelector,
     NSString *name, id object) {
     if ([name isEqual:NSViewFrameDidChangeNotification] && [observer isKindOfClass:NSClassFromString(@"SPImageRegion")]) {
@@ -493,6 +499,27 @@ int main(int argc, char **argv) { @autoreleasepool {
         check([substring.string isEqual:@"😀"] && NSEqualRanges(actualRange, NSMakeRange(1, 2)),
             [NSString stringWithFormat:@"TEST 8: substring queries return the requested UTF-16 range (got %@ at %@)",
                 substring.string, NSStringFromRange(actualRange)]);
+
+        BOOL activeBeforeCallback = NSApp.isActive;
+        BOOL keyWindowBeforeCallback = regionView.window.isKeyWindow;
+        NSArray<NSDictionary *> *stateRecords = capturedEvents(^{
+            [client setMarkedText:@"a😀c" selectedRange:NSMakeRange(3, 0)
+                replacementRange:NSMakeRange(NSNotFound, 0)];
+        });
+        NSDictionary *stateCallback = nil;
+        for (NSDictionary *event in stateRecords) {
+            if ([event[@"name"] isEqual:@"native.input.callback"]
+                && [event[@"fields"][@"call"] isEqual:@"setMarkedText"]) stateCallback = event[@"fields"];
+        }
+        NSDictionary *stateBefore = stateCallback[@"before"];
+        NSDictionary *stateAfter = stateCallback[@"after"];
+        check(stateCallback != nil
+            && jsonBooleanMatches(stateBefore[@"active"], activeBeforeCallback)
+            && jsonBooleanMatches(stateBefore[@"keyWindow"], keyWindowBeforeCallback)
+            && jsonBooleanMatches(stateAfter[@"active"], NSApp.isActive)
+            && jsonBooleanMatches(stateAfter[@"keyWindow"], regionView.window.isKeyWindow),
+            [NSString stringWithFormat:@"TEST 8: callback before/after state records AppKit active and key-window booleans (got %@)",
+                stateCallback]);
 
         NSUInteger beforePartialReplace = collectedEvents.count;
         [client setMarkedText:@"x" selectedRange:NSMakeRange(1, 0)
