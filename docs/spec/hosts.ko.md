@@ -154,7 +154,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | H1 | 없음 | `build.rs` | Rust는 macOS 대상에서 빌드 스크립트로 pkg-config(`soksak-darwin`)를 통해 `native/darwin`을 찾고, Go는 `#cgo pkg-config` 지시문을 사용한다 |
 | H3 | `src/bridge.js` | 없음 | Wails는 애플리케이션이 생성한 웹뷰에 호출 통로를 제공하지 않는다 |
 | H4 | `src/platform/darwin/webview.m` | 없음 | Wails에 자식 웹뷰 API가 없어 호스트가 Objective-C로 웹뷰를 생성하며, Tauri는 `add_child`를 사용한다 |
-| H5 | `src/diagnostics_test.go` | 없음 | 진단 전용 Go 단위 검사는 호스트 API를 넓히지 않고 비공개 capture payload helper를 검사하기 위해 구현 옆에 둔다. Rust 진단 범위는 호스트 통합 테스트에 있다 |
+| H5 | `src/diagnostics_test.go`, `src/diagnostics_clock_test.go` | 없음 | `diagnostics_test.go`는 비공개 capture payload helper를 검사한다. `diagnostics_clock_test.go`는 진단/release 두 build에서 compile되어야 하므로 비공개 진단 등록 build bit를 확인한다. 기존 `tests` package의 test가 존재하지 않는 `Surfaces.RegisterView`를 호출해 이 package는 compile되지 않는다. Rust 진단 범위는 호스트 통합 테스트에 있다 |
 | H6 | `src/menu.go`, `tests/menu_test.go` | 없음 | Wails 기본 애플리케이션 메뉴는 View 메뉴에서 메인 웹뷰 전체를 확대하고 다시 읽으므로 Wails 호스트가 애플리케이션 메뉴를 정한다. Tauri 호스트는 View 메뉴에 전체 화면만 있는 Tauri 기본 메뉴를 쓴다 |
 | H7 | 없음 | `tests/panic_hook_test.rs`, `tests/fatal_signal_test.rs` | Go runtime은 fatal signal의 보고를 표준 오류에 쓰며 표준 오류가 애플리케이션 로그다. fatal signal은 native 라이브러리의 handler가 있어야 오류 줄을 쓴다. Rust panic은 panic한 스레드에서 `application_log.rs`의 hook이 실행되므로 hook 시험이 hook이 writer를 기다리지 않는지 확인한다. goroutine의 panic은 `routine.Go`가 recover하며 hook이 없다 |
 | H8 | `tests/event_log_benchmark_test.go`, `tests/event_native_benchmark_test.go` | `benches/event_log_benchmark.rs`, `benches/event_native_benchmark.rs` | 측정은 Go에서 test 파일의 `Benchmark` 함수이고 Rust에서 `cargo bench`의 `harness = false` target이다. 둘 다 숫자를 출력하고 단언하지 않으며 `make benchmark-go`와 `make benchmark-rust`가 실행한다. |

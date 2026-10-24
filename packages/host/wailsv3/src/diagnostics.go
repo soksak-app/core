@@ -18,6 +18,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -42,6 +43,7 @@ func init() {
 	})
 	diagnosticPlugins = true
 	diagnosticMethods["diagnostics.fixture"] = diagnosticFixture
+	diagnosticMethods["diagnostics.clock"] = diagnosticClock
 	diagnosticMethods["diagnostics.drag"] = diagnosticDrag
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
@@ -76,6 +78,19 @@ func init() {
 	transcribe = func(e *Endpoint, window, line string) {
 		e.publish(topic{window, logTopic, ""}, "diagnostics.log", map[string]any{"window": window, "line": line})
 	}
+}
+
+func diagnosticClock(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	if _, err := e.window(params); err != nil {
+		return nil, err
+	}
+	nanos := monotonicNanos()
+	if nanos == 0 {
+		return nil, errors.New("monotonic clock returned zero")
+	}
+	return struct {
+		MonoNS string `json:"mono_ns"`
+	}{MonoNS: strconv.FormatUint(nanos, 10)}, nil
 }
 
 // logTopic is the topic name of a connection that receives diagnostics.log notifications. Status names are lowercase

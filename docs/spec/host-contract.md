@@ -116,6 +116,8 @@ Items:
 | `diagnostics.input-reference.declared` | Diagnostic endpoints declare the same-window input reference method. | both |
 | `diagnostics.input-reference.validates-document` | Input reference actions accept a document string only for wait, including an empty string, and reject missing or invalid values. | both |
 | `diagnostics.input-reference.rejects-nul` | Native input reference adapters reject NUL in actions or documents and complete once with an error. | both |
+| `endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal` | In a diagnostics build, a real endpoint JSON-RPC request to `diagnostics.clock` with `{window}` returns `{mono_ns}` as a positive canonical uint64 decimal string from the host event-record clock, and a second request on the same connection returns a value no smaller than the first. | both |
+| `endpoint.diagnostics-clock.absent-without-diagnostics` | Without the diagnostics build option, the endpoint does not declare `diagnostics.clock` and closes the connection for that request. | both |
 | `diagnostics.capture-stop.payload-reports-frame-limit` | The capture stop payload of a limited capture reports frames, count, limited true, and the longest gap. | both |
 | `diagnostics.capture-stop.payload-reports-callback-status` | The capture stop payload reports the path of the bounded callback status and exact display-time JSONL artifact inside the recording directory. | both |
 | `diagnostics.capture-stop.payload-reports-unbounded` | The capture stop payload of a capture below its limit reports limited false. | both |

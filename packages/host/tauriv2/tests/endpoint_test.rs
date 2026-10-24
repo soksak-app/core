@@ -407,6 +407,61 @@ fn undeclared_method_closes_connection() {
     endpoint.stop();
 }
 
+// contract: endpoint.diagnostics.clock, endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal
+#[cfg(feature = "diagnostics")]
+#[test]
+fn diagnostics_clock_returns_monotonic_nanoseconds() {
+    let config = folder::Folder::new();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "test-diagnostics-clock", fake.clone());
+    let mut connection = open(&endpoint);
+    let mut previous = 0;
+    for id in 1..=2 {
+        let reply = request(
+            &mut connection,
+            id,
+            "diagnostics.clock",
+            json!({"window": "w1"}),
+        );
+        assert_eq!(reply["jsonrpc"], "2.0");
+        assert_eq!(reply["id"], id);
+        assert_eq!(
+            reply["result"].as_object().map(serde_json::Map::len),
+            Some(1),
+            "diagnostics.clock must return only mono_ns"
+        );
+        let mono_ns = reply["result"]["mono_ns"]
+            .as_str()
+            .expect("diagnostics.clock must return mono_ns as a string");
+        let parsed = mono_ns
+            .parse::<u64>()
+            .expect("mono_ns must be a uint64 decimal string");
+        assert!(parsed > 0, "mono_ns must be positive");
+        assert_eq!(parsed.to_string(), mono_ns, "mono_ns must be canonical");
+        assert!(parsed >= previous, "mono_ns must not decrease");
+        previous = parsed;
+    }
+    assert!(fake.calls().is_empty());
+    endpoint.stop();
+}
+
+// contract: endpoint.diagnostics-clock.absent-without-diagnostics
+#[cfg(not(feature = "diagnostics"))]
+#[test]
+fn diagnostics_clock_is_not_declared_without_diagnostics() {
+    let config = folder::Folder::new();
+    let (fake, _) = Fake::new();
+    let endpoint = start(config.path(), "clock-release", fake.clone());
+    let mut connection = open(&endpoint);
+    send(
+        &mut connection,
+        json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.clock", "params": {"window": "w1"}}),
+    );
+    assert_eq!(receive(&mut connection), None);
+    assert!(fake.calls().is_empty());
+    endpoint.stop();
+}
+
 // contract: endpoint.diagnostics.methods-exist-only-in-diagnostic-builds
 #[test]
 fn diagnostic_methods_exist_only_in_diagnostic_builds() {
