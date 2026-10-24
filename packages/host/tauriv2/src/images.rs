@@ -964,6 +964,10 @@ fn create(
 #[path = "images_test.rs"]
 mod images_test;
 
+#[cfg(test)]
+#[path = "images_relay_test.rs"]
+mod images_relay_test;
+
 /// Runs run on the main thread for a created image region.
 fn with_image<T: Send + 'static>(
     webview: &Webview,

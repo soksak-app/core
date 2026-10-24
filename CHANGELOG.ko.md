@@ -12,6 +12,12 @@
   100개, 구현 파일 691개, test 파일 983개이며 미등록 파일과 feature-link
   finding은 없다.
 
+- F239-48-3-3: Rust compose relay payload test만 Wails relay test와 나란히
+  `images_relay_test.rs`로 옮기고 reload/detach lifecycle test는 `images_test.rs`에
+  둔다. 두 relay test가 각각 1/1 통과한다. Paired-host 감사 finding은 18개에서
+  17개로 줄고 다른 경로 finding은 열린 상태다. Test inventory가 새 Rust test
+  module을 가리키며 최종 count 감사는 대기 중이다. Relay 동작은 바꾸지 않았다.
+
 - F239-47-32: Native input transaction이 callback action과 최종 preedit을
   한 번의 표시 단위로 묶지만, 비동기 PTY output은 이후 event와 frame으로
   도착할 수 있음을 명확히 한다. 공개 macOS callback batching 구현을 비규범적

@@ -12,6 +12,13 @@
   audit allowance changed. The inventory records 100 lanes, 691 implementation
   files and 983 test files, with no uncovered files or feature-link findings.
 
+- F239-48-3-3: Move only the Rust compose relay payload test into
+  `images_relay_test.rs`, beside the Wails relay test; keep reload and detach
+  lifecycle tests in `images_test.rs`. Both relay tests pass 1/1. The paired
+  host audit drops from 18 findings to 17, leaving the other unmatched paths
+  open. The test inventory maps the new Rust test module; its final count audit
+  remains pending. No relay behavior changed.
+
 - F239-47-32: Clarify that native input transactions group callback actions
   and final preedit for a presentation, while asynchronous PTY output may
   arrive in later events and frames. Record public macOS callback-batching
