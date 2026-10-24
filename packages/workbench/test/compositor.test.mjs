@@ -150,6 +150,102 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
   dom.window.close();
 });
 
+test("a retained dormant view is validated with the host superset and projected off the compositor record", async (t) => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="visible-card">
+    <div data-native-surface data-native-surface-id="visible-view" data-native-plugin="placement-superset-probe" data-native-layer="0"></div>
+  </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  t.mock.module(new URL("../host.js", import.meta.url).href, {
+    namedExports: { native: true, surfaces: { kinds: ["placement-superset-probe"] } },
+  });
+  const card = document.querySelector("[data-card-id]");
+  const slot = document.querySelector("[data-native-surface]");
+  card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
+  slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "placement-superset-probe", surface: () => ({ module: null,
+    composition: { kind: "view", page: "ui/page.html" } }) });
+  const compositor = await import("../compositor.js?placement-superset-projection");
+  compositor.setSlotSurface(slot, { surfaceId: "visible-view", pluginId: "placement-superset-probe",
+    composition: { kind: "view", page: "ui/page.html" } });
+  const { placeCompositorRecord } = compositor;
+  const retainedLifecycle = { mountedSurface: () => ({ surfaceId: "tab-c2zkow", disposed: false }) };
+  const dormant = {
+    id: "tab-c2zkow", plugin: "placement-superset-probe", layer: 0, declared: { x: 0, y: 0, w: 0, h: 0 },
+    applied: { x: 0, y: 0, w: 0, h: 0 }, visible: false, dim: false,
+    surface: { composition: { kind: "view", page: "ui/page.html" } },
+  };
+  let record;
+  let visibleRecord;
+  let hostRequestIds;
+  compositor.onCommit((value) => {
+    record = value;
+    if (value.surfaces.length) visibleRecord = { ...value, surfaces: value.surfaces.map((surface) => ({ ...surface })) };
+    const hostRequest = [...value.surfaces, dormant];
+    return placeCompositorRecord(value, hostRequest, (request) => {
+      hostRequestIds = request.surfaces.map(({ id }) => id);
+      return Promise.resolve({
+        placements: request.surfaces.filter(({ id }) => id !== "tab-c2zkow")
+          .map(({ id, applied }) => ({ id, visible: true, ...applied })),
+        deferred: ["tab-c2zkow"],
+      });
+    }, ["placement-superset-probe"], retainedLifecycle);
+  });
+
+  const result = await compositor.publishAhead(
+    new Map([["visible-card", { x: 0, y: 0, w: 200, h: 150 }]]),
+    new Map([["visible-card", { id: "visible-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]),
+  );
+  assert.deepEqual(hostRequestIds, ["visible-view", "tab-c2zkow"], "the host request did not include the retained dormant tab");
+  assert.deepEqual(result, [{ id: "visible-view", visible: true, x: 2, y: 30, w: 196, h: 100 }]);
+  assert.deepEqual(record.surfaces.map(({ id }) => id), ["visible-view"], "the dormant tab entered the compositor record");
+
+  const fullRequest = [visibleRecord.surfaces[0], dormant];
+  const currentPlacement = { id: "visible-view", visible: true, ...visibleRecord.surfaces[0].applied };
+  let sentWithoutCurrent = false;
+  await assert.rejects(placeCompositorRecord(visibleRecord, [dormant], () => { sentWithoutCurrent = true; },
+    ["placement-superset-probe"], retainedLifecycle), /host placement request omits compositor surface visible-view/);
+  assert.equal(sentWithoutCurrent, false, "an incomplete host request was sent");
+  await assert.rejects(placeCompositorRecord(visibleRecord, [fullRequest[0], fullRequest[0]],
+    () => { sentWithoutCurrent = true; }, ["placement-superset-probe"], retainedLifecycle), /host placement request repeats an id/);
+  assert.equal(sentWithoutCurrent, false, "a host request with duplicate IDs was sent");
+  await assert.rejects(placeCompositorRecord(visibleRecord, fullRequest,
+    async () => ({ placements: [currentPlacement], deferred: [] }), ["placement-superset-probe"], retainedLifecycle),
+  /surface placement result is missing tab-c2zkow/);
+  await assert.rejects(placeCompositorRecord(visibleRecord, fullRequest,
+    async () => ({ placements: [currentPlacement], deferred: ["unrequested-view"] }), ["placement-superset-probe"], retainedLifecycle),
+  /surface placement cannot defer unrequested-view: id is not in the placement request/);
+  await assert.rejects(placeCompositorRecord(visibleRecord, fullRequest,
+    async () => ({ placements: [currentPlacement], deferred: ["tab-c2zkow", "tab-c2zkow"] }),
+  ["placement-superset-probe"], retainedLifecycle), /surface placement result repeats a deferred id/);
+  await assert.rejects(placeCompositorRecord(visibleRecord, fullRequest,
+    async () => ({ placements: [currentPlacement, { ...currentPlacement, id: "unexpected-view" }], deferred: ["tab-c2zkow"] }),
+  ["placement-superset-probe"], retainedLifecycle), /surface placement result contains unexpected id unexpected-view/);
+  await assert.rejects(placeCompositorRecord(visibleRecord, fullRequest,
+    async () => ({ placements: [currentPlacement, currentPlacement], deferred: ["tab-c2zkow"] }),
+  ["placement-superset-probe"], retainedLifecycle), /surface placement result repeats a placement id/);
+  await assert.rejects(placeCompositorRecord(visibleRecord, fullRequest,
+    async () => ({ placements: [currentPlacement], deferred: ["tab-c2zkow"] }), [], retainedLifecycle),
+  /surface placement cannot defer tab-c2zkow: plugin placement-superset-probe has no native surface/);
+  await assert.rejects(placeCompositorRecord(visibleRecord,
+    [fullRequest[0], { ...dormant, surface: { composition: { kind: "dom" } } }],
+    async () => ({ placements: [currentPlacement], deferred: ["tab-c2zkow"] }), ["placement-superset-probe"], retainedLifecycle),
+  /surface placement cannot defer tab-c2zkow: composition kind is dom/);
+  await assert.rejects(placeCompositorRecord({ ...visibleRecord, drawn: true }, fullRequest,
+    async () => ({ placements: [currentPlacement], deferred: ["tab-c2zkow"] }), ["placement-superset-probe"], retainedLifecycle),
+  /a drawn surface placement cannot defer a surface/);
+
+  slot.remove();
+  const emptyRecordResult = await compositor.publishAhead(new Map(), new Map());
+  assert.deepEqual(hostRequestIds, ["tab-c2zkow"], "the dormant-only host request changed its surface set");
+  assert.deepEqual(emptyRecordResult, [], "the dormant-only host response entered the empty compositor result");
+  assert.deepEqual(record.surfaces, [], "the dormant tab entered an empty compositor record");
+  dom.window.close();
+});
+
 test("placement results reject missing, extra, duplicate, and drawn-deferred surfaces", async (t) => {
   const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
     <div data-native-surface data-native-surface-id="contract-view" data-native-plugin="placement-contract" data-native-layer="0"></div>

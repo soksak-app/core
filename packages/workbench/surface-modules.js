@@ -85,9 +85,8 @@ export function authorizeSurface(id) {
   else authorization.set(id, { promise: Promise.resolve(), resolve() {} });
 }
 
-// Starts a native surface module only after the host has created the native handle.
-// This preparation callback is the production approval path. Without it, the native mount
-// waits indefinitely before reporting an error whose cause can be identified.
+// Authorizes the workbench context of a view to install its listeners and declare composition. The plugin page itself remains
+// host-created by syncSurfaces after that declaration. A prepared placement also authorizes its surface for later remounts.
 if (native) {
   onSurfacePrepared((placements) => {
     for (const placement of placements) authorizeSurface(placement.id);
@@ -603,11 +602,14 @@ export function mountSurface(slot, surface, options = {}) {
   return pending;
 }
 
-async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, registration, registered) {
+async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedTextSize } = {}, registration, registered) {
   // A view surface has no module: its page is loaded by the host into the view (docs/spec/plugins.md#view-surfaces).
   // A surface is a view: its page runs in its view, and the workbench mounts no module (docs/spec/plugins.md#surface-ownership).
   if (!slot) throw new TypeError("surface mount requires a slot");
   if (surface?.composition?.kind !== "view") throw new TypeError(`surface ${surface?.surfaceId} requires a view composition`);
+  if (retainedTextSize !== undefined && typeof retainedTextSize !== "function") {
+    throw new TypeError(`surface ${surface.surfaceId} retained text size requires a resolver`);
+  }
   // The start of the mount for the trace event surface.mount, which covers the wait for the earlier dispose too.
   const started = performance.now();
   // A tab that is restored while its unload still disposes it mounts a new surface after that dispose ends.
@@ -647,6 +649,17 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
     return entry.ready;
   }
   if (!entry) {
+    // A mounted view keeps its last scale after leaving the plane. A cold retained view seeds that value from its owning card
+    // once; the live plane scale takes over when the view enters it (docs/spec/text-size.md).
+    const initialTextSize = surfaceTextSize(surface.surfaceId);
+    let factor = initialTextSize;
+    if (factor === null && retainedTextSize !== undefined) {
+      const retained = retainedTextSize();
+      if (!Number.isFinite(retained) || retained <= 0) {
+        throw new TypeError(`surface ${surface.surfaceId} retained text size ${retained} is invalid`);
+      }
+      factor = retained;
+    }
     for (const other of mounted.values()) {
       if (other.slot === slot && other.surfaceId !== surface.surfaceId) {
         other.host.dataset.surfaceSuspended = "true";
@@ -682,9 +695,6 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
       eventListeners.get(type).add(listener);
       return () => eventListeners.get(type)?.delete(listener);
     };
-    // The mount starts when the tab is in the plane. When the tab leaves the plane, it keeps the last scale until it is released
-    // (docs/spec/text-size.md). Even if it leaves during the mount, the module reads the scale from the time the mount started.
-    let factor = surfaceTextSize(surface.surfaceId);
     // Diagnostic module. It is filled before the module is loaded.
     let diagnostics = null;
     const closing = new AbortController();
@@ -712,12 +722,10 @@ async function mountSurfaceNow(slot, surface, { onState = () => {} } = {}, regis
         theme: scoped.theme,
         // Actual text scale of this surface (docs/spec/text-size.md). It is read again at each notification and only a changed value is delivered.
         textSize: { read: () => {
-          // default: the scale of a tab that is not in the plane is null, so the last notified scale is kept.
           factor = surfaceTextSize(surface.surfaceId) ?? factor;
           if (factor === null) throw new Error(`surface ${surface.surfaceId} is not in the layout`);
           return factor;
         }, on: (listener) => {
-          // default: the scale of a tab that is not in the plane is null, so the last notified scale is kept.
           let last = surfaceTextSize(surface.surfaceId) ?? factor;
           return onTextSize(() => {
             const next = surfaceTextSize(surface.surfaceId);

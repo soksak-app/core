@@ -45,8 +45,10 @@ import {
 
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
    are done here. */
-import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
-import { authorizeSurface, disposeSurfacesExcept, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { latest, onCommit, onRun, placeCompositorRecord, publish, publishAhead } from "./compositor.js";
+import { authorizeSurface, disposeSurfacesExcept, mountedSurface, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { prepareRetainedSurface, releaseRetainedSurfaceSlots } from "./retained-surface-mounts.js";
+import { memoryPlacement } from "./memory-placement.js";
 import { afterDeclaredSnapshotIngress, prepareDeclaredSnapshotIngress } from "./declared-source.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
@@ -54,7 +56,7 @@ import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
-  currentGrid, onLayout, onRender, setGap, settle, settleModifiedTabsToClose, tabsOf,
+  activeTab, currentGrid, onLayout, onRender, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
 
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
@@ -163,25 +165,30 @@ const NOWHERE = { x: 0, y: 0, w: 0, h: 0 };
 function dormant(shown) {
   const seen = new Set(shown.map((s) => s.id));
   const out = [];
-  const add = (tab) => {
+  const add = (tab, card) => {
     // A tab of a plugin that is not loaded has no surface, only a placeholder (docs/spec/plugins.md).
     if (seen.has(tab.id) || !registry.hasPlugin(tab.plugin)) return;
     seen.add(tab.id);
+    const surface = surfaceForTab(tab);
     out.push({
       id: tab.id, plugin: tab.plugin, layer: 0,
       declared: NOWHERE, applied: NOWHERE, visible: false, dim: false,
-      surface: surfaceForTab(tab),
+      surface,
+      ...(surface.composition?.kind === "view" ? {
+        // A cold retained view starts outside the current plane. Preserve its stored card factor for its first text-size read.
+        retainedTextSize: () => value("textSize") * (card.data?.textSize ?? 1),
+      } : {}),
     });
   };
   // Tabs of the current plane. Those that are not the active tab are collected here.
-  for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t);
+  for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t, card);
   // Tabs of the other spaces. For the active space, the plane above is correct, not the stored layout.
   const here = projects.active();
   for (const p of projects.local()) {
     for (const space of p.spaces) {
       if (!projects.inLibrary() && p === here && space.id === here.activeSpaceId) continue;
       for (const card of space.layout.state.cards) {
-        for (const t of card.data?.tabs ?? []) add(t);
+        for (const t of card.data?.tabs ?? []) add(t, card);
       }
     }
   }
@@ -218,6 +225,12 @@ const memorySaver = createMemorySaver({
   stateChanged: reportTabState,
 });
 let memoryObserved = false;
+let resolveMemoryPlacementReady;
+let rejectMemoryPlacementReady;
+const memoryPlacementReady = new Promise((resolve, reject) => {
+  resolveMemoryPlacementReady = resolve;
+  rejectMemoryPlacementReady = reject;
+});
 onTabReports(() => memorySaver.protectionsChanged());
 onMemoryPressure((report) => memorySaver.pressure(report));
 // The end of the mount of a restoring tab ends its restore; a region that refuses its session history fails it.
@@ -239,28 +252,42 @@ function observeMemory(record, all) {
 
 onCommit((record) => {
   const candidates = [...record.surfaces, ...dormant(record.surfaces)];
-  observeMemory(record, candidates);
-  // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
-  // it is retained so that it is not released as a closed tab.
-  const { surfaces: all, retain: ids, unload } = memorySaver.place(candidates);
-  // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).
-  for (const card of currentGrid()?.cards ?? []) {
-    for (const tab of tabsOf(card)) if (!registry.hasPlugin(tab.plugin)) ids.add(tab.id);
-  }
-  // The surfaces that the place leaves out are released only after it succeeds; a failed place keeps them mounted.
-  // The start values of the views (docs/spec/native-surfaces.md#view-surfaces): the host injects them as window.sokSurface
-  // before the page of the view runs. origin is the origin of the tab, and project is the project that the window shows.
-  // A view whose origin the layout read refused starts no view. Its tab keeps its place in the layout and shows its text
-  // (docs/spec/projects.md#tab-origin), as a placeholder does.
-  const refusedViews = new Set(all.filter((entry) => entry.surface.composition?.kind === "view"
-    && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
-  for (const id of refusedViews) ids.add(id);
-  record.surfaces = record.surfaces.filter(({ id }) => !refusedViews.has(id));
-  const placed = surfacePlacementsForHost(all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)), projects.active());
-  return afterDeclaredSnapshotIngress(() => placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: placed })).then((answer) => {
-    for (const surface of record.surfaces) if (!refusedViews.has(surface.id)) authorizeSurface(surface.id);
+  return afterDeclaredSnapshotIngress(async () => {
+    const { surfaces: all, retain: ids, unload } = await memoryPlacement(record, candidates, {
+      ready: memoryPlacementReady,
+      saver: memorySaver,
+      observe: observeMemory,
+    });
+    // An unloaded tab stays in the layout: it is not declared to the host, its surface is released in the unload mode, and
+    // it is retained so that it is not released as a closed tab.
+    // A tab of a plugin that is not loaded is not a surface, but its placeholder must stay alive (docs/spec/plugins.md).
+    for (const card of currentGrid()?.cards ?? []) {
+      for (const tab of tabsOf(card)) if (!registry.hasPlugin(tab.plugin)) ids.add(tab.id);
+    }
+    // The surfaces that the place leaves out are released only after it succeeds; a failed place keeps them mounted.
+    // The start values of the views (docs/spec/native-surfaces.md#view-surfaces): the host injects them as window.sokSurface
+    // before the page of the view runs. origin is the origin of the tab, and project is the project that the window shows.
+    // A view whose origin the layout read refused starts no view. Its tab keeps its place in the layout and shows its text
+    // (docs/spec/projects.md#tab-origin), as a placeholder does.
+    const refusedViews = new Set(all.filter((entry) => entry.surface.composition?.kind === "view"
+      && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
+    for (const id of refusedViews) ids.add(id);
+    record.surfaces = record.surfaces.filter(({ id }) => !refusedViews.has(id));
+    const placed = surfacePlacementsForHost(all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)), projects.active());
+    const activeIds = new Set((currentGrid()?.cards ?? []).map((card) => activeTab(card)?.id).filter(Boolean));
+    const answer = await placeSurfaces(() => placeCompositorRecord(record, placed,
+      (request) => host.place(request), host.kinds, {
+        activeIds,
+        mountedSurface,
+        background: ({ plugin }) => Boolean(registry.plugin(plugin).background),
+        authorize: authorizeSurface,
+        prepare: prepareRetainedSurface,
+      }), { retain: ids, unload });
+    releaseRetainedSurfaceSlots(record, ids, unload);
+    const placedIds = new Set(answer.placements.map(({ id }) => id));
+    for (const surface of record.surfaces) if (placedIds.has(surface.id)) authorizeSurface(surface.id);
     return answer;
-  }), { retain: ids, unload }));
+  });
 });
 
 /* When the plane is redrawn, it is verified and the surfaces are reported. The plane does not know the two and the two only read the plane,
@@ -658,17 +685,31 @@ onMenuCommand((name) => {
 addEventListener("focusin", coreChanged);
 addEventListener("focusout", coreChanged);
 
-const storage = await openStore();
-await connectSettings(storage);
-// default: a plugin that is not loaded declares no surface.unload.
-await afterDeclaredSnapshotIngress(() => {});
-await projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
-memoryObserved = true;
-// The apply of a plugin change saves the projects, so the page follows plugin changes only after they are initialised.
-await followPlugins();
-// default: before the first commit there is no record, and the next commit gives the tabs.
-if (latest()) observeMemory(latest(), [...latest().surfaces, ...dormant(latest().surfaces)]);
-memorySaver.start();
+try {
+  const storage = await openStore();
+  await connectSettings(storage);
+  // default: a plugin that is not loaded declares no surface.unload.
+  await afterDeclaredSnapshotIngress(() => {});
+  const initialising = projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
+  // Tab state is available before initialise activates the requested project and waits for its first presentation.
+  // Classify startup tabs here so a drawn placement can wait without blocking the synchronous plane draw or project activation.
+  await Promise.race([
+    projects.tabStatesOpened().then((result) => {
+      if (!result.opened) throw result.error;
+    }),
+    initialising.then(() => { throw new Error("project initialization ended before tab state became ready"); }),
+  ]);
+  memoryObserved = true;
+  if (latest()) observeMemory(latest(), [...latest().surfaces, ...dormant(latest().surfaces)]);
+  memorySaver.start();
+  resolveMemoryPlacementReady();
+  await initialising;
+  // The apply of a plugin change saves the projects, so the page follows plugin changes only after they are initialised.
+  await followPlugins();
+} catch (error) {
+  rejectMemoryPlacementReady(error);
+  throw error;
+}
 drawBars();
 // After the application restarts or the page fails, closes the sidecar sessions of surfaces that are in no layout.
 retainSidecarSessions(projects.layoutSurfaces()).catch(showError);

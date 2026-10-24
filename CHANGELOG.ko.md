@@ -63,6 +63,35 @@
   remount-composition, compositor, native-paint, no-bridge 검사는 각각
   4/4, 1/1, 4/4, 8/8, 4/4 통과한다. Runtime 재검증은 남아 있고 host wire format은
   바뀌지 않았다.
+- F212.10-core-3-4: 전체 host placement 응답을 검증한 뒤 현재 compositor record에
+  해당하는 결과만 투영한다. Workbench는 현재 record와 보존할 dormant tab을 함께
+  보내므로 undrawn host 응답이 현재 record에 없는 ID를 deferred로 반환할 수 있다.
+  Red: 변경 전 compositor test는 전체 요청 형태에서 `surface placement cannot defer
+  tab-c2zkow`로 실패한다. Green: 같은 test가 전체 ID partition을 검증하고 현재 record
+  ID만 투영하며, dormant 전용 응답이 빈 record에 들어가지 않는지 확인한다. 현재 ID
+  누락, 중복 request, 응답 ID 누락·추가·중복, 요청하지 않은 deferral, 지원하지 않는
+  plugin, view가 아닌 composition, drawn deferral을 거부한다. Focused owning case는
+  49.3 ms에 1/1 통과한다. Host wire format은 바뀌지 않았다. ba6 실패는 undrawn record가
+  활성 tab보다 먼저 올 수 있음도 보였다. Retained request는 해당 tab의 drawn record 전까지
+  이를 제외한다. Mount된 dormant view는 요청에 남고, absent background view는 background
+  session이 소유하며, background 선언이 없는 loaded hidden view는 placement 전에 hidden
+  workbench slot에서 mount한다. Red: project tab state 초기화 전에 `memorySaver.place`가
+  실행되어 startup unload 대상 cold view를 host에 보냈다. Green: undrawn preparation은 cold
+  hidden view를 기다리지 않고 제외하며 drawn placement는 startup 분류를 기다린다. Memory saver가
+  켜진 경우 startup에서 unloaded가 된 tab을 제외하고, 꺼진 경우 loaded hidden view를 mount한다.
+  Readiness rejection은 대기 중인 모든 placement를 종료한다. Tab state open 실패는
+  기존 tried 신호를 resolve 상태로 유지하면서 drawn placement를 거부한다. Red: 기존
+  tried 신호 race에서는 open 실패 후 placement waiter 두 개가 진행됐다. Green: 새
+  open-result gate는 observe와 memory-saver placement 전에 둘 다 거부한다. 실제 host
+  barrier/startup test는 4/4, project readiness test는 2/2, focused compositor case는
+  1/1 통과한다. 추가 `surface-view.test.mjs` Red는 현재 plane 밖의 cold retained
+  view에 초기 scale이 없어 첫 `runtime.textSize.read`가 `surface
+  fixture-retained-text-size-tab is not in the layout`를 반환하는 문제를 재현한다.
+  Green은 retained tab의 owning card 배율에 현재 frame 배율을 곱한다. 실제 view-call은
+  배율 1.5와 1.25에서 1.875를 반환한다. Workbench 내부 resolver는 host placement
+  request 전에 제거한다. 이미 mount된 dormant view는 마지막 배율을 유지하고 cold retained
+  view는 저장된 owner card 값으로 시작한다. View start의 window project는 바꾸지 않는다.
+  Runtime acceptance는 남아 있다.
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen

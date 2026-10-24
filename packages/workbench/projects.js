@@ -32,6 +32,9 @@ let tabSessions = null;
 // tab state of a surface then throws that the store is not open.
 let triedTabStates;
 const tabStatesTried = new Promise((resolve) => { triedTabStates = resolve; });
+let openedTabStates;
+const tabStatesOpenResult = new Promise((resolve) => { openedTabStates = resolve; });
+let tabStatesOpenSettled = false;
 
 export const all = () => projects;
 /** The tab state store of the memory saver. */
@@ -40,6 +43,8 @@ export const tabStateStore = () => tabStates;
 export const tabSessionStore = () => tabSessions;
 /** Resolves once initialise has tried to open the tab state store. */
 export const tabStatesReady = () => tabStatesTried;
+/** Resolves with whether the tab state store opened; callers that place startup views must reject a failed open. */
+export const tabStatesOpened = () => tabStatesOpenResult;
 
 /** The tab ids of the layouts of all spaces of project. */
 function projectTabs(project) {
@@ -174,6 +179,16 @@ export async function initialise(storage, unloadOf) {
   documentRegions.useSessions((tab) => tabSessions.read(tab));
   try {
     tabStates = await openTabStates({ store, failed, unloadOf });
+    if (!tabStatesOpenSettled) {
+      tabStatesOpenSettled = true;
+      openedTabStates({ opened: true });
+    }
+  } catch (error) {
+    if (!tabStatesOpenSettled) {
+      tabStatesOpenSettled = true;
+      openedTabStates({ opened: false, error });
+    }
+    throw error;
   } finally {
     triedTabStates();
   }

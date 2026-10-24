@@ -28,6 +28,7 @@ The frame factor is the common setting `textSize`. A card factor is stored in th
 - The frame chrome (project bar and space bar) uses CSS `zoom` with the frame factor, so its rows grow with the text and the plane receives the remaining height.
 - The first row is `round(max(40px, 36px × frame factor))` high, and the window title bar takes the same height in the presented frame that draws the row, so the window buttons stay centred in the row ([window buttons](hosts.md#window-buttons)). A change of the frame factor is drawn by a prepared layout ([title bar height](native-surfaces.md#title-bar-height)).
 - A DOM card's content uses CSS `zoom` with the card's effective factor inside its slot; the slot rectangle, and therefore native placement, does not change.
+- A view first mounted as a retained tab outside the current plane starts with the current frame factor multiplied by its stored owning-card factor. A view already mounted outside the plane keeps its last scale; when it enters the current plane, the live card scale takes over.
 - A terminal card sets its font size to 13 points multiplied by the effective factor. The sidecar recomputes the cell size, columns, and rows from that size.
 - A browser document region sets its page zoom to the effective factor. The host keeps the factor when it places the region or the surface scale changes.
 
