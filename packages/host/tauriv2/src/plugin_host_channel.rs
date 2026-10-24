@@ -30,6 +30,22 @@ use crate::surfaces::SurfaceProject;
 use crate::view_lifecycle::is_queue_full;
 use crate::windows::{emit_window, window_data};
 
+/// Returns a plugin-host error reason with the channel identity exactly once.
+fn plugin_host_error_text(plugin: &str, reason: &str) -> String {
+    let prefix = format!("plugin {plugin}: ");
+    if reason.starts_with(&prefix) {
+        reason.to_string()
+    } else {
+        format!("{prefix}{reason}")
+    }
+}
+
+/// Recognizes a queue overflow after `plugin_host_error_text` adds the channel identity.
+pub(super) fn plugin_host_queue_full(plugin: &str, reason: &str) -> bool {
+    let prefix = format!("plugin {plugin}: ");
+    is_queue_full(reason.strip_prefix(&prefix).unwrap_or(reason))
+}
+
 /// The event name of a declared UI snapshot (docs/spec/plugin-host.md#declared-ui-snapshots).
 /// The code with which the host refuses a call that the channel does not serve: EXPOSURE_ERRORS.failed of plugin-api.
 const REFUSAL_CODE: i64 = -32000;
@@ -265,7 +281,7 @@ impl PluginHostChannels {
                 .and_then(Value::as_str)
                 .filter(|reason| !reason.is_empty())
             {
-                Some(reason) => Err(reason.to_string()),
+                Some(reason) => Err(plugin_host_error_text(plugin, reason)),
                 None => Err(format!("plugin {plugin}: view.error has no reason")),
             },
             other => Err(format!("plugin {plugin}: event {other:?} is unknown")),
@@ -838,7 +854,7 @@ pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str
             post_theme(window, plugin)
         }
         Err(error) => {
-            let overflow = is_queue_full(&error);
+            let overflow = plugin_host_queue_full(plugin, &error);
             log_error("plugin host channel", error);
             if overflow {
                 // The page has lost messages, so its host webview is closed and restarted within the restart limit

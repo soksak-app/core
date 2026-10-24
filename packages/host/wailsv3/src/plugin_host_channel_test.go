@@ -386,6 +386,30 @@ func TestPluginHostChannelQueueFullClosesTheHost(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.channel.view-error-names-plugin
+func TestPluginHostViewErrorNamesItsPluginOnce(t *testing.T) {
+	for _, test := range []struct {
+		name, reason, want string
+	}{
+		{"generic script error", "uncaught error: Script error.", "plugin probe: uncaught error: Script error."},
+		{"matching prefix", "plugin probe: existing detail", "plugin probe: existing detail"},
+		{"different plugin prefix", "plugin other: existing detail", "plugin probe: plugin other: existing detail"},
+		{"queue overflow", "queue full for probe", "plugin probe: queue full for probe"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s, _ := channelSurfaces(t, &channelPlatform{}, true)
+			message, err := json.Marshal(map[string]any{"event": "view.error", "reason": test.reason})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := s.pluginHostMessage("probe", hostMessage(string(message)))
+			if got == nil || got.Error() != test.want {
+				t.Fatalf("view.error: %v, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 // contract: plugin-host.channel.ended
 func TestPluginHostChannelEndTellsTheMainPage(t *testing.T) {
 	fake := &closingPlatform{}

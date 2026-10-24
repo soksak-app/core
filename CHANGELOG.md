@@ -2373,3 +2373,9 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   Red: the Wails host test package did not
   compile because the test supplied a removed fourth argument. Green: the
   focused owning test passes 1/1 and retains its refusal assertion.
+- F239-40: Attribute plugin-host `view.error` records to their channel.
+  Red: Go and Rust owning tests lost the plugin id for a generic script error.
+  Green: both hosts prefix the actual plugin once, preserve an existing matching
+  prefix, and keep queue-overflow handling. Focused Go tests pass 3/3; Rust
+  queue, attribution, and empty-reason tests each pass 1/1. Event and docs checks
+  pass. The original JavaScript error remains unknown.

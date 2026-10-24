@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -154,6 +155,15 @@ func (c *pluginHostChannels) openCalls(plugin string) []string {
 // plugin host on it and restarts it within the restart limit (docs/spec/plugin-host.md#restarts).
 type pluginHostOverflow struct {
 	reason string
+}
+
+// pluginHostErrorText keeps the identity of the channel that reported an error without repeating its exact prefix.
+func pluginHostErrorText(plugin, reason string) string {
+	prefix := fmt.Sprintf("plugin %s: ", plugin)
+	if strings.HasPrefix(reason, prefix) {
+		return reason
+	}
+	return prefix + reason
 }
 
 func (e pluginHostOverflow) Error() string { return e.reason }
@@ -386,9 +396,9 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 			return fmt.Errorf("plugin %s: view.error has no reason", plugin)
 		}
 		if len(event.Reason) >= len(viewQueueFullPrefix) && event.Reason[:len(viewQueueFullPrefix)] == viewQueueFullPrefix {
-			return pluginHostOverflow{reason: event.Reason}
+			return pluginHostOverflow{reason: pluginHostErrorText(plugin, event.Reason)}
 		}
-		return errors.New(event.Reason)
+		return errors.New(pluginHostErrorText(plugin, event.Reason))
 	}
 	return fmt.Errorf("plugin %s: event %q is unknown", plugin, event.Event)
 }

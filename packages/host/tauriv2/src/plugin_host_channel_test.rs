@@ -6,9 +6,9 @@ use crate::documents::ViewReplyError;
 use crate::plugin_host::{HostState, PluginHostStates, PluginHosts};
 use crate::plugin_host_channel::{
     PluginHostChannels, PluginHostEvent, PluginHostReply, PluginHostRequest, Received, end_host,
-    ended_event, event_message, host_end_report, late_state_error, reply_message, request_message,
+    ended_event, event_message, host_end_report, late_state_error, plugin_host_queue_full,
+    reply_message, request_message,
 };
-use crate::view_lifecycle::is_queue_full;
 
 /// Returns the channels of a window with the host of plugin probe and, when ready is set, the ready document doc-1.
 fn host_channels(ready: bool) -> PluginHostChannels {
@@ -374,7 +374,7 @@ fn a_queue_overflow_of_the_page_closes_the_host() {
         )
         .expect_err("the overflow is a failure");
     assert!(
-        is_queue_full(&overflow),
+        plugin_host_queue_full("probe", &overflow),
         "the overflow {overflow:?} does not close the host"
     );
     assert_eq!(end_host(&hosts, &channels, "probe", Some(11)), Some(11));
@@ -395,7 +395,39 @@ fn a_queue_overflow_of_the_page_closes_the_host() {
             &host_message(r#"{"event": "view.error", "reason": "message without the sok marker"}"#),
         )
         .expect_err("the view.error is a failure");
-    assert!(!is_queue_full(&other));
+    assert!(!plugin_host_queue_full("probe", &other));
+}
+
+// contract: plugin-host.channel.view-error-names-plugin
+#[test]
+fn a_view_error_names_its_plugin_once() {
+    for (reason, expected) in [
+        (
+            "uncaught error: Script error.",
+            "plugin probe: uncaught error: Script error.",
+        ),
+        (
+            "plugin probe: existing detail",
+            "plugin probe: existing detail",
+        ),
+        (
+            "plugin other: existing detail",
+            "plugin probe: plugin other: existing detail",
+        ),
+        ("queue full for probe", "plugin probe: queue full for probe"),
+    ] {
+        let channels = host_channels(true);
+        let error = channels
+            .receive(
+                "probe",
+                &host_message(&format!(
+                    r#"{{"event": "view.error", "reason": {}}}"#,
+                    serde_json::to_string(reason).expect("the reason is JSON")
+                )),
+            )
+            .expect_err("the view.error is a failure");
+        assert_eq!(error, expected);
+    }
 }
 
 // contract: plugin-host.channel.ended

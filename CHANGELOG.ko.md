@@ -2374,3 +2374,9 @@
   사용하도록 한다. Red: 시험이 삭제된 네 번째 인자를 전달해 Wails host
   test package가 compile되지 않았다. Green: refusal assertion을 유지한 소유
   시험이 1/1 통과한다.
+- F239-40: plugin host `view.error` 기록에 channel의 plugin을 표시한다.
+  Red: 일반 script 오류에서 Go와 Rust 소유 시험이 plugin id를 잃었다.
+  Green: 양쪽 host가 실제 plugin을 한 번 prefix로 붙이고 기존 일치 prefix와
+  queue-overflow 처리를 유지한다. 집중 Go 시험 3/3, Rust queue·attribution·
+  empty-reason 시험은 각각 1/1 통과한다. Event와 docs 검사도 통과한다.
+  원본 JavaScript 오류는 아직 확인되지 않았다.

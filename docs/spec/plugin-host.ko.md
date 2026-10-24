@@ -50,7 +50,7 @@ host 페이지는 surface context를 가지지 않는다. plugin의 동기 값(`
 
 ## Channel
 
-plugin host channel은 위의 web view 구성에 대한 [view channel](native-surfaces.ko.md#view-표면)이다. 같은 document-start script, 같은 `sok-view` handler, ready document를 만드는 문서 식별자를 담은 같은 ready message, 최대 256개의 message를 담는 같은 queue, host message의 같은 `sok: 1` 표지, `window.postMessage(message, location.origin)`를 통한 같은 전달, 표지 없는 message에 대한 같은 거부가 재사용된다. queue가 가득 찬 상태에서 도착한 message는 담기지 않는다. script는 `view.error` message로 `sok-view`를 통해 이유 `queue full for <plugin>`을 보고하고, host는 `error: plugin host channel: queue full for <plugin>`을 application log에 쓰며, host는 그 plugin host를 닫고 restart limit 안에서 다시 만든다. host message가 기록 없이 버려지는 일은 없다.
+plugin host channel은 위의 web view 구성에 대한 [view channel](native-surfaces.ko.md#view-표면)이다. 같은 document-start script, 같은 `sok-view` handler, ready document를 만드는 문서 식별자를 담은 같은 ready message, 최대 256개의 message를 담는 같은 queue, host message의 같은 `sok: 1` 표지, `window.postMessage(message, location.origin)`를 통한 같은 전달, 표지 없는 message에 대한 같은 거부가 재사용된다. queue가 가득 찬 상태에서 도착한 message는 담기지 않는다. script는 `view.error` message로 `sok-view`를 통해 이유 `queue full for <plugin>`을 보고하고, host는 `error: plugin host channel: plugin <plugin>: queue full for <plugin>`을 application log에 쓰며, host는 그 plugin host를 닫고 restart limit 안에서 다시 만든다. 다른 nonempty reason의 `view.error`는 `error: plugin host channel: plugin <plugin>: <reason>`으로 한 번 기록한다. reason이 이미 정확히 `plugin <plugin>: ` prefix로 시작하면 host는 prefix를 더하지 않고 한 번 기록한다. reason이 다른 plugin prefix로 시작하면 실제 channel plugin prefix를 더하고 reason은 그대로 보존한다. nonempty reason이 없는 `view.error`는 `plugin <plugin>: view.error has no reason`으로 거부한다. host message가 기록 없이 버려지는 일은 없다.
 
 view와 다른 것은 상대와 call이다:
 
