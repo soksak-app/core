@@ -41,6 +41,13 @@
   Hash 입력은 `screenFromMessage`가 제공하고 기대 digest는 `screenHash`가
   생성하므로 결과를 꾸며 내지 않았다. 제품 코드는 바꾸지 않았다.
 
+- F239-47-6: Acceptance 기록을 바로잡는다. 여덟 key, Backspace, Space 순서를
+  양 host에서 검증한 실행은 없다. 가장 최근 Wails 시도는 base screen과
+  presented overlay의 frame mismatch 뒤 첫 key에서 멈췄고, native AppKit
+  reference trace는 terminal PTY 동작을 검증하지 않는다. 이전 Wails 4-key
+  통과와 Tauri pointer-placement 실패는 다른 입력 순서이므로 현재 acceptance를
+  입증하지 않는다.
+
 - F239-47-2: activation observer가 각 status sample 전에 event offset을
   저장해 compose, cursor, screen, host 상태를 읽는 동안 도착한 알림을
   놓치지 않는다. Red: controlled deferred-event case에서 알림 뒤에 wait
@@ -50,6 +57,23 @@
   region frame 12를 보였다. Observer는 base screen 표시를 위해 이후 region
   frame을 허용한다. Exact composition-frame correlation과 captured glyph
   측정은 F239-47-6에 남아 있다. 이 변경은 marked glyph가 보였음을 입증하지 않는다.
+
+- F239-47-10: Frame-bound renderer geometry와 capture ROI 근거를 계산하는
+  core helper를 추가한다. 정확히 일치한 source identity를 모두 보존하고 후보마다
+  complete document, composition ranges, cursor/focus, geometry를 요구한다.
+  검증된 screen/content bounds, scale, row stride로 BGRA capture를 매핑한다.
+  Floating glyph/underline bounds는 cell edge에서 floor/ceil을 적용해 clip한다.
+  Consumer는 glyph와 underline pixel 모두에 difference blend block cursor의
+  반전 색을 적용한다. `render:null`은 evidence unavailable이며 누락 또는 부분
+  object는 validation 오류다. Red: stub calculator가 target 및 duplicate identity에
+  null을 반환했다. 이후 리뷰 test가 불완전한 candidate semantic state, image 밖
+  capture bounds, cursor가 덮은 underline pixel 미처리를 재현했다. Green:
+  `terminal-ime-visual.test.mjs` 7/7 통과. 모호한 identity, complete state/geometry,
+  capture containment, guard cell 초과 ink, 잘못된 underline 범위, 낮은 glyph 획,
+  빈 block cursor, fractional bounds, unavailable/malformed metadata 구분을 검증한다.
+  `make docs-check`가 통과한다. Fixture는 core calculator만 검증한다. 양 host visual
+  acceptance는 F239-47-6에 남아 있으며 application status에 renderer metadata는
+  아직 없다.
 
 - F267.7: F239-47-5를 제품 동작이 아닌 fixture 전용 boundary correction으로
   분류한다. 이 변경은 Workbench test의 sibling-plugin ID를 중립 key로 바꾸고
