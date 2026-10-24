@@ -3,6 +3,7 @@
 // through the layer of the host, whose replies arrive as the plugin-host-reply events. The runtime is a fake host.
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
+import { clockAnswer } from "./support/records.mjs";
 
 const calls = [];
 const listeners = new Map();
@@ -11,6 +12,8 @@ mock.module("@soksak/runtime", { namedExports: {
   host: {
     call: (name, arg) => {
       calls.push({ name, arg });
+      const clock = clockAnswer(name, arg);
+      if (clock !== undefined) return Promise.resolve(clock);
       return refusal === null ? Promise.resolve(null) : Promise.reject(new Error(refusal));
     },
     on: (name, listener) => {

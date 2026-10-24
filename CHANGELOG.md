@@ -4,7 +4,7 @@
 
 ## Unreleased
 
-- F239-35-4-1: Keep the declared UI expansion subscription independent from the DOM exposure relay. Only subscribing to `exposure-request` enables `forwardHostExposure`. Red: an expansion-only host received a forwarded `dom.rect` request instead of the no-subscription error. Green: the same test confirms immediate refusal without emitting an exposure event; plugin-host call tests pass 24/24, `make exposure-check` and `make docs-check` pass.
+- F239-35-4-1: Keep the declared UI expansion subscription independent from the DOM exposure relay. Only subscribing to `exposure-request` enables `forwardHostExposure`. Red: an expansion-only host received a forwarded `dom.rect` request instead of the no-subscription error. Green: the same test confirms immediate refusal without emitting an exposure event; plugin-host call tests pass 24/24, `make exposure-check` and `make docs-check` pass. The fake host answers `log {action: "clock"}` with the contract `{ts_us, mono_ns}` through `clockAnswer`; the owning test stderr has no clock-response error.
 
 - F239-35-4: Plugin-host `runtime.native.on` now accepts exactly `exposure-request` and `declared-ui.expanded`; other event names remain refused. Red: the unchanged public plugin-host-call test rejected `declared-ui.expanded` with `native event declared-ui.expanded is not served to a plugin host`. Green: the same owning test passes 23/23 and verifies both subscriptions plus refusal of `document-state`; `make exposure-check` passes. `make docs-check` passes.
 

@@ -4,7 +4,7 @@
 
 ## 미배포
 
-- F239-35-4-1: declared UI expansion 구독을 DOM exposure relay와 분리한다. `forwardHostExposure`는 `exposure-request`를 구독한 경우에만 허용한다. Red: expansion만 구독한 host가 no-subscription 오류 대신 `dom.rect` 요청을 전달받았다. Green: 같은 test가 즉시 거부와 exposure event 미전달을 확인하고 plugin-host call tests 24/24, `make exposure-check`, `make docs-check`가 통과한다.
+- F239-35-4-1: declared UI expansion 구독을 DOM exposure relay와 분리한다. `forwardHostExposure`는 `exposure-request`를 구독한 경우에만 허용한다. Red: expansion만 구독한 host가 no-subscription 오류 대신 `dom.rect` 요청을 전달받았다. Green: 같은 test가 즉시 거부와 exposure event 미전달을 확인하고 plugin-host call tests 24/24, `make exposure-check`, `make docs-check`가 통과한다. Fake host는 `clockAnswer`를 사용해 `log {action: "clock"}`에 계약된 `{ts_us, mono_ns}`를 반환하며 owning test stderr에는 clock response 오류가 없다.
 
 - F239-35-4: Plugin-host `runtime.native.on`은 `exposure-request`와 `declared-ui.expanded`만 허용하며 다른 event 이름은 계속 거부한다. Red: 변경 전 public plugin-host-call test는 `native event declared-ui.expanded is not served to a plugin host` 오류로 거부했다. Green: 같은 owning test가 두 구독과 `document-state` 거부를 검증하며 23/23 통과하고 `make exposure-check`도 통과한다. `make docs-check`가 통과한다.
 
