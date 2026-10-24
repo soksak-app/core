@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-32: Native input transaction이 callback action과 최종 preedit을
+  한 번의 표시 단위로 묶지만, 비동기 PTY output은 이후 event와 frame으로
+  도착할 수 있음을 명확히 한다. 공개 macOS callback batching 구현을 비규범적
+  참고로 기록한다. `make docs-check`가 통과했으며 visual runtime 결과는
+  주장하지 않는다.
+
 - F212.10-core-3-11: native call 전에 projectShown payload를 명세된
   `{id, root, title}` field로 projection한다. Tauri strict request decoder가
   저장 project metadata를 거부하지 않게 한다. Owning operations case는 1/1

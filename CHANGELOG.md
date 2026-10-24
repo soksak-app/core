@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-47-32: Clarify that native input transactions group callback actions
+  and final preedit for a presentation, while asynchronous PTY output may
+  arrive in later events and frames. Record public macOS callback-batching
+  references as non-normative examples. `make docs-check` passes; this change
+  makes no visual runtime claim.
+
 - F212.10-core-3-11: Project shown-project payloads to the declared
   `{id, root, title}` fields before the native call. This prevents Tauri's
   strict request decoder from rejecting stored project metadata. The owning
