@@ -3,10 +3,11 @@
 // the cargo of `$(HOME)/.cargo/bin` does not shadow the fake.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cargoTargetArgs, runRustTests } from '../rust-tests.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 
@@ -42,6 +43,140 @@ exit 1
   return directory;
 }
 
+function targetCargo(t) {
+  const directory = mkdtempSync(join(tmpdir(), 'soksak-rust-target-repeat-'));
+  t.after(() => rmSync(directory, { recursive: true }));
+  const targetLog = join(directory, 'targets');
+  const binary = (name, testName) => {
+    const executable = join(directory, `${name}-test`);
+    writeFileSync(executable, `#!/bin/sh
+if [ "$1" = "--list" ]; then
+  printf 'list:${name}\\n' >> ${JSON.stringify(targetLog)}
+  printf '${testName}: test\\n\\n1 tests, 0 benchmarks\\n'
+  exit 0
+fi
+printf 'run:${name}\\n' >> ${JSON.stringify(targetLog)}
+printf 'running 1 test\\ntest %s ... ok\\n\\ntest result: ok. 1 passed; 0 failed\\n' "$2"
+`);
+    chmodSync(executable, 0o755);
+    return executable;
+  };
+  const library = binary('library', 'fixture::library_case');
+  const integration = binary('integration', 'fixture::integration_case');
+  const cargo = join(directory, 'cargo');
+  writeFileSync(cargo, `#!/bin/sh
+printf '%s\\n' "$*" >> ${JSON.stringify(join(directory, 'args'))}
+case "$*" in
+  *--doc*--list*) printf 'list:doctests\\n' >> ${JSON.stringify(targetLog)}; printf 'src/lib.rs - doc_example (line 3): test\\n'; exit 0 ;;
+  *--doc*) printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed\\n'; exit 0 ;;
+  *message-format=json*)
+    case "$*" in
+      *--lib*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture","kind":["lib"]},"executable":"${library}"}\\n' ;;
+      *--test\\ integration*) printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"integration","kind":["test"]},"executable":"${integration}"}\\n' ;;
+      *)
+        printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"fixture","kind":["lib"]},"executable":"${library}"}\\n'
+        printf '{"reason":"compiler-artifact","profile":{"test":true},"target":{"name":"integration","kind":["test"]},"executable":"${integration}"}\\n' ;;
+    esac
+    exit 0 ;;
+  metadata*) printf '{"packages":[{"name":"fixture","manifest_path":"${join(directory, 'Cargo.toml')}","targets":[{"kind":["lib"],"doctest":true},{"kind":["test"],"name":"integration"}]}]}\\n'; exit 0 ;;
+  *--no-run*) exit 0 ;;
+esac
+exit 1
+`);
+  chmodSync(cargo, 0o755);
+  return { directory, targetLog };
+}
+
+function selectedTargetTest(t, selection, argument, cargoArgs, expected) {
+  const { directory, targetLog } = targetCargo(t);
+  const result = spawnSync('make', [
+    'rust-repeat', 'PACKAGE=fixture', 'COUNT=1', `TEST=${argument}`, `TEST_TARGET=${selection}`,
+  ], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const cargoCalls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n')
+    .filter((call) => call.startsWith('test '));
+  assert.equal(cargoCalls.length, 1, JSON.stringify(cargoCalls));
+  assert.match(cargoCalls[0], /--no-run/, cargoCalls[0]);
+  assert.deepEqual(readFileSync(targetLog, 'utf8').trim().split('\n'), [`list:${expected}`, `run:${expected}`]);
+  for (const call of cargoCalls) assert.match(call, cargoArgs, call);
+  assert.doesNotMatch(readFileSync(join(directory, 'args'), 'utf8'), /--doc/);
+}
+
+test('make rust-repeat selects only the lib Cargo target before discovery', (t) => {
+  selectedTargetTest(t, 'lib', 'fixture::library_case', /--lib/, 'library');
+});
+
+test('make rust-repeat selects only the test:integration Cargo target before discovery', (t) => {
+  selectedTargetTest(t, 'test:integration', 'fixture::integration_case', /--test integration/, 'integration');
+});
+
+test('make rust-repeat keeps package-wide target and doctest discovery by default', (t) => {
+  const { directory, targetLog } = targetCargo(t);
+  const result = spawnSync('make', ['rust-repeat', 'PACKAGE=fixture', 'COUNT=1'], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(readFileSync(targetLog, 'utf8').trim().split('\n'), [
+    'list:library', 'list:integration', 'list:doctests', 'run:library', 'run:integration',
+  ]);
+  const calls = readFileSync(join(directory, 'args'), 'utf8');
+  assert.match(calls, /--doc -- --list/);
+  assert.match(calls, /--doc -- src\/lib\.rs - doc_example \(line 3\)/);
+});
+
+test('make rust-repeat rejects an invalid Cargo target before invoking Cargo', (t) => {
+  const { directory } = targetCargo(t);
+  const result = spawnSync('make', [
+    'rust-repeat', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TARGET=test:bad/name',
+  ], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stderr, /--test-target must be lib or test:<Cargo target name>/, result.stdout + result.stderr);
+  assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the target selector was rejected');
+});
+
+test('make rust-repeat rejects shell syntax in a Cargo target without executing it', (t) => {
+  const { directory } = targetCargo(t);
+  const marker = join(directory, 'injected-command-ran');
+  const result = spawnSync('make', [
+    'rust-repeat', 'PACKAGE=fixture', 'COUNT=1', `TEST_TARGET=test:bad'; touch ${marker}; #`,
+  ], {
+    cwd: root, env: { ...process.env, HOME: directory, PATH: `${directory}:${process.env.PATH}` },
+    encoding: 'utf8', timeout: 60000,
+  });
+  assert.equal(existsSync(marker), false, 'shell syntax in the selector ran as a command');
+  assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the selector was rejected');
+});
+
+test('runRustTests rejects an explicitly empty Cargo target before invoking Cargo', async (t) => {
+  const { directory } = targetCargo(t);
+  const previousPath = process.env.PATH;
+  const previousHome = process.env.HOME;
+  process.env.PATH = `${directory}:${previousPath}`;
+  process.env.HOME = directory;
+  try {
+    await assert.rejects(runRustTests({
+      manifest: 'Cargo.toml', package: 'fixture', testTarget: '', count: 1, timeoutMs: 1000, write() {},
+    }), /--test-target must be lib or test:<Cargo target name>/);
+    assert.equal(existsSync(join(directory, 'args')), false, 'Cargo ran before the empty selector was rejected');
+  } finally {
+    process.env.PATH = previousPath;
+    process.env.HOME = previousHome;
+  }
+});
+
+test('cargoTargetArgs rejects non-string selectors instead of coercing them', () => {
+  assert.throws(() => cargoTargetArgs(['test:integration']), /--test-target must be a string/);
+  assert.throws(() => cargoTargetArgs({ toString: () => 'test:integration' }), /--test-target must be a string/);
+});
+
 test('make rust-repeat names each test when it starts, reports its result and elapsed time, and kills a test at its limit', (t) => {
   const directory = fakeCargo(t);
   const result = spawnSync('make', ['rust-repeat', 'PACKAGE=fixture', 'COUNT=1', 'TEST_TIMEOUT=2'], {
@@ -65,7 +200,7 @@ test('make rust-repeat passes its features to every cargo test call', (t) => {
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const calls = readFileSync(join(directory, 'args'), 'utf8').trim().split('\n').filter((call) => call.startsWith('test '));
-  assert.equal(calls.length, 2, JSON.stringify(calls));
+  assert.equal(calls.length, 1, JSON.stringify(calls));
   for (const call of calls) assert.match(call, /--features diagnostics/, call);
 });
 

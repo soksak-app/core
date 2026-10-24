@@ -4,6 +4,19 @@
 
 ## 미배포
 
+- F271: `rust-repeat`가 Cargo test target 하나를 선택한다.
+  `TEST_TARGET=lib`와 `TEST_TARGET=test:<name>`은 runner의 compile-and-discovery 요청에
+  Cargo target selector를 전달한다. 명시적 target은 다른 test binary나 library
+  doctest를 열거하지 않는다. 잘못된 selector는 Cargo 실행 전에 거부하고 전달 중 셸 문법으로 실행되지 않는다. Red: 변경
+  전 runner는 `lib` 선택에서도 integration binary를, integration 선택에서도 library
+  binary를 열거했고 잘못된 selector와 빈 selector를 허용했다. 최초 forwarding
+  수정은 selector의 셸 문법도 실행시켰다. 문자열 타입 검증 전 별도 Red에서 `cargoTargetArgs`가 배열과 객체를 문자열로 변환했다. Green: owning runner test가
+  10/10 통과한다. Controlled Cargo fixture는 runner의 단일 build에서 선택한 실행 파일만
+  열거하고 명시적 선택에서 doctest를 제외하며 기본값은 모든 target과 doctest를
+  유지한다. Exact-name filtering, test별 timeout, 진행 상황과 실패 처리는 유지한다. 실제 selected-library image relay test는 macOS 26.6.2 arm64에서
+  1/1 통과했다. 기존 dependency cache를 사용한 Cargo build/discovery를 포함해
+  15.522 s가 걸렸다. 이는 검증 한 번의 결과이며 benchmark가 아니다.
+
 - F239-48-3-2: Rust image-detach 구현과 owner test를 대응하는 module에 두고,
   Wails start-barrier test를 Rust start test와 나란히 이동한다. Focused Go와
   Rust image-detach/start test가 각각 7/7 통과한다. Paired-host 감사 finding은
@@ -979,7 +992,7 @@
 - F239-37-4: 같은 key의 tree child보다 유일한 root control을 먼저 풀이한다.
   Red: 변경 전 section-address test가 root 주소를 거부하고 중복 root 모호성을
   보고하지 않았다. Green: 정확한 child 주소와 row-only path 누락 거부를 포함해
-  owning test가 8/8 통과한다. Exposure, docs, diff 검사가 통과한다.
+  owning test가 10/10 통과한다. Exposure, docs, diff 검사가 통과한다.
 
 - F239-47-1: hit view에 직접 전달되는 diagnostic pointer press 중 image
   region focus를 유지한다. Red: 변경 전 owning test가 region 안의 press 뒤
