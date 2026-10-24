@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-26-8: The bundled process-wait observer now uses a rejecting timeout for
+  its 1,000 ms SIGTERM cleanup wait. On that timeout, it sends SIGKILL, waits
+  for child close, and reports the original wait timeout and cleanup timeout
+  together. Red: the unchanged checker test failed on the non-rejecting timer;
+  the controlled child test failed because the cleanup timeout was not reported.
+  Green: all four service process-wait tests pass, the focused checker test,
+  `make e2e-check`, and `make docs-check` pass. The cleanup bound is unchanged.
+
 - F240-8: Map eight feature areas and record a six-stage execution order for
   active core work, keeping feature fixes ahead of measurements, audits and
   external release gates. Independent leaf changes may proceed in parallel only

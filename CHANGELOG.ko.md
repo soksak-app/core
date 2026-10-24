@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-26-8: bundled process-wait observer의 1,000 ms SIGTERM cleanup wait에
+  reject timeout을 사용한다. 한도가 끝나면 SIGKILL을 보내고 child close를
+  기다리며, 원래 wait timeout과 cleanup timeout을 함께 보고한다. Red:
+  변경 전 checker test는 reject하지 않는 timer에서 실패했고, controlled
+  child test는 cleanup timeout이 보고되지 않아 실패했다. Green: service
+  process-wait test 4개, focused checker test, `make e2e-check`와
+  `make docs-check`가 통과한다. Cleanup 한도는 그대로 유지한다.
+
 - F240-8: 여덟 기능 영역을 연결하고 active core 작업의 6단계 실행 순서를
   기록한다. 기능 수정은 측정, audit 및 외부 release gate보다 먼저 둔다.
   독립 leaf 변경은 선행 조건 충족 뒤 병렬 진행하고, packaging, integration

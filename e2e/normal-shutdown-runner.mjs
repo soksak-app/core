@@ -55,7 +55,7 @@ function serviceEndpoint(configDir) {
 }
 
 /** Waits for the service PID through the CLI bundled beside the declared application executable. */
-export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SERVICE_WAIT_LIMIT, outerLimitMs = timeoutMs + 2_000, spawnChild = spawn }) {
+export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SERVICE_WAIT_LIMIT, outerLimitMs = timeoutMs + 2_000, cleanupLimitMs = 1_000, spawnChild = spawn }) {
   const sok = join(dirname(binary), "sok");
   let details;
   try {
@@ -92,10 +92,28 @@ export async function runSokProcessWait({ binary, configDir, pid, timeoutMs = SE
     status = await Promise.race([closed, deadline]);
   } catch (error) {
     if (timedOut) {
-      const reaped = await Promise.race([closed.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 1_000))]);
-      if (!reaped) {
-        child.kill("SIGKILL");
-        await closed;
+      let cleanupTimeout;
+      let cleanupTimer;
+      try {
+        await Promise.race([closed, new Promise((_, reject) => {
+          cleanupTimer = setTimeout(() => {
+            cleanupTimeout = new Error(`observer cleanup wait exceeded ${cleanupLimitMs}ms after SIGTERM`);
+            reject(cleanupTimeout);
+          }, cleanupLimitMs);
+        })]);
+      } catch (cleanupError) {
+        if (cleanupError === cleanupTimeout) {
+          try {
+            child.kill("SIGKILL");
+            await closed;
+          } catch (reapError) {
+            throw new AggregateError([error, cleanupError, reapError], `${error.message}; ${cleanupError.message}; observer SIGKILL/reap failed: ${reapError?.message ?? reapError}`);
+          }
+          throw new AggregateError([error, cleanupError], `${error.message}; ${cleanupError.message}; SIGKILL sent and observer child reaped`);
+        }
+        throw new AggregateError([error, cleanupError], `${error.message}; observer cleanup failed: ${cleanupError?.message ?? cleanupError}`);
+      } finally {
+        clearTimeout(cleanupTimer);
       }
     }
     throw error;
