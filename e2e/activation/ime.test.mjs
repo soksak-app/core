@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
@@ -309,7 +310,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: eight Korean vowels and one Backspace retain an exact input trace`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
-      await fresh(s);
+      await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
       const [terminal] = await ensureTerminals(s, 1);
       const surface = terminal.surface;
       await readScreenUntil(s, surface, (lines) => lines.some((line) => /[$%#>]$/.test(line)),
@@ -652,6 +653,7 @@ for (const app of Object.values(APPS)) {
         };
       };
 
+      const nativeInputOffsets = currentEventOffsets(app.configDir);
       const visualStageInputs = [];
       let visualStages = [];
       for (let index = 0; index < 8; index++) {
@@ -759,6 +761,34 @@ for (const app of Object.values(APPS)) {
       const recording = await capture.stop({ after: displayed + 100 });
       recordingResult = recording;
       preserveCapture();
+      let logFlushError = null;
+      try {
+        await s.flushLog();
+      } catch (error) {
+        logFlushError = error;
+      }
+      const nativeInputRows = readEvents(app.configDir, nativeInputOffsets).events
+        .filter((event) => event.event === "native.input.key_down" || event.event === "native.input.callback");
+      const nativeKeyRows = nativeInputRows.filter((event) => event.event === "native.input.key_down");
+      const nativeCallbackRows = nativeInputRows.filter((event) => event.event === "native.input.callback");
+      persist("native-input-events.json", { flushError: logFlushError?.message ?? null, events: nativeInputRows });
+      if (logFlushError) throw logFlushError;
+      assert.equal(nativeKeyRows.length, 10, `${app.name}: native input log has ${nativeKeyRows.length} key records, expected 10`);
+      assert.ok(nativeCallbackRows.length > 0, `${app.name}: native input log has no callback records`);
+      assert.ok(nativeCallbackRows.length <= 512,
+        `${app.name}: native input callback record bound 512 exceeded by ${nativeCallbackRows.length}`);
+      for (const event of nativeInputRows) {
+        assert.ok(Array.isArray(event.cids) && event.cids.length > 0
+          && event.cids.every((cid) => typeof cid === "string" && cid.length > 0),
+        `${app.name}: ${event.event} has invalid correlation identifiers`);
+      }
+      for (const event of nativeCallbackRows) {
+        assert.equal(typeof event.fields?.call, "string", `${app.name}: native callback has no call name`);
+        assert.ok(event.fields.before && typeof event.fields.before === "object",
+          `${app.name}: native callback has no before input state`);
+        assert.ok(event.fields.after && typeof event.fields.after === "object",
+          `${app.name}: native callback has no after input state`);
+      }
       const framePaths = frames(capture.frames);
       const preservedCallbackStatus = join(preservedCaptureDir, basename(recording.callbackStatus));
       persist("recording.json", { ...recording, frames: preservedCaptureDir, sourceFrames: capture.frames,

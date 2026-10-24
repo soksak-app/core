@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-2: 정확한 여덟 모음 activation fixture에서 선언된 `input:info` native callback record를 활성화한다. 이전 P85 Tauri policy는 input을 `error` 수준으로만 기록해 `info`로 선언된 `native.input.callback`을 남기지 않았다. Fixture는 엄격한 capture-gap 결과를 판정하기 전에 제한된 key와 callback record를 저장한다. Activation 재실행이나 제품 수정은 주장하지 않으며 F239-47-6은 열린 상태다.
+
 - F239-47-6/F239-47-10: P85 양 host IME 실행을 기록한다. 고정 AppKit reference와 terminal 문서 10단계는 모두 일치했다. Tauri frame gap은 34.660750 ms, Wails는 33.694458 ms로 변경하지 않은 33 ms 기준을 넘었고 visual acceptance는 열린 상태다. Metadata상 모든 모음의 foreground/background는 같고 마지막 marked 모음만 underline됐다. Callback DTO에는 AppKit selector 이름과 `committedLength`가 없다. 두 번째 조회가 baseline을 대체했고 마지막 frontmost 관측은 runner 복원 로그와 달라 F239-47-24에서 유효한 세션 baseline을 추적한다. 두 host와 sidecar는 종료됐다. Structured JSONL에는 error-level record가 없었지만 두 native host stderr에는 `error messaging the mach port for IMKCFRunLoopWakeUpReliable`가 있었다. 이 메시지는 미분류이며 capture gap과의 연결은 확인되지 않았다.
 
 - F239-47-6: Fresh Wails window의 terminal prompt 경로 `preedit` 아래에서 관측한 파란 밑줄을 기록한다. 대응하는 terminal base cell에는 underline, inverse, link flag가 없었고 `terminal.cursor.preedit`은 `ㅏㅏㅏ`였다. 표시가 이미 나온 뒤 시작한 세 frame의 non-activating capture에는 source raster나 candidate가 없었고 source drop도 없었다. 표시를 그린 주체는 확인되지 않았으며 visual acceptance는 열린 상태다.
