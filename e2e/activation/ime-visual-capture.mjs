@@ -307,10 +307,15 @@ export function planVisualStage({ key, expectedDocument, observation, frameStatu
   assert.equal(screen.frame.raster, cursor.frame.raster, `${key}: screen and cursor rasters differ`);
   assert.ok(Number.isSafeInteger(screen.frame.sequence) && screen.frame.sequence <= cursor.frame.sequence,
     `${key}: base screen frame sequence is newer than the overlay cursor frame`);
-  const presented = observation.region?.presented;
-  assert.ok(presented, `${key}: terminal region has no presented frame`);
-  assert.equal(frameKey(presented, `${key} presented`), frameKey(cursor.frame, `${key} cursor`),
-    `${key}: region presented frame differs from the cursor overlay frame`);
+  const presented = observation.presented;
+  assert.ok(presented, `${key}: terminal observation has no presented frame`);
+  frameKey(presented, `${key} presentation watermark`);
+  assert.equal(presented.generation, cursor.frame.generation,
+    `${key}: presentation watermark generation differs from the cursor frame`);
+  assert.equal(presented.raster, cursor.frame.raster,
+    `${key}: presentation watermark raster differs from the cursor frame`);
+  assert.ok(Number.isSafeInteger(presented.sequence) && presented.sequence >= cursor.frame.sequence,
+    `${key}: presentation watermark has not reached the cursor frame`);
   assert.ok(frameStatus instanceof Map, `${key}: indexed prior screen rows are required`);
   const rowSource = frameStatus.get(frameKey(cursor.frame, `${key} cursor`));
   assert.ok(rowSource, `${key}: no indexed prior screen rows for the cursor overlay frame`);

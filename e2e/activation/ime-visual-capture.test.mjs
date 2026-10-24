@@ -240,7 +240,7 @@ testWithTimeout("stage planning covers the complete Hangul span, preedit underli
       selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true } };
   const observation = { screen: { frame, rows: [[{ ch: "$", width: 1 }, { ch: " ", width: 1 },
     { width: 0 }, { width: 0 }, { width: 1 }, { width: 1 }]] },
-  cursor, compose: { ...cursor.preedit }, region: { presented: frame } };
+  cursor, compose: { ...cursor.preedit }, presented: frame };
   const frameStatus = new Map([["1/2/3", { frame, render, rows: observation.screen.rows, semantic: {
     document: "ㅏ", compose: { ...cursor.preedit }, cursor: { row: 0, col: 2, focused: true, preedit: "ㅏ" },
     geometry: { rows: 1, cols: 6, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
@@ -271,8 +271,7 @@ testWithTimeout("stage planning accepts prior base rows with the exact current o
     blinkVisible: false, preedit: compose };
   const rows = [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }, { width: 0 }, { width: 0 },
     { width: 1 }, { width: 1 }]];
-  const observation = { screen: { frame: baseFrame, rows }, compose, cursor,
-    region: { presented: overlayFrame } };
+  const observation = { screen: { frame: baseFrame, rows }, compose, cursor, presented: overlayFrame };
   const frameStatus = new Map([["1/2/11", { frame: overlayFrame, render, rows,
       semantic: { document: "ㅏ", compose,
         cursor: { row: 0, col: 2, focused: true, preedit: "ㅏ" },
@@ -284,9 +283,15 @@ testWithTimeout("stage planning accepts prior base rows with the exact current o
   assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
     ...observation, screen: { ...observation.screen, frame: { ...baseFrame, sequence: 12 } },
   }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /base screen frame sequence is newer/);
+  const newerWatermark = { ...observation, presented: { ...overlayFrame, sequence: 12 } };
+  assert.doesNotThrow(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: newerWatermark,
+    frameStatus, prompt: { row: 0, col: 0, text: "$ " } }));
   assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
-    ...observation, region: { presented: { ...overlayFrame, sequence: 12 } },
-  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /region presented frame differs/);
+    ...observation, presented: { ...overlayFrame, sequence: 10 },
+  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /has not reached the cursor frame/);
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
+    ...observation, presented: { ...overlayFrame, generation: overlayFrame.generation + 1 },
+  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /presentation watermark generation differs/);
   assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
     ...observation, screen: { ...observation.screen, rows: [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }]] },
   }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /differ from the active observer/);

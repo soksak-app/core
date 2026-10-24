@@ -12,6 +12,11 @@
   `node --check e2e/activation/ime.test.mjs`, `make e2e-check`,
   `make docs-check`가 통과한다. Activation 재실행은 하지 않았으며
   F239-47-6 acceptance는 열린 상태다.
+  Stage planner는 caller의 top-level `presented`를 사용한다. 이 값의 같은
+  generation/raster sequence는 progress watermark이며 exact source identity는
+  cursor/render frame과 index된 row state가 유지한다.
+  Caller-shape test는 이전의 존재하지 않는 `region` lookup을 재현했다.
+  수정한 frame-planning/watermark case 2/2가 통과한다.
 
 - F239-37-3: 파일 열기 실패 check를 제거된 `files.selection`
   및 `files.open` status 대기에서 선언된 `files.tree` snapshot으로 옮긴다. 더 큰 `core.sidebars`
