@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-6: Record a blue underline observed beneath `preedit` in the terminal prompt path on a fresh Wails window. The corresponding terminal base cells had no underline, inverse or link flag, while `terminal.cursor.preedit` held `ㅏㅏㅏ`. Capture began after the mark was already present; its three non-activating frames produced no source raster or candidates and recorded no source drops. The painter remains unknown and visual acceptance remains open.
+
 - F212.10-core-3-6: Retire a view's exposure registrations in the same
   synchronous workbench transition that accepts its exact source-generation
   end. Source retirement precedes `view-process-ended`, so the previous
