@@ -252,8 +252,29 @@ test("a first run that cannot read the registry starts the window without the pa
     const shown = [];
     assert.equal(await operations.installStarter("starter", registry, (line) => lines.push(line), (message) => shown.push(message)), false);
     assert.deepEqual(lines, [`first run: the starter pack starter was not installed: ${error}`]);
-    assert.deepEqual(shown, [`시작 플러그인 묶음 starter을 설치하지 못했습니다 · ${error}. 연결된 뒤 다시 시작하면 다시 설치합니다.`]);
+    assert.deepEqual(shown, [`시작 플러그인 묶음 starter을 설치하지 못했습니다 · ${error}.`]);
   }
+});
+
+test("a first-run package-format failure preserves the error without promising network recovery", async () => {
+  const formatError = "plugin.json: surface.module is required";
+  const host = starterHost({ index: starterIndex });
+  const call = host.call.bind(host);
+  host.call = async (method, params) => {
+    if (method === "pluginsRun") {
+      host.calls.push([method, params ?? null]);
+      throw new Error(formatError);
+    }
+    return call(method, params);
+  };
+  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  await operations.refresh();
+  const lines = [];
+  const shown = [];
+  assert.equal(await operations.installStarter("starter", null, (line) => lines.push(line), (message) => shown.push(message)), false);
+  assert.deepEqual(lines, [`first run: the starter pack starter was not installed: ${formatError}`]);
+  assert.deepEqual(shown, [`시작 플러그인 묶음 starter을 설치하지 못했습니다 · ${formatError}.`]);
+  assert.ok(!shown[0].includes("연결된 뒤 다시 시작하면 다시 설치합니다"));
 });
 
 test("the first run sets the default registry of the environment before it installs the starter pack", async () => {

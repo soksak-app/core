@@ -226,7 +226,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       const failedPack = job?.pack ?? pack;
       log(`first run: the starter pack ${failedPack} was not installed: ${error?.message ?? error}`);
       // default: an error that is not an Error carries its value as the text.
-      show(`시작 플러그인 묶음 ${failedPack}을 설치하지 못했습니다 · ${error?.message ?? error}. 연결된 뒤 다시 시작하면 다시 설치합니다.`);
+      show(`시작 플러그인 묶음 ${failedPack}을 설치하지 못했습니다 · ${error?.message ?? error}.`);
       return false;
     }
   }
