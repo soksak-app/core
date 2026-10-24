@@ -23,6 +23,7 @@
     "window-sidebars.js",
     "sidebar-sections.js",
     "declared-source.js",
+    "source-origins.js",
     "declared-section.js",
     "declared-tree-keys.js",
     "section-address.js",

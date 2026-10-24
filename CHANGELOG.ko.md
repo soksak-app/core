@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-46-1: Main-page source handler가 import하는 `source-origins.js`를
+  Workbench package files에 추가해 staging payload에 포함한다. Red: staged
+  import-closure test는 `plugin-host.js`가 import하는 `source-origins.js`가
+  serving payload에 없어 실패했다. Green: 같은 staged-payload test가 2/2,
+  stage test 파일이 11/11 통과한다. `make docs-check`와 `make boundaries`가
+  통과한다.
+
 - F239-37-4: 같은 key의 tree child보다 유일한 root control을 먼저 풀이한다.
   Red: 변경 전 section-address test가 root 주소를 거부하고 중복 root 모호성을
   보고하지 않았다. Green: 정확한 child 주소와 row-only path 누락 거부를 포함해

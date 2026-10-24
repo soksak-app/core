@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-46-1: Add `source-origins.js` to the Workbench package file list so
+  staging includes the module imported by the main-page source handlers. Red:
+  the staged import-closure test failed because `plugin-host.js` imported
+  `source-origins.js`, which was absent from the serving payload. Green: the
+  same staged-payload test passes (2/2), and the staging test file passes
+  11/11. `make docs-check` and `make boundaries` pass.
+
 - F239-37-4: Resolve unique root controls before same-key tree children.
   Red: the unchanged section-address test rejected the root address and did
   not report duplicate-root ambiguity. Green: the owning test passes 8/8,
