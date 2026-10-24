@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { restoreFrontmost, sessionBaseline, unlessCovered } from "../frontmost.mjs";
+import {
+  parseSessionBaseline,
+  restoreFrontmost,
+  SESSION_BASELINE_ENV,
+  sessionBaseline,
+  sessionBaselineFromEnvironment,
+  unlessCovered,
+} from "../frontmost.mjs";
 
 // Injects fakes for reading and changing the active application and checks the baseline restore after a check.
 function fake(states) {
@@ -25,12 +32,11 @@ test("a check that leaves the tested host frontmost restores the baseline", asyn
 
 test("a check that leaves the baseline frontmost changes nothing", async () => {
   const f = fake([10, 10]);
-  assert.deepEqual(await restoreFrontmost({ name: "wailsv3", baseline: 10, host: 20, hosts: [20, 21], ...f }), { before: 10, after: 10 });
+  assert.deepEqual(await restoreFrontmost({ name: "wailsv3", baseline: 10, hosts: [20, 21], ...f }), { before: 10, after: 10 });
   assert.deepEqual(f.calls, ["read", "read"]);
 });
 
 test("an application the user brought forward is reported without activating anything", async () => {
-  // The checks do not activate another application, so when another application is in front, the user changed it.
   const f = fake([30, 30]);
   assert.deepEqual(await restoreFrontmost({ name: "tauriv2", baseline: 10, host: 20, hosts: [20, 21], ...f }),
     { before: 30, after: 30 });
@@ -51,7 +57,7 @@ test("a baseline that the restore does not reach fails the check", async () => {
 });
 
 test("a session whose frontmost application before the checks is a tested host is refused", () => {
-  const f = fake([20]);
+  const f = fake([{ pid: 20, name: "soksak-wailsv3", bundle: "app.soksak.wailsv3" }]);
   const describe = (pid) => `pid ${pid}, soksak-wailsv3, app.soksak.wailsv3`;
   assert.throws(() => sessionBaseline({ hosts: [{ name: "wailsv3", pid: 20 }, { name: "tauriv2", pid: 21 }], read: f.read, describe }),
     new Error("the frontmost application before the checks is tested host wailsv3 (pid 20, soksak-wailsv3, app.soksak.wailsv3); " +
@@ -60,9 +66,20 @@ test("a session whose frontmost application before the checks is a tested host i
 });
 
 test("a session whose frontmost application before the checks is not a tested host takes it as the baseline", () => {
-  const f = fake([10]);
-  assert.equal(sessionBaseline({ hosts: [{ name: "wailsv3", pid: 20 }, { name: "tauriv2", pid: 21 }], read: f.read,
-    describe: () => assert.fail("only a refused baseline is described") }), 10);
+  const baseline = { pid: 10, name: "Finder", bundle: "com.apple.finder" };
+  const f = fake([baseline]);
+  assert.deepEqual(sessionBaseline({ hosts: [{ name: "wailsv3", pid: 20 }, { name: "tauriv2", pid: 21 }], read: f.read,
+    describe: () => assert.fail("only a refused baseline is described") }), baseline);
+});
+
+test("a propagated baseline requires the same live process identity and excludes tested hosts", () => {
+  const baseline = { pid: 10, name: "Finder", bundle: "com.apple.finder" };
+  const env = { [SESSION_BASELINE_ENV]: JSON.stringify(baseline) };
+  assert.deepEqual(sessionBaselineFromEnvironment(env, { identify: () => baseline }), baseline);
+  assert.throws(() => sessionBaselineFromEnvironment(env, { identify: () => ({ ...baseline, bundle: "org.reused.pid" }) }), /not the same running application/);
+  assert.throws(() => sessionBaselineFromEnvironment(env, { hosts: [{ name: "wailsv3", pid: 10 }], identify: () => baseline }), /tested host wailsv3/);
+  assert.throws(() => parseSessionBaseline('{"pid":10,"name":"Finder"}'), /exactly a positive pid/);
+  assert.throws(() => parseSessionBaseline('{"pid":10,"name":"Finder","bundle":"com.apple.finder","extra":true}'), /exactly a positive pid/);
 });
 
 test("a wait that fails while another window covers the window states the covering window", async () => {

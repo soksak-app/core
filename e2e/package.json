@@ -5,15 +5,15 @@
   "description": "Window checks for running Wails and Tauri applications.",
   "type": "module",
   "scripts": {
-    "verify": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'",
-    "verify:activation": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'",
-    "verify:person": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
-    "verify:real": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
+    "verify": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs './*.test.mjs'",
+    "verify:activation": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'",
+    "verify:person": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'person/*.test.mjs'",
+    "verify:real": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'real/*.test.mjs'",
     "repeat": "soksak-window-repeat --setup ./setup.mjs",
     "test": "node --test test/*.test.mjs activation/terminal-ime-document.test.mjs",
-    "verify:terminal-sidebar-current": "node --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
+    "verify:terminal-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
     "verify:shutdown": "node normal-shutdown.mjs",
-    "verify:terminal-focus-current": "node --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs"
+    "verify:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs"
   },
   "dependencies": {
     "@soksak/client": "workspace:*",

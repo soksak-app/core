@@ -7,6 +7,7 @@
 // not launch an application. SOKSAK_APP selects one host. The check file and the launch start module of --setup are
 // relative to the current folder of the calling repository.
 import { spawnSync } from "node:child_process";
+import { sessionBaselineEnvironment } from "./frontmost.mjs";
 
 const USAGE = "usage: soksak-window-repeat --setup <global setup module> --file <test file> --name <test name pattern> --count <n>";
 const options = {};
@@ -27,13 +28,14 @@ if (!options.setup || !options.file || !options.name || !Number.isInteger(count)
 }
 
 const pattern = new RegExp(options.name);
+const env = sessionBaselineEnvironment();
 for (let run = 1; run <= count; run++) {
   // The number of checks that ran is counted from TAP, the machine format. The human-readable output carries color
   // codes depending on the environment. When no check matches the name, the file itself is reported as one result line,
   // so only results whose title matches the name pattern and that were not skipped are counted.
   const result = spawnSync(process.execPath,
     ["--test", "--test-concurrency=1", `--test-global-setup=${options.setup}`, "--test-reporter=tap", `--test-name-pattern=${options.name}`, options.file],
-    { encoding: "utf8" });
+    { encoding: "utf8", env: { ...process.env, ...env } });
   const output = `${result.stdout}${result.stderr}`;
   const passed = result.stdout.split("\n")
     .map((line) => /^\s*ok \d+ - (.*)$/.exec(line)?.[1])

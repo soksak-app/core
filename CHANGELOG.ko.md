@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-50: Window-check session용 frontmost `{pid, name, bundle}` identity 하나를 캡처해 global setup과 격리된 모든 test worker에 전달한다. Check 전에 없거나 잘못됐거나 오래됐거나 검사 대상 host인 baseline을 거부하고, app cleanup은 process마다 다시 캡처하지 않고 공유 identity를 사용한다. 제어된 worker 및 frontmost owning test는 18/18, Node runner test는 12/12 통과한다. `make e2e-check`와 `make docs-check`가 통과한다. 앱 실행과 활성화는 하지 않았다.
+
 - F212.10-core-3-5: 현재 native process가 끝나면 view의 exposure
   registration을 제거한다. Registration은 해당 process에 속하므로 generation이
   없는 동안 남겨두면 source 선택이 종료된 view를 선택할 수 있다. Owning

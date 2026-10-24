@@ -1,5 +1,5 @@
-// Reads and restores the active application. The default window checks require an inactive application, so a check that
-// activates an application activates the application that was active before again when it ends.
+// Reads and restores the active application. The default window checks require an inactive application, so each check
+// restores the session's validated frontmost identity when another application is active at cleanup.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 
@@ -15,25 +15,96 @@ function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
 
 const frontmost = jxa(`
 const app = $.NSWorkspace.sharedWorkspace.frontmostApplication;
-return JSON.stringify(app.isNil() ? null : app.processIdentifier);`);
+return JSON.stringify(app.isNil() ? null : {
+  pid: app.processIdentifier,
+  name: ObjC.unwrap(app.localizedName) ?? null,
+  bundle: ObjC.unwrap(app.bundleIdentifier) ?? null
+});`);
 
-const identify = jxa(`
+const identifyProcess = jxa(`
 const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
-return JSON.stringify(app.isNil() ? null : { name: ObjC.unwrap(app.localizedName) ?? null, bundle: ObjC.unwrap(app.bundleIdentifier) ?? null });`);
+return JSON.stringify(app.isNil() ? null : {
+  pid: app.processIdentifier,
+  name: ObjC.unwrap(app.localizedName) ?? null,
+  bundle: ObjC.unwrap(app.bundleIdentifier) ?? null
+});`);
 
 const activate = jxa(`
 const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(input.pid);
 return JSON.stringify(!app.isNil() && app.activateWithOptions(0));`);
 
+export const SESSION_BASELINE_ENV = "SOKSAK_WINDOW_CHECK_BASELINE";
+
 /** The process number of the application that is active now. */
 export function frontmostApp() {
+  return frontmost()?.pid ?? null;
+}
+
+/** The process identity of the application that is active now. */
+export function frontmostContext() {
   return frontmost();
 }
 
 /** Describes the application of process pid by name and bundle identifier. */
 export function describeApp(pid) {
-  const app = identify({ pid });
+  const app = identifyProcess({ pid });
   return app === null ? `pid ${pid}, no running application` : `pid ${pid}, ${app.name ?? "no name"}, ${app.bundle ?? "no bundle identifier"}`;
+}
+
+/** Parses the one canonical baseline context passed to every worker in a window-check session. */
+export function parseSessionBaseline(value) {
+  if (typeof value !== "string") throw new Error(`${SESSION_BASELINE_ENV} is required`);
+  let baseline;
+  try {
+    baseline = JSON.parse(value);
+  } catch (error) {
+    throw new Error(`${SESSION_BASELINE_ENV} is not valid JSON: ${error.message}`);
+  }
+  if (baseline === null || typeof baseline !== "object" || Array.isArray(baseline) ||
+      Object.keys(baseline).sort().join(",") !== "bundle,name,pid" ||
+      !Number.isSafeInteger(baseline.pid) || baseline.pid <= 0 ||
+      typeof baseline.name !== "string" || baseline.name.length === 0 ||
+      typeof baseline.bundle !== "string" || baseline.bundle.length === 0) {
+    throw new Error(`${SESSION_BASELINE_ENV} must contain exactly a positive pid, a nonempty name and a nonempty bundle`);
+  }
+  return baseline;
+}
+
+/** Captures or validates the caller-declared baseline and returns an environment shared by child test processes. */
+export function sessionBaselineEnvironment({ env = process.env, hosts = [], read = frontmostContext } = {}) {
+  let baseline;
+  if (env[SESSION_BASELINE_ENV] === undefined) {
+    baseline = sessionBaseline({ hosts, read });
+  } else {
+    baseline = parseSessionBaseline(env[SESSION_BASELINE_ENV]);
+    assertBaselineIsNotHost(baseline, hosts, (pid) => `pid ${pid}, ${baseline.name}, ${baseline.bundle}`);
+  }
+  return { [SESSION_BASELINE_ENV]: JSON.stringify(baseline) };
+}
+
+/** Reads the propagated baseline and verifies that its PID still identifies the same running application. */
+export function sessionBaselineFromEnvironment(env = process.env, { hosts = [], identify = (pid) => identifyProcess({ pid }) } = {}) {
+  const baseline = parseSessionBaseline(env[SESSION_BASELINE_ENV]);
+  assertBaselineIdentity(baseline, identify);
+  assertBaselineIsNotHost(baseline, hosts, (pid) => `pid ${pid}, ${baseline.name}, ${baseline.bundle}`);
+  return baseline;
+}
+
+function assertBaselineIdentity(baseline, identify) {
+  const current = identify(baseline.pid);
+  if (current === null || current.pid !== baseline.pid || current.name !== baseline.name || current.bundle !== baseline.bundle) {
+    throw new Error(`${SESSION_BASELINE_ENV} identifies pid ${baseline.pid}, ${baseline.name}, ${baseline.bundle}, ` +
+      `but that process is not the same running application (${current === null ? "not running" : JSON.stringify(current)})`);
+  }
+}
+
+function assertBaselineIsNotHost(baseline, hosts, describe) {
+  const host = hosts.find(({ pid }) => pid === baseline.pid);
+  if (host !== undefined) {
+    throw new Error(`the frontmost application before the checks is tested host ${host.name} (${describe(baseline.pid)}); ` +
+      `tested hosts: ${hosts.map(({ name, pid }) => `${name} pid ${pid}`).join(", ")}; nothing was measured. ` +
+      "Bring another application to the front and run the checks again.");
+  }
 }
 
 /**
@@ -41,11 +112,16 @@ export function describeApp(pid) {
  * the hosts to check (hosts, { name, pid }), every synthetic pointer measurement of the session would measure an active
  * application, so the check fails before the first check and names that application and host.
  */
-export function sessionBaseline({ hosts, read = frontmostApp, describe = describeApp }) {
+export function sessionBaseline({ hosts, read = frontmostContext, describe = describeApp }) {
   const baseline = read();
-  const host = hosts.find(({ pid }) => pid === baseline);
+  if (baseline === null || !Number.isSafeInteger(baseline.pid) || baseline.pid <= 0 ||
+      typeof baseline.name !== "string" || baseline.name.length === 0 ||
+      typeof baseline.bundle !== "string" || baseline.bundle.length === 0) {
+    throw new Error("the frontmost application has no valid process identity; nothing was measured");
+  }
+  const host = hosts.find(({ pid }) => pid === baseline.pid);
   if (host !== undefined) {
-    throw new Error(`the frontmost application before the checks is tested host ${host.name} (${describe(baseline)}); ` +
+    throw new Error(`the frontmost application before the checks is tested host ${host.name} (${describe(baseline.pid)}); ` +
       `tested hosts: ${hosts.map(({ name, pid }) => `${name} pid ${pid}`).join(", ")}; nothing was measured. ` +
       "Bring another application to the front and run the checks again.");
   }
@@ -58,11 +134,9 @@ export function activateApp(pid) {
 }
 
 /**
- * After the checks, restores the active application to the baseline of the session and verifies it. When the checked
- * host host is active, it activates the baseline again and waits until the host is inactive. Then it fails if one of
- * the hosts that the session opened (hosts) is active. The checks do not activate another application, so an active
- * other application was changed by the user and is not taken away. The return value is the active application before
- * and after the restore.
+ * After a check, restores the validated session baseline when the checked host is frontmost and waits until that host is
+ * inactive. It reports another tested host that remains frontmost. An unrelated frontmost application is left alone.
+ * The return value is the active application before and after the restore.
  */
 export async function restoreFrontmost({ name, baseline, host, hosts, read = frontmostApp, activate = activateApp, inactive }) {
   const before = read();

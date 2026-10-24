@@ -11,6 +11,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { auditRunWithCatalog } from './audit-run.mjs';
 import { runTests } from './test-runner.mjs';
+import { sessionBaselineEnvironment } from '../packages/window-check/frontmost.mjs';
 
 /** The seconds since the last keyboard or pointer input of the person, or null when the system does not report it. */
 export function idleSeconds() {
@@ -55,9 +56,12 @@ export function parseTestScript(script, where) {
   const before = [];
   let tests = null;
   for (const step of steps) {
-    if (step.startsWith('node --test ')) {
+    if (step.startsWith('node --test ') || step.startsWith('node ./run.mjs --test ')) {
       if (tests !== null) throw new Error(`${where}: the test script "${script}" runs node --test twice`);
-      const words = step.slice('node --test '.length).split(/\s+/).filter(Boolean).map((word) => word.replace(/^'(.*)'$/, '$1'));
+      const command = step.startsWith('node ./run.mjs --test ')
+        ? step.slice('node ./run.mjs --test '.length)
+        : step.slice('node --test '.length);
+      const words = command.split(/\s+/).filter(Boolean).map((word) => word.replace(/^'(.*)'$/, '$1'));
       tests = { flags: words.filter((word) => word.startsWith('--')), paths: words.filter((word) => !word.startsWith('--')) };
     } else if (step === 'pnpm -r test') {
       continue;
@@ -207,7 +211,14 @@ async function main(argv) {
   const run = newRun(ROOT);
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each limited to ${limitMs / 1000}s; run ${run.id} keeps its output and manifest in ${run.folder}`);
   const beforeEach = values['when-idle'] === undefined ? undefined : whenIdle(count('when-idle'), { write });
-  const { results } = await runTests({ tests: tests.map((item) => ({ ...item, timeoutMs: limitMs })), concurrency, write, beforeEach, run });
+  const windowCheckSession = scriptName.startsWith('verify') && tests.some((item) => item.name.startsWith('e2e/'))
+    ? sessionBaselineEnvironment()
+    : null;
+  const { results } = await runTests({
+    tests: tests.map((item) => ({ ...item, timeoutMs: limitMs,
+      ...(windowCheckSession === null ? {} : { env: { ...item.env, ...windowCheckSession } }) })),
+    concurrency, write, beforeEach, run,
+  });
   const passed = [...results.values()].every((result) => result.status === 'pass');
   // The logs are audited also when a test failed, because a failed run is classified by its logs.
   const audited = auditAfterRun(scriptName, run, write);

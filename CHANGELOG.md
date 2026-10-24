@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-50: Capture one frontmost `{pid, name, bundle}` identity for a window-check session and pass it to global setup and every isolated test worker. Reject missing, malformed, stale and tested-host baselines before a check; consume the shared identity in app cleanup instead of recapturing per process. The owning controlled worker and frontmost tests pass 18/18; the Node runner test passes 12/12. `make e2e-check` and `make docs-check` pass. No application was launched or activated.
+
 - F212.10-core-3-5: Remove a view's exposure registrations when its current
   native process ends. The registration belongs to that process, so keeping it
   while its generation is absent lets source selection choose an ended view.

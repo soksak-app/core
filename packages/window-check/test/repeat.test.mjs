@@ -22,7 +22,11 @@ function fixture(t) {
 // The repeat tool runs as a top-level command, so the node:test execution context of this check (NODE_TEST_CONTEXT) is
 // not passed on. The color sets only the FORCE_COLOR that the check chooses. When NO_COLOR is also present, node puts a
 // warning into the output.
-const { NODE_TEST_CONTEXT, NO_COLOR, ...environment } = process.env;
+const { NODE_TEST_CONTEXT, NO_COLOR, ...inheritedEnvironment } = process.env;
+const environment = {
+  ...inheritedEnvironment,
+  SOKSAK_WINDOW_CHECK_BASELINE: JSON.stringify({ pid: 100, name: "baseline fixture", bundle: "org.example.baseline" }),
+};
 const run = (file, name, color = "3") => spawnSync(process.execPath,
   [repeat, "--setup", "./setup.mjs", "--file", file, "--name", name, "--count", "2"],
   { cwd: dirname(file), encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: color } });
