@@ -76,6 +76,37 @@ test("normal shutdown ignores an application error written before the audit offs
   }
 });
 
+test("normal shutdown retains an application error when the shutdown wait fails", async () => {
+  const { configDir, log } = fixture();
+  const client = {
+    endpoint: { pid: 200 },
+    request: async () => null,
+    close() {},
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      waitForShutdown: async () => {
+        appendFileSync(log, `${JSON.stringify({ seq: 2, level: "error", layer: "host", event: "host.record.error", fields: { where: "shutdown", text: "late quit failure" } })}\n`);
+        throw new Error("controlled shutdown timeout");
+      },
+      env: {},
+      write: () => {},
+    }), (error) => {
+      assert.ok(error instanceof AggregateError, `expected both failures, received ${error}`);
+      assert.match(error.errors[0].message, /controlled shutdown timeout/);
+      assert.match(error.errors[1].message, /application logged 1 error during shutdown/);
+      assert.match(error.errors[1].message, /error host shutdown: late quit failure/);
+      return true;
+    });
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test("normal shutdown closes both clients when the shutdown wait fails", async () => {
   const { configDir } = fixture();
   const serviceEndpoint = join(configDir, "services", "terminal", "endpoint.json");

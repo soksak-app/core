@@ -57,12 +57,15 @@ export async function runNormalShutdown({
   await waitFilesystem("endpoint", () => existsSync(endpointFile), STARTUP_LIMIT);
   const client = await connectClient({ configDir: app.configDir });
   let serviceClient = null;
-  let failure = null;
+  const failures = [];
+  let audit = null;
   let result;
   try {
     const pid = client.endpoint.pid;
-    const eventOffsets = currentEventOffsets(app.configDir);
-    const eventBoot = sessionEventBoot(app.configDir, pid);
+    audit = {
+      offsets: currentEventOffsets(app.configDir),
+      boot: sessionEventBoot(app.configDir, pid),
+    };
     await waitReady(client);
     const terminal = env.SOKSAK_SHUTDOWN_TERMINAL === "1"
       ? await prepare(client, request, { startupLimit: STARTUP_LIMIT }) : null;
@@ -96,9 +99,9 @@ export async function runNormalShutdown({
       }
       serviceClosedMs = Date.now() - serviceFrom;
     }
-    result = { appName: app.name, pid, terminal, closedMs, serviceClosedMs, eventOffsets, eventBoot, by };
+    result = { appName: app.name, pid, terminal, closedMs, serviceClosedMs, by };
   } catch (error) {
-    failure = error;
+    failures.push(error);
   }
 
   const closeErrors = [];
@@ -110,19 +113,18 @@ export async function runNormalShutdown({
       closeErrors.push(new Error(`${app.name}: could not close the ${name} client: ${error?.message ?? error}`, { cause: error }));
     }
   }
-  if (!failure) {
+  if (audit) {
     try {
-      auditShutdownErrors({ appName: app.name, configDir: app.configDir, offsets: result.eventOffsets, boot: result.eventBoot });
+      auditShutdownErrors({ appName: app.name, configDir: app.configDir, offsets: audit.offsets, boot: audit.boot });
     } catch (error) {
-      failure = error;
+      failures.push(error);
     }
   }
-  if (failure && closeErrors.length) {
-    throw new AggregateError([failure, ...closeErrors], `${app.name}: shutdown failed: ${failure?.message ?? failure}; client cleanup also reported ${closeErrors.length} error${closeErrors.length === 1 ? "" : "s"}`);
+  failures.push(...closeErrors);
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    throw new AggregateError(failures, `${app.name}: shutdown reported ${failures.length} errors; primary failure: ${failures[0]?.message ?? String(failures[0])}`);
   }
-  if (failure) throw failure;
-  if (closeErrors.length === 1) throw closeErrors[0];
-  if (closeErrors.length > 1) throw new AggregateError(closeErrors, `${app.name}: client cleanup reported ${closeErrors.length} errors`);
 
   write(`PASS normal-shutdown app=${app.name} by=${result.by} pid=${result.pid} terminal=${result.terminal?.sessionId ?? "none"} endpoint_absent_at_close=true endpoint_closed_ms=${result.closedMs} service_closed_ms=${result.serviceClosedMs}`);
   return { appName: result.appName, pid: result.pid, terminal: result.terminal, closedMs: result.closedMs, serviceClosedMs: result.serviceClosedMs };
