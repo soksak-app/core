@@ -219,6 +219,19 @@ fn run(
     ["bindings.rs: command run argument id is String, not Argument<T>"]);
 });
 
+test("command argument audit accepts a framework channel argument", { timeout: 1000 }, () => {
+  const source = `
+#[tauri::command(async)]
+fn listen(on_message: tauri::ipc::Channel<Vec<DeclaredSourceEvent>>) -> Result<(), String> {}
+
+#[tauri::command(async)]
+fn reject(channel: other::ipc::Channel<Vec<DeclaredSourceEvent>>) -> Result<(), String> {}
+`;
+  assert.deepEqual(findUndecodedCommandArguments(source, "bindings.rs"), [
+    "bindings.rs: command reject argument channel is other::ipc::Channel<Vec<DeclaredSourceEvent>>, not Argument<T>",
+  ]);
+});
+
 test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
   const files = {
     "native/darwin/src/a.m": "// TODO: Implement the panel\n",

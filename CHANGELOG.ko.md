@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-48-3-1: fully qualified `tauri::ipc::Channel<T>`만 framework가
+  decode하는 command argument로 취급한다. Tauri 2.12.1은 channel에
+  `CommandArg`를 구현하고 JavaScript channel id에서 주입하므로 page JSON
+  argument가 아니다. Red: owning checker test는 channel을 decode되지 않은
+  값으로 보고했다. Green: channel test와 기존 unwrapped `String` 거부 검사가
+  통과한다. Paired-host audit은 분류기 오류 없이 관련 없는 경로 finding
+  18개를 보고하며, 해당 finding은 계속 열린 상태다.
+
 - F239-48-2: `declared-ui-style.test.mjs`의 일반 tree fixture는 files를
   tree key와 `expandedByTree` lookup key로 사용했고, 이는 선언된 plugin id라
   `make boundaries`에서 core test의 plugin 참조로 거부됐다. Red: 변경 전
