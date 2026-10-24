@@ -57,6 +57,13 @@
   syncing after a newer empty layout retired its declaration. Host placement
   and theme-ordering tests pass after the fix. The earlier two-host project
   startup error remains unaccepted until rebuilt-host verification.
+- F212.10-core-3-14: Add opt-in page trace records for view-composition
+  declaration/disposal and complete native surface-sync requests. Records
+  correlate the page identity, mount attempt, exact included view IDs, request
+  ID and host-call outcome. Page disposal is not reported as native clear.
+  Unchanged owner tests failed because the declaration and sync records were
+  absent; the same owner files pass 16/16 after instrumentation. No application
+  runtime was run; the F3-4 missing-composition cause remains unknown.
 
 - F239-47-35: Bind the initial cursor observer to the accepted screen frame.
   The input-only baseline now accepts `render: null` when the cursor frame

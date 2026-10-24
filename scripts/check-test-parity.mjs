@@ -5109,7 +5109,7 @@ const FEATURE_LINKS = [
     id: "F263",
     implementation: [
       { file: "packages/workbench/host.js", symbol: "while (reply !== themeReply)" },
-      { file: "packages/workbench/host.js", symbol: 'return tell("syncSurfaces", request)' },
+      { file: "packages/workbench/host.js", symbol: 'return syncSurfaces(request, surfaceModules)' },
     ],
     tests: [
       { file: "packages/workbench/test/host-theme-placement.test.mjs", id: "view placement waits for the latest host theme reply" },

@@ -16,9 +16,12 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
   const waited = [];
   const calls = [];
   const mountOrder = [];
+  const traceEvents = [];
+  const attempts = new Map([["visible-view", 1], ["retained-view", 2], ["cold-view", 3]]);
   const authorize = (id) => { mountOrder.push(`authorize:${id}`); };
   t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false } : null,
+    mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false,
+      mountRegistration: { attempt: attempts.get(id) } } : null,
     authorizeSurface: authorize,
     mountSurface: async (slot, surface) => {
       mountOrder.push(`mount:${surface.surfaceId}`);
@@ -30,6 +33,12 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       mountOrder.push(`wait:${id}`);
       if (!mounted.has(id)) throw new Error(`surface ${id} is not mounted`);
     },
+  } });
+  const actualPerformance = await import("../performance.js");
+  t.mock.module("../performance.js", { exports: {
+    ...actualPerformance,
+    traceEnabled: () => true,
+    trace: (event, fields) => traceEvents.push({ event, fields }),
   } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
@@ -75,6 +84,14 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
 
     assert.deepEqual(calls.find(({ name }) => name === "syncSurfaces")?.request.surfaces.map(({ id }) => id),
       ["visible-view", "retained-view", "cold-view"], "the host request did not preserve retained views or prepare the cold loaded view");
+    assert.deepEqual(traceEvents.find(({ event }) => event === "surface.sync"), {
+      event: "surface.sync",
+      fields: { page: String(document.defaultView.performance.timeOrigin), requestId: 1, views: [
+        { surface: "visible-view", attempt: 1 },
+        { surface: "retained-view", attempt: 2 },
+        { surface: "cold-view", attempt: 3 },
+      ], outcome: "accepted" },
+    }, "the completed sync record did not identify the exact view set and mount attempts");
     assert.equal(Object.hasOwn(calls.find(({ name }) => name === "syncSurfaces").request.surfaces[2], "retainedTextSize"), false,
       "workbench-only retained text scale metadata crossed the host placement boundary");
     assert.deepEqual(waited, ["visible-view", "retained-view", "cold-view"], "the host composition barrier did not wait for every requested view");
@@ -90,6 +107,60 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     assert.equal(document.querySelector("[data-retained-surface-mounts]"), null, "an unloaded dormant view kept its hidden mount slot");
     retainedMounts.releaseRetainedSurfaceSlots(record, new Set());
     assert.equal(document.querySelector("[data-retained-surface-mounts]"), null, "released hidden mount slots remained in the document");
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("surface sync traces its result only while the performance trace is enabled", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>', { url: "https://example.test/" });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  const traceEvents = [];
+  let mountTraceLookups = 0;
+  let tracing = false;
+  const view = { id: "sync-trace-view", plugin: "sync-trace-probe", dim: false, visible: true,
+    applied: { x: 0, y: 0, w: 20, h: 20 },
+    surface: { surfaceId: "sync-trace-view", pluginId: "sync-trace-probe", composition: { kind: "view", page: "ui/page.html" } },
+    start: { origin: { directory: null } } };
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => { mountTraceLookups += 1; return { mountRegistration: { attempt: 7 } }; },
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
+  const actualPerformance = await import("../performance.js");
+  t.mock.module("../performance.js", { exports: {
+    ...actualPerformance,
+    traceEnabled: () => tracing,
+    trace: (event, fields) => traceEvents.push({ event, fields }),
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { windows: {}, host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
+      if (name === "syncSurfaces") throw new Error("composition missing in current page");
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+
+  try {
+    const host = await import("../host.js?surface-sync-trace-result");
+    await host.surfaces.theme({ scheme: "dark", tokens: {} });
+    const record = { surfaces: [view], settled: true, drawn: true, titlebar: 40 };
+    await assert.rejects(host.surfaces.place(record), /composition missing in current page/);
+    assert.deepEqual(traceEvents, [], "a disabled trace wrote a surface sync record");
+    assert.equal(mountTraceLookups, 0, "a disabled trace read mount metadata to build fields");
+
+    tracing = true;
+    await assert.rejects(host.surfaces.place({ ...record, surfaces: [{ ...view, applied: { ...view.applied, x: 1 } }] }),
+      /composition missing in current page/);
+    assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.sync"), [{
+      event: "surface.sync",
+      fields: { page: String(document.defaultView.performance.timeOrigin), requestId: 1,
+        views: [{ surface: view.id, attempt: 7 }], outcome: "rejected" },
+    }], "a rejected native sync was not recorded with its exact request view and mount attempt");
+    assert.equal(mountTraceLookups, 1, "an enabled sync did not read its mount attempt exactly once");
   } finally {
     dom.window.close();
   }

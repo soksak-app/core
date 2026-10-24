@@ -56,6 +56,13 @@
   retire한 뒤 앞선 view request가 sync되는 문제를 재현했다. 수정 후 host 배치와
   theme 순서 test가 통과했다. 앞선 두-host project startup 오류는 rebuilt-host
   검증 전까지 통과로 인정하지 않는다.
+- F212.10-core-3-14: view-composition 선언/폐기와 전체 native surface-sync
+  request를 위한 opt-in page trace를 추가한다. 기록은 page identity, mount
+  attempt, 실제 포함된 view ID, request ID, host 호출 결과를 연결한다. Page
+  폐기를 native clear로 기록하지 않는다. 변경 전 owner test는 declaration과
+  sync 기록이 없어 실패했고, 계측 뒤 같은 owner 파일들이 16/16 통과한다.
+  Application runtime은 실행하지 않았으며 F3-4 missing-composition 원인은
+  미확인 상태다.
 
 - F239-47-35: 초기 cursor observer를 승인된 screen frame에 묶는다.
   Input-only baseline은 cursor frame이 screen frame과 정확히 일치할 때
