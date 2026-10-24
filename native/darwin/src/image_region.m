@@ -71,7 +71,9 @@
 - (NSString *)jsonRange:(NSRange)range;
 - (NSString *)jsonEscapedString:(NSString *)string;
 - (NSString *)inputState;
+- (NSString *)preeditSnapshotJSON:(BOOL *)changed;
 - (void)performInsertText:(id)string text:(NSString *)text range:(NSRange)range;
+- (void)reportInsert:(NSString *)text;
 - (void)logInput:(NSString *)call fields:(NSString *)fields before:(NSString *)before;
 - (BOOL)enterInput;
 - (void)leaveInput:(BOOL)opened;
@@ -827,8 +829,10 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
     if (![self selectedSourceComposes]) {
-        [self commitThrough:self.textStorage.length];
+        NSString *committed = [self commitThrough:self.textStorage.length];
         [self clearDocument];
+        if (committed.length) [self reportInsert:committed];
+        else [self reportPreedit];
         return;
     }
     NSUInteger end = self.selectedRange.location;
@@ -841,12 +845,14 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         && isHangul([self.textStorage.string characterAtIndex:through - 1])) {
         through -= 1;
     }
-    if (through > self.committedLength) [self commitThrough:through];
+    NSMutableString *committed = [NSMutableString string];
+    if (through > self.committedLength) [committed appendString:[self commitThrough:through]];
     if ([self selectedSourceComposesOnlyHangul] && self.textStorage.length > self.committedLength) {
         unichar last = [self.textStorage.string characterAtIndex:self.textStorage.length - 1];
-        if (!isHangul(last)) [self commitThrough:self.textStorage.length];
+        if (!isHangul(last)) [committed appendString:[self commitThrough:self.textStorage.length]];
     }
-    [self reportPreedit];
+    if (committed.length) [self reportInsert:committed];
+    else [self reportPreedit];
 }
 
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {
@@ -917,31 +923,29 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
 
 // Reports the part of the document from the commit position to end as committed input. It does not change the
 // document.
-- (void)commitThrough:(NSUInteger)end {
-    if (end <= self.committedLength) return;
+- (NSString *)commitThrough:(NSUInteger)end {
+    if (end <= self.committedLength) return @"";
     NSString *committed = [self.textStorage.string substringWithRange:
         NSMakeRange(self.committedLength, end - self.committedLength)];
     NSUInteger from = self.committedLength;
     self.committedLength = end;
     [self logInput:@"commitThrough" fields:[NSString stringWithFormat:@"\"from\":%lu,\"to\":%lu,\"committed\":\"%@\"",
         (unsigned long)from, (unsigned long)end, [self jsonEscapedString:committed]] before:nil];
-    NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":null,\"attributed\":false}",
-        [self jsonEscapedString:committed]];
-    [self report:json.UTF8String];
+    return committed;
 }
 
-// Reports the retained suffix and its exact AppKit composition and selection state.
-- (void)reportPreedit {
+// Serializes the retained suffix and its exact AppKit composition and selection state.
+- (NSString *)preeditSnapshotJSON:(BOOL *)changedOut {
     if (self.unmarking) {
         [self logInput:@"reportPreedit" fields:@"\"deferred\":true" before:nil];
-        return;
+        return nil;
     }
     NSString *storage = self.textStorage.string;
     if (self.committedLength > storage.length) {
         NSString *reason = [NSString stringWithFormat:@"committed input length %lu exceeds document length %lu",
             (unsigned long)self.committedLength, (unsigned long)storage.length];
         [self failInput:reason where:"composition range" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
-        return;
+        return nil;
     }
     NSString *preedit = [storage substringFromIndex:self.committedLength];
     BOOL hasMarkedText = [super hasMarkedText];
@@ -953,7 +957,7 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
             NSString *reason = [NSString stringWithFormat:@"marked range %@ is outside the retained composition text of length %lu",
                 [self jsonRange:marked], (unsigned long)preedit.length];
             [self failInput:reason where:"composition range" text:[NSString stringWithFormat:@"%@ (state %@)", reason, [self inputState]]];
-            return;
+            return nil;
         }
         localMarked = NSMakeRange(marked.location - self.committedLength, marked.length);
     }
@@ -965,20 +969,35 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         || hasMarkedText != self.reportedHasMarkedText
         || !NSEqualRanges(localMarked, self.reportedMarkedRange)
         || !NSEqualRanges(localSelected, self.reportedSelectedRange);
-    if (!changed) {
-        [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":false",
-            [self jsonEscapedString:preedit]] before:nil];
-        return;
-    }
+    if (changedOut) *changedOut = changed;
     self.reportedPreedit = preedit;
     self.hasReportedCompositionState = YES;
     self.reportedHasMarkedText = hasMarkedText;
     self.reportedMarkedRange = localMarked;
     self.reportedSelectedRange = localSelected;
-    [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":true",
-        [self jsonEscapedString:preedit]] before:nil];
-    NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"markedRange\":%@,\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
+    [self logInput:@"reportPreedit" fields:[NSString stringWithFormat:@"\"preedit\":\"%@\",\"changed\":%@",
+        [self jsonEscapedString:preedit], changed ? @"true" : @"false"] before:nil];
+    return [NSString stringWithFormat:@"{\"text\":\"%@\",\"markedRange\":%@,\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
         [self jsonEscapedString:preedit], [self jsonRange:localMarked], [self jsonRange:localSelected]];
+}
+
+// Reports the retained suffix and its exact AppKit composition and selection state.
+- (void)reportPreedit {
+    BOOL changed = NO;
+    NSString *snapshot = [self preeditSnapshotJSON:&changed];
+    if (!snapshot || !changed) return;
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"compose\",\"text\":\"%@\",\"markedRange\":%@,\"selectedRange\":%@,\"replacementRange\":null,\"attributed\":false}",
+        [self jsonEscapedString:self.reportedPreedit], [self jsonRange:self.reportedMarkedRange],
+        [self jsonRange:self.reportedSelectedRange]];
+    [self report:json.UTF8String];
+}
+
+- (void)reportInsert:(NSString *)text {
+    BOOL changed = NO;
+    NSString *snapshot = [self preeditSnapshotJSON:&changed];
+    if (!snapshot) return;
+    NSString *json = [NSString stringWithFormat:@"{\"type\":\"insert\",\"text\":\"%@\",\"replacementRange\":null,\"attributed\":false,\"preedit\":%@}",
+        [self jsonEscapedString:text], snapshot];
     [self report:json.UTF8String];
 }
 
@@ -986,7 +1005,6 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
     NSString *before = [self inputState];
     [self.textStorage deleteCharactersInRange:NSMakeRange(0, self.textStorage.length)];
     self.committedLength = 0;
-    [self reportPreedit];
     [self logInput:@"clearDocument" fields:@"" before:before];
 }
 
@@ -999,9 +1017,11 @@ static SPImageRegion *spRegionUnderPress(SPImageRegion *view) {
         return;
     }
     [self logInput:@"commitPending" fields:@"\"skipped\":false" before:nil];
-    [self commitThrough:self.textStorage.length];
+    NSString *committed = [self commitThrough:self.textStorage.length];
     [self.inputContext discardMarkedText];
     [self clearDocument];
+    if (committed.length) [self reportInsert:committed];
+    else [self reportPreedit];
 }
 
 - (void)inputSourceChanged:(NSNotification *)notification {
