@@ -15,11 +15,11 @@ const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
  * adds the set set-files (files.tree, files.bookmarks, list) and the card-left link of the terminal to the common settings. When the check ends,
  * keepCommonSettings restores the set and the link together, so the caller does not reset sets separately.
  */
-export async function terminalCardSidebar(s) {
+export async function terminalCardSidebar(s, { sections = ["files.tree", "files.bookmarks"] } = {}) {
   await keepCommonSettings(s);
   const sets = (await s.get("core.settings")).values.sets;
   await s.run("core.settings.set", { patch: { sets: [...sets,
-    { id: "set-files", title: "파일", sections: ["files.tree", "files.bookmarks"], layout: "list" }] }, scope: "common" });
+    { id: "set-files", title: "파일", sections, layout: "list" }] }, scope: "common" });
   await s.run("core.settings.link", { place: "card-left", plugin: "terminal", set: "set-files", scope: "common" });
   await s.until("core.sidebars", (value) => value.some((item) => item.sidebar === "terminal:left"),
     "the terminal card sidebar did not appear");
