@@ -8,8 +8,9 @@
   F143 gksk resyllabification (하나), 이전에 승인된
   eight-vowel gesture를 사용하는 host별 10회 project close/reopen lifecycle
   cycle의 승인 전용 e2e selector를 추가한다. Case는 정의했지만 실행하지
-  않았으므로 activation 또는 lifecycle acceptance를 주장하지 않는다.
-  Lifecycle selector는 검증된 transaction envelope에서 native input action을
+  않았으므로 activation 또는 lifecycle acceptance를 주장하지 않는다. F143은
+  AppKit reference와 terminal 모두 Enter를 보내며 reference newline, terminal의
+  Enter 전 문서와 shell 출력을 확인한다. Lifecycle selector는 검증된 transaction envelope에서 native input action을
   읽고, committed screen cells와 current marked text를 AppKit document와
   비교하고, 전체 gesture capture를 보존하며, project close/reopen을 두 번
   수행한다. Overlay operation을 수행한다고 주장하지 않는다.

@@ -9,7 +9,7 @@
   and ten project close/reopen lifecycle cycles per
   host using the previously approved eight-vowel gesture. The cases are
   defined but have not been run; no activation or lifecycle acceptance is
-  claimed. The lifecycle selector reads native input actions from validated
+  claimed. F143 now sends Enter to both the AppKit reference and terminal; the reference must end with a newline, while the terminal checks its pre-Enter text and shell output. The lifecycle selector reads native input actions from validated
   transaction envelopes, compares committed screen cells plus current marked
   text with the AppKit document, preserves the full gesture capture, and
   performs two project close/reopen passes. It makes no overlay-operation

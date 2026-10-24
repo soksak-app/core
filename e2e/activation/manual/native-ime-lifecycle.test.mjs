@@ -151,7 +151,7 @@ for (const app of Object.values(APPS)) {
     await preserveInputSource(s);
     await focusedTerminal(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
-    await compareAppKitReference(s, ["g", "k", "s", "k", "Space"], "하나 ");
+    await compareAppKitReference(s, ["g", "k", "s", "k", "Space", "Enter"], "하나 \n");
     await focusedTerminal(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
     const stopTrace = await startInputTrace(s, surface);
