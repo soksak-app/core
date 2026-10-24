@@ -142,6 +142,7 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.trace.view.responsive` | call | debug | `{plugin, surface}`; state `core.plugin.views.responsive` |
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
+| `host.trace.view.callback-cancelled` | call | debug | `{surface, reason}`; reason is `retired-origin` or `window-closed` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`; counter `losses.abandoned`; written by the host, which owns the wait |
 | `page.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |

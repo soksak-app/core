@@ -142,6 +142,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.view.responsive` | call | debug | `{plugin, surface}`. 상태 `core.plugin.views.responsive` |
 | `host.trace.view.process-request` | call | debug | `{plugin, surface}` |
 | `host.trace.view.process-ready` | call | debug | `{plugin, surface}` |
+| `host.trace.view.callback-cancelled` | call | debug | `{surface, reason}`; reason은 `retired-origin` 또는 `window-closed` |
 | `host.trace.view.presentation-abandoned` | call | debug | `{surface, reason}`. 카운터 `losses.abandoned`. host가 wait를 소유하므로 host가 쓴다 |
 | `page.input.shortcut.failed` | input | error | `{plugin, command}` |
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |

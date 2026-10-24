@@ -338,6 +338,16 @@
       },
       "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of process-ended, hidden or unresponsive (docs/spec/native-surfaces.md#view-surfaces)."
     },
+    "host.trace.view.callback-cancelled": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "surface": "string",
+        "reason": "string"
+      },
+      "description": "A native callback from a retired view document was canceled before it reached the current view channel or main page; reason is retired-origin or window-closed (docs/spec/native-surfaces.md#view-surfaces)."
+    },
     "host.trace.view.process-request": {
       "layer": "host",
       "class": "call",

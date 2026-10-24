@@ -10,6 +10,7 @@
   remaining inventory issues, including the separate F266 classification.
   No behavior tests or production code changed.
 
+- F239-45: Tauri view callbacks carry a local origin registered before native document creation. Closing, replacing or removing a view retires that origin before resource release; message, navigation-state, process-end and responsiveness callbacks from stale origins cannot affect the current view channel. Stale callbacks write `host.trace.view.callback-cancelled` when performance tracing is enabled, while a producer `view.error` retains its captured plugin and surface. The controlled origin tests pass 7/7, including malformed and native error envelopes; existing view error and view call record tests pass 1/1 each. The host test targets compile, and `cargo fmt --check`, `make docs-check`, `make boundaries` and `make events-check` pass. `make parity-check` reports 10 existing findings, including the unclaimed Wails starter test and stale parity counts. The application shutdown matrix remains pending under F239-26-2.
 - F267.1: Repair the F148 and F163 behavior evidence links.
   The original parity output named the stale F148 test title and F163 source
   symbol. The links now resolve to the current test and source; the current

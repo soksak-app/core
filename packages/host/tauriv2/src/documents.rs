@@ -669,16 +669,34 @@ pub(crate) fn view_channel() -> Result<&'static str, String> {
 
 /// The view channel of one view surface: the plugin of its view and its ready document. An empty document means that no ready
 /// document is recorded (docs/spec/plugin-processes.md, rule 4).
-#[derive(Default)]
 struct ViewChannel {
     plugin: String,
     document: String,
+    origin: ViewOrigin,
     /// Set by the first ready message of the view, which writes host.trace.view.process-ready once.
     process_ready: bool,
     /// The navigations that the last document state of the view reported. A higher count starts a new document.
     navigations: u64,
     /// The calls that the view has open, by id, with the plugin and the command of each.
     calls: BTreeMap<u64, String>,
+}
+
+/// The local identity of one native view document. It does not depend on a native handle, which can be reused after release.
+#[derive(Clone, Debug)]
+struct ViewOrigin(std::sync::Arc<()>);
+
+/// The result of checking a native callback before it enters the view channel.
+#[derive(Debug, PartialEq, Eq)]
+enum ViewIngress {
+    Current,
+    Cancelled,
+    ProducerError(RetiredViewError),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RetiredViewError {
+    Channel(String),
+    View(String),
 }
 
 /// The view channels of a window, by surface. A navigation clears the ready document, so a post cannot reach a document that
@@ -690,6 +708,121 @@ pub struct ViewChannels(Mutex<HashMap<String, ViewChannel>>);
 struct ViewReceived {
     message: Option<Value>,
     error: Option<String>,
+}
+
+/// Parses errors from a retired view while leaving valid calls and replies for cancellation.
+fn retired_view_error(surface: &str, value: &str) -> Option<RetiredViewError> {
+    let received: ViewReceived = match serde_json::from_str(value) {
+        Ok(received) => received,
+        Err(error) => {
+            return Some(RetiredViewError::Channel(format!(
+                "{surface}: view message is not JSON: {error}"
+            )));
+        }
+    };
+    if let Some(error) = received.error {
+        return Some(RetiredViewError::Channel(error));
+    }
+    let Some(message) = received.message else {
+        return Some(RetiredViewError::Channel(format!(
+            "{surface}: view message has neither message nor error"
+        )));
+    };
+    let Some(fields) = message.as_object() else {
+        let error = match serde_json::from_value::<ViewEvent>(message) {
+            Err(error) => error,
+            Ok(_) => return None,
+        };
+        return Some(RetiredViewError::Channel(format!(
+            "{surface}: view event is not an object: {error}"
+        )));
+    };
+    match fields.get("event").and_then(Value::as_str) {
+        Some("view.error") => {}
+        Some("view.ready" | DECLARED_SNAPSHOT_MESSAGE) => return None,
+        Some(event) => {
+            return Some(RetiredViewError::Channel(format!(
+                "{surface}: view event {event:?} is unknown"
+            )));
+        }
+        None if fields.get("reply").is_some_and(|value| !value.is_null())
+            || fields.get("command").is_some_and(|value| !value.is_null())
+            || fields.get("cancel").is_some_and(|value| !value.is_null()) =>
+        {
+            return None;
+        }
+        None => {
+            let error = match serde_json::from_value::<ViewEvent>(message) {
+                Err(error) => error,
+                Ok(_) => return None,
+            };
+            return Some(RetiredViewError::Channel(format!(
+                "{surface}: view event is not an object: {error}"
+            )));
+        }
+    }
+    let Some(reason) = message
+        .get("reason")
+        .and_then(Value::as_str)
+        .filter(|reason| !reason.is_empty())
+    else {
+        return Some(RetiredViewError::Channel(format!(
+            "{surface}: view.error has no reason"
+        )));
+    };
+    if is_queue_full(reason) {
+        Some(RetiredViewError::Channel(reason.to_string()))
+    } else {
+        Some(RetiredViewError::View(reason.to_string()))
+    }
+}
+
+/// Writes an error produced by a retired view with the plugin and surface captured by its callback.
+fn report_retired_view_error(plugin: &str, surface: &str, error: RetiredViewError) {
+    match error {
+        RetiredViewError::Channel(reason) => log_error("view channel", reason),
+        RetiredViewError::View(reason) => log_error(&format!("view {plugin} {surface}"), reason),
+    }
+}
+
+/// Stops dispatch when a callback belongs to a retired view, while retaining its explicit producer error.
+fn accept_view_message(
+    channels: &ViewChannels,
+    plugin: &str,
+    surface: &str,
+    origin: &ViewOrigin,
+    value: &str,
+) -> bool {
+    match channels.ingress(surface, origin, value) {
+        ViewIngress::Current => true,
+        ViewIngress::Cancelled => false,
+        ViewIngress::ProducerError(error) => {
+            report_retired_view_error(plugin, surface, error);
+            false
+        }
+    }
+}
+
+/// Writes the trace record for a callback canceled after its view identity retired.
+fn record_view_message_cancelled(surface: &str, reason: &str) {
+    emit_host(
+        Level::Debug,
+        "host.trace.view.callback-cancelled",
+        json!({"surface": surface, "reason": reason}),
+    );
+}
+
+/// Whether origin still owns surface in a window that has not been removed.
+fn view_callback_retired_reason(
+    window: &Window,
+    surface: &str,
+    origin: &ViewOrigin,
+) -> Option<&'static str> {
+    match window_data(window) {
+        Err(_) => Some("window-closed"),
+        Ok(data) if !data.documents.views().is_current(surface, origin) => Some("retired-origin"),
+        Ok(_) => None,
+    }
 }
 
 #[derive(Deserialize)]
@@ -723,16 +856,58 @@ impl ViewChannels {
 
     /// Records the plugin of the view of surface. It runs when the view is created.
     pub fn register(&self, surface: &str, plugin: &str) {
+        self.register_origin(surface, plugin);
+    }
+
+    /// Registers a view before its native document loads and returns its local callback identity.
+    fn register_origin(&self, surface: &str, plugin: &str) -> ViewOrigin {
+        let origin = ViewOrigin(std::sync::Arc::new(()));
         self.lock().insert(
             surface.to_string(),
             ViewChannel {
                 plugin: plugin.to_string(),
                 document: String::new(),
+                origin: origin.clone(),
                 process_ready: false,
                 navigations: 0,
                 calls: BTreeMap::new(),
             },
         );
+        origin
+    }
+
+    /// Checks the local origin of one native callback before it enters message dispatch.
+    fn ingress(&self, surface: &str, origin: &ViewOrigin, value: &str) -> ViewIngress {
+        if self.is_current(surface, origin) {
+            return ViewIngress::Current;
+        }
+        if let Some(error) = retired_view_error(surface, value) {
+            return ViewIngress::ProducerError(error);
+        }
+        emit_host(
+            Level::Debug,
+            "host.trace.view.callback-cancelled",
+            json!({"surface": surface, "reason": "retired-origin"}),
+        );
+        ViewIngress::Cancelled
+    }
+
+    /// Whether origin still owns the view channel of surface.
+    fn is_current(&self, surface: &str, origin: &ViewOrigin) -> bool {
+        self.lock()
+            .get(surface)
+            .is_some_and(|channel| std::sync::Arc::ptr_eq(&channel.origin.0, &origin.0))
+    }
+
+    /// Removes the channel only when origin still owns surface.
+    fn forget_if_current(&self, surface: &str, origin: &ViewOrigin) {
+        let mut channels = self.lock();
+        if channels
+            .get(surface)
+            .is_some_and(|channel| std::sync::Arc::ptr_eq(&channel.origin.0, &origin.0))
+        {
+            channels.remove(surface);
+        }
     }
 
     /// Records that the view of surface has a ready message, and returns its plugin when this is its first ready message since it was
@@ -771,6 +946,11 @@ impl ViewChannels {
     /// Removes the record of the view of surface.
     pub fn forget(&self, surface: &str) {
         self.lock().remove(surface);
+    }
+
+    /// Removes all view identities of a window that has been destroyed.
+    pub fn forget_all(&self) {
+        self.lock().clear();
     }
 
     /// Whether the surface has a view.
@@ -1150,6 +1330,7 @@ pub(crate) fn sync_view(
         Ok(handle) => handle,
         Err(_) => {
             data.documents.reserve(&key)?;
+            let origin = data.documents.views().register_origin(surface, plugin);
             match attach_view(
                 window,
                 platform,
@@ -1158,19 +1339,21 @@ pub(crate) fn sync_view(
                 plugin,
                 page,
                 start,
+                origin.clone(),
             ) {
                 Ok(handle) => {
                     if !data.documents.set(&key, handle) {
+                        data.documents.views().forget_if_current(surface, &origin);
                         platform.close_document(handle)?;
                         return Err(format!(
                             "surface {surface:?} closed while its view was created"
                         ));
                     }
-                    data.documents.views().register(surface, plugin);
                     handle
                 }
                 Err(error) => {
                     data.documents.remove(&key)?;
+                    data.documents.views().forget_if_current(surface, &origin);
                     return Err(error);
                 }
             }
@@ -1197,6 +1380,7 @@ fn attach_view(
     plugin: &str,
     page: &str,
     start: ViewStart,
+    origin: ViewOrigin,
 ) -> Result<Handle, String> {
     let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
     let directory = config.join(DOCUMENT_DATA);
@@ -1216,10 +1400,14 @@ fn attach_view(
         .ok_or_else(|| "the view channel script is not loaded".to_string())?;
     let state_window = window.clone();
     let state_surface = surface.to_string();
+    let state_origin = origin.clone();
     let message_window = window.clone();
     let message_surface = surface.to_string();
+    let message_plugin = plugin.to_string();
+    let message_origin = origin.clone();
     let ended_window = window.clone();
     let ended_surface = surface.to_string();
+    let ended_origin = origin.clone();
     create_view(
         channel,
         |channel| {
@@ -1229,7 +1417,9 @@ fn attach_view(
                 &folder,
                 plugin,
                 Some(channel),
-                Box::new(move |state: String| view_state(&state_window, &state_surface, &state)),
+                Box::new(move |state: String| {
+                    view_state(&state_window, &state_surface, &state_origin, &state)
+                }),
             )?;
             // The receiver is set before the page loads, so the first message of the page reaches it.
             platform.set_view_message(
@@ -1239,6 +1429,8 @@ fn attach_view(
                         &message_window,
                         platform,
                         &message_surface,
+                        &message_plugin,
+                        &message_origin,
                         document,
                         &value,
                     )
@@ -1247,19 +1439,40 @@ fn attach_view(
             platform.set_view_ended(
                 document,
                 Box::new(move || {
+                    if let Some(reason) =
+                        view_callback_retired_reason(&ended_window, &ended_surface, &ended_origin)
+                    {
+                        record_view_message_cancelled(&ended_surface, reason);
+                        return;
+                    }
                     log_error(
                         "view channel",
                         format!("{ended_surface}: the view process ended"),
                     );
-                    view_failed(&ended_window, platform, &ended_surface, document);
+                    view_failed(
+                        &ended_window,
+                        platform,
+                        &ended_surface,
+                        &ended_origin,
+                        document,
+                    );
                 }),
             )?;
             let notice_window = window.clone();
             let notice_surface = surface.to_string();
             let notice_plugin = plugin.to_string();
+            let notice_origin = origin.clone();
             platform.set_view_responsiveness(
                 document,
                 Box::new(move |responsive| {
+                    if let Some(reason) = view_callback_retired_reason(
+                        &notice_window,
+                        &notice_surface,
+                        &notice_origin,
+                    ) {
+                        record_view_message_cancelled(&notice_surface, reason);
+                        return;
+                    }
                     if !responsive {
                         end_presentation_wait(&notice_window, &notice_surface, "unresponsive");
                     }
@@ -1286,9 +1499,16 @@ fn attach_view(
 }
 
 /// Records the navigation state of a view. A failure is written to the application log.
-fn view_state(window: &Window, surface: &str, state: &str) {
-    let result = window_data(window).and_then(|data| data.documents.views().state(surface, state));
-    if let Err(error) = result {
+fn view_state(window: &Window, surface: &str, origin: &ViewOrigin, state: &str) {
+    let Some(data) = window_data(window).ok() else {
+        record_view_message_cancelled(surface, "window-closed");
+        return;
+    };
+    if !data.documents.views().is_current(surface, origin) {
+        record_view_message_cancelled(surface, "retired-origin");
+        return;
+    }
+    if let Err(error) = data.documents.views().state(surface, state) {
         log_error("view channel", error);
     }
 }
@@ -1299,9 +1519,24 @@ fn view_message(
     window: &Window,
     platform: &'static dyn Platform,
     surface: &str,
+    plugin: &str,
+    origin: &ViewOrigin,
     document: Handle,
     value: &str,
 ) {
+    let data = match window_data(window) {
+        Ok(data) => data,
+        Err(_) => {
+            if let Some(error) = retired_view_error(surface, value) {
+                report_retired_view_error(plugin, surface, error);
+            }
+            record_view_message_cancelled(surface, "window-closed");
+            return;
+        }
+    };
+    if !accept_view_message(data.documents.views(), plugin, surface, origin, value) {
+        return;
+    }
     // A reply of the view answers a request of the main page, and goes to the main page as view-reply.
     let reply = window_data(window).and_then(|data| data.documents.views().reply(surface, value));
     match reply {
@@ -1371,7 +1606,7 @@ fn view_message(
             let overflow = is_queue_full(&error);
             log_error("view channel", error);
             if overflow {
-                view_failed(window, platform, surface, document);
+                view_failed(window, platform, surface, origin, document);
             }
         }
     }
@@ -1380,11 +1615,24 @@ fn view_message(
 /// Handles the failure of the view document of surface: its process ended, or its message queue overflowed. The view is closed, and it
 /// is created again unless the failure stops the restarts (docs/spec/plugin-processes.md, rule 5). A document that is not the current
 /// view of the surface was already replaced, so its failure is not counted again.
-fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, document: Handle) {
+fn view_failed(
+    window: &Window,
+    platform: &'static dyn Platform,
+    surface: &str,
+    origin: &ViewOrigin,
+    document: Handle,
+) {
     let data = match window_data(window) {
         Ok(data) => data,
-        Err(error) => return log_error("view channel", error),
+        Err(_) => {
+            record_view_message_cancelled(surface, "window-closed");
+            return;
+        }
     };
+    if !data.documents.views().is_current(surface, origin) {
+        record_view_message_cancelled(surface, "retired-origin");
+        return;
+    }
     let key: Key = (surface.to_string(), VIEW_NAME.to_string());
     // default: a surface without this view, or with another view handle, means that the failure belongs to a view that was already
     // closed or replaced, so the failure is not counted again.
@@ -1396,6 +1644,7 @@ fn view_failed(window: &Window, platform: &'static dyn Platform, surface: &str, 
     data.documents.lifecycle().record_end(surface);
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
+    data.documents.views().forget_if_current(surface, origin);
     end_presentation_wait(window, surface, "process-ended");
     // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
     if let Err(error) = emit_window(
@@ -1891,6 +2140,7 @@ pub fn remove_surface_for_reload(
 ) -> Vec<Handle> {
     // The view of the surface closes with its documents (docs/spec/logging.md#principles).
     documents.lifecycle().record_end(surface);
+    documents.views().forget(surface);
     streams.remove_surface(surface);
     documents.remove_surface(surface)
 }
@@ -1940,6 +2190,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
     // A view of the surface ends with it (docs/spec/logging.md#principles).
     data.documents.lifecycle().record_end(surface);
     data.documents.lifecycle().forget(surface);
+    data.documents.views().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();
     // The unregistration and the close happen in one task of the main thread. Other work that uses a document also
@@ -2536,3 +2787,7 @@ fn end_presentation_wait(window: &Window, surface: &str, reason: &str) {
         Err(error) => log_error("view channel", error),
     }
 }
+
+#[cfg(test)]
+#[path = "view_origin_test.rs"]
+mod view_origin_tests;

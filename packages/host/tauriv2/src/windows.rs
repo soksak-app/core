@@ -666,6 +666,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             // This is a close request that was not blocked. The window will soon disappear from the runtime, so it is
             // removed from the list.
             context.closing.store(true, Ordering::Relaxed);
+            context.documents.views().forget_all();
             // While the application quits, the web process of the window is killed: AppKit keeps XPC services alive
             // longer than their client, so the WebContent process would outlive the application
             // (docs/spec/hosts.md#process-lifecycle).
@@ -678,6 +679,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
         }
         tauri::WindowEvent::Destroyed => {
+            context.documents.views().forget_all();
             // A window that ends keeps no tab, so a removal that asked it is allowed.
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
