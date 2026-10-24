@@ -7,8 +7,13 @@
 - F239-47: Record the reported terminal IME visibility symptom and its
   unresolved cause. The acceptance identifies an AppKit reference, native
   input trace, terminal preedit, PTY state and full-gesture recording needed
-  to locate the failing boundary. The activation case is syntax-checked but
-  not run. `make e2e-check` remains blocked by the existing timeout rule at
+  to locate the failing boundary. The activation case reads committed cells
+  only through the reported cursor row and compares its preedit separately; a
+  focused screen-row fixture test passes 1/1. It also checks that Space ends
+  preedit and advances the PTY cursor; native/PTY insert traces contain the
+  four vowels, while Space is a key rather than inserted text. `node --check`,
+  `make docs-check` and `git diff --check` pass. The activation case is not run.
+  `make e2e-check` remains blocked by the existing timeout rule at
   `e2e/normal-shutdown-runner.mjs:95`. No activation or product code changed.
 
 - F239-47-3: Report AppKit's marked range in composition events. The native

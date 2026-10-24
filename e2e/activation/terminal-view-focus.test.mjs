@@ -62,6 +62,31 @@ function hostWindowFacts(value, surface) {
   };
 }
 
+function visibleInputBeforeCursor(screen, cursor, prompt) {
+  assert.ok(Number.isInteger(cursor.row) && Number.isInteger(cursor.col),
+    `terminal cursor has no cell position: ${JSON.stringify(cursor)}`);
+  assert.ok(cursor.row >= prompt.row && cursor.row < screen.lines.length,
+    `terminal cursor row is outside the screen: ${JSON.stringify({ cursor, rows: screen.lines.length })}`);
+  const rows = [];
+  for (let row = prompt.row; row <= cursor.row; row++) {
+    const cells = screen.lines[row];
+    const start = row === prompt.row ? prompt.col : 0;
+    const end = row === cursor.row ? cursor.col : cells.length;
+    rows.push(cells.slice(start, end).map((cell) => cell.ch === undefined ? " ".repeat(cell.width) : cell.ch).join(""));
+  }
+  const committed = rows.join("").trimEnd();
+  assert.ok(committed.startsWith(prompt.text),
+    `terminal cursor prefix lost its initial shell prompt: ${JSON.stringify({ prompt, cursor, committed })}`);
+  return `${committed.slice(prompt.text.length)}${cursor.preedit?.text ?? ""}`;
+}
+
+test("visible input uses the cursor row and ignores later blank screen rows", () => {
+  const cells = (text) => Array.from(text, (ch) => ({ ch, width: 1 }));
+  const screen = { lines: [cells("$ ㅏㅏ   "), cells("          ")] };
+  const cursor = { row: 0, col: 4, preedit: { text: "ㅏ" } };
+  assert.equal(visibleInputBeforeCursor(screen, cursor, { row: 0, col: 0, text: "$ " }), "ㅏㅏㅏ");
+});
+
 function inputEventFacts(events, surface) {
   const facts = [];
   for (const event of events) {
@@ -356,6 +381,7 @@ for (const app of Object.values(APPS)) {
             "Korean 2-set must be selected for the reference");
           for (const [index, key] of REPEATED_VOWEL_KEYS.entries()) {
             await s.press(key);
+            await s.presented();
             const stage = await s.request("diagnostics.input.reference", { action: "read" });
             referenceStages.push(stage);
             assert.equal(stage.document, REPEATED_VOWELS.slice(0, index + 1),
@@ -390,6 +416,13 @@ for (const app of Object.values(APPS)) {
           assert.equal(host.responder?.surface, surface, "the first responder must belong to the clicked terminal");
           assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
             "Korean 2-set must be selected for the terminal");
+          const initialScreen = await presentedScreen(s, surface);
+          const initialCursor = await s.get("terminal.cursor", surface);
+          const promptCells = initialScreen.lines[initialCursor.row].slice(0, initialCursor.col);
+          const promptText = promptCells.map((cell) => cell.ch === undefined ? " ".repeat(cell.width) : cell.ch).join("");
+          assert.ok(promptText.trimEnd().endsWith("$"),
+            `the terminal cursor must start at its shell prompt: ${JSON.stringify({ promptText, initialCursor })}`);
+          const prompt = { row: initialCursor.row, col: 0, text: promptText };
           const idleTrace = await s.get("terminal.ime.trace", surface);
           assert.equal(idleTrace.enabled, false, "the terminal IME trace must start idle");
           await s.run("terminal.ime.trace", { action: "start" }, surface);
@@ -418,17 +451,22 @@ for (const app of Object.values(APPS)) {
               compose,
             };
             terminalStages.push(stage);
-            const visibleText = `${stage.screen.join("\n")}${cursor.preedit?.text ?? ""}`;
-            assert.ok(visibleText.endsWith(referenceStages[index].document),
+            const visibleText = visibleInputBeforeCursor(screen, cursor, prompt);
+            assert.equal(visibleText, referenceStages[index].document,
               `terminal text before Space differs from AppKit after vowel ${index + 1}: ` +
               JSON.stringify({ expected: referenceStages[index].document, stage }));
             t.diagnostic(`${app.name}: terminal before Space after vowel ${index + 1}: ${JSON.stringify(stage)}`);
           }
 
+          const beforeSpace = terminalStages.at(-1).cursor;
           await s.press("Space");
           const committedLines = await readScreenUntil(s, surface,
             (lines) => lines.some((line) => line.includes(REPEATED_VOWELS)),
             "the terminal did not display all four vowels before another key");
+          const afterSpace = await s.until("terminal.cursor", (cursor) => cursor.row > beforeSpace.row ||
+            cursor.col > beforeSpace.col, "Space did not advance the terminal PTY cursor", { surface });
+          assert.equal((await s.get("terminal.compose", surface)).text, "",
+            "Space must end the terminal preedit before another key");
           const occurrences = committedLines.reduce((count, line) =>
             count + line.split(REPEATED_VOWELS).length - 1, 0);
           assert.equal(occurrences, 1, "the terminal must display the committed vowels exactly once");
@@ -441,6 +479,7 @@ for (const app of Object.values(APPS)) {
             .map((entry) => entry.text).join("");
           const ptyInserts = trace.entries.filter((entry) => entry.kind === "terminal-input" &&
             entry.input.type === "insert").map((entry) => entry.input.text).join("");
+          // Space is forwarded as a key, not counted as inserted text. Its PTY effect is checked by the cursor advance above.
           assert.equal(nativeInserts, REPEATED_VOWELS,
             "the native input client must commit exactly the four reference vowels");
           assert.equal(ptyInserts, REPEATED_VOWELS,
@@ -448,6 +487,7 @@ for (const app of Object.values(APPS)) {
           t.diagnostic(`${app.name}: repeated-vowel terminal result ${JSON.stringify({
             stages: terminalStages,
             committedLines,
+            afterSpace,
             nativeInserts,
             ptyInserts,
             trace: trace.entries,
