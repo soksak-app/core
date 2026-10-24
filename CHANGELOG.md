@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-47-35: Link the completed cursor-baseline predicate to its exported
+  implementation and the two owning frame-identity tests. The inventory audit
+  rejected the missing feature link and now passes without an exemption.
 - F239-47-36: Add a named clean-zsh ZLE variant of the existing eight-vowel,
   Backspace and Space activation scenario. Both scenarios share the same
   AppKit checkpoints, terminal observations, capture assertions and 33 ms

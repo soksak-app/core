@@ -5340,6 +5340,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-47-35",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function initialCursorFrameMatchesScreen(cursor, screen)" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline requires the accepted screen frame" },
+      { file: "e2e/activation/terminal-ime-document.test.mjs", id: "initial cursor baseline accepts null render only for the accepted screen frame" },
+    ],
+    expected: "The initial cursor matches the accepted screen frame exactly; null renderer metadata is allowed, and present renderer metadata must identify that same frame.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-51",
     implementation: [{ file: "e2e/files-open-failure.mjs", symbol: "export function treeNodes(snapshot)" }],
     tests: [
