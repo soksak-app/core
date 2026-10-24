@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
-import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins } from "../source-origins.js";
+import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins, sourceOrigin } from "../source-origins.js";
 import { viewCommandGenerationOf } from "../view-commands.js";
 import { recordOrigin } from "../tab-reports.js";
 import { setSurfaceTextSize } from "../text-size.js";
+import { chooseSource } from "../declared-section.js";
 
 setSurfaceTextSize(() => 1);
 
@@ -710,6 +711,85 @@ test("a view registers its exposure through the page and its port consumes forwa
     await disposeSurface(surfaceId);
     assert.equal(await dispatchSurfaceRequest({ surface: surfaceId, id: 8, method: "status.get", params: {} }),
       false, "the port survived the surface");
+  } finally {
+    await disposeSurface(surfaceId);
+    dom.window.close();
+  }
+});
+
+// The declared UI contract binds a registration to its source process. Ending the current view process removes that process's
+// registrations; a replacement can register again, while a delayed end from the old generation cannot remove the replacement.
+test("a view process end removes its status registrations and preserves replacement registrations", { timeout: 20000 }, async (t) => {
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = sourceListenerMap();
+  const calls = [];
+  const actualHost = await import("../host.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => {};
+      }, call: async (name, payload) => {
+        calls.push({ name, payload: { ...(payload ?? {}), surface: surface.surfaceId } });
+        return null;
+      } } };
+    },
+  } });
+  const { registry } = await import("../exposure.js");
+  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-exposure-generation-end");
+  const pluginId = "fixture-view-exposure-generation";
+  const surfaceId = "fixture-view-exposure-generation-surface";
+  const statusId = `${pluginId}.lines`;
+  recordOrigin(surfaceId, null, "test fixture");
+  registry.configure({ surfacePlugin: () => pluginId });
+  registry.declare(pluginId, { status: [{ name: statusId, description: "Lines.", schema: { type: "array" } }], commands: [], dom: [] });
+  registerPlugin({ id: pluginId, surface: () => null });
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  const registerStatus = (generation, id) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation, id,
+    command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: statusId } } });
+  const choose = () => chooseSource({ active: surfaceId, activeGeneration: sourceOrigin(pluginId, surfaceId),
+    registrants: registry.registrants("status", statusId) });
+  const settleRegistration = async (present) => {
+    for (let turn = 0; turn < 100; turn += 1) {
+      if (registry.registrants("status", statusId).includes(surfaceId) === present) return;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(registry.registrants("status", statusId).includes(surfaceId), present, "the exposure registration did not settle");
+  };
+  try {
+    authorizeSurface(surfaceId);
+    seedViewSource(pluginId, surfaceId, 1);
+    await mountSurface(document.querySelector("#slot"), surface);
+    registerStatus(1, 1);
+    await settleRegistration(true);
+    assert.deepEqual(choose(), { id: surfaceId, surface: surfaceId, generation: 1 }, "the current registered view was not selected");
+
+    assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the current source generation did not end");
+    listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
+    await settleRegistration(false);
+    assert.equal(sourceOrigin(pluginId, surfaceId), undefined, "the ended generation remains current");
+    assert.equal(viewCommandGenerationOf(surfaceId), null, "the ended view command layer remains current");
+    assert.equal(choose(), null, "an ended view registration remained eligible as a declared UI source");
+
+    assert.equal(registerSourceOrigin(pluginId, surfaceId, 2), true, "the replacement source generation did not register");
+    registerStatus(2, 2);
+    await settleRegistration(true);
+    assert.deepEqual(choose(), { id: surfaceId, surface: surfaceId, generation: 2 }, "the replacement registration was not selected");
+
+    assert.equal(endSourceOrigin(pluginId, surfaceId, 1), false, "a delayed old end retired the replacement generation");
+    listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
+    assert.deepEqual(registry.registrants("status", statusId), [surfaceId], "a delayed old end removed the replacement registration");
+    assert.equal(viewCommandGenerationOf(surfaceId), 2, "a delayed old end removed the replacement command layer");
+    assert.equal(calls.filter(({ name }) => name === "exposureRegister").length, 2, "both view generations must register the status with the host");
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();

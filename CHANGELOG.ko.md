@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F212.10-core-3-5: 현재 native process가 끝나면 view의 exposure
+  registration을 제거한다. Registration은 해당 process에 속하므로 generation이
+  없는 동안 남겨두면 source 선택이 종료된 view를 선택할 수 있다. Owning
+  lifecycle test는 변경 전 종료된 view가 등록 상태로 남아 실패하고, 수정 뒤
+  replacement registration과 지연된 이전 종료 검사를 통과한다. 새 사례와 기존
+  view restart/subscription cleanup 사례는 2/2, `make docs-check`와
+  `make exposure-check`는 통과한다. `make boundaries`는 변경하지 않은
+  `e2e/browser-cohort-upgrade.test.mjs`의 sidecar package 이름 참조 때문에 실패한다.
+  GUI 또는 전체 test suite는 실행하지 않았다.
+
 - F239-47-20: input receipt 뒤 각 coherent terminal document가 같은 window의
   AppKit reference와 일치할 때까지 기다린다. Backspace는 먼저 preedit을 지워도
   PTY에 committed vowel 8개가 남고, 이후 status event에서 기대한 7개 화면을

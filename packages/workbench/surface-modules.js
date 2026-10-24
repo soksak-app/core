@@ -527,6 +527,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   registrations.push(answering);
   const ending = scoped.native.on("view-process-ended", (event) => {
     if (event?.generation !== viewGeneration) return;
+    registry.unregisterSurface(surface.surfaceId);
     documentRegions.released(surface.surfaceId);
     documentGeneration += 1;
     for (const controller of pending.values()) controller.abort();

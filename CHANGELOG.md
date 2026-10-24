@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F212.10-core-3-5: Remove a view's exposure registrations when its current
+  native process ends. The registration belongs to that process, so keeping it
+  while its generation is absent lets source selection choose an ended view.
+  The owning lifecycle test fails before the correction because the ended view
+  remains registered, then passes with replacement registration and delayed-old-
+  end coverage. The new case and existing view restart/subscription cleanup
+  case pass 2/2; `make docs-check` and `make exposure-check` pass. `make
+  boundaries` remains blocked by the unchanged `e2e/browser-cohort-upgrade.test.mjs`
+  references to sidecar package names. No GUI or full suite was run.
+
 - F239-47-20: Wait for each coherent terminal document to match the same-window
   AppKit reference after input receipt. Backspace can first clear the preedit
   while the PTY still shows eight committed vowels, then publish the expected
