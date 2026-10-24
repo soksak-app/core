@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- G1.4-101-1-1: tao Cargo patch를 제거하고 crates.io의 tao 0.37.2를 사용한다. 릴리스 기록은 tao 이슈 1327의 닫힌 창 메모리 증가 수정을 포함한다고 명시한다. Red: 이 릴리스 전의 과거 실패를 새로운 Red로 재사용하지 않았다. Green: 두 host를 tao 0.37.2로 다시 빌드하고 추적 `window-release.test.mjs`의 Tauri와 Wails 검사를 통과했다(macOS 26.6.2 arm64, 파일 1개, 9.872초). `make docs-check`가 통과한다.
+
 - F212.12-2-1-2: Native view-focus test의 선택적 activation variant는 아직 검증되지 않았다. 기록된 통합 시도는 다른 앱이 frontmost여서 해당 test 전에 거부됐고, 앞선 data-store test는 timeout됐다. Wails `AcceptFirstMouse` 후보는 main webview를 설정했지만 검증 대상 계약은 plugin `SPDocumentView`에 있으므로 원복했다. Main page의 별도 첫 클릭 실패는 재현되지 않았으며 해당 후보의 source 변경은 남아 있지 않다.
 - F239-38: Wails와 Tauri는 모든 log policy에서 선언된 info level의 `host.test.start`, `host.test.end`를 저장하므로 lifecycle이 error 또는 off여도 진단 window check가 flush된 mark 위치를 받는다. 일반 lifecycle/info event는 계속 gate되고 수를 기록한다. Red: 변경 전 두 host 소유 검사가 start mark를 거부했다. Green: Wails는 두 policy의 mark 검사를 통과하고 Tauri `test_mark_test`는 4/4 통과하며 `make docs-check`도 통과한다. 보존된 window-release 실행은 fixture 준비 전에 실패해 release assertion을 실행하지 않았다.
 - F239-39: Workbench는 registry entry가 등록되거나 종료될 때 declared section source를 다시 선택한다. 이미 그려진 section이 새로 선택된 host 또는 view에서 값을 pull할 수 있고, source가 바뀌면 이전 snapshot subscription을 해제한다. Red: 바뀌지 않은 workbench consumer test는 section을 그린 뒤 host status가 등록돼도 pull하지 않았다. Green: 같은 test가 늦은 host pull/push, 동일 source 재등록의 중복 방지, view 전환, source 정리와 host 복구를 확인한다. sidebar, exposure, declared-section 검사는 각각 11/11, 34/34, 16/16 통과한다. `make docs-check`가 통과한다. 과거 Wails와 Tauri F35 실패의 registration 순서는 아직 unknown이며 app 검증은 계속 열려 있다.
