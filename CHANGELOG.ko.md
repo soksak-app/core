@@ -371,9 +371,14 @@
 - F239-37-2: 두 tree Files window check를 plugin-host status watch에서
   declared Files snapshot 및 core sidebar acceptance event로 옮긴다. 두 tree의
   확장·선택 일치, 디스크 삭제, bookmark 표시, 선언된 tree node와 control
-  rectangle 기준 visible row 측정은 유지한다. 변경된 E2E module의 `node --check`,
-  `make e2e-check`, `make docs-check`가 통과한다. Red/Green 실행이나 window
-  runtime acceptance는 기록하지 않는다.
+  rectangle 기준 visible row 측정은 유지한다. macOS Darwin arm64에서 core
+  0.0.21, Files 0.0.7, terminal 0.0.20, Files sidecar 0.0.8, VT sidecar
+  0.0.16의 동일한 앱 빌드로 정확한 case가 Tauri 4.042초, Wails 2.567초에
+  통과했다. 각 case의 host-log 구간에는 error-level 기록이 없고 Chrome PID
+  946이 실행 전·후·복원 후 frontmost baseline으로 유지됐다. 첫 Wails 시도는
+  눌린 button 사전 조건으로 실패했다. F239-53의 선언된 button-state 대기 뒤
+  두 번째 시도가 통과했다. 주변 run의 별도 실패는 전체 Files suite 통과를
+  입증하지 않는다.
 
 - F240-11: 현재 owner 근거에 맞춰 실행 계획을 정합화한다. F239-47-9에는
   보존된 activation Red/Green log와 platform을 기록하며 terminal 동작은

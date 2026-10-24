@@ -405,9 +405,15 @@
   watches to declared Files snapshots and core sidebar acceptance events. The
   check retains cross-tree expansion and selection, disk removal, bookmark
   display, and visible-row measurements against declared tree nodes and
-  control rectangles. `node --check` passes for the changed E2E modules;
-  `make e2e-check` and `make docs-check` pass. No Red/Green run or window
-  runtime acceptance is recorded here.
+  control rectangles. On macOS Darwin arm64 with core 0.0.21, Files 0.0.7,
+  terminal 0.0.20, Files sidecar 0.0.8 and VT sidecar 0.0.16, the exact case
+  passes on Tauri in 4.042 seconds and Wails in 2.567 seconds using the same
+  built app cohort. Both per-case host-log intervals contain no error-level
+  records; Chrome PID 946 remains the frontmost baseline before, after and
+  after restoration. The first Wails attempt failed on a pressed-button
+  precondition; after F239-53 added the declared button-state wait, the second
+  attempt passed. Unrelated failed cases in the surrounding runs do not
+  establish broader Files-suite acceptance.
 
 - F240-11: Reconcile the execution plan with current owner evidence. F239-47-9
   now records its preserved activation Red/Green log and platform without
