@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
-    let origins = crate::windows::DeclaredSourceOrigins::default();
+    let origins = crate::source_origins::DeclaredSourceOrigins::default();
     let generation = origins
         .issue_view("surface")
         .expect("the view origin is issued");
@@ -11,7 +11,7 @@ fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
     channels.register_origin("surface", "probe", generation);
 
     let registered =
-        crate::windows::declared_source_origin_event("probe", Some("surface"), generation);
+        crate::source_origins::declared_source_origin_event("probe", Some("surface"), generation);
     let snapshot = tag_view_generation(
         channels
             .snapshot(
@@ -43,7 +43,7 @@ fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
 
 #[test]
 fn a_stale_view_ack_is_not_posted_and_a_stale_pull_is_cancelled() {
-    let origins = crate::windows::DeclaredSourceOrigins::default();
+    let origins = crate::source_origins::DeclaredSourceOrigins::default();
     let old = origins
         .issue_view("surface")
         .expect("the first view origin is issued");

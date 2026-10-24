@@ -22,6 +22,7 @@ packages/host/wailsv3/                     packages/host/tauriv2/
     host.go        package documentation, Run         host.rs
     bindings.go    page call registration             bindings.rs
     windows.go     windows, readiness, close, exit    windows.rs
+    source_origins.go declared-source generations      source_origins.rs
     projects.go    folder check, choice, creation     projects.rs
     workspace.go   settings and project storage       workspace.rs
     surfaces.go    surface sync, presentation, place  surfaces.rs
