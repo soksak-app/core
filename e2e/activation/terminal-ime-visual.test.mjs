@@ -292,6 +292,14 @@ testWithTimeout("producer-shaped overlay metadata preserves effective colors and
     { shape: "hidden", focused: true, visible: true, blinkVisible: true }),
   { result: "declared", frame: "1/3/5" });
   assert.throws(() => validateRenderMetadata({ ...overlayRenderFixture, cursor: {
+    ...overlayRenderFixture.cursor, rect: { x: 8, y: 0, width: 1, height: 6 }, color: "#d0d0d0",
+  } }, overlayRenderFixture.frame, cursor), /undrawn cursor must not report rectangle or color/);
+  assert.throws(() => validateRenderMetadata({ ...hiddenCursor, cursor: {
+    ...hiddenCursor.cursor, rect: { x: 8, y: 0, width: 1, height: 6 }, color: "#d0d0d0",
+  } }, hiddenCursor.frame,
+  { shape: "hidden", focused: true, visible: true, blinkVisible: true }),
+  /undrawn cursor must not report rectangle or color/);
+  assert.throws(() => validateRenderMetadata({ ...overlayRenderFixture, cursor: {
     ...overlayRenderFixture.cursor, rect: { x: 12, y: 0, width: 1, height: 6 },
   } }, overlayRenderFixture.frame, cursor), /cursor rectangle is outside/);
   assert.throws(() => validateRenderMetadata({ ...overlayRenderFixture, cursor: {

@@ -336,6 +336,9 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
   if (drawn) {
     assert.ok(renderedCursor.rect, "drawn cursor rectangle is missing");
     if (renderedCursor.blend === "normal") assert.ok(renderedCursor.color !== null, "drawn normal cursor color is missing");
+  } else {
+    assert.equal(renderedCursor.rect, null, "undrawn cursor must not report rectangle or color");
+    assert.equal(renderedCursor.color, null, "undrawn cursor must not report rectangle or color");
   }
   return { result: "declared", frame };
 }
