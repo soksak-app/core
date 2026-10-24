@@ -38,6 +38,15 @@
   `make docs-check` pass. The latest Wails and Tauri runtime attempts each
   stopped after one terminal `k`; neither reached Backspace or Space, so
   F239-47-6 acceptance remains open.
+- F212.10-core-3-2: Wait for each view composition declaration before sending
+  native surface placement. Each host now rejects a view without a declaration
+  from the current page, and page reload clears the previous page's declaration
+  maps. Red: the placement barrier assertion observed no readiness wait, both
+  host checks accepted an undeclared view, and the Wails reload fixture retained
+  stale declarations. Green: placement waits for declaration and rejects when
+  the surface is disposed while waiting; current declarations are checked for
+  matching plugin and composition. The focused Workbench, Wails, and Tauri
+  owner tests pass. Runtime revalidation remains pending.
 - F212.10-core-3-1: Wait for native `view-call` and `view-reply` listener
   registration before declaring a view composition, which starts native view
   creation. This prevents the first view calls from racing page listener

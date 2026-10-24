@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, PoisonError};
 
 use super::{
-    Running, close_registered_surface, create_registered_surface, mark_first_commit,
-    pressed_surface, removed_surfaces,
+    Running, SurfaceComposition, clear_page_compositions, close_registered_surface,
+    create_registered_surface, mark_first_commit, pressed_surface, removed_surfaces,
 };
 
 // contract: exposure.host-window.reads-during-surface-creation
@@ -33,6 +33,24 @@ fn a_status_read_during_surface_creation_finds_the_registered_surface() {
     });
     assert!(failed.is_err());
     assert_eq!(surface_hosts.lock().unwrap().len(), 1);
+}
+
+// contract: view.placement.retires-declarations-on-page-reload
+#[test]
+fn clearing_page_compositions_retires_the_previous_generation() {
+    let composition = SurfaceComposition {
+        kind: "view".into(),
+        page: "ui/page.html".into(),
+        regions: Vec::new(),
+        overlays: Some(Vec::new()),
+    };
+    let compositions = Mutex::new(HashMap::from([("tab-old".into(), composition)]));
+    let plugins = Mutex::new(HashMap::from([("tab-old".into(), "probe".into())]));
+
+    clear_page_compositions(&compositions, &plugins);
+
+    assert!(compositions.lock().unwrap().is_empty());
+    assert!(plugins.lock().unwrap().is_empty());
 }
 
 // contract: exposure.host-window.reads-during-surface-close

@@ -385,6 +385,7 @@ pub(crate) fn reload_surface_documents(
         // clears; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
+    crate::surfaces::clear_page_compositions(&data.compositions, &data.surface_plugins);
     crate::exposure::window_changed(&window);
     Ok(completed_detachments)
 }

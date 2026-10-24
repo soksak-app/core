@@ -31,6 +31,46 @@ func TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView(t *testing.T) {
 	}
 }
 
+// contract: view.placement.requires-current-page-declaration
+func TestSyncRequestRejectsAViewWithoutACurrentPageDeclaration(t *testing.T) {
+	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
+	surface := Surface{ID: "tab-unannounced", Visible: true, Plugin: "page", Composition: composition, Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`)}, Rect: Rect{W: 10, H: 10}}
+	request := SyncRequest{Settled: true, Titlebar: 40, Surfaces: []Surface{surface}}
+	_, err := CheckSyncRequest(request, map[string]SurfaceComposition{}, map[string]string{})
+	if want := `surface "tab-unannounced" has no composition declaration in the current page`; err == nil || err.Error() != want {
+		t.Fatalf("the sync check returned %v, want %q", err, want)
+	}
+	current := map[string]SurfaceComposition{"tab-unannounced": composition}
+	plugins := map[string]string{"tab-unannounced": "page"}
+	if _, err := CheckSyncRequest(request, current, plugins); err != nil {
+		t.Fatalf("the current page declaration was refused: %v", err)
+	}
+	stale := SurfaceComposition{Kind: "view", Page: "ui/old-page.html", Regions: composition.Regions, Overlays: []string{}}
+	_, err = CheckSyncRequest(request, map[string]SurfaceComposition{"tab-unannounced": stale}, plugins)
+	if want := `surface "tab-unannounced" changed its composition declaration`; err == nil || err.Error() != want {
+		t.Fatalf("the sync check returned %v for a stale composition, want %q", err, want)
+	}
+}
+
+// contract: view.placement.retires-declarations-on-page-reload
+func TestReloadRetiresThePreviousPageCompositionDeclarations(t *testing.T) {
+	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html"}
+	s := &Surfaces{
+		compositions:         map[string]SurfaceComposition{"tab-old": composition},
+		surfacePlugins:       map[string]string{"tab-old": "probe"},
+		compositionRevisions: map[string]uint64{"tab-old": 1},
+		reloadCancelLayout:   func() error { return nil },
+		reloadHideSurface:    func(unsafe.Pointer, bool) {},
+		reloadCloseImage:     func(unsafe.Pointer) {},
+	}
+	if _, err := s.reloadSurfaceDocuments(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if len(s.compositions) != 0 || len(s.surfacePlugins) != 0 || len(s.compositionRevisions) != 0 {
+		t.Fatalf("previous page declarations survived reload: compositions=%v plugins=%v revisions=%v", s.compositions, s.surfacePlugins, s.compositionRevisions)
+	}
+}
+
 // contract: exposure.host-window.reads-during-surface-creation
 func TestSurfaceIsNamedWhenItsNativeViewIsCreated(t *testing.T) {
 	s := &Surfaces{named: map[uintptr]string{}}

@@ -660,9 +660,6 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if surface.Plugin == "" {
 			return nil, fmt.Errorf("surface %q requires its plugin", surface.ID)
 		}
-		if declared, exists := held[surface.ID]; exists && (!reflect.DeepEqual(declared, surface.Composition) || plugins[surface.ID] != surface.Plugin) {
-			return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
-		}
 		// default: a view without start values has no origin, which validateViewStart refuses.
 		start := ViewStart{}
 		if surface.Start != nil {
@@ -670,6 +667,15 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		}
 		if err := validateViewStart(surface.ID, &start); err != nil {
 			return nil, err
+		}
+		if surface.Composition.Kind == "view" {
+			declared, exists := held[surface.ID]
+			if !exists {
+				return nil, fmt.Errorf("surface %q has no composition declaration in the current page", surface.ID)
+			}
+			if !reflect.DeepEqual(declared, surface.Composition) || plugins[surface.ID] != surface.Plugin {
+				return nil, fmt.Errorf("surface %q changed its composition declaration", surface.ID)
+			}
 		}
 	}
 	windowOverlays := make([]platform.WindowOverlay, 0, len(req.Overlays))

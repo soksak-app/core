@@ -304,6 +304,8 @@ func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
 	}
 	s.mu.Lock()
 	clear(s.compositionRevisions)
+	clear(s.compositions)
+	clear(s.surfacePlugins)
 	s.mu.Unlock()
 	s.surfacesClosed(ids)
 	s.windowChanged()

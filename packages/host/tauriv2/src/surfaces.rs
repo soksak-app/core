@@ -285,6 +285,17 @@ pub(crate) fn require_region(
     Ok(())
 }
 
+/// Removes declarations owned by the page that is being replaced.
+pub(crate) fn clear_page_compositions(
+    compositions: &Mutex<HashMap<String, SurfaceComposition>>,
+    plugins: &Mutex<HashMap<String, String>>,
+) {
+    let mut current_compositions = compositions.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut current_plugins = plugins.lock().unwrap_or_else(PoisonError::into_inner);
+    current_compositions.clear();
+    current_plugins.clear();
+}
+
 /// Registers the immutable composition contract before the surface places its first frame.
 pub(crate) fn declare(webview: &Webview, request: CompositionDeclareRequest) -> Result<(), String> {
     if request.surface.is_empty() {
@@ -677,17 +688,24 @@ pub fn check_sync_request(
         if surface.plugin.is_empty() {
             return Err(format!("surface {:?} requires its plugin", surface.id));
         }
-        if held.get(&surface.id).is_some_and(|value| {
-            value != &surface.composition || plugins.get(&surface.id) != Some(&surface.plugin)
-        }) {
-            return Err(format!(
-                "surface {:?} changed its composition declaration",
-                surface.id
-            ));
-        }
         // default: a view without start values has no origin, which validate_view_start refuses.
         let start = surface.start.clone().unwrap_or_default();
         validate_view_start(&surface.id, &start)?;
+        if surface.composition.kind == "view" {
+            let declared = held.get(&surface.id).ok_or_else(|| {
+                format!(
+                    "surface {:?} has no composition declaration in the current page",
+                    surface.id
+                )
+            })?;
+            if declared != &surface.composition || plugins.get(&surface.id) != Some(&surface.plugin)
+            {
+                return Err(format!(
+                    "surface {:?} changed its composition declaration",
+                    surface.id
+                ));
+            }
+        }
     }
     request
         .overlays
