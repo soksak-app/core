@@ -435,7 +435,10 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a window that holds no open project reports no project`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    await s.run("core.settings.set", { patch: { left: true }, scope: "common" });
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-project-")));
+    const file = "project-close-check.txt";
+    writeFileSync(join(root, file), "F262-6\n");
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
       for (const project of await s.get("core.projects")) {
@@ -444,16 +447,55 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.flush");
     });
     const project = async () => (await s.get("host.windows")).find((item) => item.window === s.window).project;
+    const filesSections = (sidebars) => {
+      const left = sidebars.find((item) => item.sidebar === "left");
+      return ["files.tree", "files.bookmarks"].map((id) => left?.sections.find((item) => item.id === id));
+    };
     for (const item of await s.get("core.projects")) await s.run("core.project.close", { id: item.id });
     assert.equal(await s.get("core.project"), null, "the check did not start from the library");
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the library window still reports project ${await project()}`);
+    await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section?.mounted),
+      "the Files sections are not mounted in the project library");
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === root,
       "the window did not report the opened project");
+    await s.until("core.sidebars", (sidebars) => {
+      const [tree, bookmarks] = filesSections(sidebars);
+      return tree?.mounted && bookmarks?.mounted && tree.text.includes(file);
+    }, "the mounted Files sections did not receive the opened project's file");
+    const treeBefore = await s.get("files.tree");
+    const tree = treeBefore.value?.elements.find((element) => element.kind === "tree" && element.key === "files");
+    assert.ok(tree?.nodes.some((node) => node.label === file), "files.tree did not show the close-check file");
+    await s.run("files.bookmarks.add", { path: file });
+    await s.until("core.sidebars", (sidebars) => filesSections(sidebars)[1]?.text.includes(file),
+      "files.bookmarks did not show the close-check file");
+    const bookmarksBefore = await s.get("files.bookmarks");
+    assert.ok(bookmarksBefore.value?.elements.find((element) => element.kind === "list")?.items
+      .some((item) => item.label === file), "files.bookmarks did not show the close-check file");
+    const [treeSectionBefore, bookmarksSectionBefore] = filesSections(await s.get("core.sidebars"));
+    assert.ok(Number.isInteger(treeSectionBefore.acceptedSeq), "files.tree has no accepted snapshot sequence before close");
+    assert.ok(Number.isInteger(bookmarksSectionBefore.acceptedSeq), "files.bookmarks has no accepted snapshot sequence before close");
     await s.run("core.project.close", { id: opened.id });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the window still reports the closed project ${await project()}`);
+    await s.until("core.sidebars", (sidebars) => {
+      const [treeSection, bookmarksSection] = filesSections(sidebars);
+      return treeSection?.mounted && bookmarksSection?.mounted
+        && treeSection.acceptedSeq > treeSectionBefore.acceptedSeq
+        && bookmarksSection.acceptedSeq > bookmarksSectionBefore.acceptedSeq
+        && treeSection.text.includes("프로젝트 없음")
+        && bookmarksSection.text.includes("프로젝트 없음");
+    }, "the Files sections did not accept the closed project's no-project values");
+    const treeAfter = await s.get("files.tree");
+    assert.deepEqual(treeAfter.value?.elements, [
+      { kind: "status-line", key: "project", text: "프로젝트 없음" },
+    ], "files.tree retained project rows after close");
+    const bookmarksAfter = await s.get("files.bookmarks");
+    assert.deepEqual(bookmarksAfter.value?.elements, [
+      { kind: "list", key: "bookmarks", empty: "프로젝트 없음", items: [] },
+    ], "files.bookmarks retained project rows after close");
+    assert.equal(await s.get("core.page.error"), null, "closing the shown project reported an application error");
     // The title of a window that shows the library does not hold the name of the closed project.
     const { title } = (await s.get("host.windows")).find((item) => item.window === s.window);
     assert.ok(!title.includes(basename(root)), `the window title still names the closed project: ${title}`);

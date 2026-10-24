@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F262-6: Extend the existing project-close window check to require mounted
+  Files sections, populated snapshots before close, empty no-project snapshots
+  after close, no stale rows, and a clear application error audit. Existing
+  Files P42–P45 tests cover deterministic null and stale-work behavior; the
+  two-host project-close acceptance remains pending.
 - F239-37-3: Migrate the file-open failure check from removed `files.selection`
   and `files.open` status waits to the declared `files.tree` snapshot. The check
   waits for a newer accepted sequence, verifies the message row in the snapshot
