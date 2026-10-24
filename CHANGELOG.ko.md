@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F267.5: 현재 test inventory를 lane 100개, 구현 파일 689개, test 파일
+  982개로 기록한다. Parity audit에 미등록 implementation/test와 feature-link
+  finding이 없다. 두 examples 절차 문서가 발견 count와 일치한다.
+  `make parity-check`가 통과한다.
+
 - F267.9: 현재 implementation과 test에 맞게 feature evidence link를 정합한다.
   기존 owning test가 기록된 동작을 증명하는 mapping을 수정하고 F239-47-34만
   문서 정정으로 분류했다. Focused parity test는 2/2 통과하며 연결되지 않은

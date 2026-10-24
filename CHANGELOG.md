@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F267.5: Record the current test inventory as 100 lanes, 689 implementation
+  files, and 982 test files. The parity audit reports no uncovered
+  implementations, uncovered tests, or feature-link findings. Both example
+  procedures match the current discovered counts. `make parity-check` passes.
+
 - F267.9: Align feature evidence links with current implementation and tests.
   Corrected mappings where existing owning tests prove the recorded behavior
   and classified only F239-47-34 as a documentation correction. The focused
