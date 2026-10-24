@@ -44,6 +44,8 @@
   거부되면 library 정리 뒤 gate를 열고, page initialization 실패는 gate를 reject한다.
   Focused owner test는 6/6 통과했으며 application runtime acceptance는 대기 중이다.
 
+- F212.10-core-3-4: 두 memory-saver 설정에서 저장된 비활성 Browser view를 확인하는 focused two-host window check를 추가한다. Enabled에서는 unloaded/no native surface, disabled에서는 loaded/ready/invisible native placement를 확인하며 active terminal은 두 경우 모두 ready 상태로 보이고 배치된다. Runtime acceptance는 대기 중이며 first-frame pixel은 주장하지 않는다.
+
 - F239-47-30-3: ScreenCaptureKit callback record와 별도로 capture 수명 동안
   공개 AppKit display-link trace를 기록하고 두 host의 stop payload에서 artifact
   경로를 제공한다. Trace는 검증한 clock observation을 기록하고 bounded overflow를

@@ -48,6 +48,8 @@
   reject it when page initialization fails. Focused owner tests pass 6/6;
   application runtime acceptance remains pending.
 
+- F212.10-core-3-4: Add a focused two-host window check for a saved inactive Browser view under both memory-saver settings. It verifies unloaded/no native surface when enabled, and loaded/ready/invisible native placement when disabled; the active terminal stays ready and visible. Runtime acceptance remains pending, and the check makes no first-frame pixel claim.
+
 - F239-47-30-3: Add a capture-lifetime public AppKit display-link trace beside
   ScreenCaptureKit callback records, and expose its artifact path from both
   host stop payloads. The trace records validated clock observations, reports
