@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-47-23: Keep the native image-region input document visually
+  transparent while preserving AppKit composition state. The unchanged owning
+  offscreen test measured 78 blue underline pixels for attributed `ㅏ` and 162
+  for `ㅏㅏ`; the same frames retained the composition reports and a known-color
+  sidecar IOSurface. The focused test passes after `drawRect:` stops TextKit
+  drawing, with zero underline pixels and the committed text, marked ranges,
+  and sidecar layer intact. No activation or OS input method was used. P85
+  reported `attributed:false`, so the captured blue line remains uncorrelated;
+  live two-host visual acceptance remains under F239-47-6.
+
 - F212.10-core-3-6: Retire a view's exposure registrations in the same
   synchronous workbench transition that accepts its exact source-generation
   end. Source retirement precedes `view-process-ended`, so the previous
