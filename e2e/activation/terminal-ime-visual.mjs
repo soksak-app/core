@@ -12,6 +12,55 @@ function sameState(actual, expected) {
   try { assert.deepEqual(actual, expected); return true; } catch { return false; }
 }
 
+function validateSemanticState(value, label) {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value), `${label}: expected semantic state is required`);
+  assert.ok(typeof value.document === "string", `${label}: document text is required`);
+  const compose = value.compose;
+  assert.ok(compose && typeof compose === "object" && !Array.isArray(compose) && typeof compose.text === "string" &&
+    Object.hasOwn(compose, "markedRange") && Object.hasOwn(compose, "selectedRange"),
+  `${label}: complete composition state is required`);
+  for (const key of ["markedRange", "selectedRange"]) {
+    const range = compose[key];
+    assert.ok(range === null || (range && Number.isSafeInteger(range.location) && range.location >= 0 &&
+      Number.isSafeInteger(range.length) && range.length >= 0), `${label}: composition ${key} is invalid`);
+  }
+  const cursor = value.cursor;
+  assert.ok(cursor && typeof cursor === "object" && !Array.isArray(cursor) &&
+    Number.isInteger(cursor.row) && cursor.row >= 0 && Number.isInteger(cursor.col) &&
+    cursor.col >= 0 && typeof cursor.focused === "boolean" && typeof cursor.preedit === "string",
+  `${label}: complete cursor and focus state is required`);
+  const geometry = value.geometry;
+  assert.ok(geometry && typeof geometry === "object" && !Array.isArray(geometry) &&
+    Number.isInteger(geometry.rows) && geometry.rows > 0 &&
+    Number.isInteger(geometry.cols) && geometry.cols > 0 && Number.isInteger(geometry.cellWidth) &&
+    geometry.cellWidth > 0 && Number.isInteger(geometry.cellHeight) && geometry.cellHeight > 0 &&
+    Number.isInteger(geometry.origin?.x) && geometry.origin.x >= 0 &&
+    Number.isInteger(geometry.origin?.y) && geometry.origin.y >= 0,
+  `${label}: complete cell geometry is required`);
+  return value;
+}
+
+function validateCapture(capture) {
+  assert.ok(capture && Number.isInteger(capture.width) && capture.width > 0 &&
+    Number.isInteger(capture.height) && capture.height > 0 && Number.isInteger(capture.bytesPerRow) &&
+    capture.bytesPerRow >= capture.width * 4 && capture.data instanceof Uint8Array &&
+    capture.data.length === capture.bytesPerRow * capture.height,
+  "capture pixel dimensions, stride, or storage are invalid");
+  assert.ok(Number.isFinite(capture.scaleFactor) && capture.scaleFactor > 0,
+    "capture scale factor is invalid");
+  const screen = capture.screenRect;
+  const content = capture.contentRect;
+  assert.ok(screen && [screen.x, screen.y, screen.width, screen.height].every(Number.isFinite) &&
+    screen.width > 0 && screen.height > 0 &&
+    Math.abs(screen.width * capture.scaleFactor - capture.width) < 1e-7 &&
+    Math.abs(screen.height * capture.scaleFactor - capture.height) < 1e-7,
+  "capture screen bounds do not match its pixel dimensions");
+  assert.ok(content && [content.x, content.y, content.width, content.height].every(Number.isFinite) &&
+    content.x >= 0 && content.y >= 0 && content.width > 0 && content.height > 0 &&
+    content.x + content.width <= screen.width && content.y + content.height <= screen.height,
+  "capture content bounds are outside the image");
+}
+
 function cropCell(raster, cell, label) {
   const { width, height, data, grid, bytesPerRow = width * 4 } = raster;
   assert.ok(Number.isInteger(width) && width > 0 && Number.isInteger(height) && height > 0,
@@ -76,6 +125,7 @@ function cropRect(raster, rect, label) {
 }
 
 function captureCells(capture, source, cells) {
+  validateCapture(capture);
   assert.equal(capture.format, source.format, "capture/source pixel formats differ");
   assert.equal(capture.alpha, source.alpha, "capture/source alpha modes differ");
   assert.equal(capture.colorSpace, source.colorSpace, "capture/source color spaces differ");
@@ -120,6 +170,7 @@ function sameBytes(left, right) {
 
 export function compositionFrameCandidates({ targetFrame, capture, sources, cells, cell, expectedState }) {
   const target = frameIdentity(targetFrame, "terminal.cursor.frame");
+  const expected = validateSemanticState(expectedState, "expected");
   const span = cells ?? [cell];
   const candidates = [];
   const sourceIdentities = new Set();
@@ -135,7 +186,15 @@ export function compositionFrameCandidates({ targetFrame, capture, sources, cell
     assert.equal(frameIdentity(source.state.frame, `source ${identity} status`), identity,
       `source ${identity}: status belongs to a different frame`);
     assert.ok(source.state.semantic, `source ${identity}: same-frame semantic state is missing`);
-    candidates.push({ identity, stateMatches: sameState(source.state.semantic, expectedState) });
+    const semantic = validateSemanticState(source.state.semantic, `source ${identity}`);
+    assert.deepEqual(semantic.geometry, {
+      rows: source.raster.grid.rows,
+      cols: source.raster.grid.cols,
+      cellWidth: source.raster.grid.cellWidth,
+      cellHeight: source.raster.grid.cellHeight,
+      origin: { x: source.raster.grid.x, y: source.raster.grid.y },
+    }, `source ${identity}: semantic geometry differs from its raster`);
+    candidates.push({ identity, stateMatches: sameState(semantic, expected) });
   }
   const targetPresent = candidates.some(({ identity }) => identity === target);
   const semanticMismatch = candidates.some(({ stateMatches }) => !stateMatches);
@@ -157,7 +216,9 @@ function rgbDistance(pixel, color) {
 }
 
 export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyphs = []) {
-  if (!render) return { result: "no-proof", reason: "renderer-metadata-missing" };
+  if (render === null) return { result: "no-proof", reason: "renderer-metadata-unavailable" };
+  assert.ok(render && typeof render === "object" && !Array.isArray(render),
+    "renderer metadata must be null or an object");
   const frame = frameIdentity(cursorFrame, "terminal.cursor.frame");
   assert.equal(frameIdentity(render.frame, "terminal.cursor.render.frame"), frame,
     "renderer metadata belongs to a different frame");
@@ -238,9 +299,8 @@ export function rasterizeCellBounds(bounds, cellWidth, cellHeight, label = "rend
 }
 
 export function measureRenderedCell(cellPixels, render, target, cellColors, criteria) {
-  if (!render || !target?.frame || !target.cursor) {
-    return { result: "no-proof", reason: "frame-bound-renderer-state-missing" };
-  }
+  if (render === null) return { result: "no-proof", reason: "renderer-metadata-unavailable" };
+  assert.ok(target?.frame && target.cursor, "frame-bound terminal cursor state is required");
   validateRenderMetadata(render, target.frame, target.cursor,
     [{ row: target.row, col: target.col, grapheme: target.grapheme }]);
   const glyph = render?.glyphs?.find((entry) => entry.row === target.row && entry.col === target.col &&
@@ -271,6 +331,18 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
   assert.ok(Number.isFinite(criteria.minimumUnderlineCoverage) && criteria.minimumUnderlineCoverage > 0 &&
     criteria.minimumUnderlineCoverage <= 1, "consumer minimumUnderlineCoverage must be in (0, 1]");
   const cursor = render.cursor;
+  const isCursorPixel = (x, y) => cursor.visible && cursor.blinkVisible &&
+    x + gridX + target.col * cellWidth >= cursor.rect.x &&
+    x + gridX + target.col * cellWidth < cursor.rect.x + cursor.rect.width &&
+    y + gridY + target.row * cellHeight >= cursor.rect.y &&
+    y + gridY + target.row * cellHeight < cursor.rect.y + cursor.rect.height;
+  const matchesForeground = (pixel, x, y) => {
+    const inverse = isCursorPixel(x, y) && cursor.shape === "block" && cursor.blend === "difference";
+    const foreground = inverse ? cellColors.foreground.map((channel) => 255 - channel) : cellColors.foreground;
+    const background = inverse ? cellColors.background.map((channel) => 255 - channel) : cellColors.background;
+    return rgbDistance(pixel, foreground) < criteria.colorDistance &&
+      rgbDistance(pixel, background) >= criteria.colorDistance;
+  };
   let ink = 0;
   for (let y = glyphRect.y; y < glyphRect.y + glyphRect.height; y++) {
     for (let x = glyphRect.x; x < glyphRect.x + glyphRect.width; x++) {
@@ -278,21 +350,11 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
           y >= underlineRect.y && y < underlineRect.y + underlineRect.height) continue;
       const offset = (y * width + x) * 4;
       const pixel = [bytes[offset + 2], bytes[offset + 1], bytes[offset]];
-      const cursorRect = cursor?.rect;
-      const inCursor = cursorRect && cursor.visible && cursor.blinkVisible &&
-        x + gridX + target.col * cellWidth >= cursorRect.x &&
-        x + gridX + target.col * cellWidth < cursorRect.x + cursorRect.width &&
-        y + gridY + target.row * cellHeight >= cursorRect.y &&
-        y + gridY + target.row * cellHeight < cursorRect.y + cursorRect.height;
+      const inCursor = isCursorPixel(x, y);
       if (inCursor && (cursor.shape !== "block" || cursor.blend !== "difference")) {
         return { result: "no-proof", reason: "glyph-overlaps-unsupported-cursor" };
       }
-      const foreground = inCursor && cursor.blend === "difference"
-        ? cellColors.foreground.map((channel) => 255 - channel) : cellColors.foreground;
-      const background = inCursor && cursor.blend === "difference"
-        ? cellColors.background.map((channel) => 255 - channel) : cellColors.background;
-      if (rgbDistance(pixel, foreground) < criteria.colorDistance &&
-          rgbDistance(pixel, background) >= criteria.colorDistance) ink++;
+      if (matchesForeground(pixel, x, y)) ink++;
     }
   }
   let underlineCoverage = 0;
@@ -301,8 +363,7 @@ export function measureRenderedCell(cellPixels, render, target, cellColors, crit
     for (let x = underlineRect.x; x < underlineRect.x + underlineRect.width; x++) {
       const offset = (y * width + x) * 4;
       const pixel = [bytes[offset + 2], bytes[offset + 1], bytes[offset]];
-      if (rgbDistance(pixel, cellColors.foreground) < criteria.colorDistance &&
-          rgbDistance(pixel, cellColors.background) >= criteria.colorDistance) {
+      if (matchesForeground(pixel, x, y)) {
         run++;
         underlineCoverage = Math.max(underlineCoverage, run / underlineRect.width);
       } else run = 0;

@@ -33,8 +33,19 @@ function raster(width, height, columns, rows, data) {
 function captureFor(source) {
   return { width: source.width, height: source.height, bytesPerRow: source.bytesPerRow,
     format: source.format, alpha: source.alpha, colorSpace: source.colorSpace, scaleFactor: source.scale,
-    screenRect: source.screenBounds, contentRect: { x: 0, y: 0, width: source.width, height: source.height },
+    screenRect: source.screenBounds, contentRect: { x: 0, y: 0, width: source.screenBounds.width,
+      height: source.screenBounds.height },
     data: source.data };
+}
+
+function semanticState(overrides = {}) {
+  return {
+    document: "ㅏ",
+    compose: { text: "ㅏ", markedRange: { location: 0, length: 1 }, selectedRange: { location: 1, length: 0 } },
+    cursor: { row: 0, col: 1, focused: true, preedit: "ㅏ" },
+    geometry: { rows: 1, cols: 1, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
+    ...overrides,
+  };
 }
 
 function blank() {
@@ -61,7 +72,7 @@ testWithTimeout("ROI candidate set includes the exact target and preserves dupli
   const data = blank();
   const sourceRaster = raster(4, 6, 1, 1, data);
   const capture = captureFor(sourceRaster);
-  const state = { document: "ㅏ", preedit: "ㅏ", focus: true };
+  const state = semanticState();
   const otherFrame = { generation: 1, raster: 2, sequence: 4 };
   const result = compositionFrameCandidates({ targetFrame: target, capture, cell: { row: 0, column: 0 },
     expectedState: state, sources: [
@@ -83,15 +94,16 @@ testWithTimeout("ROI candidates reject missing target, semantic disagreement, an
   const sourceRaster = raster(4, 6, 1, 1, data);
   const capture = captureFor(sourceRaster);
   const sourceFrame = { generation: 1, raster: 2, sequence: 4 };
-  const source = { frame: sourceFrame, raster: sourceRaster, state: { frame: sourceFrame, semantic: { document: "wrong" } } };
+  const source = { frame: sourceFrame, raster: sourceRaster,
+    state: { frame: sourceFrame, semantic: semanticState({ document: "wrong" }) } };
   const result = compositionFrameCandidates({ targetFrame: target, capture, cell: { row: 0, column: 0 },
-    expectedState: { document: "ㅏ" }, sources: [source] });
+    expectedState: semanticState(), sources: [source] });
   assert.equal(result.result, "no-proof");
   assert.deepEqual(result.reasons, ["target-frame-not-in-roi-candidates", "candidate-semantic-state-differs"]);
   const fractionalRaster = raster(5, 6, 2, 1, new Uint8Array(5 * 6 * 4));
   assert.throws(() => compositionFrameCandidates({ targetFrame: target, capture: captureFor(fractionalRaster),
-    cell: { row: 0, column: 0 }, expectedState: {},
-    sources: [{ frame: target, raster: fractionalRaster, state: { frame: target, semantic: {} } }] }),
+    cell: { row: 0, column: 0 }, expectedState: semanticState(),
+    sources: [{ frame: target, raster: fractionalRaster, state: { frame: target, semantic: semanticState() } }] }),
   /integer cell-grid geometry is required/);
 });
 
@@ -102,7 +114,7 @@ testWithTimeout("complete input and guard cell bytes reject an extra glyph outsi
   pixel(sourceData, 9, 2, [0, 0, 0]);
   const sourceRaster = raster(12, 6, 3, 1, sourceData);
   const capture = captureFor({ ...sourceRaster, data: captureData });
-  const state = { document: "ㅏ" };
+  const state = semanticState();
   const result = compositionFrameCandidates({ targetFrame: target, capture, cells: [
     { row: 0, column: 0 }, { row: 0, column: 1 }, { row: 0, column: 2 },
   ], expectedState: state, sources: [{ frame: target, raster: sourceRaster,
@@ -128,11 +140,45 @@ testWithTimeout("ROI mapping uses source bounds, scale, grid inset, and padded c
   const capture = { width: 24, height: 20, bytesPerRow: 100, data: captureData,
     format: "BGRA8", alpha: "premultiplied-first", colorSpace: "sRGB", scaleFactor: 2,
     screenRect: { x: 8, y: 18, width: 12, height: 10 }, contentRect: { x: 0, y: 0, width: 12, height: 10 } };
-  const semantic = { document: "ㅏ" };
+  const semantic = semanticState({ geometry: { rows: 1, cols: 2, cellWidth: 4, cellHeight: 6,
+    origin: { x: 2, y: 0 } } });
   const result = compositionFrameCandidates({ targetFrame: frame, capture, cells: [{ row: 0, column: 0 }],
     expectedState: semantic, sources: [{ frame, raster: sourceRaster, state: { frame, semantic } }] });
   assert.equal(result.result, "candidate-set");
   assert.deepEqual(result.identities, ["2/4/9"]);
+  for (const expected of [semanticState({ compose: { text: "ㅏ", markedRange: null,
+    selectedRange: { location: 1, length: 0 } } }), semanticState({ geometry: { ...semanticState().geometry, cols: 2 } })]) {
+    const changed = compositionFrameCandidates({ targetFrame: frame, capture, cells: [{ row: 0, column: 0 }],
+      expectedState: expected, sources: [{ frame, raster: sourceRaster,
+        state: { frame, semantic } }] });
+    assert.equal(changed.result, "no-proof");
+    assert.deepEqual(changed.reasons, ["candidate-semantic-state-differs"]);
+  }
+  for (const incomplete of [
+    { document: "ㅏ" },
+    semanticState({ compose: { text: "ㅏ", markedRange: null } }),
+    semanticState({ cursor: { row: 0, col: 1, preedit: "ㅏ" } }),
+    semanticState({ geometry: { rows: 1, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } } }),
+  ]) {
+    assert.throws(() => compositionFrameCandidates({ targetFrame: frame, capture,
+      cells: [{ row: 0, column: 0 }], expectedState: incomplete,
+      sources: [{ frame, raster: sourceRaster, state: { frame, semantic } }] }), /required/);
+  }
+});
+
+testWithTimeout("capture content bounds and pixel storage must contain the image ROI", () => {
+  const frame = { generation: 2, raster: 4, sequence: 9 };
+  const sourceRaster = raster(4, 6, 1, 1, blank());
+  const state = semanticState();
+  const source = { frame, raster: sourceRaster, state: { frame, semantic: state } };
+  for (const capture of [
+    { ...captureFor(sourceRaster), contentRect: { x: 0, y: 0, width: 0, height: 6 } },
+    { ...captureFor(sourceRaster), contentRect: { x: 0, y: 0, width: 5, height: 6 } },
+    { ...captureFor(sourceRaster), data: new Uint8Array(1) },
+  ]) {
+    assert.throws(() => compositionFrameCandidates({ targetFrame: frame, capture,
+      cells: [{ row: 0, column: 0 }], expectedState: state, sources: [source] }), /capture/);
+  }
 });
 
 testWithTimeout("renderer geometry is frame-bound and rejects unsupported pixel layouts", () => {
@@ -166,7 +212,9 @@ testWithTimeout("renderer geometry is frame-bound and rejects unsupported pixel 
   assert.throws(() => validateRenderMetadata({ ...render, glyphs: [] }, frame, cursor,
     [{ row: 0, col: 0, grapheme: "ㅏ" }]), /glyph bounds are missing/);
   assert.deepEqual(validateRenderMetadata(null, frame, cursor),
-    { result: "no-proof", reason: "renderer-metadata-missing" });
+    { result: "no-proof", reason: "renderer-metadata-unavailable" });
+  assert.throws(() => validateRenderMetadata(undefined, frame, cursor), /must be null or an object/);
+  assert.throws(() => validateRenderMetadata({ frame }, frame, cursor), /renderer pixel dimensions are invalid/);
 });
 
 testWithTimeout("rendered-cell predicate uses actual glyph and underline rectangles with cursor inversion", () => {
@@ -189,7 +237,9 @@ testWithTimeout("rendered-cell predicate uses actual glyph and underline rectang
   const complete = compositionRaster();
   assert.equal(measureRenderedCell(complete, render, target, colors, criteria).result, "measured");
   assert.deepEqual(measureRenderedCell(complete, null, target, colors, criteria),
-    { result: "no-proof", reason: "frame-bound-renderer-state-missing" });
+    { result: "no-proof", reason: "renderer-metadata-unavailable" });
+  assert.throws(() => measureRenderedCell(complete, undefined, target, colors, criteria),
+    /must be null or an object/);
   const unsupportedCursor = { ...render, cursor: { rect: { x: 1, y: 1, width: 1, height: 1 }, shape: "beam",
     focused: true, visible: true, blinkVisible: true, blend: "normal" } };
   assert.deepEqual(measureRenderedCell(complete, unsupportedCursor,
@@ -199,14 +249,18 @@ testWithTimeout("rendered-cell predicate uses actual glyph and underline rectang
     frame: { ...render.frame, sequence: 4 } }, target, colors, criteria), /different frame/);
   assert.throws(() => measureRenderedCell(complete, render,
     { ...target, cursor: { ...target.cursor, visible: undefined } }, colors, criteria), /cursor state is incomplete/);
-  assert.deepEqual(measureRenderedCell(complete, render,
-    { row: 0, col: 0, grapheme: "ㅏ", marked: true, cursor: target.cursor }, colors,
-    criteria), { result: "no-proof", reason: "frame-bound-renderer-state-missing" });
+  assert.throws(() => measureRenderedCell(complete, render,
+    { row: 0, col: 0, grapheme: "ㅏ", marked: true }, colors, criteria), /frame-bound terminal cursor state/);
 
   const lowerGlyphStroke = compositionRaster({ underline: false });
   pixel(lowerGlyphStroke.bytes, 0, 5, [0, 0, 0]);
   pixel(lowerGlyphStroke.bytes, 1, 5, [0, 0, 0]);
-  assert.equal(measureRenderedCell(lowerGlyphStroke, render, target, colors, criteria).result, "failed");
+  const lowerStrokeResult = measureRenderedCell(lowerGlyphStroke, render, target, colors, criteria);
+  assert.equal(lowerStrokeResult.glyphPixels, 2);
+  assert.equal(lowerStrokeResult.glyphPresent, true);
+  assert.equal(lowerStrokeResult.underlineCoverage, 0.5);
+  assert.equal(lowerStrokeResult.underlined, false);
+  assert.equal(lowerStrokeResult.result, "failed");
 
   const wrongRange = compositionRaster({ wrongUnderline: true });
   assert.equal(measureRenderedCell(wrongRange, render, target, colors, criteria).underlined, false);
@@ -219,4 +273,12 @@ testWithTimeout("rendered-cell predicate uses actual glyph and underline rectang
   assert.equal(measureRenderedCell(blankCursor, blockCursor, { ...target, marked: false,
     cursor: { ...target.cursor, shape: "block", visible: true, blinkVisible: true } }, colors, criteria).result,
     "failed");
+
+  const blockOverUnderline = { ...render, cursor: { rect: { x: 0, y: 5, width: 4, height: 1 },
+    shape: "block", focused: true, visible: true, blinkVisible: true, blend: "difference" } };
+  const invertedUnderline = compositionRaster();
+  for (let x = 0; x < 4; x++) pixel(invertedUnderline.bytes, x, 5, [255, 255, 255]);
+  assert.equal(measureRenderedCell(invertedUnderline, blockOverUnderline,
+    { ...target, cursor: { ...target.cursor, shape: "block", visible: true, blinkVisible: true } },
+    colors, criteria).result, "measured");
 });
