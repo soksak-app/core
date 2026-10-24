@@ -1,6 +1,6 @@
-// Checks that a mouse press on a view (docs/spec/native-surfaces.md#view-surfaces) reaches the page of the view and moves the
-// keyboard focus of the window into the view, so the keys that the person types after the click reach the view. The press is
-// sent through -[NSWindow sendEvent:], the entry point of AppKit for a mouse event, and the application is not activated.
+// Checks that a mouse press on a view (docs/spec/native-surfaces.md#view-surfaces) reaches the page and moves keyboard focus
+// into the view. The default path sends a press through -[NSWindow sendEvent:] without activating the application. The
+// --activation path activates the application first and checks that the page also receives a key event.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "support/temporary_folder.h"
@@ -8,6 +8,10 @@
 #import "document_view.h"
 #import "private/webkit.h"
 #import "webview_geometry.h"
+#import "input_inject.h"
+
+// Declared by the activation checks of make test-activation (tests/support/no_activation.m).
+void sp_test_declare_activation(void);
 
 static int failures = 0;
 
@@ -48,7 +52,24 @@ static NSString *const channelScript = @"window.webkit.messageHandlers['sok-view
 static NSString *const page = @"<!doctype html><meta charset=utf-8><title>loading</title>"
     "<input id='field' style='position:absolute;left:0;top:0;width:100%;height:100%;font-size:24px;border:0'>"
     "<script>document.title = 'ready';"
-    "document.addEventListener('mousedown', () => { document.title = 'down'; }, true);</script>";
+    "document.addEventListener('mousedown', () => { document.title = 'down'; }, true);"
+    "document.addEventListener('keydown', (e) => { document.title = 'key:' + e.key; }, true);</script>";
+
+static BOOL activationDone;
+static sp_activate_result activationResult;
+static NSString *activationFrontmost;
+
+static void activationReported(void *context, sp_activate_result result, const char *frontmost) {
+    (void)context;
+    activationResult = result;
+    activationFrontmost = frontmost ? [NSString stringWithUTF8String:frontmost] : nil;
+    activationDone = YES;
+}
+
+static void restoreFrontmost(NSRunningApplication *previous) {
+    if (!previous || previous.processIdentifier == NSRunningApplication.currentApplication.processIdentifier) return;
+    [previous activateWithOptions:0];
+}
 
 static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NSInteger clicks, float pressure) {
     return [NSEvent mouseEventWithType:type location:[window.contentView convertPoint:point toView:nil] modifierFlags:0
@@ -56,7 +77,10 @@ static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NS
         clickCount:clicks pressure:pressure];
 }
 
-int main(void) { @autoreleasepool {
+int main(int argc, char **argv) { @autoreleasepool {
+    BOOL activation = argc == 2 && strcmp(argv[1], "--activation") == 0;
+    if (activation) sp_test_declare_activation();
+    NSRunningApplication *previous = NSWorkspace.sharedWorkspace.frontmostApplication;
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
@@ -105,7 +129,22 @@ int main(void) { @autoreleasepool {
     check(sp_document_load(view, "soksak://probe/ui/page.html"), @"the view loads the page of its plugin");
     if (!waitFor(^BOOL { return [latest[@"title"] isEqual:@"ready"]; })) {
         fprintf(stderr, "FAIL: the view page did not load within 10 seconds\n");
+        restoreFrontmost(previous);
         return 1;
+    }
+
+    if (activation) {
+        activationDone = NO;
+        activationResult = SP_ACTIVATE_PENDING;
+        activationFrontmost = nil;
+        sp_input_activate(window, 5, activationReported, NULL);
+        if (!waitFor(^BOOL { return activationDone; }) || activationResult != SP_ACTIVATE_DONE
+            || !window.isKeyWindow || !NSApp.isActive) {
+            fprintf(stderr, "FAIL: the application did not become active with the window key (activation %d, active %d, window key %d, frontmost %s)\n",
+                activationResult, (int)NSApp.isActive, (int)window.isKeyWindow, activationFrontmost.UTF8String ?: "unknown");
+            restoreFrontmost(previous);
+            return 1;
+        }
     }
 
     // The keyboard focus starts in the app DOM, so a change of the first responder is observable.
@@ -115,6 +154,15 @@ int main(void) { @autoreleasepool {
     [window sendEvent:mouseEvent(window, NSEventTypeLeftMouseDown, NSMakePoint(250, 200), 1, 1)];
     [window sendEvent:mouseEvent(window, NSEventTypeLeftMouseUp, NSMakePoint(250, 200), 1, 0)];
     check(waitFor(^BOOL { return [latest[@"title"] isEqual:@"down"]; }), @"the page of the view receives the press");
+    if (activation) {
+        NSTimeInterval time = NSProcessInfo.processInfo.systemUptime;
+        [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:time
+            windowNumber:window.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7]];
+        [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint modifierFlags:0 timestamp:time
+            windowNumber:window.windowNumber context:nil characters:@"x" charactersIgnoringModifiers:@"x" isARepeat:NO keyCode:7]];
+        check(waitFor(^BOOL { return [latest[@"title"] isEqual:@"key:x"]; }),
+            [NSString stringWithFormat:@"the page of the view receives the key x (title %@)", latest[@"title"]]);
+    }
 
     NSResponder *responder = window.firstResponder;
     BOOL inView = responder == view || ([responder isKindOfClass:NSView.class] && [(NSView *)responder isDescendantOf:view]);
@@ -126,5 +174,6 @@ int main(void) { @autoreleasepool {
     sp_surface_close(surface);
     [window close];
     [window release];
+    restoreFrontmost(previous);
     return failures ? 1 : 0;
 }}

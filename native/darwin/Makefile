@@ -12,7 +12,7 @@
 #                         It does not activate the application
 #   make test-activation  runs the hover check after window activation, the overlapping webview input check (baseline run and
 #                         registered run), the web inspector check, the OS event queue click and key check of the document region,
-#                         and the Korean input method composition check of the image region.
+#                         the Korean input method composition check of the image region, and the activated view-focus page/key check.
 #                         It activates the application and takes the focus
 #   make benchmark        measures the calling thread cost of one record (the current text record and the event ring). It prints numbers and asserts nothing
 #   make benchmark-document
@@ -278,7 +278,7 @@ test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test
+test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUILD)/webview_inspector_test $(BUILD)/window_fullscreen_test $(BUILD)/document_view_test $(BUILD)/image_region_ime_test $(BUILD)/view_focus_test
 	@$(BUILD)/input_activate_test
 	@$(BUILD)/webview_inspector_test
 	@$(BUILD)/window_fullscreen_test
@@ -287,6 +287,7 @@ test-activation: $(BUILD)/input_activate_test $(BUILD)/webview_input_test $(BUIL
 	@$(BUILD)/document_view_test --activation
 	@$(BUILD)/image_region_test --activation
 	@$(BUILD)/image_region_ime_test
+	@$(BUILD)/view_focus_test --activation
 
 # Focused Korean IME comparison. This activates the application, changes the selected input source,
 # and sends eight k keys, Backspace, and Space to an AppKit reference and an image region in one window.
