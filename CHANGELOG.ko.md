@@ -3283,3 +3283,8 @@
   P44/P45 오류는 과거 기록으로 보존하며 정확한 원인을 소급해 단정하지 않는다.
   IME 입력은 보내지 않았다.
 - F239-28: browser cohort status check를 두 host에서 실행한다. Wails와 Tauri가 Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce`, candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`에서 추적 check를 통과했다. 각 실행은 설치된 plugin/sidecar version, ready surface 및 application error 0개를 확인했다. 두 host와 sidecar가 종료됐고 endpoint와 lock은 남지 않았다. 기존 cohort 실패는 과거 증거로 보존하며 public release를 주장하지 않는다.
+- F239-47-29: native input trace의 0-based sequence를 받되 native report가
+  terminal request보다 먼저 오도록 유지하고 음수, 소수, 안전 범위를 넘는
+  값을 거부한다. sequence 0 거부를 재현한 뒤 집중 consumer case가 2/2
+  통과한다. P87 runtime input은 해당 거부 때문에 각 host에서 terminal key
+  하나 뒤 중단됐으므로 visual acceptance를 주장하지 않는다.

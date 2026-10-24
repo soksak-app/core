@@ -3381,3 +3381,8 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   historical and their exact cause is not retroactively assigned. No IME input
   was sent.
 - F239-28: Run the browser cohort status check on either host. Wails and Tauri both passed the tracked check on Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce` with candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`; each run verified the installed plugin and sidecar versions, ready surfaces, and zero application errors. Both hosts and sidecars exited and left no endpoints or locks. The preserved earlier cohort failures remain historical evidence; this validation does not claim a public release.
+- F239-47-29: Accept zero-based native input trace sequence numbers while keeping
+  native-before-terminal ordering and rejecting negative, fractional and unsafe
+  values. The focused consumer cases pass 2/2 after reproducing the rejection of
+  sequence zero. P87 runtime input remains incomplete because that rejection
+  stopped each host after its first terminal key; no visual acceptance is claimed.

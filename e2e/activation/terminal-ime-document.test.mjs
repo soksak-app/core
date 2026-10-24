@@ -285,6 +285,22 @@ test("focus-only transactions do not acknowledge a key from retained preedit", (
   assert.equal(terminalInputReceiptMatches([terminal], "k"), false);
 });
 
+test("zero-based input trace sequence keeps the native report before its terminal request", { timeout: 5000 }, () => {
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: false };
+  const native = { kind: "native-input", sequence: 0, cids: ["zero-based-cid"],
+    input: { actions: [], preedit, errors: [] } };
+  const terminal = { kind: "terminal-input", sequence: 1, cids: ["zero-based-cid"],
+    input: { operation: "input", actions: [], preedit } };
+  assert.deepEqual(assertInputTraceDelivery([native, terminal]).native.map((entry) => entry.sequence), [0]);
+  assert.throws(() => inputTraceTransactions([{ ...native, sequence: -1 }]), /sequence must be a nonnegative safe integer/);
+  assert.throws(() => inputTraceTransactions([{ ...native, sequence: 0.5 }]), /sequence must be a nonnegative safe integer/);
+  assert.throws(() => inputTraceTransactions([{ ...native, sequence: Number.MAX_SAFE_INTEGER + 1 }]),
+    /sequence must be a nonnegative safe integer/);
+  assert.throws(() => assertInputTraceDelivery([native, { ...terminal, sequence: 0 }]),
+    /input transaction 0 request preceded its native report/);
+});
+
 test("input transaction validation checks every action and correlation identifier", () => {
   const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
     selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
@@ -297,7 +313,7 @@ test("input transaction validation checks every action and correlation identifie
     { type: "focus", focused: "yes" }] } };
   assert.throws(() => terminalInputReceiptMatches([valid, invalidFocusTail], "k"), /actions\[1\]\.focused must be boolean/);
   assert.throws(() => inputTraceTransactions([{ ...valid, cids: ["one", "two"] }]), /exactly one nonempty correlation/);
-  assert.throws(() => inputTraceTransactions([{ ...valid, sequence: 0 }]), /sequence must be a positive safe integer/);
+  assert.throws(() => inputTraceTransactions([{ ...valid, sequence: -1 }]), /sequence must be a nonnegative safe integer/);
   assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input,
     preedit: { ...valid.input.preedit, markedRange: { location: 1, length: 1 } } } }]), /UTF-16 text bounds/);
   assert.throws(() => inputTraceTransactions([{ ...valid, input: { ...valid.input, actions: [

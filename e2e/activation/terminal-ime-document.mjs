@@ -207,7 +207,7 @@ function strictActions(value, label) {
 }
 
 function strictTraceSequence(value, label) {
-  assert.ok(Number.isSafeInteger(value) && value > 0, `${label} must be a positive safe integer`);
+  assert.ok(Number.isSafeInteger(value) && value >= 0, `${label} must be a nonnegative safe integer`);
   return value;
 }
 
