@@ -79,6 +79,41 @@
   unhandled preparation promise. The focused host, remount-composition,
   compositor, native-paint and no-bridge tests pass (4/4, 1/1, 4/4, 8/8 and
   4/4). Runtime revalidation is pending; the host wire format is unchanged.
+- F212.10-core-3-4: Validate full host placement replies before projecting the
+  result onto the current compositor record. The workbench sends retained
+  dormant tabs with the active record, so an undrawn host reply can defer an ID
+  absent from that record. Red: the unchanged compositor test fails with
+  `surface placement cannot defer tab-c2zkow` for the exact full-request shape.
+  Green: the same case validates the full ID partition, projects only current
+  record IDs, and keeps a dormant-only reply out of an empty record. It rejects
+  omitted current IDs, duplicate requests, missing, extra and duplicate reply
+  IDs, unrequested deferrals, unsupported plugins, non-view compositions and
+  drawn deferrals. The focused owning case passes 1/1 in 88.8 ms. The host wire
+  format is unchanged. The ba6 failure also exposed that an undrawn record can
+  precede its active tab: the retained request now omits that tab until its
+  drawn record. Mounted dormant views stay in the request; an absent background
+  view stays with its background session; a loaded hidden view without a
+  background declaration mounts in a hidden workbench slot before placement.
+  Red: the initial drawn placement used `memorySaver.place` before project tab
+  state initialized and sent a cold unload-declared view to the host. Green: an
+  undrawn preparation skips cold hidden views without waiting, while a drawn
+  placement waits for startup classification; enabled memory saver excludes a
+  tab that starts unloaded, and disabled memory saver mounts the loaded hidden
+  view. Readiness rejection settles every waiting placement. A failed tab-state open
+  now rejects drawn placement while the existing tried signal still resolves.
+  Red: the old tried-signal race let two placement waiters proceed after the
+  open failed; Green: the open-result gate rejects both before observation or
+  memory-saver placement. The actual host barrier and startup tests pass 4/4,
+  the project readiness test passes 2/2, and the focused compositor case passes
+  1/1. An additional Red in `surface-view.test.mjs` showed that a cold retained
+  view outside the current plane had no initial scale and its first
+  `runtime.textSize.read` returned `surface fixture-retained-text-size-tab is not
+  in the layout`. Green uses the retained tab's owning card factor multiplied by
+  the current frame factor; the actual view-call returns 1.875 for factors 1.5
+  and 1.25. The workbench-only resolver is removed before the host placement
+  request. A mounted dormant view continues to retain its last scale, while a
+  cold retained view starts from its stored owner card. The window project in
+  view start values is unchanged. Runtime acceptance remains pending.
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,

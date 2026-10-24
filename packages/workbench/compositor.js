@@ -217,7 +217,7 @@ function deliver(mine, snapshot, titlebar) {
   return commit(mine, snapshot, !running, titlebar);
 }
 
-function placementAnswer(record, answer) {
+function validatePlacementAnswer(record, answer, nativeKinds = app.kinds) {
   if (!answer || typeof answer !== "object" || Array.isArray(answer)
       || Object.keys(answer).sort().join(",") !== "deferred,placements"
       || !Array.isArray(answer.deferred) || !Array.isArray(answer.placements)) {
@@ -233,13 +233,26 @@ function placementAnswer(record, answer) {
   if (expectedIds.size !== record.surfaces.length) throw new Error("surface placement request repeats an id");
   for (const id of deferred) {
     const surface = record.surfaces.find((candidate) => candidate.id === id);
-    if (!surface || !app.kinds.includes(surface.plugin) || surface.surface.composition?.kind !== "view") {
-      throw new Error(`surface placement cannot defer ${id}`);
+    if (!surface) throw new Error(`surface placement cannot defer ${id}: id is not in the placement request`);
+    if (!nativeKinds.includes(surface.plugin)) {
+      throw new Error(`surface placement cannot defer ${id}: plugin ${surface.plugin} has no native surface`);
     }
+    const kind = surface.surface?.composition?.kind;
+    if (kind !== "view") throw new Error(`surface placement cannot defer ${id}: composition kind is ${kind ?? "missing"}`);
   }
   if (answer.placements.some((placement) => !placement || typeof placement !== "object"
       || typeof placement.id !== "string" || placement.id === "")) {
     throw new TypeError("surface placement result has an invalid placement id");
+  }
+  for (const placement of answer.placements) {
+    const surface = record.surfaces.find((candidate) => candidate.id === placement.id);
+    if (nativeKinds.includes(surface?.plugin)) {
+      if (typeof placement.visible !== "boolean") throw new Error(`surface placement result has invalid visibility ${placement.id}`);
+      if (![placement.x, placement.y, placement.w, placement.h].every(Number.isFinite)
+          || placement.w < 0 || placement.h < 0) {
+        throw new Error(`surface placement result has invalid geometry ${placement.id}`);
+      }
+    }
   }
   const placedIds = new Set(answer.placements.map(({ id }) => id));
   if (placedIds.size !== answer.placements.length) throw new TypeError("surface placement result repeats a placement id");
@@ -248,6 +261,89 @@ function placementAnswer(record, answer) {
     if (deferred.has(id) && placedIds.has(id)) throw new Error(`surface placement result both places and defers ${id}`);
     if (!placedIds.has(id) && !deferred.has(id)) throw new Error(`surface placement result is missing ${id}`);
   }
+  return { placements: answer.placements, deferred: answer.deferred };
+}
+
+/** Sends the host-owned surfaces and projects the validated result onto one compositor record. */
+export async function placeCompositorRecord(record, requestedSurfaces, send, nativeKinds = app.kinds, {
+  activeIds = new Set(), mountedSurface = () => null, background = () => false,
+  authorize = () => {}, prepare = async () => {},
+} = {}) {
+  if (!record || typeof record !== "object" || !Array.isArray(record.surfaces)) {
+    throw new TypeError("compositor placement record has no surfaces array");
+  }
+  if (!Array.isArray(requestedSurfaces) || typeof send !== "function" || !Array.isArray(nativeKinds)) {
+    throw new TypeError("host placement projection requires surfaces, a sender, and native kinds");
+  }
+  if (record.surfaces.some((surface) => !surface || typeof surface !== "object"
+      || typeof surface.id !== "string" || surface.id === "")) {
+    throw new TypeError("compositor placement record has an invalid surface id");
+  }
+  if (requestedSurfaces.some((surface) => !surface || typeof surface !== "object"
+      || typeof surface.id !== "string" || surface.id === "")) {
+    throw new TypeError("host placement request has an invalid surface id");
+  }
+  const recordIds = new Set(record.surfaces.map(({ id }) => id));
+  if (recordIds.size !== record.surfaces.length) throw new Error("compositor placement record repeats an id");
+  const requestedIds = new Set(requestedSurfaces.map(({ id }) => id));
+  if (requestedIds.size !== requestedSurfaces.length) throw new Error("host placement request repeats an id");
+  for (const id of recordIds) {
+    if (!requestedIds.has(id)) throw new Error(`host placement request omits compositor surface ${id}`);
+  }
+  if (!(activeIds instanceof Set) || typeof mountedSurface !== "function" || typeof background !== "function"
+      || typeof authorize !== "function" || typeof prepare !== "function") {
+    throw new TypeError("host placement projection requires active ids and surface lifecycle handlers");
+  }
+  const hostSurfaces = [];
+  for (const surface of requestedSurfaces) {
+    const { id } = surface;
+    // Retained-only preparation metadata belongs to the workbench mount path, not the host placement contract.
+    let hostSurface = surface;
+    if (Object.hasOwn(surface, "retainedTextSize")) {
+      hostSurface = { ...surface };
+      delete hostSurface.retainedTextSize;
+    }
+    const isRecordSurface = recordIds.has(id);
+    const isView = surface.surface?.composition?.kind === "view";
+    const nativeView = isView && nativeKinds.includes(surface.plugin);
+    if (!nativeView) {
+      hostSurfaces.push(hostSurface);
+      continue;
+    }
+    const mounted = mountedSurface(id);
+    if (isRecordSurface) {
+      authorize(id);
+      hostSurfaces.push(hostSurface);
+      continue;
+    }
+    if (record.drawn === false && activeIds.has(id)) continue;
+    if (!isView || (mounted && !mounted.disposed)) {
+      hostSurfaces.push(hostSurface);
+      continue;
+    }
+    // A preparation precedes the plane draw; cold hidden views wait for the drawn placement to classify memory state.
+    if (record.drawn === false) continue;
+    if (background(surface)) continue;
+    authorize(id);
+    await prepare(surface);
+    const prepared = mountedSurface(id);
+    if (!prepared || prepared.disposed) {
+      throw new Error(`retained view ${id} was not mounted after preparation`);
+    }
+    hostSurfaces.push(hostSurface);
+  }
+  const hostRecord = { ...record, surfaces: hostSurfaces };
+  const answer = await send(hostRecord);
+  const validated = validatePlacementAnswer(hostRecord, answer, nativeKinds);
+  return {
+    placements: validated.placements.filter(({ id }) => recordIds.has(id)),
+    deferred: validated.deferred.filter((id) => recordIds.has(id)),
+  };
+}
+
+function placementAnswer(record, answer) {
+  const { placements, deferred: deferredIds } = validatePlacementAnswer(record, answer);
+  const deferred = new Set(deferredIds);
   if (deferred.size) {
     record.surfaces = record.surfaces.filter(({ id }) => !deferred.has(id));
     if (record.seq === aheadSeq) {
@@ -255,7 +351,7 @@ function placementAnswer(record, answer) {
       aheadRecord = null;
     }
   }
-  return answer.placements;
+  return placements;
 }
 
 /**

@@ -139,6 +139,88 @@ test("a view mount waits for its actual source registration before serving the f
   }
 });
 
+test("a retained view reads the text scale of its stored owner card", { timeout: 5000 }, async (t) => {
+  const dom = new JSDOM("<main></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const listeners = new Map();
+  const replies = [];
+  const actualHost = await import("../host.js");
+  const actualEnvironment = await import("../environment.js");
+  t.mock.module("../host.js", { exports: {
+    ...actualHost,
+    native: true,
+    onSurfacePrepared: () => () => {},
+    surfaceContextRuntime: (surface, declarations) => {
+      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
+      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
+        listeners.set(name, listener);
+        return () => listeners.delete(name);
+      }, call: async (name, payload) => {
+        if (name === "viewReply") replies.push(payload);
+        return null;
+      } } };
+    },
+  } });
+  t.mock.module("../environment.js", { exports: { ...actualEnvironment, pluginDiagnostics: async () => null } });
+  let liveScale = null;
+  setSurfaceTextSize(() => liveScale);
+  const { prepareRetainedSurface, releaseRetainedSurfaceSlots } = await import("../retained-surface-mounts.js");
+  const { authorizeSurface, disposeSurface } = await import("../surface-modules.js");
+  const pluginId = "fixture-retained-text-size";
+  const surfaceId = "fixture-retained-text-size-tab";
+  const ownerCard = { data: { textSize: 1.25 } };
+  let frameFactor = 1.5;
+  const retainedTextSize = () => frameFactor * (ownerCard.data?.textSize ?? 1);
+  const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], dom: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" } };
+  recordOrigin(surfaceId, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  seedViewSource(pluginId, surfaceId);
+  try {
+    authorizeSurface(surfaceId);
+    await prepareRetainedSurface({
+      id: surfaceId, surface,
+      retainedTextSize,
+    });
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
+      id: 1, command: "runtime.textSize.read", params: null });
+    for (let turn = 0; replies.length === 0 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [{ id: 1, result: 1.875, generation: 1 }],
+      "a cold retained view did not read frame scale multiplied by its stored owner-card scale");
+    frameFactor = 2;
+    ownerCard.data.textSize = 1.5;
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
+      id: 2, command: "runtime.textSize.read", params: null });
+    for (let turn = 0; replies.length < 2 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [
+      { id: 1, result: 1.875, generation: 1 },
+      { id: 2, result: 1.875, generation: 1 },
+    ], "a mounted retained view changed its cached scale while it remained outside the plane");
+    liveScale = 3;
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
+      id: 3, command: "runtime.textSize.read", params: null });
+    for (let turn = 0; replies.length < 3 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    liveScale = null;
+    listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1,
+      id: 4, command: "runtime.textSize.read", params: null });
+    for (let turn = 0; replies.length < 4 && turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(replies, [
+      { id: 1, result: 1.875, generation: 1 },
+      { id: 2, result: 1.875, generation: 1 },
+      { id: 3, result: 3, generation: 1 },
+      { id: 4, result: 3, generation: 1 },
+    ], "a retained view did not adopt the live plane scale and retain it after leaving the plane");
+  } finally {
+    releaseRetainedSurfaceSlots({ surfaces: [] }, new Set());
+    await disposeSurface(surfaceId);
+    setSurfaceTextSize(() => 1);
+    dom.window.close();
+  }
+});
+
 test("a view declares its composition only after native call listeners are ready", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;

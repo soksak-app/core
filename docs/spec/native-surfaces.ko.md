@@ -25,6 +25,10 @@
 
 워크벤치 배치 콜백은 대상 표면의 식별자·흐림·대상 슬롯 여백을 카드 사각형과 함께 캡처한다. 대상 여백은 측정한 슬롯에서 이전에 그린 사이드바 영역을 빼고 요청한 카드 상태의 영역을 더한다. 컴포지터는 이전 사이드바 배치를 다시 읽지 않고 캡처한 기하를 사용한다. 측정할 수 없는 기존 슬롯은 null로 명시하고 준비 동안 숨긴다. 잘못된 여백 값은 오류다.
 
+페이지는 현재 compositor record에 없는 보존 surface도 host placement request에 포함할 수 있다. 페이지는 전체 request의 모든 ID를 기준으로 host 응답을 검증한다. 각 요청 ID는 배치되거나, 그려지지 않은 preparation 중에만 deferred되어야 하며, 누락·추가·중복 ID와 잘못된 deferred ID는 오류다. 현재 compositor record를 기록하기 전 검증된 응답을 해당 record의 ID로 투영한다. Record 밖의 보존 surface는 retention 경로가 소유하며 활성 compositor 배치로 기록하지 않는다.
+
+Workbench는 현재 page가 소유한 surface로 요청을 구성한다. 아직 undrawn compositor record에 없는 활성 tab은 dormant로 취급하지 않고 drawn record에서 보낸다. 이미 mount된 dormant view는 host가 native handle을 유지하도록 요청에 남긴다. Undrawn record 밖의 cold view는 drawn placement까지 기다리며, preparation이 이를 생성하거나 배치하면 안 된다. Drawn placement 전에는 project tab state store가 성공적으로 열리고 memory saver가 startup tab을 분류할 때까지 기다린다. Tab state open 실패는 placement를 거부하며, 별도 tried 신호는 tab state 호출이 store 미사용 상태를 보고하도록 계속 resolve한다. `surface.unload`를 선언한 plugin의 hidden tab은 memory saver가 startup 시 unloaded로 분류하면 host request에서 제외하며 tab은 state와 함께 layout에 남긴다. Background 선언이 없는 loaded hidden view는 hidden workbench slot에서 mount하고 listener를 설치한 뒤 composition을 선언해야 host에 placement를 보낼 수 있다. Background 선언이 있고 아직 mount되지 않은 view는 background session이 소유하며 native view를 만들지 않는다. 요청에 포함한 모든 view에는 host composition barrier를 계속 적용한다.
+
 네이티브 표면을 대기 중인 사각형들의 교집합으로 일시 축소하지 않는다. 다음 슬롯과 일치하지 않는 표면은 DOM 변경 전에 숨긴다. 페이지가 다음 슬롯을 잰 표면은 준비 동안 새 사각형에 보인 채로 둔다. 준비의 변경은 창의 열린 트랜잭션 안에 있어 화면에 나오지 않으며, 그때 표면을 숨기면 화면에 아직 그 표면이 보이는 자리의 누름이 표면 대신 페이지로 간다. 그리기 후 측정으로 새 사각형을 제공한다. 첫 응답자를 담은 뷰를 숨기면 AppKit은 첫 응답자를 다른 뷰나 창으로 옮기므로, 배치 중에 숨긴 표면은 키보드 소유자를 기록하고 다시 보일 때 포커스를 그 소유자에게 되돌린다. 숨긴 동안 포커스가 옮겨졌으면 되돌리지 않는다.
 
 `hidden` 속성을 가진 요소 안의 표면은 마운트를 유지하지만 표시하지 않는 상태로 제출한다. 카드 전체 화면은 이 속성으로 다른 카드를 숨기며, 원래 배치를 복원할 때까지 해당 표면과 세션을 유지한다.
