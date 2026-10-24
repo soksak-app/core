@@ -26,6 +26,7 @@ import {
   terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
   visibleInputBeforeCursor,
+  waitForObservedStatusEvent,
   waitForStateEvent as waitForStateEventAfter,
 } from "./terminal-ime-document.mjs";
 
@@ -565,9 +566,13 @@ for (const app of Object.values(APPS)) {
       await s.pointer(terminalX, terminalY, "move", { activate: true });
       await s.until("host.window", (host) => host.active === true && host.key === true,
         "the application did not regain the active key window");
+      const focusEventOffset = observedStateEvents.length;
       await s.run("terminal.focus", {}, surface);
-      await s.until("terminal.cursor", (cursor) => cursor.focused === true,
-        "the terminal did not regain focus after the reference closed", { surface });
+      await waitForObservedStatusEvent(observedStateEvents, focusEventOffset, (notify) => {
+        stateEventWaiters.add(notify);
+        return () => stateEventWaiters.delete(notify);
+      }, "terminal.cursor", (cursor) => cursor?.focused === true,
+      "the terminal did not regain focus after the reference closed", 1500);
       await s.until("host.window", (host) => host.responder?.surface === surface &&
         host.regions.some((region) => region.surface === surface && region.focused),
       "the terminal did not regain its native responder after the reference closed");

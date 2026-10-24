@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-47-16: Keep the raw terminal cursor observer subscribed after
+  AppKit reference focus returns. The old caller used managed
+  `Client.watch` through `s.until` for a cursor status already watched by
+  raw requests; its `status.unwatch` removed the observer's subscription.
+  Red: the unchanged sequence loses the subsequent focused cursor event.
+  Green: wait for a fresh focused event on the existing observer stream,
+  reject stale focus values, and leave the raw watch active until observer
+  cleanup. The owning `terminal-ime-document.test.mjs` passes 19/19. No
+  activation rerun or IME behavior acceptance is claimed; F239-47-6 remains
+  open.
 - F239-47-15: Reconcile fresh terminal notifications with known pre-key state.
   The observer accepts a coherent composition update when PTY rows remain
   unchanged, while requiring changed rows to have a matching screen event and

@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-47-16: AppKit reference focus가 돌아온 뒤 raw terminal cursor
+  observer 구독을 유지한다. 이전 caller는 raw request가 이미 구독한 cursor
+  status에 managed `Client.watch` 기반 `s.until`을 사용했다. 이때 보낸
+  `status.unwatch`가 observer 구독을 해제했다. Red: 변경 전 sequence에서
+  이후 focused cursor event가 사라진다. Green: 기존 observer stream에서 새
+  focused event를 기다리고 stale focus 값은 거부하며 observer cleanup까지 raw
+  watch를 유지한다. Owning `terminal-ime-document.test.mjs`는 19/19 통과한다.
+  Activation rerun이나 IME 동작 acceptance는 주장하지 않으며 F239-47-6은
+  계속 열린다.
 - F239-47-15: 새 terminal notification을 알려진 pre-key 상태와 대조한다.
   PTY rows가 그대로인 coherent composition update는 허용하고, rows 변경은
   일치하는 screen event가 있어야 허용한다. Stale notification, blink-only

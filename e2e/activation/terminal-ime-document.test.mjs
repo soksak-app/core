@@ -11,6 +11,7 @@ import {
   terminalObserverStatusesMatch,
   visibleInputBeforeCursor,
   startTerminalStatusObserver,
+  waitForObservedStatusEvent,
   waitForStateEvent,
 } from "./terminal-ime-document.mjs";
 
@@ -232,6 +233,95 @@ test("an initial managed until does not release the manual terminal status watch
     "managed-watch", "managed-unwatch", "status.watch", "status.watch", "status.watch",
   ]);
   await observer.stop();
+});
+
+test("a managed cursor until releases the observer's raw cursor watch", async () => {
+  const listeners = new Set();
+  const requests = [];
+  const watched = new Set();
+  const session = {
+    window: "main",
+    client: { on(_name, listener) { listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      requests.push({ method, name });
+      if (method === "status.watch") watched.add(name);
+      if (method === "status.unwatch") watched.delete(name);
+      return null;
+    },
+    async until(name, predicate, _message, { surface }) {
+      await this.request("status.watch", { name, surface });
+      const value = name === "terminal.compose" ? { text: "" } : { focused: true };
+      assert.equal(predicate(value), true);
+      await this.request("status.unwatch", { name, surface });
+      return value;
+    },
+  };
+  const observer = await startTerminalStatusObserver(session, "surface-1");
+
+  await session.until("terminal.cursor", (cursor) => cursor.focused === true,
+    "terminal focus did not return", { surface: "surface-1" });
+  if (watched.has("terminal.cursor")) {
+    for (const listener of listeners) listener({ window: "main", surface: "surface-1",
+      name: "terminal.cursor", value: { focused: true } });
+  }
+
+  assert.deepEqual(requests.filter((request) => request.method === "status.watch" || request.method === "status.unwatch"), [
+    { method: "status.watch", name: "terminal.compose" },
+    { method: "status.unwatch", name: "terminal.compose" },
+    { method: "status.watch", name: "terminal.compose" },
+    { method: "status.watch", name: "terminal.cursor" },
+    { method: "status.watch", name: "terminal.screen" },
+    { method: "status.watch", name: "terminal.cursor" },
+    { method: "status.unwatch", name: "terminal.cursor" },
+  ]);
+  assert.equal(watched.has("terminal.cursor"), false);
+  assert.equal(observer.events.some((event) => event.name === "terminal.cursor"), false,
+    "the old managed focus wait drops the cursor notification from the raw observer");
+  await observer.stop();
+});
+
+test("focus waits on the existing raw status stream after reference handoff", async () => {
+  const listeners = new Set();
+  const requests = [];
+  const watched = new Set();
+  const session = {
+    window: "main",
+    client: { on(_name, listener) { listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      requests.push({ method, name });
+      if (method === "status.watch") watched.add(name);
+      if (method === "status.unwatch") watched.delete(name);
+      return null;
+    },
+    async until(name, predicate, _message, { surface }) {
+      await this.request("status.watch", { name, surface });
+      const value = name === "terminal.compose" ? { text: "" } : { focused: true };
+      assert.equal(predicate(value), true);
+      await this.request("status.unwatch", { name, surface });
+      return value;
+    },
+  };
+  const observer = await startTerminalStatusObserver(session, "surface-1");
+  const offset = observer.events.length;
+  let notify;
+  const result = waitForObservedStatusEvent(observer.events, offset, (listener) => {
+    notify = listener;
+    return () => { notify = undefined; };
+  }, "terminal.cursor", (cursor) => cursor?.focused === true, "focus wait", 20);
+  for (const listener of listeners) listener({ window: "main", surface: "surface-1",
+    name: "terminal.cursor", value: { focused: false } });
+  notify();
+  assert.equal(notify !== undefined, true, "stale focus must not resolve or remove the waiter");
+  for (const listener of listeners) listener({ window: "main", surface: "surface-1",
+    name: "terminal.cursor", value: { focused: true } });
+  notify();
+
+  const event = await result;
+  assert.equal(event.value.focused, true);
+  assert.equal(watched.has("terminal.cursor"), true, "focus wait must preserve the raw cursor watch");
+  assert.equal(requests.some((request) => request.method === "status.unwatch" && request.name === "terminal.cursor"), false);
+  await observer.stop();
+  assert.equal(watched.size, 0, "observer cleanup must release each raw watch");
 });
 
 test("a status notification delivered during a sample satisfies the sample's original event offset", async () => {

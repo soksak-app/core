@@ -149,6 +149,35 @@ export function waitForStateEvent(events, after, subscribe, label, timeoutMs = 1
   });
 }
 
+/** Resolves only for a matching status event on the caller's existing observer stream. */
+export function waitForObservedStatusEvent(events, after, subscribe, name, predicate, label, timeoutMs = 1500) {
+  assert.ok(Array.isArray(events), "terminal observer events must be an array");
+  assert.ok(Number.isInteger(after) && after >= 0, "terminal observer event offset must be nonnegative");
+  assert.equal(typeof predicate, "function", "terminal observer predicate must be a function");
+  const matchingEvent = () => events.slice(after).findLast((event) => event.name === name && predicate(event.value));
+  const current = matchingEvent();
+  if (current) return Promise.resolve(current);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let off = () => {};
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      off();
+      callback(value);
+    };
+    const timer = setTimeout(() => finish(reject,
+      new Error(`${label}: no matching ${name} notification on the existing observer stream`)), timeoutMs);
+    off = subscribe(() => {
+      const event = matchingEvent();
+      if (event) finish(resolve, event);
+    });
+    const arrivedDuringSubscribe = matchingEvent();
+    if (arrivedDuringSubscribe) finish(resolve, arrivedDuringSubscribe);
+  });
+}
+
 /** Starts the status event stream used to observe terminal input. */
 export async function startTerminalStatusObserver(session, surface, onEvent = () => {}) {
   await session.until("terminal.compose", (compose) => compose?.text === "",
