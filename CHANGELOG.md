@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- F239-47-6/F239-47-10: Record the P85 two-host IME attempt. Both fixed AppKit reference sequences and all ten terminal documents matched. Tauri recorded a 34.660750 ms frame gap and Wails 33.694458 ms, exceeding the unchanged 33 ms limit; visual acceptance remains open. Metadata assigns all vowels the same foreground/background and underlines only the last marked vowel. The callback DTO does not expose AppKit selector names or `committedLength`. A second query replaced the original baseline, and the final frontmost observation conflicts with the runner's restore log; F239-47-24 tracks a valid session baseline. Both hosts and sidecars exited with zero error records.
+## Unreleased
+
 - F239-47-6: Record a blue underline observed beneath `preedit` in the terminal prompt path on a fresh Wails window. The corresponding terminal base cells had no underline, inverse or link flag, while `terminal.cursor.preedit` held `ㅏㅏㅏ`. Capture began after the mark was already present; its three non-activating frames produced no source raster or candidates and recorded no source drops. The painter remains unknown and visual acceptance remains open.
 
 - F212.10-core-3-6: Retire a view's exposure registrations in the same
