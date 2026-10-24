@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-48-3-8: Pair both real start-module entries through module hooks.
+  Both owner tests pass 2/2. The current host audit drops from 14 to 12
+  findings, removing the two app-start paths without an allowance. The
+  inventory check passes with 100 lanes, 697 implementation files, and
+  996 test files; `make docs-check` passes.
 - F239-48-3-7: Add Tauri MockRuntime IPC coverage for the starter binding's
   invalid request argument. The Tauri and Wails owner tests pass 1/1 each.
   The host structure audit drops from 12 to 11 findings. The inventory check

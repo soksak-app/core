@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-48-3-8: 양쪽 실제 start-module entry를 module hook으로 짝지어
+  검증한다. Owner test는 2/2 통과한다. 현재 host 감사는 예외 추가 없이
+  app-start 경로 두 개를 제거해 14개에서 12개 finding으로 줄었다.
+  Inventory 검사는 lane 100개, 구현 파일 697개, test 파일 996개로
+  통과하고 `make docs-check`도 통과한다.
 - F239-48-3-7: Tauri starter binding의 잘못된 request argument를
   MockRuntime IPC로 검증한다. Tauri와 Wails owner test가 각각 1/1 통과한다.
   Host 구조 감사 finding은 12개에서 11개로 줄었다. Inventory 검사는
