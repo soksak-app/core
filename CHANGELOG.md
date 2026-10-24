@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F240-8: Map eight feature areas and record a six-stage execution order for
+  active core work, keeping feature fixes ahead of measurements, audits and
+  external release gates. Independent leaf changes may proceed in parallel only
+  after their prerequisites; packaging, integration verification and audits
+  follow those fixes. `make docs-check` passes.
+
 - F267.2: Link the completed F239-38, F239-39, F239-40, F239-40-1, F263 and F264
   capabilities to their implementation symbols and existing
   owning tests. The parity audit resolves all six links and reports four

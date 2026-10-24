@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F240-8: 여덟 기능 영역을 연결하고 active core 작업의 6단계 실행 순서를
+  기록한다. 기능 수정은 측정, audit 및 외부 release gate보다 먼저 둔다.
+  독립 leaf 변경은 선행 조건 충족 뒤 병렬 진행하고, packaging, integration
+  verification, audit는 해당 수정 후 진행한다. `make docs-check`가 통과한다.
+
 - F267.2: 완료된 F239-38, F239-39, F239-40, F239-40-1, F263, F264
   capability를 implementation symbol과 기존 소유 test에 연결했다. Parity
   audit는 여섯 link를 확인하고 별도 F266 분류를 포함한 inventory 오류
