@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-47-30-2: Read hyphenated Go diagnostic endpoint names in host parity. The declared `diagnostics.native.window-color-space` method was omitted by the Go assignment parser, producing a false host mismatch. The owning parser Red reproduces that assertion failure; the same test and all 8 parser tests pass with the corrected matcher. `make host-parity-check` and `make docs-check` pass.
+
 - F239-47-34: Correct the ScreenCaptureKit stop comment.
   `minimumFrameInterval` limits the requested update rate and does not guarantee
   idle callbacks at that cadence. Stop waits for a callback at or beyond the
