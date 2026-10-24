@@ -33,8 +33,13 @@
   space를 보고한다. Window를 바꾸지 않고 localized name과 사용할 수 있는 ICC
   profile data의 SHA-256 fingerprint를 반환한다. 변경 전에는 method가 없어 두
   host declaration test가 실패했다. Wails와 Tauri declaration test 및 native
-  `window_facts_test`가 통과하고, `cargo fmt --check -p soksak-host-tauriv2`와
-  `make docs-check`가 통과한다. 양 host endpoint의 runtime 검증은 대기 중이다.
+  `window_facts_test`가 통과한다. `cargo fmt --check -p soksak-host-tauriv2`와
+  `make docs-check`도 통과한다. Stable 0.0.21 macOS arm64 Wails와 Tauri bundle을
+  대상으로 한 번의 비활성 check가 정확한 응답 형식, 없는 window 오류, OS color
+  profile을 고정하지 않은 query 전후의 안정된 `host.window` facts를 확인한다.
+  양 host error audit는 통과했고 test process는 endpoint 파일을 제거한 채 종료됐다.
+  ICC digest pattern 전에 string 타입을 확인하도록 consumer assertion을 강화한 뒤
+  같은 양 host case를 다시 통과했다. 두 error audit는 비어 있고 cleanup 결과도 같다.
 
 - F239-47-32: Image region에 marked-buffer-only input client를 둔다. 누적
   `NSTextView` document가 unmarked committed text를 preedit으로 노출했다. Region은 이제
