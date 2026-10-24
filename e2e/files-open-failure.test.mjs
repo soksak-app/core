@@ -1,7 +1,53 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { hasOpenFailureRow, openFailureRow, treeNodes, waitTreeSnapshot } from "./files-open-failure.mjs";
+import { hasOpenFailureRow, openFailureRow, treeNodes, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
+
+test("the Files tree baseline waits for a current accepted snapshot", async () => {
+  const pending = [{ sidebar: "left", sections: [{ id: "files.tree", source: { id: "files", surface: null },
+    subscription: "pending", mounted: false, acceptedSeq: null, text: "" }] }];
+  const accepted = [{ sidebar: "left", sections: [{ id: "files.tree", source: { id: "files", surface: null },
+    subscription: "ready", mounted: true, acceptedSeq: 8, text: "project" }] }];
+  let notifications = 0;
+  const s = {
+    async get(name) {
+      assert.equal(name, "core.sidebars");
+      return pending;
+    },
+    async until(name, predicate) {
+      assert.equal(name, "core.sidebars");
+      notifications += 1;
+      assert.equal(predicate(pending), false, "a pending source was accepted as a sequence baseline");
+      notifications += 1;
+      assert.equal(predicate(accepted), true, "the accepted source was not recognized");
+      return accepted;
+    },
+  };
+
+  const result = await waitAcceptedTreeSection(s, "Files tree source did not accept a snapshot");
+  assert.equal(notifications, 2, "the baseline did not wait through the pending notification");
+  assert.equal(result.section.acceptedSeq, 8);
+  assert.equal(result.section.source.id, "files");
+});
+
+test("the Files tree readiness failure includes the last observed sidebar payload", async () => {
+  const pending = [{ sidebar: "left", sections: [{ id: "files.tree", source: { id: "files", surface: null },
+    subscription: "pending", mounted: false, acceptedSeq: null, text: "" }] }];
+  const s = {
+    async get(name) {
+      assert.equal(name, "core.sidebars");
+      return pending;
+    },
+    async until(name, predicate) {
+      assert.equal(name, "core.sidebars");
+      assert.equal(predicate(pending), false);
+      throw new Error("status wait timed out");
+    },
+  };
+
+  await assert.rejects(waitAcceptedTreeSection(s, "Files tree source did not accept a snapshot"),
+    /last core\.sidebars=.*subscription.*pending.*acceptedSeq.*null/);
+});
 
 test("file-open failure check reads the declared tree snapshot, not removed status values", async () => {
   let sequence = 3;

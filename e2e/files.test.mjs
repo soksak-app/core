@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, coveredBy, open } from "@soksak/window-check/app.mjs";
 import { fresh, terminalCardSidebar } from "./fixture.mjs";
-import { hasOpenFailureRow, openFailureRow, waitTreeSnapshot } from "./files-open-failure.mjs";
+import { hasOpenFailureRow, openFailureRow, waitAcceptedTreeSection, waitTreeSnapshot } from "./files-open-failure.mjs";
 import { distance, readPng } from "@soksak/window-check/png.mjs";
 
 /** Presses the center of the element with native input. */
@@ -642,12 +642,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(rect.width > 0 && rect.height > 0, `${path} ${role} control has no area`);
       await s.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
     };
-    const acceptedTreeSequence = async () => {
-      const section = (await s.get("core.sidebars")).find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
-      assert.ok(Number.isInteger(section?.acceptedSeq), "the Files tree has no accepted snapshot sequence");
-      return section.acceptedSeq;
-    };
-    let accepted = await acceptedTreeSequence();
+    let accepted = (await waitAcceptedTreeSection(s, "Files tree source did not accept a snapshot")).section.acceptedSeq;
     assert.equal(await s.run("files.refresh"), null);
     let current = await waitTreeSnapshot(s, accepted,
       (snapshot) => nodeByPath(snapshot, folder) !== null,

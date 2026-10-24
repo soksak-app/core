@@ -14,6 +14,24 @@
   boundaries` remains blocked by the unchanged `e2e/browser-cohort-upgrade.test.mjs`
   references to sidecar package names. No GUI or full suite was run.
 
+- F239-37-9: Start the existing Files project-close check by opening its
+  disposable project before waiting for mounted sidebar sections. The project
+  library has no plane, so `core.sidebars` correctly reports no drawn sections
+  there. After close, the check now verifies newer declared tree and bookmark
+  snapshots with exact no-project values, no stale rows, no application error,
+  and no Files sections drawn in the library. Red: the prior Wails check timed
+  out on `core.sidebars: []` before opening the test project. Syntax and
+  `make e2e-check` pass; the updated two-host runtime check remains pending.
+
+- F239-37-8: Wait for the current Files tree source to accept a declared UI
+  snapshot before using its sequence as a baseline. A source change may leave
+  the section cleared with a pending subscription and a null `acceptedSeq`.
+  The helper now waits for a current source, a ready subscription, a mounted
+  section and an integer accepted sequence, and includes the last observed
+  `core.sidebars` payload on failure. The unchanged consumer test reproduced
+  immediate refusal of the pending state; the focused consumer tests pass
+  4/4. No producer or status contract changed.
+
 - F239-47-20: Wait for each coherent terminal document to match the same-window
   AppKit reference after input receipt. Backspace can first clear the preedit
   while the PTY still shows eight committed vowels, then publish the expected

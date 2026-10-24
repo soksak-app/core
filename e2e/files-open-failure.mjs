@@ -1,5 +1,29 @@
 import assert from "node:assert/strict";
 
+/** Waits for the current Files tree source to accept a value before taking a sequence baseline. */
+export async function waitAcceptedTreeSection(s, message) {
+  const sectionOf = (sidebars) => sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === "files.tree");
+  const accepted = (sidebars) => {
+    const section = sectionOf(sidebars);
+    return section?.source !== null && section?.source !== undefined
+      && section.subscription === "ready" && section.mounted === true
+      && Number.isInteger(section.acceptedSeq);
+  };
+  let observed;
+  try {
+    observed = await s.get("core.sidebars");
+    if (!accepted(observed)) {
+      observed = await s.until("core.sidebars", (sidebars) => {
+        observed = sidebars;
+        return accepted(sidebars);
+      }, message);
+    }
+  } catch (cause) {
+    throw new Error(`${message}; last core.sidebars=${JSON.stringify(observed)}`, { cause });
+  }
+  return { sidebars: observed, section: sectionOf(observed) };
+}
+
 /** Waits for a newer accepted Files tree snapshot and returns it with its section state. */
 export async function waitTreeSnapshot(s, afterSequence, predicate, message) {
   assert.ok(Number.isInteger(afterSequence), "the Files tree has no accepted snapshot sequence");

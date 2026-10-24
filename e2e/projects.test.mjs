@@ -455,8 +455,6 @@ for (const app of Object.values(APPS)) {
     assert.equal(await s.get("core.project"), null, "the check did not start from the library");
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the library window still reports project ${await project()}`);
-    await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section?.mounted),
-      "the Files sections are not mounted in the project library");
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === root,
       "the window did not report the opened project");
@@ -479,19 +477,26 @@ for (const app of Object.values(APPS)) {
     await s.run("core.project.close", { id: opened.id });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the window still reports the closed project ${await project()}`);
-    await s.until("core.sidebars", (sidebars) => {
-      const [treeSection, bookmarksSection] = filesSections(sidebars);
-      return treeSection?.mounted && bookmarksSection?.mounted
-        && treeSection.acceptedSeq > treeSectionBefore.acceptedSeq
-        && bookmarksSection.acceptedSeq > bookmarksSectionBefore.acceptedSeq
-        && treeSection.text.includes("프로젝트 없음")
-        && bookmarksSection.text.includes("프로젝트 없음");
-    }, "the Files sections did not accept the closed project's no-project values");
-    const treeAfter = await s.get("files.tree");
+    await s.until("core.sidebars", (sidebars) => filesSections(sidebars).every((section) => section === undefined),
+      "the library still draws Files sidebar sections after project close");
+    const noProjectTree = (snapshot) => snapshot.version > treeSectionBefore.acceptedSeq
+      && snapshot.value?.elements?.length === 1
+      && snapshot.value.elements[0].kind === "status-line"
+      && snapshot.value.elements[0].key === "project"
+      && snapshot.value.elements[0].text === "프로젝트 없음";
+    const treeAfter = await s.until("files.tree", noProjectTree,
+      "files.tree did not publish a newer no-project snapshot after close");
     assert.deepEqual(treeAfter.value?.elements, [
       { kind: "status-line", key: "project", text: "프로젝트 없음" },
     ], "files.tree retained project rows after close");
-    const bookmarksAfter = await s.get("files.bookmarks");
+    const noProjectBookmarks = (snapshot) => snapshot.version > bookmarksSectionBefore.acceptedSeq
+      && snapshot.value?.elements?.length === 1
+      && snapshot.value.elements[0].kind === "list"
+      && snapshot.value.elements[0].key === "bookmarks"
+      && snapshot.value.elements[0].empty === "프로젝트 없음"
+      && snapshot.value.elements[0].items?.length === 0;
+    const bookmarksAfter = await s.until("files.bookmarks", noProjectBookmarks,
+      "files.bookmarks did not publish a newer no-project snapshot after close");
     assert.deepEqual(bookmarksAfter.value?.elements, [
       { kind: "list", key: "bookmarks", empty: "프로젝트 없음", items: [] },
     ], "files.bookmarks retained project rows after close");

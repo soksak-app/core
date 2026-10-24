@@ -14,6 +14,22 @@
   `e2e/browser-cohort-upgrade.test.mjs`의 sidecar package 이름 참조 때문에 실패한다.
   GUI 또는 전체 test suite는 실행하지 않았다.
 
+- F239-37-9: 기존 Files project-close check가 mounted sidebar section을 기다리기
+  전에 disposable project를 열도록 순서를 수정한다. Project library에는 plane이
+  없어 `core.sidebars`가 그려진 section을 보고하지 않는 것이 정상이다. Close 뒤
+  더 새로운 declared tree와 bookmark snapshot의 정확한 no-project 값, stale row와
+  application error 없음, library에 Files section이 그려지지 않음을 확인한다. Red:
+  기존 Wails check는 test project를 열기 전 `core.sidebars: []`에서 timeout됐다.
+  Syntax와 `make e2e-check`는 통과했다. 수정된 양 host runtime check는 대기 중이다.
+
+- F239-37-8: Files tree source가 declared UI snapshot을 수락할 때까지 sequence
+  baseline 사용을 기다린다. Source 변경 직후 section은 cleared 상태, pending
+  subscription과 null `acceptedSeq`를 가질 수 있다. Helper는 현재 source, ready
+  subscription, mounted section 및 정수 accepted sequence를 기다리고, 실패 시
+  마지막 `core.sidebars` payload를 포함한다. 변경 전 consumer test는 pending
+  상태의 즉시 거부를 재현했고, focused consumer test 4/4가 통과한다. Producer와
+  status 계약은 바뀌지 않았다.
+
 - F239-47-20: input receipt 뒤 각 coherent terminal document가 같은 window의
   AppKit reference와 일치할 때까지 기다린다. Backspace는 먼저 preedit을 지워도
   PTY에 committed vowel 8개가 남고, 이후 status event에서 기대한 7개 화면을
