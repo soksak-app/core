@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F265-1: The records check rejects an existing census that is not a JSON object and reports malformed `exclude` patterns with the census file and value. Red: both contextual-error tests fail against F265. Green: records-check passes 15/15 and `make docs-check` passes 112 files and 1718 records.
+
 - F265: The records check treats an absent census `exclude` as no exclusions and rejects a present non-string value with the census file and found value. Red: both new owning tests failed on the unchanged checker; Green: records-check passes 13/13 and `make docs-check` passes 112 files and 1718 records.
 
 - F264: The workspace version is now release candidate `0.0.21`, distinct from immutable published tag `v0.0.20`. The version checker names both identities, the manifest audit and three workspace Cargo.lock entries use the candidate, and the installation specification distinguishes candidates from published releases. Red: unchanged checker identity failed with `0.0.20` versus `0.0.21`; a controlled replay with original Cargo.lock entries failed for `soksak-host-tauriv2`. Green: `versions.test.mjs` passes 7/7, the version audit passes, and `make docs-check` passes 112 files and 1718 records. No tag, release asset or registry entry was published.

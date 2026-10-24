@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F265-1: records 검사는 JSON object가 아닌 census 선언을 거부하고, 잘못된 `exclude` pattern은 census 파일과 실제 값을 담아 보고한다. Red: 두 오류 문맥 시험이 F265 코드에서 실패했다. Green: records-check 15/15와 `make docs-check` 문서 112개, record 1718개가 통과한다.
+
 - F265: records 검사는 census `exclude`가 없으면 아무 파일도 제외하지 않고, 선언된 비문자열 값은 census 파일과 실제 값을 담아 거부한다. Red: 새 소유 시험 2개가 변경 전 검사에서 실패했다. Green: records-check 13/13과 `make docs-check` 문서 112개, record 1718개가 통과한다.
 
 - F264: 작업공간 version을 immutable public tag `v0.0.20`과 구분되는 release candidate `0.0.21`로 맞췄다. Version checker가 두 identity를 명시하고, manifest audit와 workspace Cargo.lock 3개 항목이 candidate를 사용하며, 설치 명세가 candidate와 public release를 구분한다. Red: 변경 전 checker identity가 `0.0.20`과 `0.0.21` 불일치로 실패했다. 원래 Cargo.lock 항목을 되돌린 제어된 replay는 `soksak-host-tauriv2`에서 실패했다. Green: `versions.test.mjs` 7/7, version audit, `make docs-check` 112개 파일과 1718개 record가 통과한다. Tag, release asset, registry 항목은 게시하지 않았다.

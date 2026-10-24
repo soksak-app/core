@@ -159,3 +159,23 @@ test("a census declaration rejects a non-string exclude with its file and value"
   execSync("git add .", { cwd: repository });
   assert.throws(() => repositoryRecordViolations(repository), /census\.json.*exclude.*number.*3/);
 });
+
+test("a census declaration rejects null and array roots with its file and value", () => {
+  for (const declaration of [null, []]) {
+    const repository = mkdtempSync(join(tmpdir(), "records-invalid-census-"));
+    execSync("git init -q .", { cwd: repository });
+    writeFileSync(join(repository, "census.json"), JSON.stringify(declaration));
+    writeFileSync(join(repository, "own.md"), "Repository facts.\n");
+    execSync("git add .", { cwd: repository });
+    assert.throws(() => repositoryRecordViolations(repository), /census\.json.*declaration.*object.*found/);
+  }
+});
+
+test("a census declaration reports an invalid exclude pattern with its file and value", () => {
+  const repository = mkdtempSync(join(tmpdir(), "records-invalid-pattern-"));
+  execSync("git init -q .", { cwd: repository });
+  writeFileSync(join(repository, "census.json"), JSON.stringify({ exclude: "[" }));
+  writeFileSync(join(repository, "own.md"), "Repository facts.\n");
+  execSync("git add .", { cwd: repository });
+  assert.throws(() => repositoryRecordViolations(repository), /census\.json.*exclude pattern.*\[.*invalid/);
+});
