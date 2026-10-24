@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-50-1: Keep an unrelated foreground application untouched, but reject a check result when cleanup cannot verify the shared session baseline. The unchanged cleanup accepted PID 30 while baseline PID 10 was expected; the owning test now requires explicit failure without activation.
+
 - F239-50: Capture one frontmost `{pid, name, bundle}` identity for a window-check session and pass it to global setup and every isolated test worker. Reject missing, malformed, stale and tested-host baselines before a check; consume the shared identity in app cleanup instead of recapturing per process. The owning controlled worker and frontmost tests pass 18/18; the Node runner test passes 12/12. `make e2e-check` and `make docs-check` pass. No application was launched or activated.
 
 - F212.10-core-3-5: Remove a view's exposure registrations when its current

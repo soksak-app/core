@@ -135,8 +135,8 @@ export function activateApp(pid) {
 
 /**
  * After a check, restores the validated session baseline when the checked host is frontmost and waits until that host is
- * inactive. It reports another tested host that remains frontmost. An unrelated frontmost application is left alone.
- * The return value is the active application before and after the restore.
+ * inactive. It leaves an unrelated frontmost application undisturbed, but rejects the check result unless the validated
+ * session baseline is frontmost after cleanup. The return value is the active application before and after the restore.
  */
 export async function restoreFrontmost({ name, baseline, host, hosts, read = frontmostApp, activate = activateApp, inactive }) {
   const before = read();
@@ -147,6 +147,10 @@ export async function restoreFrontmost({ name, baseline, host, hosts, read = fro
   const after = read();
   if (hosts.includes(after)) {
     throw new Error(`${name}: tested host ${after} is frontmost after the check instead of the baseline ${baseline} ` +
+      `(frontmost before restoring: ${before})`);
+  }
+  if (after !== baseline) {
+    throw new Error(`${name}: frontmost baseline changed from pid ${baseline} to pid ${after}; check result not accepted ` +
       `(frontmost before restoring: ${before})`);
   }
   return { before, after };

@@ -36,10 +36,10 @@ test("a check that leaves the baseline frontmost changes nothing", async () => {
   assert.deepEqual(f.calls, ["read", "read"]);
 });
 
-test("an application the user brought forward is reported without activating anything", async () => {
+test("an unrelated frontmost application preserves focus and rejects the check result", async () => {
   const f = fake([30, 30]);
-  assert.deepEqual(await restoreFrontmost({ name: "tauriv2", baseline: 10, host: 20, hosts: [20, 21], ...f }),
-    { before: 30, after: 30 });
+  await assert.rejects(restoreFrontmost({ name: "tauriv2", baseline: 10, host: 20, hosts: [20, 21], ...f }),
+    /tauriv2: frontmost baseline changed from pid 10 to pid 30; check result not accepted/);
   assert.deepEqual(f.calls, ["read", "read"]);
 });
 
