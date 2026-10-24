@@ -6,8 +6,8 @@ use crate::documents::ViewReplyError;
 use crate::plugin_host::{HostState, PluginHostStates, PluginHosts};
 use crate::plugin_host_channel::{
     PluginHostChannels, PluginHostEvent, PluginHostReply, PluginHostRequest, Received, end_host,
-    ended_event, event_message, host_end_report, late_state_error, plugin_host_queue_full,
-    reply_message, request_message,
+    ended_event, event_message, host_end_report, late_message_error, late_state_error,
+    plugin_host_queue_full, reply_message, request_message,
 };
 
 /// Returns the channels of a window with the host of plugin probe and, when ready is set, the ready document doc-1.
@@ -280,6 +280,77 @@ fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
             "the snapshot {message} is accepted"
         );
     }
+}
+
+// contract: plugin-host.channel.stale-instance-message
+#[test]
+fn a_delayed_callback_from_a_disposed_host_is_not_received_by_a_recreated_host() {
+    let channels = PluginHostChannels::default();
+    let old_instance = channels.register("probe", None);
+    channels
+        .receive(
+            "probe",
+            &host_message(r#"{"event": "view.ready", "plugin": "probe", "document": "doc-1"}"#),
+        )
+        .expect("the old host's ready message is accepted");
+    let message = host_message(
+        r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"old"}}"#,
+    );
+    let delayed_callback = || channels.receive_from("probe", &old_instance, &message);
+    channels.unregister("probe");
+    let current_instance = channels.register("probe", None);
+    assert!(
+        !std::sync::Arc::ptr_eq(&old_instance, &current_instance),
+        "a recreated provider has a new local identity independent of its native handle"
+    );
+    assert_eq!(
+        delayed_callback(),
+        Ok(crate::plugin_host_channel::ProviderMessage::Stale(None)),
+        "a callback of the disposed instance must be canceled after recreation"
+    );
+    let old_error = channels.receive_from(
+        "probe",
+        &old_instance,
+        &host_message(r#"{"event":"view.error","reason":"queue full for probe"}"#),
+    );
+    assert_eq!(
+        old_error,
+        Ok(crate::plugin_host_channel::ProviderMessage::Stale(Some(
+            "plugin probe: queue full for probe".to_string()
+        ))),
+        "an old queue error remains reportable without failing the replacement host"
+    );
+    assert!(matches!(
+        channels.receive_from(
+            "probe",
+            &current_instance,
+            &host_message(
+                r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"current"}}"#
+            )
+        ),
+        Ok(crate::plugin_host_channel::ProviderMessage::Current(
+            Received::Emit("declared-ui-snapshot", _)
+        ))
+    ));
+}
+
+// contract: plugin-host.channel.stale-instance-message
+#[test]
+fn a_callback_during_creation_uses_the_registered_instance_before_the_native_handle_is_stored() {
+    let channels = PluginHostChannels::default();
+    let instance = channels.register("probe", None);
+    assert!(matches!(
+        channels.receive_from(
+            "probe",
+            &instance,
+            &host_message(
+                r#"{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"early"}}"#
+            )
+        ),
+        Ok(crate::plugin_host_channel::ProviderMessage::Current(
+            Received::Emit("declared-ui-snapshot", _)
+        )),
+    ), "a callback after channel registration remains valid before host creation returns");
 }
 
 /// The document state of a host page as the native host sends it: loading and the count of navigations that the page started.
@@ -900,5 +971,29 @@ fn a_navigation_state_that_arrives_after_its_window_closed_is_not_reported() {
     assert!(
         late_state_error(&open, "probe", r#"{"loading": false}"#).is_some(),
         "a state without navigations of an open window is still refused"
+    );
+}
+
+// contract: plugin-host.channel.late-error-preserved
+#[test]
+fn a_late_provider_error_is_preserved_after_window_records_are_removed() {
+    let data = Err("project window is closed".to_string());
+    assert_eq!(
+        late_message_error(
+            &data,
+            "probe",
+            r#"{"error":"provider failed after its window closed"}"#
+        ),
+        Some("plugin probe: provider failed after its window closed".to_string()),
+        "an explicit provider error must remain observable after window teardown"
+    );
+    assert_eq!(
+        late_message_error(
+            &data,
+            "probe",
+            &host_message(r#"{"event":"declared-ui.snapshot","plugin":"probe"}"#)
+        ),
+        None,
+        "an ordinary late provider message must remain a canceled callback"
     );
 }

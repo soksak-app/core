@@ -1130,7 +1130,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
         let theme = theme.clone();
         let start_script = crate::plugin_host::host_start_script(project.as_ref(), &plugin.exposes);
         let host_window = window.clone();
-        data.plugin_host_channels.register(&plugin.id, plugin.state);
+        let instance = data.plugin_host_channels.register(&plugin.id, plugin.state);
         let view = crate::plugin_host::HostView {
             directory: &directory,
             folder: &folder,
@@ -1153,7 +1153,8 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
                         crate::plugin_host_channel::state(&state_window, &state_plugin, &state);
                     }),
                 )?;
-                let (message_window, message_plugin) = (host_window.clone(), host_plugin.clone());
+                let (message_window, message_plugin, message_instance) =
+                    (host_window.clone(), host_plugin.clone(), instance.clone());
                 platform.set_view_message(
                     handle,
                     Box::new(move |value: String| {
@@ -1161,6 +1162,7 @@ fn load_plugin_hosts_on_main(window: &Window) -> Result<(), String> {
                             &message_window,
                             &message_plugin,
                             handle,
+                            &message_instance,
                             &value,
                         );
                     }),

@@ -165,9 +165,11 @@ func (s *Surfaces) createPluginHost(window unsafe.Pointer, declared hostPlugin, 
 		s.pluginHostState(plugin, state)
 	})
 	if err == nil {
-		s.pluginHostChannels.register(plugin, declared.state)
+		instance := s.pluginHostChannels.register(plugin, declared.state)
 		err = system.SetViewMessage(handle, func(value string) {
-			s.pluginHostReceived(plugin, value)
+			if _, messageErr := s.pluginHostReceived(plugin, instance, value); messageErr != nil {
+				LogError("plugin host channel", messageErr)
+			}
 		})
 	}
 	if err == nil {
@@ -332,20 +334,25 @@ func (s *Surfaces) disposePluginHosts() {
 	}
 }
 
-// pluginHostReceived handles one message of the sok-view handler of the host of plugin and writes its failure to the
-// application log. A message that reports the loss of the message queue is a failure of the plugin host, which closes it
-// and restarts it within the restart limit. It runs on the UI thread.
-func (s *Surfaces) pluginHostReceived(plugin, value string) {
+// pluginHostReceived handles one message callback of instance. A callback of a disposed instance is canceled before it can
+// affect a replacement channel. Explicit old-provider errors remain errors, but do not fail the replacement host.
+func (s *Surfaces) pluginHostReceived(plugin string, instance *pluginHostChannel, value string) (bool, error) {
+	if !s.pluginHostChannels.current(plugin, instance) {
+		if PerformanceEnabled() {
+			EmitHost(LevelDebug, "host.trace.plugin-host.message-stale", map[string]any{"plugin": plugin})
+		}
+		return false, stalePluginHostMessageError(plugin, value)
+	}
 	err := s.pluginHostMessage(plugin, value)
 	if err == nil {
-		return
+		return true, nil
 	}
-	LogError("plugin host channel", err)
 	var overflow pluginHostOverflow
 	if errors.As(err, &overflow) {
 		// The page has lost messages, so its host web view is closed (docs/spec/plugin-host.md#channel).
 		s.pluginHostFailed(plugin)
 	}
+	return false, err
 }
 
 // pluginHostState records the navigation state of the host of plugin. A navigation that starts after the last state clears its ready

@@ -73,6 +73,10 @@ plugin host는 surface가 아니다. plugin host가 등록한 이름에 대한 `
 
 ## Declared UI snapshots
 
+Native message callback은 이를 등록한 local host instance에 묶인다. Native message callback, host 생성 및 host dispose는 main thread에서 실행되므로 instance 확인과 동기 dispatch는 replacement와 직렬화된다. Dispose 뒤 해당 instance에서 늦게 온 callback은 같은 plugin의 host가 다시 만들어졌더라도 dispatch 전에 취소하며 performance tracing이 켜져 있으면 `host.trace.plugin-host.message-stale {plugin}`을 쓴다. retired provider의 명시적 오류는 plugin 식별자와 함께 기록하지만 replacement host를 종료하거나 다시 시작하지 않는다. Window record가 이미 제거된 뒤에도 Tauri host는 callback이 캡처한 plugin id로 명시적 provider 오류를 기록하며 일반 늦은 message는 취소한다.
+
+native message callback은 callback을 설치한 local host instance에 묶인다. instance를 처분한 뒤 도착한 그 instance의 늦은 callback은 같은 plugin의 host가 다시 만들어졌더라도 dispatch 전에 취소되며, performance tracing 중에는 `host.trace.plugin-host.message-stale {plugin}`을 기록한다. 종료된 provider가 명시한 error는 그 plugin context로 기록하고 대체 host를 닫거나 재시작하지 않는다.
+
 plugin host는 자신이 등록한 각 declared status의 [declared UI snapshot](declared-ui.ko.md)을 push하고 pull 요청에 답하며, view가 그러하듯 한다. snapshot은 plugin을 담고 surface를 담지 않는다. pull은 `declared-ui.snapshot.request` call이며 그 reply는 `{seq, value}`다([plugin 프로세스](plugin-processes.ko.md) 규칙 2). plugin host가 시작하거나 다시 시작할 때, 각 status의 첫 snapshot은 그 status의 전체 값이고, 다시 시작된 plugin host는 저장된 상태에서 자신의 값을 만든다([state](#state)). workbench는 이전 프로세스의 멈춘 snapshot과 대기 중인 acknowledgement를 버린다([plugin processes](plugin-processes.md) rule 2). state module만 등록하는 status에는 출처가 없고, host가 등록한 declared status는 새 host 프로세스가 다시 등록하고 전체 첫 snapshot을 push하여 다시 제공하며, 이는 [선언된 status](declared-ui.ko.md#선언된-status)의 전이를 따른다. plugin의 view가 그것을 등록하면 그 view가 출처가 된다([declared status](declared-ui.ko.md#선언된-status)).
 
 ## Restarts

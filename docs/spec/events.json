@@ -398,6 +398,15 @@
       },
       "description": "The first ready message of the plugin host page arrived after the host created its web view in the window, so its page runtime started (docs/spec/plugin-host.md#channel)."
     },
+    "host.trace.plugin-host.message-stale": {
+      "layer": "host",
+      "class": "call",
+      "level": "debug",
+      "fields": {
+        "plugin": "string"
+      },
+      "description": "A message callback arrived from a disposed plugin-host instance, so the host canceled it before dispatching it to a replacement instance (docs/spec/plugin-host.md#declared-ui-snapshots)."
+    },
     "host.trace.modal.stale-ready": {
       "layer": "host",
       "class": "call",

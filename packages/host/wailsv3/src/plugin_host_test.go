@@ -19,11 +19,14 @@ import (
 // other operation of the platform interface is not implemented by it.
 type hostViewPlatform struct {
 	platform.Platform
-	created []hostViewCreation
-	loaded  []string
-	scripts []string
-	closed  []unsafe.Pointer
-	refuse  bool
+	created      []hostViewCreation
+	loaded       []string
+	scripts      []string
+	closed       []unsafe.Pointer
+	messages     []func(string)
+	handle       unsafe.Pointer
+	messageOnSet string
+	refuse       bool
 }
 
 type hostViewCreation struct {
@@ -36,10 +39,19 @@ func (p *hostViewPlatform) CreatePluginHost(window unsafe.Pointer, directory, fo
 		return nil, errors.New("no window")
 	}
 	p.created = append(p.created, hostViewCreation{window: uintptr(window), directory: directory, folder: folder, plugin: plugin, channel: channel})
+	if p.handle != nil {
+		return p.handle, nil
+	}
 	return unsafe.Pointer(new(int)), nil
 }
 
-func (p *hostViewPlatform) SetViewMessage(unsafe.Pointer, func(string)) error { return nil }
+func (p *hostViewPlatform) SetViewMessage(_ unsafe.Pointer, message func(string)) error {
+	p.messages = append(p.messages, message)
+	if p.messageOnSet != "" {
+		message(p.messageOnSet)
+	}
+	return nil
+}
 
 func (p *hostViewPlatform) SetViewEnded(unsafe.Pointer, func()) error { return nil }
 
@@ -205,6 +217,73 @@ func TestPluginHostReloadDisposesEveryHost(t *testing.T) {
 	}
 }
 
+// contract: plugin-host.channel.stale-instance-message
+func TestPluginHostDelayedMessageFromDisposedInstanceIsNotRelayedAfterRecreate(t *testing.T) {
+	config := hostFixture(t)
+	fake := &hostViewPlatform{handle: unsafe.Pointer(new(int))}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events []string
+	s := hostTestSurfaces(config)
+	s.events = func(name string, _ any) { events = append(events, name) }
+	s.createPluginHosts(nil, plugins)
+	if len(fake.messages) != 1 {
+		t.Fatalf("callbacks after first creation: %d, want 1", len(fake.messages))
+	}
+	oldCallback := fake.messages[0]
+	s.disposePluginHosts()
+	s.createPluginHosts(nil, plugins)
+	if len(fake.messages) != 2 {
+		t.Fatalf("callbacks after recreation: %d, want 2", len(fake.messages))
+	}
+	if fake.created[0].plugin != fake.created[1].plugin || len(fake.closed) != 1 || fake.closed[0] != fake.handle {
+		t.Fatalf("recreation did not reuse the plugin and native handle: created=%+v closed=%v", fake.created, fake.closed)
+	}
+	message := hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"old"}}`)
+	oldCallback(message)
+	if len(events) != 0 {
+		t.Fatalf("events after delayed old callback: %v, want none", events)
+	}
+	fake.messages[1](hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"current"}}`))
+	if len(events) != 1 || events[0] != declaredSnapshotWindowEvent {
+		t.Fatalf("events after current callback: %v, want one declared snapshot", events)
+	}
+	isolateTraceRecords(t)
+	oldCallback(hostMessage(`{"event":"view.error","reason":"queue full for probe"}`))
+	if len(fake.closed) != 1 || s.pluginHosts["probe"] != fake.handle {
+		t.Fatalf("replacement host after old provider error: closed=%v, current=%v", fake.closed, s.pluginHosts["probe"])
+	}
+	errorRecords := bufferedTraces(t, "host.record.error")
+	if len(errorRecords) != 1 || errorRecords[0]["where"] != "plugin host channel" || errorRecords[0]["text"] != "plugin probe: queue full for probe" {
+		t.Fatalf("records of the retired provider error: %v, want one error with its plugin context", errorRecords)
+	}
+}
+
+// contract: plugin-host.channel.stale-instance-message
+func TestPluginHostMessageDuringCreationUsesTheRegisteredInstance(t *testing.T) {
+	config := hostFixture(t)
+	fake := &hostViewPlatform{messageOnSet: hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"items","seq":1,"skipped":0,"value":{"source":"early"}}`)}
+	saved := system
+	system = fake
+	t.Cleanup(func() { system = saved })
+	plugins, err := hostPlugins(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events []string
+	s := hostTestSurfaces(config)
+	s.events = func(name string, _ any) { events = append(events, name) }
+	s.createPluginHosts(nil, plugins)
+	if len(events) != 1 || events[0] != declaredSnapshotWindowEvent {
+		t.Fatalf("events before host creation returned: %v, want the registered instance snapshot", events)
+	}
+}
+
 // contract: plugin-host.close-disposes
 func TestPluginHostCloseDisposesEveryHost(t *testing.T) {
 	config := hostFixture(t)
@@ -314,7 +393,10 @@ func TestPluginHostRestartCreatesTheHostAgainAfterAFailure(t *testing.T) {
 		t.Fatalf("the window holds no new host web view of probe after the failure")
 	}
 	// The queue overflow of the channel is a failure too.
-	windows[0].pluginHostReceived("probe", hostMessage(`{"event": "view.error", "reason": "queue full for probe"}`))
+	_, err := windows[0].pluginHostReceived("probe", windows[0].pluginHostChannels.instance("probe"), hostMessage(`{"event": "view.error", "reason": "queue full for probe"}`))
+	if err == nil {
+		t.Fatal("queue overflow was not reported")
+	}
 	if len(fake.closed) != 2 || len(fake.created) != 4 {
 		t.Fatalf("the overflow closed %d and created %d host web views, want 2 closed and 4 created", len(fake.closed), len(fake.created))
 	}

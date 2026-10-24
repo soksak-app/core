@@ -7,7 +7,7 @@
 //! surface.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
@@ -55,6 +55,8 @@ const REFUSAL_CODE: i64 = -32000;
 /// state means that the host declaration names none.
 #[derive(Default)]
 struct Channel {
+    /// The local identity captured by callbacks of this host instance. It remains alive while any callback can run.
+    instance: Arc<()>,
     state: Option<HostState>,
     document: String,
     process_ready: bool,
@@ -86,10 +88,49 @@ pub enum Received {
     },
 }
 
+/// The outcome of a callback that carries its creating host instance identity.
+#[derive(Debug, PartialEq)]
+pub enum ProviderMessage {
+    /// The callback belongs to the current host instance.
+    Current(Received),
+    /// The callback belongs to a disposed instance; an explicit error is retained for the application log.
+    Stale(Option<String>),
+}
+
 #[derive(Deserialize)]
 struct HostReceived {
     message: Option<Value>,
     error: Option<String>,
+}
+
+/// Preserves explicit errors from a disposed host without dispatching its message through a replacement channel.
+fn stale_plugin_host_message_error(plugin: &str, value: &str) -> Option<String> {
+    let received: HostReceived = match serde_json::from_str(value) {
+        Ok(received) => received,
+        Err(error) => return Some(format!("plugin {plugin}: message is not JSON: {error}")),
+    };
+    if let Some(error) = received.error {
+        return Some(plugin_host_error_text(plugin, &error));
+    }
+    let Some(message) = received.message else {
+        return Some(format!(
+            "plugin {plugin}: message has neither message nor error"
+        ));
+    };
+    let Some(fields) = message.as_object() else {
+        return Some(format!("plugin {plugin}: message is not an object"));
+    };
+    if fields.get("event").and_then(Value::as_str) != Some("view.error") {
+        return None;
+    }
+    match fields
+        .get("reason")
+        .and_then(Value::as_str)
+        .filter(|reason| !reason.is_empty())
+    {
+        Some(reason) => Some(plugin_host_error_text(plugin, reason)),
+        None => Some(format!("plugin {plugin}: view.error has no reason")),
+    }
 }
 
 /// The document state of a host page (docs/spec/native-surfaces.md, document-state). The decoder checks that loading is a JSON
@@ -130,14 +171,24 @@ impl PluginHostChannels {
     }
 
     /// Records the channel of plugin with its declared state. It runs when the host webview is created.
-    pub fn register(&self, plugin: &str, state: Option<HostState>) {
+    pub fn register(&self, plugin: &str, state: Option<HostState>) -> Arc<()> {
+        let instance = Arc::new(());
         self.lock().insert(
             plugin.to_string(),
             Channel {
+                instance: instance.clone(),
                 state,
                 ..Channel::default()
             },
         );
+        instance
+    }
+
+    /// Returns whether instance is still the current local identity of plugin.
+    pub fn is_current(&self, plugin: &str, instance: &Arc<()>) -> bool {
+        self.lock()
+            .get(plugin)
+            .is_some_and(|channel| Arc::ptr_eq(&channel.instance, instance))
     }
 
     /// Removes the channel of plugin. It runs when the host webview is disposed.
@@ -286,6 +337,29 @@ impl PluginHostChannels {
             },
             other => Err(format!("plugin {plugin}: event {other:?} is unknown")),
         }
+    }
+
+    /// Receives a callback only when it belongs to the current plugin-host instance. A stale callback is traced and canceled;
+    /// explicit provider errors remain errors but do not act on a replacement host.
+    pub fn receive_from(
+        &self,
+        plugin: &str,
+        instance: &Arc<()>,
+        value: &str,
+    ) -> Result<ProviderMessage, String> {
+        if !self.is_current(plugin, instance) {
+            if crate::performance::enabled() {
+                emit_host(
+                    Level::Debug,
+                    "host.trace.plugin-host.message-stale",
+                    serde_json::json!({"plugin": plugin}),
+                );
+            }
+            return Ok(ProviderMessage::Stale(stale_plugin_host_message_error(
+                plugin, value,
+            )));
+        }
+        self.receive(plugin, value).map(ProviderMessage::Current)
     }
 
     /// Returns what the host does with a call request or a cancel of the host of plugin. A registration call is forwarded
@@ -817,32 +891,75 @@ pub(crate) fn late_state_error(
     data.plugin_host_channels.state(plugin, state).err()
 }
 
+/// Returns a provider error carried by a callback after window records have been removed.
+pub(crate) fn late_message_error(
+    data: &Result<std::sync::Arc<crate::windows::WindowData>, String>,
+    plugin: &str,
+    value: &str,
+) -> Option<String> {
+    if data.is_ok() {
+        return None;
+    }
+    stale_plugin_host_message_error(plugin, value)
+}
+
 /// Dispatches one message of the sok-view handler of the host webview handle of plugin. A failure is written to the
-/// application log, and a queue overflow closes the host (docs/spec/plugin-host.md#channel).
-pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str) {
-    // A message that arrives after its window was closed is a late report of the close, not a failure: the window's records are gone,
-    // so there is no channel to receive it (docs/spec/plugin-host.md#channel).
-    let Ok(data) = window_data(window) else {
+/// application log, and a queue overflow closes the host (docs/spec/plugin-host.md#channel). An explicit provider error
+/// that arrives after its window records are removed is still logged with the captured plugin id.
+pub(crate) fn message(
+    window: &Window,
+    plugin: &str,
+    handle: Handle,
+    instance: &Arc<()>,
+    value: &str,
+) {
+    // An ordinary message that arrives after its window was closed is a late report of the close, not a failure. An error carried
+    // by the provider remains a failure even after the window records are gone.
+    let data = window_data(window);
+    let Ok(data) = data else {
+        if let Some(error) = late_message_error(&data, plugin, value) {
+            log_error("plugin host channel", error);
+        }
         return;
     };
-    let received = data.plugin_host_channels.receive(plugin, value);
+    let received = data
+        .plugin_host_channels
+        .receive_from(plugin, instance, value);
+    let received = match received {
+        Ok(ProviderMessage::Current(received)) => received,
+        Ok(ProviderMessage::Stale(error)) => {
+            if let Some(error) = error {
+                log_error("plugin host channel", error);
+            }
+            return;
+        }
+        Err(error) => {
+            let overflow = plugin_host_queue_full(plugin, &error);
+            log_error("plugin host channel", error);
+            if overflow {
+                // The current page has lost messages, so its host webview is closed and restarted within the restart limit.
+                failed(window, plugin, handle);
+            }
+            return;
+        }
+    };
     let result = match received {
-        Ok(Received::Emit(name, payload)) => {
+        Received::Emit(name, payload) => {
             emit_window(window, name, payload).map_err(|error| error.to_string())
         }
-        Ok(Received::Post(message)) => post(window, plugin, &message),
-        Ok(Received::State {
+        Received::Post(message) => post(window, plugin, &message),
+        Received::State {
             id,
             command,
             params,
             declared,
-        }) => {
+        } => {
             let reply = window
                 .state::<PluginHostStates>()
                 .answer(plugin, declared, id, &command, &params);
             post(window, plugin, &reply)
         }
-        Ok(Received::Ready { first }) => {
+        Received::Ready { first } => {
             if first {
                 emit_host(
                     Level::Debug,
@@ -852,16 +969,6 @@ pub(crate) fn message(window: &Window, plugin: &str, handle: Handle, value: &str
             }
             // The current theme is the first message to a ready document, as it is for a view.
             post_theme(window, plugin)
-        }
-        Err(error) => {
-            let overflow = plugin_host_queue_full(plugin, &error);
-            log_error("plugin host channel", error);
-            if overflow {
-                // The page has lost messages, so its host webview is closed and restarted within the restart limit
-                // (docs/spec/plugin-host.md#channel).
-                failed(window, plugin, handle);
-            }
-            return;
         }
     };
     if let Err(error) = result {

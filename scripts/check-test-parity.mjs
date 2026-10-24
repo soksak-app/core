@@ -2657,6 +2657,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-43",
+    implementation: [
+      { file: "packages/host/wailsv3/src/plugin_host.go", symbol: "pluginHostReceived(plugin string, instance *pluginHostChannel" },
+      { file: "packages/host/wailsv3/src/plugin_host_channel.go", symbol: "func (c *pluginHostChannels) current(plugin string, instance *pluginHostChannel) bool" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub fn receive_from(" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel.rs", symbol: "pub(crate) fn late_message_error(" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/plugin_host_test.go", id: "TestPluginHostDelayedMessageFromDisposedInstanceIsNotRelayedAfterRecreate" },
+      { file: "packages/host/wailsv3/src/plugin_host_test.go", id: "TestPluginHostMessageDuringCreationUsesTheRegisteredInstance" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_delayed_callback_from_a_disposed_host_is_not_received_by_a_recreated_host" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_callback_during_creation_uses_the_registered_instance_before_the_native_handle_is_stored" },
+      { file: "packages/host/tauriv2/src/plugin_host_channel_test.rs", id: "a_late_provider_error_is_preserved_after_window_records_are_removed" },
+    ],
+    expected: "A callback from a disposed plugin-host instance is canceled before a replacement channel receives it, while current and creation-time callbacks remain valid; an explicit late provider error retains its captured plugin identity.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-42-1",
     implementation: [{ file: "packages/workbench/declared-source.js", symbol: "ingressReady.catch((error) =>" }],
     tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "listener registration failure remains observable without an early unhandled rejection" }],

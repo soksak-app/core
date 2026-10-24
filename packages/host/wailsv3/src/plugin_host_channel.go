@@ -43,10 +43,26 @@ func newPluginHostChannels() *pluginHostChannels {
 }
 
 // register records the channel of plugin with its declared state. It runs when the host web view is created.
-func (c *pluginHostChannels) register(plugin string, state *hostState) {
+func (c *pluginHostChannels) register(plugin string, state *hostState) *pluginHostChannel {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.byID[plugin] = &pluginHostChannel{plugin: plugin, state: state, calls: map[uint64]string{}}
+	channel := &pluginHostChannel{plugin: plugin, state: state, calls: map[uint64]string{}}
+	c.byID[plugin] = channel
+	return channel
+}
+
+// current reports whether instance is the channel of plugin now. The channel pointer is an instance identity: a callback
+// retains it until it can no longer run, so allocator address reuse cannot make an old callback current again.
+func (c *pluginHostChannels) current(plugin string, instance *pluginHostChannel) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return instance != nil && c.byID[plugin] == instance
+}
+
+func (c *pluginHostChannels) instance(plugin string) *pluginHostChannel {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.byID[plugin]
 }
 
 // unregister removes the channel of plugin. It runs when the host web view is disposed.
@@ -401,6 +417,38 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 		return errors.New(pluginHostErrorText(plugin, event.Reason))
 	}
 	return fmt.Errorf("plugin %s: event %q is unknown", plugin, event.Event)
+}
+
+// stalePluginHostMessageError preserves explicit errors from a retired provider without dispatching its message through the
+// current channel. Ordinary stale data and calls are canceled; malformed envelopes and explicit view.error reports remain visible.
+func stalePluginHostMessageError(plugin, value string) error {
+	var received struct {
+		Message json.RawMessage `json:"message"`
+		Error   *string         `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(value), &received); err != nil {
+		return fmt.Errorf("plugin %s: message is not JSON: %w", plugin, err)
+	}
+	if received.Error != nil {
+		return errors.New(*received.Error)
+	}
+	if len(received.Message) == 0 || string(received.Message) == "null" {
+		return fmt.Errorf("plugin %s: message has neither message nor error", plugin)
+	}
+	var event struct {
+		Event  string `json:"event"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(received.Message, &event); err != nil {
+		return fmt.Errorf("plugin %s: message is not an object: %w", plugin, err)
+	}
+	if event.Event != "view.error" {
+		return nil
+	}
+	if event.Reason == "" {
+		return fmt.Errorf("plugin %s: view.error has no reason", plugin)
+	}
+	return errors.New(pluginHostErrorText(plugin, event.Reason))
 }
 
 // postPluginHost posts message to the ready document of the host of plugin, with the field sok 1. It returns an error when

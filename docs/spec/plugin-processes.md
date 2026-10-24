@@ -147,6 +147,7 @@ The RPC protocol number is 1 in the 0.0 series.
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
 | `host.trace.plugin-host.restart-reset` | call | debug | `{plugin}` |
+| `host.trace.plugin-host.message-stale` | call | debug | `{plugin}`: a delayed callback from a disposed host instance was canceled before dispatch |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
 The statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views` are declared in `packages/workbench/exposure.json`. The events of this specification have level `error` or `debug` only, within the class budget of the [event catalog](events.json). The restart state of a plugin host or a sidecar is shown in `core.plugin.views` or in the sidecar status.

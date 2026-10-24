@@ -362,7 +362,10 @@ func (p *closingPlatform) CloseDocument(unsafe.Pointer) { p.closed++ }
 func TestPluginHostChannelQueueFullClosesTheHost(t *testing.T) {
 	fake := &closingPlatform{}
 	s, events := channelSurfaces(t, fake, true)
-	s.pluginHostReceived("probe", hostMessage(`{"event": "view.error", "reason": "queue full for probe"}`))
+	_, err := s.pluginHostReceived("probe", s.pluginHostChannels.instance("probe"), hostMessage(`{"event": "view.error", "reason": "queue full for probe"}`))
+	if err == nil {
+		t.Fatal("queue overflow was not reported")
+	}
 	if fake.closed != 1 {
 		t.Fatalf("the host web view was closed %d times, want once", fake.closed)
 	}

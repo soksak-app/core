@@ -147,6 +147,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.plugin-host.restart` | lifecycle | error | `{plugin, attempt}` |
 | `host.plugin-host.restart-limit` | lifecycle | error | `{plugin}` |
 | `host.trace.plugin-host.restart-reset` | call | debug | `{plugin}` |
+| `host.trace.plugin-host.message-stale` | call | debug | `{plugin}`: 처분된 host instance의 늦은 callback을 dispatch 전에 취소했다 |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `packages/workbench/exposure.json`에 선언한다. 이 명세의 event는 [event catalog](events.json)의 class 예산 안에서 level `error` 또는 `debug`만 쓴다. plugin host와 sidecar의 재시작 상태는 `core.plugin.views` 또는 sidecar status에 보인다.
