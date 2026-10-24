@@ -1,9 +1,10 @@
-// Checks that core packages do not name plugins or sidecars in code.
+// Checks that core package sources and package tests do not name plugins or sidecars in code.
 //
 // Components are connected only by declaration files. Plugins and sidecars live in their own repositories
 // (docs/spec/plugins.md#repositories), and their names are read from the package.json and plugin.json of the folders that scripts/workspace-registry.json
-// declares. A core source names only core packages: every `@soksak/` name whose base is not exactly a core package name
-// fails, whether it is declared or not (decision D3, rule 1). Other scopes are not checked.
+// declares. Every `@soksak/` name whose base is not exactly a core package name fails, whether it is declared or not
+// (decision D3, rule 1), except a declared end-to-end window check, which tests the application's installed cohort.
+// Other scopes are not checked.
 // Declaration files (package.json, plugin.json, sidecar.json) and documents (.md) are not checked either.
 // Each plugin and sidecar repository checks its own sources.
 //
@@ -12,6 +13,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, posix, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { parse } from "acorn";
 import { checkDeclaration, gitCommonDir, repositoryFolder } from "./workspace-registry.mjs";
 
 const ROOT = resolve(process.argv[2] ?? new URL("../", import.meta.url).pathname);
@@ -53,7 +55,7 @@ export function components(root = ROOT) {
 
 /**
  * Checks the @soksak/ names of the given files. A name is allowed only when its base is an exact core package name
- * (a Set of names, see corePackageNames). readSource reads a file by its path relative to the checkout.
+ * (a Set of names, see corePackageNames), or the file is a declared window check. readSource reads a relative path.
  */
 export function checkNames(core, files, readSource = (file) => readFileSync(join(ROOT, file), "utf8")) {
   const errors = [];
@@ -64,6 +66,7 @@ export function checkNames(core, files, readSource = (file) => readFileSync(join
       errors.push(`${file}: cannot be read: ${error?.message ?? error}`);
       continue;
     }
+    if (isDeclaredWindowCheck(file, source)) continue;
     source.split("\n").forEach((line, index) => {
       for (const match of line.matchAll(SOKSAK_NAME)) {
         if (!core.has(match[0])) {
@@ -90,6 +93,71 @@ export function corePackageNames(root = ROOT) {
   return [...names, ...CORE_SERVED];
 }
 
+/** A window check uses the declared application endpoint instead of testing a package in isolation. */
+function isDeclaredWindowCheck(file, source) {
+  if (!file.startsWith("e2e/") || !file.endsWith(".test.mjs")) return false;
+  const program = parse(source, { ecmaVersion: "latest", sourceType: "module" });
+  const openBindings = new Set();
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration" || statement.source.value !== "@soksak/window-check/app.mjs") continue;
+    for (const specifier of statement.specifiers) {
+      const imported = specifier.type === "ImportSpecifier"
+        ? (specifier.imported.name ?? specifier.imported.value)
+        : null;
+      if (imported === "open") openBindings.add(specifier.local.name);
+    }
+  }
+  if (openBindings.size === 0) return false;
+
+  let shadowed = false;
+  const declarePattern = (pattern) => {
+    if (!pattern || shadowed) return;
+    if (pattern.type === "Identifier") shadowed ||= openBindings.has(pattern.name);
+    else if (pattern.type === "RestElement") declarePattern(pattern.argument);
+    else if (pattern.type === "AssignmentPattern") declarePattern(pattern.left);
+    else if (pattern.type === "ArrayPattern") pattern.elements.forEach(declarePattern);
+    else if (pattern.type === "ObjectPattern") pattern.properties.forEach((property) =>
+      declarePattern(property.type === "RestElement" ? property.argument : property.value));
+  };
+  const checkBindings = (node) => {
+    if (!node || shadowed) return;
+    if (node.type === "VariableDeclarator") declarePattern(node.id);
+    if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") {
+      declarePattern(node.id);
+      node.params.forEach(declarePattern);
+    }
+    if (node.type === "ClassDeclaration" || node.type === "ClassExpression") declarePattern(node.id);
+    if (node.type === "CatchClause") declarePattern(node.param);
+    if (node.type === "ImportDeclaration") {
+      for (const specifier of node.specifiers) {
+        const imported = specifier.type === "ImportSpecifier"
+          ? (specifier.imported.name ?? specifier.imported.value)
+          : null;
+        if (!(node.source.value === "@soksak/window-check/app.mjs" && imported === "open")) {
+          declarePattern(specifier.local);
+        }
+      }
+    }
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(checkBindings);
+      else if (value && typeof value.type === "string") checkBindings(value);
+    }
+  };
+  checkBindings(program);
+  if (shadowed) return false;
+
+  const pending = [program];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node.type === "CallExpression" && node.callee.type === "Identifier" && openBindings.has(node.callee.name)) return true;
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) pending.push(...value.filter((child) => child && typeof child.type === "string"));
+      else if (value && typeof value.type === "string") pending.push(value);
+    }
+  }
+  return false;
+}
+
 /** The tracked source files of the checkout that the boundary rule covers. */
 function trackedSources(root) {
   return execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] })
@@ -99,22 +167,22 @@ function trackedSources(root) {
     .filter((file) => !file.split("/").some((segment) => SKIP_DIRS.has(segment)));
 }
 
-// The folders of the core packages that tests belong to: a folder under packages/ or packages/<group>/ with a package.json,
-// go.mod or Cargo.toml. The Go and Rust packages of sok and the host have no package.json.
+// The folders of declared core packages that tests belong to. Workspace package manifests include applications and the
+// root e2e package; Go and Rust package manifests cover the native packages that have no package.json.
 const PACKAGE_MARKERS = ["package.json", "go.mod", "Cargo.toml"];
 export function corePackageFolders(root = ROOT) {
-  const folders = [];
-  const isPackage = (dir) => PACKAGE_MARKERS.some((marker) => existsSync(join(dir, marker)));
-  const subdirs = (dir) => existsSync(dir)
-    ? readdirSync(dir).map((name) => join(dir, name)).filter((path) => statSync(path).isDirectory())
-    : [];
-  for (const dir of subdirs(join(root, "packages"))) {
-    if (isPackage(dir)) folders.push({ dir: relative(root, dir), kind: "core", name: relative(root, dir) });
-    for (const inner of subdirs(dir)) {
-      if (isPackage(inner)) folders.push({ dir: relative(root, inner), kind: "core", name: relative(root, inner) });
-    }
-  }
-  return folders;
+  const tracked = execFileSync("git", ["ls-files", "-z"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  }).split("\0").filter((file) => file !== "");
+  const folders = new Set(tracked
+    .filter((file) => PACKAGE_MARKERS.includes(posix.basename(file)))
+    .map((file) => posix.dirname(file))
+    .filter((dir) => dir !== "."));
+  return [...folders]
+    .sort((a, b) => a.localeCompare(b))
+    .map((dir) => ({ dir, kind: "core", name: dir }));
 }
 
 // A line that reads a file or names a path to open: a file-access call, a URL or module path, or a process. A string that a

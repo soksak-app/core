@@ -31,6 +31,20 @@
   `core.sidebars` payload on failure. The unchanged consumer test reproduced
   immediate refusal of the pending state; the focused consumer tests pass
   4/4. No producer or status contract changed.
+- F239-48-5-1: Discover test owners from tracked package manifests, including
+  the root e2e package, before checking cross-package path reads. Red: the
+  production owner list omitted `e2e`; the owning test failed on the actual
+  browser cohort test path. Green: the focused checker test passes 18/18 and
+  `make boundaries` passes for 16 components. Window checks may name installed
+  components, but that exception does not permit implementation-path reads.
+
+- F239-48-5: Exclude only declared application window checks from the core
+  package-name boundary audit. Classification requires an `e2e/` test source,
+  an import of `open` from `@soksak/window-check/app.mjs`, and a call through
+  that imported binding. Red: the unchanged audit reported the Files and VT
+  sidecar names in the browser cohort window check. Green: the focused owner
+  test passes 1/1 and `make boundaries` passes for 16 components. Regular core
+   tests still reject plugin names, and implementation-path reads remain checked.
 
 - F239-47-20: Wait for each coherent terminal document to match the same-window
   AppKit reference after input receipt. Backspace can first clear the preedit

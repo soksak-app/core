@@ -29,6 +29,18 @@
   마지막 `core.sidebars` payload를 포함한다. 변경 전 consumer test는 pending
   상태의 즉시 거부를 재현했고, focused consumer test 4/4가 통과한다. Producer와
   status 계약은 바뀌지 않았다.
+- F239-48-5-1: 다른 package 경로 읽기를 검사하기 전에 tracked package manifest에서
+  test owner를 찾는다. Root `e2e` package도 포함한다. Red: production owner 목록이
+  `e2e`를 빠뜨려 실제 browser cohort test 경로의 owner test가 실패했다. Green:
+  focused checker test 18/18과 16 components 대상 `make boundaries`가 통과한다.
+  Window check는 설치된 component 이름을 참조할 수 있지만 구현 경로 읽기는 허용되지 않는다.
+
+- F239-48-5: 선언된 application window check만 core package-name boundary audit에서
+  제외한다. 분류 조건은 `e2e/` test source, `@soksak/window-check/app.mjs`의 `open`
+  import, imported binding의 실제 호출이다. Red: 변경 전 audit는 browser cohort
+  window check에서 Files와 VT sidecar 이름을 보고했다. Green: focused owner test
+  1/1과 16 components 대상 `make boundaries`가 통과한다. 일반 core test의 plugin
+   이름은 계속 거부하며 구현 경로 읽기도 검사한다.
 
 - F239-47-20: input receipt 뒤 각 coherent terminal document가 같은 window의
   AppKit reference와 일치할 때까지 기다린다. Backspace는 먼저 preedit을 지워도

@@ -1,12 +1,12 @@
 // Tests of the module exports of scripts/check-boundaries.mjs. Importing the module runs no check and prints nothing.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { checkNames, checkTestPathReads, components, corePackageNames } from "../check-boundaries.mjs";
+import { checkNames, checkTestPathReads, components, corePackageFolders, corePackageNames } from "../check-boundaries.mjs";
 
 // The names are joined from parts: the boundary audit scans this file for @soksak/ names.
 const scoped = (name) => ["@soksak", name].join("/");
@@ -49,6 +49,53 @@ test("checkNames allows the exact core names and refuses the others", () => {
   assert.deepEqual(errors, [
     `packages/x/b.ts:1: core source names ${scoped("plugin-api")}-x, which is not a core package`,
   ]);
+});
+
+test("boundary names distinguish declared window checks from core tests without permitting implementation reads", { timeout: 1000 }, () => {
+  const names = new Set(corePackageNames());
+  assert.deepEqual(checkNames(names, ["e2e/browser-cohort-upgrade.test.mjs"]), []);
+
+  const source = [
+    'import { open as launch } from "@soksak/window-check/app.mjs";',
+    "await launch(context, application);",
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.deepEqual(checkNames(names, ["e2e/window-like.test.mjs"], () => source), [],
+    "an aliased window-check opener must retain its declared role");
+  const packageFile = "packages/workbench/test/window-check.test.mjs";
+  assert.deepEqual(checkNames(names, [packageFile], () => source), [
+    `${packageFile}:3: core source names ${scoped("sidecar-probe")}, which is not a core package`,
+  ]);
+
+  const fake = [
+    '// import { open } from "@soksak/window-check/app.mjs";',
+    'const note = "open(context, application)";',
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.equal(checkNames(names, ["e2e/window-like.test.mjs"], () => fake).length, 1,
+    "comments and strings must not classify a package test as a window check");
+  const shadowed = [
+    'import { open as launch } from "@soksak/window-check/app.mjs";',
+    "function helper(launch) { launch(context, application); }",
+    `const dependency = "${scoped("sidecar-probe")}";`,
+  ].join("\n");
+  assert.equal(checkNames(names, ["e2e/window-like.test.mjs"], () => shadowed).length, 1,
+    "a shadowed local function must not count as calling the imported opener");
+
+  const components = [
+    { dir: "e2e", kind: "core", name: scoped("e2e") },
+    { dir: "packages/workbench", kind: "core", name: scoped("workbench") },
+    { dir: "packages/plugin-api", kind: "core", name: scoped("plugin-api") },
+  ];
+  const windowFile = "e2e/window-like.test.mjs";
+  const readFile = {
+    [packageFile]: `${source}\nreadFileSync(new URL("../../plugin-api/index.js", import.meta.url));`,
+    [windowFile]: `${source}\nreadFileSync(new URL("../packages/plugin-api/index.js", import.meta.url));`,
+  };
+  assert.deepEqual(checkTestPathReads(components, [packageFile, windowFile], (file) => readFile[file]), [
+    `${packageFile}:4: test of ${scoped("workbench")} reads a path of ${scoped("plugin-api")}: ../../plugin-api/index.js`,
+    `${windowFile}:4: test of ${scoped("e2e")} reads a path of ${scoped("plugin-api")}: ../packages/plugin-api/index.js`,
+  ], "a window-check import must not exempt implementation path reads");
 });
 
 test("checkNames reports a file it cannot read", () => {
@@ -123,4 +170,15 @@ test("checkTestPathReads does not refuse a path that a test names as the key of 
   };
   const errors = checkTestPathReads(components, testFiles(Object.keys(sources)), (file) => sources[file]);
   assert.deepEqual(errors.map((error) => error.split(":")[0]), ["packages/plugin-api/test/read.test.mjs"]);
+});
+
+test("checkTestPathReads discovers the declared e2e owner from the production package list", () => {
+  const owners = corePackageFolders();
+  assert.ok(owners.some((owner) => owner.dir === "e2e"), "the declared e2e package owns its window checks");
+  const file = "e2e/browser-cohort-upgrade.test.mjs";
+  const source = `${readFileSync(new URL(`../../${file}`, import.meta.url), "utf8")}\n` +
+    `readFileSync(new URL("../packages/plugin-api/index.js", import.meta.url));\n`;
+  assert.deepEqual(checkTestPathReads(owners, [file], () => source), [
+    `${file}:${source.split("\n").length - 1}: test of e2e reads a path of packages/plugin-api: ../packages/plugin-api/index.js`,
+  ], "the main owner discovery must reject implementation reads by an e2e test");
 });
