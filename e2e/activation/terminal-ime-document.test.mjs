@@ -115,6 +115,16 @@ test("reads visible input from terminal.screen.read rows and appends preedit onc
   assert.equal(visibleInputBeforeCursor(dto, cursor, prompt, ""), "ㅏㅏ");
 });
 
+test("reconstructs committed screen text plus only the current marked buffer", () => {
+  const committed = "ㅏ".repeat(6);
+  const dto = screen([[cell("$"), cell(" "), ...Array.from(committed, (ch) => cell(ch, 2))]]);
+  const cursor = { row: 0, col: 14 };
+  const prompt = { row: 0, col: 0, text: "$ " };
+
+  assert.equal(visibleInputBeforeCursor(dto, cursor, prompt, "ㅏ"), "ㅏ".repeat(7));
+  assert.equal(visibleInputBeforeCursor(dto, cursor, prompt, ""), committed);
+});
+
 test("preserves a committed trailing space after the prompt", () => {
   const dto = screen([[cell("$"), cell(" "), cell("ㅏ"), cell(" ")] ]);
   assert.equal(visibleInputBeforeCursor(dto, { row: 0, col: 4 }, { row: 0, col: 0, text: "$ " }, ""), "ㅏ ");

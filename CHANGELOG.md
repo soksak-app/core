@@ -9,7 +9,11 @@
   and ten project close/reopen lifecycle cycles per
   host using the previously approved eight-vowel gesture. The cases are
   defined but have not been run; no activation or lifecycle acceptance is
-  claimed.
+  claimed. The lifecycle selector reads native input actions from validated
+  transaction envelopes, compares committed screen cells plus current marked
+  text with the AppKit document, preserves the full gesture capture, and
+  performs two project close/reopen passes. It makes no overlay-operation
+  claim.
 
 - F239-47-30-1: Report the AppKit window color space through a one-shot
   diagnostic method. The query returns its localized name and the SHA-256

@@ -1,14 +1,16 @@
 // Approval-gated activation checks for the native input client lifecycle.
 // This file is selected explicitly; it is not part of the default window checks.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../../fixture.mjs";
-import { ensureTerminals, readScreenUntil } from "../../terminal-screen.mjs";
+import { ensureTerminals, presentedScreen, readScreenUntil } from "../../terminal-screen.mjs";
+import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptMatches,
+  terminalLineBeforeCursor, visibleInputBeforeCursor } from "../terminal-ime-document.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
 const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
@@ -68,9 +70,40 @@ async function preserveInputSource(s) {
 }
 
 function insertedText(entries) {
-  return entries.flatMap((entry) => entry.actions
+  const { native } = inputTraceTransactions(entries);
+  return native.flatMap((entry) => entry.actions
     .filter((action) => action.type === "insert")
     .map((action) => action.text)).join("");
+}
+
+async function preserveGestureCapture(s, artifactDir, label) {
+  const capture = await s.record();
+  let result = null;
+  let preserved = false;
+  const persist = () => {
+    if (preserved || !result) return;
+    const destination = join(artifactDir, label);
+    cpSync(capture.frames, destination, { recursive: true });
+    writeFileSync(join(artifactDir, `${label}.json`), JSON.stringify({
+      ...result,
+      frames: destination,
+      sourceFrames: capture.frames,
+      frameCount: result.count,
+    }, null, 2));
+    preserved = true;
+  };
+  s.cleanup(async () => {
+    if (!result) result = await capture.stop({ after: 0 });
+    persist();
+  });
+  return async () => {
+    const { displayed } = await s.presented();
+    result = await capture.stop({ after: displayed + 100 });
+    assert.ok(result.count > 0, `${label}: the full-gesture capture contains no frames`);
+    assert.equal(result.limited, false, `${label}: the full-gesture capture reached its frame limit`);
+    persist();
+    return result;
+  };
 }
 
 for (const app of Object.values(APPS)) {
@@ -146,7 +179,7 @@ for (const app of Object.values(APPS)) {
         await fresh(s, { log: { input: "info" }, reads: ["native.input.key_down", "native.input.callback"] });
         const projectRoot = mkdtempSync(join(tmpdir(), "soksak-ime-lifecycle-"));
         s.cleanup(() => rmSync(projectRoot, { recursive: true, force: true }));
-        const opened = await s.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
+        let opened = await s.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
         s.cleanup(async () => {
           const projects = await s.get("core.projects");
           if (projects.some((item) => item.id === opened.id)) await s.run("core.project.close", { id: opened.id });
@@ -163,45 +196,69 @@ for (const app of Object.values(APPS)) {
         await compareAppKitReference(s, [...Array(8).fill("k"), "Backspace", "Space"], `${"ㅏ".repeat(7)} `);
         await focusedTerminal(s, surface);
         assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
-        const stopTrace = await startInputTrace(s, surface);
+        const baselineScreen = await presentedScreen(s, surface);
+        const baselineCompose = await s.get("terminal.compose", surface);
+        const baselineCursor = await s.get("terminal.cursor", surface);
+        const promptText = terminalLineBeforeCursor(baselineScreen, baselineCursor,
+          `${app.name} lifecycle baseline`);
+        const prompt = { row: baselineCursor.row, col: 0, text: promptText };
+        const artifactDir = join(s.configDir, "logs", "ime-lifecycle", app.id, cycleLabel);
+        mkdirSync(artifactDir, { recursive: true });
+        writeFileSync(join(artifactDir, "baseline.json"), JSON.stringify({
+          screen: baselineScreen, compose: baselineCompose, cursor: baselineCursor, prompt,
+        }, null, 2));
+        const stopCapture = await preserveGestureCapture(s, artifactDir, "approved-eight-vowels-backspace-space");
         assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
-
-        for (let index = 1; index <= 8; index++) {
-          await s.press("k");
-          await s.until("terminal.compose", (compose) => compose.text.length >= index,
-            `cycle ${cycleLabel}: vowel ${index} did not update composition`, { surface });
-        }
-        await s.press("Backspace");
-        await s.until("terminal.compose", (compose) => compose.text.length === 7,
-          `cycle ${cycleLabel}: Backspace did not leave seven vowels`, { surface });
-        await s.press("Space");
+        const stopTrace = await startInputTrace(s, surface);
+        for (const key of Array(8).fill("k").concat("Backspace", "Space")) await s.press(key);
         await s.until("terminal.compose", (compose) => compose.text === "",
           `cycle ${cycleLabel}: Space did not finish composition`, { surface });
-        await readScreenUntil(s, surface, (lines) => lines.some((line) => line.includes("ㅏ".repeat(7))),
-          `cycle ${cycleLabel}: committed vowels did not reach the PTY`);
+        const completedScreen = await presentedScreen(s, surface);
+        const completedCompose = await s.get("terminal.compose", surface);
+        const completedCursor = await s.get("terminal.cursor", surface);
+        const actualDocument = visibleInputBeforeCursor(completedScreen, completedCursor, prompt,
+          completedCompose.text, `${app.name} cycle ${cycleLabel} completed document`);
+        const expectedDocument = `${"ㅏ".repeat(7)} `;
+        writeFileSync(join(artifactDir, "completed-document.json"), JSON.stringify({
+          expectedDocument, actualDocument, screen: completedScreen,
+          compose: completedCompose, cursor: completedCursor,
+        }, null, 2));
+        assert.equal(actualDocument, expectedDocument,
+          `cycle ${cycleLabel}: committed screen plus current marked buffer differs from AppKit`);
         const entries = await stopTrace();
-        assert.ok(insertedText(entries).includes("ㅏ".repeat(7)),
-          `cycle ${cycleLabel}: the native input trace did not preserve the seven committed vowels`);
+        writeFileSync(join(artifactDir, "native-input-transactions.json"), JSON.stringify(entries, null, 2));
+        const { native } = assertInputTraceDelivery(entries);
+        for (const [key, expectedCount] of [["k", 8], ["Backspace", 1], ["Space", 1]]) {
+          const receipts = native.filter((transaction) => terminalInputReceiptMatches(
+            entries.filter((entry) => entry.cids?.[0] === transaction.cids[0]), key));
+          assert.equal(receipts.length, expectedCount,
+            `cycle ${cycleLabel}: the trace has ${receipts.length} ${key} receipts, expected ${expectedCount}`);
+        }
+        assert.ok(insertedText(entries).includes(" "),
+          `cycle ${cycleLabel}: the trace did not record the committed Space`);
+        await stopCapture();
 
-        const oldProjectId = opened.id;
-        await s.run("core.project.close", { id: oldProjectId });
-        await s.until("host.windows", (windows) => windows.find((item) => item.window === s.window)?.project === null,
-          `cycle ${cycleLabel}: the closed project remained shown`);
-        await s.until("host.window", (host) => !host.regions.some((region) => region.surface === surface),
-          `cycle ${cycleLabel}: the terminal image region remained attached after project close`);
-        assert.equal(await s.get("core.page.error"), null,
-          `cycle ${cycleLabel}: project close reported an application error`);
-
-        const reopened = await s.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
-        await s.until("core.project", (value) => value?.id === reopened.id,
-          `cycle ${cycleLabel}: the project did not reopen`);
-        const [replacement] = await ensureTerminals(s, 1);
-        await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === replacement.surface && item.visible),
-          `cycle ${cycleLabel}: the terminal view did not register after reopen`);
-        await s.get("terminal.session", replacement.surface);
-        assert.equal(await s.get("core.page.error"), null,
-          `cycle ${cycleLabel}: project reopen reported an application error`);
-        t.diagnostic(`${app.name}: F239-47-33 cycle ${cycleLabel}/10 closed the old image region and reopened a terminal`);
+        let currentSurface = surface;
+        for (let pass = 1; pass <= 2; pass++) {
+          await s.run("core.project.close", { id: opened.id });
+          await s.until("host.windows", (windows) => windows.find((item) => item.window === s.window)?.project === null,
+            `cycle ${cycleLabel}, pass ${pass}: the closed project remained shown`);
+          await s.until("host.window", (host) => !host.regions.some((region) => region.surface === currentSurface),
+            `cycle ${cycleLabel}, pass ${pass}: the terminal image region remained attached after project close`);
+          assert.equal(await s.get("core.page.error"), null,
+            `cycle ${cycleLabel}, pass ${pass}: project close reported an application error`);
+          opened = await s.run("core.project.open", { root: projectRoot, color: "#7db4ff" });
+          await s.until("core.project", (value) => value?.id === opened.id,
+            `cycle ${cycleLabel}, pass ${pass}: the project did not reopen`);
+          const [replacement] = await ensureTerminals(s, 1);
+          currentSurface = replacement.surface;
+          await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === currentSurface && item.visible),
+            `cycle ${cycleLabel}, pass ${pass}: the terminal view did not register after reopen`);
+          await s.get("terminal.session", currentSurface);
+          assert.equal(await s.get("core.page.error"), null,
+            `cycle ${cycleLabel}, pass ${pass}: project reopen reported an application error`);
+        }
+        t.diagnostic(`${app.name}: F239-47-33 cycle ${cycleLabel}/10 completed two project close/reopen passes`);
       });
   }
 }
