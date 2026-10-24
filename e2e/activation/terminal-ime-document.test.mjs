@@ -10,6 +10,7 @@ import {
   assertInputTraceDelivery,
   inputTraceTransactions,
   terminalInputReceiptMatches,
+  initialCursorFrameMatchesScreen,
   terminalObserverStatusesMatch,
   terminalStageMatchesReference,
   selectCoherentTerminalObservation,
@@ -28,6 +29,36 @@ function screen(rows) {
 function cell(ch, width = 1) {
   return { ch, width };
 }
+
+test("initial cursor baseline requires the accepted screen frame", () => {
+  const acceptedScreen = screen([]);
+  const current = { frame: { ...acceptedScreen.frame }, render: { frame: { ...acceptedScreen.frame } } };
+  assert.equal(initialCursorFrameMatchesScreen(current, acceptedScreen), true);
+  assert.equal(initialCursorFrameMatchesScreen({ ...current,
+    frame: { ...current.frame, sequence: current.frame.sequence - 1 },
+    render: { frame: { ...current.frame, sequence: current.frame.sequence - 1 } } }, acceptedScreen), false,
+  "an earlier cursor frame must not establish the current baseline");
+  assert.equal(initialCursorFrameMatchesScreen({ ...current,
+    render: { frame: { ...current.frame, sequence: current.frame.sequence + 1 } } }, acceptedScreen), false,
+  "renderer metadata from another frame must not establish the baseline");
+});
+
+test("initial cursor baseline accepts null render only for the accepted screen frame", () => {
+  const acceptedScreen = screen([]);
+  const current = { row: 0, col: 8, focused: true,
+    frame: { ...acceptedScreen.frame }, render: null };
+  assert.equal(initialCursorFrameMatchesScreen(current, acceptedScreen), true,
+    "a null render does not invalidate the exact cursor frame identity");
+  assert.equal(initialCursorFrameMatchesScreen({ ...current,
+    frame: { ...current.frame, sequence: current.frame.sequence - 1 } }, acceptedScreen), false,
+  "an earlier cursor frame cannot establish the prompt baseline");
+  assert.equal(initialCursorFrameMatchesScreen({ ...current,
+    frame: { ...current.frame, sequence: Number.NaN } }, acceptedScreen), false,
+  "malformed cursor frame identity cannot establish the baseline");
+  assert.equal(initialCursorFrameMatchesScreen({ ...current,
+    render: { frame: { ...current.frame, sequence: current.frame.sequence + 1 } } }, acceptedScreen), false,
+  "non-null renderer identity must match the cursor frame");
+});
 
 test("waits for the seven-vowel Backspace document after a coherent eight-vowel intermediate", { timeout: 5000 }, async () => {
   const empty = { text: "", markedRange: null, selectedRange: { location: 0, length: 0 },

@@ -44,6 +44,25 @@ export function terminalCompositionState(compose, cursor) {
   };
 }
 
+function validFrameIdentity(value) {
+  return value && Number.isSafeInteger(value.generation) && value.generation > 0 &&
+    Number.isSafeInteger(value.raster) && value.raster > 0 &&
+    Number.isSafeInteger(value.sequence) && value.sequence > 0;
+}
+
+/** Reports whether the initial cursor status identifies the accepted screen frame. */
+export function initialCursorFrameMatchesScreen(cursor, screen) {
+  const screenFrame = screen?.frame;
+  const cursorFrame = cursor?.frame;
+  if (!validFrameIdentity(screenFrame) || !validFrameIdentity(cursorFrame) ||
+      cursorFrame.generation !== screenFrame.generation || cursorFrame.raster !== screenFrame.raster ||
+      cursorFrame.sequence !== screenFrame.sequence) return false;
+  if (cursor.render === null) return true;
+  const renderFrame = cursor.render?.frame;
+  return validFrameIdentity(renderFrame) && renderFrame.generation === cursorFrame.generation &&
+    renderFrame.raster === cursorFrame.raster && renderFrame.sequence === cursorFrame.sequence;
+}
+
 export function sameTerminalComposition(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }

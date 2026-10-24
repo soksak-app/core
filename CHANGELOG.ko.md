@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-47-35: 초기 cursor observer를 승인된 screen frame에 묶는다.
+  Input-only baseline은 cursor frame이 screen frame과 정확히 일치할 때
+  `render: null`을 허용하며, renderer frame이 있으면 같은 frame이어야 한다.
+  변경 전 Wails run에는 유효한 cursor 상태가 있었지만 inline predicate가
+  renderer metadata를 요구해 입력 전에 timeout됐다. Owning test가 기존 거부를
+  재현하고 수정 predicate에서 통과하며 terminal IME document helper test는
+  35/35 통과한다. Two-host IME acceptance는 대기 중이다.
+
 - F271: `rust-repeat`가 Cargo test target 하나를 선택한다.
   `TEST_TARGET=lib`와 `TEST_TARGET=test:<name>`은 runner의 compile-and-discovery 요청에
   Cargo target selector를 전달한다. 명시적 target은 다른 test binary나 library

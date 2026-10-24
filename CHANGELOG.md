@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-47-35: Bind the initial cursor observer to the accepted screen frame.
+  The input-only baseline now accepts `render: null` when the cursor frame
+  exactly matches the screen frame; any present renderer frame must also match.
+  The unchanged Wails run had this valid cursor status and timed out before
+  input because the inline predicate required renderer metadata. The owner test
+  reproduces that rejection and passes with the corrected predicate; all
+  terminal IME document helper tests pass 35/35. Two-host IME acceptance remains
+  pending.
+
 - F271: Let `rust-repeat` select one Cargo test target.
   `TEST_TARGET=lib` and `TEST_TARGET=test:<name>` pass a Cargo selector to the
   runner's compile-and-discovery request; explicit targets do not enumerate other test

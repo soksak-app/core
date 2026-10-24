@@ -26,6 +26,7 @@ import {
   terminalComposeMatchesPreedit,
   terminalCompositionState,
   terminalInputReceiptMatches,
+  initialCursorFrameMatchesScreen,
   terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
   selectCoherentTerminalObservation,
@@ -499,15 +500,15 @@ for (const app of Object.values(APPS)) {
         "initial terminal compose status", 1500);
       const initialCursorEvent = await waitForObservedStatusEvent(observedStateEvents, 0,
         (notify) => { stateEventWaiters.add(notify); return () => stateEventWaiters.delete(notify); },
-        "terminal.cursor", (cursor) => cursor?.frame && cursor?.render?.frame,
+        "terminal.cursor", (cursor) => initialCursorFrameMatchesScreen(cursor, baselineScreen),
         "initial frame-bound terminal cursor status", 1500);
       assert.deepEqual(initialScreenEvent.value, baselineScreen.rows,
         "the observed initial terminal screen differs from the pre-key baseline rows");
       assert.equal(sameTerminalComposition(terminalCompositionState(initialComposeEvent.value, initialCursorEvent.value),
         terminalCompositionState(baselineCompose, baselineCursor)), true,
       "initial compose/cursor observer state differs from the pre-key baseline");
-      assert.deepEqual(initialCursorEvent.value.frame, initialCursorEvent.value.render.frame,
-        "initial cursor render does not belong to its frame");
+      assert.equal(initialCursorFrameMatchesScreen(initialCursorEvent.value, baselineScreen), true,
+        "initial cursor status does not belong to the accepted screen frame");
       persist("observer-baseline.json", {
         screenEventIndex: observedStateEvents.indexOf(initialScreenEvent),
         composeEventIndex: observedStateEvents.indexOf(initialComposeEvent),
