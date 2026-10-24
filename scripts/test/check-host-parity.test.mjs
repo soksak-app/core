@@ -101,3 +101,13 @@ test("an endpoint method of one host passes only when the allowed differences de
   assert.deepEqual(auditHostParity(changed),
     ['wailsv3 endpoint diagnostics methods has "diagnostics.heap.profile" that tauriv2 does not']);
 });
+
+test("hyphenated diagnostic endpoint methods are read from both hosts", () => {
+  const changed = sources();
+  changed.tauriv2EndpointSource = changed.tauriv2EndpointSource.replace(
+    '"diagnostics.fixture",', '"diagnostics.fixture",\n  "diagnostics.native.window-color-space",');
+  changed.wailsv3DiagnosticsSource = changed.wailsv3DiagnosticsSource.replace(
+    'diagnosticMethods["diagnostics.fixture"] = nil',
+    'diagnosticMethods["diagnostics.fixture"] = nil\n  diagnosticMethods["diagnostics.native.window-color-space"] = nil');
+  assert.deepEqual(auditHostParity(changed), []);
+});

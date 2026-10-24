@@ -63,7 +63,7 @@ function goMapKeys(source, declaration) {
 
 /** The set of method names that the Go endpoint declares (per build flavor). */
 export function goEndpointMethods(endpoint, diagnosticsSource) {
-  const assigned = (source) => [...source.matchAll(/^\s*diagnostic(Methods|Subscriptions)\["([a-z][a-z0-9_.]*)"\] =/gm)]
+  const assigned = (source) => [...source.matchAll(/^\s*diagnostic(Methods|Subscriptions)\["([a-z][a-z0-9_.-]*)"\] =/gm)]
     .map((match) => match[2]);
   const diagnosticOnly = new Set([
     ...assigned(diagnosticsSource),

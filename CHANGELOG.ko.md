@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-47-30-2: host parity에서 hyphen이 있는 Go diagnostic endpoint 이름을 읽는다. 선언된 `diagnostics.native.window-color-space` method를 Go assignment parser가 놓쳐 host mismatch를 잘못 보고했다. 소유 parser Red에서 해당 assertion 실패를 재현했고, matcher 수정 뒤 같은 test와 parser test 8개가 통과한다. `make host-parity-check`와 `make docs-check`가 통과한다.
+
 - F239-47-34: ScreenCaptureKit stop 주석을 실제 동작에 맞춘다.
   `minimumFrameInterval`은 요청 update rate를 제한하며 해당 간격의 idle
   callback을 보장하지 않는다. Stop은 요청 display 경계 이상인 callback을
