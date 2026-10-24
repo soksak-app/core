@@ -93,6 +93,10 @@ func (implementation) WindowFacts(window unsafe.Pointer) (string, error) {
 	return facts(C.sp_window_facts(window), "window state")
 }
 
+func (implementation) WindowColorSpace(window unsafe.Pointer) (string, error) {
+	return facts(C.sp_window_color_space_facts(window), "window color-space facts")
+}
+
 func (implementation) WindowHit(window unsafe.Pointer, x, y float64) (string, error) {
 	return facts(C.sp_window_hit(window, C.double(x), C.double(y)), "window hit testing")
 }

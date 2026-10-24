@@ -63,6 +63,13 @@ func TestInputReferenceMethodIsDeclared(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.native-window-color-space.reports-appkit-profile
+func TestNativeWindowColorSpaceMethodIsDeclared(t *testing.T) {
+	if diagnosticMethods["diagnostics.native.window-color-space"] == nil {
+		t.Fatal("the diagnostic endpoint has no native window color-space query")
+	}
+}
+
 // contract: diagnostics.input-reference.validates-document
 func TestInputReferenceValidatesDocument(t *testing.T) {
 	for _, action := range []string{"open", "read", "focus", "close"} {

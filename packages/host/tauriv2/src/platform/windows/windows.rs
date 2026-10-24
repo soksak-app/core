@@ -46,6 +46,10 @@ impl Platform for Windows {
     fn window_handle(&self, window: &Window) -> Result<Handle, String> {
         unsupported::window_handle(window)
     }
+    #[cfg(feature = "diagnostics")]
+    fn window_color_space(&self, window: Handle) -> Result<Value, String> {
+        unsupported::window_color_space(window)
+    }
     fn set_main_webview(&self, window: Handle, main: Handle) -> Result<(), String> {
         unsupported::set_main_webview(window, main)
     }

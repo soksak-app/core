@@ -25,6 +25,11 @@ void *sp_window_main_webview(void *window);
 // Returns NULL when there is no window or registered main web view.
 char *sp_window_facts(void *window);
 
+// Returns {name, iccSHA256} for the window's current AppKit backing color space. Both values are null when
+// the window has no backing color space; iccSHA256 is null when AppKit supplies no ICC profile data.
+// This is called only for one-shot diagnostic queries. It does not change the window.
+char *sp_window_color_space_facts(void *window);
+
 // Hit test result {view, main, identifier, hit} at window coordinates (x, y). view is the address of the
 // WKWebView that contains the point and is 0 when there is none. main tells whether that web view is the
 // main page. identifier is the identifier of the hit view. hit is {class, frame} and is null when there is

@@ -182,6 +182,18 @@ pub fn facts(window: Handle) -> Result<Value, String> {
     )
 }
 
+/// Reads the AppKit backing color space and ICC fingerprint for one diagnostic query.
+#[cfg(feature = "diagnostics")]
+pub fn color_space(window: Handle) -> Result<Value, String> {
+    unsafe extern "C" {
+        fn sp_window_color_space_facts(window: *mut c_void) -> *mut c_char;
+    }
+    facts_value(
+        unsafe { sp_window_color_space_facts(window as *mut c_void) },
+        "window color-space facts",
+    )
+}
+
 /// Moves the upper left of the window frame to screen coordinates.
 pub fn move_to(window: Handle, x: f64, y: f64) -> Result<(), String> {
     unsafe extern "C" {

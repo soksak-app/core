@@ -183,6 +183,11 @@ impl Platform for Darwin {
     fn window_facts(&self, window: Handle) -> Result<Value, String> {
         window::facts(window)
     }
+
+    #[cfg(feature = "diagnostics")]
+    fn window_color_space(&self, window: Handle) -> Result<Value, String> {
+        window::color_space(window)
+    }
     fn process_footprint_kb(&self, pid: u32) -> Result<u64, String> {
         process_footprint::process_footprint_kb(pid)
     }

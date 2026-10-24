@@ -2,6 +2,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
+#import <CommonCrypto/CommonDigest.h>
 #import "window_facts.h"
 #import "observe.h"
 #import "application_log.h"
@@ -198,6 +199,38 @@ char *sp_window_facts(void *handle) {
         @"appDomWebviews": @(views.count - documents),
         @"documentWebviews": @(documents),
     });
+}
+
+char *sp_window_color_space_facts(void *handle) {
+    NSWindow *window = (NSWindow *)handle;
+    if (!window) {
+        sp_log_error("window color-space facts", "the window is gone");
+        return NULL;
+    }
+    NSColorSpace *colorSpace = window.colorSpace;
+    if (!colorSpace) {
+        return copyJSON(@{ @"name": NSNull.null, @"iccSHA256": NSNull.null });
+    }
+    NSString *name = colorSpace.localizedName;
+    if (!name) {
+        sp_log_error("window color-space facts", "AppKit returned a color space without a localized name");
+        return NULL;
+    }
+    NSData *profile = colorSpace.ICCProfileData;
+    id digestValue = NSNull.null;
+    if (profile) {
+        if (profile.length > UINT32_MAX) {
+            sp_log_error("window color-space facts", "the ICC profile exceeds the SHA-256 input limit");
+            return NULL;
+        }
+        unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+        CC_SHA256(profile.bytes, (CC_LONG)profile.length, digest);
+        NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+        for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++)
+            [hex appendFormat:@"%02x", digest[index]];
+        digestValue = hex;
+    }
+    return copyJSON(@{ @"name": name, @"iccSHA256": digestValue });
 }
 
 char *sp_window_hit(void *handle, double x, double y) {

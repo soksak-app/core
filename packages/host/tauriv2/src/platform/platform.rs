@@ -324,6 +324,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Returns the frame, the active state, the window buttons and the webviews of the window as JSON. The format is
     /// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the main thread.
     fn window_facts(&self, window: Handle) -> Result<Value, String>;
+    /// Reads the AppKit backing color space and ICC fingerprint for one diagnostic query.
+    #[cfg(feature = "diagnostics")]
+    fn window_color_space(&self, window: Handle) -> Result<Value, String>;
     /// Returns the physical footprint (KB) of the process pid, which counts the pages that no other process shares. It is an
     /// error when the process cannot be read, such as a process that has ended.
     fn process_footprint_kb(&self, pid: u32) -> Result<u64, String>;

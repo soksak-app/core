@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "window_facts.h"
+#import <CommonCrypto/CommonDigest.h>
 
 static int failures = 0;
 
@@ -45,6 +46,25 @@ int main(void) { @autoreleasepool {
     check(!sp_window_set_main_webview(window, top), @"another webview cannot replace the registered app DOM");
     [top setValue:@NO forKey:@"drawsBackground"];
     top.underPageBackgroundColor = NSColor.clearColor;
+
+    window.colorSpace = NSColorSpace.sRGBColorSpace;
+    NSColorSpace *queriedColorSpace = window.colorSpace;
+    NSData *icc = queriedColorSpace.ICCProfileData;
+    if (!icc) {
+        check(NO, @"AppKit provides ICC profile data for the configured sRGB color space");
+    } else {
+        unsigned char expectedDigest[CC_SHA256_DIGEST_LENGTH];
+        CC_SHA256(icc.bytes, (CC_LONG)icc.length, expectedDigest);
+        NSMutableString *expectedHash = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+        for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++)
+            [expectedHash appendFormat:@"%02x", expectedDigest[index]];
+        NSDictionary *colorFacts = parse(sp_window_color_space_facts(window));
+        check(colorFacts.count == 2
+            && [colorFacts[@"name"] isEqual:queriedColorSpace.localizedName]
+            && [colorFacts[@"iccSHA256"] isEqual:expectedHash]
+            && window.colorSpace == queriedColorSpace,
+            [NSString stringWithFormat:@"the one-shot facts report the actual AppKit color space and ICC digest without changing it: %@", colorFacts]);
+    }
 
     [window makeFirstResponder:top];
     NSDictionary *responderFacts = parse(sp_window_facts(window));

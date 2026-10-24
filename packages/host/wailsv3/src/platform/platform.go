@@ -291,6 +291,9 @@ type Platform interface {
 	// WindowFacts returns the frame, the active state, the window buttons and the web views of the window as JSON. The form is
 	// the same as sp_window_facts of native/darwin/src/window_facts.h. Call it on the UI thread.
 	WindowFacts(window unsafe.Pointer) (string, error)
+	// WindowColorSpace returns the current AppKit backing color space and ICC profile fingerprint as JSON.
+	// Call it on the UI thread for a one-shot diagnostic query.
+	WindowColorSpace(window unsafe.Pointer) (string, error)
 	// ProcessFootprintKB returns the physical footprint (KB) of the process pid: the size that the system attributes to the process,
 	// which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an error when the
 	// process cannot be read, such as a process that has ended.

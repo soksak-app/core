@@ -56,6 +56,9 @@ func (implementation) WindowControls(unsafe.Pointer) (platform.Rect, error) {
 func (implementation) WindowFacts(unsafe.Pointer) (string, error) {
 	return "", unsupported("window state")
 }
+func (implementation) WindowColorSpace(unsafe.Pointer) (string, error) {
+	return "", unsupported("window color space")
+}
 func (implementation) ProcessFootprintKB(int) (uint64, error) {
 	return 0, unsupported("process footprint")
 }

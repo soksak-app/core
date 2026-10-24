@@ -62,6 +62,7 @@ func init() {
 	holdModalContent = modalHolds.wait
 	diagnosticMethods["diagnostics.page.collect"] = diagnosticPageCollect
 	diagnosticMethods["diagnostics.native.objects"] = diagnosticNativeObjects
+	diagnosticMethods["diagnostics.native.window-color-space"] = diagnosticNativeWindowColorSpace
 	diagnosticMethods["diagnostics.objects"] = diagnosticObjects
 	diagnosticMethods["diagnostics.heap.profile"] = diagnosticHeapProfile
 	diagnosticMethods["diagnostics.process.exit"] = diagnosticProcessExit
@@ -898,6 +899,23 @@ func diagnosticNativeObjects(e *Endpoint, _ *endpointConn, params json.RawMessag
 	case <-time.After(2 * pageTimeout):
 		return nil, rpcError(codeTimeout, "the application did not handle an event within %s", pageTimeout)
 	}
+}
+
+type nativeWindowColorSpaceFacts struct {
+	Name      *string `json:"name"`
+	ICCSHA256 *string `json:"iccSHA256"`
+}
+
+func diagnosticNativeWindowColorSpace(e *Endpoint, _ *endpointConn, params json.RawMessage) (any, error) {
+	_, surfaces, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var facts nativeWindowColorSpaceFacts
+	if err := surfaces.nativeFacts(system.WindowColorSpace, &facts, nil); err != nil {
+		return nil, err
+	}
+	return facts, nil
 }
 
 // pageAnswer is the count of the main page (main is true) or of the document region key.

@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-30-1: 한 번 호출하는 diagnostic method로 AppKit window color
+  space를 보고한다. Window를 바꾸지 않고 localized name과 사용할 수 있는 ICC
+  profile data의 SHA-256 fingerprint를 반환한다. 변경 전에는 method가 없어 두
+  host declaration test가 실패했다. Wails와 Tauri declaration test 및 native
+  `window_facts_test`가 통과하고, `cargo fmt --check -p soksak-host-tauriv2`와
+  `make docs-check`가 통과한다. 양 host endpoint의 runtime 검증은 대기 중이다.
+
 - F239-47-31: Terminal status sample에 key 시작 offset을 유지한다.
   Screen notification 뒤 cursor notification이 오면 observer가 stage offset을
   다시 계산해 screen event를 제외할 수 있었다. Observer는 이제 모든 reread에서

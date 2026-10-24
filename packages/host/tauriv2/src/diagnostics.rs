@@ -158,6 +158,7 @@ pub(crate) fn call(
         "diagnostics.page.collect" => page_collect(window),
         "diagnostics.host.events" => host_events(window, &params),
         "diagnostics.native.objects" => native_objects(window, &params),
+        "diagnostics.native.window-color-space" => native_window_color_space(window),
         "diagnostics.objects" => crate::object_counts::objects_reply(host, window.label()),
         "diagnostics.process.exit" => process_exit(window, &params),
         "diagnostics.memory.pressure" => {
@@ -391,6 +392,15 @@ fn native_objects(window: &Window, params: &Map<String, Value>) -> Result<Value,
         ));
     }
     Ok(counts.payload())
+}
+
+fn native_window_color_space(window: &Window) -> Result<Value, Failure> {
+    let platform = platform::current().map_err(internal)?;
+    crate::windows::with_native_owner(window, move |handle| platform.window_color_space(handle))
+        .map_err(exposure::native_failure(
+            window.label(),
+            crate::endpoint::HANDLER_FAILED,
+        ))
 }
 
 /// Answers when the process pid ends. A window check awaits the end of the WebContent process of a closed window with

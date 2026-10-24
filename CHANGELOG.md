@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-47-30-1: Report the AppKit window color space through a one-shot
+  diagnostic method. The query returns its localized name and the SHA-256
+  fingerprint of ICC profile data when available, without changing the
+  window. Before the change, both host declaration tests failed because the
+  method was absent. The Wails and Tauri declaration tests and the native
+  `window_facts_test` pass; `cargo fmt --check -p soksak-host-tauriv2` and
+  `make docs-check` pass. Both-host endpoint runtime verification remains
+  pending.
+
 - F239-47-31: Keep the original key-start offset for terminal status samples.
   A cursor notification arriving after the screen notification could make the
   observer recalculate the stage offset and exclude that screen event. The

@@ -24,6 +24,10 @@ pub fn prepare_window<'a>(_builder: WindowBuilder<'a>) -> Result<WindowBuilder<'
 pub fn window_handle(_window: &Window) -> Result<Handle, String> {
     missing("native window handle")
 }
+#[cfg(feature = "diagnostics")]
+pub fn window_color_space(_window: Handle) -> Result<Value, String> {
+    missing("window color space")
+}
 pub fn reveal_after_load(_window: Handle) -> Result<(), String> {
     missing("window reveal")
 }

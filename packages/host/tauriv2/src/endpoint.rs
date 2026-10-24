@@ -91,6 +91,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.notifications",
     "diagnostics.page.collect",
     "diagnostics.native.objects",
+    "diagnostics.native.window-color-space",
     "diagnostics.objects",
     "diagnostics.process.exit",
     "diagnostics.memory.pressure",
@@ -1424,5 +1425,14 @@ mod input_reference_declaration_test {
     #[test]
     fn input_reference_method_is_declared() {
         assert!(super::declared("diagnostics.input.reference"));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod native_window_color_space_declaration_test {
+    // contract: diagnostics.native-window-color-space.reports-appkit-profile
+    #[test]
+    fn native_window_color_space_method_is_declared() {
+        assert!(super::declared("diagnostics.native.window-color-space"));
     }
 }
