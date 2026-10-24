@@ -269,12 +269,19 @@ const LAYERS: [&str; 5] = ["native", "host", "page", "plugin", "sidecar"];
 /// Whether `cid` can be stored as a correlation identifier: it is not empty and holds no quote, no backslash and no
 /// control character, so it is written as the text of a JSON string without escaping.
 /// The events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy): `page.start`, which the
-/// first module of a page emits before the policy reaches the gate of the page, and the stall records of a host, which are
-/// the only record of a main-thread stall that no event source reports.
+/// first module emits before the page policy reaches its gate; host stall records, the only record of a main-thread stall;
+/// `host.view.killed`, which reports an ended view's unsent batch; and `host.test.start`/`host.test.end`, whose flushed
+/// positions delimit a diagnostic window check under every selected policy.
 pub fn passes_every_gate(event: &str) -> bool {
     matches!(
         event,
-        "page.start" | "host.stall" | "host.stall.sampled" | "host.stall.dump" | "host.view.killed"
+        "page.start"
+            | "host.stall"
+            | "host.stall.sampled"
+            | "host.stall.dump"
+            | "host.view.killed"
+            | "host.test.start"
+            | "host.test.end"
     )
 }
 

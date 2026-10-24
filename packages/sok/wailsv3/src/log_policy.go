@@ -46,12 +46,12 @@ func DefaultLogPolicy() LogPolicy {
 }
 
 // PassesEveryGate names the events that pass every gate, so the policy never refuses them (docs/spec/logging.md#policy):
-// page.start, which the first module of a page emits before the policy reaches the gate of the page, the stall records
-// of a host, which are the only record of a main-thread stall that no event source reports, and host.view.killed, which
-// states the loss of the unsent batch of a view that the host ended.
+// page.start, which the first module emits before the page policy reaches its gate; host stall records, the only record of a
+// main-thread stall; host.view.killed, which states the loss of a view's unsent batch; and host.test.start/end, whose flushed
+// positions delimit a diagnostic window check under every selected policy.
 func PassesEveryGate(event string) bool {
 	switch event {
-	case "page.start", "host.stall", "host.stall.sampled", "host.stall.dump", "host.view.killed":
+	case "page.start", "host.stall", "host.stall.sampled", "host.stall.dump", "host.view.killed", "host.test.start", "host.test.end":
 		return true
 	}
 	return false

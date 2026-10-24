@@ -2504,6 +2504,8 @@
   - [ ] F266.13 — P1, F196.10.1에 연결: Tauri sidecar-session count finding을 검증한다. 기록에는 `make object-counts` 3회와 15 repetitions가 있지만 원래 count 증가 때의 load가 없다. 이후 실행 중 하나는 load 26이었다. 원래 load가 보존됐는지 확인하고 owning measurement 전체 실행 3회를 기록하되 한 번은 비슷한 load에서 실행하며 재발 시 baseline/post-close session identity와 `page.background.session` 이벤트를 보존한다.
   - [ ] F266.14 — P1, F160.6.5에 연결: 전체 crate 종료 실행의 load 범위를 확인한다. 기록에는 원래 실패 load 약 40, focused repeat 20회의 load 27–44, 전체 crate 실행 3회의 load 25–34가 있다. focused repeat는 비슷한 load의 전체 suite 실행을 대신하지 않는다. diagnostics crate 전체 실행 3회를 기록하고 그중 한 번은 원래 실패와 비슷한 load에서 실행하며 blocked-writer 상태와 refusal count를 보존한다.
 
+- [o] F239-38 — P0: 일반 lifecycle logging을 넓히지 않고 모든 log policy에서 진단 test mark를 저장한다. `host.test.start`와 `host.test.end`는 catalog에 선언된 level `info`의 이름 지정 예외이며, lifecycle이 `error` 또는 `off`여도 window-check 시작·종료 mark를 flush하고 정확한 위치를 반환한다. 일반 lifecycle/info는 계속 gate된다. Red: 변경 전 Wails와 Tauri `diagnostics.test.mark` 위치 검사가 모두 `the event writer refused host.test.start because the policy does not store it`로 실패했다. Green: Wails mark 검사는 lifecycle `error`와 `off`에서 연속된 flush 위치를 보존하고 일반 lifecycle/info 거부 한 건을 세며, Tauri `test_mark_test`는 같은 assertion으로 4/4 통과한다. 문제를 드러낸 보존 window-release 실행은 start mark에서 fixture 준비 전에 멈췄고 end mark도 거부되어 release assertion에 도달하지 않았다. 이는 harness logging 결함이며 tao release 실패의 증거가 아니다. `make docs-check`가 통과한다.
+
 ## Tauri/Wails 대칭 감사 (2026-09-21)
 
 기계적 호스트 검사는 `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`를 보고한다. 이것은 여전히 파일 구조 차이다. Wails의 `runtime-contract.test.mjs`에는 `waitPresented` 전달 검사가 있고 G2.5에서 양쪽 adapter를 거친 `{ displayed: 42 }` 반환값도 단언하므로, 같은 파일명 부재만으로 동작 검사 누락을 단정하지 않는다.

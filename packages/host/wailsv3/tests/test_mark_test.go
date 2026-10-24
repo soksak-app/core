@@ -45,7 +45,23 @@ func TestATestMarkAcceptsOnlyAStartOrAnEndWithItsResult(t *testing.T) {
 
 // contract: diagnostics.test-mark.event-carries-position
 func TestATestMarkIsAnEventAndTheReplyNamesItsPosition(t *testing.T) {
+	assertTestMarksUnderLifecyclePolicy(t, "error")
+}
+
+// contract: diagnostics.test-mark.event-carries-position
+func TestATestMarkIsStoredWhenLifecycleIsOff(t *testing.T) {
+	assertTestMarksUnderLifecyclePolicy(t, "off")
+}
+
+func assertTestMarksUnderLifecyclePolicy(t *testing.T, lifecycle string) {
+	t.Helper()
 	log := useEventLog(t)
+	policyText := `{"schema":1,"classes":{"lifecycle":"` + lifecycle + `","input":"error","call":"error","io":"error","frame":"error"}}`
+	policy, err := host.ParseLogPolicy("log-policy.json", []byte(policyText))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.SetPolicy(policy, "file")
 	boot, start, err := host.EmitTestMark(host.TestMark{Kind: "start", Name: "n", Run: "r"}, 5*time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +73,26 @@ func TestATestMarkIsAnEventAndTheReplyNamesItsPosition(t *testing.T) {
 	if boot != "b1" || boot2 != "b1" || end != start+1 {
 		t.Fatalf("positions (%s, %d) and (%s, %d)", boot, start, boot2, end)
 	}
+	host.EmitHost(host.LevelInfo, "host.record.info", map[string]any{"where": "test", "text": "ordinary lifecycle record"})
+	if err := log.Flush(5 * time.Second); err != nil {
+		t.Fatal(err)
+	}
 	events := readEventLog(t, log.Path())
+	var lifecycleInfoGated float64
+	for _, event := range events {
+		if event["event"] == "host.record.info" {
+			t.Fatalf("ordinary lifecycle/info record passed a closed gate: %v", event)
+		}
+		if event["event"] == "log.gated" {
+			fields := event["fields"].(map[string]any)
+			if fields["class"] == "lifecycle" && fields["level"] == "info" {
+				lifecycleInfoGated += fields["count"].(float64)
+			}
+		}
+	}
+	if lifecycleInfoGated != 1 {
+		t.Fatalf("log.gated counted lifecycle/info %v times, want 1", lifecycleInfoGated)
+	}
 	for _, c := range []struct {
 		seq    uint64
 		event  string

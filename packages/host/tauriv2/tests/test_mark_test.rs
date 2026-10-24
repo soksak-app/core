@@ -12,8 +12,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use soksak_host_tauriv2::event_log::Options;
-use soksak_host_tauriv2::event_record::use_host_event_log;
+use soksak_host_tauriv2::event_log::{Level, Options};
+use soksak_host_tauriv2::event_record::{emit_host, use_host_event_log};
+use soksak_host_tauriv2::log_policy::LogPolicy;
 use soksak_host_tauriv2::test_mark::{TestMark, emit_test_mark, parse_test_mark};
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
@@ -89,6 +90,15 @@ fn a_test_mark_accepts_only_a_start_or_an_end_with_its_result() {
 // contract: diagnostics.test-mark.event-carries-position
 #[test]
 fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
+    assert_test_marks_under_lifecycle_policy("error");
+}
+
+#[test]
+fn a_test_mark_is_stored_when_lifecycle_is_off() {
+    assert_test_marks_under_lifecycle_policy("off");
+}
+
+fn assert_test_marks_under_lifecycle_policy(lifecycle: &str) {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let directory = folder::Folder::new();
     let log = Arc::new(
@@ -108,18 +118,42 @@ fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
         .unwrap(),
     );
     use_host_event_log(Some(log.clone()));
+    let policy = format!(
+        r#"{{"schema":1,"classes":{{"lifecycle":"{lifecycle}","input":"error","call":"error","io":"error","frame":"error"}}}}"#
+    );
+    log.set_policy(
+        LogPolicy::parse("log-policy.json", policy.as_bytes()).unwrap(),
+        "file",
+    );
     let (boot, start) = emit_test_mark(&mark("start", ""), Duration::from_secs(5)).unwrap();
     let (boot_end, end) = emit_test_mark(&mark("end", "fail"), Duration::from_secs(5)).unwrap();
     assert_eq!(
         (boot.as_str(), boot_end.as_str(), end),
         ("b1", "b1", start + 1)
     );
+    emit_host(
+        Level::Info,
+        "host.record.info",
+        json!({"where": "test", "text": "ordinary lifecycle record"}),
+    );
+    log.flush(Duration::from_secs(5)).unwrap();
     let lines: Vec<Value> = fs::read_to_string(log.path())
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     use_host_event_log(None);
+    assert!(
+        lines.iter().all(|line| line["event"] != "host.record.info"),
+        "ordinary lifecycle/info record passed a closed gate: {lines:?}"
+    );
+    let lifecycle_info_gated: u64 = lines
+        .iter()
+        .filter(|line| line["event"] == "log.gated")
+        .filter(|line| line["fields"]["class"] == "lifecycle" && line["fields"]["level"] == "info")
+        .map(|line| line["fields"]["count"].as_u64().unwrap())
+        .sum();
+    assert_eq!(lifecycle_info_gated, 1, "{lines:?}");
     for (seq, event, fields) in [
         (start, "host.test.start", json!({"name": "n", "run": "r"})),
         (
