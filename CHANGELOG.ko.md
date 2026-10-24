@@ -405,8 +405,12 @@
   이 annotation 변경은 새 test나 runtime 결과를 주장하지 않는다.
 - F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전
   데이터 snapshot, 닫은 뒤의 빈 no-project snapshot, 오래된 row 부재와 깨끗한
-  application error audit을 요구한다. 기존 Files P42–P45 test는 null 및 오래된
-  작업 동작을 결정적으로 검증하며, 양 host project-close acceptance는 대기 중이다.
+  application error audit을 요구한다. 집중 검사는 core 0.0.21 candidate와 frozen
+  P47 registry를 사용한 Wails와 Tauri에서 통과해 2/2다. 두 audit에 error,
+  expected error, missing record가 없고 `no project is shown` 기록도 없다. 종료된
+  host와 네 sidecar의 endpoint가 남지 않았고 session baseline을 복원했다. 종료된
+  view의 lifecycle `host.view.killed` warning은 미전송 기록이 있었을 수 있음을
+  나타낸다. 이는 지정한 검사만 확인하며 전체 Files suite나 public release를 뜻하지 않는다.
 
 - F239-47-19: 정확한 cursor/render overlay frame으로 visual stage를 계획하고
   이전 screen rows를 source로 보존한다. rows-only status deduplication으로

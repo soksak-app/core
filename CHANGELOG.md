@@ -438,9 +438,14 @@
   timeout. This annotation change does not claim a new test or runtime result.
 - F262-6: Extend the existing project-close window check to require mounted
   Files sections, populated snapshots before close, empty no-project snapshots
-  after close, no stale rows, and a clear application error audit. Existing
-  Files P42–P45 tests cover deterministic null and stale-work behavior; the
-  two-host project-close acceptance remains pending.
+  after close, no stale rows, and a clear application error audit. The focused
+  case passes on Wails and Tauri (2/2) with the core 0.0.21 candidate and frozen
+  P47 registry. Both audits have no errors, expected errors or missing records;
+  no `no project is shown` record occurs. The ended hosts and four sidecars have
+  no remaining endpoints, and the session baseline is restored. Lifecycle
+  `host.view.killed` warnings state that ended views may have had unsent records.
+  This validates the named case only, not the full Files suite or a public
+  release.
 
 - F239-47-19: Plan visual stages against the exact cursor/render overlay frame
   while preserving the earlier screen rows as their source. The base screen
