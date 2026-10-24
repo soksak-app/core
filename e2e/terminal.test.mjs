@@ -803,6 +803,7 @@ for (const app of Object.values(APPS)) {
     // The transcript records the host binding call only after its reply has been accepted.
     const log = await s.transcript();
     s.cleanup(() => log.stop());
+    const transcriptStart = log.lines.length;
     const offsets = currentEventOffsets(s.app.configDir);
     const document = (await s.get("core.window.document")).timeOrigin;
     await s.run("host.window.reload");
@@ -818,7 +819,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) =>
       item.surface === surface && item.exposes.includes("status terminal.session")), "the terminal did not return after the reload");
     const after = await s.until("terminal.session", (state) => Boolean(state?.sessionId), "the terminal session did not return", { surface });
-    let transcriptPosition = log.lines.length;
+    let transcriptPosition = transcriptStart;
     let pageEvents = [];
     let accepted = [];
     const replyDeadline = Date.now() + 30000;
