@@ -2668,6 +2668,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-41-1",
+    implementation: [
+      { file: "packages/workbench/declared-section.js", symbol: "mine !== generation" },
+      { file: "packages/workbench/declared-source.js", symbol: "if (closed) return" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "a queued callback from the first A subscription is discarded after an A to B to A change" },
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "the channel delivers each snapshot of its surface and plugin, and the unsubscribe ends the delivery" },
+    ],
+    expected: "A snapshot callback changes a declared section only while the exact subscription generation that received it remains current, and a closed transport ignores callbacks already queued before unsubscribe.",
+    levels: ["unit"],
+  },
+  {
     id: "F244",
     implementation: [{ file: "packages/workbench/tab-reports.js", symbol: "tabOrigin" }],
     tests: [

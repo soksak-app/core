@@ -179,6 +179,7 @@ tree 노드의 focus target은 그 label 컨트롤이 있고 활성이면 label 
 - (b) 출처가 바뀌면 새 출처의 첫 값을 받아들일 때까지 section을 비운다. 이전 출처의 expansion 상태는 살아남지 않으며 새 출처의 값이 정한다.
 - (c) 출처가 바뀌면 workbench는 새 출처의 현재 값을 한 번 pull한다. workbench는 고른 출처에서 pull하는 것을 메인 페이지 load 때, 출처가 바뀔 때만 허용하며, 다른 때는 허용하지 않는다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없기 때문이다. pull한 값은 push된 선언된 UI snapshot과 같은 검사와 거부 규칙을 따른다.
 - workbench는 새 출처의 snapshot subscription을 완료한 뒤 그 출처를 pull한다. Subscription readiness는 push snapshot을 받는 listener를 출처에 설치한 상태를 뜻한다. subscription 작업은 readiness 뒤에만 unsubscribe 함수를 resolve하며, listener를 동기적으로 설치하는 출처는 readiness를 즉시 resolve한다. readiness 전에 출처가 바뀌거나 section이 닫히면 workbench는 readiness가 완료되는 즉시 unsubscribe하고 해당 출처를 pull하지 않는다. readiness 뒤 pull 응답 전에 전달된 snapshot은 정상적으로 수락하므로, 더 낮은 sequence의 pull은 이를 덮어쓸 수 없다.
+- Snapshot callback은 이를 받은 정확한 subscription 인스턴스에 속한다. callback이 실행되기 전에 해당 subscription의 source generation이 끝났다면, 같은 source가 다시 선택됐더라도 callback을 버린다.
 - (d) 프로세스가 끝나면 그 등록을 지우고, 출처를 (a)처럼 다시 고른다.
 - 선택된 출처가 아닌 짝에서 온 선언된 UI snapshot은 확인 응답한 뒤 검사 없이 버린다. 선택된 출처가 아닌 짝에서 온 pull 응답, 또는 `seq`가 출처에서 마지막으로 받아들인 값의 `seq`보다 낮은 pull 응답은 검사 없이 버린다. 트리나 오류 표시를 바꾸지 않는다.
 

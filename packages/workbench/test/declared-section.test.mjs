@@ -26,7 +26,7 @@ async function harness({ deferSubscription = false } = {}) {
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), acks: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), listenerRegistrations: [], acks: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
@@ -37,6 +37,7 @@ async function harness({ deferSubscription = false } = {}) {
     channel: (source) => ({
       send: (message) => { world.acks.push({ source: source.id, message }); },
       onMessage: (listener) => {
+        world.listenerRegistrations.push({ source: source.id, listener });
         if (!world.deferSubscription) {
           world.channels.set(source.id, listener);
           return () => { world.channels.delete(source.id); };
@@ -221,6 +222,29 @@ test("closing before subscription readiness unsubscribes late and never pulls", 
   await settle();
   assert.equal(h.world.channels.has("view-a"), false, "the late listener remained after the section closed");
   assert.deepEqual(h.world.pulls, [], "the source was pulled after the section closed");
+});
+
+test("a queued callback from the first A subscription is discarded after an A to B to A change", async () => {
+  const h = await harness({ deferSubscription: true });
+  h.world.registrants = ["view-a", "view-b"];
+  h.world.active = "view-a";
+  h.section.reconcile();
+  const firstA = h.world.listenerRegistrations[0].listener;
+  h.world.deferSubscription = false;
+  h.world.active = "view-b";
+  h.section.reconcile();
+  h.world.active = "view-a";
+  h.section.reconcile();
+  const currentA = h.world.listenerRegistrations[2].listener;
+
+  // The old A registration has completed, but its queued delivery runs before its readiness continuation can unsubscribe it.
+  h.world.deferredSubscriptions[0]();
+  firstA({ event: "declared-ui.snapshot", plugin: "demo", status: h.statusId.slice("demo.".length), seq: 4, value: list(["stale-a"]), skipped: 0 });
+  assert.deepEqual(h.labels(), [], "a callback from the first A subscription changed the current section");
+
+  currentA({ event: "declared-ui.snapshot", plugin: "demo", status: h.statusId.slice("demo.".length), seq: 5, value: list(["current-a"]), skipped: 0 });
+  assert.deepEqual(h.labels(), ["current-a"], "the current A subscription did not update the section");
+  await settle();
 });
 
 test("a pull reply with value null leaves the section cleared until the first push", async () => {

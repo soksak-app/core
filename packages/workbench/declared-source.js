@@ -32,6 +32,7 @@ export function createDeclaredSource({ plugin, status }) {
     let registration;
     try {
       registration = bridge.on(event, (message) => {
+        if (closed) return;
         if (matches(message)) receive(message);
       });
     } catch (error) {
@@ -39,10 +40,6 @@ export function createDeclaredSource({ plugin, status }) {
     }
     return Promise.resolve(registration).then((unsubscribe) => {
       if (typeof unsubscribe !== "function") throw new TypeError(`${where}: snapshot listener registration did not return an unsubscribe function`);
-      if (closed) {
-        unsubscribe();
-        return () => {};
-      }
       return () => {
         closed = true;
         unsubscribe();

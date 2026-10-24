@@ -105,7 +105,9 @@ test("the channel delivers each snapshot of its surface and plugin, and the unsu
   assert.deepEqual(received, [{
     event: "declared-ui.snapshot", plugin: "probe", status: "lines", seq: 2, value: { n: 1 }, skipped: 1,
   }], "the channel delivered a snapshot of another source");
+  const queued = [...listeners.get("declared-ui-snapshot")][0];
   unsubscribe();
+  queued({ surface: "view-a", plugin: "probe", status: "lines", seq: 9, value: { n: 2 }, skipped: 0 });
   await new Promise((resolve) => setImmediate(resolve));
   emit("declared-ui-snapshot", { surface: "view-a", plugin: "probe", status: "lines", seq: 5, value: null, skipped: 0 });
   assert.deepEqual(received.length, 1, "the unsubscribe did not end the delivery");
