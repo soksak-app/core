@@ -293,10 +293,20 @@ static void checkRegionKeyRecords(NSArray<NSDictionary *> *records, NSString *ke
     check(keyDown.count == 1, [NSString stringWithFormat:@"image region records one native key-down for %@ (got %@)", key, keyDown]);
     check(reports.count > 0, [NSString stringWithFormat:@"image region records its report for %@ (records %@)", key, records]);
     if (keyDown.count != 1) return;
+    NSArray *keyCids = keyDown.firstObject[@"cids"];
+    check([keyCids isKindOfClass:NSArray.class] && keyCids.count > 0,
+        [NSString stringWithFormat:@"%@ key-down has a correlation identifier (record %@)", key, keyDown.firstObject]);
     for (NSDictionary *report in reports) {
         check([report[@"cids"] isEqual:keyDown.firstObject[@"cids"]],
             [NSString stringWithFormat:@"%@ callback report retains the key correlation identifier (key %@, report %@)",
                 key, keyDown.firstObject, report]);
+    }
+    for (NSDictionary *record in records) {
+        NSDictionary *fields = record[@"fields"];
+        if ([record[@"name"] isEqual:@"native.record.error"]
+            && [fields[@"text"] containsString:@"the boot identifier of the run is not set"]) {
+            check(NO, [NSString stringWithFormat:@"%@ input trace has a boot identifier before callback recording (%@)", key, record]);
+        }
     }
 }
 
@@ -304,6 +314,7 @@ static void checkRegionKeyRecords(NSArray<NSDictionary *> *records, NSString *ke
 // with the image-region's committed and preedit reports after each physical-layout key.
 static void backspaceTrace(NSWindow *window, SPRecordingTextView *control, void *region) {
     NSDate *deadline = traceDeadline;
+    check(sp_event_set_boot("native-ime"), @"native input trace sets its boot identifier before recording callbacks");
     int8_t levels[] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(levels), @"native input trace records are enabled for the bounded run");
     NSMutableArray<NSDictionary *> *controlStates = [NSMutableArray array];

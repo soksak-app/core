@@ -18,6 +18,14 @@
   통과한다. Source `finish` helper는 단일 settlement와 timer/subscription 공통
   cleanup을 수행하므로 유지한다. Timeout 값과 status-event 동작은 바꾸지 않는다.
 
+- F239-47-11: 집중 Korean IME target이 input callback을 기록하기 전에
+  event-trace boot identifier를 초기화한다. 변경 전 setup은 key event에
+  correlation identifier가 없어 assertion 95개가 실패하고 오류 202개를
+  기록했다. Green: 같은 target은 assertion 105개, boot 누락 오류 없음,
+  AppKit reference와 image-region 문서 checkpoint 열 개를 모두 통과했다.
+  반복 Green에서 Make와 tee 종료 코드는 모두 0이었다. 기존 event-ring API를
+  사용하며 IME 문서 동작은 바꾸지 않는다.
+
 - F269: 기존 유효 message projection 15개에 빠져 있던 고유 `screen.hash`
   case 아홉 개를 추가한다. 같은 projection은 case 하나를 공유해 SDK test의
   ambiguous call을 막는다. Red: 변경 전 owning test는

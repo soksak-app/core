@@ -19,6 +19,15 @@
   shared timer/subscription cleanup. Timeout values and status-event behavior
   remain unchanged.
 
+- F239-47-11: Initialize the event-trace boot identifier before the focused
+  Korean IME target records input callbacks. The unchanged setup failed 95
+  assertions and recorded 202 errors because key events had no correlation
+  identifiers. Green: the same target passed 105 assertions, recorded no
+  missing-boot errors, and matched all ten AppKit reference and image-region
+  document checkpoints. The repeated Green recorded both Make and tee exit
+  codes as zero. The test uses the existing event-ring API and changes no
+  IME document behavior.
+
 - F269: Add nine unique `screen.hash` cases for 15 existing valid message
   projections that lacked hash inputs. Repeated projections share one case,
   preventing ambiguous SDK test calls. Red: the unchanged owning test failed
