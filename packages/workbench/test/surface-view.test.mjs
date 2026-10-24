@@ -850,7 +850,7 @@ test("a view watch of a status that the exposure does not declare is refused wit
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(calls.filter(({ name }) => name === "viewReply"), [{
       name: "viewReply",
-      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, generation: 1, surface: surfaceId },
+      payload: { id: 3, error: { code: -32000, message: `view call runtime.status.watch ${pluginId}.missing is not a declared status` }, generation: 1, surface: surfaceId, page: String(dom.window.performance.timeOrigin) },
     }]);
   } finally {
     await disposeSurface(surfaceId);

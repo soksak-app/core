@@ -1028,6 +1028,7 @@ fn view_declared_snapshot_invalid_fields_are_errors_not_forwarded() {
 fn view_call_reply_is_the_channel_message_with_its_id() {
     use soksak_host_tauriv2::documents::{ViewReply, ViewReplyError, view_reply_message};
     let result = ViewReply {
+        page: "page-1".into(),
         surface: "probe-surface".to_string(),
         generation: 1,
         id: 7,
@@ -1039,6 +1040,7 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
         Ok(json!({"sok": 1, "id": 7, "result": {"count": 2}}))
     );
     let failed = ViewReply {
+        page: "page-1".into(),
         surface: "probe-surface".to_string(),
         generation: 1,
         id: 8,
@@ -1055,6 +1057,7 @@ fn view_call_reply_is_the_channel_message_with_its_id() {
         )
     );
     let empty = ViewReply {
+        page: "page-1".into(),
         surface: "probe-surface".to_string(),
         generation: 1,
         id: 9,
@@ -1152,6 +1155,7 @@ fn view_commands_reject_generations_above_the_javascript_safe_integer_limit() {
         cids: Vec::new(),
     };
     let reply = ViewReply {
+        page: "page-1".into(),
         surface: "probe-surface".into(),
         generation,
         id: 7,

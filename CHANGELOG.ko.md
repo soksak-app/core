@@ -3378,3 +3378,10 @@
   값을 거부한다. sequence 0 거부를 재현한 뒤 집중 consumer case가 2/2
   통과한다. P87 runtime input은 해당 거부 때문에 각 host에서 terminal key
   하나 뒤 중단됐으므로 visual acceptance를 주장하지 않는다.
+
+- F212.10-core-3-10: generation을 식별하는 native view-reply dispatch 기록을
+  generation 검증과 native post 완료 뒤 기록한다. 필수 page identity로
+  native post 수락과 JavaScript 수신을 구분하고 post 오류는 기존 RPC 오류
+  경로를 유지한다. Workbench, Wails, Tauri 소유 검사와 event generation,
+  `make docs-check`가 통과했고 runtime 검증은 남아 있다. Event generation은
+  generated map에서 빠졌던 기존 선언 trace class 두 개도 동기화했다.

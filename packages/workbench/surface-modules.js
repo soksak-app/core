@@ -517,7 +517,9 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
           viewCallCancellationFields(surface.pluginId, surface.surfaceId, event, receivedSourceGeneration));
         return null;
       }
-      return scoped.native.call("viewReply", { ...reply, generation: receivedSourceGeneration }).then(() => {
+      return scoped.native.call("viewReply", {
+        ...reply, page: String(document.defaultView.performance.timeOrigin), generation: receivedSourceGeneration,
+      }).then(() => {
         emitEvent("debug", "page.view.reply", {
           plugin: surface.pluginId, surface: surface.surfaceId, generation: receivedSourceGeneration,
           id: event.id, outcome: "error" in reply ? "error" : "result",
