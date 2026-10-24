@@ -320,8 +320,13 @@ impl Platform for Windows {
         width: f64,
         height: f64,
         scale: f64,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
     ) -> Result<bool, String> {
-        unsupported::present_image(image, token_id, nonce, width, height, scale)
+        unsupported::present_image(
+            image, token_id, nonce, width, height, scale, generation, raster, sequence,
+        )
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         unsupported::focus_image(image)

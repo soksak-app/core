@@ -1371,7 +1371,17 @@ where
                             ));
                         }
                         platform
-                            .present_image(handle, id, nonce, width as f64, height as f64, scale)
+                            .present_image(
+                                handle,
+                                id,
+                                nonce,
+                                width as f64,
+                                height as f64,
+                                scale,
+                                generation,
+                                raster,
+                                sequence,
+                            )
                             .and_then(|presented| {
                                 presented
                                     .then_some(())

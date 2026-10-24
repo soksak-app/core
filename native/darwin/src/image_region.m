@@ -35,6 +35,9 @@
 @property size_t presentedWidth;
 @property size_t presentedHeight;
 @property double presentedScale;
+@property uint64_t presentedGeneration;
+@property uint64_t presentedRaster;
+@property int presentedSequence;
 @property(copy) NSString *presentationError;
 @property(retain) NSTextInputContext *givenInputContext;  // The context of sp_region_set_input_context, or nil.
 @property(assign) NSView *webSurface;  // The logical surface view. Not owned by this object.
@@ -1156,7 +1159,8 @@ bool sp_region_surface_placed(void *handle) {
     return nativePlane && NSWidth(nativePlane.bounds) > 0 && NSHeight(nativePlane.bounds) > 0;
 }
 
-bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale) {
+bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height,
+    double scale, uint64_t generation, uint64_t raster, int sequence) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
     SPImageRegion *view = (SPImageRegion *)handle;
     if (!nonce) return false;
@@ -1251,6 +1255,9 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     view.presentedWidth = surfaceWidth;
     view.presentedHeight = surfaceHeight;
     view.presentedScale = scale;
+    view.presentedGeneration = generation;
+    view.presentedRaster = raster;
+    view.presentedSequence = sequence;
     view.presentationError = nil;
     if (previous) CGImageRelease(previous);
 
@@ -1368,8 +1375,9 @@ const char *sp_region_facts(void *handle) {
           layerWidth, layerHeight, contentsScale];
 
     if (hasPresented) {
-        [json appendFormat:@"\"presented\":{\"width\":%d,\"height\":%d,\"scale\":%.1f},",
-              presentedWidth, presentedHeight, presentedScale];
+        [json appendFormat:@"\"presented\":{\"width\":%d,\"height\":%d,\"scale\":%.1f,\"generation\":%llu,\"raster\":%llu,\"sequence\":%d},",
+              presentedWidth, presentedHeight, presentedScale, (unsigned long long)view.presentedGeneration,
+              (unsigned long long)view.presentedRaster, view.presentedSequence];
     }
 
     [json appendFormat:@"\"error\":%@", view.presentationError

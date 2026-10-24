@@ -449,9 +449,10 @@ type Platform interface {
 	SurfacePlacedImage(image unsafe.Pointer) bool
 	// PresentImage displays an external IOSurface. token_id is the global ID of the IOSurface,
 	// nonce is the 16-byte data to compare with the nonce, width and height are the size in device pixels,
-	// and scale is the scale at which the image was created (used as contentsScale).
+	// and scale is the scale at which the image was created (used as contentsScale). generation, raster and sequence
+	// identify the source transfer retained by the native snapshot and do not report physical display presentation.
 	// On failure, it returns the native rejection reason (notFound, forbidden, size, unsupported and others) as an error string.
-	PresentImage(image unsafe.Pointer, token_id uint32, nonce [16]byte, width, height, scale float64) error
+	PresentImage(image unsafe.Pointer, token_id uint32, nonce [16]byte, width, height, scale float64, generation, raster uint64, sequence int) error
 	// FocusImage makes the region the first responder and sends a focus event.
 	FocusImage(image unsafe.Pointer)
 	// CaretImage stores the caret (input cursor) position.

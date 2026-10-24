@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <stdint.h>
 
 // An image region placed on a surface. It shows an IOSurface provided from outside and supports the keyboard, the
 // input
@@ -25,8 +26,10 @@ bool sp_region_surface_placed(void *region);
 
 // Shows an external IOSurface. token_id is the global ID of the IOSurface, nonce is 16 bytes of data for the nonce
 // comparison, width and height are the size in device pixels, and scale is the scale at which the image was made
-// (used as contentsScale). Returns true on success and false if the surface is not found or the size does not match.
-bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height, double scale);
+// (used as contentsScale). The accepted snapshot retains its generic source identity. That identity does not report
+// physical display presentation. Returns true on success and false if the surface is not found or the size does not match.
+bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height,
+    double scale, uint64_t generation, uint64_t raster, int sequence);
 
 // Returns the reason of the last presentation rejection as a malloc() string. Returns NULL if there is no error.
 char *sp_region_last_error(void *region);

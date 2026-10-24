@@ -204,8 +204,12 @@ int main(int argc, char **argv) { @autoreleasepool {
         IOSurfaceRef testSurface1 = createColoredGlobalSurface((size_t)raster1[0], (size_t)raster1[1], nonce1);
         check(testSurface1 != NULL, @"TEST 1: IOSurface created with global flag");
         BOOL presented = sp_region_present(region1, IOSurfaceGetID(testSurface1), nonce1,
-            raster1[0], raster1[1], raster1[2]);
+            raster1[0], raster1[1], raster1[2], 41, 7, 1);
         check(presented, @"TEST 1: sp_region_present succeeded");
+        const char *facts1 = sp_region_facts(region1);
+        check(facts1 && strstr(facts1, "\"generation\":41") && strstr(facts1, "\"raster\":7") &&
+            strstr(facts1, "\"sequence\":1"), @"TEST 1: native snapshot facts retain the exact source frame identity");
+        free((void *)facts1);
 
         // Finds the layer and checks its properties
         NSView *regionView = (NSView *)region1;
@@ -263,7 +267,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         arc4random_buf(wrongNonce, 16);
 
         void *region2 = sp_region_create(surface, "test2", testEvent, NULL);
-        BOOL presented = sp_region_present(region2, sid2, wrongNonce, 100, 100, window.backingScaleFactor);
+        BOOL presented = sp_region_present(region2, sid2, wrongNonce, 100, 100, window.backingScaleFactor, 42, 7, 1);
         check(!presented, @"TEST 2: sp_region_present returns false with wrong nonce");
 
         check([collectedEvents count] > 0, @"TEST 2: event received");
@@ -284,7 +288,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         arc4random_buf(nonce3, 16);
 
         void *region3 = sp_region_create(surface, "test3", testEvent, NULL);
-        BOOL presented = sp_region_present(region3, 0xdeadbeef, nonce3, 100, 100, window.backingScaleFactor);
+        BOOL presented = sp_region_present(region3, 0xdeadbeef, nonce3, 100, 100, window.backingScaleFactor, 43, 7, 1);
         check(!presented, @"TEST 3: sp_region_present returns false with non-existent ID");
 
         check([collectedEvents count] > 0, @"TEST 3: event received");
@@ -305,7 +309,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         IOSurfaceID sid4 = IOSurfaceGetID(testSurface4);
 
         void *region4 = sp_region_create(surface, "test4", testEvent, NULL);
-        BOOL presented = sp_region_present(region4, sid4, nonce4, 200, 200, window.backingScaleFactor);  // Wrong size
+        BOOL presented = sp_region_present(region4, sid4, nonce4, 200, 200, window.backingScaleFactor, 44, 7, 1);  // Wrong size
         check(!presented, @"TEST 4: sp_region_present returns false with wrong size");
 
         check([collectedEvents count] > 0, @"TEST 4: event received");
@@ -364,7 +368,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         unsigned char nonce5a[16];
         IOSurfaceRef testSurface5a = createColoredGlobalSurface((size_t)raster5a[0], (size_t)raster5a[1], nonce5a);
         check(sp_region_present(region5a, IOSurfaceGetID(testSurface5a), nonce5a,
-            raster5a[0], raster5a[1], raster5a[2]), @"TEST 5A: initial snapshot is presented");
+            raster5a[0], raster5a[1], raster5a[2], 45, 8, 1), @"TEST 5A: initial snapshot is presented");
+        check(!sp_region_present(region5a, IOSurfaceGetID(testSurface5a), nonce5a,
+            raster5a[0] + 1, raster5a[1], raster5a[2], 45, 99, 99),
+            @"TEST 5A: a rejected frame does not replace the source identity");
+        const char *initialFacts5a = sp_region_facts(region5a);
+        check(initialFacts5a && strstr(initialFacts5a, "\"generation\":45") && strstr(initialFacts5a, "\"raster\":8") &&
+            strstr(initialFacts5a, "\"sequence\":1"), @"TEST 5A: rejected frame leaves the previous identity intact");
+        free((void *)initialFacts5a);
 
         // During real presentation, the open CATransaction of SurfaceHost
         // hides this prepared geometry, and the host commits it at once together with the matching raster.
@@ -381,8 +392,12 @@ int main(int argc, char **argv) { @autoreleasepool {
         IOSurfaceRef testSurface5aNew = createColoredGlobalSurface(
             (size_t)raster5aNew[0], (size_t)raster5aNew[1], nonce5aNew);
         check(sp_region_present(region5a, IOSurfaceGetID(testSurface5aNew), nonce5aNew,
-            raster5aNew[0], raster5aNew[1], raster5aNew[2]),
+            raster5aNew[0], raster5aNew[1], raster5aNew[2], 45, 9, 2),
             @"TEST 5A: matching raster commits new frame");
+        const char *facts5a = sp_region_facts(region5a);
+        check(facts5a && strstr(facts5a, "\"generation\":45") && strstr(facts5a, "\"raster\":9") &&
+            strstr(facts5a, "\"sequence\":2"), @"TEST 5A: snapshot replacement updates its source frame identity");
+        free((void *)facts5a);
         sp_region_frame(region5a, frame5a);
         check(frame5a[0] == 100 && frame5a[1] == 40 && frame5a[2] == 380 && frame5a[3] == 330,
             [NSString stringWithFormat:@"TEST 5A: matching raster commits new insets (%.0f, %.0f, %.0f, %.0f)",
@@ -1253,7 +1268,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         unsigned char nonce19[16];
         IOSurfaceRef testSurface19 = createColoredGlobalSurface((size_t)raster19[0], (size_t)raster19[1], nonce19);
         BOOL presented = sp_region_present(region19, IOSurfaceGetID(testSurface19), nonce19,
-            raster19[0], raster19[1], raster19[2]);
+            raster19[0], raster19[1], raster19[2], 49, 1, 1);
         check(presented, @"TEST 19: image presented with scale 2");
 
         NSView *regionView = (NSView *)region19;
@@ -1318,7 +1333,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         unsigned char nonce21[16];
         IOSurfaceRef testSurface21 = createColoredGlobalSurface(pixelWidth, pixelHeight, nonce21);
         bool presented = sp_region_present(region21, IOSurfaceGetID(testSurface21), nonce21,
-            pixelWidth, pixelHeight, raster21[2]);
+            pixelWidth, pixelHeight, raster21[2], 51, 1, 1);
         check(presented, @"TEST 21: image is presented in SurfaceHost coordinates");
 
         NSView *regionView = (NSView *)region21;
@@ -1356,7 +1371,7 @@ int main(int argc, char **argv) { @autoreleasepool {
         unsigned char nonce22[16];
         IOSurfaceRef testSurface22 = createColoredGlobalSurface((size_t)raster22[0], (size_t)raster22[1], nonce22);
         bool presented = sp_region_present(region22, IOSurfaceGetID(testSurface22), nonce22,
-            raster22[0], raster22[1], raster22[2] + 1);
+            raster22[0], raster22[1], raster22[2] + 1, 52, 1, 1);
         BOOL reported = NO;
         for (NSString *event in collectedEvents) if ([event containsString:@"\"reason\":\"scale\""]) reported = YES;
         check(!presented && reported, @"TEST 22: an image drawn at another scale is refused with reason scale");
@@ -1365,7 +1380,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             @"TEST 22: host facts retain the actual presentation error");
         free((void *)failedFacts);
         check(sp_region_present(region22, IOSurfaceGetID(testSurface22), nonce22,
-            raster22[0], raster22[1], raster22[2]), @"TEST 22: a valid frame presents after an error");
+            raster22[0], raster22[1], raster22[2], 52, 1, 2), @"TEST 22: a valid frame presents after an error");
         const char *recoveredFacts = sp_region_facts(region22);
         check(recoveredFacts && strstr(recoveredFacts, "\"error\":null"),
             @"TEST 22: only successful presentation clears the error");

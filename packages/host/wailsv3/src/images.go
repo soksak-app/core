@@ -873,7 +873,8 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 				return fmt.Errorf("staleRaster native=%dx%d@%v frame=%dx%d@%v", width, height, scale, d.Width, d.Height, d.Scale)
 			}
 			// Displays the image on the platform
-			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale)
+			return system.PresentImage(handle, d.ID, d.Nonce, float64(d.Width), float64(d.Height), d.Scale,
+				d.Generation, d.Raster, d.Sequence)
 		})
 
 		if err != nil && !declared() {

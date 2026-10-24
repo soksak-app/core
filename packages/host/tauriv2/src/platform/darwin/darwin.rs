@@ -450,8 +450,13 @@ impl Platform for Darwin {
         width: f64,
         height: f64,
         scale: f64,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
     ) -> Result<bool, String> {
-        image::present(image, token_id, &nonce, width, height, scale)
+        image::present(
+            image, token_id, &nonce, width, height, scale, generation, raster, sequence,
+        )
     }
     fn focus_image(&self, image: Handle) -> Result<(), String> {
         image::focus(image);

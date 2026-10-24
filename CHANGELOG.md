@@ -17,6 +17,7 @@
   external release gates. Independent leaf changes may proceed in parallel only
   after their prerequisites; packaging, integration verification and audits
   follow those fixes. `make docs-check` passes.
+- F212.12-2-2-4-8-2-1: Preserve image transfer `{generation,raster,sequence}` through the generic host platform call into each accepted native image-region snapshot. Red: `image_region_test` failed because snapshot facts omitted source identity. Green: the same test verifies exact identity, replacement, and rejection behavior (1/1, 0.552 s); the Wails attached-image test (1/1, 0.032 s) and Tauri presented-frame identity test (1/1, 0.026 s) pass. `make docs-check` passes on macOS 26.6.2 arm64. The retained identity describes the source transfer and is not a physical presentation timestamp; capture matching remains open.
 
 - F267.2: Link the completed F239-38, F239-39, F239-40, F239-40-1, F263 and F264
   capabilities to their implementation symbols and existing

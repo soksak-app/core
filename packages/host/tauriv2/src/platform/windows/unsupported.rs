@@ -698,6 +698,9 @@ pub fn present_image(
     _width: f64,
     _height: f64,
     _scale: f64,
+    _generation: u64,
+    _raster: u64,
+    _sequence: i32,
 ) -> Result<bool, String> {
     missing("image presentation")
 }

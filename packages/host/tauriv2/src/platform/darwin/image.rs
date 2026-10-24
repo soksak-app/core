@@ -32,6 +32,9 @@ unsafe extern "C" {
         width: f64,
         height: f64,
         scale: f64,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
     ) -> bool;
     fn sp_region_last_error(region: *mut c_void) -> *mut c_char;
     fn sp_region_focus(region: *mut c_void);
@@ -122,6 +125,9 @@ pub fn present(
     width: f64,
     height: f64,
     scale: f64,
+    generation: u64,
+    raster: u64,
+    sequence: i32,
 ) -> Result<bool, String> {
     let accepted = unsafe {
         sp_region_present(
@@ -131,6 +137,9 @@ pub fn present(
             width,
             height,
             scale,
+            generation,
+            raster,
+            sequence,
         )
     };
     if accepted {

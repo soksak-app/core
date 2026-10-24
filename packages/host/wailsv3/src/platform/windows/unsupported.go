@@ -550,7 +550,7 @@ func (implementation) RasterImage(unsafe.Pointer) (int, int, float64, bool) {
 	return 0, 0, 0, false
 }
 
-func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64, float64) error {
+func (implementation) PresentImage(unsafe.Pointer, uint32, [16]byte, float64, float64, float64, uint64, uint64, int) error {
 	return unsupported("image presentation")
 }
 

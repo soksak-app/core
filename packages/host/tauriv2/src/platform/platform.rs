@@ -526,8 +526,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn image_facts(&self, image: Handle) -> Result<String, String>;
     /// Displays an external IOSurface. token_id is the global ID of the IOSurface, nonce is the 16 bytes of data to
     /// check the nonce, width and height are the size in device pixels, and scale is the scale at which the image was
-    /// created. It returns true on success, and false when it was not found or the size does not match. Call it on the
-    /// main thread.
+    /// created. generation, raster and sequence identify the source transfer retained by the native snapshot; they do
+    /// not report physical display presentation. It returns true on success, and false when it was not found or the
+    /// size does not match. Call it on the main thread.
     fn present_image(
         &self,
         image: Handle,
@@ -536,6 +537,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
         width: f64,
         height: f64,
         scale: f64,
+        generation: u64,
+        raster: u64,
+        sequence: i32,
     ) -> Result<bool, String>;
     /// Makes the region the first responder and sends the focus event. Call it on the main thread.
     fn focus_image(&self, image: Handle) -> Result<(), String>;

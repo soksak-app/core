@@ -64,8 +64,10 @@ func (implementation) SurfacePlacedImage(image unsafe.Pointer) bool {
 	return bool(C.sp_region_surface_placed(image))
 }
 
-func (implementation) PresentImage(image unsafe.Pointer, tokenID uint32, nonce [16]byte, width, height, scale float64) error {
-	if C.sp_region_present(image, C.uint(tokenID), (*C.uchar)(unsafe.Pointer(&nonce[0])), C.double(width), C.double(height), C.double(scale)) {
+func (implementation) PresentImage(image unsafe.Pointer, tokenID uint32, nonce [16]byte, width, height, scale float64,
+	generation, raster uint64, sequence int) error {
+	if C.sp_region_present(image, C.uint(tokenID), (*C.uchar)(unsafe.Pointer(&nonce[0])), C.double(width), C.double(height), C.double(scale),
+		C.uint64_t(generation), C.uint64_t(raster), C.int(sequence)) {
 		return nil
 	}
 	reason := C.sp_region_last_error(image)
