@@ -410,6 +410,26 @@ test("runtime.native.on subscribes the host to declared UI expansion and exposur
 });
 
 // contract: plugin-host.channel.call-served-set
+test("declared UI expansion subscription does not enable exposure requests", { timeout: 10000 }, async () => {
+  const pluginHost = listen();
+  const start = calls.length;
+  try {
+    emit("plugin-host-call", { plugin: "probe", id: 34, command: "runtime.native.on", params: { name: "declared-ui.expanded" } });
+    await tick();
+    const reply = forwardHostExposure("probe", "dom.rect", { name: "probe.canvas" }).then(() => "resolved", (error) => error.message);
+    await tick();
+    const forwarded = calls.slice(start).some((call) => call.name === "pluginHostEvent" && call.arg.event === "exposure-request");
+    emit("plugin-host-ended", { plugin: "probe" });
+    assert.equal(await reply, "plugin host probe has no exposure-request subscription");
+    assert.equal(forwarded, false);
+  } finally {
+    emit("plugin-host-ended", { plugin: "probe" });
+    calls.splice(start);
+    pluginHost.close();
+  }
+});
+
+// contract: plugin-host.channel.call-served-set
 test("a dom request of a host-registered entry reaches the host page as exposure-request and is answered by its exposureReply", async () => {
   const pluginHost = listen();
   const start = calls.length;
