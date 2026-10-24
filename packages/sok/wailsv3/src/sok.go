@@ -40,6 +40,8 @@ commands:
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]
                             starts the application bundle TARGET again in the background after the process PID ended
+  process wait PID --timeout-ms MILLISECONDS
+                            waits for the operating system to report that PID ended
   plugin pack DIRECTORY OUTPUT [--diagnostics]
                             writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
@@ -530,6 +532,9 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	// The arguments after -- are those of the application that starts again, so the command parses its own.
 	if len(args) > 0 && args[0] == "app" {
 		return runApp(args[1:], stdout)
+	}
+	if len(args) > 0 && args[0] == "process" {
+		return runProcess(args[1:], stdout)
 	}
 	// A command word with a dot is a declared command (docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {

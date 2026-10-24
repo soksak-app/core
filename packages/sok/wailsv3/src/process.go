@@ -1,0 +1,118 @@
+package sok
+
+import (
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/soksak-app/core/packages/sok/wailsv3/src/platform"
+)
+
+const processWaitTimeoutMax = 600000
+
+// runProcess runs the process commands that do not connect to an application endpoint.
+func runProcess(args []string, stdout io.Writer) error {
+	if len(args) == 1 && args[0] == "--help" {
+		_, err := fmt.Fprintln(stdout, Usage)
+		return err
+	}
+	if len(args) == 0 {
+		return usage("process requires an action")
+	}
+	if args[0] != "wait" {
+		return usage("unknown command: process %s", strings.Join(args, " "))
+	}
+	return runProcessWait(args[1:], stdout)
+}
+
+// runProcessWait parses the command-specific flags and waits for the operating system to report the process ID ended.
+func runProcessWait(args []string, stdout io.Writer) error {
+	positionals := make([]string, 0, 1)
+	values := map[string]string{}
+	flags := map[string]bool{}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if !strings.HasPrefix(arg, "--") {
+			positionals = append(positionals, arg)
+			continue
+		}
+		name, value, inline := strings.Cut(arg[2:], "=")
+		switch name {
+		case "help":
+			if inline || flags[name] {
+				return usage("--%s takes no value and may be given once", name)
+			}
+			flags[name] = true
+		case "timeout-ms", "config-dir":
+			// The logged command wrapper reads config-dir before dispatch; process wait does not read configuration files.
+			if _, seen := values[name]; seen {
+				return usage("--%s is given twice", name)
+			}
+			if !inline {
+				if i+1 >= len(args) {
+					return usage("--%s needs a value", name)
+				}
+				i++
+				value = args[i]
+			}
+			values[name] = value
+		default:
+			return usage("unknown option --%s", name)
+		}
+	}
+	if flags["help"] {
+		_, err := fmt.Fprintln(stdout, Usage)
+		return err
+	}
+	if len(positionals) == 0 {
+		return usage("process wait requires a pid")
+	}
+	if len(positionals) > 1 {
+		return usage("unexpected argument %s", positionals[1])
+	}
+	pidText := positionals[0]
+	if !decimalDigits(pidText) {
+		return usage("pid must be an integer from 1 to 2147483647")
+	}
+	parsedPID, err := strconv.ParseUint(pidText, 10, 31)
+	if err != nil || parsedPID == 0 {
+		return usage("pid must be an integer from 1 to 2147483647")
+	}
+	timeoutText, ok := values["timeout-ms"]
+	if !ok {
+		return usage("--timeout-ms is required")
+	}
+	if !decimalDigits(timeoutText) {
+		return usage("timeout must be an integer from 1 to 600000 milliseconds")
+	}
+	timeoutMS, err := strconv.ParseUint(timeoutText, 10, 64)
+	if err != nil || timeoutMS == 0 || timeoutMS > processWaitTimeoutMax {
+		return usage("timeout must be an integer from 1 to 600000 milliseconds")
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return fmt.Errorf("process wait: %w", err)
+	}
+	ended, err := current.WaitProcessEnd(int(parsedPID), time.Duration(timeoutMS)*time.Millisecond)
+	if err != nil {
+		return fmt.Errorf("process wait: %w", err)
+	}
+	if !ended {
+		return fmt.Errorf("process %d did not end within %dms", parsedPID, timeoutMS)
+	}
+	return printJSON(stdout, map[string]any{"pid": int(parsedPID), "ended": true})
+}
+
+func decimalDigits(text string) bool {
+	if text == "" {
+		return false
+	}
+	for _, char := range text {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}

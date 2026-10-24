@@ -8,6 +8,8 @@
 
 `sok` runs on macOS and Linux. Its platform key is `<os>-<arch>` with `arm64` or `x64` ([installation](installation.md)). On Linux the configuration directory is the application identifier under `$XDG_CONFIG_HOME`, or under `~/.config` when that is not set, and the endpoint is a Unix socket as on macOS ([endpoint](endpoint.md)). Linux has no path entry folder, so `sok path install` and `sok path remove` fail there with `path entries are not implemented on linux`. On Windows every operation of the platform interface fails with `<operation> is not implemented on windows`.
 
+The current Linux and Windows platform implementations report that process exit waiting is not implemented; `sok process wait` therefore fails explicitly on those systems. macOS uses the kernel process-exit notification.
+
 ## Commands
 
 | Command | Action |
@@ -25,6 +27,7 @@
 | `sok capture [window]` | Diagnostic builds: writes a still image of the window without focusing it |
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | Replaces the application bundle `<target>` with `<bundle>` after the process `<pid>` ended and starts it ([application update](installation.md#application-update)) |
 | `sok app relaunch --wait <pid> --target <path> [-- <argument>...]` | Starts the application bundle `<target>` again with the arguments, without activating it, after the process `<pid>` ended ([diagnostic builds](endpoint.md#diagnostic-builds)) |
+| `sok process wait <pid> --timeout-ms <milliseconds>` | Waits for the operating system to report that the process ID ended, without connecting to an application or service |
 | `sok path install\|remove` | Writes or deletes the path entry of this application; `install` prints the file and the directory it holds |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
 | `sok plugin list` | Lists the installed plugins |
@@ -46,6 +49,8 @@ The flags of a declared command come from the parameter schema that `exposure.li
 ## Output and exit status
 
 A command writes its result as JSON on standard output; a command without a result writes `null`. An error is written to standard error as `sok: <message>`, with the endpoint error code in parentheses when there is one. A failed file operation names the file and the operating system reason in lower case, `<path>: <reason>`, with the same text in both implementations. The exit status is 0 on success, 1 on a failed command, and 2 on a usage error, which also prints the usage; it is 3 when sok cannot write its error to standard error, and 4 when the command or one of its goroutines or threads panicked ([event log](#event-log)). A cleanup that fails after a failed write or extraction is appended to the error as `; cleanup <path>: <reason>`, and a temporary file that cannot be closed as `; close <path>: <reason>`. A connection to the application that cannot be closed reports `endpoint connection: <reason>`.
+
+`process wait` requires a positive process ID no greater than 2147483647 and an explicit timeout from 1 through 600000 milliseconds. It prints `{"pid": <pid>, "ended": true}` when the operating system reports that the PID is absent or its exit event occurs. It fails with `process <pid> did not end within <milliseconds>ms` when the wait reaches its timeout. Platform errors, including an unsupported process wait, are reported as command failures. The command waits by process ID; it does not establish an identity guarantee across arbitrary PID reuse.
 
 ## Event log
 

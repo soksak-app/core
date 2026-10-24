@@ -33,6 +33,7 @@ mod path;
 pub mod platform;
 pub mod plugin_catalog;
 pub mod plugins;
+mod process;
 mod registry;
 mod release;
 pub mod replay;
@@ -67,6 +68,8 @@ commands:
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]
                             starts the application bundle TARGET again in the background after the process PID ended
+  process wait PID --timeout-ms MILLISECONDS
+                            waits for the operating system to report that PID ended
   plugin pack DIRECTORY OUTPUT [--diagnostics]
                             writes the plugin into OUTPUT; --diagnostics adds diagnostics.json
   sidecar release DIRECTORY OUTPUT [--platform P]
@@ -744,6 +747,9 @@ fn execute(
     // The arguments after -- are those of the application that starts again, so the command parses its own.
     if args.first().map(String::as_str) == Some("app") {
         return appupdate::run_app(&args[1..], stdout);
+    }
+    if args.first().map(String::as_str) == Some("process") {
+        return process::run(&args[1..], stdout);
     }
     // A command word with a dot is a declared command (docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
