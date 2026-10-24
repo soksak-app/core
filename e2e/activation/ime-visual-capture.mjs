@@ -33,7 +33,7 @@ function sameFrame(left, right) {
 export function readRetainedSources(directory, frameStates) {
   const manifestPath = join(directory, "sources", "manifest.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  assert.equal(manifest.format, 1, "capture source manifest format is unsupported");
+  assert.equal(manifest.format, 2, "capture source manifest format is unsupported");
   assert.equal(manifest.pixelFormat, "BGRA8", "capture source pixel format is unsupported");
   assert.equal(manifest.alpha, "premultiplied-first", "capture source alpha mode is unsupported");
   assert.equal(manifest.droppedSources, 0, "capture source retention dropped snapshots");

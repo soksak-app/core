@@ -419,7 +419,6 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     sp_image_capture_match_result match = sp_image_capture_match_sample(copy + sizeof(head) + sizeof(info),
         width, height, stride, rect, hasScreenRect ? screen : CGRectZero,
         contentScale, scaleFactor, colorName, shown);
-    sp_image_capture_match_write_sources(self.directory.fileSystemRepresentation, captureWriter);
     double matchMilliseconds = (CACurrentMediaTime() - matchBegan) * 1000;
     NSMutableDictionary *callbackRecord = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
     callbackRecord[@"imageMatch"] = imageMatchRecord(match, matchMilliseconds, width, height, stride,
@@ -810,7 +809,7 @@ bool sp_capture_start(const char* directory, char **errorOut) {
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(captureSink.directory.fileSystemRepresentation, captureWriter);
     // The copied completion block retains the original stream, so its identity is kept after a replacement.
     if (captureStartDone) dispatch_release(captureStartDone);
     captureStartDone = dispatch_semaphore_create(0);
@@ -915,13 +914,9 @@ int sp_capture_stop(double after) {
         setCaptureError(@"capture stop did not complete within 5000ms");
     }
     dispatch_sync(captureQueue, ^{});
-    sp_image_capture_match_write_sources(captureSink.directory.fileSystemRepresentation, captureWriter);
-    // Counts after all copied frames have been written.
-    dispatch_sync(captureWriter, ^{});
+    // Source manifest finalization closes source intake and drains the shared writer queue.
     __block bool sourceManifestWritten = false;
-    dispatch_sync(captureWriter, ^{
-        sourceManifestWritten = sp_image_capture_match_write_manifest(captureSink.directory.fileSystemRepresentation);
-    });
+    sourceManifestWritten = sp_image_capture_match_write_manifest(captureSink.directory.fileSystemRepresentation);
     if (!sourceManifestWritten) setCaptureError(@"diagnostic image source artifact manifest or source write failed");
     if (!writeCaptureCallbackStatusTrace(captureSink) && !hasCaptureError()) {
         setCaptureError(@"capture callback status trace failed without a reason");

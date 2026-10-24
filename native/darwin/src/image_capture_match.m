@@ -5,9 +5,14 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdatomic.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 static const size_t kImageCaptureHistoryLimit = 64 * 1024 * 1024;
 static const NSUInteger kImageCaptureHistoryCountLimit = 512;
+static const size_t kImageCaptureArtifactPendingLimit = 64 * 1024 * 1024;
 
 @interface SPImageCaptureSource : NSObject
 @property sp_image_capture_identity identity;
@@ -18,7 +23,6 @@ static const NSUInteger kImageCaptureHistoryCountLimit = 512;
 @property CGRect screenBounds;
 @property double scale;
 @property(copy) NSString *colorSpace;
-@property BOOL artifactScheduled;
 @end
 
 @implementation SPImageCaptureSource
@@ -29,12 +33,13 @@ static const NSUInteger kImageCaptureHistoryCountLimit = 512;
 }
 @end
 
-static NSLock *historyLock;
+static NSCondition *historyLock;
 static NSMutableArray<SPImageCaptureSource *> *history;
 static size_t historyBytes;
 static size_t historyDrops;
 static atomic_bool historyEnabled;
 static size_t artifactBytes;
+static size_t artifactPendingBytes;
 static NSUInteger artifactCount;
 static size_t artifactDrops;
 static size_t artifactWriteFailures;
@@ -42,29 +47,44 @@ static size_t artifactCleanupFailures;
 static NSMutableArray<NSDictionary *> *artifactRecords;
 static NSMutableDictionary<NSString *, NSNumber *> *artifactDropReasons;
 static NSMutableArray<NSDictionary *> *artifactCleanupErrors;
-static NSMutableDictionary<NSString *, SPImageCaptureSource *> *artifactIdentitySources;
+static NSMutableDictionary<NSString *, SPImageCaptureSource *> *pendingArtifactSources;
+static NSMutableDictionary<NSString *, NSDictionary *> *artifactIdentityRecords;
+static NSString *artifactDirectory;
+static dispatch_queue_t artifactWriterQueue;
+static NSUInteger artifactComparisons;
 
 static void recordArtifactDrop(NSString *reason);
+static NSString *artifactName(sp_image_capture_identity identity);
+static NSDictionary *artifactRecord(SPImageCaptureSource *source, NSString *fileName, NSString *digest);
+static void writeArtifact(SPImageCaptureSource *source, NSString *directory, NSString *identityKey);
 
 static void initializeHistory(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        historyLock = [NSLock new];
+        historyLock = [NSCondition new];
         history = [NSMutableArray new];
         artifactRecords = [NSMutableArray new];
         artifactDropReasons = [NSMutableDictionary new];
         artifactCleanupErrors = [NSMutableArray new];
-        artifactIdentitySources = [NSMutableDictionary new];
+        pendingArtifactSources = [NSMutableDictionary new];
+        artifactIdentityRecords = [NSMutableDictionary new];
     });
 }
 
-void sp_image_capture_match_begin(void) {
+void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_t writer_queue) {
     initializeHistory();
+    NSString *directory = capture_directory ? [NSString stringWithUTF8String:capture_directory] : nil;
     [historyLock lock];
+    if (artifactWriterQueue) dispatch_release(artifactWriterQueue);
+    [artifactDirectory release];
+    artifactDirectory = [directory copy];
+    artifactWriterQueue = writer_queue;
+    if (artifactWriterQueue) dispatch_retain(artifactWriterQueue);
     [history removeAllObjects];
     historyBytes = 0;
     historyDrops = 0;
     artifactBytes = 0;
+    artifactPendingBytes = 0;
     artifactCount = 0;
     artifactDrops = 0;
     artifactWriteFailures = 0;
@@ -72,7 +92,9 @@ void sp_image_capture_match_begin(void) {
     [artifactRecords removeAllObjects];
     [artifactDropReasons removeAllObjects];
     [artifactCleanupErrors removeAllObjects];
-    [artifactIdentitySources removeAllObjects];
+    [pendingArtifactSources removeAllObjects];
+    [artifactIdentityRecords removeAllObjects];
+    artifactComparisons = 0;
     atomic_store(&historyEnabled, true);
     [historyLock unlock];
 }
@@ -81,9 +103,19 @@ void sp_image_capture_match_end(void) {
     initializeHistory();
     [historyLock lock];
     atomic_store(&historyEnabled, false);
+    while (artifactComparisons != 0) [historyLock wait];
+    dispatch_queue_t writer_queue = artifactWriterQueue;
+    if (writer_queue) dispatch_retain(writer_queue);
+    [historyLock unlock];
+    if (writer_queue) {
+        dispatch_sync(writer_queue, ^{});
+        dispatch_release(writer_queue);
+    }
+    [historyLock lock];
     [history removeAllObjects];
     historyBytes = 0;
     artifactBytes = 0;
+    artifactPendingBytes = 0;
     artifactCount = 0;
     artifactDrops = 0;
     artifactWriteFailures = 0;
@@ -91,7 +123,12 @@ void sp_image_capture_match_end(void) {
     [artifactRecords removeAllObjects];
     [artifactDropReasons removeAllObjects];
     [artifactCleanupErrors removeAllObjects];
-    [artifactIdentitySources removeAllObjects];
+    [pendingArtifactSources removeAllObjects];
+    [artifactIdentityRecords removeAllObjects];
+    [artifactDirectory release];
+    artifactDirectory = nil;
+    if (artifactWriterQueue) dispatch_release(artifactWriterQueue);
+    artifactWriterQueue = NULL;
     [historyLock unlock];
 }
 
@@ -140,19 +177,94 @@ bool sp_image_capture_match_retain(sp_image_capture_identity identity, const uin
         [historyLock unlock];
         return false;
     }
-    SPImageCaptureSource *artifactSource = artifactIdentitySources[identityKey];
-    if (artifactSource) {
-        NSString *scheduledColor = artifactSource.colorSpace ?: @"<null>";
-        BOOL sameMetadata = artifactSource.width == width && artifactSource.height == height
-            && artifactSource.stride == stride && CGRectEqualToRect(artifactSource.screenBounds, screen_bounds)
-            && artifactSource.scale == scale && [scheduledColor isEqualToString:colorSpace ?: @"<null>"];
-        BOOL samePixels = sameMetadata && artifactSource.pixels.length == byteCount
-            && memcmp(artifactSource.pixels.bytes, pixels, byteCount) == 0;
+    SPImageCaptureSource *pendingSource = pendingArtifactSources[identityKey];
+    if (pendingSource) {
+        NSString *pendingColor = pendingSource.colorSpace ?: @"<null>";
+        BOOL sameMetadata = pendingSource.width == width && pendingSource.height == height
+            && pendingSource.stride == stride && CGRectEqualToRect(pendingSource.screenBounds, screen_bounds)
+            && pendingSource.scale == scale && [pendingColor isEqualToString:colorSpace ?: @"<null>"];
+        BOOL samePixels = sameMetadata && pendingSource.pixels.length == byteCount
+            && memcmp(pendingSource.pixels.bytes, pixels, byteCount) == 0;
         if (samePixels) { [historyLock unlock]; return true; }
         historyDrops++;
         recordArtifactDrop(@"identity-conflict");
         [historyLock unlock];
         return false;
+    }
+    NSDictionary *artifactRecordForIdentity = artifactIdentityRecords[identityKey];
+    if (artifactRecordForIdentity) {
+        NSDictionary *record = [artifactRecordForIdentity retain];
+        NSString *directory = [artifactDirectory copy];
+        dispatch_queue_t writer_queue = artifactWriterQueue;
+        if (writer_queue) dispatch_retain(writer_queue);
+        artifactComparisons++;
+        [historyLock unlock];
+
+        CGRect recordBounds = CGRectMake([record[@"screenBounds"][@"x"] doubleValue],
+            [record[@"screenBounds"][@"y"] doubleValue], [record[@"screenBounds"][@"width"] doubleValue],
+            [record[@"screenBounds"][@"height"] doubleValue]);
+        NSString *recordColor = record[@"colorSpace"] == NSNull.null ? nil : record[@"colorSpace"];
+        BOOL sameMetadata = [record[@"generation"] isEqual:[NSString stringWithFormat:@"%llu", (unsigned long long)identity.generation]]
+            && [record[@"raster"] isEqual:[NSString stringWithFormat:@"%llu", (unsigned long long)identity.raster]]
+            && [record[@"sequence"] isEqual:@(identity.sequence)]
+            && [record[@"width"] isEqual:@(width)] && [record[@"height"] isEqual:@(height)]
+            && [record[@"stride"] isEqual:@(stride)] && CGRectEqualToRect(recordBounds, screen_bounds)
+            && [record[@"scale"] isEqual:@(scale)]
+            && [(recordColor ?: @"<null>") isEqualToString:colorSpace ?: @"<null>"]
+            && [record[@"byteCount"] isEqual:@(byteCount)];
+        __block int fileMatch = sameMetadata ? -1 : 0;
+        if (sameMetadata && writer_queue && directory) {
+            NSString *path = [[directory stringByAppendingPathComponent:@"sources"]
+                stringByAppendingPathComponent:artifactName(identity)];
+            dispatch_sync(writer_queue, ^{
+                int descriptor = open(path.fileSystemRepresentation, O_RDONLY);
+                if (descriptor < 0) return;
+                struct stat status;
+                if (fstat(descriptor, &status) != 0 || status.st_size < 0 || (uint64_t)status.st_size != byteCount) {
+                    fileMatch = 0;
+                    close(descriptor);
+                    return;
+                }
+                uint8_t chunk[64 * 1024];
+                size_t offset = 0;
+                fileMatch = 1;
+                while (offset < byteCount) {
+                    size_t wanted = MIN(sizeof(chunk), byteCount - offset);
+                    ssize_t count = read(descriptor, chunk, wanted);
+                    if (count < 0 && errno == EINTR) continue;
+                    if (count <= 0) { fileMatch = -1; break; }
+                    if (memcmp(chunk, pixels + offset, (size_t)count) != 0) { fileMatch = 0; break; }
+                    offset += (size_t)count;
+                }
+                if (close(descriptor) != 0 && fileMatch == 1) fileMatch = -1;
+            });
+        }
+        if (writer_queue) dispatch_release(writer_queue);
+        [directory release];
+        [record release];
+        [historyLock lock];
+        artifactComparisons--;
+        [historyLock broadcast];
+        if (fileMatch == 1) { [historyLock unlock]; return true; }
+        historyDrops++;
+        if (fileMatch < 0) {
+            artifactWriteFailures++;
+            recordArtifactDrop(@"identity-read");
+        } else {
+            recordArtifactDrop(@"identity-conflict");
+        }
+        [historyLock unlock];
+        return false;
+    }
+
+    if (artifactWriterQueue && artifactDirectory) {
+        if (artifactCount >= kImageCaptureHistoryCountLimit
+            || artifactPendingBytes > kImageCaptureArtifactPendingLimit - byteCount) {
+            historyDrops++;
+            recordArtifactDrop(@"capacity");
+            [historyLock unlock];
+            return false;
+        }
     }
     while ((historyBytes + byteCount > kImageCaptureHistoryLimit || history.count >= kImageCaptureHistoryCountLimit)
         && history.count > 0) {
@@ -172,6 +284,19 @@ bool sp_image_capture_match_retain(sp_image_capture_identity identity, const uin
     source.colorSpace = colorSpace;
     [history addObject:source];
     historyBytes += byteCount;
+    if (artifactWriterQueue && artifactDirectory) {
+        artifactPendingBytes += byteCount;
+        artifactBytes += byteCount;
+        artifactCount++;
+        pendingArtifactSources[identityKey] = source;
+        NSString *directory = [artifactDirectory copy];
+        [source retain];
+        dispatch_async(artifactWriterQueue, ^{
+            writeArtifact(source, directory, identityKey);
+            [source release];
+            [directory release];
+        });
+    }
     [source release];
     [historyLock unlock];
     return true;
@@ -202,94 +327,51 @@ static NSDictionary *artifactRecord(SPImageCaptureSource *source, NSString *file
     };
 }
 
-void sp_image_capture_match_write_sources(const char *capture_directory, dispatch_queue_t writer_queue) {
-    initializeHistory();
-    if (!capture_directory || !writer_queue) {
-        [historyLock lock];
-        if (atomic_load(&historyEnabled)) recordArtifactDrop(@"writer-unavailable");
-        [historyLock unlock];
-        return;
-    }
-    NSString *directory = [NSString stringWithUTF8String:capture_directory];
-    if (!directory) {
-        [historyLock lock];
-        if (atomic_load(&historyEnabled)) recordArtifactDrop(@"invalid-directory");
-        [historyLock unlock];
-        return;
+static void writeArtifact(SPImageCaptureSource *source, NSString *directory, NSString *identityKey) {
+    NSString *sourceDirectory = [directory stringByAppendingPathComponent:@"sources"];
+    NSFileManager *manager = NSFileManager.defaultManager;
+    NSError *error = nil;
+    NSString *fileName = artifactName(source.identity);
+    NSString *path = [sourceDirectory stringByAppendingPathComponent:fileName];
+    NSString *partial = [path stringByAppendingString:@".partial"];
+    NSData *pixels = source.pixels;
+    BOOL created = [manager createDirectoryAtPath:sourceDirectory withIntermediateDirectories:YES attributes:nil error:&error];
+    BOOL written = created && [pixels writeToFile:partial options:NSDataWritingAtomic error:&error]
+        && [manager moveItemAtPath:partial toPath:path error:&error];
+    NSError *cleanupError = nil;
+    BOOL partialExists = [manager fileExistsAtPath:partial];
+    BOOL cleanupSucceeded = !partialExists || [manager removeItemAtPath:partial error:&cleanupError];
+    NSDictionary *record = nil;
+    if (written) {
+        unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+        CC_SHA256(pixels.bytes, (CC_LONG)pixels.length, digest);
+        NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+        for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [hex appendFormat:@"%02x", digest[index]];
+        record = artifactRecord(source, fileName, hex);
     }
 
     [historyLock lock];
-    if (!atomic_load(&historyEnabled)) { [historyLock unlock]; return; }
-    NSMutableArray<SPImageCaptureSource *> *pending = [NSMutableArray array];
-    for (SPImageCaptureSource *source in history) {
-        if (source.artifactScheduled) continue;
-        source.artifactScheduled = YES;
-        if (artifactCount >= kImageCaptureHistoryCountLimit
-            || source.pixels.length > kImageCaptureHistoryLimit - artifactBytes) {
-            recordArtifactDrop(@"capacity");
-            continue;
+    artifactPendingBytes -= pixels.length;
+    [pendingArtifactSources removeObjectForKey:identityKey];
+    if (written) {
+        [artifactRecords addObject:record];
+        artifactIdentityRecords[identityKey] = record;
+    } else {
+        artifactBytes -= pixels.length;
+        artifactCount--;
+        artifactWriteFailures++;
+        recordArtifactDrop(created ? @"write" : @"directory");
+        if (!cleanupSucceeded) {
+            artifactCleanupFailures++;
+            recordArtifactDrop(@"partial-cleanup");
+            if (artifactCleanupErrors.count < 32) {
+                [artifactCleanupErrors addObject:@{ @"path": partial,
+                    @"error": cleanupError.localizedDescription ?: @"unknown cleanup error" }];
+            }
         }
-        artifactBytes += source.pixels.length;
-        artifactCount++;
-        NSString *identityKey = [NSString stringWithFormat:@"%llu-%llu-%d", (unsigned long long)source.identity.generation,
-            (unsigned long long)source.identity.raster, source.identity.sequence];
-        artifactIdentitySources[identityKey] = source;
-        [pending addObject:source];
     }
+    [historyLock broadcast];
     [historyLock unlock];
-
-    NSString *sourceDirectory = [directory stringByAppendingPathComponent:@"sources"];
-    for (SPImageCaptureSource *source in pending) {
-        dispatch_async(writer_queue, ^{
-            NSFileManager *manager = NSFileManager.defaultManager;
-            NSError *error = nil;
-            if (![manager createDirectoryAtPath:sourceDirectory withIntermediateDirectories:YES attributes:nil error:&error]) {
-                [historyLock lock];
-                artifactBytes -= source.pixels.length;
-                artifactCount--;
-                artifactWriteFailures++;
-                recordArtifactDrop(@"directory");
-                [historyLock unlock];
-                return;
-            }
-            NSString *fileName = artifactName(source.identity);
-            NSString *path = [sourceDirectory stringByAppendingPathComponent:fileName];
-            NSString *partial = [path stringByAppendingString:@".partial"];
-            NSData *pixels = source.pixels;
-            if (![pixels writeToFile:partial options:NSDataWritingAtomic error:&error]
-                || ![manager moveItemAtPath:partial toPath:path error:&error]) {
-                NSError *cleanupError = nil;
-                BOOL partialExists = [manager fileExistsAtPath:partial];
-                BOOL cleanupSucceeded = !partialExists || [manager removeItemAtPath:partial error:&cleanupError];
-                [historyLock lock];
-                artifactBytes -= pixels.length;
-                artifactCount--;
-                NSString *identityKey = [NSString stringWithFormat:@"%llu-%llu-%d",
-                    (unsigned long long)source.identity.generation, (unsigned long long)source.identity.raster,
-                    source.identity.sequence];
-                [artifactIdentitySources removeObjectForKey:identityKey];
-                artifactWriteFailures++;
-                recordArtifactDrop(@"write");
-                if (!cleanupSucceeded) {
-                    artifactCleanupFailures++;
-                    recordArtifactDrop(@"partial-cleanup");
-                    if (artifactCleanupErrors.count < 32) {
-                        [artifactCleanupErrors addObject:@{ @"path": partial, @"error": cleanupError.localizedDescription ?: @"unknown cleanup error" }];
-                    }
-                }
-                [historyLock unlock];
-                return;
-            }
-            unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-            CC_SHA256(pixels.bytes, (CC_LONG)pixels.length, digest);
-            NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
-            for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [hex appendFormat:@"%02x", digest[index]];
-            NSDictionary *record = artifactRecord(source, fileName, hex);
-            [historyLock lock];
-            [artifactRecords addObject:record];
-            [historyLock unlock];
-        });
-    }
 }
 
 bool sp_image_capture_match_write_manifest(const char *capture_directory) {
@@ -297,10 +379,30 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
     if (!capture_directory) return false;
     NSString *directory = [NSString stringWithUTF8String:capture_directory];
     if (!directory) return false;
+
     [historyLock lock];
+    atomic_store(&historyEnabled, false);
+    while (artifactComparisons != 0) [historyLock wait];
+    dispatch_queue_t writer_queue = artifactWriterQueue;
+    if (writer_queue) dispatch_retain(writer_queue);
+    [historyLock unlock];
+    if (writer_queue) {
+        dispatch_sync(writer_queue, ^{});
+        dispatch_release(writer_queue);
+    }
+
+    [historyLock lock];
+    if (artifactDirectory && ![artifactDirectory isEqualToString:directory]) {
+        [historyLock unlock];
+        return false;
+    }
     NSDictionary *manifest = @{
-        @"format": @1, @"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first",
-        @"limits": @{ @"bytes": @(kImageCaptureHistoryLimit), @"identities": @(kImageCaptureHistoryCountLimit) },
+        @"format": @2, @"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first",
+        @"limits": @{ @"historyBytes": @(kImageCaptureHistoryLimit),
+            @"historyIdentities": @(kImageCaptureHistoryCountLimit),
+            @"pendingArtifactBytes": @(kImageCaptureArtifactPendingLimit),
+            @"artifactIdentities": @(kImageCaptureHistoryCountLimit) },
+        @"artifactBytes": @(artifactBytes),
         @"artifacts": [artifactRecords copy], @"droppedSources": @(artifactDrops),
         @"dropReasons": [artifactDropReasons copy], @"writeFailures": @(artifactWriteFailures),
         @"cleanupFailures": @(artifactCleanupFailures), @"cleanupErrors": [artifactCleanupErrors copy],

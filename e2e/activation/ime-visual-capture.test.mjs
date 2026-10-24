@@ -124,7 +124,7 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
       screenBounds: { x: 0, y: 0, width: 4, height: 6 }, scale: 1, colorSpace: "sRGB",
       byteCount: data.length, sha256 };
     writeFileSync(join(directory, "sources", artifact.file), data);
-    writeFileSync(join(directory, "sources", "manifest.json"), JSON.stringify({ format: 1,
+    writeFileSync(join(directory, "sources", "manifest.json"), JSON.stringify({ format: 2,
       pixelFormat: "BGRA8", alpha: "premultiplied-first", droppedSources: 0, writeFailures: 0,
       artifacts: [artifact] }));
     const state = { frame: { generation: 1, raster: 2, sequence: 3 }, render: renderFixture, semantic };

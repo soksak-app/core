@@ -48,11 +48,10 @@ typedef struct {
     uint8_t actual_bgra[4];
 } sp_image_capture_match_result;
 
-// Starts a diagnostic-only source history. The history has a fixed 64 MiB byte bound.
-void sp_image_capture_match_begin(void);
-// Queues each source identity not yet represented by an artifact on the capture's existing serial writer queue.
-void sp_image_capture_match_write_sources(const char *capture_directory, dispatch_queue_t writer_queue);
-// Writes the bounded source manifest after the writer queue has drained. Returns false on an artifact or manifest I/O error.
+// Starts diagnostic-only source matching. A null path and queue configure matcher history only; otherwise accepted
+// source artifacts stream to that capture directory on the serial writer queue.
+void sp_image_capture_match_begin(const char *capture_directory, dispatch_queue_t writer_queue);
+// Stops accepting snapshots, drains source writes, and writes the manifest. Returns false on an artifact or manifest I/O error.
 bool sp_image_capture_match_write_manifest(const char *capture_directory);
 // Stops source retention and releases every retained diagnostic copy.
 void sp_image_capture_match_end(void);
