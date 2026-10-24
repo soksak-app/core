@@ -344,11 +344,12 @@ func TestPluginHostChannelReadyRecordsTheDocumentAndPostsTheTheme(t *testing.T) 
 	if channel, _ := s.pluginHostChannels.channel("probe"); channel.document != "doc-1" {
 		t.Fatalf("ready document %q, want doc-1", channel.document)
 	}
-	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"event":"theme"`) {
-		t.Fatalf("posted %v, want the theme after the ready message", fake.posted)
+	if len(fake.posted) != 2 || !strings.Contains(fake.posted[0], `"event":"theme"`) ||
+		!strings.Contains(fake.posted[1], `"event":"project"`) {
+		t.Fatalf("posted %v, want the theme then current project after the ready message", fake.posted)
 	}
 	s.postThemeToPluginHosts()
-	if len(fake.posted) != 2 || !strings.Contains(fake.posted[1], `"event":"theme"`) {
+	if len(fake.posted) != 3 || !strings.Contains(fake.posted[2], `"event":"theme"`) {
 		t.Fatalf("posted %v, want the theme change", fake.posted)
 	}
 	// The progress of the same navigation keeps the ready document.
@@ -746,8 +747,8 @@ func TestPluginHostPostsRunOnTheUIThread(t *testing.T) {
 	}
 	// A theme change comes from the binding of the main page, which runs outside the UI thread.
 	s.postThemeToPluginHosts()
-	if len(fake.postedOnUI) != 2 {
-		t.Fatalf("posts %d, want the theme after ready and the theme change", len(fake.postedOnUI))
+	if len(fake.postedOnUI) != 3 {
+		t.Fatalf("posts %d, want the theme, current project, and theme change", len(fake.postedOnUI))
 	}
 	for i, onUI := range fake.postedOnUI {
 		if !onUI {
@@ -797,6 +798,30 @@ func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
 	s.postProjectToPluginHosts()
 	if len(fake.posted) != 1 || !strings.Contains(fake.posted[0], `"data":null`) || !strings.Contains(fake.posted[0], `"event":"project"`) {
 		t.Fatalf("posted %v, want one project event with null", fake.posted)
+	}
+}
+
+// contract: plugin-host.project.ready-catch-up
+// A project change while the host document is unready is sent after the document reports ready.
+func TestPluginHostReadyReceivesTheProjectCurrentlyShown(t *testing.T) {
+	fake := &channelPlatform{}
+	s, _ := channelSurfaces(t, fake, false)
+	s.shown = "prj-old"
+	s.root = "/work/old"
+	// The project release occurs while the host document has no ready receiver.
+	s.shown = ""
+	s.root = ""
+	s.postProjectToPluginHosts()
+	if len(fake.posted) != 0 {
+		t.Fatalf("an unready host received %v", fake.posted)
+	}
+
+	if err := s.pluginHostMessage("probe", hostMessage(`{"event": "view.ready", "plugin": "probe", "document": "doc-1"}`)); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+	if len(fake.posted) != 2 || !strings.Contains(fake.posted[0], `"event":"theme"`) ||
+		!strings.Contains(fake.posted[1], `"event":"project"`) || !strings.Contains(fake.posted[1], `"data":null`) {
+		t.Fatalf("ready posts %v, want current theme then current null project", fake.posted)
 	}
 }
 

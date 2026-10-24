@@ -24,6 +24,16 @@
   F267.5에 남긴다.
 
 
+- F262-9: 유효한 ready message마다 plugin host를 현재 project와
+  동기화한다. Host document가 준비되지 않은 동안의 project 변경은 기존에
+  건너뛰었다. 이제 Wails와 Tauri가 theme 뒤에 현재 project를 `null`을
+  포함해 보낸다. Red: 변경 전 Wails ready 경로는 unready 중 project가
+  null로 바뀐 뒤에도 theme만 보냈고, Tauri ready-path seam도 project를
+  누락했다. Green: catch-up과 관련 Wails 시험 4/4, Tauri ready-path 순서, project-message serializer와
+  project-change 시험 3/3이 통과한다. 순서 시험은 `Received::Ready`가 호출하는
+  seam을 확인하고 serializer 시험은 payload 형태만 검증한다. F37/F47 runtime
+  원인은 여전히 미확인이다.
+
 - F212.10-editor-1: Editor window check은 key 입력 전에 선언된
   `editor.content` rectangle을 native click하고 해당 view가 native responder가
   될 때까지 기다린다. Main page reload 뒤에도 같은 절차를 적용한다. 보존된 두

@@ -26,6 +26,15 @@
   for F267.5.
 
 
+- F262-9: Synchronize plugin hosts with the current project after each valid
+  ready message. A change while the host document was unready was previously
+  skipped. The host now sends the current project, including `null`, after the
+  theme in Wails and Tauri. Red: the unchanged Wails ready path sent only the
+  theme after an unready project changed to null; the Tauri ready-path seam
+  also omitted the project. Green: the catch-up test and three related Wails
+  tests pass 4/4; Tauri ready-path ordering, project-message serializer, and project-change tests pass 3/3. The ordering test exercises the seam called by `Received::Ready`; the serializer test checks payload shape only.
+  The F37/F47 runtime cause remains unconfirmed.
+
 - F212.10-editor-1: The editor window check now clicks the declared
   `editor.content` rectangle and waits for that view to become the native
   responder before sending keys, including after a main-page reload. In the

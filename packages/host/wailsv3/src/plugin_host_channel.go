@@ -420,7 +420,10 @@ func (s *Surfaces) pluginHostMessage(plugin, value string) error {
 			EmitHost(LevelDebug, "host.trace.plugin-host.process-ready", map[string]any{"plugin": plugin, "window": s.name})
 		}
 		// The current theme is the first message to a ready document, as it is for a view (docs/spec/plugin-host.md#channel).
-		return s.postPluginHost(plugin, map[string]any{"event": "theme", "data": s.Theme()})
+		if err := s.postPluginHost(plugin, map[string]any{"event": "theme", "data": s.Theme()}); err != nil {
+			return err
+		}
+		return s.postCurrentProjectToPluginHost(plugin)
 	case "view.error":
 		if event.Reason == "" {
 			return fmt.Errorf("plugin %s: view.error has no reason", plugin)
@@ -531,6 +534,16 @@ func (s *Surfaces) postProjectToPluginHosts() {
 			LogError("plugin host channel", err)
 		}
 	}
+}
+
+// postCurrentProjectToPluginHost synchronizes a ready document with the project that its window shows now. A project change
+// that happened while the document was unready could not be delivered by postProjectToPluginHosts.
+func (s *Surfaces) postCurrentProjectToPluginHost(plugin string) error {
+	var data any
+	if project := s.shownProjectValue(); project != nil {
+		data = map[string]any{"id": project.ID, "root": project.Root}
+	}
+	return s.postPluginHost(plugin, map[string]any{"event": "project", "data": data})
 }
 
 // postThemeToPluginHosts posts the current theme to each plugin host that has a ready document. It runs after the theme

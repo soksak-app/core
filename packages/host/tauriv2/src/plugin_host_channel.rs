@@ -1056,7 +1056,10 @@ pub(crate) fn message(
                 );
             }
             // The current theme is the first message to a ready document, as it is for a view.
-            post_theme(window, plugin)
+            post_ready_via(
+                || post_theme(window, plugin),
+                || post_current_project_to_plugin_host(window, plugin),
+            )
         }
     };
     if let Err(error) = result {
@@ -1111,28 +1114,48 @@ pub(crate) fn shown_project(window: &Window) -> Result<Option<SurfaceProject>, S
 
 /// Posts the event project with the id and the root of the shown project, or null, to each plugin of plugins that is ready, and
 /// returns the failures of the posts. dispatch(plugin, message) posts the message to the host of plugin. A host without a ready
-/// document is skipped, because the project of its window reaches it with its ready message (docs/spec/plugin-host.md#configuration).
+/// document is skipped; the current project is sent after the document becomes ready
+/// (docs/spec/plugin-host.md#configuration).
 pub(crate) fn post_project_via(
     plugins: &[String],
     ready: impl Fn(&str) -> bool,
     project: Option<&SurfaceProject>,
     mut dispatch: impl FnMut(&str, &Value) -> Result<(), String>,
 ) -> Vec<String> {
-    let data = project.map_or(
-        Value::Null,
-        |project| json!({ "id": project.id, "root": project.root }),
-    );
     let mut failures = vec![];
     for plugin in plugins {
         if !ready(plugin) {
             continue;
         }
-        let message = json!({"sok": 1, "event": "project", "data": data});
+        let message = project_message(project);
         if let Err(error) = dispatch(plugin, &message) {
             failures.push(error);
         }
     }
     failures
+}
+
+/// Posts the project currently shown by the window to one ready plugin host. This catches up a project change that occurred
+/// while its document was unready (docs/spec/plugin-host.md#configuration).
+fn post_current_project_to_plugin_host(window: &Window, plugin: &str) -> Result<(), String> {
+    let project = shown_project(window)?;
+    post(window, plugin, &project_message(project.as_ref()))
+}
+
+pub(super) fn project_message(project: Option<&SurfaceProject>) -> Value {
+    let data = project.map_or(
+        Value::Null,
+        |project| json!({ "id": project.id, "root": project.root }),
+    );
+    json!({"sok": 1, "event": "project", "data": data})
+}
+
+pub(super) fn post_ready_via(
+    send_theme: impl FnOnce() -> Result<(), String>,
+    send_current_project: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    send_theme()?;
+    send_current_project()
 }
 
 /// Posts the project that the window shows to each plugin host with a ready document, as the event project. It runs after the

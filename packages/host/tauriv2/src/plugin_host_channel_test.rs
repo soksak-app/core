@@ -1088,6 +1088,56 @@ fn a_project_change_posts_the_project_event_to_each_host_with_a_ready_document()
     );
 }
 
+// contract: plugin-host.project.ready-catch-up
+// A ready host receives the project currently shown, including null after an unready interval.
+#[test]
+fn a_ready_host_project_message_contains_the_current_project_or_null() {
+    let project: crate::surfaces::SurfaceProject =
+        serde_json::from_value(json!({"id": "prj-two", "root": "/work/two"}))
+            .expect("the project has its form");
+    assert_eq!(
+        crate::plugin_host_channel::project_message(Some(&project)),
+        serde_json::json!({"sok": 1, "event": "project", "data": {"id": "prj-two", "root": "/work/two"}})
+    );
+    assert_eq!(
+        crate::plugin_host_channel::project_message(None),
+        serde_json::json!({"sok": 1, "event": "project", "data": null})
+    );
+}
+
+// contract: plugin-host.project.ready-catch-up
+// A ready message sends the theme before the project currently shown by the window.
+#[test]
+fn a_ready_host_receives_theme_then_the_current_null_project() {
+    let current_project: Option<crate::surfaces::SurfaceProject> = None;
+    let posted = std::cell::RefCell::new(vec![]);
+    let result = crate::plugin_host_channel::post_ready_via(
+        || {
+            posted
+                .borrow_mut()
+                .push(serde_json::json!({"event": "theme"}));
+            Ok(())
+        },
+        || {
+            posted
+                .borrow_mut()
+                .push(crate::plugin_host_channel::project_message(
+                    current_project.as_ref(),
+                ));
+            Ok(())
+        },
+    );
+    assert_eq!(result, Ok(()));
+    assert_eq!(
+        posted.into_inner(),
+        vec![
+            serde_json::json!({"event": "theme"}),
+            serde_json::json!({"sok": 1, "event": "project", "data": null}),
+        ],
+        "the ready sequence must send the current null project after the theme"
+    );
+}
+
 // contract: plugin-host.channel.end-of-closed-window-is-not-an-error
 #[test]
 fn the_end_of_a_host_whose_window_is_closed_is_not_reported() {
