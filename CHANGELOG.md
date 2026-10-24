@@ -50,6 +50,7 @@
 
 - F212.10-core-3-4: Add a focused two-host window check for a saved inactive Browser view under both memory-saver settings. It verifies unloaded/no native surface when enabled, and loaded/ready/invisible native placement when disabled; the active terminal stays ready and visible. Runtime acceptance remains pending, and the check makes no first-frame pixel claim.
 
+- F239-47-30-3-1: Add consumer validation for the public display-link stop artifact. The focused helper tests pass 7/7, including preservation of an incomplete artifact when stop reports an error. The two-host runtime check remains pending; no cadence acceptance is claimed.
 - F239-47-30-3: Add a capture-lifetime public AppKit display-link trace beside
   ScreenCaptureKit callback records, and expose its artifact path from both
   host stop payloads. The trace records validated clock observations, reports
