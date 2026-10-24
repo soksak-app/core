@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F212.10-core-3-8: terminal page-reload acceptance case를 강화해
+  current document identity 및 source-generation page call/reply를 받아들여진
+  native `viewReply` host call과 연결한다. Reload 전에 transcript 수집을
+  시작하고 readiness까지 line을 보존해 startup reply를 놓치지 않으며 새 page
+  identity로 걸러 늦게 도착한 이전 page 회신을 거부한다. Test는 generation이
+  다른 회신도 거부한다. Terminal session identity와 shell continuation 검증은
+  유지한다. Correlator와 문서 검사가 통과했으며 새 Wails/Tauri runtime
+  acceptance는 남아 있다.
+
 - F239-47-33: F8-9 ddd + Korean 2-Set gksrmf sequence (ddd한글),
   F143 gksk resyllabification (하나), 이전에 승인된
   eight-vowel gesture를 사용하는 host별 10회 project close/reopen lifecycle
