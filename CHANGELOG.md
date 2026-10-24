@@ -11,6 +11,12 @@
   same staged-payload test passes (2/2), and the staging test file passes
   11/11. `make docs-check` and `make boundaries` pass.
 
+- F239-46-2: Map `declaredSourceOrigins` in both application runtimes. Red:
+  each unchanged runtime-contract test rejected `host.call("declaredSourceOrigins")`
+  as an unknown host call. Green: Wails sends `DeclaredSourceOrigins` with no
+  arguments; Tauri invokes `declared_source_origins` with `{}`. Both owning
+  runtime-contract tests pass 1/1 and assert the returned origin snapshot.
+
 - F239-37-4: Resolve unique root controls before same-key tree children.
   Red: the unchanged section-address test rejected the root address and did
   not report duplicate-root ambiguity. Green: the owning test passes 8/8,

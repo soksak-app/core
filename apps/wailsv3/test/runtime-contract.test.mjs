@@ -21,7 +21,8 @@ test("Wails page regions expose operations but only composition places geometry"
         // The statement of the clock anchor (page.log.clock) leads the first batch of a page and has its own test in the workbench.
         if (method === "Log") logged.push([method, [{ ...args[0], events: args[0].events.filter((event) => event.event !== "page.log.clock") }]]);
         else recorded.push([method, args]);
-        return Promise.resolve(method === "WaitPresented" ? { displayed: 42 } : undefined);
+        return Promise.resolve(method === "WaitPresented" ? { displayed: 42 }
+          : method === "DeclaredSourceOrigins" ? { floor: 0, pluginHosts: {}, views: {} } : undefined);
       },
       on(event, fn) {
         // Simulates event delivery: sends an image-event once to s1 and once to s2, twice in total.
@@ -81,6 +82,8 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["CompositionPlace", [{ revision: 1, regions: [], overlays: [] }]]);
   assert.deepEqual(await host.call("waitPresented"), { displayed: 42 });
   assert.deepEqual(recorded.at(-1), ["WaitPresented", []]);
+  assert.deepEqual(await host.call("declaredSourceOrigins"), { floor: 0, pluginHosts: {}, views: {} });
+  assert.deepEqual(recorded.at(-1), ["DeclaredSourceOrigins", []]);
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
   assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 1 }, ["b1.7"]]]);
   await host.call("imageAttach", { surface: "s1", name: "img", sidecar: "x" });

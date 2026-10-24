@@ -11,6 +11,13 @@
   stage test 파일이 11/11 통과한다. `make docs-check`와 `make boundaries`가
   통과한다.
 
+- F239-46-2: 양 application runtime에 `declaredSourceOrigins`를 mapping한다.
+  Red: 변경 전 각 runtime-contract test가 `host.call("declaredSourceOrigins")`를
+  unknown host call로 거부했다. Green: Wails는 argument 없이
+  `DeclaredSourceOrigins`를 보내고, Tauri는 `{}`로 `declared_source_origins`를
+  invoke한다. 두 소유 runtime-contract test는 반환된 origin snapshot도 확인하며
+  각각 1/1 통과한다.
+
 - F239-37-4: 같은 key의 tree child보다 유일한 root control을 먼저 풀이한다.
   Red: 변경 전 section-address test가 root 주소를 거부하고 중복 root 모호성을
   보고하지 않았다. Green: 정확한 child 주소와 row-only path 누락 거부를 포함해
