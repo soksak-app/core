@@ -9,6 +9,7 @@ import {
   terminalCompositionState,
   terminalInputReceiptMatches,
   terminalObserverStatusesMatch,
+  selectCoherentTerminalObservation,
   visibleInputBeforeCursor,
   startTerminalStatusObserver,
   waitForObservedStatusEvent,
@@ -159,6 +160,47 @@ test("a terminal observer requires a fresh semantic input status, not blink-only
   assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: { ...cursor, focused: false } }],
     baseline, { ...unchanged, cursor: { ...cursor, focused: false } }), false,
   "losing terminal focus cannot count as key input progress");
+});
+
+test("returns the latest coherent reread and its accepted event slice", { timeout: 5000 }, () => {
+  const firstCompose = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const firstCursor = { row: 0, col: 8, focused: true, preedit: null };
+  const currentCompose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const currentCursor = { row: 0, col: 8, focused: true, preedit: { ...currentCompose } };
+  const currentScreen = { ...screen([[cell("$"), cell(" ")]]), frame: { generation: 2, raster: 3, sequence: 5 } };
+  const region = { frame: { x: 1, y: 2, width: 30, height: 20 },
+    presented: { generation: 2, raster: 3, sequence: 5 } };
+  const freshEvents = [
+    { name: "terminal.compose", value: currentCompose },
+    { name: "terminal.cursor", value: currentCursor },
+  ];
+  const snapshot = {
+    compose: firstCompose,
+    cursor: firstCursor,
+    screen: currentScreen,
+    region,
+    currentCompose,
+    currentCursor,
+    stateEvents: freshEvents,
+    coherence: { firstReadMatchesReread: false, cursorMatchesCompose: true, coherentReread: true,
+      statusesMatch: true, baseScreenPresented: true },
+  };
+
+  assert.deepEqual(selectCoherentTerminalObservation(snapshot), {
+    compose: currentCompose,
+    cursor: currentCursor,
+    screen: currentScreen,
+    region,
+    stateEvents: freshEvents,
+  });
+});
+
+test("does not select a terminal observation before reread and presentation are coherent", { timeout: 5000 }, () => {
+  const snapshot = { coherence: { coherentReread: false, baseScreenPresented: true }, stateEvents: [] };
+  assert.throws(() => selectCoherentTerminalObservation(snapshot), /reread must be coherent/);
+  assert.throws(() => selectCoherentTerminalObservation({ coherence: { coherentReread: true,
+    baseScreenPresented: false }, stateEvents: [] }), /base screen must be presented/);
 });
 
 test("a terminal observer rejects stale changed state and rows without a matching event", () => {

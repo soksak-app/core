@@ -25,6 +25,7 @@ import {
   terminalInputReceiptMatches,
   terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
+  selectCoherentTerminalObservation,
   visibleInputBeforeCursor,
   waitForObservedStatusEvent,
   waitForStateEvent as waitForStateEventAfter,
@@ -419,18 +420,20 @@ for (const app of Object.values(APPS)) {
           await waitForStateEvent(sampleEventOffset, key,
             "no later terminal status notification followed an incoherent observer sample");
         }
-        const region = host.regions.find((item) => item.surface === surface && item.name === "view");
+        const selected = selectCoherentTerminalObservation(snapshot);
+        const { compose: acceptedCompose, cursor: acceptedCursor, screen: acceptedScreen,
+          region, stateEvents: acceptedEvents } = selected;
         const observation = {
           group,
           index,
           key,
-          stateEvents: observedStateEvents.slice(eventOffset),
+          stateEvents: acceptedEvents,
           beforeCompose: baseline.compose,
-          compose,
-          cursor,
-          screen,
-          screenText: textLines({ lines: screen.rows }),
-          frame: screen.frame,
+          compose: acceptedCompose,
+          cursor: acceptedCursor,
+          screen: acceptedScreen,
+          screenText: textLines({ lines: acceptedScreen.rows }),
+          frame: acceptedScreen.frame,
           presented: region.presented,
           nativeFrame: region.frame,
           session: await s.get("terminal.session", surface),
@@ -438,7 +441,8 @@ for (const app of Object.values(APPS)) {
         observations.push(observation);
         persist(`${group}-${String(index).padStart(2, "0")}.json`, observation);
         t.diagnostic(`${app.name}: INPUT ${JSON.stringify(observation)}`);
-        assertTerminalStageCoherent({ screen, region, compose, cursor, stateEvents }, `${key} terminal state`);
+        assertTerminalStageCoherent({ screen: acceptedScreen, region, compose: acceptedCompose,
+          cursor: acceptedCursor, stateEvents: acceptedEvents }, `${key} terminal state`);
         return observation;
       };
 

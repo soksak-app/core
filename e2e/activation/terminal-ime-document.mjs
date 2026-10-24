@@ -308,3 +308,18 @@ export function assertTerminalStageCoherent({ screen, region, compose, cursor, s
       `${label}: screen notification differs from terminal.screen.read`);
   }
 }
+
+/** Selects the accepted read set after the observer finds a coherent reread. */
+export function selectCoherentTerminalObservation(snapshot) {
+  assert.ok(snapshot && typeof snapshot === "object", "terminal observation snapshot must be an object");
+  assert.equal(snapshot.coherence?.coherentReread, true, "terminal observation reread must be coherent");
+  assert.equal(snapshot.coherence?.baseScreenPresented, true, "terminal observation base screen must be presented");
+  assert.ok(Array.isArray(snapshot.stateEvents), "terminal observation events must be an array");
+  return {
+    compose: snapshot.currentCompose,
+    cursor: snapshot.currentCursor,
+    screen: snapshot.screen,
+    region: snapshot.region,
+    stateEvents: snapshot.stateEvents,
+  };
+}

@@ -12,6 +12,16 @@
   `files.open is a command, not a status`로 실패했다. Green: focused consumer
   test 2/2와 변경한 JavaScript 세 파일의 syntax check 및 `make e2e-check`가
   통과한다. Window case는 실행하지 않았으며 runtime acceptance는 대기 중이다.
+- F239-47-18: terminal input observation에 coherent한 최신 reread를 사용한다.
+  일시적인 첫 compose/cursor read가 오래됐어도 뒤이은 reread는 현재 watched
+  event와 presented screen에 맞을 수 있다. Activation caller가 하나의 coherent
+  snapshot을 선택하고 저장 observation과 최종 assertion에 해당 compose, cursor,
+  screen, region, event slice를 함께 사용한다. Red: owning selector test는
+  coherent한 `ㅏ` reread 대신 오래된 빈 첫 pair와 이전 event slice를 반환해
+  실패했다. Green: focused owning case 2/2, activation source syntax check,
+  `git diff --check`, `make docs-check`가 통과한다. Key receipt, frame/render/source
+  검사, visual 측정과 33 ms frame-gap 제한은 그대로다. Activation rerun은 하지
+  않았으며 F239-47-6 acceptance는 계속 열려 있다.
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen
