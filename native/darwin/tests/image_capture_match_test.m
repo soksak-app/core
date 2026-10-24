@@ -17,7 +17,7 @@ int main(void) { @autoreleasepool {
     memcpy(frame + 4 * 4, source + 8, 8);
     CGRect bounds = CGRectMake(10, 20, 2, 2);
     sp_image_capture_identity first = { 7, 11, 13 };
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     check(sp_image_capture_match_retain(first, source, 2, 2, 8, bounds, 1, "DeviceRGB"),
         @"diagnostic matching retains the exact source raster");
     check(sp_image_capture_match_retain(first, source, 2, 2, 8, bounds, 1, "DeviceRGB"),
@@ -31,7 +31,7 @@ int main(void) { @autoreleasepool {
         @"the geometrically mapped ScreenCaptureKit crop matches its source identity and preserves displayTime");
     sp_image_capture_match_result_dispose(&result);
 
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     check(sp_image_capture_match_retain(first, source, 2, 2, 8, bounds, 1, "DeviceRGB"),
         @"the conflicting-identity fixture retains its first raster");
     uint8_t conflictingSource[sizeof source];
@@ -46,7 +46,7 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_result_dispose(&result);
     sp_image_capture_match_end();
 
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     check(sp_image_capture_match_retain(first, source, 2, 2, 8, bounds, 1, "DeviceRGB"),
         @"the ambiguity fixture retains its first source identity");
     sp_image_capture_identity second = { 7, 11, 14 };
@@ -58,11 +58,11 @@ int main(void) { @autoreleasepool {
         @"identical pixels preserve both source identities as ambiguous candidates");
     sp_image_capture_match_result_dispose(&result);
     sp_image_capture_match_end();
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     check(!sp_image_capture_match_retain(first, source, SIZE_MAX / 4 + 1, 1, 4,
         bounds, 1, "DeviceRGB"), @"a source width whose BGRA byte size overflows is rejected");
     sp_image_capture_match_end();
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     check(sp_image_capture_match_retain(first, source, 2, 2, 8, bounds, 1, "DeviceRGB"),
         @"the next matching fixture starts with a fresh source history");
 
@@ -107,7 +107,7 @@ int main(void) { @autoreleasepool {
     uint8_t topLeftFrame[sizeof(frame)] = { 0 };
     memcpy(topLeftFrame, source, 8);
     memcpy(topLeftFrame + 4 * 4, source + 8, 8);
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     check(sp_image_capture_match_retain(first, source, 2, 2, 8, bounds, 1, "DeviceRGB"),
         @"the top-left coordinate fixture retains its source raster");
     result = sp_image_capture_match_sample(topLeftFrame, 4, 4, 16,
@@ -117,7 +117,7 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_result_dispose(&result);
     sp_image_capture_match_end();
 
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(NULL, NULL);
     const size_t overLimitWidth = (64 * 1024 * 1024) / 4 + 1;
     uint8_t *overLimit = calloc(overLimitWidth, 4);
     check(overLimit != NULL, @"the bounded-retention fixture allocates its over-limit raster");

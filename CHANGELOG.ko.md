@@ -4,6 +4,18 @@
 
 ## 미배포
 
+- F212.12-2-2-4-8-2-4: Matching history에서 eviction되기 전에 수락된 각
+  image source raster를 diagnostic artifact writer로 stream한다. Matching
+  history는 64 MiB와 512 snapshot으로 유지하고, queued 및 active raster byte는
+  별도로 64 MiB로 제한한다. Aggregate artifact byte limit은 제거하고 512개
+  identity 제한과 pending-budget 초과의 명시적 기록은 유지한다. Manifest
+  format 2는 history byte, pending byte, total artifact byte를 따로 기록한다.
+  Red: 변경 전 `capture_metadata_test`는 기존 aggregate artifact limit 때문에
+  고유 raster 20개(각 3,520,512 byte)를 모두 저장하지 못해 실패했다. Green: 같은
+  test는 writer를 막은 경우 19개를 수락하고 20번째를 명시적으로 거절하는 경계와
+  함께 1/1 통과한다. Matcher test 1/1, visual-capture manifest test 12/12, native
+  build, `make docs-check`가 통과한다. Live capture나 activation은 실행하지 않았다.
+
 - F239-37-3: 파일 열기 실패 window check에 test별 120초 timeout을 지정한다.
   이 annotation 변경은 새 test나 runtime 결과를 주장하지 않는다.
 - F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전

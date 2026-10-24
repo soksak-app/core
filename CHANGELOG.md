@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+- F212.12-2-2-4-8-2-4: Stream each accepted image source raster to the
+  diagnostic artifact writer before matching-history eviction. Keep matching
+  history at 64 MiB and 512 snapshots, and bound queued plus active raster
+  bytes independently at 64 MiB. Remove the aggregate artifact byte limit;
+  retain the 512-identity limit and report pending-budget overflow explicitly.
+  Manifest format 2 records history bytes, pending bytes, and total artifact
+  bytes separately. Red: unchanged `capture_metadata_test` failed because the
+  former aggregate artifact limit prevented 20 unique 3,520,512-byte rasters
+  from all being saved. Green: the same test passes 1/1, including a blocked
+  writer accepting 19 rasters and explicitly rejecting the 20th; the matcher
+  test passes 1/1, visual-capture manifest tests pass 12/12, native build and
+  `make docs-check` pass. No live capture or activation was run.
+
 - F239-37-3: Give the file-open failure window check its own 120-second
   timeout. This annotation change does not claim a new test or runtime result.
 - F262-6: Extend the existing project-close window check to require mounted

@@ -148,7 +148,7 @@ int main(void) { @autoreleasepool {
 
     const uint8_t artifactSource[] = { 11, 12, 13, 255, 21, 22, 23, 255, 31, 32, 33, 255, 41, 42, 43, 255 };
     sp_image_capture_identity artifactIdentity = { 7, 11, 13 };
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
     check(sp_image_capture_match_retain(artifactIdentity, artifactSource, 2, 2, 8,
         CGRectMake(10, 20, 2, 2), 1, "kCGColorSpaceSRGB"),
         @"diagnostic capture retains the source used by the artifact fixture");
@@ -161,8 +161,6 @@ int main(void) { @autoreleasepool {
     NSData *sourceArtifact = [NSData dataWithContentsOfFile:sourceArtifactPath];
     check(error.length == 0 && [sourceArtifact isEqualToData:[NSData dataWithBytes:artifactSource length:sizeof artifactSource]],
         @"diagnostic capture writes the source artifact with the exact retained BGRA bytes and identity");
-    sp_image_capture_match_write_sources(directory.fileSystemRepresentation, captureWriter);
-    dispatch_sync(captureWriter, ^{});
     check(sp_image_capture_match_write_manifest(directory.fileSystemRepresentation),
         @"diagnostic capture writes the source artifact manifest after its writer queue drains");
     NSString *manifestPath = [[directory stringByAppendingPathComponent:@"sources"] stringByAppendingPathComponent:@"manifest.json"];
@@ -177,7 +175,8 @@ int main(void) { @autoreleasepool {
     for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++)
         [artifactDigestHex appendFormat:@"%02x", artifactDigest[index]];
     NSDictionary *artifactBounds = artifact[@"screenBounds"];
-    check([artifact[@"generation"] isEqual:@"7"] && [artifact[@"raster"] isEqual:@"11"]
+    check([manifest[@"format"] isEqual:@2]
+        && [artifact[@"generation"] isEqual:@"7"] && [artifact[@"raster"] isEqual:@"11"]
         && [artifact[@"sequence"] isEqual:@13] && [artifact[@"file"] isEqual:@"7-11-13.bgra"]
         && [artifact[@"width"] isEqual:@2] && [artifact[@"height"] isEqual:@2]
         && [artifact[@"stride"] isEqual:@8] && [artifact[@"pixelFormat"] isEqual:@"BGRA8"]
@@ -198,14 +197,13 @@ int main(void) { @autoreleasepool {
         withIntermediateDirectories:YES attributes:nil error:&cleanupSetupError]
         && [@"retain" writeToFile:partialPath atomically:YES encoding:NSUTF8StringEncoding error:&cleanupSetupError];
     check(cleanupFixtureReady, [NSString stringWithFormat:@"the artifact cleanup fixture is prepared (%@)", cleanupSetupError]);
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(cleanupDirectory.fileSystemRepresentation, captureWriter);
     sp_image_capture_identity cleanupIdentity = { 77, 1, 1 };
+    BOOL cleanupPermissionSet = chmod(cleanupSourceDirectory.fileSystemRepresentation, 0500) == 0;
+    check(cleanupPermissionSet, @"the artifact cleanup fixture prevents partial-file replacement and removal");
     check(sp_image_capture_match_retain(cleanupIdentity, artifactSource, 2, 2, 8,
         CGRectMake(10, 20, 2, 2), 1, "kCGColorSpaceSRGB"),
         @"the artifact cleanup fixture retains its source raster");
-    BOOL cleanupPermissionSet = chmod(cleanupSourceDirectory.fileSystemRepresentation, 0500) == 0;
-    check(cleanupPermissionSet, @"the artifact cleanup fixture prevents partial-file replacement and removal");
-    sp_image_capture_match_write_sources(cleanupDirectory.fileSystemRepresentation, captureWriter);
     dispatch_sync(captureWriter, ^{});
     BOOL cleanupPermissionRestored = chmod(cleanupSourceDirectory.fileSystemRepresentation, 0700) == 0;
     check(cleanupPermissionRestored, @"the artifact cleanup fixture restores directory permissions");
@@ -221,17 +219,16 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_end();
 
     NSString *countBoundDirectory = [directory stringByAppendingPathComponent:@"count-bound"];
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(countBoundDirectory.fileSystemRepresentation, captureWriter);
     BOOL retainedCountFixture = YES;
     for (int sequence = 1; sequence <= 513; sequence++) {
         sp_image_capture_identity identity = { 8, 3, sequence };
         uint8_t pixel[4] = { (uint8_t)sequence, 22, 33, 255 };
-        if (!sp_image_capture_match_retain(identity, pixel, 1, 1, sizeof pixel,
-            CGRectMake(10, 20, 1, 1), 1, "kCGColorSpaceSRGB")) retainedCountFixture = NO;
-        sp_image_capture_match_write_sources(countBoundDirectory.fileSystemRepresentation, captureWriter);
+        BOOL retained = sp_image_capture_match_retain(identity, pixel, 1, 1, sizeof pixel,
+            CGRectMake(10, 20, 1, 1), 1, "kCGColorSpaceSRGB");
+        if (sequence <= 512 ? !retained : retained) retainedCountFixture = NO;
     }
-    check(retainedCountFixture, @"the source artifact count fixture retains all 513 input images for bounded export");
-    dispatch_sync(captureWriter, ^{});
+    check(retainedCountFixture, @"the source artifact count fixture accepts 512 identities and refuses the 513th");
     check(sp_image_capture_match_write_manifest(countBoundDirectory.fileSystemRepresentation),
         @"the source artifact count-bound manifest is written after queued artifacts finish");
     NSString *countManifestPath = [[countBoundDirectory stringByAppendingPathComponent:@"sources"]
@@ -251,7 +248,7 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_end();
 
     NSString *byteBoundDirectory = [directory stringByAppendingPathComponent:@"byte-bound"];
-    sp_image_capture_match_begin();
+    sp_image_capture_match_begin(byteBoundDirectory.fileSystemRepresentation, captureWriter);
     size_t byteLimit = 64 * 1024 * 1024;
     uint8_t *largeSource = calloc(byteLimit, 1);
     check(largeSource != NULL, @"the byte-bound fixture allocates exactly 64 MiB");
@@ -260,14 +257,12 @@ int main(void) { @autoreleasepool {
         check(sp_image_capture_match_retain(largeIdentity, largeSource, byteLimit / 4, 1, byteLimit,
             CGRectMake(10, 20, byteLimit / 4, 1), 1, "kCGColorSpaceSRGB"),
             @"the source artifact byte-bound fixture retains exactly 64 MiB");
-        sp_image_capture_match_write_sources(byteBoundDirectory.fileSystemRepresentation, captureWriter);
+        dispatch_sync(captureWriter, ^{});
         sp_image_capture_identity excessIdentity = { 9, 4, 2 };
         uint8_t excessPixel[4] = { 1, 2, 3, 255 };
         check(sp_image_capture_match_retain(excessIdentity, excessPixel, 1, 1, sizeof excessPixel,
             CGRectMake(10, 20, 1, 1), 1, "kCGColorSpaceSRGB"),
             @"the source artifact byte-bound fixture retains a source after its first raster");
-        sp_image_capture_match_write_sources(byteBoundDirectory.fileSystemRepresentation, captureWriter);
-        dispatch_sync(captureWriter, ^{});
         check(sp_image_capture_match_write_manifest(byteBoundDirectory.fileSystemRepresentation),
             @"the source artifact byte-bound manifest is written after queued artifacts finish");
         NSString *byteManifestPath = [[byteBoundDirectory stringByAppendingPathComponent:@"sources"]
@@ -275,13 +270,116 @@ int main(void) { @autoreleasepool {
         NSData *byteManifestData = [NSData dataWithContentsOfFile:byteManifestPath];
         NSDictionary *byteManifest = byteManifestData
             ? [NSJSONSerialization JSONObjectWithData:byteManifestData options:0 error:nil] : nil;
-        check([byteManifest[@"artifacts"] count] == 1
+        check([byteManifest[@"artifacts"] count] == 2
             && [byteManifest[@"artifacts"][0][@"byteCount"] isEqual:@(byteLimit)]
-            && [byteManifest[@"droppedSources"] isEqual:@1]
-            && [byteManifest[@"dropReasons"][@"capacity"] isEqual:@1],
-            @"the source exceeding the 64 MiB artifact byte bound is dropped explicitly");
+            && [byteManifest[@"artifactBytes"] isEqual:@(byteLimit + sizeof excessPixel)]
+            && [byteManifest[@"droppedSources"] isEqual:@0],
+            @"the artifact stream preserves source bytes beyond the former aggregate byte limit");
         free(largeSource);
     }
+    sp_image_capture_match_end();
+
+    NSString *multiFrameDirectory = [directory stringByAppendingPathComponent:@"multi-frame-source-retention"];
+    check([[NSFileManager defaultManager] createDirectoryAtPath:multiFrameDirectory
+        withIntermediateDirectories:YES attributes:nil error:nil],
+        @"the multi-frame source fixture directory is created");
+    sp_image_capture_match_begin(multiFrameDirectory.fileSystemRepresentation, captureWriter);
+    size_t sourceBytesCount = 1520 * 573 * 4;
+    uint8_t *sourceBytes = malloc(sourceBytesCount);
+    check(sourceBytes != NULL, @"the multi-frame source fixture allocates one native-sized raster");
+    if (sourceBytes) {
+        BOOL retainedEverySource = YES;
+        for (int sequence = 1; sequence <= 20; sequence++) {
+            memset(sourceBytes, sequence, sourceBytesCount);
+            sp_image_capture_identity identity = { 12, 4, sequence };
+            if (!sp_image_capture_match_retain(identity, sourceBytes, 1520, 573, 1520 * 4,
+                CGRectMake(10, 20, 760, 286.5), 2, "kCGColorSpaceSRGB")) retainedEverySource = NO;
+            dispatch_sync(captureWriter, ^{});
+        }
+        check(retainedEverySource,
+            @"the matcher accepts every source identity across a multi-frame gesture");
+        memset(sourceBytes, 1, sourceBytesCount);
+        sp_image_capture_identity firstStreamedIdentity = { 12, 4, 1 };
+        BOOL oldIdentityRepeatIsIdempotent = sp_image_capture_match_retain(firstStreamedIdentity,
+            sourceBytes, 1520, 573, 1520 * 4, CGRectMake(10, 20, 760, 286.5), 2, "kCGColorSpaceSRGB");
+        sourceBytes[0] ^= 1;
+        BOOL oldIdentityConflictIsRejected = !sp_image_capture_match_retain(firstStreamedIdentity,
+            sourceBytes, 1520, 573, 1520 * 4, CGRectMake(10, 20, 760, 286.5), 2, "kCGColorSpaceSRGB");
+        check(oldIdentityRepeatIsIdempotent && oldIdentityConflictIsRejected,
+            @"artifact deduplication compares exact bytes after matcher history evicts the source");
+        check(sp_image_capture_match_write_manifest(multiFrameDirectory.fileSystemRepresentation),
+            @"the multi-frame source manifest is written after source artifacts finish");
+        NSString *multiFrameSources = [multiFrameDirectory stringByAppendingPathComponent:@"sources"];
+        NSData *multiFrameManifestData = [NSData dataWithContentsOfFile:
+            [multiFrameSources stringByAppendingPathComponent:@"manifest.json"]];
+        NSDictionary *multiFrameManifest = multiFrameManifestData
+            ? [NSJSONSerialization JSONObjectWithData:multiFrameManifestData options:0 error:nil] : nil;
+        NSArray *multiFrameArtifacts = multiFrameManifest[@"artifacts"];
+        BOOL everyArtifactPresent = multiFrameArtifacts.count == 20
+            && [multiFrameManifest[@"artifactBytes"] isEqual:@(sourceBytesCount * 20)]
+            && [multiFrameManifest[@"droppedSources"] isEqual:@1]
+            && [multiFrameManifest[@"dropReasons"][@"identity-conflict"] isEqual:@1];
+        for (int sequence = 1; sequence <= 20; sequence++) {
+            NSString *artifactPath = [multiFrameSources stringByAppendingPathComponent:
+                [NSString stringWithFormat:@"12-4-%d.bgra", sequence]];
+            NSData *artifact = [NSData dataWithContentsOfFile:artifactPath];
+            if (artifact.length != sourceBytesCount || ((const uint8_t *)artifact.bytes)[0] != sequence
+                || ((const uint8_t *)artifact.bytes)[sourceBytesCount - 1] != sequence) {
+                everyArtifactPresent = NO;
+            }
+        }
+        check(everyArtifactPresent,
+            @"all exact source identities above the former 64 MiB aggregate limit have artifacts");
+        free(sourceBytes);
+    }
+    sp_image_capture_match_end();
+
+    NSString *pendingBoundDirectory = [directory stringByAppendingPathComponent:@"pending-source-bound"];
+    check([[NSFileManager defaultManager] createDirectoryAtPath:pendingBoundDirectory
+        withIntermediateDirectories:YES attributes:nil error:nil],
+        @"the pending source fixture directory is created");
+    dispatch_semaphore_t writerGate = dispatch_semaphore_create(0);
+    dispatch_semaphore_t writerBlocked = dispatch_semaphore_create(0);
+    dispatch_async(captureWriter, ^{
+        dispatch_semaphore_signal(writerBlocked);
+        dispatch_semaphore_wait(writerGate, DISPATCH_TIME_FOREVER);
+    });
+    dispatch_semaphore_wait(writerBlocked, DISPATCH_TIME_FOREVER);
+    sp_image_capture_match_begin(pendingBoundDirectory.fileSystemRepresentation, captureWriter);
+    size_t pendingSourceBytesCount = 1520 * 573 * 4;
+    uint8_t *pendingSourceBytes = malloc(pendingSourceBytesCount);
+    check(pendingSourceBytes != NULL, @"the pending source fixture allocates one native-sized raster");
+    if (pendingSourceBytes) {
+        BOOL acceptedWithinPendingBound = YES;
+        for (int sequence = 1; sequence <= 20; sequence++) {
+            memset(pendingSourceBytes, sequence, pendingSourceBytesCount);
+            sp_image_capture_identity identity = { 13, 4, sequence };
+            BOOL retained = sp_image_capture_match_retain(identity, pendingSourceBytes, 1520, 573, 1520 * 4,
+                CGRectMake(10, 20, 760, 286.5), 2, "kCGColorSpaceSRGB");
+            if (sequence <= 19 ? !retained : retained) acceptedWithinPendingBound = NO;
+        }
+        check(acceptedWithinPendingBound,
+            @"the bounded source writer accepts a burst that fits its byte budget and rejects overflow explicitly");
+        dispatch_semaphore_signal(writerGate);
+        check(sp_image_capture_match_write_manifest(pendingBoundDirectory.fileSystemRepresentation),
+            @"the pending-bound source manifest is written after queued artifacts finish");
+        NSString *pendingSources = [pendingBoundDirectory stringByAppendingPathComponent:@"sources"];
+        NSData *pendingManifestData = [NSData dataWithContentsOfFile:
+            [pendingSources stringByAppendingPathComponent:@"manifest.json"]];
+        NSDictionary *pendingManifest = pendingManifestData
+            ? [NSJSONSerialization JSONObjectWithData:pendingManifestData options:0 error:nil] : nil;
+        NSString *overflowArtifact = [pendingSources stringByAppendingPathComponent:@"13-4-20.bgra"];
+        check([pendingManifest[@"artifacts"] count] == 19
+            && [pendingManifest[@"droppedSources"] isEqual:@1]
+            && [pendingManifest[@"dropReasons"][@"capacity"] isEqual:@1]
+            && ![NSFileManager.defaultManager fileExistsAtPath:overflowArtifact],
+            @"pending byte overflow is recorded and does not create an incomplete source artifact");
+        free(pendingSourceBytes);
+    } else {
+        dispatch_semaphore_signal(writerGate);
+    }
+    dispatch_release(writerBlocked);
+    dispatch_release(writerGate);
     sp_image_capture_match_end();
 
     CVReturn (*originalLock)(CVPixelBufferRef, CVPixelBufferLockFlags) = captureLockBaseAddress;
