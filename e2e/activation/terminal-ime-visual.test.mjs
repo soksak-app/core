@@ -142,10 +142,10 @@ testWithTimeout("renderer geometry is frame-bound and rejects unsupported pixel 
     frame,
     pixel: { width: 4, height: 6, bytesPerRow: 16, format: "BGRA8", alpha: "premultiplied-first",
       colorSpace: "sRGB", origin: "top-left" },
-    grid: { rows: 1, cols: 1, cellWidth: 4, cellHeight: 6, x: 0, y: 0 },
+    grid: { rows: 1, cols: 1, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
     font: { family: "fixture", size: 6, ascent: 4, descent: 1, leading: 1 },
-    underline: { x: 0, y: 5, width: 4, height: 1, colorSource: "cell.foregroundAfterInverse" },
-    glyphs: [{ row: 0, col: 0, grapheme: "ㅏ", ink: { x: 1, y: 1, width: 2, height: 3 } }],
+    underline: { rect: { x: 0, y: 5, width: 4, height: 1 }, colorSource: "cell.foregroundAfterInverse" },
+    glyphs: [{ row: 0, col: 0, grapheme: "ㅏ", bounds: { x: 1, y: 1, width: 2, height: 3 } }],
     cursor: { rect: { x: 0, y: 0, width: 1, height: 1 }, shape: "block", focused: true,
       visible: true, blinkVisible: true, blend: "difference" },
   };
@@ -154,14 +154,14 @@ testWithTimeout("renderer geometry is frame-bound and rejects unsupported pixel 
   assert.throws(() => validateRenderMetadata({ ...render,
     frame: { generation: 1, raster: 2, sequence: 4 } }, frame, cursor), /different frame/);
   assert.throws(() => validateRenderMetadata({ ...render,
-    grid: { ...render.grid, x: 4 } }, frame, cursor), /grid is outside/);
+    grid: { ...render.grid, origin: { x: 4, y: 0 } } }, frame, cursor), /grid is outside/);
   assert.throws(() => validateRenderMetadata({ ...render,
     pixel: { ...render.pixel, format: "RGBA8" } }, frame, cursor), /must be BGRA8/);
   assert.deepEqual(rasterizeCellBounds({ x: 1.25, y: -0.25, width: 2.5, height: 3.5 }, 4, 6),
     { x: 1, y: 0, width: 3, height: 4 });
   assert.throws(() => rasterizeCellBounds({ x: 5.5, y: 1, width: 1, height: 2 }, 4, 6), /covers no cell pixels/);
   assert.throws(() => validateRenderMetadata({ ...render,
-    glyphs: [{ ...render.glyphs[0], ink: { x: 1, y: 1, width: 0, height: 3 } }] }, frame, cursor),
+    glyphs: [{ ...render.glyphs[0], bounds: { x: 1, y: 1, width: 0, height: 3 } }] }, frame, cursor),
   /glyph ink rectangle is invalid/);
   assert.throws(() => validateRenderMetadata({ ...render, glyphs: [] }, frame, cursor,
     [{ row: 0, col: 0, grapheme: "ㅏ" }]), /glyph bounds are missing/);
@@ -172,11 +172,11 @@ testWithTimeout("renderer geometry is frame-bound and rejects unsupported pixel 
 testWithTimeout("rendered-cell predicate uses actual glyph and underline rectangles with cursor inversion", () => {
   const render = {
     frame: { generation: 1, raster: 2, sequence: 3 },
-    grid: { cellWidth: 4, cellHeight: 6, x: 0, y: 0 },
-    glyphs: [{ row: 0, col: 0, grapheme: "ㅏ", ink: { x: 1.25, y: 1.25, width: 1.5, height: 2 } }],
-    underline: { x: 0, y: 5, width: 4, height: 1, colorSource: "cell.foregroundAfterInverse" },
+    grid: { cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
+    glyphs: [{ row: 0, col: 0, grapheme: "ㅏ", bounds: { x: 1.25, y: 1.25, width: 1.5, height: 2 } }],
+    underline: { rect: { x: 0, y: 5, width: 4, height: 1 }, colorSource: "cell.foregroundAfterInverse" },
     cursor: { rect: { x: 0, y: 0, width: 0, height: 0 }, shape: "beam", visible: false, blinkVisible: false,
-      blend: "source-over" },
+      blend: "normal" },
   };
   const colors = { foreground: [0, 0, 0], background: [255, 255, 255] };
   const criteria = { colorDistance: 32, minimumGlyphPixels: 2, minimumUnderlineCoverage: 0.75 };
@@ -186,7 +186,7 @@ testWithTimeout("rendered-cell predicate uses actual glyph and underline rectang
   assert.deepEqual(measureRenderedCell(complete, null, target, colors, criteria),
     { result: "no-proof", reason: "frame-bound-renderer-state-missing" });
   const unsupportedCursor = { ...render, cursor: { rect: { x: 1, y: 1, width: 1, height: 1 }, shape: "beam",
-    visible: true, blinkVisible: true, blend: "source-over" } };
+    visible: true, blinkVisible: true, blend: "normal" } };
   assert.deepEqual(measureRenderedCell(complete, unsupportedCursor, target, colors, criteria),
     { result: "no-proof", reason: "glyph-overlaps-unsupported-cursor" });
   assert.throws(() => measureRenderedCell(complete, { ...render,
