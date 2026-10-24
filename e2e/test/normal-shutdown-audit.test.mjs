@@ -18,12 +18,180 @@ function fixture() {
   return { configDir, log };
 }
 
+test("no-terminal shutdown refuses a sidecar session before requesting quit", { timeout: 2000 }, async () => {
+  const { configDir } = fixture();
+  const sessions = [{ sidecar: "vt-alacritty", surface: "tab-terminal" }];
+  let quitRequested = false;
+  const client = {
+    endpoint: { pid: 200 },
+    request: async (method, params) => {
+      if (method === "diagnostics.objects") {
+        assert.deepEqual(params, { window: "main" });
+        return { sessions };
+      }
+      if (method === "command.run" && params.name === "host.quit") {
+        quitRequested = true;
+        return null;
+      }
+      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
+    },
+    close() {},
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      waitForShutdown: async () => ({ closedMs: 1 }),
+      env: {},
+      write: () => {},
+    }), /no-terminal shutdown precondition failed: sidecar sessions=/);
+    assert.equal(quitRequested, false, "the runner requests quit before rejecting the live sidecar session");
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test("no-terminal shutdown refuses a persistent service endpoint without a session", { timeout: 2000 }, async () => {
+  const { configDir } = fixture();
+  const serviceDirectory = join(configDir, "services", "vt-alacritty");
+  mkdirSync(serviceDirectory, { recursive: true });
+  const endpointFile = join(serviceDirectory, "endpoint.json");
+  writeFileSync(endpointFile, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
+  let quitRequested = false;
+  const client = {
+    endpoint: { pid: 200 },
+    request: async (method, params) => {
+      if (method === "diagnostics.objects") return { sessions: [] };
+      if (method === "command.run" && params.name === "host.quit") {
+        quitRequested = true;
+        return null;
+      }
+      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
+    },
+    close() {},
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      waitForShutdown: async () => ({ closedMs: 1 }),
+      env: {},
+      write: () => {},
+    }), (error) => {
+      assert.match(error.message, /no-terminal shutdown precondition failed/);
+      assert.ok(error.message.includes(endpointFile), `the error does not name ${endpointFile}: ${error.message}`);
+      return true;
+    });
+    assert.equal(quitRequested, false, "the runner requests quit before rejecting the service endpoint");
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test("no-terminal shutdown records the empty session and endpoint precondition", { timeout: 2000 }, async () => {
+  const { configDir } = fixture();
+  const client = {
+    endpoint: { pid: 200 },
+    request: async (method, params) => {
+      if (method === "diagnostics.objects") {
+        assert.deepEqual(params, { window: "main" });
+        return { sessions: [] };
+      }
+      if (method === "command.run" && params.name === "host.quit") return null;
+      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
+    },
+    close() {},
+  };
+  const lines = [];
+  try {
+    await runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      waitForShutdown: async () => ({ closedMs: 1 }),
+      env: {},
+      write: (line) => lines.push(line),
+    });
+    assert.ok(lines.includes("PRECONDITION normal-shutdown app=wailsv3 mode=no-terminal sidecar_sessions=0 service_endpoints=0"),
+      `the empty no-terminal precondition was not recorded: ${JSON.stringify(lines)}`);
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test("no-terminal shutdown reports invalid diagnostic session metadata", { timeout: 2000 }, async () => {
+  const { configDir } = fixture();
+  let quitRequested = false;
+  const client = {
+    endpoint: { pid: 200 },
+    request: async (method, params) => {
+      if (method === "diagnostics.objects") return { sessions: null };
+      if (method === "command.run" && params.name === "host.quit") {
+        quitRequested = true;
+        return null;
+      }
+      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
+    },
+    close() {},
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      waitForShutdown: async () => ({ closedMs: 1 }),
+      env: {},
+      write: () => {},
+    }), /diagnostics\.objects returned no sidecar session list/);
+    assert.equal(quitRequested, false, "the runner requests quit after receiving invalid session metadata");
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
+test("no-terminal shutdown reports a non-directory service entry", { timeout: 2000 }, async () => {
+  const { configDir } = fixture();
+  const serviceEntry = join(configDir, "services", "invalid-entry");
+  mkdirSync(join(configDir, "services"));
+  writeFileSync(serviceEntry, "invalid\n");
+  const client = {
+    endpoint: { pid: 200 },
+    request: async (method) => {
+      if (method === "diagnostics.objects") return { sessions: [] };
+      throw new Error(`unexpected request ${method}`);
+    },
+    close() {},
+  };
+  try {
+    await assert.rejects(runNormalShutdown({
+      app: { name: "wailsv3", configDir },
+      connectClient: async () => client,
+      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
+      waitForReady: async () => {},
+      env: {},
+      write: () => {},
+    }), (error) => {
+      assert.equal(error.message, `${serviceEntry} is not a service directory`);
+      return true;
+    });
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+  }
+});
+
 test("normal shutdown rejects an application error written by the controlled host during quit", async () => {
   const { configDir, log } = fixture();
   let clientClosed = false;
   const client = {
     endpoint: { pid: 200 },
     request: async (method, params) => {
+      if (method === "diagnostics.objects") return { sessions: [] };
       assert.equal(method, "command.run");
       assert.equal(params.name, "host.quit");
       appendFileSync(log, `${JSON.stringify({ seq: 2, level: "error", layer: "host", event: "host.record.error", fields: { where: "shutdown", text: "quit failed" } })}\n`);
@@ -54,6 +222,7 @@ test("normal shutdown ignores an application error written before the audit offs
   const client = {
     endpoint: { pid: 200 },
     request: async (method, params) => {
+      if (method === "diagnostics.objects") return { sessions: [] };
       assert.equal(method, "command.run");
       assert.equal(params.name, "host.quit");
       quitCalls += 1;
@@ -82,7 +251,12 @@ test("normal shutdown retains an application error when the shutdown wait fails"
   const { configDir, log } = fixture();
   const client = {
     endpoint: { pid: 200 },
-    request: async () => null,
+    request: async (method, params) => {
+      if (method === "diagnostics.objects") return { sessions: [] };
+      assert.equal(method, "command.run");
+      assert.equal(params.name, "host.quit");
+      return null;
+    },
     close() {},
   };
   try {
@@ -364,7 +538,12 @@ test("normal shutdown reports client-close errors without hiding a shutdown fail
   const { configDir } = fixture();
   const client = {
     endpoint: { pid: 200 },
-    request: async () => null,
+    request: async (method, params) => {
+      if (method === "diagnostics.objects") return { sessions: [] };
+      assert.equal(method, "command.run");
+      assert.equal(params.name, "host.quit");
+      return null;
+    },
     close() { throw new Error("controlled client-close failure"); },
   };
   try {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { connect } from "@soksak/client";
@@ -32,11 +32,42 @@ async function waitForReady(client) {
     { timeout: STARTUP_LIMIT });
 }
 
+function serviceEndpointFiles(configDir, { allowMissing = false } = {}) {
+  const directory = join(configDir, "services");
+  let root;
+  try {
+    root = lstatSync(directory);
+  } catch (error) {
+    if (allowMissing && error?.code === "ENOENT") return [];
+    throw error;
+  }
+  if (root.isSymbolicLink()) throw new Error(`${directory} is a symbolic link`);
+  if (!root.isDirectory()) throw new Error(`${directory} is not a directory`);
+
+  const services = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const service = join(directory, entry.name);
+    if (entry.isSymbolicLink()) throw new Error(`${service} is a symbolic link`);
+    if (!entry.isDirectory()) throw new Error(`${service} is not a service directory`);
+    const endpoint = join(service, "endpoint.json");
+    let metadata;
+    try {
+      metadata = lstatSync(endpoint);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw new Error(`${endpoint} could not be inspected: ${error?.message ?? error}`, { cause: error });
+    }
+    if (metadata.isSymbolicLink() || !metadata.isFile()) throw new Error(`${endpoint} is not a regular file`);
+    services.push(endpoint);
+  }
+  return services;
+}
+
 function serviceDirectory(configDir) {
   const directory = join(configDir, "services");
-  const services = readdirSync(directory).filter((name) => existsSync(join(directory, name, "endpoint.json")));
+  const services = serviceEndpointFiles(configDir).map((endpoint) => dirname(endpoint));
   if (services.length !== 1) throw new Error(`${directory} has ${services.length} services with an endpoint, expected the terminal service`);
-  return join(directory, services[0]);
+  return services[0];
 }
 
 function serviceEndpoint(configDir) {
@@ -166,6 +197,17 @@ export async function runNormalShutdown({
     const by = env.SOKSAK_SHUTDOWN_BY ?? "command";
     if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
     service = terminal ? serviceEndpoint(app.configDir) : null;
+    if (!terminal) {
+      const objects = await request(client, "diagnostics.objects", { window: "main" });
+      if (!objects || !Array.isArray(objects.sessions)) {
+        throw new Error("diagnostics.objects returned no sidecar session list for the no-terminal shutdown precondition");
+      }
+      const serviceEndpoints = serviceEndpointFiles(app.configDir, { allowMissing: true });
+      if (objects.sessions.length !== 0 || serviceEndpoints.length !== 0) {
+        throw new Error(`no-terminal shutdown precondition failed: sidecar sessions=${JSON.stringify(objects.sessions)} service endpoints=${JSON.stringify(serviceEndpoints)}`);
+      }
+      write(`PRECONDITION normal-shutdown app=${app.name} mode=no-terminal sidecar_sessions=0 service_endpoints=0`);
+    }
 
     const from = Date.now();
     if (by === "signal") {

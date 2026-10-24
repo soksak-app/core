@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F239-26-9: no-terminal shutdown runner는 quit 전에 main window의 sidecar
+  session 목록이 비어 있고 persistent service endpoint file이 없는지
+  확인한 뒤 사전조건을 기록한다. Plugin 설치 상태로 runtime 부재를 추론하지
+  않는다. Red: 변경 전 controlled runner는 실행 중인 session과 service
+  endpoint를 허용했고 빈 상태 기록도 남기지 않았다. Green: controlled-client
+  test는 두 자원이 있으면 각각 거부하고, 잘못된 diagnostic session metadata와
+  invalid service directory entry도 거부하며, 빈 사전조건을 기록한다. Terminal
+  사용 행의 기존 경로는 유지한다. Audit test 17개, `make e2e-check`,
+  `make docs-check`, `git diff --check`가 통과한다.
+
 - F239-26-8: bundled process-wait observer의 1,000 ms SIGTERM cleanup wait에
   reject timeout을 사용한다. 한도가 끝나면 SIGKILL을 보내고 child close를
   기다리며, 원래 wait timeout과 cleanup timeout을 함께 보고한다. Red:

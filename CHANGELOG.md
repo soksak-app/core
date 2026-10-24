@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- F239-26-9: The no-terminal shutdown runner now requires an empty main-window
+  sidecar session list and no persistent service endpoint files before quit,
+  then records that precondition. It does not infer runtime absence from
+  plugin installation state. Red: the unchanged controlled runner accepted a
+  live session and a service endpoint, and emitted no empty-state record.
+  Green: controlled-client tests reject either live resource, malformed
+  diagnostic session metadata and invalid service directory entries, and
+  record the empty precondition; terminal-enabled rows keep their existing
+  path. All 17 audit tests, `make e2e-check`, `make docs-check` and
+  `git diff --check` pass.
+
 - F239-26-8: The bundled process-wait observer now uses a rejecting timeout for
   its 1,000 ms SIGTERM cleanup wait. On that timeout, it sends SIGKILL, waits
   for child close, and reports the original wait timeout and cleanup timeout
