@@ -895,7 +895,7 @@ export async function waitSurfaceCompositionDeclared(surfaceId) {
   }
   if (placeholders.has(surfaceId)) return;
   entry = mounted.get(surfaceId);
-  if (!entry) {
+  if (!entry || entry.disposed) {
     const failed = mounting.get(surfaceId);
     if (failed?.state === "failed") throw mountFailureError(surfaceId, failed);
     throw new Error(`surface ${surfaceId} is not mounted`);

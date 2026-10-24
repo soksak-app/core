@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "node:test";
 import { JSDOM } from "jsdom";
 
 test("a layout published before drawing waits for the host's placement answer", async () => {
@@ -22,7 +22,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   let answer, prepared;
   onCommit((record) => new Promise((resolve) => {
     prepared = record;
-    answer = () => resolve(record.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })));
+    answer = () => resolve({ placements: record.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })), deferred: [] });
   }));
 
   const pending = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
@@ -79,7 +79,10 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
   let width = 100, height = 100;
   slot.getBoundingClientRect = () => ({left:0,top:0,width,height});
   let record;
-  compositor.onCommit((value) => { record = value; return value.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })); });
+  compositor.onCommit((value) => {
+    record = value;
+    return { placements: value.surfaces.map((surface) => ({ id: surface.id, ...surface.applied })), deferred: [] };
+  });
   try {
     await compositor.publish();
     assert.equal(record.surfaces.length, 1, "hidden state removed the live surface");
@@ -103,4 +106,79 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
     await compositor.publish();
     assert.equal(record.surfaces[0].visible, true, "restoring the slot height did not restore visibility");
   } finally { dom.window.close(); }
+});
+
+test("a deferred preparation is not recorded as an applied or predicted view", async (t) => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
+    <div data-native-surface data-native-surface-id="deferred-view" data-native-plugin="deferred-probe" data-native-layer="0"></div>
+  </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  t.mock.module(new URL("../host.js", import.meta.url).href, {
+    namedExports: { native: true, surfaces: { kinds: ["deferred-probe"] } },
+  });
+  const card = document.querySelector("[data-card-id]");
+  const slot = document.querySelector("[data-native-surface]");
+  card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
+  slot.getBoundingClientRect = () => ({ left: 2, top: 30, width: 196, height: 100 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "deferred-probe", surface: () => ({ module: null, composition: { kind: "view", page: "ui/page.html" } }) });
+  const compositor = await import("../compositor.js?deferred-view-placement");
+  compositor.setSlotSurface(slot, { surfaceId: "deferred-view", pluginId: "deferred-probe",
+    composition: { kind: "view", page: "ui/page.html" } });
+  let record;
+  compositor.onCommit((value) => {
+    record = value;
+    return Promise.resolve({ placements: [], deferred: ["deferred-view"] });
+  });
+  const prepared = await compositor.publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
+    new Map([["card", { id: "deferred-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]));
+  assert.deepEqual(prepared, [], "a deferred view was reported as a native placement");
+  assert.deepEqual(record.surfaces, [], "a deferred view was stored as seated geometry");
+  assert.equal(compositor.seated(), record, "the answer did not settle the actual placement record");
+  assert.equal(compositor.ahead(), null, "a deferred view made the predicted layout appear complete");
+  assert.equal(compositor.placementPending(), false, "a completed deferred result remained pending");
+
+  compositor.onCommit((value) => ({
+    placements: value.surfaces.map((surface) => ({ id: surface.id, visible: true, ...surface.applied })), deferred: [],
+  }));
+  const drawn = await compositor.publish();
+  assert.deepEqual(drawn, [{ id: "deferred-view", visible: true, x: 2, y: 30, w: 196, h: 100 }]);
+  assert.equal(compositor.seated().surfaces.length, 1, "the drawn view did not receive its real host placement");
+  dom.window.close();
+});
+
+test("placement results reject missing, extra, duplicate, and drawn-deferred surfaces", async (t) => {
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
+    <div data-native-surface data-native-surface-id="contract-view" data-native-plugin="placement-contract" data-native-layer="0"></div>
+  </div></div>`, { url: "https://example.test/", pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  t.mock.module(new URL("../host.js", import.meta.url).href, {
+    namedExports: { native: true, surfaces: { kinds: ["placement-contract"] } },
+  });
+  const slot = document.querySelector("[data-native-surface]");
+  slot.getBoundingClientRect = () => ({ left: 1, top: 2, width: 30, height: 40 });
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "placement-contract", surface: () => ({ module: null,
+    composition: { kind: "view", page: "ui/page.html" } }) });
+  const compositor = await import("../compositor.js?placement-result-contract");
+  compositor.setSlotSurface(slot, { surfaceId: "contract-view", pluginId: "placement-contract",
+    composition: { kind: "view", page: "ui/page.html" } });
+  compositor.onCommit(() => ({ placements: [], deferred: ["contract-view"] }));
+  try {
+    assert.throws(() => compositor.publish(), /drawn surface placement cannot defer/);
+    compositor.onCommit(() => ({ placements: [], deferred: [] }));
+    assert.throws(() => compositor.publish(), /surface placement result is missing contract-view/);
+    compositor.onCommit(() => ({ placements: [{ id: "unexpected" }], deferred: [] }));
+    assert.throws(() => compositor.publish(), /unexpected id unexpected/);
+    compositor.onCommit(() => ({ placements: [{ id: "contract-view" }, { id: "contract-view" }], deferred: [] }));
+    assert.throws(() => compositor.publish(), /repeats a placement id/);
+  } finally {
+    dom.window.close();
+  }
 });

@@ -9,6 +9,10 @@ test("a view surface carries its start values in the preparation and a surface w
   const dom = new JSDOM('<div id="plane"></div>');
   globalThis.document = dom.window.document;
   const calls = [];
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => ({ surfaceId: "view" }),
+    waitSurfaceCompositionDeclared: async () => {},
+  } });
   t.mock.module("@soksak/runtime", { namedExports: { host: {
     on: () => {},
     page: (path) => path,
@@ -134,6 +138,7 @@ test("native view placement waits for current-page composition readiness", async
   let announceWait;
   const waitStarted = new Promise((resolve) => { announceWait = resolve; });
   t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => ({ surfaceId: "view-ready-barrier" }),
     waitSurfaceCompositionDeclared: (surfaceId) => {
       assert.equal(surfaceId, "view-ready-barrier");
       waitCount++;
@@ -183,6 +188,7 @@ test("native view placement rejects when its surface is disposed before composit
   let announceWait;
   const waitStarted = new Promise((resolve) => { announceWait = resolve; });
   t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: () => ({ surfaceId: "view-disposed" }),
     waitSurfaceCompositionDeclared: () => {
       announceWait();
       return new Promise((resolve, reject) => { rejectComposition = reject; });
@@ -205,7 +211,7 @@ test("native view placement rejects when its surface is disposed before composit
     surfaces: [{ id: "view-disposed", dim: false, visible: true,
       surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
       applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null } } }],
-    settled: true, drawn: false, titlebar: 40,
+    settled: true, drawn: true, titlebar: 40,
   };
   try {
     await surfaces.theme({ scheme: "dark", tokens: {} });
@@ -215,6 +221,89 @@ test("native view placement rejects when its surface is disposed before composit
     await assert.rejects(placement, /disposed before declaring composition/);
     assert.equal(calls.some(({ name }) => name === "syncSurfaces"), false,
       "native placement continued after its surface was disposed");
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("an initial placement defers an unmounted view until its drawn commit", async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  const order = [];
+  let mounted = { surfaceId: "view-mount-order", disposed: true };
+  let drawnCallStarted = false;
+  let announceWait;
+  let releaseRegistration;
+  const waitStarted = new Promise((resolve) => { announceWait = resolve; });
+  const registrationReady = new Promise((resolve) => { releaseRegistration = resolve; });
+  t.mock.module("../surface-modules.js", { namedExports: {
+    mountedSurface: (surfaceId) => surfaceId === "view-mount-order" ? mounted : null,
+    waitSurfaceCompositionDeclared: async (surfaceId) => {
+      order.push(`composition:${surfaceId}`);
+      announceWait();
+      if (mounted.disposed && !drawnCallStarted) throw new Error(`surface ${surfaceId} has no current composition`);
+      await registrationReady;
+    assert.equal(mounted.disposed, false, `composition wait completed before ${surfaceId} replacement was mounted`);
+    },
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      calls.push({ name, request });
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
+      if (name === "syncSurfaces") {
+        order.push("syncSurfaces");
+        return {
+          ticket: 1,
+          placements: request.surfaces.map((surface) => ({
+            id: surface.id, visible: true, x: surface.x, y: surface.y, w: surface.w, h: surface.h,
+          })),
+          chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar },
+        };
+      }
+      if (name === "presentSurfaces") {
+        order.push("presentSurfaces");
+        return request.placements;
+      }
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?initial-view-mount-order");
+  const record = (drawn) => {
+    if (drawn) drawnCallStarted = true;
+    return {
+      surfaces: [{ id: "view-mount-order", dim: false, visible: true,
+        surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
+        applied: { x: 1, y: 2, w: 30, h: 40 }, start: { origin: { directory: null } } }],
+      settled: true, drawn, titlebar: 40,
+    };
+  };
+  try {
+    await surfaces.theme({ scheme: "dark", tokens: {} });
+    const first = await surfaces.place(record(false));
+    assert.deepEqual(first, { placements: [], deferred: ["view-mount-order"] },
+      "the unmounted view must be explicitly deferred without a fabricated placement");
+    assert.deepEqual(calls.find(({ name }) => name === "syncSurfaces").request.surfaces, [],
+      "the host declaration fence must not receive an unmounted view");
+    assert.equal(order.includes("composition:view-mount-order"), false,
+      "pre-draw placement waited for a replacement mount that drawing has not started");
+
+    const secondPending = surfaces.place(record(true));
+    await waitStarted;
+    assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1,
+      "the drawn view was sent while its mount registration was pending");
+    mounted = { surfaceId: "view-mount-order", disposed: false };
+    releaseRegistration();
+    const second = await secondPending;
+    assert.deepEqual(second, {
+      placements: [{ id: "view-mount-order", visible: true, x: 1, y: 2, w: 30, h: 40 }], deferred: [],
+    });
+    assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").at(-1).request.surfaces.map(({ id }) => [id]),
+      [["view-mount-order"]], "the declared view was not sent after mount registration");
+    assert.deepEqual(order, ["syncSurfaces", "composition:view-mount-order", "syncSurfaces", "presentSurfaces"]);
   } finally {
     dom.window.close();
   }

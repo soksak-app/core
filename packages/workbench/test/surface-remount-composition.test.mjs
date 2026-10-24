@@ -18,8 +18,14 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
   const id = "fixture-remount-composition";
   let waitForComposition;
   let waitResult;
+  let releaseWaitObserved;
   let inspectRelease = true;
   let refuseComposition = false;
+  let holdDispose = false;
+  let announceDisposal;
+  let releaseDisposal;
+  const disposalStarted = new Promise((resolve) => { announceDisposal = resolve; });
+  const disposalGate = new Promise((resolve) => { releaseDisposal = resolve; });
   const actualRegions = await import("../document-regions.js");
   t.mock.module("../document-regions.js", { exports: {
     ...actualRegions,
@@ -35,6 +41,7 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
           } catch (error) {
             waitResult = error;
           }
+          releaseWaitObserved?.();
         });
       },
     },
@@ -47,7 +54,15 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     onSurfacePrepared: () => () => {},
     surfaceContextRuntime: (surface, declarations) => {
       const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async (name) => {
+      const exposure = runtime.exposure;
+      return { ...runtime, exposure: { ...exposure, dispose: async () => {
+        if (holdDispose) {
+          announceDisposal();
+          await disposalGate;
+          holdDispose = false;
+        }
+        return exposure.dispose();
+      } }, native: { ...runtime.native, on: async () => () => {}, call: async (name) => {
         if (name === "compositionDeclare" && refuseComposition) {
           refuseComposition = false;
           throw new Error("the host refused the replacement composition");
@@ -56,7 +71,7 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
       } } };
     },
   } });
-  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?remount-composition");
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?remount-composition");
   waitForComposition = waitSurfaceCompositionDeclared;
   const pluginId = "fixture-remount-composition";
   recordOrigin(id, null, "test fixture");
@@ -74,12 +89,32 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     await mountSurface(slot, surface);
     await waitSurfaceCompositionDeclared(id);
 
+    inspectRelease = false;
+    holdDispose = true;
+    const oldDisposal = disposeSurface(id, { released: true });
+    await disposalStarted;
+    assert.equal(mountedSurface(id)?.disposed, true, "the test did not hold the retired entry during cleanup");
+    try {
+      const staleWait = waitSurfaceCompositionDeclared(id);
+      await assert.rejects(staleWait, /surface fixture-remount-composition is not mounted/,
+        "a disposed entry without a replacement satisfied the composition wait");
+    } finally {
+      releaseDisposal();
+    }
+    await oldDisposal;
+    inspectRelease = true;
+
+    authorizeSurface(id);
+    await mountSurface(slot, surface);
+    await waitSurfaceCompositionDeclared(id);
+    const releaseWait = new Promise((resolve) => { releaseWaitObserved = resolve; });
     const disposing = disposeSurface(id, { released: true });
     const remounting = mountSurface(slot, surface);
     await disposing;
     authorizeSurface(id);
     await remounting;
     await waitSurfaceCompositionDeclared(id);
+    await releaseWait;
 
     assert.equal(waitResult, null, waitResult?.message ?? "composition wait failed during replacement mount");
     inspectRelease = false;
@@ -93,7 +128,7 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
     const failedWait = waitSurfaceCompositionDeclared(id);
     await assert.rejects(failedMount, /the host refused the replacement composition/);
     await assert.rejects(failedWait, /the host refused the replacement composition/);
-    await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-composition mount attempt 3 failed during mount: the host refused the replacement composition/,
+    await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-composition mount attempt 4 failed during mount: the host refused the replacement composition/,
       "a failed replacement must preserve its original failure after releasing its mounted entry");
   } finally {
     await disposeSurface(id);

@@ -32,7 +32,10 @@ async function fixture(name) {
   const answer = (placement = {}) => {
     const request = requests.shift();
     assert.ok(request, "no pending host placement");
-    request.resolve(request.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied, ...placement })));
+    request.resolve({
+      placements: request.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied, ...placement })),
+      deferred: [],
+    });
   };
   const frame = () => { for (const callback of callbacks.splice(0)) callback(); };
   const clip = () => document.head.querySelector("style")?.textContent ?? null;
@@ -84,7 +87,7 @@ test("paint holes retain acknowledged native alignment and visibility", async ()
 });
 
 for (const [index, [value, error]] of [
-  [null, /missing native placement surface/],
+  [null, /surface placement result is missing surface/],
   [{ visible: undefined }, /invalid native placement visibility surface/],
   [{ w: NaN }, /invalid native placement geometry surface/],
 ].entries()) {
@@ -92,7 +95,7 @@ for (const [index, [value, error]] of [
     const f = await fixture(`invalid-${index}`);
     try {
       const pending = f.compositor.publish();
-      if (value === null) f.requests.shift().resolve([]);
+      if (value === null) f.requests.shift().resolve({ placements: [], deferred: [] });
       else f.answer(value);
       await assert.rejects(pending, error);
       assert.equal(f.callbacks.length, 0, "invalid acknowledgement scheduled a paint update");
@@ -110,10 +113,16 @@ test("a placement answer that arrives after a newer one does not replace the new
     const newer = f.compositor.publish();
     assert.equal(f.requests.length, 2);
     const [first, second] = f.requests.splice(0);
-    second.resolve(second.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })));
+    second.resolve({
+      placements: second.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })),
+      deferred: [],
+    });
     await newer; f.frame();
     const latest = f.clip();
-    first.resolve(first.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })));
+    first.resolve({
+      placements: first.record.surfaces.map(surface => ({ id: surface.id, visible: surface.visible, ...surface.applied })),
+      deferred: [],
+    });
     await older; f.frame();
     assert.equal(f.clip(), latest, "an older placement answer replaced the background holes of the newer placement");
   } finally { f.dom.window.close(); }
