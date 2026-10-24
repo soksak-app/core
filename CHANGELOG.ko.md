@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-37-8: Files tree source가 declared UI snapshot을 수락할 때까지 sequence
+  baseline 사용을 기다린다. Source 변경 직후 section은 cleared 상태, pending
+  subscription과 null `acceptedSeq`를 가질 수 있다. Helper는 현재 source, ready
+  subscription, mounted section 및 정수 accepted sequence를 기다리고, 실패 시
+  마지막 `core.sidebars` payload를 포함한다. 변경 전 consumer test는 pending
+  상태의 즉시 거부를 재현했고, focused consumer test 4/4가 통과한다. Producer와
+  status 계약은 바뀌지 않았다.
+
 - F239-47-20: input receipt 뒤 각 coherent terminal document가 같은 window의
   AppKit reference와 일치할 때까지 기다린다. Backspace는 먼저 preedit을 지워도
   PTY에 committed vowel 8개가 남고, 이후 status event에서 기대한 7개 화면을
