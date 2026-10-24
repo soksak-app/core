@@ -4,6 +4,17 @@
 
 ## Unreleased
 
+- F239-47-15: Reconcile fresh terminal notifications with known pre-key state.
+  The observer accepts a coherent composition update when PTY rows remain
+  unchanged, while requiring changed rows to have a matching screen event and
+  rejecting stale notifications, blink-only changes, lost focus and missing
+  input state. Red: the unchanged all-three-event predicate rejected a fresh
+  compose update with coherent cursor state and identical baseline rows.
+  Green: the owning `terminal-ime-document.test.mjs` passes 17/17, the
+  activation file passes syntax checking, and `make e2e-check` and
+  `make docs-check` pass. The latest Wails and Tauri runtime attempts each
+  stopped after one terminal `k`; neither reached Backspace or Space, so
+  F239-47-6 acceptance remains open.
 - F212.10-core-3-1: Wait for native `view-call` and `view-reply` listener
   registration before declaring a view composition, which starts native view
   creation. This prevents the first view calls from racing page listener
@@ -70,7 +81,7 @@
   activation request and wait callback for a non-activation path. Green: the
   helper now returns without changing frontmost state when activation was not
   attempted; after an activation attempt it requires an accepted request and
-  an `NSWorkspaceDidActivateApplicationNotification` for the exact previous PID. The fault test passes 14/14 and the default
+  an `NSWorkspaceDidActivateApplicationNotification` for the exact previous PID. The fault test passes 17/17 and the default
   non-activation view-focus check passes 9/9. The activation variant remains
   unrun.
 

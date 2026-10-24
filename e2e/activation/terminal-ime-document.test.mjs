@@ -7,6 +7,8 @@ import {
   terminalComposeMatchesPreedit,
   terminalLineBeforeCursor,
   terminalCompositionState,
+  terminalInputReceiptMatches,
+  terminalObserverStatusesMatch,
   visibleInputBeforeCursor,
   startTerminalStatusObserver,
   waitForStateEvent,
@@ -82,6 +84,118 @@ test("a null protocol preedit matches only a valid empty composition", () => {
   assert.equal(terminalComposeMatchesPreedit(empty, { ...cursor, preedit: undefined }), true);
   assert.equal(terminalComposeMatchesPreedit({ ...emptyClear, selectedRange: { location: 0, length: 1 } }, cursor), false);
   assert.equal(terminalComposeMatchesPreedit({ ...emptyClear, markedRange: { location: 0, length: 0 } }, cursor), false);
+});
+
+test("a fresh compose and cursor update can use unchanged known PTY rows", () => {
+  const baseline = {
+    compose: { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    cursor: { row: 0, col: 8, focused: true, preedit: null },
+    screen: screen([[cell("$"), cell(" ")]]),
+  };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: { ...compose } };
+  const currentScreen = { ...screen([[cell("$"), cell(" ")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+  const freshEvents = [{ name: "terminal.compose", value: compose }];
+
+  assert.deepEqual(currentScreen.rows, baseline.screen.rows, "PTY rows remain unchanged while composition changes");
+  assert.equal(terminalObserverStatusesMatch(freshEvents, baseline, { compose, cursor, screen: currentScreen }), true,
+    "a fresh compose notification and coherent current cursor may reuse unchanged known rows");
+});
+
+test("a fresh cursor event can report a changed preedit without compose or screen events", () => {
+  const baseline = {
+    compose: { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    cursor: { row: 0, col: 8, focused: true, preedit: null },
+    screen: screen([[cell("$"), cell(" ")]]),
+  };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: { ...compose } };
+  const currentScreen = { ...screen([[cell("$"), cell(" ")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: cursor }], baseline,
+    { compose, cursor, screen: currentScreen }), true);
+});
+
+test("a fresh screen event can accompany a coherent composition reread", () => {
+  const baseline = {
+    compose: { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false },
+    cursor: { row: 0, col: 8, focused: true, preedit: null },
+    screen: screen([[cell("$"), cell(" ")]]),
+  };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: { ...compose } };
+  const currentScreen = { ...screen([[cell("$"), cell("x")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.screen", value: currentScreen.rows }], baseline,
+    { compose, cursor, screen: currentScreen }), true);
+});
+
+test("per-key IME trace receipts identify the expected native or terminal callback", () => {
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-compose", text: "ㅏ" }], "k"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "compose", text: "ㅏ" } }], "k"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-key", key: "Backspace" }], "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "command", selector: "deleteBackward:" } }],
+    "Backspace"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-insert", text: " " }], "Space"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "terminal-input", input: { type: "insert", text: " " } }], "Space"), true);
+  assert.equal(terminalInputReceiptMatches([{ kind: "native-compose", text: "ㅏ" }], "Backspace"), false);
+  assert.equal(terminalInputReceiptMatches([], "k"), false);
+  assert.throws(() => terminalInputReceiptMatches([], "Enter"), /no receipt rule for key/);
+});
+
+test("a terminal observer requires a fresh semantic input status, not blink-only state", () => {
+  const compose = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: null, blinkVisible: true };
+  const baseline = { compose, cursor, screen: screen([[cell("$"), cell(" ")]]) };
+  const presentationOnlyCursor = { ...cursor, blinkVisible: false };
+  const unchanged = { compose, cursor: presentationOnlyCursor, screen: baseline.screen };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: presentationOnlyCursor }], baseline, unchanged), false);
+  assert.equal(terminalObserverStatusesMatch([], baseline, { ...unchanged, compose: { ...compose, text: "ㅏ" } }), false);
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.cursor", value: { ...cursor, focused: false } }],
+    baseline, { ...unchanged, cursor: { ...cursor, focused: false } }), false,
+  "losing terminal focus cannot count as key input progress");
+});
+
+test("a terminal observer rejects stale changed state and rows without a matching event", () => {
+  const empty = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: null };
+  const baseline = { compose: empty, cursor, screen: screen([[cell("$"), cell(" ")]]) };
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const currentCursor = { ...cursor, preedit: { ...compose } };
+  const current = { compose, cursor: currentCursor, screen: baseline.screen };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.compose", value: { ...compose, text: "ㅎ" } }],
+    baseline, current), false, "a stale compose event must not bless a newer state");
+  assert.equal(terminalObserverStatusesMatch([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.cursor", value: { ...currentCursor, col: 9 } },
+  ], baseline, current), false, "a stale cursor event must not bless a newer state");
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.compose", value: compose }], baseline,
+    { ...current, screen: { ...screen([[cell("$"), cell("x")]]), frame: { ...baseline.screen.frame, sequence: 5 } } }), false,
+  "changed PTY rows require their own matching screen notification");
+  assert.equal(terminalObserverStatusesMatch([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.screen", value: [[cell("$"), cell("stale")]] },
+  ], baseline, current), false, "a stale screen event must not bless the current rows");
+  assert.throws(() => terminalObserverStatusesMatch([
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.screen", value: null },
+  ], baseline, current), /terminal\.screen notification must be raw cell rows/);
+});
+
+test("a matching screen update can establish changed PTY rows with unchanged composition", () => {
+  const compose = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const cursor = { row: 0, col: 8, focused: true, preedit: null };
+  const baseline = { compose, cursor, screen: screen([[cell("$"), cell(" ")]]) };
+  const currentScreen = { ...screen([[cell("$"), cell("x")]]), frame: { ...baseline.screen.frame, sequence: 5 } };
+
+  assert.equal(terminalObserverStatusesMatch([{ name: "terminal.screen", value: currentScreen.rows }], baseline,
+    { compose, cursor, screen: currentScreen }), true);
 });
 
 test("an initial managed until does not release the manual terminal status watch", async () => {
