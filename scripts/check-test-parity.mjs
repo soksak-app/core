@@ -5121,6 +5121,68 @@ const FEATURE_LINKS = [
     expected: "The development release candidate is 0.0.21, distinct from latest published 0.0.20, and the tracked version tests audit workspace manifests and Cargo.lock against that candidate.",
     levels: ["unit"],
   },
+  {
+    id: "F239-47-12",
+    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
+    tests: [
+      { file: "e2e/activation/terminal-ime-visual.test.mjs", id: "renderer geometry is frame-bound and rejects unsupported pixel layouts" },
+      { file: "e2e/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" },
+    ],
+    expected: "The visual calculator validates the producer screen.render metadata and its distinct capture pixel format, effective glyph colors, fractional geometry, and blink-off cursor representation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-13",
+    implementation: [
+      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function mapCaptureRaster(" },
+      { file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function measureRenderedCell(" },
+    ],
+    tests: [{ file: "e2e/activation/terminal-ime-visual.test.mjs", id: "raw glyph ink bounds preserve signed overhang and clip only to the raster" }],
+    expected: "Signed glyph and underline bounds retain their source coordinates, map through capture raster origin, and clip only to the raster while rejecting mismatched frame provenance.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-14",
+    implementation: [{ file: "e2e/activation/terminal-ime-visual.mjs", symbol: "export function validateRenderMetadata(" }],
+    tests: [{ file: "e2e/activation/terminal-ime-visual.test.mjs", id: "producer-shaped overlay metadata preserves effective colors and blink-off cursor state" }],
+    expected: "Cursor rectangle and color metadata are required only when the producer draws the cursor, including normal and difference blend rules.",
+    levels: ["unit"],
+  },
+  {
+    id: "F268",
+    implementation: [
+      { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.message.frame-preedit" },
+      { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.hash.frame-preedit.sha256" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage(" },
+    ],
+    tests: [{ file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash frame and preedit message pairs with its projected screen hash" }],
+    expected: "The public SDK fixture pairs a non-null-frame preedit message with the exact projected screen used as its published hash input.",
+    levels: ["unit"],
+  },
+  {
+    id: "F269",
+    implementation: [
+      { file: "packages/plugin-api/contract/screen-hash.json", symbol: "screen.hash.letter-x-hidden-cursor.sha256" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export async function screenHash(" },
+      { file: "packages/plugin-api/screen-hash.js", symbol: "export function screenFromMessage(" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash publishes one unique hash input for each valid message projection" },
+      { file: "packages/plugin-api/test/screen-hash-contract.test.mjs", id: "screenHash frame and preedit message pairs with its projected screen hash" },
+    ],
+    expected: "Every valid screen-message projection has exactly one matching published hash input, and the core recomputes each digest from the projected screen.",
+    levels: ["unit"],
+  },
+  {
+    id: "F270",
+    implementation: [{ file: "scripts/check-e2e.mjs", symbol: "export function auditE2ESource(" }],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit accepts a Promise reject forwarded through a local timeout helper" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "window-source audit keeps a local helper's rejection bound to its definition scope" },
+    ],
+    expected: "The E2E source audit recognizes Promise rejection forwarded through local timeout helpers while preserving lexical binding and rejection-scope checks.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.

@@ -11,6 +11,13 @@
   값으로 보고했다. Green: channel test와 기존 unwrapped `String` 거부 검사가
   통과한다. Paired-host audit은 분류기 오류 없이 관련 없는 경로 finding
   18개를 보고하며, 해당 finding은 계속 열린 상태다.
+- F267.8: 완료된 capability 여섯 개를 소유 implementation 및 behavior test에
+  연결한다(F239-47-12/-13/-14, F268/-269/-270). Red: 변경 전 parity audit은
+  capability link 여섯 건 누락과 미등록 파일이 없음을 보고했다. Green: 여섯
+  link가 모두 해석되고 audit은 422개 link에서 capability-link 오류, implementation
+  coverage 오류, test coverage 오류가 없다고 보고한다. 전체 audit은 F267.5에
+  남긴 inventory count 불일치 두 건으로 계속 실패하며 count는 바꾸지 않았다.
+  `make docs-check`가 통과한다.
 
 - F239-48-2: `declared-ui-style.test.mjs`의 일반 tree fixture는 files를
   tree key와 `expandedByTree` lookup key로 사용했고, 이는 선언된 plugin id라
