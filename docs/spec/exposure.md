@@ -166,11 +166,12 @@ The [memory saver](plugins.md#memory-saver) of the main page has these entries.
 
 ## Plugin processes
 
-The main page publishes three statuses of the [plugin process design](plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process connects its call layer, which reports the open calls and the losses of its plugin to the main page.
+The main page publishes four statuses of the [plugin process design](plugin-processes.md#messages-and-events). Each status is a list of records that carry the plugin id. Each list is `[]` until a plugin process reports its state to the main page.
 
 - Status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, the open calls of each plugin that has one, including snapshots waiting for acknowledgement. `oldestStartedAt` is the start time of the oldest open call, or `null`.
 - Status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, the counts of each plugin's losses, kept until the application ends.
 - Status `core.plugin.views`: `[{plugin, surface, responsive}]`, the responsiveness of each plugin view surface.
+- Status `core.plugin.snapshots`: `[{plugin, status, surface, generation, seq}]`, the last natively acknowledged snapshot sequence of each current source and declared status. `status` is the name sent in the snapshot event. `surface` is null for a plugin host. It has no record before the first accepted snapshot, clears the previous generation on source registration, and removes the record on source end. It includes sources whose sidebar section is not mounted, contains no snapshot value, and means transport acceptance rather than sidebar drawing.
 - Status `core.surfaces`: each surface entry carries `composition`, the kind of its declared composition (`view`), or `null` when the plugin declares no surface for it.
 
 ## Windows

@@ -484,7 +484,7 @@ for (const app of Object.values(APPS)) {
       && value.elements[0].kind === "status-line"
       && value.elements[0].key === "project"
       && value.elements[0].text === "프로젝트 없음";
-    const treeAfter = await getClosedProjectSnapshot(s, "files.tree", treeSectionBefore.acceptedSeq,
+    const treeAfter = await getClosedProjectSnapshot(s, "files.tree", treeSectionBefore.source, treeSectionBefore.acceptedSeq,
       noProjectTree, "files.tree did not publish its no-project snapshot after close");
     assert.deepEqual(treeAfter.value?.elements, [
       { kind: "status-line", key: "project", text: "프로젝트 없음" },
@@ -494,7 +494,7 @@ for (const app of Object.values(APPS)) {
       && value.elements[0].key === "bookmarks"
       && value.elements[0].empty === "프로젝트 없음"
       && value.elements[0].items?.length === 0;
-    const bookmarksAfter = await getClosedProjectSnapshot(s, "files.bookmarks", bookmarksSectionBefore.acceptedSeq,
+    const bookmarksAfter = await getClosedProjectSnapshot(s, "files.bookmarks", bookmarksSectionBefore.source, bookmarksSectionBefore.acceptedSeq,
       noProjectBookmarks, "files.bookmarks did not publish its no-project snapshot after close");
     assert.deepEqual(bookmarksAfter.value?.elements, [
       { kind: "list", key: "bookmarks", empty: "프로젝트 없음", items: [] },

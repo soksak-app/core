@@ -13,6 +13,8 @@ const layers = new Map();
 const listeners = new Set();
 /** The responsiveness of each view surface, in the order of its first notice. */
 const viewStates = [];
+/** Latest native-accepted snapshot sequence for each active plugin/status/source tuple. */
+const acceptedSnapshotSequences = new Map();
 
 const announce = () => {
   for (const listener of listeners) listener();
@@ -29,6 +31,48 @@ const lossesOf = (plugin) => {
 export function onPluginProcessChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/** Returns metadata for snapshots accepted by the native source transport, without snapshot values. */
+export const acceptedSnapshots = () => [...acceptedSnapshotSequences.values()].map((entry) => ({ ...entry }));
+
+/** Records a snapshot only after its native acknowledgement and current-generation check succeed. */
+export function acceptSnapshotSequence(plugin, status, surface, generation, seq) {
+  if (typeof plugin !== "string" || plugin === "" || typeof status !== "string" || status === "" ||
+      (surface !== null && (typeof surface !== "string" || surface === "")) ||
+      !Number.isSafeInteger(generation) || generation < 1 || !Number.isSafeInteger(seq) || seq < 1) {
+    throw new TypeError("accepted snapshot sequence requires a source tuple and positive generation and sequence");
+  }
+  const key = JSON.stringify([plugin, status, surface]);
+  const previous = acceptedSnapshotSequences.get(key);
+  if (previous?.generation === generation && seq <= previous.seq) return false;
+  acceptedSnapshotSequences.set(key, { plugin, status, surface, generation, seq });
+  announce();
+  return true;
+}
+
+/** Removes watermarks from prior generations when a source is replaced. */
+export function replaceSnapshotSource(plugin, surface, generation) {
+  let changed = false;
+  for (const [key, entry] of acceptedSnapshotSequences) {
+    if (entry.plugin === plugin && entry.surface === surface && entry.generation !== generation) {
+      acceptedSnapshotSequences.delete(key);
+      changed = true;
+    }
+  }
+  if (changed) announce();
+}
+
+/** Removes watermarks only for the exact source generation that ended. */
+export function retireSnapshotSource(plugin, surface, generation) {
+  let changed = false;
+  for (const [key, entry] of acceptedSnapshotSequences) {
+    if (entry.plugin === plugin && entry.surface === surface && entry.generation === generation) {
+      acceptedSnapshotSequences.delete(key);
+      changed = true;
+    }
+  }
+  if (changed) announce();
 }
 
 /**

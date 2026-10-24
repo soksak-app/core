@@ -69,6 +69,13 @@ globalThis.dispatchEvent = (event) => { reported.push(event.message); return pre
 const { createDeclaredSource: makeDeclaredSource, startDeclaredSnapshotIngress, afterDeclaredSnapshotIngress } = await import("../declared-source.js");
 const { registerSourceOrigin, seedSourceOrigins, sourceOrigin } = await import("../source-origins.js");
 const { keepViewCommands } = await import("../view-commands.js");
+const { registry } = await import("../exposure.js");
+const processState = await import("../plugin-processes.js");
+registry.declare("snapshot-probe", {
+  status: [{ name: "snapshot-probe.tree", description: "Tree.", schema: { type: "object" } }],
+  commands: [],
+  dom: [],
+});
 
 function withGeneration(source, plugin) {
   return source.generation === undefined ? { ...source, generation: fixtureGeneration(plugin, source.surface) } : source;
@@ -134,6 +141,22 @@ test("source lifecycle events advance the seeded registry and reject delayed ret
   assert.equal(sourceOrigin("new-plugin", null), 7, "a delayed retired end removed the current source");
   emit("declared-ui-source-ended", { plugin: "new-plugin", generation: 7 });
   assert.equal(sourceOrigin("new-plugin", null), undefined, "the exact current end did not remove the source");
+});
+
+test("source lifecycle events clear only the replaced or ended generation watermark", async () => {
+  await startDeclaredSnapshotIngress();
+  delayListenerRegistration = false;
+  const { acceptSnapshotSequence, acceptedSnapshots } = processState;
+  acceptSnapshotSequence("lifecycle-probe", "tree", null, 6, 3);
+  emit("declared-ui-source-registered", { plugin: "lifecycle-probe", generation: 7 });
+  assert.deepEqual(acceptedSnapshots().filter((row) => row.plugin === "lifecycle-probe"), [], "replacement kept the previous generation watermark");
+  acceptSnapshotSequence("lifecycle-probe", "tree", null, 7, 1);
+  emit("declared-ui-source-ended", { plugin: "lifecycle-probe", generation: 6 });
+  assert.deepEqual(acceptedSnapshots().filter((row) => row.plugin === "lifecycle-probe"), [
+    { plugin: "lifecycle-probe", status: "tree", surface: null, generation: 7, seq: 1 },
+  ], "a delayed end removed the replacement generation watermark");
+  emit("declared-ui-source-ended", { plugin: "lifecycle-probe", generation: 7 });
+  assert.deepEqual(acceptedSnapshots().filter((row) => row.plugin === "lifecycle-probe"), []);
 });
 
 test("the channel delivers each snapshot of its surface and plugin, and the unsubscribe ends the delivery", async () => {
@@ -304,6 +327,87 @@ test("a snapshot with an older native generation is not acknowledged or delivere
   assert.deepEqual(received, [], "an older generation was delivered to the current recipient");
   assert.deepEqual(calls, [], "an older generation was acknowledged through the replacement provider");
   stop();
+});
+
+test("the accepted snapshot status advances only after the delayed native acknowledgement", { timeout: 5000 }, async () => {
+  delayListenerRegistration = false;
+  completeListenerRegistration = null;
+  seedSourceOrigins({ floor: 9, pluginHosts: { "snapshot-probe": 9 }, views: {} });
+  await startDeclaredSnapshotIngress();
+  const read = () => processState.acceptedSnapshots();
+  const accepted = (seq) => [{ plugin: "snapshot-probe", status: "tree", surface: null, generation: 9, seq }];
+  let finishAck;
+  emit("declared-ui-snapshot", {
+    plugin: "snapshot-probe", generation: 9, status: "tree", seq: 4,
+    value: { project: "old" }, skipped: 0,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const beforeProjectChange = read();
+  callOverride = (name, arg) => {
+    assert.equal(name, "pluginHostEvent");
+    assert.equal(arg.event, "declared-ui.snapshot.ack");
+    return new Promise((resolve) => { finishAck = resolve; });
+  };
+  emit("declared-ui-snapshot", {
+    plugin: "snapshot-probe", generation: 9, status: "tree", seq: 5,
+    value: { project: null }, skipped: 0,
+  });
+  const whileAckPending = read();
+  finishAck(true);
+  await new Promise((resolve) => setImmediate(resolve));
+  const afterAcceptedAck = read();
+  callOverride = null;
+  assert.deepEqual({ beforeProjectChange, whileAckPending, afterAcceptedAck }, {
+    beforeProjectChange: accepted(4),
+    whileAckPending: accepted(4),
+    afterAcceptedAck: accepted(5),
+  }, "the accepted snapshot status must expose the old value until the delayed new snapshot ACK is accepted");
+});
+
+test("the ingress acknowledges but does not publish an undeclared snapshot status", async () => {
+  delayListenerRegistration = false;
+  await startDeclaredSnapshotIngress();
+  seedSourceOrigins({ floor: 10, pluginHosts: { "undeclared-probe": 10 }, views: {} });
+  calls.length = 0;
+  const before = processState.acceptedSnapshots();
+  emit("declared-ui-snapshot", {
+    plugin: "undeclared-probe", generation: 10, status: "unregistered", seq: 1,
+    value: { private: true }, skipped: 0,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, [{
+    name: "pluginHostEvent",
+    arg: { plugin: "undeclared-probe", generation: 10, event: "declared-ui.snapshot.ack", data: { plugin: "undeclared-probe", status: "unregistered", seq: 1 } },
+  }], "an undeclared status was not acknowledged through its current source");
+  assert.deepEqual(processState.acceptedSnapshots(), before, "an undeclared status became public metadata");
+});
+
+test("a delayed declared snapshot acknowledgement cannot publish a retired source generation", { timeout: 5000 }, async () => {
+  delayListenerRegistration = false;
+  await startDeclaredSnapshotIngress();
+  seedSourceOrigins({ floor: 9, pluginHosts: { "snapshot-probe": 9 }, views: {} });
+  let finishAck;
+  callOverride = () => new Promise((resolve) => { finishAck = resolve; });
+  emit("declared-ui-snapshot", {
+    plugin: "snapshot-probe", generation: 9, status: "tree", seq: 6,
+    value: { project: null }, skipped: 0,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(typeof finishAck, "function", "the declared snapshot did not start its native acknowledgement");
+  emit("declared-ui-source-registered", { plugin: "snapshot-probe", generation: 10 });
+  finishAck(true);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(processState.acceptedSnapshots().filter((row) => row.plugin === "snapshot-probe"), [],
+    "a delayed acknowledgement published the retired generation");
+  callOverride = null;
+  emit("declared-ui-snapshot", {
+    plugin: "snapshot-probe", generation: 10, status: "tree", seq: 1,
+    value: { project: null }, skipped: 0,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(processState.acceptedSnapshots().filter((row) => row.plugin === "snapshot-probe"), [
+    { plugin: "snapshot-probe", status: "tree", surface: null, generation: 10, seq: 1 },
+  ], "the current generation did not publish its accepted watermark");
 });
 
 test("the channel of a plugin host source acknowledges through pluginHostEvent and delivers the snapshots of its plugin", async () => {

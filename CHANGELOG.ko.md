@@ -24,12 +24,21 @@
 - F239-51-1: tree lookup 수정의 runtime acceptance를 별도로 추적한다. 수정 전
   두 host attempt는 Red 증거이며 수정 후 window run 기록은 없다.
 
-- F239-52: project-close check에서 plugin-host 전용 Files snapshot에
-  `status.get`을 사용한다. 보존된 runtime attempt는 두 case 모두
+- F239-52: project-close check에서 plugin-host 전용 Files snapshot에 `status.get`을
+  사용한다. 보존된 runtime attempt는 두 case 모두
   `-32602 plugin host files does not serve status.watch`로 실패했다. Focused
   consumer test는 선언된 pull method를 검증한다. 이는 API 준수만 확인하며
   publication 순서는 확인하지 않는다. F239-52-1에서 event-driven
   accepted-snapshot watermark와 지연 publication 검증을 추적한다.
+
+- F239-52-1: native ACK 수락 뒤 snapshot sequence metadata를 게시하고
+  section mount 여부와 관계없이 `core.plugin.snapshots`로 노출한다. Source
+  교체와 종료는 정확한 generation row를 정리하며, 미선언 status는 게시하지
+  않고 지연 ACK는 retired generation을 복원하지 못한다. Controlled ingress
+  test는 지연 ACK와 generation 교체를 통과한다. Project-close consumer는 더
+  높은 matching source sequence를 구독한 뒤 `status.get`을 호출하며 값이
+  stale이면 다음 accepted sequence를 기다린다. Focused consumer, ingress,
+  plugin-process check는 33/33 통과한다.
 
 - F239-47-22: Provider presentation caret은 generic screen projection과
   replay hash 밖의 runtime 상태임을 명확히 한다. Owning projection test는

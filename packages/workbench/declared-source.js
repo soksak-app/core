@@ -6,6 +6,8 @@ import { createSnapshotReceiver, SNAPSHOT_EVENT, SNAPSHOT_REQUEST_COMMAND } from
 import { viewCommandGenerationOf, viewCommandsOf } from "./view-commands.js";
 import { hostCommandGeneration, hostCommandsOf, pluginOfHostKey } from "./plugin-host.js";
 import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins, sourceOrigin } from "./source-origins.js";
+import { registry } from "./exposure.js";
+import { acceptSnapshotSequence, replaceSnapshotSource, retireSnapshotSource } from "./plugin-processes.js";
 
 const recipients = new Map();
 const recipientKey = (plugin, surface, status, generation) => JSON.stringify([plugin, surface, status, generation]);
@@ -34,7 +36,11 @@ function acceptGeneration(event) {
   if (!Number.isSafeInteger(event?.generation) || event.generation < 1) {
     throw new TypeError("declared UI snapshot has no positive source generation");
   }
-  return registerSourceOrigin(event.plugin, event.surface ?? null, event.generation);
+  const surface = event.surface ?? null;
+  const previous = activeGeneration(event.plugin, surface);
+  const accepted = registerSourceOrigin(event.plugin, surface, event.generation);
+  if (accepted && previous !== event.generation) replaceSnapshotSource(event.plugin, surface, event.generation);
+  return accepted;
 }
 
 function receive(event) {
@@ -62,6 +68,9 @@ function receive(event) {
     onSnapshot: (status, seq, value, skipped) => {
       const delivery = Promise.resolve(ack).then((accepted) => {
         if (!accepted || activeGeneration(event.plugin, surface) !== generation) return;
+        if (registry.declared("status", `${event.plugin}.${status}`)) {
+          acceptSnapshotSequence(event.plugin, status, surface ?? null, generation, seq);
+        }
         for (const recipient of targets) {
           if (listeners?.has(recipient) && activeGeneration(event.plugin, surface) === generation) {
             try {
@@ -89,8 +98,16 @@ function receiveOriginLifecycle(event, ended) {
   if (!Number.isSafeInteger(event.generation) || event.generation < 1) {
     throw new TypeError("declared UI source lifecycle event requires a positive source generation");
   }
-  if (ended) endSourceOrigin(event.plugin, surface, event.generation);
-  else registerSourceOrigin(event.plugin, surface, event.generation);
+  if (ended) {
+    if (endSourceOrigin(event.plugin, surface, event.generation)) {
+      retireSnapshotSource(event.plugin, surface, event.generation);
+    }
+  } else {
+    const previous = activeGeneration(event.plugin, surface);
+    if (registerSourceOrigin(event.plugin, surface, event.generation) && previous !== event.generation) {
+      replaceSnapshotSource(event.plugin, surface, event.generation);
+    }
+  }
 }
 
 function consumeBuffered(event) {

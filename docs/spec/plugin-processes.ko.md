@@ -151,7 +151,7 @@ RPC protocol 번호는 0.0 계열에서 1이다.
 | `host.trace.plugin-host.message-stale` | call | debug | `{plugin}`: 처분된 host instance의 늦은 callback을 dispatch 전에 취소했다 |
 | `host.trace.sidecar.restart-reset` | call | debug | `{sidecar, surface}` |
 
-status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `packages/workbench/exposure.json`에 선언한다. 이 명세의 event는 [event catalog](events.json)의 class 예산 안에서 level `error` 또는 `debug`만 쓴다. plugin host와 sidecar의 재시작 상태는 `core.plugin.views` 또는 sidecar status에 보인다.
+status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`, `core.plugin.snapshots`는 `packages/workbench/exposure.json`에 선언한다. `core.plugin.snapshots`는 활성 process source와 선언된 status마다 마지막으로 수락된 `{plugin, status, surface, generation, seq}`를 담으며 `status`는 snapshot event에 실린 이름이다. Plugin host의 `surface`는 null이다. Source 등록은 이전 generation의 record를 지우고 source 종료는 해당 record를 제거한다. Workbench는 native host가 snapshot acknowledgment를 수락하고 동일 source generation이 여전히 현재일 때만 record를 갱신한다. 이 기록은 transport 수락을 뜻하며 sidebar가 그렸다는 뜻은 아니다. 같은 generation의 중복 또는 낮은 sequence는 record를 뒤로 움직이지 않는다. Mounted section이 없어도 snapshot을 기록하므로 consumer는 현재 값을 pull하기 전에 publisher event를 기다릴 수 있다. 이 status는 snapshot value를 포함하지 않는다. 각 변경은 status subscriber에 알린다. 이 명세의 event는 [event catalog](events.json)의 class 예산 안에서 level `error` 또는 `debug`만 쓴다. Plugin host와 sidecar의 재시작 상태는 `core.plugin.views` 또는 sidecar status에 보인다.
 
 **릴리스의 event level.** 0.0.x 릴리스는 error event만 저장한다(AGENTS.md, Diagnostic code). 따라서 이 설계의 각 발생은 한 번 분류한다.
 (a) 실패나 거부된 연산은 level `error`의 event다.

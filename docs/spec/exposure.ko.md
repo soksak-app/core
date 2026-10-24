@@ -166,11 +166,12 @@ document audit는 open shadow tree를 포함하여 그 document의 모든 shared
 
 ## Plugin processes
 
-메인 페이지는 [plugin process 설계](plugin-processes.ko.md#메시지와-event)의 status 세 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 call 계층을 연결하기 전까지 각 목록은 `[]`이다. call 계층은 자기 plugin의 열린 call과 손실을 메인 페이지에 보고한다.
+메인 페이지는 [plugin process 설계](plugin-processes.ko.md#메시지와-event)의 status 네 개를 게시한다. 각 status는 plugin id를 담은 record의 목록이다. plugin process가 상태를 메인 페이지에 보고하기 전까지 각 목록은 `[]`이다.
 
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. 응답 확인을 기다리는 snapshot도 포함한다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, skipped, stalled, abandoned, lateReplies, timeouts, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
+- status `core.plugin.snapshots`: `[{plugin, status, surface, generation, seq}]`, 현재 source와 선언된 status마다 native가 확인한 마지막 snapshot sequence다. `status`는 snapshot event에 실린 이름이다. Plugin host의 `surface`는 null이다. 첫 snapshot 전에 record는 없고, source 등록은 이전 generation record를 지우며, source 종료는 record를 제거한다. Sidebar section이 mount되지 않은 source도 포함하고 snapshot value는 담지 않으며, sidebar drawing이 아니라 transport 수락을 뜻한다.
 - status `core.surfaces`: 각 표면 항목은 선언된 합성의 종류인 `composition`(`view`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다.
 
 ## 창

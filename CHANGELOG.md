@@ -34,6 +34,15 @@
   not publication ordering. F239-52-1 tracks an event-driven accepted-snapshot
   watermark and delayed-publication verification.
 
+- F239-52-1: Publish metadata-only snapshot sequences after native ACK acceptance
+  and expose them through `core.plugin.snapshots`, including when no section is
+  mounted. Source replacement and end remove exact-generation rows; undeclared
+  statuses are not published and late ACKs cannot restore retired generations.
+  The controlled ingress tests pass with delayed ACK and generation replacement.
+  The project-close consumer subscribes for a newer matching source sequence,
+  pulls `status.get`, and waits for a later accepted sequence when the value is
+  stale. The focused consumer, ingress and plugin-process checks pass 33/33.
+
 - F239-47-22: Clarify that a provider's presentation caret is runtime state
   outside the generic screen projection and replay hash. The owning projection
   test confirms that an object or null presentation caret does not change the

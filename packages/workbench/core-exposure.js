@@ -16,7 +16,7 @@ import { focusName, focusState } from "./focus-state.js";
 import { trackPointer } from "./pointer-state.js";
 import { moveTreeFocus, setTreeExpanded } from "./declared-ui.js";
 import { resolveSectionControl, resolveSectionStatusLine } from "./section-address.js";
-import { losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
+import { acceptedSnapshots, losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
 import { tabMenuItems } from "./tab-menu.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
@@ -334,6 +334,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.plugin.open-calls", openCalls);
   status("core.plugin.losses", losses);
   status("core.plugin.views", views);
+  status("core.plugin.snapshots", acceptedSnapshots);
   onPluginProcessChange(coreChanged);
   status("core.focus", () => focusState(document));
   status("core.pointer", trackPointer(document, coreChanged));

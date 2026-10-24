@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { validateExposureFile } from "@soksak/plugin-api";
 
-const PLUGIN_STATUSES = ["core.plugin.open-calls", "core.plugin.losses", "core.plugin.views"];
+const PLUGIN_STATUSES = ["core.plugin.open-calls", "core.plugin.losses", "core.plugin.views", "core.plugin.snapshots"];
 
 const declaredExposure = () => validateExposureFile(JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")));
 
@@ -15,8 +15,8 @@ test("the plugin process statuses are declared by the core exposure file", () =>
 
 test("each plugin process status is registered and publishes its empty initial value", async () => {
   const { createRegistry } = await import("../exposure.js");
-  const { losses, openCalls, views } = await import("../plugin-processes.js");
-  const readers = { "core.plugin.open-calls": openCalls, "core.plugin.losses": losses, "core.plugin.views": views };
+  const { acceptedSnapshots, losses, openCalls, views } = await import("../plugin-processes.js");
+  const readers = { "core.plugin.open-calls": openCalls, "core.plugin.losses": losses, "core.plugin.views": views, "core.plugin.snapshots": acceptedSnapshots };
   const made = createRegistry();
   made.declare("core", declaredExposure().exposes);
   for (const name of PLUGIN_STATUSES) made.status(name, readers[name], () => () => {});
@@ -24,6 +24,22 @@ test("each plugin process status is registered and publishes its empty initial v
     const empty = await made.handle({ method: "status.get", params: { name } });
     assert.deepEqual(empty, { result: [] }, `${name} initial value`);
   }
+});
+
+test("accepted snapshot watermarks advance monotonically and retire with their exact source generation", async () => {
+  const { acceptedSnapshots, acceptSnapshotSequence, replaceSnapshotSource, retireSnapshotSource } = await import("../plugin-processes.js");
+  const source = { plugin: "watermark-probe", status: "tree", surface: null };
+  const row = (generation, seq) => ({ ...source, generation, seq });
+  assert.equal(acceptSnapshotSequence(source.plugin, source.status, source.surface, 11, 4), true);
+  assert.equal(acceptSnapshotSequence(source.plugin, source.status, source.surface, 11, 3), false, "an older sequence moved the watermark backward");
+  assert.deepEqual(acceptedSnapshots().filter((entry) => entry.plugin === source.plugin), [row(11, 4)]);
+  replaceSnapshotSource(source.plugin, source.surface, 12);
+  assert.deepEqual(acceptedSnapshots().filter((entry) => entry.plugin === source.plugin), [], "replacement retained an old-generation watermark");
+  assert.equal(acceptSnapshotSequence(source.plugin, source.status, source.surface, 12, 1), true);
+  retireSnapshotSource(source.plugin, source.surface, 11);
+  assert.deepEqual(acceptedSnapshots().filter((entry) => entry.plugin === source.plugin), [row(12, 1)], "a delayed old end removed the replacement watermark");
+  retireSnapshotSource(source.plugin, source.surface, 12);
+  assert.deepEqual(acceptedSnapshots().filter((entry) => entry.plugin === source.plugin), []);
 });
 
 test("the reports of call layers fill the open-call and loss statuses, and each change is announced", async (t) => {

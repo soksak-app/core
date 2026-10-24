@@ -1837,6 +1837,23 @@
         }
       },
       {
+        "name": "core.plugin.snapshots",
+        "description": "The last native-acknowledged declared UI snapshot sequence of each current source and status: `{plugin, status, surface, generation, seq}`. Surface is null for a plugin host. Records are absent before the first accepted snapshot, replaced when a source generation changes, and removed when the source ends. The status includes sources whose sidebar section is not mounted and carries no snapshot value.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "plugin": { "type": "string" },
+              "status": { "type": "string" },
+              "surface": { "type": ["string", "null"] },
+              "generation": { "type": "integer" },
+              "seq": { "type": "integer" }
+            }
+          }
+        }
+      },
+      {
         "name": "core.pointer",
         "description": "The last pointer sequence that the main document received: a press increments sequence, and down, up and click name the exposed element (or tag) that received pointerdown, pointerup and click; pressedConnected tells whether the pressed element was still in the document at pointerup. A click is missing when the pressed element was replaced before the release.",
         "schema": {
