@@ -11,6 +11,11 @@
   개인 prompt나 highlighter는 대표하지 않는다. Shell 선택 owner test는 2/2,
   activation document helper test는 35/35 통과했고 두 JavaScript module은
   `node --check`를 통과했다. Activation이나 application 실행은 하지 않았다.
+- F239-48-3-5: Tauri Darwin input-reference 거부 test를 구현 옆에 두어
+  Wails owner-test 경로와 맞춘다. 변경 전 host audit은 14개, 변경 후에는
+  13개 finding을 보고한다. Tauri owning test는 1/1, `make docs-check`는
+  통과했다. Inventory 검사는 lane 100개, 구현 파일 695개, test 파일
+  990개로 통과했다.
 - F239-47-30-3-1: E2E consumer에서 display-link artifact를 검증한다.
   집중 helper test 7/7과 양 host capture-stop case가 통과한다. Consumer는
   누락 없이 inactive application의 Wails 관측 24개와 Tauri 관측 22개의

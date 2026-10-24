@@ -44,6 +44,9 @@ mod input;
 #[cfg(feature = "diagnostics")]
 #[path = "input_reference.rs"]
 mod input_reference;
+#[cfg(all(test, feature = "diagnostics"))]
+#[path = "input_reference_test.rs"]
+mod input_reference_test;
 #[cfg(feature = "diagnostics")]
 #[path = "input_source.rs"]
 mod input_source;
