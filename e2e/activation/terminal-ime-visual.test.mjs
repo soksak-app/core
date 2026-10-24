@@ -175,23 +175,32 @@ testWithTimeout("rendered-cell predicate uses actual glyph and underline rectang
     grid: { cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
     glyphs: [{ row: 0, col: 0, grapheme: "ㅏ", bounds: { x: 1.25, y: 1.25, width: 1.5, height: 2 } }],
     underline: { rect: { x: 0, y: 5, width: 4, height: 1 }, colorSource: "cell.foregroundAfterInverse" },
-    cursor: { rect: { x: 0, y: 0, width: 0, height: 0 }, shape: "beam", visible: false, blinkVisible: false,
-      blend: "normal" },
+    pixel: { width: 4, height: 6, bytesPerRow: 16, format: "BGRA8", alpha: "premultiplied-first",
+      colorSpace: "sRGB", origin: "top-left" },
+    grid: { rows: 1, cols: 1, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
+    font: { family: "fixture", size: 6, ascent: 4, descent: 1, leading: 1 },
+    cursor: { rect: { x: 0, y: 0, width: 1, height: 1 }, shape: "beam", focused: true,
+      visible: false, blinkVisible: false, blend: "normal" },
   };
   const colors = { foreground: [0, 0, 0], background: [255, 255, 255] };
   const criteria = { colorDistance: 32, minimumGlyphPixels: 2, minimumUnderlineCoverage: 0.75 };
-  const target = { frame: render.frame, row: 0, col: 0, grapheme: "ㅏ", marked: true };
+  const target = { frame: render.frame, row: 0, col: 0, grapheme: "ㅏ", marked: true,
+    cursor: { shape: "beam", focused: true, visible: false, blinkVisible: false } };
   const complete = compositionRaster();
   assert.equal(measureRenderedCell(complete, render, target, colors, criteria).result, "measured");
   assert.deepEqual(measureRenderedCell(complete, null, target, colors, criteria),
     { result: "no-proof", reason: "frame-bound-renderer-state-missing" });
   const unsupportedCursor = { ...render, cursor: { rect: { x: 1, y: 1, width: 1, height: 1 }, shape: "beam",
-    visible: true, blinkVisible: true, blend: "normal" } };
-  assert.deepEqual(measureRenderedCell(complete, unsupportedCursor, target, colors, criteria),
+    focused: true, visible: true, blinkVisible: true, blend: "normal" } };
+  assert.deepEqual(measureRenderedCell(complete, unsupportedCursor,
+    { ...target, cursor: { ...target.cursor, visible: true, blinkVisible: true } }, colors, criteria),
     { result: "no-proof", reason: "glyph-overlaps-unsupported-cursor" });
   assert.throws(() => measureRenderedCell(complete, { ...render,
-    frame: { ...render.frame, sequence: 4 } }, target, colors, criteria), /frames differ/);
-  assert.deepEqual(measureRenderedCell(complete, render, { row: 0, col: 0, grapheme: "ㅏ", marked: true }, colors,
+    frame: { ...render.frame, sequence: 4 } }, target, colors, criteria), /different frame/);
+  assert.throws(() => measureRenderedCell(complete, render,
+    { ...target, cursor: { ...target.cursor, visible: undefined } }, colors, criteria), /cursor state is incomplete/);
+  assert.deepEqual(measureRenderedCell(complete, render,
+    { row: 0, col: 0, grapheme: "ㅏ", marked: true, cursor: target.cursor }, colors,
     criteria), { result: "no-proof", reason: "frame-bound-renderer-state-missing" });
 
   const lowerGlyphStroke = compositionRaster({ underline: false });
@@ -206,7 +215,8 @@ testWithTimeout("rendered-cell predicate uses actual glyph and underline rectang
   const blankCursor = compositionRaster({ glyph: false, underline: false });
   for (let y = 0; y < 6; y++) for (let x = 0; x < 4; x++) pixel(blankCursor.bytes, x, y, [0, 0, 0]);
   const blockCursor = { ...render, cursor: { rect: { x: 0, y: 0, width: 4, height: 6 }, shape: "block",
-    visible: true, blinkVisible: true, blend: "difference" } };
-  assert.equal(measureRenderedCell(blankCursor, blockCursor, { ...target, marked: false }, colors, criteria).result,
+    focused: true, visible: true, blinkVisible: true, blend: "difference" } };
+  assert.equal(measureRenderedCell(blankCursor, blockCursor, { ...target, marked: false,
+    cursor: { ...target.cursor, shape: "block", visible: true, blinkVisible: true } }, colors, criteria).result,
     "failed");
 });

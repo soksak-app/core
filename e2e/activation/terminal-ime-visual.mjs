@@ -206,6 +206,9 @@ export function validateRenderMetadata(render, cursorFrame, cursor, expectedGlyp
     `renderer glyph bounds are missing for ${JSON.stringify(expected)}`);
   }
   const renderedCursor = render.cursor;
+  assert.ok(cursor && typeof cursor.shape === "string" &&
+    [cursor.focused, cursor.visible, cursor.blinkVisible].every((value) => typeof value === "boolean"),
+  "terminal cursor state is incomplete");
   assert.ok(renderedCursor && ["x", "y", "width", "height"].every((key) =>
     Number.isInteger(renderedCursor.rect?.[key])), "renderer cursor rectangle is missing");
   assert.equal(renderedCursor.shape, cursor.shape, "renderer cursor shape differs from terminal status");
@@ -235,11 +238,11 @@ export function rasterizeCellBounds(bounds, cellWidth, cellHeight, label = "rend
 }
 
 export function measureRenderedCell(cellPixels, render, target, cellColors, criteria) {
-  if (!render || !target?.frame) {
+  if (!render || !target?.frame || !target.cursor) {
     return { result: "no-proof", reason: "frame-bound-renderer-state-missing" };
   }
-  assert.equal(frameIdentity(render.frame, "terminal.cursor.render.frame"),
-    frameIdentity(target.frame, "terminal.cursor.frame"), "renderer and cursor status frames differ");
+  validateRenderMetadata(render, target.frame, target.cursor,
+    [{ row: target.row, col: target.col, grapheme: target.grapheme }]);
   const glyph = render?.glyphs?.find((entry) => entry.row === target.row && entry.col === target.col &&
     entry.grapheme === target.grapheme);
   if (!glyph || !render.underline?.rect) {
