@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-47-21: Attach the resulting composition snapshot to each committed
+  native insert so committed bytes and retained preedit arrive atomically. Keep
+  composition-only updates on the compose event. The non-activating owning native
+  test passes for partial commits, unchanged preedit, and commit-before-Backspace.
+
 - F239-37-3: Give the file-open failure window check its own 120-second
   timeout. This annotation change does not claim a new test or runtime result.
 - F262-6: Extend the existing project-close window check to require mounted

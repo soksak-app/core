@@ -88,13 +88,14 @@ static NSArray *committedTexts(NSUInteger from) {
     return texts;
 }
 
-// Composition string of the last compose event after from. nil if there is none.
+// Composition string of the last composition snapshot after from. nil if there is none.
 static NSString *lastPreedit(NSUInteger from) {
     NSString *text = nil;
     for (NSUInteger i = from; i < collectedEvents.count; i++) {
         NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
             options:0 error:NULL];
         if ([event[@"type"] isEqual:@"compose"]) text = event[@"text"];
+        if ([event[@"type"] isEqual:@"insert"]) text = event[@"preedit"][@"text"];
     }
     return text;
 }
@@ -616,6 +617,61 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"TEST 8: unmark reports null once when selection and retained suffix are unchanged (selection %@ -> %@, events %lu, got %@)",
                 NSStringFromRange(selectionBeforeUnmark), NSStringFromRange(unmarkView.selectedRange), (unsigned long)unmarkComposeCount, unmarkComposeEvents]);
         sp_region_close(unmarkRegion);
+        void *atomicRegion = sp_region_create(surface, "test8-atomic-insert", testEvent, NULL);
+        sp_region_place(atomicRegion, 10, 10, 10, 10, true);
+        sp_region_focus(atomicRegion);
+        NSTextView *atomicView = (NSTextView *)atomicRegion;
+        [(id<NSTextInputClient>)atomicView insertText:@"abc" replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSUInteger beforeCommittedInsert = collectedEvents.count;
+        [(id<NSTextInputClient>)atomicView insertText:@"X" replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSDictionary *committedInsert = nil;
+        NSUInteger composeReportsAfterInsert = 0;
+        for (NSUInteger i = beforeCommittedInsert; i < collectedEvents.count; i++) {
+            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:NULL];
+            if ([event[@"type"] isEqual:@"insert"]) committedInsert = event;
+            if ([event[@"type"] isEqual:@"compose"]) composeReportsAfterInsert++;
+        }
+        NSDictionary *insertPreedit = committedInsert[@"preedit"];
+        check([committedInsert[@"text"] isEqual:@"abc"] && [insertPreedit[@"text"] isEqual:@"X"]
+            && insertPreedit[@"markedRange"] == NSNull.null && insertPreedit[@"selectedRange"] != nil
+            && insertPreedit[@"replacementRange"] == NSNull.null && [insertPreedit[@"attributed"] isEqual:@NO]
+            && composeReportsAfterInsert == 0,
+            [NSString stringWithFormat:@"TEST 8: one committed insert carries the resulting strict preedit snapshot without a duplicate compose report (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforeCommittedInsert, collectedEvents.count - beforeCommittedInsert)]]);
+        NSUInteger beforeSamePreeditCommit = collectedEvents.count;
+        [(id<NSTextInputClient>)atomicView insertText:@"X" replacementRange:NSMakeRange(NSNotFound, 0)];
+        NSDictionary *samePreeditInsert = nil;
+        NSUInteger samePreeditComposeCount = 0;
+        for (NSUInteger i = beforeSamePreeditCommit; i < collectedEvents.count; i++) {
+            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:NULL];
+            if ([event[@"type"] isEqual:@"insert"]) samePreeditInsert = event;
+            if ([event[@"type"] isEqual:@"compose"]) samePreeditComposeCount++;
+        }
+        check([samePreeditInsert[@"text"] isEqual:@"X"] && [samePreeditInsert[@"preedit"][@"text"] isEqual:@"X"]
+            && samePreeditComposeCount == 0,
+            [NSString stringWithFormat:@"TEST 8: a new commit is sent when the retained preedit text is unchanged (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforeSamePreeditCommit, collectedEvents.count - beforeSamePreeditCommit)]]);
+        NSUInteger beforeBackspace = collectedEvents.count;
+        [atomicView setValue:@"{\"type\":\"key\",\"key\":\"Backspace\",\"shift\":false,\"alt\":false,\"ctrl\":false}" forKey:@"unhandledKey"];
+        [(id<NSTextInputClient>)atomicView doCommandBySelector:@selector(deleteBackward:)];
+        NSUInteger pendingInsertIndex = NSNotFound, backspaceIndex = NSNotFound;
+        NSDictionary *clearedPreedit = nil;
+        for (NSUInteger i = beforeBackspace; i < collectedEvents.count; i++) {
+            NSDictionary *event = [NSJSONSerialization JSONObjectWithData:[collectedEvents[i] dataUsingEncoding:NSUTF8StringEncoding]
+                options:0 error:NULL];
+            if ([event[@"type"] isEqual:@"insert"]) {
+                pendingInsertIndex = i;
+                clearedPreedit = event[@"preedit"];
+            }
+            if ([event[@"type"] isEqual:@"key"] && [event[@"key"] isEqual:@"Backspace"]) backspaceIndex = i;
+        }
+        check(pendingInsertIndex != NSNotFound && backspaceIndex > pendingInsertIndex
+            && [clearedPreedit[@"text"] isEqual:@""] && clearedPreedit[@"markedRange"] == NSNull.null,
+            [NSString stringWithFormat:@"TEST 8: clearing the committed suffix reports its empty preedit before the pending Backspace (got %@)",
+                [collectedEvents subarrayWithRange:NSMakeRange(beforeBackspace, collectedEvents.count - beforeBackspace)]]);
+        sp_region_close(atomicRegion);
         method_setImplementation(composesMethod, originalComposes);
         method_setImplementation(hangulOnlyMethod, originalHangulOnly);
         imp_removeBlock(composingSource);

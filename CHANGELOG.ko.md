@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-47-21: 확정 bytes와 보관 preedit을 원자적으로 전달하도록 각 native
+  insert에 결과 composition snapshot을 담는다. Composition-only 변경은 compose
+  event로 유지한다. 비활성 owning native test가 partial commit, 동일 preedit의
+  새 commit, Backspace 전 commit을 통과한다.
+
 - F239-37-3: 파일 열기 실패 window check에 test별 120초 timeout을 지정한다.
   이 annotation 변경은 새 test나 runtime 결과를 주장하지 않는다.
 - F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전
