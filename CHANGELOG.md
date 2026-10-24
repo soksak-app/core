@@ -11,6 +11,16 @@
   one-second wait
   expires. Capture behavior and the 33 ms criterion are unchanged.
 
+- F212.10-core-3-9: Require the host's native view-reply dispatch record
+  before accepting a terminal reply after page reload. The page call and its
+  source receipt/reply do not prove that the host accepted a native post.
+  Start from the dispatch record, validate its target and outcome, and join
+  one `posted` record to the matching page receipt/reply. Ignore page-call
+  arguments and cross-layer timestamps. The focused correlator owner passes
+  1/1 and the exported structural source audit passes for all three changed
+  e2e files. Full `make e2e-check` and rebuilt two-host runtime verification
+  remain pending.
+
 - F212.10-core-3-8: Strengthen the terminal page-reload acceptance case to
   correlate the current document identity and source-generation page call and
   reply with the accepted native `viewReply` host call. Preserve transcript
