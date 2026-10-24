@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-48-3-5: Place the Tauri Darwin input-reference rejection test beside
+  its implementation, matching the Wails owner-test path. The unchanged host
+  audit drops from 14 to 13 findings. The Tauri owning test passes 1/1 and
+  `make docs-check` passes. `make parity-check` could not start because this
+  isolated worktree has no installed `acorn` dependency; inventory validation
+  remains pending.
 - F239-47-30-3-1: Verify the display-link artifact through the E2E consumer.
   The focused helper tests pass 7/7, and the capture-stop case passes on both
   hosts. The consumer preserves available metadata with 24 Wails and 22 Tauri

@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-48-3-5: Tauri Darwin input-reference 거부 test를 구현 옆에 두어
+  Wails owner-test 경로와 맞춘다. 변경 전 host audit은 14개, 변경 후에는
+  13개 finding을 보고한다. Tauri owning test는 1/1, `make docs-check`는
+  통과했다. 격리 worktree에 `acorn` dependency가 없어 `make parity-check`는
+  시작하지 못했으며 inventory 검증은 대기 중이다.
 - F239-47-30-3-1: E2E consumer에서 display-link artifact를 검증한다.
   집중 helper test 7/7과 양 host capture-stop case가 통과한다. Consumer는
   누락 없이 inactive application의 Wails 관측 24개와 Tauri 관측 22개의
