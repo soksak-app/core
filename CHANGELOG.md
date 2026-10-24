@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-48-3-8: Pair the Wails start-module test with Tauri's test by
+  importing each real `runtime/start.js` entry through Node's module hooks
+  and supplying a response fixture for its declared transport. The host audit
+  drops from 15 to 13 findings; both app-level start findings are removed.
+  The paired tests pass 2/2, `make docs-check` passes, and `make parity-check`
+  passes with 100 lanes, 696 implementation files, and 995 test files.
 - F239-48-3-6: Place the Go diagnostics input-reference parser test beside
   its contract owner, matching the Rust test module. The host audit drops
   from 13 to 12 findings. The unchanged Go owner test passes 1/1. The

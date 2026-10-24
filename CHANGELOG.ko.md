@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-48-3-8: Wails start-module test를 Tauri test와 짝지어 각 실제
+  `runtime/start.js`를 Node module hook으로 가져오고 선언된 transport의 응답
+  fixture를 제공한다. Host audit은 15개에서 13개 finding으로 줄었고 두
+  app-level start finding이 사라졌다. Paired test는 2/2, `make docs-check`와
+  lane 100개, 구현 파일 696개, test 파일 995개의 `make parity-check`가 통과한다.
 - F239-48-3-6: Go diagnostics input-reference parser test를 계약 owner인
   Rust test module과 맞춰 배치한다. Host audit은 13개에서 12개 finding으로
   줄었다. 변경하지 않은 Go owner test는 1/1 통과한다. Inventory 검사는
