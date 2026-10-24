@@ -320,11 +320,10 @@ WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/soksak-wailsv3
 # Writes the Info.plist and the Dock icon of the bundle. The first argument is the bundle and the second is the application. The app name
 # is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
 # When the name differs by language, the .lproj/InfoPlist.strings of that language is added again at that time.
-# The Contents of the bundle are created anew at each build. A file that an earlier build put there (such as a sidecar that the bundle no longer holds)
-# would otherwise make the bundle differ from the current build.
-bundle-info = rm -rf $(1)/Contents && mkdir -p $(1)/Contents/MacOS $(1)/Contents/Resources \
-	&& cp apps/$(2)/platform/darwin/Info.plist $(1)/Contents/Info.plist \
-	&& cp apps/$(2)/platform/darwin/AppIcon.icns $(1)/Contents/Resources/AppIcon.icns
+# The Contents of the bundle are created anew at each build so an earlier sidecar or other removed file cannot remain in the bundle. The Darwin
+# preparation helper checks the target before this mutation and refuses with the active process PID and bundle path when a process is executing
+# from its Contents/MacOS directory.
+bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "$(1)" --app "$(2)"
 # So that the debug bundle runs beside the release application, appends .dev to the release identifier in Info.plist and uses the bundle name
 # as the executable name (docs/spec/hosts.md#frontend-and-executables). The first argument is the bundle and the second is the application.
 bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(1)/Contents/Info.plist).dev" $(1)/Contents/Info.plist \

@@ -16,6 +16,8 @@
   각각 3.722초와 4.064초에 통과하며 native label/expand click, bookmark 추가/삭제,
   reload 유지를 확인한다. 전체 Files suite는 F239-35와 F239-37에 남는다.
 
+- F239-48: macOS bundle preparation은 `Contents`를 교체하기 전에 process table을 확인한다. process command가 대상 bundle의 `Contents/MacOS`에서 시작하면 파일을 삭제하기 전에 PID와 bundle 경로를 보고하고 거부한다. Red: 변경 전 Makefile preparation은 disposable executable child가 bundle을 사용하는 중에도 성공하고 sentinel을 삭제했다. Green: 실행한 Makefile 경계가 활성 child를 거부하고 sentinel을 보존하며, process가 없으면 `Contents`, `Info.plist`, app icon을 재생성한다(2/2). `make docs-check`와 `make boundaries`가 통과한다. Parity audit에는 기존 F266 및 Wails starter test 문제가 남고 `make platforms`는 관련 없는 위반 네 개를 보고한다.
+
 - F239-35-4-1: declared UI expansion 구독을 DOM exposure relay와 분리한다. `forwardHostExposure`는 `exposure-request`를 구독한 경우에만 허용한다. Red: expansion만 구독한 host가 no-subscription 오류 대신 `dom.rect` 요청을 전달받았다. Green: 같은 test가 즉시 거부와 exposure event 미전달을 확인하고 plugin-host call tests 24/24, `make exposure-check`, `make docs-check`가 통과한다. Fake host는 `clockAnswer`를 사용해 `log {action: "clock"}`에 계약된 `{ts_us, mono_ns}`를 반환하며 owning test stderr에는 clock response 오류가 없다.
 
 - F239-35-4: Plugin-host `runtime.native.on`은 `exposure-request`와 `declared-ui.expanded`만 허용하며 다른 event 이름은 계속 거부한다. Red: 변경 전 public plugin-host-call test는 `native event declared-ui.expanded is not served to a plugin host` 오류로 거부했다. Green: 같은 owning test가 두 구독과 `document-state` 거부를 검증하며 23/23 통과하고 `make exposure-check`도 통과한다. `make docs-check`가 통과한다.

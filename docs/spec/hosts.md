@@ -288,6 +288,8 @@ On macOS each application runs from an application bundle, because the operating
 | `make platforms` | Run `scripts/check-platforms.mjs` |
 | `make hosts-check` | Run `scripts/check-hosts.mjs` |
 
+All four macOS application bundle build targets check the target bundle before replacing its `Contents` directory. If a process is executing from that bundle, preparation fails with the process PID and exact bundle path before it mutates the bundle. Run builds from the intended verification checkout and do not direct a build at a bundle used by a running application.
+
 ## Structure checks
 
 `scripts/check-hosts.mjs` compares `packages/host/wailsv3` with `packages/host/tauriv2` and `apps/wailsv3` with `apps/tauriv2`. It compares `.go` and `.rs` files by relative path without extension and other files by relative path. A file present on one side passes only when it is listed with a difference ID from the allowed differences table. The check reads files that Git tracks or would track, so generated `src/frontend/` files are not compared.
