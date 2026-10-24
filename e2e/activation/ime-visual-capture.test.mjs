@@ -240,16 +240,63 @@ testWithTimeout("stage planning covers the complete Hangul span, preedit underli
       selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true } };
   const observation = { screen: { frame, rows: [[{ ch: "$", width: 1 }, { ch: " ", width: 1 },
     { width: 0 }, { width: 0 }, { width: 1 }, { width: 1 }]] },
-  cursor, compose: { ...cursor.preedit } };
-  const stage = planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation,
+  cursor, compose: { ...cursor.preedit }, presented: frame };
+  const frameStatus = new Map([["1/2/3", { frame, render, rows: observation.screen.rows, semantic: {
+    document: "ㅏ", compose: { ...cursor.preedit }, cursor: { row: 0, col: 2, focused: true, preedit: "ㅏ" },
+    geometry: { rows: 1, cols: 6, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } },
+  }, eventIndexes: { screen: 0, cursor: 1 }, screenRowsReused: false }]]);
+  const stage = planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation, frameStatus,
     prompt: { row: 0, col: 0, text: "$ " } });
   assert.deepEqual(stage.cells, [
     { row: 0, column: 2 }, { row: 0, column: 3 }, { row: 0, column: 4 },
   ]);
   assert.deepEqual(stage.glyphs, [{ row: 0, col: 2, grapheme: "ㅏ", marked: true }]);
   assert.equal(stage.semantic.document, "ㅏ");
-  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏㅏ", observation,
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏㅏ", observation, frameStatus,
     prompt: { row: 0, col: 0, text: "$ " } }), /terminal document differs/);
+});
+
+testWithTimeout("stage planning accepts prior base rows with the exact current overlay frame", () => {
+  const baseFrame = { generation: 1, raster: 2, sequence: 9 };
+  const overlayFrame = { generation: 1, raster: 2, sequence: 11 };
+  const glyph = { row: 0, col: 2, width: 2, fontRuns: 1, grapheme: "ㅏ",
+    foreground: "#000000", background: "#ffffff", bounds: { x: 0, y: 1, width: 4, height: 3 },
+    underline: { rect: { x: 0, y: 5, width: 8, height: 1 } } };
+  const render = { ...renderFixture, frame: overlayFrame,
+    grid: { rows: 1, cols: 6, origin: { x: 0, y: 0 }, cellWidth: 4, cellHeight: 6 },
+    glyphs: [glyph] };
+  const compose = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const cursor = { frame: overlayFrame, render, row: 0, col: 2, focused: true, shape: "beam", visible: false,
+    blinkVisible: false, preedit: compose };
+  const rows = [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }, { width: 0 }, { width: 0 },
+    { width: 1 }, { width: 1 }]];
+  const observation = { screen: { frame: baseFrame, rows }, compose, cursor, presented: overlayFrame };
+  const frameStatus = new Map([["1/2/11", { frame: overlayFrame, render, rows,
+      semantic: { document: "ㅏ", compose,
+        cursor: { row: 0, col: 2, focused: true, preedit: "ㅏ" },
+        geometry: { rows: 1, cols: 6, cellWidth: 4, cellHeight: 6, origin: { x: 0, y: 0 } } },
+      eventIndexes: { screen: 0, cursor: 2 }, screenRowsReused: true }]]);
+
+  assert.doesNotThrow(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation, frameStatus,
+    prompt: { row: 0, col: 0, text: "$ " } }));
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
+    ...observation, screen: { ...observation.screen, frame: { ...baseFrame, sequence: 12 } },
+  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /base screen frame sequence is newer/);
+  const newerWatermark = { ...observation, presented: { ...overlayFrame, sequence: 12 } };
+  assert.doesNotThrow(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: newerWatermark,
+    frameStatus, prompt: { row: 0, col: 0, text: "$ " } }));
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
+    ...observation, presented: { ...overlayFrame, sequence: 10 },
+  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /has not reached the cursor frame/);
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
+    ...observation, presented: { ...overlayFrame, generation: overlayFrame.generation + 1 },
+  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /presentation watermark generation differs/);
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation: {
+    ...observation, screen: { ...observation.screen, rows: [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }]] },
+  }, frameStatus, prompt: { row: 0, col: 0, text: "$ " } }), /differ from the active observer/);
+  assert.throws(() => planVisualStage({ key: "k-1", expectedDocument: "ㅏ", observation,
+    frameStatus: new Map(), prompt: { row: 0, col: 0, text: "$ " } }), /indexed prior screen rows/);
 });
 
 testWithTimeout("visual stage evaluator retains exact target identity and measures each expected glyph", () => {

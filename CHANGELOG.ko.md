@@ -10,6 +10,23 @@
   데이터 snapshot, 닫은 뒤의 빈 no-project snapshot, 오래된 row 부재와 깨끗한
   application error audit을 요구한다. 기존 Files P42–P45 test는 null 및 오래된
   작업 동작을 결정적으로 검증하며, 양 host project-close acceptance는 대기 중이다.
+
+- F239-47-19: 정확한 cursor/render overlay frame으로 visual stage를 계획하고
+  이전 screen rows를 source로 보존한다. rows-only status deduplication으로
+  변경 없는 screen notification이 생략되면 base screen sequence가 overlay보다
+  앞설 수 있다. Visual planning/evaluation 전에 10개 입력 state, callback batch와
+  전체 recording을 모두 보존한다. Owning visual-capture test 12/12,
+  `node --check e2e/activation/ime.test.mjs`, `make e2e-check`,
+  `make docs-check`가 통과한다. Activation 재실행은 하지 않았으며
+  F239-47-6 acceptance는 열린 상태다.
+  Stage planner는 caller의 top-level `presented`를 사용한다. 이 값의 같은
+  generation/raster sequence는 progress watermark이며 exact source identity는
+  cursor/render frame과 index된 row state가 유지한다.
+  Caller-shape test는 이전의 존재하지 않는 `region` lookup을 재현했다.
+  수정한 frame-planning/watermark case 2/2가 통과한다.
+  Activation check는 raw observer callback을 메모리에 보관하기 전에
+  `status-events.jsonl`에 append하며 쓰기 오류는 check 실패로 처리한다.
+
 - F239-37-3: 파일 열기 실패 check를 제거된 `files.selection`
   및 `files.open` status 대기에서 선언된 `files.tree` snapshot으로 옮긴다. 더 큰 `core.sidebars`
   `acceptedSeq`를 기다린 뒤 `files.tree` snapshot과 rendered section의 message row를 확인하고,

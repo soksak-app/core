@@ -11,6 +11,24 @@
   after close, no stale rows, and a clear application error audit. Existing
   Files P42–P45 tests cover deterministic null and stale-work behavior; the
   two-host project-close acceptance remains pending.
+
+- F239-47-19: Plan visual stages against the exact cursor/render overlay frame
+  while preserving the earlier screen rows as their source. The base screen
+  sequence may precede the overlay sequence when rows-only status deduplication
+  suppresses an unchanged screen notification. Preserve all ten input states,
+  callback batches, and the full recording before visual planning or evaluation.
+  The owning visual-capture tests pass 12/12; `node --check
+  e2e/activation/ime.test.mjs`, `make e2e-check`, and `make docs-check` pass.
+  No activation rerun was performed; F239-47-6 acceptance remains open.
+  The stage planner consumes the caller's top-level `presented` field. It uses
+  that same-generation/raster sequence as a progress watermark, while exact
+  source identity remains the cursor/render frame and indexed row state.
+  The caller-shaped test reproduced the previous nonexistent `region` lookup;
+  the corrected frame-planning/watermark cases pass 2/2.
+  The activation check appends each raw observer callback to
+  `status-events.jsonl` before retaining it in memory; write errors fail the
+  check.
+
 - F239-37-3: Migrate the file-open failure check from removed `files.selection`
   and `files.open` status waits to the declared `files.tree` snapshot. The check
   waits for a newer accepted sequence, verifies the message row in the snapshot
