@@ -22,6 +22,9 @@
   `git diff --check`, `make docs-check`가 통과한다. Key receipt, frame/render/source
   검사, visual 측정과 33 ms frame-gap 제한은 그대로다. Activation rerun은 하지
   않았으며 F239-47-6 acceptance는 계속 열려 있다.
+- F238-c-18: Terminal의 current-source view literal 검증 완료를 기록한다. Pinned SDK release와 owner pin 요구는 F238-c-11-1에 유지한다.
+
+- F238-c-20: 기존 current-source plugin 검사를 owner별로 기록하고 plugin check matrix를 바로잡는다. Source 구현과 공개 SDK release는 포함하지 않는다.
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen

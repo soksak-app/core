@@ -24,6 +24,9 @@
   docs-check` pass. Key receipts, frame/render/source checks, visual measurement
   and the 33 ms frame-gap limit are unchanged. No activation rerun was made;
   F239-47-6 acceptance remains open.
+- F238-c-18: Record terminal current-source view-literal validation as complete. Keep the pinned SDK release and owner-pin requirement under F238-c-11-1.
+
+- F238-c-20: Record existing current-source plugin checks by owner and correct the plugin check matrix. No source implementation or public SDK release is included.
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,
