@@ -1563,6 +1563,27 @@ func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 	}
 }
 
+func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
+	written := captureLog(t)
+	script := "#!/bin/sh\necho $$ > DIR/pid\nread open\nread closed\ncat >/dev/null\n" +
+		"printf '%s\\n' '{\"surface\":\"s2\",\"body\":{\"image\":{\"format\":\"bgra8\",\"generation\":3,\"height\":10,\"name\":\"view\",\"raster\":4,\"scale\":1.0,\"sequence\":5,\"token\":{\"id\":7,\"kind\":\"iosurface-global\"},\"width\":10}}}'\n"
+	sidecars, directory := scriptSidecars(t, script)
+	owner := newFakeOwner("/projects/a")
+	if err := sidecars.Send(owner, echoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sidecars.Close("s2")
+	sidecars.Stop()
+	requireEnded(t, processID(t, directory))
+	got := written()
+	if strings.Contains(got, "error host sidecar "+echoSidecar+": answer of the image of closed surface s2: sidecars are stopped") {
+		t.Fatalf("stop logged a failed reply for process-owned output: %s", got)
+	}
+	if !strings.Contains(got, "info host sidecar "+echoSidecar+": canceled transfer image of closed surface s2") {
+		t.Fatalf("stop did not record cancellation of process-owned output: %s", got)
+	}
+}
+
 // contract: sidecars.read.unfinished-line-ends-the-connection
 func TestAnUnfinishedLineAtTheEndOfTheOutputIsNotAMessage(t *testing.T) {
 	unfinished := 0

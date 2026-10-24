@@ -510,6 +510,115 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 	}
 }
 
+// contract: sidecars.image.stop-answers-late-persistent-image-before-shutdown
+func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T) {
+	written := captureLog(t)
+	root := t.TempDir()
+	socketDirectory := socketParent(t)
+	socket := filepath.Join(socketDirectory, "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	operations := make(chan []string, 1)
+	served := make(chan error, 1)
+	go func() {
+		connection, err := listener.Accept()
+		if err != nil {
+			served <- err
+			return
+		}
+		defer connection.Close()
+		reader := bufio.NewReader(connection)
+		seen := make([]string, 0)
+		for {
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				served <- err
+				operations <- seen
+				return
+			}
+			var request map[string]any
+			if err := json.Unmarshal(line, &request); err != nil {
+				served <- err
+				operations <- seen
+				return
+			}
+			operation, _ := request["operation"].(string)
+			if request["closed"] == true {
+				operation = "closed"
+			}
+			body, hasBody := request["body"].(map[string]any)
+			if hasBody {
+				if bodyOperation, ok := body["operation"].(string); ok {
+					operation = bodyOperation
+				} else if image, ok := body["image"].(map[string]any); ok && image["error"] == "closed" {
+					operation = "image-reply"
+				}
+			}
+			seen = append(seen, operation)
+			switch operation {
+			case "hello":
+				_, err = io.WriteString(connection, `{"operation":"hello","protocol":1,"version":"0.0.1","ok":true}`+"\n")
+			case "close-owner":
+				image := `{"surface":"surface","body":{"image":{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{"id":7,"kind":"iosurface-global"},"width":10}}}`
+				if _, err = io.WriteString(connection, image+"\n"); err == nil {
+					requestID, _ := request["request"].(string)
+					closed, _ := json.Marshal(map[string]any{"operation": "closed-owner", "request": requestID, "ok": true})
+					_, err = connection.Write(append(closed, '\n'))
+				}
+			case "shutdown":
+				requestID, _ := request["request"].(string)
+				closed, _ := json.Marshal(map[string]any{"operation": "shutdown", "request": requestID, "ok": true})
+				if _, err = connection.Write(append(closed, '\n')); err == nil {
+					operations <- seen
+					served <- nil
+					return
+				}
+			case "open":
+				_, err = io.WriteString(connection, `{"surface":"surface","body":{"event":"opened"}}`+"\n")
+			case "image-reply", "closed":
+				continue
+			}
+			if err != nil {
+				served <- err
+				operations <- seen
+				return
+			}
+		}
+	}()
+
+	declarations := harnessDeclarations(t.TempDir())
+	declarations[0].Version = "0.0.1"
+	sidecars, err := NewSidecars(declarations, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &harnessOwner{root: "/late-image", seen: make(chan SidecarMessage, 1)}
+	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-owner.seen:
+	case <-time.After(stall):
+		t.Fatal("the service's open event did not reach its owner")
+	}
+	sidecars.Close("surface")
+	sidecars.Stop()
+	got := written()
+	if strings.Contains(got, "error host sidecar fixture-service: answer of the image of closed surface surface: sidecars are stopped") {
+		t.Fatalf("stop rejected a transfer image while its persistent connection was still open: %s", got)
+	}
+	if err := <-served; err != nil {
+		t.Fatal(err)
+	}
+	if seen := <-operations; !slices.Equal(seen, []string{"hello", "open", "closed", "close-owner", "image-reply", "shutdown"}) {
+		t.Fatalf("service operations = %v, want image reply before shutdown; log=%s", seen, got)
+	}
+}
+
 // contract: sidecars-transport.hello.rejects-auth-failure
 func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	root := t.TempDir()

@@ -937,6 +937,110 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
     );
 }
 
+// contract: sidecars.image.stop-answers-late-persistent-image-before-shutdown
+#[test]
+fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("late-image.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "late-image-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+
+    let service = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut seen = Vec::new();
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                return seen;
+            }
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let operation = if request["closed"] == true {
+                "closed"
+            } else if let Some(operation) = request["body"]["operation"].as_str() {
+                operation
+            } else if request["body"]["image"]["error"] == "closed" {
+                "image-reply"
+            } else {
+                request["operation"].as_str().unwrap_or("")
+            };
+            seen.push(operation.to_string());
+            match operation {
+                "hello" => {
+                    writeln!(stream, r#"{{"operation":"hello","protocol":1,"ok":true}}"#).unwrap()
+                }
+                "open" => writeln!(
+                    stream,
+                    r#"{{"surface":"surface","body":{{"event":"opened"}}}}"#
+                )
+                .unwrap(),
+                "close-owner" => {
+                    writeln!(stream, r#"{{"surface":"surface","body":{{"image":{{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{{"id":7,"kind":"iosurface-global"}},"width":10}}}}}}"#).unwrap();
+                    let reply = serde_json::json!({
+                        "operation": "closed-owner",
+                        "request": request["request"],
+                        "ok": true
+                    });
+                    writeln!(stream, "{reply}").unwrap();
+                }
+                "shutdown" => {
+                    let reply = serde_json::json!({
+                        "operation": "shutdown",
+                        "request": request["request"],
+                        "ok": true
+                    });
+                    writeln!(stream, "{reply}").unwrap();
+                    return seen;
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (window, events) = owner("late-image", "/projects/late-image");
+    sidecars
+        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    assert_eq!(
+        events.recv_timeout(STALL).unwrap().body.get(),
+        r#"{"event":"opened"}"#
+    );
+    sidecars.retain(&window, &|_| false).unwrap();
+    sidecars.stop();
+    assert_eq!(
+        service.join().unwrap(),
+        [
+            "hello",
+            "open",
+            "closed",
+            "close-owner",
+            "image-reply",
+            "shutdown"
+        ]
+    );
+}
+
 // contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
 #[test]
 fn persistent_retain_sends_layout_and_known_surfaces() {

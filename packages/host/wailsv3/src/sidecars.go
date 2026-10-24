@@ -116,7 +116,9 @@ type sidecar struct {
 	closeWaiters   map[string]chan error
 	// ownerMutex serializes the close of the owner of a persistent service, and transportClosed is true once it closed the
 	// transport, so the close of a replacement and the close of a stop run once between them.
-	ownerMutex      sync.Mutex
+	ownerMutex sync.Mutex
+	// responseMutex serializes persistent response enqueue with closing the connection and outbox.
+	responseMutex   sync.Mutex
 	transportClosed bool
 	// retained is the number of sessions that the service closed for each retain request.
 	retained map[string]int
@@ -654,6 +656,13 @@ func (c *Sidecars) Writing(name string) (int, error) {
 // SendResponse passes a reply (such as an image return) to the sidecar.
 // When the channel is full, it buffers the immutable replies in order and the write goroutine sends them.
 func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessage) error {
+	return c.sendResponse(nil, name, surface, image, body)
+}
+
+// sendResponse passes a reply to the sidecar process that produced it. A response to a discarded image may arrive after
+// stop removed that process from the running list. A stdio process is ending and releases the image at process exit; a
+// persistent service remains connected through close-owner and must receive the reply before shutdown.
+func (c *Sidecars) sendResponse(source *sidecar, name, surface, image string, body json.RawMessage) error {
 	// First serializes the JSON outside the mutex.
 	type response struct {
 		Surface string          `json:"surface"`
@@ -666,12 +675,33 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 	line = append(line, '\n')
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.stopped {
-		return fmt.Errorf("sidecars are stopped")
+		if source == nil {
+			c.mu.Unlock()
+			return fmt.Errorf("sidecars are stopped")
+		}
+		if !source.persistent {
+			c.mu.Unlock()
+			LogInfo("sidecar "+name, fmt.Sprintf("canceled transfer image of closed surface %s while stopping; process exit releases transfer image", surface))
+			return nil
+		}
+		source.responseMutex.Lock()
+		if source.transportClosed {
+			source.responseMutex.Unlock()
+			c.mu.Unlock()
+			return fmt.Errorf("sidecar %s response channel is disconnected", name)
+		}
+		defer source.responseMutex.Unlock()
+		defer c.mu.Unlock()
+		return c.queueResponse(source, name, surface, image, body, line)
 	}
+	defer c.mu.Unlock()
 	process, ok := c.running[name]
-	if !ok {
+	if source != nil {
+		if !ok || process != source {
+			return sidecarEnded{name}
+		}
+	} else if !ok {
 		return sidecarEnded{name}
 	}
 	select {
@@ -679,7 +709,20 @@ func (c *Sidecars) SendResponse(name, surface, image string, body json.RawMessag
 		return fmt.Errorf("sidecar %s response channel is disconnected", name)
 	default:
 	}
+	if process.persistent {
+		process.responseMutex.Lock()
+		if process.transportClosed {
+			process.responseMutex.Unlock()
+			return fmt.Errorf("sidecar %s response channel is disconnected", name)
+		}
+		defer process.responseMutex.Unlock()
+	}
+	return c.queueResponse(process, name, surface, image, body, line)
+}
 
+// queueResponse writes a response without blocking, or buffers the immutable line when the outbox is full. It is called
+// with c.mu held so stop cannot retire the process between validation and enqueue.
+func (c *Sidecars) queueResponse(process *sidecar, name, surface, image string, body json.RawMessage, line []byte) error {
 	// Sends to the channel without blocking. When the channel is full, it buffers.
 	select {
 	case process.outbox <- queue(line):
@@ -1831,7 +1874,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
-			c.dropMessage(process.name, event)
+			c.dropMessage(process, event)
 		}
 	}
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
@@ -2029,7 +2072,7 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 			c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body)
 			owner.Emit("sidecar-message", SidecarMessage{Sidecar: process.name, Surface: event.Surface, Body: event.Body})
 		} else {
-			c.dropMessage(process.name, event)
+			c.dropMessage(process, event)
 		}
 	}
 	// net.ErrClosed means that this host closed the connection (cleanup after termination or failure). When the peer closes, it is EOF and there is no error.
@@ -2247,19 +2290,19 @@ func (e sidecarEnded) Is(target error) bool { return target == ErrSidecarEnded }
 // dropMessage records, with its body, a sidecar message that is discarded because there is no owner window, and answers a
 // transfer image among them with the error closed, because the supplier keeps a transfer image until the host answers it
 // (docs/spec/native-surfaces.md#image-regions).
-func (c *Sidecars) dropMessage(sidecar string, event sidecarEvent) {
-	LogWarn("sidecar "+sidecar, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
+func (c *Sidecars) dropMessage(process *sidecar, event sidecarEvent) {
+	LogWarn("sidecar "+process.name, fmt.Sprintf("message for surface %s dropped: no window owns the surface: %s", event.Surface, event.Body))
 	name, answer, ok := ClosedImageAnswer(event.Body)
 	if !ok {
 		return
 	}
-	err := c.SendResponse(sidecar, event.Surface, name, answer)
+	err := c.sendResponse(process, process.name, event.Surface, name, answer)
 	switch {
 	case errors.Is(err, ErrSidecarEnded):
 		// The frames of a sidecar end with its process, so an ended sidecar needs no answer.
-		LogInfo("sidecar "+sidecar, fmt.Sprintf("answer of the image of closed surface %s not sent: %v", event.Surface, err))
+		LogInfo("sidecar "+process.name, fmt.Sprintf("answer of the image of closed surface %s not sent: %v", event.Surface, err))
 	case err != nil:
-		LogError("sidecar "+sidecar, fmt.Sprintf("answer of the image of closed surface %s: %v", event.Surface, err))
+		LogError("sidecar "+process.name, fmt.Sprintf("answer of the image of closed surface %s: %v", event.Surface, err))
 	}
 }
 
@@ -2301,9 +2344,14 @@ func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surfa
 
 // closeTransport closes the connection and the outbox of a persistent service. It is called with ownerMutex held.
 func (s *sidecar) closeTransport() {
+	s.responseMutex.Lock()
+	defer s.responseMutex.Unlock()
+	if s.transportClosed {
+		return
+	}
+	s.transportClosed = true
 	s.conn.Close()
 	close(s.outbox)
-	s.transportClosed = true
 }
 
 // flushStderr writes the last text of the standard error that ended without a line break, after the process ended, to the record.

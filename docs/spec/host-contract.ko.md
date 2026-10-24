@@ -470,6 +470,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.protocol.dropped-message-is-recorded` | 소유 창이 없어 버려지는 사이드카 메시지는 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`를 쓴다. | both |
 | `sidecars.protocol.answer-to-ended-sidecar-is-recorded` | process가 실행 중이 아닌 sidecar로의 응답은 끝난 오류(`sidecar <name> is not running`)이고, 그런 sidecar에 대한 버려진 transfer image의 `closed` 답은 오류 대신 `not sent`로 기록된다. sidecar의 frame은 process와 함께 끝나기 때문이다. | both |
 | `sidecars.image.closed-surface-is-answered` | 소유 창이 없는 표면의 전송 그림은 버리고 그 그림의 값으로 `{"surface":<surface>,"body":{"image":{"error":"closed","name","generation","raster","sequence"}}}`를 답한다. | both |
+| `sidecars.image.stop-answers-late-persistent-image-before-shutdown` | 호스트가 중지 중일 때 persistent service는 소유자가 없는 표면의 전송 그림을 보낼 수 있다. 호스트는 아직 열린 service 연결로 `shutdown`을 보내기 전에 응답하여 service가 transport를 닫기 전에 그림을 해제하게 한다. | both |
 | `sidecars.read.unfinished-line-ends-the-connection` | process가 줄을 쓰다 끝나서 line feed 없는 줄로 끝나는 sidecar 출력은 연결을 끝낸다. 그 줄은 메시지가 아니고, host는 `info host sidecar <name>: the output ended in a line of <n> bytes without a line break, which is not a message`를 쓰며, sidecar의 어떤 surface도 `invalid message`로 실패하지 않는다. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |
 | `sidecars.send.rejects-after-stop` | 사이드카가 멈춘 뒤 보내면 "stopped"로 실패한다. | both |
