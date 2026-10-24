@@ -4080,6 +4080,11 @@
         "many": true
       },
       {
+        "name": "core.sidebar.section.status-line",
+        "description": "The static status-line roots that declared UI values draw in section order. Each carries data-key with its declared element key and resolves a {sidebar, section, key} address to its exact rectangle; it has no command.",
+        "many": true
+      },
+      {
         "name": "core.sidebar.section.header",
         "description": "The fold headers of sections in list-layout sidebars in document order, for module sections and declared UI sections.",
         "many": true

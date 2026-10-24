@@ -2541,3 +2541,8 @@
   native source registration에서 current generation을 받은 뒤 command layer를
   만든다. 소유 mount test는 generation 누락 실패, source-ended 뒤 process-ended,
   replacement 뒤 늦은 old end를 확인한다. `surface-view.test.mjs` 22/22 통과한다.
+- F239-37-6: 선언된 status-line root를
+  `{sidebar, section, key}` 주소로 노출한다. 별도 이름은 command/control role을
+  부여하지 않고 정확한 static text geometry를 찾는다. 소유 declared-ui 및
+  section-address test가 92/92 통과하고 exposure와 docs 검사도 통과한다. F37
+  window 검사는 기존 첫 visible node 행 기준을 사용해 runtime 재검증해야 한다.

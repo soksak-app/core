@@ -725,15 +725,18 @@ test("a button without command is rejected at the button", async () => {
   assert.equal(error.reason, 'missing "command"');
 });
 
-// The status-line element (docs/spec/declared-ui.md): one line of plain text, with no command and no control attributes.
-test("a status line draws its text as one line with no control attributes", async () => {
+// The status-line element (docs/spec/declared-ui.md): one line of plain text, with geometry exposure but no command or control attributes.
+test("a status line draws its text as one line and exposes its root geometry", async () => {
   const module = await load("status-line-draw");
   const s = section(module);
   s.show({ elements: [{ kind: "status-line", key: "st", text: "Ready" }] });
+  const line = s.body.firstElementChild;
   assert.equal(s.body.textContent, "Ready", "the text was not drawn");
   assert.equal(s.body.querySelector("button"), null, "the status line draws a button");
-  assert.equal(s.body.querySelector("[data-expose]"), null, "the status line carries a dom name");
-  assert.equal(s.body.querySelector("[data-key]"), null, "the status line carries data-key");
+  assert.equal(line.dataset.expose, "core.sidebar.section.status-line", "the status line has no geometry dom name");
+  assert.equal(line.dataset.key, "st", "the status line has no address key");
+  assert.equal(line.hasAttribute("data-role"), false, "the status line carries a control role");
+  assert.equal(line.hasAttribute("data-command"), false, "the status line carries a command");
   assert.equal(s.calls.length, 0, "the status line is bound to a command");
 });
 

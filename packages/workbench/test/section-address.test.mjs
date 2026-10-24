@@ -4,6 +4,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
 import { resolveSectionControl } from "../section-address.js";
+import * as sectionAddress from "../section-address.js";
 
 const { document } = new JSDOM(`
 <div class="set" data-sidebar="left"><section class="set__section" data-section="side.count">
@@ -99,4 +100,20 @@ test("a value of the wrong type, an unknown field, or an address that is not an 
   assert.equal(refusal({ ...row, path: "b", role: "expand" }), EXPOSURE_ERRORS.invalidParams, "path is not an array");
   assert.equal(refusal({ ...row, path: [1], role: "expand" }), EXPOSURE_ERRORS.invalidParams, "path has a value that is not a string");
   assert.equal(refusal({ ...row, path: ["b"], role: "other" }), EXPOSURE_ERRORS.invalidParams, "role is not label or expand");
+});
+
+test("a declared status-line address resolves its exact static root", () => {
+  const { document: statusDocument } = new JSDOM(`
+    <div class="set" data-sidebar="left"><section class="set__section" data-section="files.tree">
+      <div data-expose="core.sidebar.section.status-line" data-key="project" id="project">/project</div>
+      <div data-expose="core.sidebar.section.status-line" data-key="hint" id="hint">Ready</div>
+    </section></div>`).window;
+  const statusLines = [...statusDocument.querySelectorAll('[data-expose="core.sidebar.section.status-line"]')];
+  assert.equal(typeof sectionAddress.resolveSectionStatusLine, "function", "status-line address resolver is missing");
+  const address = { sidebar: "left", section: "files.tree", key: "project" };
+  assert.equal(sectionAddress.resolveSectionStatusLine(address, statusLines), statusDocument.querySelector("#project"));
+  assert.throws(() => sectionAddress.resolveSectionStatusLine({ ...address, extra: true }, statusLines),
+    { code: EXPOSURE_ERRORS.invalidParams });
+  assert.throws(() => sectionAddress.resolveSectionStatusLine({ ...address, key: "missing" }, statusLines),
+    { code: EXPOSURE_ERRORS.noControl });
 });

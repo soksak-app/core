@@ -8,6 +8,8 @@ import { connectTreeKeys, EXPAND, redrawKeepingFocus, stepFocus, treeBox } from 
 
 /** The dom name of every control that a declared UI value draws (docs/spec/exposure.md). */
 export const CONTROL_NAME = "core.sidebar.section.control";
+/** The dom name of static status-line roots, which expose geometry but no command. */
+export const STATUS_LINE_NAME = "core.sidebar.section.status-line";
 
 const MAX_BYTES = 1048576;
 const MAX_ROOT_ELEMENTS = 64;
@@ -554,6 +556,8 @@ function paintRoot(box, element, ctx) {
   }
   if (element.kind === "status-line") {
     box.className = "declared-status-line";
+    box.dataset.expose = STATUS_LINE_NAME;
+    box.dataset.key = element.key;
     box.textContent = element.text;
     return;
   }

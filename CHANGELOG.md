@@ -2554,3 +2554,9 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   provides a current generation. The owning mount test reproduces the
   missing-generation failure, checks source-ended before process-ended and
   rejects a late old end after replacement; the surface-view tests pass 22/22.
+- F239-37-6: Expose declared status-line roots through
+  `core.sidebar.section.status-line` with a `{sidebar, section, key}` address.
+  The separate name resolves exact static text geometry without assigning a
+  command or control role. The owning declared-ui and section-address tests
+  pass 92/92; exposure and documentation checks pass. The F37 window check
+  still needs a runtime run with its original first-visible-node row target.

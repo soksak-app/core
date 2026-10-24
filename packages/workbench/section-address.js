@@ -3,6 +3,7 @@
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 
 const FIELDS = ["sidebar", "section", "key", "path", "role", "action"];
+const STATUS_LINE_FIELDS = ["sidebar", "section", "key"];
 const ROLES = ["label", "expand", "action"];
 
 const invalid = (message) => new ExposureError(EXPOSURE_ERRORS.invalidParams, message);
@@ -11,6 +12,24 @@ const isObject = (value) => typeof value === "object" && value !== null && !Arra
 /** The sidebar and the section that hold a control, from the markup that the workbench draws around it. */
 function placeOf(element) {
   return { sidebar: element.closest("[data-sidebar]")?.dataset.sidebar, section: element.closest(".set__section")?.dataset.section };
+}
+
+/** Resolves the geometry address {sidebar, section, key} of a static declared status line. */
+export function resolveSectionStatusLine(address, elements) {
+  if (!isObject(address)) throw invalid("address must be an object");
+  for (const name of Object.keys(address)) {
+    if (!STATUS_LINE_FIELDS.includes(name)) throw invalid(`address field ${name} is not a field of a status-line address`);
+  }
+  for (const name of STATUS_LINE_FIELDS) {
+    if (typeof address[name] !== "string") throw invalid(`address ${name} must be a string`);
+  }
+  const matches = elements.filter((element) => {
+    const place = placeOf(element);
+    return place.sidebar === address.sidebar && place.section === address.section && element.dataset.key === address.key;
+  });
+  if (matches.length === 0) throw new ExposureError(EXPOSURE_ERRORS.noControl, "no status line matches the address");
+  if (matches.length > 1) throw invalid("address matches more than one status line");
+  return matches[0];
 }
 
 /**
