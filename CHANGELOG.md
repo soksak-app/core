@@ -17,6 +17,9 @@
   source identity remains the cursor/render frame and indexed row state.
   The caller-shaped test reproduced the previous nonexistent `region` lookup;
   the corrected frame-planning/watermark cases pass 2/2.
+  The activation check appends each raw observer callback to
+  `status-events.jsonl` before retaining it in memory; write errors fail the
+  check.
 
 - F239-37-3: Migrate the file-open failure check from removed `files.selection`
   and `files.open` status waits to the declared `files.tree` snapshot. The check

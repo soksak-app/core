@@ -5,7 +5,7 @@
 // It is not part of the default window check (pnpm -F @soksak/e2e verify); a run that the user approved runs it
 // only through pnpm -F @soksak/e2e verify:activation.
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import test from "node:test";
 
@@ -459,7 +459,10 @@ for (const app of Object.values(APPS)) {
       persist("manifest.json", manifest);
 
       const observedStateEvents = [];
+      const statusEventsPath = join(artifactDir, "status-events.jsonl");
+      writeFileSync(statusEventsPath, "");
       const stateObserver = await startTerminalStatusObserver(s, surface, (event) => {
+        appendFileSync(statusEventsPath, `${JSON.stringify(event)}\n`);
         observedStateEvents.push(event);
         for (const notify of [...stateEventWaiters]) notify();
       });

@@ -17,6 +17,8 @@
   cursor/render frame과 index된 row state가 유지한다.
   Caller-shape test는 이전의 존재하지 않는 `region` lookup을 재현했다.
   수정한 frame-planning/watermark case 2/2가 통과한다.
+  Activation check는 raw observer callback을 메모리에 보관하기 전에
+  `status-events.jsonl`에 append하며 쓰기 오류는 check 실패로 처리한다.
 
 - F239-37-3: 파일 열기 실패 check를 제거된 `files.selection`
   및 `files.open` status 대기에서 선언된 `files.tree` snapshot으로 옮긴다. 더 큰 `core.sidebars`
