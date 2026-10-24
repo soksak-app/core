@@ -9,6 +9,7 @@ import { catalogOf } from "../scripts/check-events.mjs";
 
 /** The shell of the window-check terminal. It avoids a prompt that depends on the profile of the login shell. */
 const CHECK_SHELL = fileURLToPath(new URL("./check-shell", import.meta.url));
+const CHECK_ZSH = fileURLToPath(new URL("./check-zsh", import.meta.url));
 
 /**
  * Puts an inner left sidebar on the terminal card. The default layout has no card sidebar, so a check of the card sidebar
@@ -28,6 +29,12 @@ export async function terminalCardSidebar(s, { sections = ["files.tree", "files.
 /** The event catalog of this repository (docs/spec/logging.md#catalog). */
 const CATALOG = fileURLToPath(new URL("../docs/spec/events.json", import.meta.url));
 
+export function terminalCheckShell(shell = "check") {
+  if (shell === "check") return CHECK_SHELL;
+  if (shell === "zsh") return CHECK_ZSH;
+  throw new Error(`unsupported terminal check shell ${JSON.stringify(shell)}`);
+}
+
 /**
  * The declarations of the records that a check reads: the catalog of this repository joined with the catalogs of the sidecars
  * installed in the configuration folder of the application.
@@ -44,15 +51,17 @@ async function registrationTimeline(s, offsets) {
 }
 
 /**
- * Puts the window in the start state of a check, waits until the terminal of the window check is ready with the check shell
- * (check-shell), and returns that terminal. `log` is the log policy that the check declares and `reads` the records below
- * `error` that it reads (prepareFixture); with the performance trace the registration timeline of a failed start is read too.
+ * Puts the window in the start state of a check, waits until the terminal of the window check is ready with its fixed shell
+ * fixture, and returns that terminal. `shell` is `check` by default or `zsh` for the tracked ZLE case. `log` is the log policy
+ * that the check declares and `reads` the records below `error` that it reads (prepareFixture); with the performance trace the
+ * registration timeline of a failed start is read too.
  */
-export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [] } = {}) {
+export async function fresh(s, { performanceTrace = TRACE, settings = {}, log = {}, reads = [], shell = "check" } = {}) {
   const traceOffsets = currentEventOffsets(s.app.configDir);
   const declared = performanceTrace ? [...reads, "page.trace.surface.registration"] : reads;
-  // The terminal of a window check starts with the check shell (check-shell), whatever the login shell of the user is.
-  await prepareFixture(s, { settings: { ...settings, "terminal.shell": CHECK_SHELL }, performanceTrace, log, reads: declared,
+  const shellPath = terminalCheckShell(shell);
+  // Window checks use fixed shell fixtures; the activation ZLE case never reads user shell startup files.
+  await prepareFixture(s, { settings: { ...settings, "terminal.shell": shellPath }, performanceTrace, log, reads: declared,
     catalog: declared.length ? recordCatalog(s.app) : undefined });
   let terminal;
   try {

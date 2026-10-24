@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-36: 기존 여덟 모음·Backspace·Space activation 시나리오에
+  고정 clean-zsh ZLE variant를 추가한다. 두 시나리오는 같은 AppKit checkpoint,
+  terminal 관측, capture assertion, 33 ms frame-gap 기준을 공유한다. zsh wrapper는
+  고정 prompt와 `/bin/zsh -f`를 사용해 사용자 startup file을 읽지 않는다. 사용자의
+  개인 prompt나 highlighter는 대표하지 않는다. Shell 선택 owner test는 2/2,
+  activation document helper test는 35/35 통과했고 두 JavaScript module은
+  `node --check`를 통과했다. Activation이나 application 실행은 하지 않았다.
 - F239-47-30-3-1: E2E consumer에서 display-link artifact를 검증한다.
   집중 helper test 7/7과 양 host capture-stop case가 통과한다. Consumer는
   누락 없이 inactive application의 Wails 관측 24개와 Tauri 관측 22개의

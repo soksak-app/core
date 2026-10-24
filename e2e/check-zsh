@@ -1,0 +1,4 @@
+#!/bin/sh
+# The activation ZLE fixture runs the system zsh without user startup files.
+export PS1='zle-check% '
+exec /bin/zsh -f

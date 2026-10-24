@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-47-36: Add a named clean-zsh ZLE variant of the existing eight-vowel,
+  Backspace and Space activation scenario. Both scenarios share the same
+  AppKit checkpoints, terminal observations, capture assertions and 33 ms
+  frame-gap limit. The zsh wrapper runs `/bin/zsh -f` with a fixed prompt and
+  does not read user startup files; this does not represent a user's personal
+  prompt or highlighter. The shell-selection owner test passes 2/2, the
+  activation document helper tests pass 35/35, and both edited JavaScript
+  modules pass `node --check`. No activation or application run was performed.
 - F239-47-30-3-1: Verify the display-link artifact through the E2E consumer.
   The focused helper tests pass 7/7, and the capture-stop case passes on both
   hosts. The consumer preserves available metadata with 24 Wails and 22 Tauri
