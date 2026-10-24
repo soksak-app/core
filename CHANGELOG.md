@@ -73,6 +73,15 @@
   Unchanged owner tests failed because the declaration and sync records were
   absent; the same owner files pass 16/16 after instrumentation. No application
   runtime was run; the F3-4 missing-composition cause remains unknown.
+- F212.10-core-3-15: Keep an already-mounted active view in undrawn complete
+  placement requests as invisible when it has no slot in that record. A
+  rebuilt two-host trace showed an accepted sync omitting a mounted terminal
+  view, followed by a request that reused the same mount attempt without a new
+  declaration; the hosts rejected it because the omission had retired the
+  native declaration. The unchanged retained-placement test failed on the
+  omitted view; it now passes with the undrawn request retaining the view and
+  the drawn request reusing its mount. Two adjacent deferral/unloaded cases pass.
+  Application acceptance remains pending rebuilt-host verification.
 
 - F239-47-35: Bind the initial cursor observer to the accepted screen frame.
   The input-only baseline now accepts `render: null` when the cursor frame

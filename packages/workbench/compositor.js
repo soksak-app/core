@@ -316,7 +316,9 @@ export async function placeCompositorRecord(record, requestedSurfaces, send, nat
       hostSurfaces.push(hostSurface);
       continue;
     }
-    if (record.drawn === false && activeIds.has(id)) continue;
+    // An active view without an undrawn slot waits for its drawn record only while unmounted.
+    // A live mount stays in the complete request so native sync does not retire it.
+    if (record.drawn === false && activeIds.has(id) && (!mounted || mounted.disposed)) continue;
     if (!isView || (mounted && !mounted.disposed)) {
       hostSurfaces.push(hostSurface);
       continue;

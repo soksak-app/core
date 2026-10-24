@@ -72,6 +72,14 @@
   sync 기록이 없어 실패했고, 계측 뒤 같은 owner 파일들이 16/16 통과한다.
   Application runtime은 실행하지 않았으며 F3-4 missing-composition 원인은
   미확인 상태다.
+- F212.10-core-3-15: 이미 mount된 활성 view가 undrawn record에 슬롯이 없을
+  때도 보이지 않는 surface로 undrawn 전체 placement request에 유지한다. 양 host의
+  rebuilt trace에서 성공한 sync가 mount된 terminal view를 제외한 뒤 같은 mount
+  attempt를 새 declaration 없이 재사용하는 request가 이어졌고, host는 native
+  declaration이 제거되어 이를 거부했다. 변경 전 retained-placement test는
+  view 누락으로 실패했고, 수정 후 undrawn request는 view를 유지하며 drawn request는
+  같은 mount를 재사용해 통과한다. 인접한 deferral/unloaded case도 2개 통과한다.
+  Application acceptance는 rebuilt host 검증을 기다린다.
 
 - F239-47-35: 초기 cursor observer를 승인된 screen frame에 묶는다.
   Input-only baseline은 cursor frame이 screen frame과 정확히 일치할 때

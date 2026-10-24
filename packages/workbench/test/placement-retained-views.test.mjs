@@ -101,6 +101,67 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       "the host sync began before every requested view declared composition");
     assert.deepEqual(answer.placements.map(({ id }) => id), ["visible-view"], "the host's dormant placement entered the compositor result");
     assert.deepEqual(answer.deferred, [], "a cold dormant view was reported as a host deferral");
+
+    const retained = view("retained-view", 20);
+    const saver = createMemorySaver({
+      now: () => 0,
+      enabled: () => true,
+      delay: () => 720,
+      declaration: () => "unload",
+      keeps: () => [],
+      kept: () => false,
+      setKept: () => {},
+      regions: async () => [],
+      interaction: async () => {},
+      restore: () => {},
+      commit: async () => {},
+      showLabel: () => {},
+      changed: () => {},
+      failed: () => {},
+    });
+    saver.observe(new Set(["retained-view"]), [{ id: "retained-view", plugin: "placement-probe" }]);
+    const undrawn = { surfaces: [], drawn: false, settled: false, titlebar: 40 };
+    const classified = await memoryPlacement(undrawn, [retained], {
+      ready: Promise.resolve(), saver, observe: () => {},
+    });
+    const beforeDraw = await placeCompositorRecord(undrawn, classified.surfaces,
+      (request) => host.surfaces.place({ ...undrawn, surfaces: request.surfaces }),
+      ["placement-probe"], {
+        activeIds: new Set(["retained-view"]),
+        mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false,
+          mountRegistration: { attempt: attempts.get(id) } } : null,
+        authorize,
+      });
+    const undrawnSync = calls.filter(({ name }) => name === "syncSurfaces").at(-1);
+    assert.deepEqual(undrawnSync?.request.surfaces.map(({ id }) => id), ["retained-view"],
+      "an already-mounted loaded view was omitted from the complete undrawn host request");
+    assert.equal(undrawnSync.request.surfaces[0].visible, false,
+      "the retained view did not stay hidden while it had no compositor slot");
+    assert.deepEqual(beforeDraw.placements, [], "the retained-only view entered an empty compositor record");
+
+    const drawn = { surfaces: [retained], drawn: true, settled: true, titlebar: 40 };
+    const afterDraw = await memoryPlacement(drawn, [retained], {
+      ready: Promise.resolve(), saver, observe: () => {},
+    });
+    await placeCompositorRecord(drawn, afterDraw.surfaces,
+      (request) => host.surfaces.place({ ...drawn, surfaces: request.surfaces }),
+      ["placement-probe"], {
+        activeIds: new Set(["retained-view"]),
+        mountedSurface: (id) => mounted.has(id) ? { surfaceId: id, disposed: false,
+          mountRegistration: { attempt: attempts.get(id) } } : null,
+        authorize,
+      });
+    const sequence = calls.filter(({ name }) => name === "syncSurfaces").slice(-2).map(({ request }) =>
+      request.surfaces.map(({ id }) => id));
+    assert.deepEqual(sequence, [["retained-view"], ["retained-view"]],
+      "the retained view was removed and reintroduced across the undrawn and drawn requests");
+    assert.deepEqual(waited.slice(-2), ["retained-view", "retained-view"],
+      "both placements did not wait on the existing mount attempt");
+    assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.sync").slice(-2).map(({ fields }) => fields.views), [
+      [{ surface: "retained-view", attempt: 2 }],
+      [{ surface: "retained-view", attempt: 2 }],
+    ], "the retained host requests did not preserve the same mounted attempt");
+
     retainedMounts.releaseRetainedSurfaceSlots(record, new Set(["visible-view", "retained-view", "cold-view", "background-view"]));
     assert.ok(document.querySelector("[data-retained-surface-mounts]"), "the loaded dormant view lost its retained mount slot");
     retainedMounts.releaseRetainedSurfaceSlots(record, new Set(["cold-view"]), ["cold-view"]);
