@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-37-3: Require the reloaded page to report the editor disabled before
+  testing the Files failure row. The retained Wails and Tauri runs timed out
+  with no failure row, while both installed editor manifests declare `*`;
+  they do not record whether the editor was loaded or the Enter target had
+  focus. The check now verifies the disabled plugin state, requires the
+  selected node's declared `files.open` target and exact path parameters, and
+  records `core.focus`, native window focus fields, and a visible terminal
+  cursor before its existing Enter action. Runtime acceptance remains pending.
+
 - F239-53: Make high-level window-check clicks wait for `host.buttons` to
   report mask 0 before the press and again before the release. The P85 Files
   run received native 1007 refusals while another application was frontmost;

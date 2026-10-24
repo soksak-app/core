@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-37-3: Files failure row를 검사하기 전에 reload된 page가 editor를
+  disabled라고 보고하도록 요구한다. 보존된 Wails와 Tauri 실행은 failure row
+  없이 timeout되었고 두 설치 editor manifest는 모두 `*`를 선언하지만, 해당
+  실행은 editor 로드 상태나 Enter target의 focus를 기록하지 않았다. Check는
+  disabled plugin 상태를 확인하고 선택된 node의 선언된 `files.open` target과
+  정확한 path 인자를 요구하며, 기존 Enter 동작 직전에 `core.focus`, native
+  window focus 정보, 표시 중인 terminal cursor를 기록한다. Runtime acceptance는
+  대기 중이다.
+
 - F239-53: High-level window-check click이 `host.buttons`로 press 전에, 다시 release 전에
   mask 0을 보고할 때까지 기다린다. P85 Files run은 다른
   application이 frontmost인 동안 native 1007 거부를 받았다. Low-level

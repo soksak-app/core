@@ -605,15 +605,37 @@ for (const app of Object.values(APPS)) {
       await s.until("host.window", (value) => value.pageProcess !== 0 && value.pageProcess !== before, message);
       await s.until("host.windows", (list) => list.some((item) => item.window === s.window && item.ready), `${message}: the new page did not report ready`);
     };
+    const initialPlugins = await s.get("core.plugins");
+    const editorBefore = initialPlugins.plugins.find((row) => row.id === "editor");
+    assert.ok(editorBefore, "core.plugins did not list editor before the failure-row check");
+    assert.equal(editorBefore.state, "loaded", "editor must be loaded before the failure-row check");
+    assert.equal(editorBefore.installed.enabled, true, "editor must be enabled before the failure-row check");
     s.cleanup(async () => {
-      if ((await s.get("core.plugins")).plugins.find((row) => row.id === "editor").installed.enabled) return;
+      const current = (await s.get("core.plugins")).plugins.find((row) => row.id === "editor");
+      assert.ok(current, "core.plugins did not list editor during failure-row cleanup");
+      if (current.installed.enabled === editorBefore.installed.enabled) return;
       const before = await page();
-      await s.run("core.plugins.enable", { plugin: "editor" });
-      await reloaded(before, "enabling editor did not reload the window");
+      const action = editorBefore.installed.enabled ? "enable" : "disable";
+      await s.run(`core.plugins.${action}`, { plugin: "editor" });
+      await reloaded(before, `${action} editor did not reload the window during cleanup`);
+      await s.until("core.plugins", (value) => {
+        const row = value.plugins.find((item) => item.id === "editor");
+        return row?.state === editorBefore.state
+          && row.installed?.enabled === editorBefore.installed.enabled
+          && value.reload === false;
+      }, `editor did not return to its initial state during cleanup`);
     });
     const beforeDisable = await page();
     await s.run("core.plugins.disable", { plugin: "editor" });
     await reloaded(beforeDisable, "disabling editor did not reload the window");
+    const disabled = await s.until("core.plugins", (value) => {
+      const row = value.plugins.find((item) => item.id === "editor");
+      return row?.state === "disabled" && row.installed?.enabled === false && value.reload === false;
+    }, "the reloaded page did not report editor disabled");
+    const disabledEditor = disabled.plugins.find((row) => row.id === "editor");
+    assert.equal(disabledEditor.state, "disabled");
+    assert.equal(disabledEditor.installed.enabled, false);
+    assert.equal(disabled.reload, false);
     const project = await s.get("core.project");
     const folder = `files-open-check-${process.pid}`;
     mkdirSync(join(project.root, folder));
@@ -665,6 +687,22 @@ for (const app of Object.values(APPS)) {
       (snapshot) => nodeByPath(snapshot, `${folder}/note.zzz`)?.selected === true,
       "a click on the file did not select it");
     accepted = current.sequence;
+    const selectedNode = nodeByPath(current.snapshot, `${folder}/note.zzz`);
+    assert.ok(selectedNode, "the selected file is absent from the declared files.tree snapshot");
+    assert.equal(selectedNode.open, "files.open", "the selected file has no declared files.open command");
+    assert.deepEqual(selectedNode.params, { path: `${folder}/note.zzz` }, "the selected file has unexpected open parameters");
+    const focus = await s.get("core.focus");
+    const window = await s.get("host.window");
+    const surfaces = await s.get("core.surfaces");
+    const terminal = surfaces.find((surface) => surface.plugin === "terminal" && surface.visible && surface.composition === "view");
+    const terminalCursor = terminal ? await s.get("terminal.cursor", terminal.id) : null;
+    t.diagnostic(`${app.name}: file-open target before Enter ${JSON.stringify({
+      editor: disabledEditor,
+      node: { open: selectedNode.open, params: selectedNode.params, selected: selectedNode.selected },
+      focus,
+      window: { pageProcess: window.pageProcess, active: window.active, responder: window.responder },
+      terminal: terminal ? { surface: terminal.id, cursor: terminalCursor } : null,
+    })}`);
     // The window check fails on every application error that is logged, so the main document showing the failure would fail it.
     const failed = await openFailureRow(s, `${folder}/note.zzz`, accepted, () => s.press("Enter"));
     // Selecting another path ends the failure.
