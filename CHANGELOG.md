@@ -27,7 +27,15 @@
   declared-sidebar helper resolves the addressed control's unique index within
   its section, focuses it through `core.focus.set`, and waits for the exact
   focus status; the existing Enter route and failure-row assertions remain.
-  The helper tests pass 9/9; focused Wails runtime acceptance is pending.
+  The helper tests pass 9/9. The exact failure-row case passes on Wails and
+  Tauri in the P47 local candidate cohort; the full runtime evidence is in
+  `docs/features.md`.
+
+- F239-51-1: Verify the corrected Files tree-node lookup in the actual window
+  consumer. The focused failure-row case passes on Wails and Tauri after the
+  helper import correction. Both log audits pass with no error records, and
+  process waits confirm that both hosts and their sidecars ended. This does
+  not claim full Files-suite acceptance.
 
 - F239-47-28: Reject a replacement at `committedLength` before AppKit.
   The previous path let AppKit replace

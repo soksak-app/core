@@ -26,7 +26,13 @@
   declared-sidebar helper는 주소가 지정된 control의 section 내 고유 index를
   찾고 `core.focus.set`으로 focus를 준 뒤 정확한 focus status를 기다린다.
   기존 Enter 경로와 failure-row assertion은 유지한다. Helper test 9/9가
-  통과했고 focused Wails runtime acceptance는 대기 중이다.
+  통과한다. 동일 failure-row case가 P47 local candidate cohort의 Wails와
+  Tauri에서 통과한다. 전체 runtime 증거는 `docs/features.ko.md`에 있다.
+
+- F239-51-1: 수정한 Files tree-node lookup을 실제 window consumer에서 확인한다.
+  Helper import 수정 후 집중 failure-row case가 Wails와 Tauri 모두 통과한다.
+  두 log audit이 error record 없이 통과했고 process wait은 양 host와 sidecar가
+  종료됐음을 확인한다. 전체 Files suite 통과를 뜻하지 않는다.
 
 - F239-47-28: `committedLength` 앞의 replacement를 AppKit 전에 거부한다.
   기존 경로는 AppKit이 확정 `가`를 `invalid`로
