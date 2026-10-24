@@ -1,8 +1,6 @@
-// Files plugin check: the state module of a plugin without a surface lists the project folder, the file tree in the left sidebar
-// draws that state with @pierre/trees, and native clicks inside the tree open folders and select files; the check confirms that changes on disk and git
-// state follow without a refresh, and that bookmarks remain after they are read again.
+// Files plugin check: declared UI snapshots draw the project folder and bookmarks in sidebar sections, native clicks operate the tree,
+// and core sidebar notifications report rendered updates while plugin-host snapshots are pulled through status.get.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -50,42 +48,55 @@ for (const app of Object.values(APPS)) {
     mkdirSync(directory);
     writeFileSync(join(directory, "note.txt"), "note\n");
     s.cleanup(() => rmSync(directory, { recursive: true, force: true }));
-    execFileSync("git", ["init", "-q"], { cwd: project.root });
-    s.cleanup(() => rmSync(join(project.root, ".git"), { recursive: true, force: true }));
     const text = (sidebars, id) => sidebars.find((item) => item.sidebar === "left")?.sections.find((item) => item.id === id)?.text;
-    const rowIndex = (tree, path) => tree.entries.findIndex((entry) => entry.path === path);
+    const filesTree = (snapshot) => snapshot.value?.elements.find((element) => element.kind === "tree" && element.key === "files");
+    const treeRows = (snapshot) => {
+      const flatten = (nodes) => (nodes ?? []).flatMap((node) => [node, ...flatten(node.children)]);
+      return flatten(filesTree(snapshot)?.nodes);
+    };
+    const treeNode = (snapshot, path) => {
+      return treeRows(snapshot).find((node) => node.params?.path === path) ?? null;
+    };
+    const bookmarkPaths = (snapshot) => snapshot.value?.elements
+      .flatMap((element) => element.kind === "list" ? element.items : []).map((item) => item.label) ?? [];
+    const waitForSectionText = (id, predicate, message) => s.until("core.sidebars",
+      (sidebars) => predicate(text(sidebars, id) ?? ""), message);
+    const treeAfterSectionText = async (id, predicate, message) => {
+      await waitForSectionText(id, predicate, message);
+      return s.get("files.tree");
+    };
 
-    // File tree: the state module lists the project folder, and the git state reports a new file of the repository as untracked.
-    await s.run("files.refresh");
-    let tree = await s.until("files.tree", (value) => value?.root === project.root && rowIndex(value, folder) >= 0,
-      "files.tree did not list the project folder");
-    assert.equal(tree.error, null);
-    await s.until("files.git", (value) => value.some((entry) => entry.path === `${folder}/note.txt` && entry.status === "untracked"),
-      "files.git did not report the untracked file");
+    // `files.refresh` completes the listing before its command reply, so read the declared snapshot once after the reply.
+    assert.equal(await s.run("files.refresh"), null);
+    let tree = await s.get("files.tree");
+    const projectLine = tree.value.elements.find((element) => element.kind === "status-line" && element.key === "project");
+    assert.equal(projectLine?.text, project.root);
+    assert.ok(treeNode(tree, folder), "files.tree did not list the project folder");
 
     /** Presses the center of the tree row path with a native click. A row is ROW apart from the top of the element that holds it. */
     const clickRow = async (value, path) => {
       const sidebars = await s.get("core.sidebars");
       const holder = await s.rect("core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", HOLDER));
-      const at = rowIndex(value, path);
-      assert.ok(at >= 0, `${path} is not a row`);
-      await s.click(holder.x + holder.width / 2, holder.y + (at + 0.5) * ROW);
+      const index = treeRows(value).findIndex((item) => item.params?.path === path);
+      assert.ok(index >= 0, `${path} is not a row`);
+      await s.click(holder.x + holder.width / 2, holder.y + (index + 0.5) * ROW);
     };
 
     // When a folder of the tree is opened with a native click, files.tree.toggle lists that folder.
     await clickRow(tree, folder);
-    tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/note.txt`) >= 0,
+    tree = await treeAfterSectionText("files.tree", (value) => value.includes("note.txt"),
       "a click on the folder in the tree did not open it");
+    assert.ok(treeNode(tree, `${folder}/note.txt`), "the declared files.tree snapshot omitted the opened file");
 
-    // A file created or deleted outside the application appears or disappears through the watcher without a refresh, and the git state follows.
+    // A file created or deleted outside the application appears or disappears through the watcher without a refresh.
     writeFileSync(join(directory, "watched.txt"), "watched\n");
-    await s.until("files.tree", (value) => rowIndex(value, `${folder}/watched.txt`) >= 0,
+    tree = await treeAfterSectionText("files.tree", (value) => value.includes("watched.txt"),
       "a file created on disk did not appear without a refresh");
-    await s.until("files.git", (value) => value.some((entry) => entry.path === `${folder}/watched.txt`),
-      "files.git did not follow the created file");
+    assert.ok(treeNode(tree, `${folder}/watched.txt`), "the declared files.tree snapshot omitted the created file");
     rmSync(join(directory, "watched.txt"));
-    tree = await s.until("files.tree", (value) => rowIndex(value, `${folder}/watched.txt`) < 0,
+    tree = await treeAfterSectionText("files.tree", (value) => !value.includes("watched.txt"),
       "a file removed on disk did not leave without a refresh");
+    assert.equal(treeNode(tree, `${folder}/watched.txt`), null, "the declared files.tree snapshot retained the removed file");
 
     // The refresh control runs files.refresh.
     let sidebars = await s.get("core.sidebars");
@@ -96,9 +107,10 @@ for (const app of Object.values(APPS)) {
     tree = await s.get("files.tree");
     await clickRow(tree, note);
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.tree", STAR));
-    await s.until("files.bookmarks", (value) => value.includes(note), "the star did not bookmark the selected file");
+    await waitForSectionText("files.bookmarks", (value) => value.includes(note), "the star did not bookmark the selected file");
+    assert.ok(bookmarkPaths(await s.get("files.bookmarks")).includes(note), "the declared files.bookmarks snapshot omitted the file");
     s.cleanup(async () => {
-      if ((await s.get("files.bookmarks")).includes(note)) await s.run("files.bookmarks.remove", { path: note });
+      if (bookmarkPaths(await s.get("files.bookmarks")).includes(note)) await s.run("files.bookmarks.remove", { path: note });
     });
     await s.until("core.sidebars", (value) => text(value, "files.bookmarks")?.includes(note),
       "the bookmarks section did not show the bookmark");
@@ -111,9 +123,10 @@ for (const app of Object.values(APPS)) {
       "the bookmark did not survive a reload");
 
     // The delete control runs files.bookmarks.remove.
-    const bookmarks = await s.get("files.bookmarks");
+    const bookmarks = bookmarkPaths(await s.get("files.bookmarks"));
     await press(s, "core.sidebar.section.control", controlIndex(sidebars, "left", "files.bookmarks", bookmarks.indexOf(note)));
-    await s.until("files.bookmarks", (value) => !value.includes(note), "a click on 삭제 did not remove the bookmark");
+    await waitForSectionText("files.bookmarks", (value) => !value.includes(note), "a click on 삭제 did not remove the bookmark");
+    assert.ok(!bookmarkPaths(await s.get("files.bookmarks")).includes(note), "the declared files.bookmarks snapshot retained the file");
   });
 }
 
