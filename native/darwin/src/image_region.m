@@ -1091,7 +1091,16 @@ static CGImageRef copySurfaceImage(IOSurfaceRef surface) {
     IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
     if (!data) return NULL;
     CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
-    CGColorSpaceRef colors = CGColorSpaceCreateDeviceRGB();
+    CFPropertyListRef colorProperties = IOSurfaceCopyValue(surface, kIOSurfaceColorSpace);
+    CGColorSpaceRef colors = colorProperties ? CGColorSpaceCreateWithPropertyList(colorProperties)
+        : CGColorSpaceCreateDeviceRGB();
+    if (colorProperties && !colors) {
+        CFRelease(colorProperties);
+        if (provider) CGDataProviderRelease(provider);
+        CFRelease(data);
+        return NULL;
+    }
+    if (colorProperties) CFRelease(colorProperties);
     CGImageRef image = provider && colors ? CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
         kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst,
         provider, NULL, false, kCGRenderingIntentDefault) : NULL;

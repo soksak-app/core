@@ -232,6 +232,13 @@ int main(int argc, char **argv) { @autoreleasepool {
             check(snapshot != NULL && CGImageGetWidth(snapshot) == (size_t)raster1[0]
                 && CGImageGetHeight(snapshot) == (size_t)raster1[1],
                 @"TEST 1: layer owns a copied snapshot at the exact native raster");
+            CGColorSpaceRef snapshotColorSpace = snapshot ? CGImageGetColorSpace(snapshot) : NULL;
+            CFStringRef snapshotColorSpaceName = snapshotColorSpace ? CGColorSpaceGetName(snapshotColorSpace) : NULL;
+            char snapshotColorSpaceBuffer[128] = {0};
+            check(snapshotColorSpaceName && CFStringGetCString(snapshotColorSpaceName, snapshotColorSpaceBuffer,
+                sizeof(snapshotColorSpaceBuffer), kCFStringEncodingUTF8)
+                && strcmp(snapshotColorSpaceBuffer, "kCGColorSpaceDeviceRGB") == 0,
+                @"TEST 1: an IOSurface without a color-space tag keeps the DeviceRGB display interpretation");
             check((CFTypeRef)snapshot != (CFTypeRef)testSurface1,
                 @"TEST 1: layer does not point at the supplier IOSurface");
             IOSurfaceLock(testSurface1, 0, NULL);
@@ -1387,6 +1394,50 @@ int main(int argc, char **argv) { @autoreleasepool {
         free((void *)recoveredFacts);
         sp_region_close(region22);
         CFRelease(testSurface22);
+    }
+
+    // TEST 23: accepted IOSurface snapshots preserve declared color metadata.
+    {
+        void *region23 = sp_region_create(surface, "test23", testEvent, NULL);
+        sp_region_place(region23, 0, 0, 0, 0, true);
+        double raster23[3] = {0};
+        check(sp_region_raster(region23, raster23), @"TEST 23: region reports its native raster");
+        unsigned char nonce23[16];
+        IOSurfaceRef testSurface23 = createColoredGlobalSurface((size_t)raster23[0], (size_t)raster23[1], nonce23);
+        CGColorSpaceRef srgb23 = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        CFPropertyListRef srgbProperties23 = srgb23 ? CGColorSpaceCopyPropertyList(srgb23) : NULL;
+        BOOL tagged23 = testSurface23 && srgbProperties23;
+        if (tagged23) IOSurfaceSetValue(testSurface23, kIOSurfaceColorSpace, srgbProperties23);
+        if (srgbProperties23) CFRelease(srgbProperties23);
+        if (srgb23) CGColorSpaceRelease(srgb23);
+        check(tagged23, @"TEST 23: fixture IOSurface declares its sRGB color space");
+        BOOL presented23 = tagged23 && sp_region_present(region23, IOSurfaceGetID(testSurface23), nonce23,
+            raster23[0], raster23[1], raster23[2], 53, 1, 1);
+        check(presented23, @"TEST 23: sRGB-tagged IOSurface is accepted");
+        NSView *regionView23 = (NSView *)region23;
+        CALayer *imageLayer23 = regionView23.layer.sublayers.firstObject;
+        CGColorSpaceRef snapshotSpace23 = imageLayer23 ? CGImageGetColorSpace((CGImageRef)imageLayer23.contents) : NULL;
+        CFStringRef snapshotName23 = snapshotSpace23 ? CGColorSpaceGetName(snapshotSpace23) : NULL;
+        char snapshotNameBuffer23[128] = {0};
+        BOOL preservesSpace23 = snapshotName23 && CFStringGetCString(snapshotName23, snapshotNameBuffer23,
+            sizeof(snapshotNameBuffer23), kCFStringEncodingUTF8)
+            && strcmp(snapshotNameBuffer23, "kCGColorSpaceSRGB") == 0;
+        check(preservesSpace23, @"TEST 23: accepted snapshot preserves the IOSurface sRGB color-space tag");
+
+        unsigned char invalidNonce23[16];
+        IOSurfaceRef invalidSurface23 = createColoredGlobalSurface((size_t)raster23[0], (size_t)raster23[1], invalidNonce23);
+        if (invalidSurface23) IOSurfaceSetValue(invalidSurface23, kIOSurfaceColorSpace,
+            CFSTR("invalid color-space property list"));
+        BOOL invalidRejected23 = invalidSurface23 && !sp_region_present(region23, IOSurfaceGetID(invalidSurface23),
+            invalidNonce23, raster23[0], raster23[1], raster23[2], 54, 1, 2);
+        const char *facts23 = sp_region_facts(region23);
+        check(invalidRejected23 && facts23 && strstr(facts23, "\"error\":\"presentFailed\"")
+            && strstr(facts23, "\"generation\":53"),
+            @"TEST 23: invalid declared color metadata rejects the frame and preserves the prior snapshot");
+        free((void *)facts23);
+        sp_region_close(region23);
+        if (invalidSurface23) CFRelease(invalidSurface23);
+        if (testSurface23) CFRelease(testSurface23);
     }
 
     // Right after the outer surface changes, the region and the raster must have the same size without a page placement notification.

@@ -6,6 +6,16 @@
 
 - F239-35-2: Plugin-host status.get now removes the registered plugin owner prefix before sending declared-ui.snapshot.request. The registry uses the qualified name while the plugin snapshot store uses the local key. Red: the unchanged createRegistry.handle test passed probe.lines to the fake host instead of lines. Green: the same test passes and asserts one local-key pull with no retry; exposure.test.mjs passes 35/35, exposure-host-round-trip.test.mjs passes 1/1, and make exposure-check passes. make docs-check passes 112 files, 394 error records and 1729 record checks. Window runtime acceptance remains under F239-35.
 
+- F212.12-2-2-4-8-2-3: The macOS image region now decodes the IOSurface
+  `kIOSurfaceColorSpace` property list when it creates its immutable snapshot.
+  A present but invalid declaration rejects the frame and leaves the previous
+  snapshot in place. An absent declaration retains the existing DeviceRGB
+  display interpretation. Red: unchanged `image_region_test` failed because
+  the accepted sRGB image was labeled DeviceRGB and an invalid declaration was
+  accepted. Green: the same test verifies sRGB preservation, DeviceRGB behavior
+  without a tag, rejection of invalid metadata, and preservation of the prior
+  snapshot (1/1, 1.142 s).
+
 - F239-35-1: `core.sidebars` reports the chosen declared-status source, snapshot
   subscription stage, pull phase and reply metadata, and last accepted sequence.
   Stage changes notify sidebar status subscribers without copying status values.

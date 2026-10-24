@@ -6,6 +6,14 @@
 
 - F239-35-2: Plugin-host status.get은 declared-ui.snapshot.request를 보내기 전에 등록 plugin owner prefix를 제거한다. Registry는 qualified 이름을 사용하지만 plugin snapshot store는 local key를 사용한다. Red: 변경 전 createRegistry.handle test는 fake host에 lines 대신 probe.lines를 전달했다. Green: 같은 test가 local key 요청 한 번과 재시도 부재를 확인하며 통과하고, exposure.test.mjs 35/35, exposure-host-round-trip.test.mjs 1/1 및 make exposure-check가 통과한다. make docs-check는 112 files, 394 error records, 1729 record checks를 통과한다. Window runtime acceptance는 F239-35에 남는다.
 
+- F212.12-2-2-4-8-2-3: macOS image region은 불변 snapshot을 만들 때 IOSurface
+  `kIOSurfaceColorSpace` property list를 해석한다. 선언이 있지만 잘못된 값이면
+  frame을 거절하고 이전 snapshot을 유지한다. 선언이 없으면 기존 DeviceRGB 표시
+  해석을 유지한다. Red: 변경 전 `image_region_test`는 허용된 sRGB image를 DeviceRGB로
+  표시했고 잘못된 선언도 허용해 실패했다. Green: 같은 test에서 sRGB 보존, 태그 없는
+  경우의 DeviceRGB 동작, 잘못된 metadata 거절, 이전 snapshot 보존을 검증한다(1/1,
+  1.142초).
+
 - F239-35-1: `core.sidebars`가 선택한 declared-status source, snapshot
   subscription 단계, pull 진행 단계와 reply metadata, 마지막 accepted sequence를
   보고한다. Status value를 복사하지 않고 단계 변경을 sidebar status subscriber에
