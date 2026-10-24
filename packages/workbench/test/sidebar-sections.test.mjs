@@ -209,7 +209,6 @@ test("a declared section selects and pulls a host that registers after the secti
   declaredWorld.channel = (source) => {
     channels.set(source.id, (channels.get(source.id) ?? 0) + 1);
     return {
-      send: (message) => listeners.set(`${source.id}:ack:${message.seq}`, message),
       onMessage: (listener) => { listeners.set(source.id, listener); return () => listeners.delete(source.id); },
     };
   };
@@ -242,7 +241,6 @@ test("a declared section selects and pulls a host that registers after the secti
     listeners.get(`plugin:${plugin}`)({ event: "declared-ui.snapshot", plugin, status: "lines", seq: 2,
       value: { elements: [{ kind: "list", key: "host-list", empty: "none", items: [{ key: "host-row-2", label: "pushed value" }] }] }, skipped: 0 });
     assert.equal(report().text, "pushed value", "the host's subscribed snapshot did not replace the pulled value");
-    assert.ok(listeners.has(`plugin:${plugin}:ack:2`), "the host snapshot was not acknowledged");
 
     registry.hostRegistered({ plugin, kind: "status", name: `${plugin}.lines` });
     await settle();

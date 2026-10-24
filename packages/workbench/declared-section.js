@@ -1,7 +1,6 @@
 // The source and the state of one declared section (docs/spec/declared-ui.md, status mapping and transitions). The section takes its
 // value from the chosen source only. The snapshot channel and the pull of a source are given by the caller; the production
 // connection of a view source is createDeclaredSource() of declared-source.js.
-import { createSnapshotReceiver } from "@soksak/plugin-api";
 import { changeSource, receive } from "./declared-ui.js";
 import { hideError } from "./shown-errors.js";
 
@@ -24,7 +23,7 @@ const sameSource = (a, b) => (a === null ? b === null : b !== null && a.id === b
  *     body          the section element that draws the accepted value
  *     options       the options of receive (declared, hasIcon, bind)
  *     choose()      the chosen source {id, surface}, or null (chooseSource)
- *     channel(source) {send, onMessage} of the snapshot channel of a source, or null when the source has no channel
+ *     channel(source) {onMessage} of the already acknowledged snapshot stream, or null when the source has no channel
  *     pull(source)  a promise of the pull reply {seq, value}
  *     skipped(count) receives the count of the values that a snapshot of the source overwrote while it was in transit
  *     failed(error) receives the error of a pull that failed
@@ -105,18 +104,12 @@ export function createDeclaredSection({ statusId, body, options, choose, channel
     const mine = generation;
     const link = channel(next);
     if (link !== null) {
-      const ready = createSnapshotReceiver({
-        plugin: owner,
-        send: link.send,
-        onMessage: link.onMessage,
-        onSnapshot: (received, seq, value, count) => {
-          // The snapshot names the status inside the plugin; the channel is per plugin (docs/spec/declared-ui.md).
-          if (received !== status || mine !== generation || current === null || current.id !== next.id) return;
-          // The count of the overwritten values reaches the main page in each snapshot (docs/spec/plugin-processes.md, rule 2).
-          // default: a section without a skipped receiver writes no trace event of the overwritten values.
-          if (count > 0) skipped?.(count);
-          accept(seq, value, next);
-        },
+      const ready = link.onMessage((message) => {
+        // The window ingress validates and acknowledges snapshots before routing them to sections. A source can have several
+        // section recipients, so a section only accepts its own status and never acknowledges the shared push.
+        if (message.status !== status || mine !== generation || current === null || current.id !== next.id) return;
+        if (message.skipped > 0) skipped?.(message.skipped);
+        accept(message.seq, message.value, next);
       });
       Promise.resolve(ready).then((unsubscribe) => {
         if (mine !== generation || current === null || current.id !== next.id) {

@@ -47,6 +47,7 @@ import {
    are done here. */
 import { latest, onCommit, onRun, publish, publishAhead } from "./compositor.js";
 import { authorizeSurface, disposeSurfacesExcept, onSurfaceMounted, placeSurfaces, surfaceForTab, surfacePlacementsForHost, waitSurfaceCompositionDeclared } from "./surface-modules.js";
+import { afterDeclaredSnapshotIngress, startDeclaredSnapshotIngress } from "./declared-source.js";
 import { createMemorySaver } from "./memory-saver.js";
 import { documentRegions } from "./document-regions.js";
 import { onTabReports, reportTabState, reportTitle, tabKeeps, viewRefusal } from "./tab-reports.js";
@@ -255,10 +256,10 @@ onCommit((record) => {
     && viewRefusal(entry.surface.surfaceId) !== null).map((entry) => entry.surface.surfaceId));
   for (const id of refusedViews) ids.add(id);
   const placed = surfacePlacementsForHost(all.filter((entry) => !refusedViews.has(entry.surface.surfaceId)), projects.active());
-  return placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: placed })).then((answer) => {
+  return afterDeclaredSnapshotIngress(() => placeSurfaces(() => Promise.resolve(host.place({ ...record, surfaces: placed })).then((answer) => {
     for (const surface of record.surfaces) if (!refusedViews.has(surface.id)) authorizeSurface(surface.id);
     return answer;
-  }), { retain: ids, unload });
+  }), { retain: ids, unload }));
 });
 
 /* When the plane is redrawn, it is verified and the surfaces are reported. The plane does not know the two and the two only read the plane,
@@ -595,6 +596,7 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
 projects.onChange(() => { drawBars(); drawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
+startDeclaredSnapshotIngress();
 projects.begin(start.workspace);
 // The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));
@@ -658,6 +660,7 @@ addEventListener("focusout", coreChanged);
 const storage = await openStore();
 await connectSettings(storage);
 // default: a plugin that is not loaded declares no surface.unload.
+await afterDeclaredSnapshotIngress(() => {});
 await projects.initialise(storage, (plugin) => pluginUnits().find((unit) => unit.id === plugin)?.unload ?? false);
 memoryObserved = true;
 // The apply of a plugin change saves the projects, so the page follows plugin changes only after they are initialised.

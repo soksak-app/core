@@ -11,6 +11,28 @@ globalThis.document = dom.window.document;
 const reports = [];
 mock.module("../host.js", { namedExports: { report: (line) => { reports.push(line); } } });
 
+// The runtime transport used by the production declared source. Snapshot senders are connected to these listeners below.
+const snapshotListeners = new Set();
+let snapshotSenders = new Map();
+const snapshotAcknowledgements = [];
+mock.module("@soksak/runtime", { namedExports: {
+  host: {
+    call: (name, arg) => Promise.resolve().then(() => {
+      snapshotAcknowledgements.push({ name, arg });
+      const data = arg.data;
+      const listeners = snapshotSenders.get(data.status) ?? [];
+      for (const listener of [...listeners]) listener({ event: arg.event, plugin: data.plugin, status: data.status, seq: data.seq });
+      return null;
+    }),
+    on: (name, listener) => {
+      assert.equal(name, "declared-ui-snapshot");
+      snapshotListeners.add(listener);
+      return Promise.resolve(() => snapshotListeners.delete(listener));
+    },
+  },
+  page: null,
+} });
+
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const list = (texts) => ({ elements: [{ kind: "list", key: "l1", empty: "none", items: texts.map((text) => ({ key: text, label: text })) }] });
 const tree = (nodes) => ({ elements: [{ kind: "tree", key: "t1", empty: "none", nodes }] });
@@ -19,6 +41,48 @@ const leaf = (key) => ({ key, label: key });
 
 let counter = 0;
 
+/** A bounded sender fixture at the declared snapshot wire boundary. */
+function senderFixture({ plugin, status, surface, report }) {
+  let seq = 0;
+  let inTransit = null;
+  let dirty = false;
+  let value;
+  const sent = [];
+  function transmit() {
+    inTransit = seq;
+    const message = { event: "declared-ui.snapshot", plugin, status, seq, value, skipped: 0 };
+    if (surface !== null) message.surface = surface;
+    sent.push(message);
+    for (const listener of [...snapshotListeners]) listener(message);
+  }
+  return {
+    sent,
+    push(next) {
+      seq += 1;
+      value = next;
+      if (inTransit !== null) {
+        dirty = true;
+        return;
+      }
+      transmit();
+    },
+    pull() { return { seq, value }; },
+    acknowledge(message) {
+      if (message?.event !== "declared-ui.snapshot.ack" || message.plugin !== plugin || message.status !== status || message.seq !== inTransit) {
+        const error = new Error(`snapshot acknowledgement ${message?.status} ${message?.seq} has no matching ${status} snapshot in transit`);
+        report(error);
+        throw error;
+      }
+      inTransit = null;
+      if (dirty) {
+        dirty = false;
+        transmit();
+      }
+    },
+    close() { inTransit = null; dirty = false; },
+  };
+}
+
 /** A declared section for one status, with fake registrations, a fake channel per source, and a fake pull. */
 async function harness({ deferSubscription = false } = {}) {
   const name = `s${++counter}`;
@@ -26,7 +90,7 @@ async function harness({ deferSubscription = false } = {}) {
   const { setTreeExpanded } = await import("../declared-ui.js");
   const statusId = `demo.${name}`;
   const body = document.createElement("div");
-  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), listenerRegistrations: [], acks: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
+  const world = { registrants: [], active: null, orientation: "vertical", channels: new Map(), listenerRegistrations: [], pulls: [], expanded: [], pullReply: null, pullError: null, deferred: [], deferredSubscriptions: [], deferSubscription, skipped: [], failures: [] };
   const section = module.createDeclaredSection({
     statusId,
     body,
@@ -35,7 +99,6 @@ async function harness({ deferSubscription = false } = {}) {
     orientation: () => world.orientation,
     choose: () => module.chooseSource({ statusId, active: world.active, registrants: world.registrants, host: world.host ?? null }),
     channel: (source) => ({
-      send: (message) => { world.acks.push({ source: source.id, message }); },
       onMessage: (listener) => {
         world.listenerRegistrations.push({ source: source.id, listener });
         if (!world.deferSubscription) {
@@ -88,6 +151,187 @@ test("a section with no registered source shows nothing, pulls nothing, and subs
   assert.equal(h.world.channels.size, 0, "a channel was subscribed without a source");
 });
 
+test("sections sharing a source acknowledge only snapshots of their own status", async () => {
+  const { createDeclaredSource } = await import("../declared-source.js");
+  const { createDeclaredSection } = await import("../declared-section.js");
+  const priorDispatch = globalThis.dispatchEvent;
+  const transportErrors = [];
+  globalThis.dispatchEvent = (event) => { transportErrors.push(event.message); return true; };
+  try {
+    for (const source of [{ id: "view-a", surface: "view-a" }, { id: "plugin:demo", surface: null }]) {
+      snapshotAcknowledgements.length = 0;
+      snapshotSenders = new Map();
+      const senders = new Map();
+      for (const status of ["tree", "bookmarks"]) {
+        const sender = senderFixture({
+          plugin: "demo",
+          status,
+          surface: source.surface,
+          report: (error) => transportErrors.push(error.message),
+        });
+        snapshotSenders.set(status, [(message) => sender.acknowledge(message)]);
+        senders.set(status, sender);
+      }
+
+      const sections = [];
+      const bodies = new Map();
+      for (const status of ["tree", "bookmarks"]) {
+        const body = document.createElement("div");
+        bodies.set(status, body);
+        const section = createDeclaredSection({
+          statusId: `demo.${status}`,
+          body,
+          options: { declared: () => true, hasIcon: () => true, bind: (el) => el },
+          choose: () => source,
+          channel: (selected) => createDeclaredSource({ plugin: "demo", status }).channel(selected),
+          pull: () => Promise.resolve({ seq: 0, value: null }),
+          expanded: () => {},
+          skipped: () => {},
+          failed: (error) => { throw error; },
+        });
+        sections.push(section);
+        section.reconcile();
+      }
+      await settle();
+      await settle();
+      senders.get("tree").push(tree([leaf("root")]));
+      await settle();
+      await settle();
+      assert.equal(bodies.get("tree").textContent, "root", "the matching section did not receive its snapshot");
+      assert.equal(bodies.get("bookmarks").textContent, "", "a section drew a snapshot of another status");
+
+      assert.equal(snapshotAcknowledgements.filter(({ arg }) => arg.data.status === "tree").length, 1,
+        `${source.surface === null ? "plugin host" : "view"} source acknowledged the tree snapshot more than once`);
+      assert.equal(snapshotAcknowledgements.filter(({ arg }) => arg.data.status === "bookmarks").length, 0,
+        `${source.surface === null ? "plugin host" : "view"} source acknowledged a snapshot for another status`);
+      assert.deepEqual(transportErrors, [], "a duplicate acknowledgement reached a sender without a snapshot in transit");
+      senders.get("bookmarks").push(list(["saved"]));
+      await settle();
+      await settle();
+      assert.equal(bodies.get("bookmarks").textContent, "saved", "the matching bookmarks section did not receive its snapshot");
+      assert.deepEqual(snapshotAcknowledgements.map(({ arg }) => arg.data.status), ["tree", "bookmarks"],
+        "each plugin push must receive exactly one acknowledgement for its own status");
+      assert.deepEqual(transportErrors, [], "a status sender rejected an acknowledgement");
+      for (const section of sections) section.close();
+      for (const sender of senders.values()) sender.close();
+    }
+  } finally {
+    globalThis.dispatchEvent = priorDispatch;
+  }
+});
+
+test("a hidden status keeps its sender moving while another status section is mounted", async () => {
+  const { createDeclaredSource } = await import("../declared-source.js");
+  const { createDeclaredSection } = await import("../declared-section.js");
+  const priorDispatch = globalThis.dispatchEvent;
+  globalThis.dispatchEvent = () => true;
+  snapshotAcknowledgements.length = 0;
+  const source = { id: "view-a", surface: "view-a" };
+  const sent = [];
+  const senders = new Map();
+  const body = document.createElement("div");
+  try {
+    for (const status of ["tree", "bookmarks"]) {
+      const sender = senderFixture({
+        plugin: "demo",
+        status,
+        surface: source.surface,
+        report: (error) => { throw error; },
+      });
+      snapshotSenders.set(status, [(message) => sender.acknowledge(message)]);
+      senders.set(status, sender);
+    }
+
+    const section = createDeclaredSection({
+      statusId: "demo.tree",
+      body,
+      options: { declared: () => true, hasIcon: () => true, bind: (el) => el },
+      choose: () => source,
+      channel: (selected) => createDeclaredSource({ plugin: "demo", status: "tree" }).channel(selected),
+      pull: () => Promise.resolve({ seq: 0, value: null }),
+      expanded: () => {}, skipped: () => {}, failed: (error) => { throw error; },
+    });
+    section.reconcile();
+    await settle();
+    senders.get("bookmarks").push(list(["first"]));
+    senders.get("bookmarks").push(list(["latest"]));
+    await settle();
+    await settle();
+    sent.push(...senders.get("bookmarks").sent);
+
+    assert.deepEqual(sent.map(({ status }) => status), ["bookmarks", "bookmarks"],
+      "the hidden status sender kept its latest snapshot in transit without an acknowledgement");
+    assert.deepEqual(snapshotAcknowledgements.map(({ arg }) => arg.data.status), ["bookmarks", "bookmarks"],
+      "the mounted sibling section did not route each hidden-status acknowledgement");
+    assert.equal(body.textContent, "", "the mounted sibling section drew a snapshot of the hidden status");
+    section.close();
+  } finally {
+    for (const sender of senders.values()) sender.close();
+    globalThis.dispatchEvent = priorDispatch;
+  }
+});
+
+test("a push before a section mounts releases its sender slot before the next push", async () => {
+  const { createDeclaredSource } = await import("../declared-source.js");
+  const { keepViewCommands } = await import("../view-commands.js");
+  const { createDeclaredSection } = await import("../declared-section.js");
+  const priorDispatch = globalThis.dispatchEvent;
+  globalThis.dispatchEvent = () => true;
+  snapshotAcknowledgements.length = 0;
+  snapshotSenders = new Map();
+  const source = { id: "view-a", surface: "view-a" };
+  const sender = senderFixture({
+    plugin: "demo",
+    status: "tree",
+    surface: source.surface,
+    report: (error) => { throw error; },
+  });
+  const sent = sender.sent;
+  snapshotSenders.set("tree", [(message) => sender.acknowledge(message)]);
+  let forgetCommands;
+  let section;
+  try {
+    sender.push(tree([leaf("before-subscription")]));
+    assert.deepEqual(sent.map(({ seq }) => seq), [1], "the first push was not the source's initial snapshot");
+
+    forgetCommands = keepViewCommands(source.surface, {
+      run: (command, params) => {
+        assert.equal(command, "declared-ui.snapshot.request");
+        return Promise.resolve(sender.pull(params.status));
+      },
+    });
+    const transport = createDeclaredSource({ plugin: "demo", status: "tree" });
+    const body = document.createElement("div");
+    section = createDeclaredSection({
+      statusId: "demo.tree",
+      body,
+      options: { declared: () => true, hasIcon: () => true, bind: (el) => el },
+      choose: () => source,
+      channel: transport.channel,
+      pull: transport.pull,
+      expanded: () => {}, skipped: () => {}, failed: (error) => { throw error; },
+    });
+    section.reconcile();
+    await settle();
+    await settle();
+    assert.equal(body.textContent, "before-subscription", "the pull did not recover the first value");
+
+    sender.push(tree([leaf("after-subscription")]));
+    await settle();
+    await settle();
+    assert.deepEqual(sent.map(({ seq }) => seq), [1, 2],
+      "pulling the latest value did not release the sender's first in-transit snapshot");
+    assert.deepEqual(snapshotAcknowledgements.map(({ arg }) => arg.data.seq), [1, 2],
+      "each push did not receive exactly one acknowledgement");
+    assert.equal(body.textContent, "after-subscription", "the section did not draw the next pushed value");
+  } finally {
+    section?.close();
+    forgetCommands?.();
+    sender.close();
+    globalThis.dispatchEvent = priorDispatch;
+  }
+});
+
 test("the active view that registered the status is the source: it is pulled once and its pushed values are drawn", async () => {
   const h = await harness();
   h.world.registrants = ["view-a"];
@@ -99,7 +343,6 @@ test("the active view that registered the status is the source: it is pulled onc
   assert.deepEqual(h.labels(), ["a"], "the pulled value was not drawn");
   h.push("view-a", 2, list(["b"]));
   assert.deepEqual(h.labels(), ["b"], "the pushed value was not drawn");
-  assert.deepEqual(h.world.acks.map((ack) => ack.message.seq), [2], "the snapshot was not acknowledged");
 });
 
 test("reconciling the ready source again keeps one listener and one pull", async () => {
@@ -186,7 +429,6 @@ test("the first push is subscribed before the source is pulled", async () => {
   await settle();
   assert.deepEqual(h.world.pulls, ["view-a"], "the source was not pulled after subscription readiness");
   h.push("view-a", 1, list(["first-push"]));
-  assert.deepEqual(h.world.acks.map(({ message }) => message.seq), [1], "the ready listener did not receive the first push");
   assert.deepEqual(h.labels(), ["first-push"], "the ready listener did not draw the first push");
   h.world.deferred[0]({ seq: 0, value: null });
   await settle();
@@ -246,6 +488,7 @@ test("a queued callback from the first A subscription is discarded after an A to
   assert.deepEqual(h.labels(), ["current-a"], "the current A subscription did not update the section");
   await settle();
 });
+
 
 test("a pull reply with value null leaves the section cleared until the first push", async () => {
   const h = await harness();

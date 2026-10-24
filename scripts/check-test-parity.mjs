@@ -2650,10 +2650,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-42",
+    implementation: [
+      { file: "packages/workbench/declared-source.js", symbol: "export function startDeclaredSnapshotIngress()" },
+      { file: "packages/workbench/declared-source.js", symbol: "createSnapshotReceiver({" },
+      { file: "packages/workbench/index.html", symbol: "startDeclaredSnapshotIngress()" },
+      { file: "packages/workbench/index.html", symbol: "afterDeclaredSnapshotIngress(() => {})" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "sections sharing a source acknowledge only snapshots of their own status" },
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "a hidden status keeps its sender moving while another status section is mounted" },
+      { file: "packages/workbench/test/declared-section.test.mjs", id: "a push before a section mounts releases its sender slot before the next push" },
+      { file: "packages/workbench/test/declared-source.test.mjs", id: "the ingress ACKs each valid view event once and routes only its source and status" },
+      { file: "packages/workbench/test/declared-source-no-host.test.mjs", id: "a page without a native bridge starts ingress without a fallback transport" },
+    ],
+    expected: "One window ingress validates and acknowledges every pushed snapshot once, routes it by plugin, source and status, and releases sender slots when no matching section is mounted. Provider startup waits for ingress readiness, and a page without a native bridge starts without a fallback transport.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-41",
     implementation: [
-      { file: "packages/workbench/declared-source.js", symbol: "function subscribe(event, matches, receive)" },
-      { file: "packages/workbench/declared-section.js", symbol: "const ready = createSnapshotReceiver" },
+      { file: "packages/workbench/declared-source.js", symbol: "export function startDeclaredSnapshotIngress()" },
+      { file: "packages/workbench/declared-section.js", symbol: "const ready = link.onMessage" },
       { file: "packages/plugin-api/snapshots.js", symbol: "export function createSnapshotReceiver" },
     ],
     tests: [

@@ -53,6 +53,7 @@ Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름
 1. workbench 페이지에서는 plugin 코드를 실행하지 않는다.
 2. **Declared UI snapshot.** plugin view나 plugin host는 declared UI snapshot을 workbench로 보낸다(push). 메인 페이지가 load될 때(reload 포함) workbench는 각 선언된 status의 현재 값을 그 status의 출처로 고른 곳에서 한 번 요청한다(pull). 상태의 출처가 바뀌면 workbench는 그 status의 현재 값을 한 번 pull한다. 실행 중인 view는 마지막 값을 새 독자에게 보낼 다른 수단이 없다. 다른 pull은 없다. 메시지의 이름과 field는 [메시지와 event](#메시지와-event)에 적는다.
    - status 하나에는 전송 중인 snapshot이 최대 1개다.
+   - window ingress receiver 하나가 section recipient 수와 관계없이 pushed snapshot마다 한 번 검사하고 확인 응답한다. 일치하는 section이 mount되지 않은 snapshot도 확인 응답한 뒤 버리므로, mount되지 않은 status가 sender의 전송 중 슬롯을 유지하지 않는다. 출처와 status routing은 [선언된 UI](declared-ui.ko.md#status-대응)에 정의한다.
    - 전송 중에 생긴 변경은 dirty로 표시한다. 확인(ack)이 오면 최신 값을 담아 다음 snapshot을 보낸다.
    - 건너뛴 값의 수는 core status `core.plugin.losses`의 `losses.skipped`로 센다. 이 수는 각 snapshot message의 필드 `skipped`로 메인 페이지에 닿는다. 전송 중에 덮어쓴 값의 수이며, status의 이전 snapshot이 보내진 뒤의 수다. 성능 trace가 켜져 있으면 메인 페이지는 덮어쓴 값마다 `page.trace.declared-ui.snapshot.skipped {plugin, status, count}`를 쓴다. host는 snapshot을 중계하지 않으며 이 경우 event를 쓰지 않는다. `host.*` event는 host 코드만 쓰기 때문이다.
    - plugin 프로세스가 (다시) 시작하면 그 프로세스의 첫 snapshot이 각 status의 전체 값이다. workbench는 이전 프로세스의 멈춘 snapshot과 확인 대기를 버린다. 다시 시작한 plugin은 저장한 state에서 값을 만들어 보낸다(규칙 5).
