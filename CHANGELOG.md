@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-47-6: Correct the acceptance record: no run proves the eight-key,
+  Backspace and Space sequence on both hosts. The latest Wails attempt stopped
+  after the first key at the base-screen/presented-overlay frame mismatch; a
+  native AppKit reference trace does not verify terminal PTY behavior. The
+  earlier Wails four-key pass and Tauri pointer-placement failure cover a
+  different sequence and do not establish this acceptance.
+
 - F239-47-2: The activation observer now keeps the event offset from before
   each status sample, so a notification delivered while the sample reads
   compose, cursor, screen and host state is not lost. Red: the controlled

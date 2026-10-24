@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-47-6: Acceptance 기록을 바로잡는다. 여덟 key, Backspace, Space 순서를
+  양 host에서 검증한 실행은 없다. 가장 최근 Wails 시도는 base screen과
+  presented overlay의 frame mismatch 뒤 첫 key에서 멈췄고, native AppKit
+  reference trace는 terminal PTY 동작을 검증하지 않는다. 이전 Wails 4-key
+  통과와 Tauri pointer-placement 실패는 다른 입력 순서이므로 현재 acceptance를
+  입증하지 않는다.
+
 - F239-47-2: activation observer가 각 status sample 전에 event offset을
   저장해 compose, cursor, screen, host 상태를 읽는 동안 도착한 알림을
   놓치지 않는다. Red: controlled deferred-event case에서 알림 뒤에 wait
