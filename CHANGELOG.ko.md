@@ -6,8 +6,10 @@
 
 - F239-47: 보고된 terminal IME 표시 증상과 미확인 원인을 기록한다. 수용
   기준은 실패 경계를 찾기 위해 AppKit 기준 입력, native input trace, terminal
-  preedit, PTY 상태 및 전체 입력 녹화를 요구한다. Activation이나 제품 코드는
-  변경하지 않았다.
+  preedit, PTY 상태 및 전체 입력 녹화를 요구한다. Activation case는 syntax
+  검사만 했고 실행하지 않았다. `make e2e-check`는 기존
+  `e2e/normal-shutdown-runner.mjs:95` timeout 규칙에서 실패한다. Activation이나
+  제품 코드는 변경하지 않았다.
 
 - F239-47-3: AppKit marked range를 composition event로 보고한다. Native event는
   보관 suffix 전체와 text 기준 실제 UTF-16 marked range를 담고, AppKit에

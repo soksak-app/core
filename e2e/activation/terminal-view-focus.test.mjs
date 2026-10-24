@@ -8,10 +8,13 @@ import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../fixture.mjs";
 import { EVERY_LEVEL } from "@soksak/window-check/log-policy.mjs";
-import { readScreenUntil } from "../terminal-screen.mjs";
+import { presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
 
 const ABC = "com.apple.keylayout.ABC";
+const KOREAN_2SET = "com.apple.inputmethod.Korean.2SetKorean";
 const COMMAND = "echo focuscheck";
+const REPEATED_VOWEL_KEYS = ["k", "k", "k", "k"];
+const REPEATED_VOWELS = "ㅏㅏㅏㅏ";
 const INPUT_RECORDS = ["native.record.info", "native.input.key_down", "native.input.report", "host.input.relay",
   "host.window.event", "host.trace.region", "host.trace.sidecar.send", "page.call", "page.log.clock",
   "host.sidecar.request", "sidecar.vt.request", "sidecar.vt.pty_write", "sidecar.vt.pty_read"];
@@ -317,5 +320,138 @@ for (const app of Object.values(APPS)) {
     for (const type of ["pointerdown", "pointerup"]) assert.ok(input.entries.some((entry) =>
       entry.kind === "pointer-dom" && entry.type === type && entry.trusted), `the native click delivered no trusted ${type}`);
     t.diagnostic(`terminal pointer trace: ${JSON.stringify(input)}`);
+  });
+
+  test(`${app.name}: repeated Korean vowels stay visible before Space`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    const terminal = await step(t, `${app.name}: prepare repeated-vowel terminal`, () => fresh(s, {
+      performanceTrace: true,
+      log: EVERY_LEVEL,
+      reads: INPUT_RECORDS,
+    }));
+    const surface = terminal.surface;
+    await readScreenUntil(s, surface, (lines) => lines.some((line) => line.endsWith("$")), "shell prompt missing");
+    await s.keepPointerOutside();
+    const originalSource = (await s.request("diagnostics.input.source")).current;
+    s.cleanup(() => s.request("diagnostics.input.source", { select: originalSource }));
+    assert.deepEqual(await s.request("diagnostics.input.reference", { action: "read" }), { open: false },
+      "the disposable configuration must not contain an open reference");
+    await s.request("diagnostics.input.reference", { action: "open" });
+    let referenceOpen = true;
+    s.cleanup(async () => {
+      if (referenceOpen) await s.request("diagnostics.input.reference", { action: "close" });
+    });
+
+    const referenceStages = [];
+    await step(t, `${app.name}: AppKit reference repeated-vowel gesture`, () => recordGesture(s, t,
+      "AppKit repeated-vowel reference", () => observeInput(s, t, "AppKit repeated-vowel reference", surface,
+        async () => {
+          const reference = await s.request("diagnostics.input.reference", { action: "read" });
+          assert.equal(reference.document, "", "the AppKit reference must start empty");
+          await s.pointer(reference.frame.x + reference.frame.w / 2, reference.frame.y + reference.frame.h / 2,
+            "move", { activate: true });
+          const focused = await s.request("diagnostics.input.reference", { action: "focus" });
+          assert.equal(focused.focused, true, "the AppKit reference must receive native focus");
+          assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
+            "Korean 2-set must be selected for the reference");
+          for (const [index, key] of REPEATED_VOWEL_KEYS.entries()) {
+            await s.press(key);
+            const stage = await s.request("diagnostics.input.reference", { action: "read" });
+            referenceStages.push(stage);
+            assert.equal(stage.document, REPEATED_VOWELS.slice(0, index + 1),
+              `the AppKit reference document after vowel ${index + 1} must match the native key sequence`);
+            t.diagnostic(`${app.name}: AppKit reference after vowel ${index + 1}: ${JSON.stringify(stage)}`);
+          }
+          await s.press("Space");
+          const committed = await s.request("diagnostics.input.reference", {
+            action: "wait", document: `${REPEATED_VOWELS} `,
+          });
+          assert.equal(committed.document, `${REPEATED_VOWELS} `,
+            "the AppKit reference must commit the four vowels and Space exactly");
+          assert.equal(committed.marked, null, "the AppKit reference must finish without marked text");
+          t.diagnostic(`${app.name}: AppKit reference committed result: ${JSON.stringify(committed)}`);
+        })));
+    await s.request("diagnostics.input.reference", { action: "close" });
+    referenceOpen = false;
+    assert.deepEqual(await s.request("diagnostics.input.reference", { action: "read" }), { open: false });
+
+    let imeTracing = false;
+    await step(t, `${app.name}: terminal repeated-vowel gesture`, () => recordGesture(s, t,
+      "terminal repeated-vowel gesture", () => observeInput(s, t, "terminal repeated-vowel gesture", surface,
+        async () => {
+          const current = (await s.get("core.surfaces")).find((item) => item.surface === surface);
+          assert.ok(current?.visible && current.composition === "view" && current.applied,
+            "the terminal must expose its current applied native frame");
+          const { x, y, w, h } = current.applied;
+          await s.click(x + w / 2, y + h / 2);
+          const host = await s.until("host.window", (value) => value.active && value.key &&
+            value.regions.some((region) => region.surface === surface && region.name === "view" && region.focused),
+          "the clicked terminal did not receive native focus in the active key window");
+          assert.equal(host.responder?.surface, surface, "the first responder must belong to the clicked terminal");
+          assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET,
+            "Korean 2-set must be selected for the terminal");
+          const idleTrace = await s.get("terminal.ime.trace", surface);
+          assert.equal(idleTrace.enabled, false, "the terminal IME trace must start idle");
+          await s.run("terminal.ime.trace", { action: "start" }, surface);
+          assert.equal((await s.get("terminal.ime.trace", surface)).enabled, true,
+            "the terminal IME trace must start before native input");
+          imeTracing = true;
+          s.cleanup(async () => {
+            if (imeTracing) {
+              imeTracing = false;
+              const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+              t.diagnostic(`${app.name}: retained terminal IME trace after failure: ${JSON.stringify(trace)}`);
+            }
+          });
+
+          const terminalStages = [];
+          for (const [index, key] of REPEATED_VOWEL_KEYS.entries()) {
+            await s.press(key);
+            const screen = await presentedScreen(s, surface);
+            const cursor = await s.get("terminal.cursor", surface);
+            const compose = await s.get("terminal.compose", surface);
+            const stage = {
+              index: index + 1,
+              key,
+              screen: textLines({ lines: screen.lines }),
+              cursor,
+              compose,
+            };
+            terminalStages.push(stage);
+            const visibleText = `${stage.screen.join("\n")}${cursor.preedit?.text ?? ""}`;
+            assert.ok(visibleText.endsWith(referenceStages[index].document),
+              `terminal text before Space differs from AppKit after vowel ${index + 1}: ` +
+              JSON.stringify({ expected: referenceStages[index].document, stage }));
+            t.diagnostic(`${app.name}: terminal before Space after vowel ${index + 1}: ${JSON.stringify(stage)}`);
+          }
+
+          await s.press("Space");
+          const committedLines = await readScreenUntil(s, surface,
+            (lines) => lines.some((line) => line.includes(REPEATED_VOWELS)),
+            "the terminal did not display all four vowels before another key");
+          const occurrences = committedLines.reduce((count, line) =>
+            count + line.split(REPEATED_VOWELS).length - 1, 0);
+          assert.equal(occurrences, 1, "the terminal must display the committed vowels exactly once");
+          assert.equal((await s.get("terminal.session", surface)).error, undefined,
+            "the native repeated-vowel input must not report a session error");
+          imeTracing = false;
+          const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
+          assert.equal(trace.overflow, false, "the terminal IME trace must not overflow");
+          const nativeInserts = trace.entries.filter((entry) => entry.kind === "native-insert")
+            .map((entry) => entry.text).join("");
+          const ptyInserts = trace.entries.filter((entry) => entry.kind === "terminal-input" &&
+            entry.input.type === "insert").map((entry) => entry.input.text).join("");
+          assert.equal(nativeInserts, REPEATED_VOWELS,
+            "the native input client must commit exactly the four reference vowels");
+          assert.equal(ptyInserts, REPEATED_VOWELS,
+            "the terminal PTY input queue must receive exactly the four vowels");
+          t.diagnostic(`${app.name}: repeated-vowel terminal result ${JSON.stringify({
+            stages: terminalStages,
+            committedLines,
+            nativeInserts,
+            ptyInserts,
+            trace: trace.entries,
+          })}`);
+        })));
   });
 }
