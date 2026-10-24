@@ -184,8 +184,15 @@
   there. After close, the check now verifies newer declared tree and bookmark
   snapshots with exact no-project values, no stale rows, no application error,
   and no Files sections drawn in the library. Red: the prior Wails check timed
-  out on `core.sidebars: []` before opening the test project. Syntax and
-  `make e2e-check` pass; the updated two-host runtime check remains pending.
+  out on `core.sidebars: []` before opening the test project. Green: the exact
+  project-close case passes on Wails (2.419 s) and Tauri (2.095 s), 2/2. Both
+  log audits report no error records, process waits confirm both hosts and all
+  four sidecars ended, and endpoint scans are empty. The result validates this
+  named check only; it does not claim the full Files suite or a public release.
+
+- F239-37: All nine separately tracked Files window checks for the current
+  plugin-host snapshot contract are complete. This closes only those named
+  checks and does not claim full Files-suite or public-release acceptance.
 
 - F239-37-8: Wait for the current Files tree source to accept a declared UI
   snapshot before using its sequence as a baseline. A source change may leave

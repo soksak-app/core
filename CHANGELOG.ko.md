@@ -174,7 +174,14 @@
   더 새로운 declared tree와 bookmark snapshot의 정확한 no-project 값, stale row와
   application error 없음, library에 Files section이 그려지지 않음을 확인한다. Red:
   기존 Wails check는 test project를 열기 전 `core.sidebars: []`에서 timeout됐다.
-  Syntax와 `make e2e-check`는 통과했다. 수정된 양 host runtime check는 대기 중이다.
+  Green: 동일 project-close case가 Wails(2.419초), Tauri(2.095초)에서 통과해
+  2/2다. 두 log audit에 error record가 없고, process wait은 양 host와 네 sidecar의
+  종료를 확인하며 endpoint scan은 비어 있다. 이 결과는 이름이 지정된 check만
+  검증하며 전체 Files suite나 public release를 뜻하지 않는다.
+
+- F239-37: 현재 plugin-host snapshot 계약을 다루는 Files window check 9개가 모두
+  완료됐다. 이름이 지정된 check만 닫으며 전체 Files suite나 public release 수용을
+  뜻하지 않는다.
 
 - F239-37-8: Files tree source가 declared UI snapshot을 수락할 때까지 sequence
   baseline 사용을 기다린다. Source 변경 직후 section은 cleared 상태, pending
