@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F267.6: Link F239-47-1 to its native implementation and owning tests, and
+  claim `image_capture_match.m` with its existing test in the Darwin document
+  and surface lane. Red: the unchanged `make parity-check` reported the
+  missing F239-47-1 link and the uncovered native implementation. Green: the
+  same audit reports 0 uncovered implementations and 0 feature-link issues
+  across 415 links. Four unrelated issues remain: F266 classification, the
+  two recorded examples counts (100/673/922 versus current 100/679/929), and
+  the unclaimed Wails starter test. No behavior or test code changed.
+
 - F239-46-1: Add `source-origins.js` to the Workbench package file list so
   staging includes the module imported by the main-page source handlers. Red:
   the staged import-closure test failed because `plugin-host.js` imported

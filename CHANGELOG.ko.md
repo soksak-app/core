@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F267.6: F239-47-1을 native implementation 및 소유 test에 연결하고,
+  기존 test와 함께 `image_capture_match.m`을 Darwin document and surface
+  lane에 등록한다. Red: 변경 전 `make parity-check`는 F239-47-1 link 누락과
+  native implementation 미등록을 보고했다. Green: 같은 audit는 미등록
+  implementation 0개, feature link 오류 0건, 검사한 link 415개를 보고한다.
+  F266 분류, 두 examples count(100/673/922와 현재 100/679/929), 미등록
+  Wails starter test 등 무관한 네 문제는 남는다. 동작 및 test code는 바꾸지 않았다.
+
 - F239-46-1: Main-page source handler가 import하는 `source-origins.js`를
   Workbench package files에 추가해 staging payload에 포함한다. Red: staged
   import-closure test는 `plugin-host.js`가 import하는 `source-origins.js`가

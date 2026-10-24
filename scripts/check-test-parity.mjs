@@ -136,11 +136,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin document and surface", "objective-c", [
     "native/darwin/src/document_view.m",
     "native/darwin/src/image_region.m",
+    "native/darwin/src/image_capture_match.m",
     "native/darwin/src/surface_layout.m",
     "native/darwin/src/webview_geometry.m",
   ], [
     "native/darwin/tests/document_view_test.m",
     "native/darwin/tests/image_region_test.m",
+    "native/darwin/tests/image_capture_match_test.m",
     "native/darwin/tests/presentation_order_test.m",
     "native/darwin/tests/surface_layout_test.m",
     "native/darwin/tests/webview_geometry_test.m",
@@ -2670,6 +2672,19 @@ const FEATURE_LINKS = [
     ],
     expected: "The Makefile bundle preparation refuses with the active process PID and target path before removing Contents, preserves the running bundle files, and recreates Contents when no process uses the bundle.",
     levels: ["unit"],
+  },
+  {
+    id: "F239-47-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "sp_input_press_context_push(&context, window, point.x, point.y)" },
+      { file: "native/darwin/src/image_region.m", symbol: "sp_input_press_context_point(view.window, &x, &y)" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "direct pointer focus: a press inside the focused region does not report focus loss" },
+      { file: "native/darwin/tests/image_region_test.m", id: "direct pointer focus: the region remains first responder after the click" },
+    ],
+    expected: "A diagnostic pointer press dispatched directly to the hit view supplies a scoped synthetic press context, so an in-region press retains image-region focus without modifying NSApp.currentEvent.",
+    levels: ["native"],
   },
   {
     id: "F239-43",
