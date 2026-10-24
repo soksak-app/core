@@ -633,13 +633,17 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
 .declared-row{display:flex;align-items:center;gap:.25em;min-width:0}
 .declared-actions{display:flex;flex:0 0 auto;align-items:center;gap:.25em}
 .declared-children{padding-left:1em}
-.declared-expand{display:flex;flex:0 0 1em;width:1em;height:1em;padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
+/* Declared UI uses buttons for every interactive control. Remove the browser button box so only the declared content draws. */
+.set__body[data-declared] button{appearance:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;
+  letter-spacing:inherit;text-align:left;cursor:pointer}
+.declared-expand{display:flex;flex:0 0 1em;width:1em;height:1em;color:var(--muted)}
 .declared-icon{display:flex;flex:0 0 1em;width:1em;height:1em}
 .declared-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .declared-status-line{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* The body of a declared section stacks its root elements, and lays them left to right in one row that wraps at the section
    width when the sidebar is horizontal (docs/spec/declared-ui.md, sidebar section form). */
 .set__body[data-declared]{display:flex;flex-direction:column;gap:6px}
+.set__body[data-declared]:has(> .declared-tree){padding:0}
 .set[data-orientation=horizontal] .set__body[data-declared]{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
 /* A tree takes a full line of a horizontal section, because its width follows its deepest visible row, which changes when a branch expands
    or collapses; in a row flow that change would reflow the sibling elements. A tree box scrolls horizontally, with a thin scrollbar, when a

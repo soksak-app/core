@@ -4,6 +4,18 @@
 
 ## Unreleased
 
+- F239-37-7: Remove the generic padding from declared bodies that contain a
+  tree and reset browser button styling for declared controls. Red: the
+  unchanged owning style tests fail 2/2 with 14 px of declared body padding
+  and `appearance:auto` on declared buttons. Green: `declared-ui-style.test.mjs`
+  passes 2/2 after the stylesheet change; `declared-ui.test.mjs` and
+  `sidebar-sections.test.mjs` pass 97/97 with it. The prior 25ad two-host
+  geometry run predates this CSS change and failed at title ink x=23 pt versus
+  section-chevron ink x=20.5 pt. Its row scan used a broad half-row region, so
+  it establishes no tree-chevron alignment result. The corrected F37-1
+  measurement records the status-line box and scans the first-node control;
+  runtime validation of this CSS change remains pending.
+
 - F239-47-2: Add `test-activation-backspace` as a focused Korean IME
   comparison between an AppKit text view and an image region in one window,
   plus an e2e terminal case for both hosts. The e2e case sends the same keys to

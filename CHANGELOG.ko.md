@@ -4,6 +4,18 @@
 
 ## 미배포
 
+- F239-37-7: Tree가 포함된 declared body의 공통 padding을 제거하고 declared
+  control의 browser button styling을 초기화한다. Red: 변경 전 owning style
+  test 두 개가 declared body padding 14 px와 declared button의
+  `appearance:auto`로 2/2 실패했다. Green: stylesheet 수정 후
+  `declared-ui-style.test.mjs`가 2/2 통과하고, 수정 내용이 포함된
+  `declared-ui.test.mjs`와 `sidebar-sections.test.mjs`는 97/97 통과한다. 이전
+  25ad 두 host geometry 검사는 이 CSS 수정 전 실행되어 title ink x=23 pt와
+  section-chevron ink x=20.5 pt에서 실패했다. Row 검사는 넓은 half-row를
+  스캔해 tree-chevron 정렬 결과를 입증하지 않는다. 수정된 F37-1 검사는
+  status-line box를 기록하고 first-node control 영역만 스캔한다. 이 CSS의
+  runtime 검증은 대기 중이다.
+
 - F239-47-2: `test-activation-backspace`는 같은 창의 AppKit text view와
   image region을 비교하고 양쪽 host의 e2e terminal case를 추가한다. E2E는
   같은 열 개 입력을 같은 창의 AppKit reference와 terminal에 보내고, 각
