@@ -1,6 +1,8 @@
 // Checks through the real write path that the recording path rejects with an explicit error a sample that lacks a required field of a completed frame (state, presentation time, window rectangle, scale, image),
 // and that an idle frame without an image is only counted.
 #import "../src/capture.m"
+#import <CommonCrypto/CommonDigest.h>
+#include <sys/stat.h>
 
 static int failures;
 static uint64_t controlledTimes[3];
@@ -115,6 +117,18 @@ static void beginSequence(SPCapture **used) {
 int main(void) { @autoreleasepool {
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native capture frame metadata validation\n");
+    sp_image_capture_match_result mismatch = { .state = SP_IMAGE_CAPTURE_UNMATCHED,
+        .display_time = 123456789, .has_pixel_difference = true, .different_pixels = 2,
+        .first_difference_x = 3, .first_difference_y = 4,
+        .expected_bgra = { 1, 2, 3, 4 }, .actual_bgra = { 5, 6, 7, 8 } };
+    NSDictionary *mismatchRecord = imageMatchRecord(mismatch, 0.25, 20, 10, 80,
+        CGRectMake(0, 0, 10, 5), CGRectMake(0, 0, 10, 5), YES, 1, 1, kCVPixelFormatType_32BGRA, "kCGColorSpaceSRGB");
+    NSDictionary *firstDifference = mismatchRecord[@"firstDifference"];
+    check([mismatchRecord[@"differentPixels"] isEqual:@2]
+        && [firstDifference[@"x"] isEqual:@3] && [firstDifference[@"y"] isEqual:@4]
+        && [firstDifference[@"expectedBGRA"] isEqual:@[@1, @2, @3, @4]]
+        && [firstDifference[@"actualBGRA"] isEqual:@[@5, @6, @7, @8]],
+        @"the callback record preserves the bounded exact pixel mismatch details");
     [NSApplication sharedApplication];
     char path[] = "/tmp/soksak-capture-metadata-XXXXXX";
     if (mkdtemp(path) == NULL) { check(NO, @"the fixture directory is created"); return 1; }
@@ -126,6 +140,149 @@ int main(void) { @autoreleasepool {
 
     NSString *error = record(sample(YES, complete(nil)), &used);
     check(error.length == 0 && used.written == 1, [NSString stringWithFormat:@"a complete frame with every field is written (%@)", error]);
+    NSDictionary *firstFrameTrace = used.callbackStatusTrace.lastObject;
+    check([firstFrameTrace[@"imageMatch"] isKindOfClass:NSDictionary.class]
+        && [firstFrameTrace[@"imageMatch"][@"displayTime"] isKindOfClass:NSString.class]
+        && [firstFrameTrace[@"imageMatch"][@"state"] isKindOfClass:NSString.class],
+        @"each captured image frame records an explicit source match state and its display time");
+
+    const uint8_t artifactSource[] = { 11, 12, 13, 255, 21, 22, 23, 255, 31, 32, 33, 255, 41, 42, 43, 255 };
+    sp_image_capture_identity artifactIdentity = { 7, 11, 13 };
+    sp_image_capture_match_begin();
+    check(sp_image_capture_match_retain(artifactIdentity, artifactSource, 2, 2, 8,
+        CGRectMake(10, 20, 2, 2), 1, "kCGColorSpaceSRGB"),
+        @"diagnostic capture retains the source used by the artifact fixture");
+    check(sp_image_capture_match_retain(artifactIdentity, artifactSource, 2, 2, 8,
+        CGRectMake(10, 20, 2, 2), 1, "kCGColorSpaceSRGB"),
+        @"repeated identical source identities do not schedule duplicate artifact paths");
+    error = record(sample(YES, complete(nil)), &used);
+    NSString *sourceArtifactPath = [[directory stringByAppendingPathComponent:@"sources"]
+        stringByAppendingPathComponent:@"7-11-13.bgra"];
+    NSData *sourceArtifact = [NSData dataWithContentsOfFile:sourceArtifactPath];
+    check(error.length == 0 && [sourceArtifact isEqualToData:[NSData dataWithBytes:artifactSource length:sizeof artifactSource]],
+        @"diagnostic capture writes the source artifact with the exact retained BGRA bytes and identity");
+    sp_image_capture_match_write_sources(directory.fileSystemRepresentation, captureWriter);
+    dispatch_sync(captureWriter, ^{});
+    check(sp_image_capture_match_write_manifest(directory.fileSystemRepresentation),
+        @"diagnostic capture writes the source artifact manifest after its writer queue drains");
+    NSString *manifestPath = [[directory stringByAppendingPathComponent:@"sources"] stringByAppendingPathComponent:@"manifest.json"];
+    NSData *manifestData = [NSData dataWithContentsOfFile:manifestPath];
+    NSDictionary *manifest = manifestData
+        ? [NSJSONSerialization JSONObjectWithData:manifestData options:0 error:nil] : nil;
+    NSArray *artifacts = manifest[@"artifacts"];
+    NSDictionary *artifact = artifacts.count == 1 ? artifacts.firstObject : nil;
+    unsigned char artifactDigest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(artifactSource, (CC_LONG)sizeof artifactSource, artifactDigest);
+    NSMutableString *artifactDigestHex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++)
+        [artifactDigestHex appendFormat:@"%02x", artifactDigest[index]];
+    NSDictionary *artifactBounds = artifact[@"screenBounds"];
+    check([artifact[@"generation"] isEqual:@"7"] && [artifact[@"raster"] isEqual:@"11"]
+        && [artifact[@"sequence"] isEqual:@13] && [artifact[@"file"] isEqual:@"7-11-13.bgra"]
+        && [artifact[@"width"] isEqual:@2] && [artifact[@"height"] isEqual:@2]
+        && [artifact[@"stride"] isEqual:@8] && [artifact[@"pixelFormat"] isEqual:@"BGRA8"]
+        && [artifact[@"alpha"] isEqual:@"premultiplied-first"]
+        && [artifact[@"colorSpace"] isEqual:@"kCGColorSpaceSRGB"]
+        && [artifactBounds[@"x"] isEqual:@10] && [artifactBounds[@"y"] isEqual:@20]
+        && [artifactBounds[@"width"] isEqual:@2] && [artifactBounds[@"height"] isEqual:@2]
+        && [artifact[@"scale"] isEqual:@1] && [artifact[@"byteCount"] isEqual:@(sizeof artifactSource)]
+        && [artifact[@"sha256"] isEqual:artifactDigestHex] && [manifest[@"droppedSources"] isEqual:@0],
+        @"the bounded source manifest records exact identity, pixel layout, geometry, color, byte count and SHA-256 once");
+    sp_image_capture_match_end();
+
+    NSString *cleanupDirectory = [directory stringByAppendingPathComponent:@"cleanup-failure"];
+    NSString *cleanupSourceDirectory = [cleanupDirectory stringByAppendingPathComponent:@"sources"];
+    NSString *partialPath = [cleanupSourceDirectory stringByAppendingPathComponent:@"77-1-1.bgra.partial"];
+    NSError *cleanupSetupError = nil;
+    BOOL cleanupFixtureReady = [[NSFileManager defaultManager] createDirectoryAtPath:cleanupSourceDirectory
+        withIntermediateDirectories:YES attributes:nil error:&cleanupSetupError]
+        && [@"retain" writeToFile:partialPath atomically:YES encoding:NSUTF8StringEncoding error:&cleanupSetupError];
+    check(cleanupFixtureReady, [NSString stringWithFormat:@"the artifact cleanup fixture is prepared (%@)", cleanupSetupError]);
+    sp_image_capture_match_begin();
+    sp_image_capture_identity cleanupIdentity = { 77, 1, 1 };
+    check(sp_image_capture_match_retain(cleanupIdentity, artifactSource, 2, 2, 8,
+        CGRectMake(10, 20, 2, 2), 1, "kCGColorSpaceSRGB"),
+        @"the artifact cleanup fixture retains its source raster");
+    BOOL cleanupPermissionSet = chmod(cleanupSourceDirectory.fileSystemRepresentation, 0500) == 0;
+    check(cleanupPermissionSet, @"the artifact cleanup fixture prevents partial-file replacement and removal");
+    sp_image_capture_match_write_sources(cleanupDirectory.fileSystemRepresentation, captureWriter);
+    dispatch_sync(captureWriter, ^{});
+    BOOL cleanupPermissionRestored = chmod(cleanupSourceDirectory.fileSystemRepresentation, 0700) == 0;
+    check(cleanupPermissionRestored, @"the artifact cleanup fixture restores directory permissions");
+    BOOL cleanupManifestWritten = sp_image_capture_match_write_manifest(cleanupDirectory.fileSystemRepresentation);
+    NSString *cleanupManifestPath = [cleanupSourceDirectory stringByAppendingPathComponent:@"manifest.json"];
+    NSData *cleanupManifestData = [NSData dataWithContentsOfFile:cleanupManifestPath];
+    NSDictionary *cleanupManifest = cleanupManifestData
+        ? [NSJSONSerialization JSONObjectWithData:cleanupManifestData options:0 error:nil] : nil;
+    NSArray *cleanupErrors = cleanupManifest[@"cleanupErrors"];
+    check(!cleanupManifestWritten && [cleanupManifest[@"cleanupFailures"] isEqual:@1]
+        && cleanupErrors.count == 1 && [cleanupErrors.firstObject[@"error"] isKindOfClass:NSString.class],
+        @"a failed partial-file cleanup is reported in the manifest and fails the artifact write");
+    sp_image_capture_match_end();
+
+    NSString *countBoundDirectory = [directory stringByAppendingPathComponent:@"count-bound"];
+    sp_image_capture_match_begin();
+    BOOL retainedCountFixture = YES;
+    for (int sequence = 1; sequence <= 513; sequence++) {
+        sp_image_capture_identity identity = { 8, 3, sequence };
+        uint8_t pixel[4] = { (uint8_t)sequence, 22, 33, 255 };
+        if (!sp_image_capture_match_retain(identity, pixel, 1, 1, sizeof pixel,
+            CGRectMake(10, 20, 1, 1), 1, "kCGColorSpaceSRGB")) retainedCountFixture = NO;
+        sp_image_capture_match_write_sources(countBoundDirectory.fileSystemRepresentation, captureWriter);
+    }
+    check(retainedCountFixture, @"the source artifact count fixture retains all 513 input images for bounded export");
+    dispatch_sync(captureWriter, ^{});
+    check(sp_image_capture_match_write_manifest(countBoundDirectory.fileSystemRepresentation),
+        @"the source artifact count-bound manifest is written after queued artifacts finish");
+    NSString *countManifestPath = [[countBoundDirectory stringByAppendingPathComponent:@"sources"]
+        stringByAppendingPathComponent:@"manifest.json"];
+    NSData *countManifestData = [NSData dataWithContentsOfFile:countManifestPath];
+    NSDictionary *countManifest = countManifestData
+        ? [NSJSONSerialization JSONObjectWithData:countManifestData options:0 error:nil] : nil;
+    NSString *droppedArtifact = [[countBoundDirectory stringByAppendingPathComponent:@"sources"]
+        stringByAppendingPathComponent:@"8-3-513.bgra"];
+    NSString *droppedPartial = [droppedArtifact stringByAppendingString:@".partial"];
+    check([countManifest[@"artifacts"] count] == 512
+        && [countManifest[@"droppedSources"] isEqual:@1]
+        && [countManifest[@"dropReasons"][@"capacity"] isEqual:@1]
+        && ![NSFileManager.defaultManager fileExistsAtPath:droppedArtifact]
+        && ![NSFileManager.defaultManager fileExistsAtPath:droppedPartial],
+        @"the 513th unique source is dropped explicitly without a partial file when the 512-artifact bound is reached");
+    sp_image_capture_match_end();
+
+    NSString *byteBoundDirectory = [directory stringByAppendingPathComponent:@"byte-bound"];
+    sp_image_capture_match_begin();
+    size_t byteLimit = 64 * 1024 * 1024;
+    uint8_t *largeSource = calloc(byteLimit, 1);
+    check(largeSource != NULL, @"the byte-bound fixture allocates exactly 64 MiB");
+    if (largeSource) {
+        sp_image_capture_identity largeIdentity = { 9, 4, 1 };
+        check(sp_image_capture_match_retain(largeIdentity, largeSource, byteLimit / 4, 1, byteLimit,
+            CGRectMake(10, 20, byteLimit / 4, 1), 1, "kCGColorSpaceSRGB"),
+            @"the source artifact byte-bound fixture retains exactly 64 MiB");
+        sp_image_capture_match_write_sources(byteBoundDirectory.fileSystemRepresentation, captureWriter);
+        sp_image_capture_identity excessIdentity = { 9, 4, 2 };
+        uint8_t excessPixel[4] = { 1, 2, 3, 255 };
+        check(sp_image_capture_match_retain(excessIdentity, excessPixel, 1, 1, sizeof excessPixel,
+            CGRectMake(10, 20, 1, 1), 1, "kCGColorSpaceSRGB"),
+            @"the source artifact byte-bound fixture retains a source after its first raster");
+        sp_image_capture_match_write_sources(byteBoundDirectory.fileSystemRepresentation, captureWriter);
+        dispatch_sync(captureWriter, ^{});
+        check(sp_image_capture_match_write_manifest(byteBoundDirectory.fileSystemRepresentation),
+            @"the source artifact byte-bound manifest is written after queued artifacts finish");
+        NSString *byteManifestPath = [[byteBoundDirectory stringByAppendingPathComponent:@"sources"]
+            stringByAppendingPathComponent:@"manifest.json"];
+        NSData *byteManifestData = [NSData dataWithContentsOfFile:byteManifestPath];
+        NSDictionary *byteManifest = byteManifestData
+            ? [NSJSONSerialization JSONObjectWithData:byteManifestData options:0 error:nil] : nil;
+        check([byteManifest[@"artifacts"] count] == 1
+            && [byteManifest[@"artifacts"][0][@"byteCount"] isEqual:@(byteLimit)]
+            && [byteManifest[@"droppedSources"] isEqual:@1]
+            && [byteManifest[@"dropReasons"][@"capacity"] isEqual:@1],
+            @"the source exceeding the 64 MiB artifact byte bound is dropped explicitly");
+        free(largeSource);
+    }
+    sp_image_capture_match_end();
 
     CVReturn (*originalLock)(CVPixelBufferRef, CVPixelBufferLockFlags) = captureLockBaseAddress;
     CVReturn (*originalUnlock)(CVPixelBufferRef, CVPixelBufferLockFlags) = captureUnlockBaseAddress;

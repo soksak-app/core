@@ -10,6 +10,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import "application_log.h"
 #import "event_ring.h"
+#import "image_capture_match.h"
 #import "image_region.h"
 #import "observe.h"
 #import "webview_geometry.h"
@@ -1081,7 +1082,7 @@ static IOSurfaceRef lookupSurface(unsigned int surface_id) {
     return IOSurfaceLookup(surface_id);
 }
 
-static CGImageRef copySurfaceImage(IOSurfaceRef surface) {
+static CGImageRef copySurfaceImage(IOSurfaceRef surface, char *declaredColorSpaceName, size_t nameCapacity) {
     if (IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return NULL;
     size_t width = IOSurfaceGetWidth(surface);
     size_t height = IOSurfaceGetHeight(surface);
@@ -1099,6 +1100,11 @@ static CGImageRef copySurfaceImage(IOSurfaceRef surface) {
         if (provider) CGDataProviderRelease(provider);
         CFRelease(data);
         return NULL;
+    }
+    if (colorProperties && declaredColorSpaceName && nameCapacity) {
+        CFStringRef name = CGColorSpaceGetName(colors);
+        if (!name || !CFStringGetCString(name, declaredColorSpaceName, nameCapacity, kCFStringEncodingUTF8))
+            declaredColorSpaceName[0] = '\0';
     }
     if (colorProperties) CFRelease(colorProperties);
     CGImageRef image = provider && colors ? CGImageCreate(width, height, 8, 32, bytesPerRow, colors,
@@ -1243,7 +1249,8 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    CGImageRef snapshot = copySurfaceImage(surface);
+    char declaredColorSpaceName[256] = {0};
+    CGImageRef snapshot = copySurfaceImage(surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
     CFRelease(surface);
     if (!snapshot) {
         [view reject:@"presentFailed"];
@@ -1268,6 +1275,31 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     view.presentedRaster = raster;
     view.presentedSequence = sequence;
     view.presentationError = nil;
+    if (sp_image_capture_match_active() && !view.isHiddenOrHasHiddenAncestor) {
+        CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
+        CFDataRef snapshotBytes = provider ? CGDataProviderCopyData(provider) : NULL;
+        const char *colorSpaceName = declaredColorSpaceName[0] ? declaredColorSpaceName : NULL;
+        NSRect localBounds = [view convertRect:view.bounds toView:nil];
+        NSRect screenBounds = [view.window convertRectToScreen:localBounds];
+        NSScreen *primaryScreen = NSScreen.screens.firstObject;
+        if (primaryScreen) {
+            // ScreenCaptureKit screenRect and window_facts use top-left coordinates. AppKit screen rectangles use a
+            // bottom-left origin, so normalize before retaining bounds for crop mapping.
+            screenBounds.origin.y = NSMaxY(primaryScreen.frame) - NSMaxY(screenBounds);
+        } else {
+            screenBounds = NSZeroRect;
+        }
+        sp_image_capture_identity identity = { generation, raster, sequence };
+        if (snapshotBytes) {
+            if (!sp_image_capture_match_retain(identity, CFDataGetBytePtr(snapshotBytes), CGImageGetWidth(snapshot),
+                CGImageGetHeight(snapshot), CGImageGetBytesPerRow(snapshot), NSRectToCGRect(screenBounds), scale,
+                colorSpaceName)) sp_log_error("image capture match", "source snapshot exceeded or failed the diagnostic retention bound");
+            CFRelease(snapshotBytes);
+        } else {
+            sp_image_capture_match_drop();
+            sp_log_error("image capture match", "source snapshot bytes could not be copied for diagnostic retention");
+        }
+    }
     if (previous) CGImageRelease(previous);
 
     return true;

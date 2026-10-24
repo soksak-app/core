@@ -12,6 +12,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import "capture.h"
+#import "image_capture_match.h"
 #import "application_log.h"
 #import <ImageIO/ImageIO.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
@@ -117,6 +118,56 @@ static BOOL contentRect(CMSampleBufferRef sample, CGRect *rect) {
     CFTypeRef value = frameInfo(sample, SCStreamFrameInfoContentRect);
     return value != NULL && CFGetTypeID(value) == CFDictionaryGetTypeID()
         && CGRectMakeWithDictionaryRepresentation(value, rect);
+}
+
+static BOOL screenRect(CMSampleBufferRef sample, CGRect *rect) {
+    CFTypeRef value = frameInfo(sample, SCStreamFrameInfoScreenRect);
+    return value != NULL && CFGetTypeID(value) == CFDictionaryGetTypeID()
+        && CGRectMakeWithDictionaryRepresentation(value, rect);
+}
+
+static NSDictionary *captureRectRecord(CGRect rect) {
+    return @{ @"x": @(CGRectGetMinX(rect)), @"y": @(CGRectGetMinY(rect)),
+        @"width": @(CGRectGetWidth(rect)), @"height": @(CGRectGetHeight(rect)) };
+}
+
+static NSDictionary *imageMatchRecord(sp_image_capture_match_result result, double processingMilliseconds,
+    size_t frameWidth, size_t frameHeight, size_t frameStride, CGRect contentRect, CGRect screenRect,
+    BOOL hasScreenRect, double contentScale, double scaleFactor, uint32_t pixelFormat, const char *colorSpace) {
+    NSMutableArray *candidates = [NSMutableArray arrayWithCapacity:result.candidate_count];
+    for (size_t index = 0; index < result.candidate_count; index++) {
+        sp_image_capture_identity identity = result.candidates[index];
+        [candidates addObject:@{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.generation],
+            @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)identity.raster],
+            @"sequence": @(identity.sequence) }];
+    }
+    NSDictionary *source = result.has_latest_source ? @{ @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)result.latest_source.generation],
+        @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)result.latest_source.raster],
+        @"sequence": @(result.latest_source.sequence), @"width": @(result.latest_width), @"height": @(result.latest_height),
+        @"stride": @(result.latest_stride), @"scale": @(result.latest_scale),
+        @"colorSpace": result.latest_color_space[0] ? [NSString stringWithUTF8String:result.latest_color_space] : (id)NSNull.null,
+        @"screenBounds": captureRectRecord(result.latest_screen_bounds) } : (id)NSNull.null;
+    NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:@{ @"state": [NSString stringWithUTF8String:sp_image_capture_match_state_name(result.state)],
+        @"displayTime": [NSString stringWithFormat:@"%llu", (unsigned long long)result.display_time],
+        @"candidates": candidates, @"droppedSnapshots": @(result.dropped_snapshots),
+        @"processingMilliseconds": @(processingMilliseconds),
+        @"captureFrame": @{ @"width": @(frameWidth), @"height": @(frameHeight), @"stride": @(frameStride),
+            @"pixelFormat": @(pixelFormat), @"contentRect": captureRectRecord(contentRect),
+            @"screenRect": hasScreenRect ? captureRectRecord(screenRect) : (id)NSNull.null,
+            @"contentScale": @(contentScale), @"scaleFactor": @(scaleFactor),
+            @"colorSpace": colorSpace ? [NSString stringWithUTF8String:colorSpace] : (id)NSNull.null },
+        @"latestRetainedSource": source,
+        @"latestSourceCrop": result.has_latest_crop ? captureRectRecord(result.latest_crop) : (id)NSNull.null }];
+    if (result.has_pixel_difference) {
+        record[@"differentPixels"] = @(result.different_pixels);
+        record[@"firstDifference"] = @{
+            @"x": @(result.first_difference_x),
+            @"y": @(result.first_difference_y),
+            @"expectedBGRA": @[@(result.expected_bgra[0]), @(result.expected_bgra[1]), @(result.expected_bgra[2]), @(result.expected_bgra[3])],
+            @"actualBGRA": @[@(result.actual_bgra[0]), @(result.actual_bgra[1]), @(result.actual_bgra[2]), @(result.actual_bgra[3])],
+        };
+    }
+    return record;
 }
 
 // frameStatus reads the status attached to a frame. It returns NO if there is no status.
@@ -354,9 +405,29 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         dispatch_semaphore_signal(capturePending);
         return;
     }
+    CGRect screen = CGRectZero;
+    BOOL hasScreenRect = screenRect(sample, &screen);
+    CFTypeRef colorAttachment = CVBufferCopyAttachment(buffer, kCVImageBufferCGColorSpaceKey, NULL);
+    CGColorSpaceRef captureColorSpace = colorAttachment && CFGetTypeID(colorAttachment) == CGColorSpaceGetTypeID()
+        ? (CGColorSpaceRef)colorAttachment : NULL;
+    CFStringRef captureColorName = captureColorSpace ? CGColorSpaceGetName(captureColorSpace) : NULL;
+    char colorNameBuffer[256];
+    const char *colorName = CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA
+        && captureColorName && CFStringGetCString(captureColorName, colorNameBuffer,
+            sizeof(colorNameBuffer), kCFStringEncodingUTF8) ? colorNameBuffer : NULL;
+    CFTimeInterval matchBegan = CACurrentMediaTime();
+    sp_image_capture_match_result match = sp_image_capture_match_sample(copy + sizeof(head) + sizeof(info),
+        width, height, stride, rect, hasScreenRect ? screen : CGRectZero,
+        contentScale, scaleFactor, colorName, shown);
+    sp_image_capture_match_write_sources(self.directory.fileSystemRepresentation, captureWriter);
+    double matchMilliseconds = (CACurrentMediaTime() - matchBegan) * 1000;
+    NSMutableDictionary *callbackRecord = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
+    callbackRecord[@"imageMatch"] = imageMatchRecord(match, matchMilliseconds, width, height, stride,
+        rect, screen, hasScreenRect, contentScale, scaleFactor, CVPixelBufferGetPixelFormatType(buffer), colorName);
+    sp_image_capture_match_result_dispose(&match);
+    if (colorAttachment) CFRelease(colorAttachment);
     self.queued = number;
     NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
-    NSMutableDictionary *callbackRecord = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
     callbackRecord[@"frame"] = path.lastPathComponent;
     dispatch_async(captureWriter, ^{
         CFTimeInterval began = CACurrentMediaTime();
@@ -739,6 +810,7 @@ bool sp_capture_start(const char* directory, char **errorOut) {
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
+    sp_image_capture_match_begin();
     // The copied completion block retains the original stream, so its identity is kept after a replacement.
     if (captureStartDone) dispatch_release(captureStartDone);
     captureStartDone = dispatch_semaphore_create(0);
@@ -843,11 +915,18 @@ int sp_capture_stop(double after) {
         setCaptureError(@"capture stop did not complete within 5000ms");
     }
     dispatch_sync(captureQueue, ^{});
+    sp_image_capture_match_write_sources(captureSink.directory.fileSystemRepresentation, captureWriter);
     // Counts after all copied frames have been written.
     dispatch_sync(captureWriter, ^{});
+    __block bool sourceManifestWritten = false;
+    dispatch_sync(captureWriter, ^{
+        sourceManifestWritten = sp_image_capture_match_write_manifest(captureSink.directory.fileSystemRepresentation);
+    });
+    if (!sourceManifestWritten) setCaptureError(@"diagnostic image source artifact manifest or source write failed");
     if (!writeCaptureCallbackStatusTrace(captureSink) && !hasCaptureError()) {
         setCaptureError(@"capture callback status trace failed without a reason");
     }
+    sp_image_capture_match_end();
     @synchronized([SPCapture class]) { captureStream = nil; }
     dispatch_release(captureQueue);
     dispatch_release(stopped);
