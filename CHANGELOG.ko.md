@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F212.10-core-3-1: native `view-call` 및 `view-reply` listener 등록을
+  기다린 뒤 view composition을 선언해 native view 생성을 시작한다. 따라서
+  첫 view call이 page listener 준비와 경합하지 않는다. Red: 변경 전
+  `surface-view.test.mjs`는 등록을 지연한 상태에서 composition이 먼저
+  선언되어 실패했다. Green: 같은 fixture는 두 listener가 준비된 뒤에만
+  composition이 선언되고 초기 call 두 개가 응답을 받는지 확인한다. Pending
+  setup 중 dispose와 등록 거부는 mount를 종료하고 성공한 listener를 해제한다.
+  Owning view/remount 검사는 33/33 통과하고 `make docs-check`도 통과한다.
+  이전 두 host timeout 상관관계는 미확인이며 수정 후 runtime 재검증은 하지 않았다.
 - F239-48-3-1: fully qualified `tauri::ipc::Channel<T>`만 framework가
   decode하는 command argument로 취급한다. Tauri 2.12.1은 channel에
   `CommandArg`를 구현하고 JavaScript channel id에서 주입하므로 page JSON
