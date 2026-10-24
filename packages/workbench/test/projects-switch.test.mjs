@@ -55,11 +55,12 @@ mock.module("../plugin-data.js", {
 });
 /* The project that the first screen chose for the settings. */
 const begunSettings = [];
+let beginThemeReply = async () => {};
 /* The host reply of the settings project selection. The test can hold the reply. */
 let selection = async () => {};
 mock.module("../settings.js", {
   namedExports: {
-    beginSettings: (snapshot, id) => { begunSettings.push(id); },
+    beginSettings: (snapshot, id) => { begunSettings.push(id); return beginThemeReply(snapshot, id); },
     selectProject: () => selection(),
     value: () => "tabs",
     flushSettings: async () => {},
@@ -277,6 +278,20 @@ test("the start document draws the window's project before the store connects an
   assert.deepEqual(patches, [[project.id, ["lastOpened"]]], "the activation saved more than the open time");
   assert.equal(projects.active().id, project.id);
   await projects.flush();
+});
+
+test("the start document draws the project synchronously while the host theme reply is pending", { timeout: 5000 }, async () => {
+  const project = { ...structuredClone(PROJECT), id: "prj-theme-start", root: "/work/theme-start" };
+  const snapshot = { common: {}, projects: [structuredClone(project)], open: [] };
+  globalThis.location = new URL(`http://soksak.test/index.html?project=${project.id}`);
+  let acknowledge;
+  beginThemeReply = () => new Promise((resolve) => { acknowledge = resolve; });
+  plane.events.length = 0;
+
+  projects.begin(structuredClone(snapshot));
+  assert.deepEqual(plane.events, ["load"], "the first DOM layout waited for the host theme reply");
+  acknowledge();
+  beginThemeReply = async () => {};
 });
 
 test("a project that the start document drew falls back to the library when its activation fails", async () => {

@@ -364,6 +364,7 @@ const tellInTurn = (name, payload) => {
 };
 
 let last = "";
+let themeReply = null;
 // Layout preparation and display form one transaction. The native compositor has only one active ticket per window,
 // so no next preparation is sent to the host between the two calls.
 let layoutTurn = Promise.resolve();
@@ -481,7 +482,10 @@ export const surfaces = native ? {
     /** Sends one failure line to the application log. */
     report: (line) => reportRecord("error", line),
 
-    theme: (values) => tellInTurn("setTheme", values),
+    theme(values) {
+      themeReply = tellInTurn("setTheme", values);
+      return themeReply;
+    },
 
     /** The language of the application menu. The host ignores a repeated send of the same language. */
     menuLanguage: (language) => tellInTurn("setMenuLanguage", language),
@@ -521,7 +525,18 @@ export const surfaces = native ? {
         // layoutTurn is the transaction order of surface preparation and display.
         // It does not also wait for the global command turn: doing so would let an unrelated
         // host call add one frame per divider step.
-        const scheduled = layoutTurn.then(() => tell("syncSurfaces", request));
+        const hasView = record.surfaces.some(({ surface }) => surface?.composition?.kind === "view");
+        const scheduled = layoutTurn.then(async () => {
+          if (hasView) {
+            let reply;
+            do {
+              reply = themeReply;
+              if (!reply) throw new Error("view placement has no host theme reply");
+              await reply;
+            } while (reply !== themeReply);
+          }
+          return tell("syncSurfaces", request);
+        });
         layoutFrame = scheduled;
         layoutResult = scheduled.then((frame) => {
           checkChrome(frame.chrome);

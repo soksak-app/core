@@ -15,6 +15,7 @@ test("a view surface carries its start values in the preparation and a surface w
     call: async (name, request) => {
       calls.push({ name, request });
       if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
       if (name === "syncSurfaces") {
         return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
       }
@@ -42,6 +43,8 @@ test("a view surface carries its start values in the preparation and a surface w
     settled: true, drawn: false, titlebar: 40,
   };
   try {
+    await surfaces.theme({ scheme: "dark", tokens: { "--bg": "#000" } });
+    calls.length = 0;
     await surfaces.place(record);
     assert.deepEqual(calls[0].request.surfaces[0].start, start);
     assert.equal("start" in calls[0].request.surfaces[1], false);
