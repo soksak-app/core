@@ -12,6 +12,14 @@
   `screen-hash-contract.test.mjs`가 57/57 통과한다. `make docs-check`도
   통과한다. 제품 로직은 바꾸지 않았다.
 
+- F239-47-9: Native activation 비교의 native insert, Backspace, Space event
+  sequence를 AppKit `NSTextView` document model에 적용한다. Red: 이전
+  insert-plus-compose projection은 Backspace 뒤 `ㅏ` 여덟 개, 이후 여덟 개와
+  공백 하나를 유지했다. Green: 비활성 소유 test에서 AppKit의
+  `insertText:replacementRange:`와 `deleteBackward:`가 고정 document/cursor
+  checkpoint 열 개를 만든다. Focused activation target도 이 model을 사용하지만
+  아직 다시 실행하지 않았다. 이 model은 terminal PTY 출력을 검증하지 않는다.
+
 - F268: non-null frame과 cursor preedit을 가진 screen message를 그 메시지가
   투영하는 screen의 hash case와 함께 공개한다. Red: 변경 전 owning contract
   test는 message case가 없어 실패했다. Green: paired assertion과

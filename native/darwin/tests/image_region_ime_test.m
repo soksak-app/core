@@ -13,6 +13,7 @@
 #import "input_inject.h"
 #import "input_source.h"
 #import "support/ime_reference_state.h"
+#import "support/ime_wire_document.h"
 #import "support/records.h"
 #import "webview_geometry.h"
 
@@ -265,20 +266,12 @@ static NSDictionary *textViewState(SPRecordingTextView *view) {
 static NSDictionary *regionState(NSUInteger from) {
     NSString *committed = [valuesOfType(@"insert", from) componentsJoinedByString:@""];
     NSString *preedit = [valuesOfType(@"compose", from) lastObject] ?: @"";
-    NSDictionary *composition = nil;
-    for (NSUInteger index = from; index < events.count; index++) {
-        if ([events[index][@"type"] isEqual:@"compose"]) composition = events[index];
-    }
-    NSDictionary *selected = composition[@"selectedRange"];
-    NSString *selectedRange = @"{location=not-found, length=0}";
-    if ([selected isKindOfClass:NSDictionary.class]) {
-        NSRange global = NSMakeRange(committed.length + [selected[@"location"] unsignedIntegerValue],
-            [selected[@"length"] unsignedIntegerValue]);
-        selectedRange = NSStringFromRange(global);
-    }
+    NSRange selectedRange = NSMakeRange(NSNotFound, 0);
+    NSString *document = sp_ime_wire_document([events subarrayWithRange:NSMakeRange(from, events.count - from)],
+        &selectedRange);
     return @{@"committed": committed ?: @"", @"preedit": preedit,
-        @"document": [NSString stringWithFormat:@"%@%@", committed ?: @"", preedit],
-        @"selectedRange": selectedRange,
+        @"document": document ?: @"invalid wire events",
+        @"selectedRange": NSStringFromRange(selectedRange),
         @"markedRange": preedit.length ? NSStringFromRange(NSMakeRange(committed.length, preedit.length))
             : @"{location=not-found, length=0}",
         @"reports": [events subarrayWithRange:NSMakeRange(from, events.count - from)]};

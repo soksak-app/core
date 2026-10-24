@@ -12,6 +12,15 @@
   with `screen-hash-contract.test.mjs` (57/57); `make docs-check` passes.
   No product logic changes.
 
+- F239-47-9: Apply the native insert, Backspace and Space event sequence to an
+  AppKit `NSTextView` document model in the native activation comparison.
+  Red: the old insert-plus-compose projection retained eight `ㅏ` after
+  Backspace and eight plus a space afterward. Green: AppKit's
+  `insertText:replacementRange:` and `deleteBackward:` produce the fixed ten
+  document and cursor checkpoints in the non-activating owning test. The
+  focused activation target now uses that model, but has not been rerun yet.
+  This model does not assert terminal PTY output.
+
 - F268: Publish a screen message with a non-null frame and cursor preedit,
   paired with a hash case for the screen it projects to. Red: the unchanged
   owning contract test failed because the message case was absent. Green: the
