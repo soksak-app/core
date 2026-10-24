@@ -744,6 +744,7 @@ test("a view process end removes its status registrations and preserves replacem
     },
   } });
   const { registry } = await import("../exposure.js");
+  const registrationObservations = [];
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-exposure-generation-end");
   const pluginId = "fixture-view-exposure-generation";
   const surfaceId = "fixture-view-exposure-generation-surface";
@@ -758,6 +759,12 @@ test("a view process end removes its status registrations and preserves replacem
     command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: statusId } } });
   const choose = () => chooseSource({ active: surfaceId, activeGeneration: sourceOrigin(pluginId, surfaceId),
     registrants: registry.registrants("status", statusId) });
+  const stopRegistrationObservation = registry.onRegistrationChange(() => {
+    registrationObservations.push({
+      registrants: registry.registrants("status", statusId),
+      generation: sourceOrigin(pluginId, surfaceId),
+    });
+  });
   const settleRegistration = async (present) => {
     for (let turn = 0; turn < 100; turn += 1) {
       if (registry.registrants("status", statusId).includes(surfaceId) === present) return;
@@ -774,6 +781,8 @@ test("a view process end removes its status registrations and preserves replacem
     assert.deepEqual(choose(), { id: surfaceId, surface: surfaceId, generation: 1 }, "the current registered view was not selected");
 
     assert.equal(endSourceOrigin(pluginId, surfaceId, 1), true, "the current source generation did not end");
+    assert.deepEqual(registry.registrants("status", statusId), [], "the ended view registration remained available before process-end cleanup");
+    assert.deepEqual(registrationObservations.at(-1), { registrants: [], generation: undefined }, "observers saw an ended generation with a live registration");
     listeners.get("view-process-ended")({ surface: surfaceId, plugin: pluginId, generation: 1 });
     await settleRegistration(false);
     assert.equal(sourceOrigin(pluginId, surfaceId), undefined, "the ended generation remains current");
@@ -791,6 +800,7 @@ test("a view process end removes its status registrations and preserves replacem
     assert.equal(viewCommandGenerationOf(surfaceId), 2, "a delayed old end removed the replacement command layer");
     assert.equal(calls.filter(({ name }) => name === "exposureRegister").length, 2, "both view generations must register the status with the host");
   } finally {
+    stopRegistrationObservation();
     await disposeSurface(surfaceId);
     dom.window.close();
   }

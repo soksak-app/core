@@ -4,7 +4,7 @@ import { markViewSurface, registry } from "./exposure.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
 import { createViewSubscriptions } from "./view-events.js";
 import { createViewCommands, keepViewCommands } from "./view-commands.js";
-import { onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
+import { onSourceOriginEnded, onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pluginDiagnostics } from "./environment.js";
@@ -385,6 +385,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   const stopObservingSource = onSourceOriginRegistered(surface.pluginId, surface.surfaceId, (generation) => {
     if (sourceOrigin(surface.pluginId, surface.surfaceId) === generation) refreshViewCommands(generation);
   });
+  const stopObservingSourceEnd = onSourceOriginEnded(({ plugin, surface: endedSurface, generation }) => {
+    if (plugin === surface.pluginId && endedSurface === surface.surfaceId && viewGeneration === generation) {
+      registry.unregisterSurface(surface.surfaceId);
+    }
+  });
   const currentSourceGeneration = () => sourceOrigin(surface.pluginId, surface.surfaceId);
   // The exposure of the view. A forwarded exposure request of the view reaches the view through its exposure-request subscription and is
   // answered through exposureReply of the surface (docs/spec/native-surfaces.md#view-surfaces, view exposure), so the page does not
@@ -567,6 +572,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     if (closed) return;
     closed = true;
     stopObservingSource();
+    stopObservingSourceEnd();
     if (viewCommands) forgetCommands();
     unmarkView();
     viewCommands?.close();

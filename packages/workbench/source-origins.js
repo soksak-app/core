@@ -4,6 +4,7 @@ let floor = 0;
 let pluginHosts = new Map();
 let views = new Map();
 const registrationListeners = new Map();
+const endedListeners = new Set();
 
 function tableOf(surface) {
   return surface === null ? pluginHosts : views;
@@ -92,7 +93,20 @@ export function endSourceOrigin(plugin, surface, generation) {
   const identity = identityOf(plugin, surface);
   if (table.get(identity) !== generation) return false;
   table.delete(identity);
+  for (const listener of endedListeners) listener({ plugin, surface, generation });
   return true;
+}
+
+/** Calls listener synchronously after an exact current source generation is retired. */
+export function onSourceOriginEnded(listener) {
+  if (typeof listener !== "function") throw new TypeError("source end listener requires a function");
+  endedListeners.add(listener);
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    endedListeners.delete(listener);
+  };
 }
 
 /** Returns the current generation of a source, or undefined when it has no active native incarnation. */
