@@ -2530,6 +2530,8 @@ Previous completed component work remains evidence, not completion of these wide
 
 - [o] F239-42-1 — P1, linked to completed F239-42: Initial drawing does not await ingress readiness, so a listener registration failure can become an unhandled rejection before the later startup await. Red: the unchanged owning test observed a delayed listener registration failure through the first event-loop turn and failed with an unhandled `snapshot listener registration failed` rejection. Green: ingress observes rejection on the same readiness promise immediately, preventing early unhandled rejection; later consumers still receive the original rejected promise and fail startup. The existing workbench owning tests and `make docs-check` pass.
 
+- [o] F239-42-2 — P1, linked to completed F239-42: The ingress ACK consumer test depended on the readiness test to disable a deferred listener, so running that test by name waited indefinitely. Red: a name-filtered run with the per-test 3-second timeout failed with `test timed out after 3000ms`. Green: the test sets its own listener fixture state and passes by name within its timeout; the combined workbench owning tests pass 49/49.
+
 ## Tauri/Wails parity audit (2026-09-21)
 
 The mechanical host check reports `apps/tauriv2/test/runtime.test.mjs: no counterpart in apps/wailsv3`. This remains a file-structure mismatch. Wails tests `waitPresented` dispatch in `runtime-contract.test.mjs`, and G2.5 now asserts the returned `{ displayed: 42 }` value through both adapters; the missing filename alone does not establish missing behavior coverage.

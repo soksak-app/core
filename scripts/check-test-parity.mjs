@@ -2650,6 +2650,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-42-2",
+    implementation: [{ file: "packages/workbench/test/declared-source.test.mjs", symbol: "delayListenerRegistration = false;" }],
+    tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "the ingress ACKs each valid view event once and routes only its source and status" }],
+    expected: "The ingress ACK consumer test configures its own listener fixture and ends within its individual timeout when selected by name.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-42-1",
     implementation: [{ file: "packages/workbench/declared-source.js", symbol: "ingressReady.catch((error) =>" }],
     tests: [{ file: "packages/workbench/test/declared-source.test.mjs", id: "listener registration failure remains observable without an early unhandled rejection" }],

@@ -145,7 +145,9 @@ test("a declared-ui.expanded request is sent through the plugin host event call"
   });
 });
 
-test("the ingress ACKs each valid view event once and routes only its source and status", async () => {
+test("the ingress ACKs each valid view event once and routes only its source and status", { timeout: 3000 }, async () => {
+  delayListenerRegistration = false;
+  completeListenerRegistration = null;
   const { channel } = createDeclaredSource({ plugin: "probe", status: "lines" });
   const link = channel({ id: "view-a", surface: "view-a" });
   const received = [];
