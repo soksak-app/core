@@ -528,6 +528,10 @@ export const surfaces = native ? {
         const hasView = record.surfaces.some(({ surface }) => surface?.composition?.kind === "view");
         const scheduled = layoutTurn.then(async () => {
           if (hasView) {
+            const { waitSurfaceCompositionDeclared } = await import("./surface-modules.js");
+            await Promise.all(record.surfaces
+              .filter(({ surface }) => surface?.composition?.kind === "view")
+              .map(({ id }) => waitSurfaceCompositionDeclared(id)));
             let reply;
             do {
               reply = themeReply;

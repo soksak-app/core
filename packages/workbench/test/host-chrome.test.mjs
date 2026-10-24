@@ -124,3 +124,98 @@ test("the preparation carries the title bar height and the presented chrome is t
     dom.window.close();
   }
 });
+
+test("native view placement waits for current-page composition readiness", async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  let releaseComposition;
+  let waitCount = 0;
+  let announceWait;
+  const waitStarted = new Promise((resolve) => { announceWait = resolve; });
+  t.mock.module("../surface-modules.js", { namedExports: {
+    waitSurfaceCompositionDeclared: (surfaceId) => {
+      assert.equal(surfaceId, "view-ready-barrier");
+      waitCount++;
+      announceWait();
+      return new Promise((resolve) => { releaseComposition = resolve; });
+    },
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      calls.push({ name, request });
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
+      if (name === "syncSurfaces") return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?composition-barrier");
+  const record = {
+    surfaces: [{ id: "view-ready-barrier", dim: false, visible: true,
+      surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
+      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null } } }],
+    settled: true, drawn: false, titlebar: 40,
+  };
+  try {
+    await surfaces.theme({ scheme: "dark", tokens: {} });
+    const placement = surfaces.place(record);
+    await waitStarted;
+    assert.equal(waitCount, 1, "the view composition readiness barrier was not observed");
+    assert.equal(calls.some(({ name }) => name === "syncSurfaces"), false,
+      "native view placement began before the current page declared its composition");
+    releaseComposition();
+    await placement;
+    assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1);
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("native view placement rejects when its surface is disposed before composition", async (t) => {
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const calls = [];
+  let rejectComposition;
+  let announceWait;
+  const waitStarted = new Promise((resolve) => { announceWait = resolve; });
+  t.mock.module("../surface-modules.js", { namedExports: {
+    waitSurfaceCompositionDeclared: () => {
+      announceWait();
+      return new Promise((resolve, reject) => { rejectComposition = reject; });
+    },
+  } });
+  t.mock.module("@soksak/runtime", { namedExports: { host: {
+    on: () => {},
+    page: (path) => path,
+    call: async (name, request) => {
+      calls.push({ name, request });
+      if (name === "log") return clockAnswer(name, request);
+      if (name === "setTheme") return null;
+      if (name === "syncSurfaces") return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
+      if (name === "presentSurfaces") return request.placements;
+      throw new Error(`unexpected host call ${name}`);
+    },
+  } } });
+  const { surfaces } = await import("../host.js?composition-disposed");
+  const record = {
+    surfaces: [{ id: "view-disposed", dim: false, visible: true,
+      surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
+      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null } } }],
+    settled: true, drawn: false, titlebar: 40,
+  };
+  try {
+    await surfaces.theme({ scheme: "dark", tokens: {} });
+    const placement = surfaces.place(record);
+    await waitStarted;
+    rejectComposition(new Error("surface view-disposed was disposed before declaring composition"));
+    await assert.rejects(placement, /disposed before declaring composition/);
+    assert.equal(calls.some(({ name }) => name === "syncSurfaces"), false,
+      "native placement continued after its surface was disposed");
+  } finally {
+    dom.window.close();
+  }
+});

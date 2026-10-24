@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F212.10-core-3-2: native surface 배치를 보내기 전에 각 view composition
+  선언을 기다린다. 각 host는 현재 page의 선언이 없는 view를 거부하고 page
+  reload는 이전 page의 declaration map을 지운다. Red: placement barrier
+  assertion은 readiness 대기가 없음을 확인했고, 양 host 검사는 미선언 view를
+  허용했으며 Wails reload fixture는 이전 선언이 남는 것을 확인했다. Green:
+  배치는 선언을 기다리고 대기 중 surface가 dispose되면 거부된다. 현재 선언의
+  plugin과 composition 일치 여부도 검사한다. 범위를 제한한 Workbench, Wails,
+  Tauri owning test가 통과한다. Runtime 재검증은 남아 있다.
 - F212.10-core-3-1: native `view-call` 및 `view-reply` listener 등록을
   기다린 뒤 view composition을 선언해 native view 생성을 시작한다. 따라서
   첫 view call이 page listener 준비와 경합하지 않는다. Red: 변경 전

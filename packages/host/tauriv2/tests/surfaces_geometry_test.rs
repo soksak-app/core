@@ -34,19 +34,34 @@ fn surface(id: &str, w: f64) -> serde_json::Value {
 // contract: surfaces-geometry.sync.rejects-surface-rect-before-layout
 #[test]
 fn sync_request_check_rejects_an_invalid_surface_rectangle() {
-    let held = HashMap::new();
+    let composition = serde_json::from_value(surface("tab-1", 10.0)["composition"].clone())
+        .expect("the composition fixture is valid");
+    let held = HashMap::from([("tab-1".to_string(), composition)]);
+    let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     let valid = sync_request(
         serde_json::json!({"settled": true, "titlebar": 40.0, "surfaces": [surface("tab-1", 10.0)]}),
     );
-    assert!(check_sync_request(&valid, &held, &HashMap::new()).is_ok());
+    assert!(check_sync_request(&valid, &held, &plugins).is_ok());
     let negative = sync_request(serde_json::json!({
         "settled": true,
         "titlebar": 40.0,
         "surfaces": [surface("tab-1", 10.0), surface("tab-2", -1.0)],
     }));
     assert_eq!(
-        check_sync_request(&negative, &held, &HashMap::new()).unwrap_err(),
+        check_sync_request(&negative, &held, &plugins).unwrap_err(),
         r#"surface "tab-2" geometry must not have a negative size"#
+    );
+}
+
+// contract: view.placement.requires-current-page-declaration
+#[test]
+fn sync_request_check_rejects_a_view_without_a_current_page_declaration() {
+    let request = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0, "surfaces": [surface("tab-unannounced", 10.0)]
+    }));
+    assert_eq!(
+        check_sync_request(&request, &HashMap::new(), &HashMap::new()).unwrap_err(),
+        r#"surface "tab-unannounced" has no composition declaration in the current page"#
     );
 }
 
@@ -106,6 +121,14 @@ fn sync_request_check_requires_the_same_plugin_of_each_surface() {
     let other = HashMap::from([("tab-1".to_string(), "other".to_string())]);
     assert_eq!(
         check_sync_request(&request, &held, &other).unwrap_err(),
+        r#"surface "tab-1" changed its composition declaration"#
+    );
+    let stale_composition = serde_json::from_value(serde_json::json!({
+        "kind": "view", "page": "ui/old-page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []
+    })).expect("the stale composition fixture is valid");
+    let stale = HashMap::from([("tab-1".to_string(), stale_composition)]);
+    assert_eq!(
+        check_sync_request(&request, &stale, &same).unwrap_err(),
         r#"surface "tab-1" changed its composition declaration"#
     );
     value["plugin"] = serde_json::json!("");
@@ -181,7 +204,12 @@ fn sync_request_check_validates_the_start_values_of_a_view() {
 // contract: view.start-values.refuses-a-missing-origin
 #[test]
 fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
-    let held = HashMap::new();
+    let composition = serde_json::json!({"kind": "view", "page": "ui/page.html"});
+    let held = HashMap::from([(
+        "tab-1".to_string(),
+        serde_json::from_value(composition).expect("the composition fixture is valid"),
+    )]);
+    let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     let view = |start: Option<serde_json::Value>| {
         let mut surface = serde_json::json!({
             "id": "tab-1", "module": null, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
@@ -214,7 +242,7 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
             "settled": true, "titlebar": 40.0, "surfaces": [view(start)],
         }));
         assert_eq!(
-            check_sync_request(&request, &held, &HashMap::new()).unwrap_err(),
+            check_sync_request(&request, &held, &plugins).unwrap_err(),
             want
         );
     }
@@ -222,5 +250,5 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
         "settled": true, "titlebar": 40.0,
         "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}})))],
     }));
-    assert!(check_sync_request(&request, &held, &HashMap::new()).is_ok());
+    assert!(check_sync_request(&request, &held, &plugins).is_ok());
 }
