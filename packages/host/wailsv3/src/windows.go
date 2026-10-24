@@ -277,17 +277,29 @@ func cancelLayout(win *application.WebviewWindow) {
 }
 
 // An app DOM reload replaces all plugin documents but does not end the sessions.
-func (s *Surfaces) reloadSurfaceDocuments() {
-	if err := system.CancelLayout(s.window.NativeWindow()); err != nil {
+func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
+	cancelLayout := s.reloadCancelLayout
+	if cancelLayout == nil {
+		cancelLayout = func() error { return system.CancelLayout(s.window.NativeWindow()) }
+	}
+	if err := cancelLayout(); err != nil {
 		LogError("surface layout cancel", err)
-		return
+		return nil, err
+	}
+	hideSurface := s.reloadHideSurface
+	if hideSurface == nil {
+		hideSurface = system.SetSurfaceHiddenHandle
+	}
+	closeImage := s.reloadCloseImage
+	if closeImage == nil {
+		closeImage = system.CloseImage
 	}
 	ids := make([]string, 0, len(s.views))
+	var detachments []imageDetachTarget
 	for id, view := range s.views {
-		system.SetSurfaceHiddenHandle(view.handle, true)
+		hideSurface(view.handle, true)
 		s.closeSurfaceDocuments(id)
-		s.closeSurfaceImages(id)
-		s.images.BeginGeneration(id)
+		detachments = append(detachments, s.reloadSurfaceImages(id, closeImage)...)
 		ids = append(ids, id)
 	}
 	s.mu.Lock()
@@ -295,6 +307,15 @@ func (s *Surfaces) reloadSurfaceDocuments() {
 	s.mu.Unlock()
 	s.surfacesClosed(ids)
 	s.windowChanged()
+	return detachments, nil
+}
+
+// reloadSurfaceImages captures the current supplier and image generation before closing native image regions and advancing the surface generation.
+func (s *Surfaces) reloadSurfaceImages(surface string, closeImage func(unsafe.Pointer)) []imageDetachTarget {
+	targets := s.images.detachments(surface)
+	s.images.CloseSurface(surface, closeImage)
+	s.images.BeginGeneration(surface)
+	return targets
 }
 
 // newWindow runs the window creation on the UI thread in a state in which the window registry lock is released.

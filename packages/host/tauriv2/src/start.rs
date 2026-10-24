@@ -38,6 +38,16 @@ pub fn start_document(workspace: &Value, controls: &Value) -> Result<Vec<u8>, St
     .map_err(|error| error.to_string())
 }
 
+/// Runs the page cleanup and its detach barriers before constructing a successful start document.
+pub(crate) fn after_page_started<P, D>(
+    page_started: impl FnOnce() -> Result<P, String>,
+    document: impl FnOnce() -> Result<D, String>,
+) -> Result<(P, D), String> {
+    let state = page_started()?;
+    let document = document()?;
+    Ok((state, document))
+}
+
 /// Passes a start document request to start with the label of the requesting webview. Another owner or path is not
 /// found. When no window is found, it starts no page and answers 400; another failure answers 500.
 pub fn serve(
@@ -86,21 +96,33 @@ pub(crate) fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, Stri
         .get_window(webview)
         .filter(|window| window.label() == webview)
         .ok_or_else(|| NO_WINDOW.to_string())?;
-    crate::windows::page_started(&window)?;
-    let snapshot = crate::workspace::handle(
-        app,
-        serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
-            .map_err(|error| error.to_string())?,
+    let (detachments, document) = after_page_started(
+        || crate::windows::page_started(&window),
+        || {
+            let snapshot = crate::workspace::handle(
+                app,
+                serde_json::from_value(serde_json::json!({ "kind": "snapshot" }))
+                    .map_err(|error| error.to_string())?,
+            )?;
+            // The first draw of the page does not wait for readiness, so the title bar is first set to the height of that first
+            // row, and then the controls are read.
+            // (docs/spec/native-surfaces.md#title-bar-height).
+            let common = snapshot
+                .get("common")
+                .filter(|common| common.is_object())
+                .ok_or("the workspace snapshot has no common settings")?;
+            crate::windows::start_titlebar(&window, common)?;
+            let controls = serde_json::to_value(crate::windows::window_chrome(&window)?)
+                .map_err(|error| error.to_string())?;
+            start_document(&snapshot, &controls)
+        },
     )?;
-    // The first draw of the page does not wait for readiness, so the title bar is first set to the height of that first
-    // row, and then the controls are read.
-    // (docs/spec/native-surfaces.md#title-bar-height).
-    let common = snapshot
-        .get("common")
-        .filter(|common| common.is_object())
-        .ok_or("the workspace snapshot has no common settings")?;
-    crate::windows::start_titlebar(&window, common)?;
-    let controls = serde_json::to_value(crate::windows::window_chrome(&window)?)
-        .map_err(|error| error.to_string())?;
-    start_document(&snapshot, &controls)
+    crate::windows::window_data(&window)?
+        .images
+        .complete_detachments(&detachments);
+    Ok(document)
 }
+
+#[cfg(test)]
+#[path = "start_test.rs"]
+mod start_tests;

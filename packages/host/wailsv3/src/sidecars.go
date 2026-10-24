@@ -143,7 +143,10 @@ type SidecarOwner interface {
 
 // Sidecars manages the sidecar processes of one application and the windows that own surfaces.
 type Sidecars struct {
-	mu sync.Mutex
+	mu                     sync.Mutex
+	imageDetachRequests    map[string]*imageDetachWaiter
+	nextImageDetachRequest uint64
+	imageDetachTimeout     time.Duration
 	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
 	requests requestLedger
 	// declarations protects declared, displayNames, persistent and basenames.
@@ -355,22 +358,24 @@ type OutdatedSidecar struct {
 // is wrong.
 func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
 	c := &Sidecars{
-		declared:        map[string]string{},
-		displayNames:    map[string]string{},
-		versions:        map[string]string{},
-		persistent:      map[string]bool{},
-		running:         map[string]*sidecar{},
-		starting:        map[string]chan struct{}{},
-		closing:         map[string]map[string]int{},
-		owners:          map[string]SidecarOwner{},
-		roots:           map[string]string{},
-		unannouncedLoss: map[string]bool{},
-		restarts:        map[string]*restartRecord{},
-		replacing:       map[string]replacement{},
-		basenames:       map[string]string{},
-		StopTimeout:     5 * time.Second,
-		ReadyTimeout:    30 * time.Second,
-		HelloTimeout:    5 * time.Second,
+		imageDetachRequests: map[string]*imageDetachWaiter{},
+		imageDetachTimeout:  imageDetachTimeout,
+		declared:            map[string]string{},
+		displayNames:        map[string]string{},
+		versions:            map[string]string{},
+		persistent:          map[string]bool{},
+		running:             map[string]*sidecar{},
+		starting:            map[string]chan struct{}{},
+		closing:             map[string]map[string]int{},
+		owners:              map[string]SidecarOwner{},
+		roots:               map[string]string{},
+		unannouncedLoss:     map[string]bool{},
+		restarts:            map[string]*restartRecord{},
+		replacing:           map[string]replacement{},
+		basenames:           map[string]string{},
+		StopTimeout:         5 * time.Second,
+		ReadyTimeout:        30 * time.Second,
+		HelloTimeout:        5 * time.Second,
 	}
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
 	if configDirectoryProvided {
@@ -1020,6 +1025,7 @@ func (c *Sidecars) stop(detach bool) {
 		forgot = c.detach(name, process) || forgot
 	}
 	c.mu.Unlock()
+	c.failImageDetaches("", "the host stopped before the image detach acknowledgement arrived")
 	if forgot {
 		c.closingChanged()
 	}
@@ -2332,6 +2338,19 @@ func ClosedImageAnswer(body json.RawMessage) (string, json.RawMessage, bool) {
 // tryHandleImageEnvelope checks whether the event is an image envelope and handles it. It returns true for an envelope.
 
 func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body json.RawMessage) bool {
+	var envelope struct {
+		Image *struct {
+			Detached json.RawMessage `json:"detached"`
+		} `json:"image"`
+	}
+	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Image != nil && envelope.Image.Detached != nil {
+		var ack imageDetachAck
+		if err := json.Unmarshal(envelope.Image.Detached, &ack); err != nil || ack.Request == "" || ack.Name == "" || ack.Generation == 0 {
+			LogError("sidecar "+sidecarName, fmt.Sprintf("invalid image detach acknowledgement for surface %s", surface))
+			return true
+		}
+		return c.handleImageDetachAck(owner, sidecarName, surface, ack)
+	}
 	// Checks whether the owner has the image envelope decision handler
 	if decider, ok := owner.(interface {
 		DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool

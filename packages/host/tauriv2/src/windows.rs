@@ -310,7 +310,9 @@ pub fn reconnect_targets(
 /// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
 /// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
 /// must not attach a new native image.
-pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
+pub(crate) fn reload_surface_documents(
+    window: &Window,
+) -> Result<Vec<crate::images::DetachTarget>, String> {
     let data = window_data(window)?;
     let owner = native_owner(window)?;
     let platform = platform::current()?;
@@ -328,7 +330,9 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
     let reconnect = RawValue::from_string(r#"{"operation":"reconnect"}"#.to_string())
         .map_err(|error| error.to_string())?;
     let running_persistent = window.state::<WindowSidecars>().running_persistent()?;
+    let mut completed_detachments = Vec::new();
     for (surface, handle) in surfaces {
+        let surface_detachments = data.images.begin_reload(&surface);
         let sidecars = reconnect_targets(
             &surface,
             data.images.sidecars_for_surface(&surface),
@@ -336,7 +340,6 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
             |name| window.state::<WindowSidecars>().declared(name),
         );
         platform.set_surface_hidden_handle(handle, true)?;
-        data.images.begin_generation(&surface);
         crate::exposure::surface_closed(&window, &surface);
         let view_plugin = data.documents.views().plugin(&surface);
         let view_generation = data.declared_source_origins.current_view(&surface);
@@ -358,9 +361,12 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         for image in data.images.remove_surface(&surface) {
             platform.close_image(image)?;
         }
+        window
+            .state::<WindowSidecars>()
+            .detach_images(&window, &surface_detachments)?;
         // A persistent sidecar can send a new raster as soon as it receives the reconnect. All previous native images
-        // are removed first so that a new frame does not race with the termination of the previous IOSurface or reuse
-        // its token.
+        // are removed first, and the old supplier generation is detached and acknowledged, so the replacement page
+        // cannot configure a new image while the supplier still owns the previous image.
         for sidecar in sidecars {
             window.state::<WindowSidecars>().send(
                 &window,
@@ -369,6 +375,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
                 reconnect.as_ref(),
             )?;
         }
+        completed_detachments.extend(surface_detachments);
     }
     data.composition_revisions
         .lock()
@@ -377,7 +384,7 @@ pub(crate) fn reload_surface_documents(window: &Window) -> Result<(), String> {
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
     crate::exposure::window_changed(&window);
-    Ok(())
+    Ok(completed_detachments)
 }
 
 /// The window registry and the project-owned windows of the application.
@@ -1302,12 +1309,12 @@ pub(crate) fn window_state(window: &Window) -> Result<Option<Geometry>, String> 
 /// Records that the main page started. Call it before the start document request answers. It leaves the window not
 /// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
 /// modals of the previous page.
-pub(crate) fn page_started(window: &Window) -> Result<(), String> {
+pub(crate) fn page_started(window: &Window) -> Result<Vec<crate::images::DetachTarget>, String> {
     let data = window_data(window)?;
     let cleanup = (|| {
         data.ready.store(false, Ordering::Relaxed);
         crate::exposure::page_reloaded(window);
-        reload_surface_documents(window)?;
+        let detachments = reload_surface_documents(window)?;
         dispose_plugin_hosts(window);
         // The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md
         // rule 7).
@@ -1315,7 +1322,8 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
             &window.state::<crate::sidecars::WindowSidecars>(),
             window,
         )?;
-        data.overlay.discard()
+        data.overlay.discard()?;
+        Ok(detachments)
     })();
     data.declared_source_events.retire();
     cleanup

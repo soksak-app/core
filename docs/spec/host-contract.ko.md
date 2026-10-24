@@ -395,6 +395,13 @@ fn invalid_json_closes_connection() {
 | `log.binding-failure.returned-not-logged` | 실패한 binding 호출은 framework transport의 log 줄 없이 page로 돌아가므로 page가 그 실패를 한 번 기록한다. | wailsv3 only: Wails HTTP transport가 binding 호출을 나르고, Tauri invoke는 돌려준 오류에 log 줄을 쓰지 않는다 |
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
 | `log.service.open-failure-fails-start` | 서비스 로그를 열 수 없으면 `sidecar <name>: service log: <error>`로 시작을 실패시키고 서비스를 시작하지 않는다. | both |
+| `images.detach.ack-consumed` | 유효한 `image.detached` 응답은 host가 소비하며 page에 전달하지 않는다. | both |
+| `images.detach.ack-exact-owner` | request, supplier, surface, image name, generation이 일치하는 응답만 detach를 완료한다. 불일치 응답은 대기를 끝내지 않는다. | both |
+| `images.detach.refusal-fails-start` | supplier 거부는 명시적 이유와 함께 page 시작을 실패시키며 정확한 detach 대상을 다음 시작 시도까지 보존한다. | both |
+| `images.detach.timeout-retains-target` | 응답이 선언된 제한 시간 안에 오지 않으면 page 시작이 실패하며 정확한 detach 대상을 재시도용으로 보존한다. | both |
+| `images.detach.waits-for-every-region` | 이미지 영역마다 일치하는 detach 응답을 받을 때까지 page 시작이 대기한다. | both |
+| `images.reload.captures-old-image-owner` | Reload는 native 영역을 닫고 surface generation을 올리기 전에 각 이미지의 supplier와 현재 generation을 캡처한다. | both |
+| `images.reload.start-document-waits-for-detach` | native image를 닫은 뒤 캡처한 모든 image detach 응답을 받을 때까지 start document를 성공적으로 반환하지 않는다. | both |
 | `images.envelope.rejects-unattached-image` | 연결된 적 없는 이미지 이름의 봉투에 notAttached로 응답한다. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | 거부 응답은 봉투의 name과 sequence를 담는다. | both |
 | `images.envelope.refusal-preserves-quoted-name` | 따옴표가 든 이름의 거부 응답은 올바른 JSON이며 이름을 유지한다. | both |

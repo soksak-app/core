@@ -763,7 +763,7 @@ func (s *Surfaces) surfacesClosed(ids []string) {
 	s.mu.Unlock()
 	for _, id := range ids {
 		closed[id] = true
-		s.window.EmitEvent("exposure-registered", map[string]any{"surface": id, "closed": true})
+		s.windowEvent("exposure-registered", map[string]any{"surface": id, "closed": true})
 	}
 	s.host.relay.Abandon(func(t relayTarget) bool { return t.owner == s && closed[t.surface] })
 }

@@ -392,6 +392,13 @@ Items:
 | `log.binding-failure.returned-not-logged` | A failed binding call is returned to the page without a log line of the framework transport, so the page writes the failure once. | wailsv3 only: the Wails HTTP transport carries binding calls; Tauri invoke writes no log line for a returned error |
 | `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |
 | `log.service.open-failure-fails-start` | A service log that cannot open fails the start with `sidecar <name>: service log: <error>` and the service does not start. | both |
+| `images.detach.ack-consumed` | A valid `image.detached` acknowledgement is consumed by the host and is not forwarded to the page. | both |
+| `images.detach.ack-exact-owner` | Only the acknowledgement matching request, supplier, surface, image name, and generation settles the detach; a mismatch leaves it pending. | both |
+| `images.detach.refusal-fails-start` | A supplier refusal fails page startup with its explicit reason and retains the exact detach target for a later start attempt. | both |
+| `images.detach.timeout-retains-target` | A missing acknowledgement fails page startup at the declared deadline and retains the exact detach target for retry. | both |
+| `images.detach.waits-for-every-region` | Page startup remains pending until each image-region detach receives its matching acknowledgement. | both |
+| `images.reload.captures-old-image-owner` | Reload captures each image's supplier and current generation before closing its native region and advancing the surface generation. | both |
+| `images.reload.start-document-waits-for-detach` | The start document is not returned successfully until every captured image detach is acknowledged after native image closure. | both |
 | `images.envelope.rejects-unattached-image` | An envelope for an image name that was never attached is answered with notAttached. | both |
 | `images.envelope.refusal-echoes-name-and-sequence` | A refusal carries the name and sequence of the envelope. | both |
 | `images.envelope.refusal-preserves-quoted-name` | A refusal for a name containing a quote is valid JSON and keeps the name. | both |

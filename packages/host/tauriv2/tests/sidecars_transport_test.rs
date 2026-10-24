@@ -3301,3 +3301,42 @@ fn persistent_close_owned_closes_only_the_selected_surfaces() {
     sidecars.stop();
     service.thread.join().unwrap();
 }
+
+// contract: images.detach.ack-consumed
+#[test]
+fn image_detach_acknowledgements_are_not_delivered_as_surface_messages() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let program = executable_directory.path().join("echo");
+    std::fs::write(
+        &program,
+        "#!/bin/sh\nwhile IFS= read -r request; do\n  printf '%s\\n' '{\"surface\":\"surface-1\",\"body\":{\"image\":{\"detached\":{\"request\":\"detach-1\",\"name\":\"region\",\"generation\":1,\"ok\":true,\"result\":\"detached\"}}}}'\n  printf '%s\\n' '{\"surface\":\"surface-1\",\"body\":{\"event\":\"after-detach\"}}'\ndone\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fixture =
+        files(r#"{"executable":"echo","protocol":1,"displayName":"soksak://sidecar/probe"}"#);
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("image-detach", "/projects/image-detach");
+
+    sidecars
+        .send(
+            &owner,
+            ECHO,
+            "surface-1",
+            &raw(r#"{"image":{"detach":{"request":"detach-1","name":"region","generation":1}}}"#),
+        )
+        .unwrap();
+
+    let event = events.recv_timeout(STALL).unwrap();
+    let body: serde_json::Value = serde_json::from_str(event.body.get()).unwrap();
+    assert_eq!(
+        body["event"], "after-detach",
+        "the native image detach acknowledgement is consumed by the host"
+    );
+    sidecars.stop();
+}

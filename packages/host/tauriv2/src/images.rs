@@ -37,6 +37,15 @@ pub struct Request {
 /// A pair of a surface and an image name.
 pub type Key = (String, String);
 
+/// The image owner that a page reload must detach from its supplier before reconnecting the surface.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct DetachTarget {
+    pub surface: String,
+    pub name: String,
+    pub sidecar: String,
+    pub generation: u64,
+}
+
 /// The sidecar owner that registered the image region.
 pub struct Owner {
     pub sidecar_owner: String,
@@ -81,6 +90,8 @@ struct Inner {
     /// counts from the next raster, because the sidecar treats a configuration whose (generation, raster) did not grow
     /// as an old configuration and ignores it. It is cleared when the generation of the surface changes.
     detached_rasters: HashMap<Key, (u64, u64)>,
+    /// Old supplier owners whose detach acknowledgement has not yet allowed a replacement page to start.
+    pending_detachments: HashMap<(String, String, u64), String>,
     next_generation: u64,
 }
 
@@ -102,6 +113,22 @@ impl Inner {
                 .insert(key.clone(), (state.generation, state.raster));
         }
         Some(handle)
+    }
+
+    fn begin_generation(&mut self, surface: &str) -> u64 {
+        self.next_generation += 1;
+        let generation = self.next_generation;
+        self.generations.insert(surface.to_string(), generation);
+        self.forget_detached_rasters(surface);
+        for (key, state) in &mut self.states {
+            if key.0 == surface {
+                state.generation = generation;
+                state.configured = false;
+                state.presentation_error = None;
+                state.last_sequence = 0;
+            }
+        }
+        generation
     }
 }
 
@@ -176,19 +203,70 @@ impl Images {
     /// Creates a generation that distinguishes frames from the previous frames when a new surface document starts.
     pub fn begin_generation(&self, surface: &str) -> u64 {
         let mut inner = self.lock();
-        inner.next_generation += 1;
-        let generation = inner.next_generation;
-        inner.generations.insert(surface.to_string(), generation);
-        inner.forget_detached_rasters(surface);
-        for (key, state) in &mut inner.states {
-            if key.0 == surface {
-                state.generation = generation;
-                state.configured = false;
-                state.presentation_error = None;
-                state.last_sequence = 0;
+        inner.begin_generation(surface)
+    }
+
+    /// Captures every current or retryable supplier owner before advancing a page generation.
+    pub(crate) fn begin_reload(&self, surface: &str) -> Vec<DetachTarget> {
+        let mut inner = self.lock();
+        let current: Vec<_> = inner
+            .states
+            .iter()
+            .filter(|(key, _)| key.0 == surface)
+            .filter_map(|(key, state)| {
+                if inner
+                    .pending_detachments
+                    .keys()
+                    .any(|(target_surface, target_name, _)| {
+                        target_surface == &key.0 && target_name == &key.1
+                    })
+                {
+                    return None;
+                }
+                Some((
+                    key.0.clone(),
+                    key.1.clone(),
+                    state.generation,
+                    inner.sidecars.get(key)?.clone(),
+                ))
+            })
+            .collect();
+        for (surface, name, generation, sidecar) in current {
+            inner
+                .pending_detachments
+                .insert((surface, name, generation), sidecar);
+        }
+        let mut targets: Vec<_> = inner
+            .pending_detachments
+            .iter()
+            .filter(|((target_surface, _, _), _)| target_surface == surface)
+            .map(
+                |((target_surface, name, generation), sidecar)| DetachTarget {
+                    surface: target_surface.clone(),
+                    name: name.clone(),
+                    sidecar: sidecar.clone(),
+                    generation: *generation,
+                },
+            )
+            .collect();
+        targets.sort_by(|left, right| left.name.cmp(&right.name));
+        inner.begin_generation(surface);
+        targets
+    }
+
+    /// Clears only the exact owners whose detach batch received every acknowledgement.
+    pub(crate) fn complete_detachments(&self, targets: &[DetachTarget]) {
+        let mut inner = self.lock();
+        for target in targets {
+            let key = (
+                target.surface.clone(),
+                target.name.clone(),
+                target.generation,
+            );
+            if inner.pending_detachments.get(&key) == Some(&target.sidecar) {
+                inner.pending_detachments.remove(&key);
             }
         }
-        generation
     }
 
     /// Ends the current generation of a removed surface. The number is not reused.
@@ -196,6 +274,9 @@ impl Images {
         let mut inner = self.lock();
         inner.generations.remove(surface);
         inner.forget_detached_rasters(surface);
+        inner
+            .pending_detachments
+            .retain(|(target_surface, _, _), _| target_surface != surface);
         if inner.states.keys().any(|key| key.0 == surface) {
             inner.surface_visibility.insert(surface.to_string(), false);
         } else {
@@ -371,6 +452,13 @@ impl Images {
                 sidecars.insert(sidecar.clone());
             }
         }
+        sidecars.extend(
+            inner
+                .pending_detachments
+                .iter()
+                .filter(|((target_surface, _, _), _)| target_surface == surface)
+                .map(|(_, sidecar)| sidecar.clone()),
+        );
         sidecars.into_iter().collect()
     }
 

@@ -104,6 +104,15 @@ pub trait Owner: Clone + Send + 'static {
     ) -> bool {
         false
     }
+    /// Consumes a supplier acknowledgement for a native image detach request.
+    fn image_detach_ack(
+        &self,
+        _sidecar: &str,
+        _surface: &str,
+        _body: &RawValue,
+    ) -> Result<(), String> {
+        Err("no image detach acknowledgement handler is registered".to_string())
+    }
     /// Called when the connection of a persistent sidecar is established again after it was lost (V5-106). The window
     /// must send the image configure of that sidecar again, because the configure state that the previous connection
     /// confirmed died with the connection. There is no default implementation: an owner that owns no image has nothing
@@ -873,6 +882,8 @@ struct Core<O> {
     declarations: RwLock<Declarations>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
+    /// The exact image detach requests waiting for supplier acknowledgements.
+    image_detaches: Mutex<HashMap<String, ImageDetachWaiter>>,
     /// Announces every end of a start. The requests and stop of the same sidecar wait for it.
     started: Condvar,
     /// The upper limit of the time until a newly started persistent service prints its endpoint.
@@ -883,6 +894,25 @@ struct Core<O> {
     /// The upper limit of the time until a persistent service answers hello. A check gives a short limit.
     hello_timeout: Duration,
 }
+
+struct ImageDetachWaiter {
+    sidecar: String,
+    surface: String,
+    name: String,
+    generation: u64,
+    result: SyncSender<Result<(), String>>,
+}
+
+struct PendingImageDetach {
+    request: String,
+    receiver: std::sync::mpsc::Receiver<Result<(), String>>,
+    target: crate::images::DetachTarget,
+}
+
+const IMAGE_DETACH_TIMEOUT: Duration = Duration::from_secs(10);
+const IMAGE_DETACH_LIMIT: usize = 1024;
+/// One service can serve multiple windows, so request ids share one process-wide sequence.
+static NEXT_IMAGE_DETACH_REQUEST: AtomicU64 = AtomicU64::new(1);
 
 /// A sidecar that uses the executable of a declared sidecar, whether it is persistent, and the basename of the
 /// persistent executable.
@@ -1054,6 +1084,7 @@ impl<O: Owner> Sidecars<O> {
                     clock: Arc::new(Instant::now),
                     restarts: HashMap::new(),
                 })),
+                image_detaches: Mutex::new(HashMap::new()),
                 started: Condvar::new(),
                 ready_timeout: READY_TIMEOUT,
                 retain_sending: None,
@@ -1343,6 +1374,228 @@ impl<O: Owner> Sidecars<O> {
         body: &RawValue,
     ) -> Result<(), String> {
         self.send_with_cids(owner, name, surface, body, &[])
+    }
+
+    /// Sends every image detach before waiting for the exact acknowledgements under one deadline.
+    pub(crate) fn detach_images(
+        &self,
+        owner: &O,
+        targets: &[crate::images::DetachTarget],
+    ) -> Result<(), String> {
+        self.detach_images_until(owner, targets, IMAGE_DETACH_TIMEOUT)
+    }
+
+    fn detach_images_until(
+        &self,
+        owner: &O,
+        targets: &[crate::images::DetachTarget],
+        timeout: Duration,
+    ) -> Result<(), String> {
+        if targets.is_empty() {
+            return Ok(());
+        }
+        let deadline = Instant::now() + timeout;
+        let mut pending = Vec::with_capacity(targets.len());
+        for target in targets {
+            if target.surface.is_empty()
+                || target.name.is_empty()
+                || target.sidecar.is_empty()
+                || target.generation == 0
+            {
+                self.cancel_image_detaches(&pending);
+                return Err("image detach target is incomplete".to_string());
+            }
+            let serial = match NEXT_IMAGE_DETACH_REQUEST.fetch_update(
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+                |value| value.checked_add(1),
+            ) {
+                Ok(serial) => serial,
+                Err(_) => {
+                    self.cancel_image_detaches(&pending);
+                    return Err("image detach request identifiers are exhausted".to_string());
+                }
+            };
+            let request = format!("image-detach-{}-{serial}", std::process::id());
+            let (sender, receiver) = sync_channel(1);
+            {
+                let mut waiters = self
+                    .core
+                    .image_detaches
+                    .lock()
+                    // default: a thread that stopped while holding the lock leaves each pending acknowledgement
+                    // independently addressable; the panic hook records the stop.
+                    .unwrap_or_else(PoisonError::into_inner);
+                if waiters.len() >= IMAGE_DETACH_LIMIT {
+                    drop(waiters);
+                    self.cancel_image_detaches(&pending);
+                    return Err(format!(
+                        "image detach acknowledgements reached the limit of {IMAGE_DETACH_LIMIT}"
+                    ));
+                }
+                waiters.insert(
+                    request.clone(),
+                    ImageDetachWaiter {
+                        sidecar: target.sidecar.clone(),
+                        surface: target.surface.clone(),
+                        name: target.name.clone(),
+                        generation: target.generation,
+                        result: sender,
+                    },
+                );
+            }
+            pending.push(PendingImageDetach {
+                request: request.clone(),
+                receiver,
+                target: target.clone(),
+            });
+            let body = serde_json::json!({"image":{"detach":{
+                "request": request,
+                "name": target.name,
+                "generation": target.generation,
+            }}});
+            let body = match RawValue::from_string(body.to_string()) {
+                Ok(body) => body,
+                Err(error) => {
+                    self.cancel_image_detaches(&pending);
+                    return Err(format!("image detach serialization: {error}"));
+                }
+            };
+            if let Err(error) = self.send(owner, &target.sidecar, &target.surface, &body) {
+                self.cancel_image_detaches(&pending);
+                return Err(format!(
+                    "image detach {}/{} request {request}: {error}",
+                    target.surface, target.name
+                ));
+            }
+        }
+
+        let mut failures = Vec::new();
+        for request in &pending {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let result = if remaining.is_zero() {
+                Err("timed out".to_string())
+            } else {
+                match request.receiver.recv_timeout(remaining) {
+                    Ok(result) => result,
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err("timed out".to_string()),
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                        Err("acknowledgement waiter ended".to_string())
+                    }
+                }
+            };
+            if let Err(error) = result {
+                failures.push(format!(
+                    "image detach {}/{} request {}: {error}",
+                    request.target.surface, request.target.name, request.request
+                ));
+            }
+        }
+        self.cancel_image_detaches(&pending);
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(failures.join("; "))
+        }
+    }
+
+    fn cancel_image_detaches(&self, pending: &[PendingImageDetach]) {
+        for request in pending {
+            self.cancel_image_detach(&request.request);
+        }
+    }
+
+    fn cancel_image_detach(&self, request: &str) {
+        self.core
+            .image_detaches
+            .lock()
+            // default: cancellation removes only the exact opaque request, and a poisoned lock retains other requests.
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(request);
+    }
+
+    /// Validates and consumes one acknowledgement against its exact pending supplier request.
+    fn acknowledge_image_detach(
+        &self,
+        sidecar: &str,
+        surface: &str,
+        body: &RawValue,
+    ) -> Result<(), String> {
+        let value: Value = serde_json::from_str(body.get())
+            .map_err(|error| format!("invalid image detach acknowledgement: {error}"))?;
+        let ack = value
+            .pointer("/image/detached")
+            .and_then(Value::as_object)
+            .ok_or_else(|| "image detach acknowledgement has no object payload".to_string())?;
+        let request = ack
+            .get("request")
+            .and_then(Value::as_str)
+            .filter(|request| !request.is_empty())
+            .ok_or_else(|| "image detach acknowledgement has no request id".to_string())?;
+        let name = ack
+            .get("name")
+            .and_then(Value::as_str)
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| format!("image detach acknowledgement {request} has no image name"))?;
+        let generation = ack
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|generation| *generation > 0)
+            .ok_or_else(|| {
+                format!("image detach acknowledgement {request} has no valid generation")
+            })?;
+        let mut waiters = self
+            .core
+            .image_detaches
+            .lock()
+            // default: removing the matching waiter settles only the request named by the supplier; a poisoned lock
+            // retains its other waiters and the panic hook records the stop.
+            .unwrap_or_else(PoisonError::into_inner);
+        let Some(waiter) = waiters.get(request) else {
+            return Err(format!(
+                "image detach acknowledgement {request} has no pending request"
+            ));
+        };
+        let tuple_matches = waiter.sidecar == sidecar
+            && waiter.surface == surface
+            && waiter.name == name
+            && waiter.generation == generation;
+        if !tuple_matches {
+            return Err(format!(
+                "image detach acknowledgement {request} does not match its sidecar, surface, image, or generation"
+            ));
+        }
+        let waiter = waiters.remove(request).ok_or_else(|| {
+            format!("image detach acknowledgement {request} has no pending request")
+        })?;
+        drop(waiters);
+        let result = match ack.get("ok").and_then(Value::as_bool) {
+            Some(true) => match ack.get("result").and_then(Value::as_str) {
+                Some("detached" | "alreadyDetached" | "alreadyAbsent") => Ok(()),
+                Some(result) => Err(format!(
+                    "image detach acknowledgement {request} has invalid result {result:?}"
+                )),
+                None => Err(format!(
+                    "image detach acknowledgement {request} has no result"
+                )),
+            },
+            Some(false) => match ack.get("error").and_then(Value::as_str) {
+                Some(error) if !error.is_empty() => {
+                    Err(format!("supplier rejected image detach {request}: {error}"))
+                }
+                _ => Err(format!(
+                    "image detach acknowledgement {request} has no rejection reason"
+                )),
+            },
+            _ => Err(format!(
+                "image detach acknowledgement {request} has no boolean result"
+            )),
+        };
+        waiter
+            .result
+            .send(result.clone())
+            .map_err(|_| format!("image detach acknowledgement {request} has no waiting reload"))?;
+        result
     }
 
     /// Sends a page request that continues the inputs named by `cids`; the request line carries them as the field `cids`,
@@ -3860,6 +4113,15 @@ fn try_handle_image_envelope<O: Owner>(
     body: &RawValue,
     response_sender: &dyn ResponseSender,
 ) -> bool {
+    let is_detach_ack = serde_json::from_str::<Value>(body.get())
+        .ok()
+        .is_some_and(|value| value.pointer("/image/detached").is_some());
+    if is_detach_ack {
+        if let Err(error) = owner.image_detach_ack(sidecar_name, surface, body) {
+            log_error(&format!("sidecar {sidecar_name}"), error);
+        }
+        return true;
+    }
     // Checks whether it is an image envelope and requests the decision.
     owner.decide_image_envelope(sidecar_name, surface, body, response_sender)
 }
@@ -3915,6 +4177,18 @@ impl Owner for Window {
         if let Err(error) = emit_window(self, "sidecar-failure", failure) {
             log_error("sidecar-failure", error);
         }
+    }
+    fn image_detach_ack(
+        &self,
+        sidecar_name: &str,
+        surface: &str,
+        body: &RawValue,
+    ) -> Result<(), String> {
+        tauri::Manager::state::<WindowSidecars>(self).acknowledge_image_detach(
+            sidecar_name,
+            surface,
+            body,
+        )
     }
     fn decide_image_envelope(
         &self,
@@ -3996,3 +4270,7 @@ fn write_stderr_records(stderr: std::process::ChildStderr, name: &str) {
 #[cfg(test)]
 #[path = "sidecars_lock_test.rs"]
 mod lock_test;
+
+#[cfg(test)]
+#[path = "sidecars_image_detach_test.rs"]
+mod image_detach_test;

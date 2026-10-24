@@ -348,7 +348,13 @@ type Surfaces struct {
 	// streams are the stream subscriptions of the document regions.
 	streams *DocumentStreams
 	// images are the image regions that the surface pages attached.
-	images *Images
+	images               *Images
+	imageDetachMu        sync.Mutex
+	pendingImageDetaches []imageDetachTarget
+	// reload hooks replace native calls only in owning host tests; production uses the platform operations.
+	reloadCancelLayout func() error
+	reloadHideSurface  func(unsafe.Pointer, bool)
+	reloadCloseImage   func(unsafe.Pointer)
 	// invoke runs a task on the UI thread and waits for it. NewSurfaces sets application.InvokeSync, and a test sets a runner that
 	// records the tasks.
 	invoke   func(task func())

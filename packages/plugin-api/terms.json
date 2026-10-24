@@ -60,6 +60,12 @@
       "allowed": []
     },
     {
+      "term": "image detachment",
+      "definition": "The acknowledged removal of one image generation's render ownership and configuration while retaining its surface session (docs/spec/sidecars.md#image-envelope).",
+      "rejected": [],
+      "allowed": []
+    },
+    {
       "term": "deep link",
       "definition": "An address soksak://<owner>/<command> that opens from outside the application.",
       "rejected": [],

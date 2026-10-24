@@ -191,6 +191,7 @@ func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body json
 // failRequests stores `host.sidecar.reply` as a failure for each surface of the sidecar that has requests waiting, with their
 // identifiers and the reason that the failure of the sidecar gives the page.
 func (c *Sidecars) failRequests(sidecar, reason string) {
+	c.failImageDetaches(sidecar, reason)
 	surfaces, byCid := c.requests.failed(sidecar)
 	text, cut := sok.CutText(fmt.Sprintf("%d: %s", codeInternal, reason), CallTextBytes)
 	for _, surface := range surfaces {

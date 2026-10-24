@@ -142,6 +142,21 @@ The nonce is a 16-byte value attached to the IOSurface that the host uses to ver
 
 The host sends the authorized supplier a `configure` body containing the region name, generation, raster revision, exact pixel dimensions, and scale. The supplier must not derive these values from page geometry. It must not modify or reuse a sent transfer surface until `consumed` or an error arrives. The host never binds that mutable transfer surface directly to the presentation layer; the copy completed before `consumed` is the reuse boundary.
 
+When the host closes an image region but keeps its sidecar session, it sends `{"image":{"detach":{"request":"opaque-id","name":"region-name","generation":2}}}` to that region's supplier after closing the native region. The supplier replies only after it has removed that generation's render ownership, requested image, and pending configuration. It retains outstanding transfer images until their matching `consumed` or error response, or connection end, under the existing transfer ownership rules. The detach keeps the surface session and its process alive and leaves it headless, so an image-less `open` can continue the same session. The supplier returns one of these results in `image.detached`:
+
+| Condition | Result | State change |
+| --- | --- | --- |
+| Exact current configured image name and generation | `{ok: true, result: "detached"}` | Removes that image ownership and configuration; retains the session and transfer leases |
+| Same generation was already detached and no newer owner exists | `{ok: true, result: "alreadyDetached"}` | None |
+| No image, request, or configuration exists for the surface | `{ok: true, result: "alreadyAbsent"}` | None |
+| Matching requested image has no configuration yet | `{ok: true, result: "detached"}` | Clears the request and records the detached generation; retains the session |
+| Requested image name differs from the current image name | `{ok: false, error: "imageNameMismatch"}` | None |
+| Request generation is older than known current or retired generation | `{ok: false, error: "staleGeneration", currentGeneration}` | None |
+| Request generation is newer than a configured attachment | `{ok: false, error: "futureGeneration", currentGeneration}` | None |
+| Request id was previously used with another surface, image name, or generation | `{ok: false, error: "requestMismatch"}` | None |
+
+Every result also echoes the opaque `request`, `name`, and `generation`. A replay of a request id with the same tuple returns its result only while no newer image owner has appeared; reuse with a different tuple is `requestMismatch`. The host associates an acknowledgement with its exact request id, sidecar, surface, image name, and generation; another surface, owner, request, or generation cannot settle it. Page startup waits for all detach acknowledgements caused by reload before it allows a new page to open background sessions or attach replacement images. A failed or timed-out detach fails page startup with the sidecar, surface, image name, generation, and request id.
+
 ## Tests
 
 Each sidecar runs its tests in its own directory. Each host tests its relay, the message limit, and failure delivery in `tests/sidecars_test.*` and its resolution from staged manifests with a fake sidecar executable and does not start a real sidecar.

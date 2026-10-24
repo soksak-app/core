@@ -55,6 +55,20 @@
   status-line box를 기록하고 first-node control 영역만 스캔한다. 이 CSS의
   runtime 검증은 대기 중이다.
 
+- F212.10-core-5-5: reload된 page가 유지된 sidecar session을 headless로 열기
+  전에 image ownership을 detach한다. Host는 이전 native image를 먼저 닫고
+  정확한 supplier, surface, image name, generation을 보존하며 일치하는
+  `image.detached` 응답을 받은 뒤에만 성공한 start document를 반환한다.
+  Supplier는 PTY/session 및 미해결 transfer lease를 유지하면서 이전 image
+  request, render ownership, pending configuration을 해제한다. Red/Green 검사는
+  ACK 소비와 상관, timeout 뒤 이전 target 보존, 모든 region 대기 및 start
+  document barrier를 다룬다. Wails owning 검사는 7/7 통과했고 Tauri 집중
+  검사 12개는 각각 1/1 통과했다. Mismatch follow-up Red에서는 잘못된 generation
+  ACK가 waiter를 완료했다. 수정 후 검사는 1/1 통과하며 정확한 ACK가 올 때까지
+  waiter를 유지한다. 분리된 VT S77 구현은 owning test 7개 통과를 보고했다.
+  보존 reload run은 순서 증거이며 전체 acceptance 결과는 아니다. staged VT
+  release를 포함한 양 host runtime 검증은 F212.10-core-5-6에서 계속한다.
+
 - F239-47-2: `test-activation-backspace`는 같은 창의 AppKit text view와
   image region을 비교하고 양쪽 host의 e2e terminal case를 추가한다. E2E는
   같은 열 개 입력을 같은 창의 AppKit reference와 terminal에 보내고, 각

@@ -142,6 +142,21 @@ plugin 세션의 실패는 그 sidecar의 실패 기록에 더해지며, 그 기
 
 호스트는 권한 있는 공급자에게 영역 이름, 세대, 래스터 리비전, 정확한 픽셀 크기, 배율을 담은 `configure` 본문을 보낸다. 공급자는 페이지 위치에서 이 값을 계산하면 안 된다. 보낸 전송 표면은 `consumed`나 오류가 올 때까지 수정하거나 재사용하면 안 된다. 호스트는 이 가변 전송 표면을 표시 레이어에 직접 연결하지 않으며, `consumed` 전에 완료한 복사가 재사용 경계다.
 
+호스트가 native image region을 닫으면서 sidecar session은 유지할 때는 native region을 닫은 뒤 해당 region의 supplier에 `{"image":{"detach":{"request":"opaque-id","name":"region-name","generation":2}}}`를 보낸다. Supplier는 해당 generation의 render ownership, 요청된 image, 대기 중 configuration을 해제한 뒤에만 답한다. 미해결 transfer image는 기존 transfer 소유권 규칙에 따라 짝이 맞는 `consumed` 또는 오류 응답, 혹은 연결 종료까지 유지한다. Detach는 surface session과 process를 유지하고 headless 상태로 두므로 image 없는 `open`이 같은 session을 이어갈 수 있다. Supplier는 `image.detached`에 다음 결과 중 하나를 담는다.
+
+| 상황 | 결과 | 상태 변경 |
+| --- | --- | --- |
+| 현재 설정된 image 이름과 generation이 정확히 일치 | `{ok: true, result: "detached"}` | 해당 image ownership과 configuration을 없애고 session 및 transfer lease 유지 |
+| 같은 generation을 이미 detach했고 새 owner가 없음 | `{ok: true, result: "alreadyDetached"}` | 없음 |
+| 해당 surface에 image, request, configuration이 없음 | `{ok: true, result: "alreadyAbsent"}` | 없음 |
+| 요청 image는 일치하지만 아직 configuration이 없음 | `{ok: true, result: "detached"}` | request를 지우고 detached generation을 기록하며 session 유지 |
+| 요청 image 이름이 현재 image와 다름 | `{ok: false, error: "imageNameMismatch"}` | 없음 |
+| 요청 generation이 현재 또는 마지막 retired generation보다 오래됨 | `{ok: false, error: "staleGeneration", currentGeneration}` | 없음 |
+| 요청 generation이 설정된 attachment보다 더 새로움 | `{ok: false, error: "futureGeneration", currentGeneration}` | 없음 |
+| request id를 다른 surface, image 이름 또는 generation에 이미 사용함 | `{ok: false, error: "requestMismatch"}` | 없음 |
+
+모든 결과는 opaque `request`, `name`, `generation`도 그대로 담는다. 같은 tuple이며 더 새 image owner가 생기지 않았을 때만 request id 재전송에 기존 결과를 돌려주며, 다른 tuple로 재사용하면 `requestMismatch`다. 호스트는 정확한 request id, sidecar, surface, image 이름, generation으로 응답을 연결하며 다른 surface, owner, request, generation의 응답은 기다리는 요청을 완료할 수 없다. Page 시작은 reload가 만든 모든 detach 응답을 받은 뒤 새 page의 background session open과 대체 image attach를 허용한다. 실패하거나 시간이 초과된 detach는 sidecar, surface, image 이름, generation, request id를 밝히며 page 시작을 실패시킨다.
+
 ## 테스트
 
 각 사이드카는 자기 디렉터리에서 테스트를 실행한다. 각 호스트는 `tests/sidecars_test.*`에서 fake 사이드카 실행 파일로 전달, 메시지 한도, 실패 전달과 스테이징된 선언 파일을 통한 해석을 검사하고 실제 사이드카를 실행하지 않는다.

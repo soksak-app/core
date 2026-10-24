@@ -401,7 +401,7 @@ func (s *Surfaces) setBackground(enabled bool) {
 	if win, ok := s.window, s.window != nil; ok {
 		win.ExecJS(fmt.Sprintf("window.__soksakBackground = %t", enabled))
 	}
-	application.InvokeSync(func() {
+	s.invoke(func() {
 		s.setDocumentsBackground(enabled)
 	})
 }

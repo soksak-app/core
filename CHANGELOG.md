@@ -59,6 +59,22 @@
   measurement records the status-line box and scans the first-node control;
   runtime validation of this CSS change remains pending.
 
+- F212.10-core-5-5: Detach image ownership before a reloaded page opens a
+  retained sidecar session headless. Hosts close the old native image first,
+  retain the exact supplier, surface, image name and generation, and wait for
+  matching `image.detached` replies before returning a successful start
+  document. Suppliers retain the PTY/session and outstanding transfer leases
+  while removing the old image request, render ownership and pending
+  configuration. Red/Green tests cover acknowledgement consumption and
+  correlation, old-target retention after timeout, all-region waiting and the
+  start-document barrier. Wails owning checks pass 7/7; 12 scoped Tauri checks
+  pass 1/1 each. The mismatch follow-up Red showed that a wrong-generation ACK
+  settled its waiter; its correction passes 1/1 and leaves the waiter pending
+  for the exact ACK. The separate VT S77 implementation reports seven owning
+  tests passing. The preserved reload run is ordering evidence, not full
+  acceptance. Two-host runtime verification with the staged VT release remains
+  open under F212.10-core-5-6.
+
 - F239-47-2: Add `test-activation-backspace` as a focused Korean IME
   comparison between an AppKit text view and an image region in one window,
   plus an e2e terminal case for both hosts. The e2e case sends the same keys to

@@ -75,6 +75,14 @@ type ImageOwner struct {
 	SidecarOwner SidecarOwner
 }
 
+type imageDetachTarget struct {
+	Surface    string
+	Name       string
+	Sidecar    string
+	Generation uint64
+	Owner      SidecarOwner
+}
+
 // Images are the image regions of a window.
 type Images struct {
 	mu             sync.Mutex
@@ -273,6 +281,26 @@ func (i *Images) GetOwner(key ImageKey) (*ImageOwner, error) {
 		return owner, nil
 	}
 	return nil, fmt.Errorf("image %q is not attached", key.Name)
+}
+
+// detachments captures the supplier and generation of every registered image before a page reload advances the surface generation.
+func (i *Images) detachments(surface string) []imageDetachTarget {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	var targets []imageDetachTarget
+	for key, owner := range i.owners {
+		if key.Surface != surface || owner == nil {
+			continue
+		}
+		state := i.states[key]
+		if state == nil {
+			continue
+		}
+		targets = append(targets, imageDetachTarget{Surface: key.Surface, Name: key.Name,
+			Sidecar: owner.SidecarName, Generation: state.Generation, Owner: owner.SidecarOwner})
+	}
+	sort.Slice(targets, func(left, right int) bool { return targets[left].Name < targets[right].Name })
+	return targets
 }
 
 // Remove removes the name and returns its image region.

@@ -6,6 +6,7 @@ package host
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -79,10 +80,20 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 	}
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s && t.surface == "" })
 	routine.Go("windows-changed", h.windowsChanged)
-	application.InvokeSync(func() {
-		s.reloadSurfaceDocuments()
-		s.disposePluginHosts()
+	var detachments []imageDetachTarget
+	var reloadErr error
+	s.invoke(func() {
+		detachments, reloadErr = s.reloadSurfaceDocuments()
+		if reloadErr == nil {
+			s.disposePluginHosts()
+		}
 	})
+	if reloadErr != nil {
+		return nil, fmt.Errorf("page reload: %w", reloadErr)
+	}
+	if err := s.awaitImageDetaches(detachments); err != nil {
+		return nil, fmt.Errorf("page reload image detach: %w", err)
+	}
 	// The plugin sessions of the window end with the previous page, which emits no plugin-host-ended (docs/plans/plugin-host-routes.md rule 7).
 	s.sidecars.closePluginSessions(s, func(pluginSession) bool { return true })
 	s.discardOverlay()
