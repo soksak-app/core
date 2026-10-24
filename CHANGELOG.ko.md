@@ -54,6 +54,12 @@
   F239-47-9에서 native wire insert, Backspace, Space를 AppKit editing semantics로
   적용하는 document model을 추적한다.
 
+- F239-47-8: 원래 전면 앱 복원 뒤 선택된 input source를 다시 확인한다. ABC와
+  Terminal을 baseline으로 시작한 focused run 한 번에서 기존 cleanup 순서는
+  baseline 재활성화 전에 캡처한 source를 선택했고, 재활성화 뒤 assertion도 ABC를
+  읽었다. 이전 Korean 결과에는 query command와 출력이 없어 보고는 repeat target을
+  기다리며 열린 상태다. Cleanup 순서는 변경하지 않는다.
+
 - F212.10-editor-1: Editor window check은 key 입력 전에 선언된
   `editor.content` rectangle을 native click하고 해당 view가 native responder가
   될 때까지 기다린다. Main page reload 뒤에도 같은 절차를 적용한다. 보존된 두

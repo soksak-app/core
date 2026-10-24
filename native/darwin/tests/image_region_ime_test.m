@@ -500,6 +500,9 @@ int main(int argc, const char *argv[]) { @autoreleasepool {
                 == previousApp.processIdentifier; }, cleanupDeadline),
                 @"the frontmost application is restored before cleanup ends");
         }
+        check(pumpUntil(^BOOL { return [currentSourceID() isEqual:previousSource]; }, cleanupDeadline),
+            [NSString stringWithFormat:@"the previous input source is active after the frontmost application is restored (got %@)",
+                currentSourceID()]);
         return failures ? 1 : 0;
     }
     NSUInteger (^controlAnswered)(void) = ^NSUInteger {

@@ -58,6 +58,13 @@
   native-wire document model that applies insert, Backspace and Space through
   AppKit editing semantics.
 
+- F239-47-8: Check the selected input source again after restoring the
+  original frontmost application. In one focused run that began with ABC and
+  Terminal as the baseline, the original cleanup order selected the captured
+  source before reactivation and the post-reactivation assertion still read
+  ABC. A prior Korean result lacks its query command and output, so the report
+  remains open pending a repeat target; no cleanup-order change is made.
+
 - F212.10-editor-1: The editor window check now clicks the declared
   `editor.content` rectangle and waits for that view to become the native
   responder before sending keys, including after a main-page reload. In the
