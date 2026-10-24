@@ -168,6 +168,150 @@ function assertTerminalStageCoherent(stage, screenEvents, name) {
   `${name}: sidecar screen rows and cursor do not match the presented frame`);
 }
 
+async function waitForTerminalImeStage(session, surface, before, name) {
+  const names = ["terminal.screen", "terminal.cursor", "terminal.compose"];
+  const values = new Map();
+  const revisions = new Map(names.map((status) => [status, 0]));
+  let resolveCoherent;
+  const coherent = new Promise((resolve) => { resolveCoherent = resolve; });
+  const check = () => {
+    const screen = values.get("terminal.screen");
+    const compose = values.get("terminal.compose");
+    const cursor = values.get("terminal.cursor");
+    const changed = JSON.stringify(screen) !== JSON.stringify(before.screen) ||
+      compose?.text !== before.compose.text || cursor?.row !== before.cursor.row ||
+      cursor?.col !== before.cursor.col || cursor?.preedit?.text !== before.cursor.preedit?.text;
+    if (changed && typeof compose?.text === "string" && compose.text === cursor?.preedit?.text) {
+      resolveCoherent({ screen, compose, cursor });
+    }
+  };
+  const off = session.client.on("status.changed", (params) => {
+    if (params?.window !== session.window || params.surface !== surface || !names.includes(params.name)) return;
+    values.set(params.name, params.value);
+    revisions.set(params.name, revisions.get(params.name) + 1);
+    check();
+  });
+  const watched = [];
+  let timer;
+  let result;
+  let failure;
+  try {
+    for (const status of names) {
+      await session.request("status.watch", { name: status, surface });
+      watched.push(status);
+    }
+    for (const status of names) {
+      const revision = revisions.get(status);
+      const value = await session.get(status, surface);
+      if (revisions.get(status) === revision) values.set(status, value);
+      check();
+    }
+    result = await Promise.race([coherent, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${name}: terminal cursor and composition statuses did not converge`)), 10000);
+    })]);
+  } catch (error) {
+    failure = error;
+  } finally {
+    clearTimeout(timer);
+    off();
+    const cleanupErrors = [];
+    for (const status of watched.reverse()) {
+      try { await session.request("status.unwatch", { name: status, surface }); }
+      catch (error) { cleanupErrors.push(error); }
+    }
+    if (cleanupErrors.length) {
+      failure = failure ? new AggregateError([failure, ...cleanupErrors], `${name}: observation and status cleanup failed`)
+        : new AggregateError(cleanupErrors, `${name}: status cleanup failed`);
+    }
+  }
+  if (failure) throw failure;
+  return result;
+}
+
+test("terminal IME stage waits for cursor notification after composition changes", async () => {
+  const listeners = new Set();
+  const before = { screen: ["$ "], compose: { text: "ㅏ" }, cursor: { row: 0, col: 1, preedit: { text: "ㅏ" } } };
+  const session = {
+    window: "main",
+    client: { on(name, listener) { assert.equal(name, "status.changed"); listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      assert.ok(["status.watch", "status.unwatch"].includes(method));
+      assert.ok(["terminal.screen", "terminal.compose", "terminal.cursor"].includes(name));
+    },
+    async get(name) {
+      if (name === "terminal.screen") return before.screen;
+      if (name === "terminal.compose") return { text: "ㅏㅏ" };
+      queueMicrotask(() => {
+        for (const listener of listeners) listener({ window: "main", surface: "tab-ime", name,
+          value: { row: 0, col: 2, preedit: { text: "ㅏㅏ" } } });
+      });
+      return { row: 0, col: 1, preedit: { text: "ㅏ" } };
+    },
+  };
+
+  const stage = await waitForTerminalImeStage(session, "tab-ime", before, "fixture");
+  assert.equal(stage.compose.text, "ㅏㅏ");
+  assert.equal(stage.cursor.preedit.text, "ㅏㅏ");
+  assert.equal(listeners.size, 0);
+});
+
+test("terminal IME stage waits for cursor movement when native preedit stays unchanged", async () => {
+  const listeners = new Set();
+  const before = { screen: ["$ ㅏ"], compose: { text: "ㅏㅏ" }, cursor: { row: 0, col: 2, preedit: { text: "ㅏㅏ" } } };
+  const session = {
+    window: "main",
+    client: { on(name, listener) { assert.equal(name, "status.changed"); listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      assert.ok(["status.watch", "status.unwatch"].includes(method));
+      assert.ok(["terminal.screen", "terminal.compose", "terminal.cursor"].includes(name));
+    },
+    async get(name) {
+      if (name === "terminal.screen") return before.screen;
+      if (name === "terminal.compose") return before.compose;
+      queueMicrotask(() => {
+        for (const listener of listeners) listener({ window: "main", surface: "tab-ime", name,
+          value: { row: 0, col: 3, preedit: { text: "ㅏㅏ" } } });
+      });
+      return before.cursor;
+    },
+  };
+
+  const stage = await waitForTerminalImeStage(session, "tab-ime", before, "fixture");
+  assert.equal(stage.compose.text, before.compose.text);
+  assert.equal(stage.cursor.preedit.text, before.cursor.preedit.text);
+  assert.equal(stage.cursor.col, 3);
+  assert.equal(listeners.size, 0);
+});
+
+test("terminal IME stage rereads coherent composition on a screen notification", async () => {
+  const listeners = new Set();
+  const before = { screen: ["$ "], compose: { text: "ㅏ" }, cursor: { row: 0, col: 2, preedit: { text: "ㅏ" } } };
+  const session = {
+    window: "main",
+    client: { on(name, listener) { assert.equal(name, "status.changed"); listeners.add(listener); return () => listeners.delete(listener); } },
+    async request(method, { name }) {
+      assert.ok(["status.watch", "status.unwatch"].includes(method));
+      assert.ok(["terminal.screen", "terminal.compose", "terminal.cursor"].includes(name));
+    },
+    async get(name) {
+      if (name === "terminal.screen") {
+        queueMicrotask(() => {
+          for (const listener of listeners) listener({ window: "main", surface: "tab-ime", name,
+            value: ["$ ㅏ"] });
+        });
+        return before.screen;
+      }
+      return before[name === "terminal.compose" ? "compose" : "cursor"];
+    },
+  };
+
+  const stage = await waitForTerminalImeStage(session, "tab-ime", before, "fixture");
+  assert.deepEqual(stage.screen, ["$ ㅏ"]);
+  assert.equal(stage.compose.text, "ㅏ");
+  assert.equal(stage.cursor.preedit.text, "ㅏ");
+  assert.equal(listeners.size, 0);
+});
+
 test("terminal stage requires matching screen, cursor, and compose state", () => {
   const stage = {
     frame: { generation: 2, raster: 4, sequence: 12 },
@@ -574,21 +718,32 @@ for (const app of Object.values(APPS)) {
             recordGesture(s, t, "terminal repeated-vowel keys", async () => {
           const terminalStages = [];
           for (const [index, key] of REPEATED_VOWEL_KEYS.entries()) {
+            const before = {
+              screen: await s.get("terminal.screen", surface),
+              compose: await s.get("terminal.compose", surface),
+              cursor: await s.get("terminal.cursor", surface),
+            };
             await s.press(key);
+            const reference = referenceStages[index];
+            await waitForTerminalImeStage(s, surface, before, `${app.name}: vowel ${index + 1}`);
             const screen = await presentedScreen(s, surface);
-            const cursor = await s.get("terminal.cursor", surface);
-            const compose = await s.get("terminal.compose", surface);
+            const current = await waitForTerminalImeStage(s, surface, before,
+              `${app.name}: presented vowel ${index + 1}`);
             const stage = {
               index: index + 1,
               key,
-              reference: referenceStages[index],
+              reference,
               frame: screen.frame,
               rows: screen.rows,
               screen: textLines({ lines: screen.rows }),
-              cursor,
-              compose,
+              cursor: current.cursor,
+              compose: current.compose,
             };
             terminalStages.push(stage);
+            writeFileSync(join(s.app.configDir, "terminal-ime-stage-observations.json"), JSON.stringify({
+              referenceStages,
+              terminalStages,
+            }, null, 2));
             t.diagnostic(`${app.name}: terminal before Space after vowel ${index + 1}: ${JSON.stringify({
               index: stage.index,
               key: stage.key,
@@ -601,13 +756,20 @@ for (const app of Object.values(APPS)) {
           }
 
           const beforeSpace = terminalStages.at(-1).cursor;
+          const beforeSpaceState = {
+            screen: await s.get("terminal.screen", surface),
+            compose: terminalStages.at(-1).compose,
+            cursor: beforeSpace,
+          };
           await s.press("Space");
+          const afterSpaceState = await waitForTerminalImeStage(s, surface, beforeSpaceState,
+            `${app.name}: Space composition commit`);
           const committedLines = await readScreenUntil(s, surface,
             (lines) => lines.some((line) => line.includes(REPEATED_VOWELS)),
             "the terminal did not display all four vowels before another key");
           const afterSpace = await s.until("terminal.cursor", (cursor) => cursor.row > beforeSpace.row ||
             cursor.col > beforeSpace.col, "Space did not advance the terminal PTY cursor", { surface });
-          const committedCompose = await s.get("terminal.compose", surface);
+          const committedCompose = afterSpaceState.compose;
           imeTracing = false;
           const trace = await s.run("terminal.ime.trace", { action: "stop" }, surface);
           const sessionError = (await s.get("terminal.session", surface)).error;
@@ -623,9 +785,6 @@ for (const app of Object.values(APPS)) {
           return gesture;
       }));
     const screenEvents = terminalResult.inputEvents.filter((event) => event.layer === "sidecar.screen");
-    for (const stage of terminalResult.terminalStages) {
-      assertTerminalStageCoherent(stage, screenEvents, `${app.name}: vowel ${stage.index}`);
-    }
     writeFileSync(join(s.app.configDir, "terminal-ime-stage-observations.json"), JSON.stringify({
       referenceStages,
       terminalStages: terminalResult.terminalStages,
@@ -638,6 +797,9 @@ for (const app of Object.values(APPS)) {
       ptyInserts: terminalResult.ptyInserts,
       trace: terminalResult.trace.entries,
     }, null, 2));
+    for (const stage of terminalResult.terminalStages) {
+      assertTerminalStageCoherent(stage, screenEvents, `${app.name}: vowel ${stage.index}`);
+    }
     assert.equal(terminalResult.trace.overflow, false, "the terminal IME trace must not overflow");
     assert.equal(terminalResult.committedCompose.text, "",
       "Space must end the terminal preedit before another key");

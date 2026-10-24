@@ -4,20 +4,22 @@
 
 ## Unreleased
 
-- F239-47: On macOS 26.6.2 arm64, the prior approved activation recording with
-  installed terminal 0.0.15 shows a transient compose-display loss, while
-  native and PTY insert traces retain the complete
-  `ㅏㅏㅏㅏ ` input. Before P70, Tauri's AppKit reference advanced through all
-  four vowels, but terminal compose/cursor preedit became empty after vowel
-  three and its fourth-vowel frame showed only two committed vowel cells.
-  Wails failed the terminal focus wait and reached the capture limit, so it did
-  not complete a comparable key sequence. The terminal owner corrected
-  insert-triggered compose clearing in P70; that candidate is not released.
-  The consumer test now correlates each presented screen read to a received
-  sidecar frame, cursor and compose state. Its helper fixtures pass 3/3, and
-  `node --check` and `git diff --check` pass. A fresh P70 candidate activation
-  run remains pending. `make e2e-check` is still blocked by the existing
-  timeout rule at `e2e/normal-shutdown-runner.mjs:95`.
+- F239-47: On the fresh P70 candidate, Wails completed the approved same-window
+  AppKit and terminal gesture of four Korean 2-set vowels followed by Space.
+  Each terminal screen/cursor/compose observation converged after a key, and
+  the final AppKit document and PTY insert were exactly `ㅏㅏㅏㅏ ` with empty
+  compose. The 65 reference frames and 146 terminal callbacks had maximum gaps
+  of 16.7621667 ms and 17.0064583 ms. Tauri failed before input: the pointer
+  remained inside the final window after `keepPointerOutside()` requested its
+  move, so the two-host acceptance remains open. The recorded geometry does not
+  establish whether the pointer moved externally or the helper selected a
+  placement that remained under it; F239-47-4 tracks the missing geometry
+  evidence. The cleanup check initially found Tauri frontmost instead of the
+  baseline; normal host termination was followed by successful baseline restore.
+  The status observer correlates a presented screen with its received frame,
+  cursor and compose. Its three controlled coherence fixtures pass. The parent
+  item remains active; this Wails result does not close the Tauri or two-host
+  criteria.
 
 - F239-47-3: Report AppKit's marked range in composition events. The native
   event carries the full retained suffix and the exact text-relative UTF-16

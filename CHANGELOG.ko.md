@@ -4,18 +4,18 @@
 
 ## 미배포
 
-- F239-47: macOS 26.6.2 arm64에서 설치 terminal 0.0.15로 수행한 이전 승인
-  activation 녹화는 terminal compose 표시가 일시적으로 사라졌지만 native와 PTY
-  insert trace에는 전체 `ㅏㅏㅏㅏ ` 입력이 보존되었음을
-  보여준다. P70 이전 Tauri AppKit 기준은 네 모음을 모두 반영했지만 terminal
-  compose/cursor preedit은 세 번째 모음 뒤 비었고 네 번째 모음 frame에는 확정된
-  모음 cell 두 개만 있었다. Wails는 terminal focus 대기에 실패하고 capture limit에
-  도달해 비교 가능한 키 입력을 완료하지 못했다. Terminal 소유자는 insert가 compose를
-  지우는 동작을 P70에서 수정했으며 candidate는 아직 release되지 않았다. Consumer
-  test는 각 presented screen read를 수신 sidecar frame, cursor 및 compose 상태와
-  연결한다. Helper fixture 3/3, `node --check`, `git diff --check`가 통과한다. 새 P70
-  candidate activation run은 대기 중이다. `make e2e-check`는 기존
-  `e2e/normal-shutdown-runner.mjs:95` timeout 규칙에서 계속 막혀 있다.
+- F239-47: 새 P70 candidate에서 Wails는 같은 창의 AppKit과 terminal에 한국어
+  2벌식 모음 네 번 후 Space를 보내는 승인 gesture를 완료했다. 각 terminal
+  screen/cursor/compose 관측은 키 뒤 수렴했고, 최종 AppKit 문서와 PTY insert는
+  compose가 빈 상태에서 정확히 `ㅏㅏㅏㅏ `였다. Reference frame 65개와 terminal
+  callback 146개의 최대 간격은 각각 16.7621667ms와 17.0064583ms였다. Tauri는
+  입력 전에 실패했다. `keepPointerOutside()`가 창 이동을 요청한 뒤에도 포인터가
+  최종 창 안에 남아 두 host 수용 검사는 열린 상태다. 기록된 geometry는 외부
+  포인터 이동과 helper 배치 동작을 구분하지 못한다. F239-47-4가 빠진 geometry
+  증거를 추적한다. Cleanup 검사는 처음에 Tauri가 baseline보다 앞에 있다고
+  보고했으며 정상 host 종료 뒤 baseline 복원은 성공했다. Status observer는 표시된
+  screen을 수신한 frame, cursor, compose와 연결한다. 제어된 coherence fixture 3개가
+  통과한다. 이 Wails 결과만으로 부모 항목을 닫지 않는다.
 
 - F239-47-3: AppKit marked range를 composition event로 보고한다. Native event는
   보관 suffix 전체와 text 기준 실제 UTF-16 marked range를 담고, AppKit에
