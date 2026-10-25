@@ -22,6 +22,7 @@ import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
 import { trace, traceEnabled } from "./performance.js";
 const mounted = new Map();
+let placementTail = Promise.resolve();
 const mounting = new Map();
 let nextMountAttempt = 0;
 /* Placeholder of a surface that is not mounted in a document without a host: one element for each surface id. */
@@ -1048,7 +1049,14 @@ export async function disposeSurfacesExcept(surfaceIds, { released = false } = {
  * so the release drops only the page-side handles. A failed place releases nothing, so its surfaces stay mounted.
  * Resolves the reply of the place.
  */
-export async function placeSurfaces(place, { retain, unload = [] }) {
+export function placeSurfaces(place, options) {
+  const result = placementTail.then(() => applySurfacePlacement(place, options));
+  // The caller reports a rejected placement; the lifecycle lane remains available to the next request.
+  placementTail = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+async function applySurfacePlacement(place, { retain, unload = [] }) {
   // The place leaves the regions of the surfaces it leaves out to the host, which closes them before the reply.
   const left = new Set(unload);
   for (const id of mounted.keys()) if (!retain.has(id)) left.add(id);

@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-157: Serialize retained-view preparation, native placement and
+  release so an earlier placement cannot dispose a later mount. The held
+  placement owner fails before the correction and passes afterward;
+  rejection recovery and adjacent owners pass 44/44. Caller-visible errors
+  and the next placement remain available after a rejection.
+  Both rebuilt hosts pass the persistence case and log audit, 2/2. This
+  closes the related saved-sidebar F239-156, origin F262-4 and normal-window
+  close F212.12-1-15-5 acceptance; parent F262 still requires its full run.
+
 - F239-158: Use a consumer-owned sidecar identity in four capture fixtures
   instead of naming a workspace implementation. The same 24 owner cases
   and all 16 boundary components pass without changing payload assertions

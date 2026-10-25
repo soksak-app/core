@@ -171,3 +171,55 @@ test("a view declares its composition only after the host authorizes its surface
   await disposeSurface(id);
   h.close();
 });
+
+
+test("a later retained mount waits for the preceding placement release", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { mountSurface, authorizeSurface, disposeSurface, mountedSurface, placeSurfaces } = h.modules;
+  const { recordOrigin } = await import("../tab-reports.js");
+  const id = "view-retained-placement-order";
+  recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  let release, entered;
+  const held = new Promise((resolve) => { release = resolve; });
+  const started = new Promise((resolve) => { entered = resolve; });
+  const order = [];
+  const previous = placeSurfaces(async () => {
+    entered();
+    await held;
+    order.push("previous placed");
+  }, { retain: new Set() });
+  await started;
+  const next = placeSurfaces(async () => {
+    order.push("next prepare");
+    authorizeSurface(id);
+    await mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+  }, { retain: new Set([id]) });
+  try {
+    await new Promise((resolve) => setImmediate(resolve));
+    release();
+    await Promise.all([previous, next]);
+    assert.deepEqual(order, ["previous placed", "next prepare"]);
+    assert.equal(mountedSurface(id)?.disposed, false,
+      "the preceding placement released the retained mount prepared by its successor");
+  } finally {
+    release();
+    await Promise.allSettled([previous, next]);
+    await disposeSurface(id);
+    h.close();
+  }
+});
+
+test("a rejected placement reports its error and allows the next placement", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const failure = new Error("fixture placement rejected");
+  const rejected = h.modules.placeSurfaces(async () => { throw failure; }, { retain: new Set() });
+  const following = h.modules.placeSurfaces(async () => "next placed", { retain: new Set() });
+  try {
+    await assert.rejects(rejected, (error) => error === failure);
+    assert.equal(await following, "next placed");
+  } finally {
+    await Promise.allSettled([rejected, following]);
+    h.close();
+  }
+});

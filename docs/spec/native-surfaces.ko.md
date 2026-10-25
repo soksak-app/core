@@ -196,6 +196,8 @@ plugin host는 manifest가 선언하는 plugin의 숨은 web view로, 창에 붙
 
 ### Region lifetime
 
+Page는 retained-view 준비부터 host placement와 page 쪽 release까지 각 placement를 직렬화한다. 이전 placement가 아직 mount를 release할 수 있는 동안 다음 placement는 mount를 준비하지 않는다. 거부된 placement는 caller에게 오류를 보고하고 다음 placement의 실행을 막지 않는다.
+
 place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트는 place가 답하기 전에 page가 더 이상 나열하지 않는 각 표면의 문서 영역과 그림 영역을 모두 닫는다. page는 place를 먼저 실행하고, place가 성공한 뒤에만 그런 표면의 모듈을 release한다. 그 release는 영역의 page 쪽 handle만 버리고 `documentDetach`, `documentUnsubscribe`, `imageDetach`를 호출하지 않는다. place를 실행하기 전에 page는 place가 빼는 각 표면의 composition을 멈춘다: 호스트가 place 중에 그런 표면의 composition을 지우므로, 그 표면에 대해 `compositionPlace`와 `imagePlace`를 보내지 않고 아무것도 detach하지 않는다. 실패한 place는 아무것도 release하지 않으므로, 뺐을 표면은 마운트된 채 남고 그 composition은 다시 시작해 현재 형태를 다시 place한다. place는 host에서 그런 surface의 sidecar session도 끝내므로, place가 도는 동안 모듈이 sidecar로 보내는 send는 결과를 기다린다: 실패한 place 뒤에는 보내고, 성공한 place 뒤에는 그 send와 dispose가 보내는 session 종료 같은 모듈의 이후 send를 보내지 않는다. host로 보내면 project root 없는 session이 열리기 때문이다. 표면이 배치된 채로 page가 스스로 detach하는 영역은 호스트를 거쳐 detach하고, 그 detach의 실패는 보고한다. 이는 place를 거친 모든 제거에 적용된다: 탭 닫기, 탭 unload, commit이 더 이상 유지하지 않는 표면.
 
 ## 네이티브 뷰 위의 입력

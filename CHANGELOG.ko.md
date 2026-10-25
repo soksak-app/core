@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-157: Retained-view 준비, native placement 및 release를 직렬화하여 이전
+  placement가 이후 mount를 dispose하지 못하게 한다. 보류된 placement owner는
+  수정 전 실패하고 수정 후 통과하며 거부 복구 및 인접 owner가 44/44 통과한다.
+  거부 뒤에도 caller에게 오류를 전달하고 다음 placement를 실행한다.
+  재빌드한 양 host의 persistence case와 log 감사가 2/2 통과한다. 관련 저장
+  sidebar F239-156, origin F262-4 및 정상 window close F212.12-1-15-5
+  acceptance를 완료하며 상위 F262의 전체 실행은 남긴다.
+
 - F239-158: Capture fixture 네 곳에서 workspace 구현 이름 대신 consumer
   소유 sidecar identity를 사용한다. Payload assertion 변경이나 checker 예외
   없이 동일 owner 24 case 및 boundary 16 component가 모두 통과한다.
