@@ -3,6 +3,8 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+
+- F239-92: Tauri-only scope 표기를 checker host ID `tauriv2`로 바로잡았다. Red: 변경 전 static check가 `tauri`를 거부했고 보존된 `make host-contract-check`는 host test를 실행하기 전에 중단됐다. Green: exact-scope owner case가 통과하고 `scripts/test/check-host-contract.test.mjs`가 16/16 통과한다. `make docs-check`는 문서 112개, failure record 431개, record check 1836개로 통과한다. 전체 static audit은 무관한 declaration issue 130개를 계속 보고한다. Host suite는 실행하지 않았다.
 - F239-88: Lifecycle callback Mach tick을 canonical decimal string으로 기록해 event catalog 형식과 맞춘다. F84에서 Wails와 Tauri에 number 값 14건이 확인됐다. `first-sample` 7건과 `start-completion` 7건이며 나머지 non-null Mach-tick field는 schema와 일치했다. 제어된 owner Red는 phase별 형식 assertion과 `uint64` 최대값 사례에서 실패했다. Producer는 정확한 unsigned 값과 null 상태를 보존하며 `capture_callback_test`가 1/1 통과한다.
 
 

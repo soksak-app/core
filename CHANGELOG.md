@@ -3,6 +3,7 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+- F239-92: Correct the Tauri-only scope spelling to the checker host ID `tauriv2`. Red: the unchanged static check rejected `tauri`, and the preserved `make host-contract-check` stopped before running host tests. Green: the exact-scope owner case passes and `scripts/test/check-host-contract.test.mjs` passes 16/16. `make docs-check` passes 112 documents, 431 failure records and 1836 record checks. The full static audit still reports 130 unrelated declaration issues; no host suite was run.
 - F239-88: Encode lifecycle callback Mach ticks as canonical decimal strings, matching the event catalog. F84 observed 14 numeric values across Wails and Tauri: seven `first-sample` and seven `start-completion` events; other non-null Mach-tick fields already matched the schema. The controlled owner Red failed the phase type assertions and `uint64` maximum case. The producer now preserves the exact unsigned value and null state; `capture_callback_test` passes 1/1.
 
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { auditDeclarations, auditHostContract, parseContractCases, groupResults, parseDeclarations, uncoveredCases } from '../check-host-contract.mjs';
 
@@ -113,6 +114,12 @@ test('the case table rejects duplicate ids, invalid ids, and a limited scope wit
   assert.throws(() => parseContractCases(`\n${table('| `a.b` | x | tauriv2 only |')}`), /without a reason/);
   assert.throws(() => parseContractCases(`\n${table('| `a.b` | x | everywhere |')}`), /scope/);
   assert.throws(() => parseContractCases('# none\n'), /no "Contract cases" section/);
+});
+
+test('the late provider error case uses the registered Tauri host scope', () => {
+  const spec = readFileSync(new URL('../../docs/spec/host-contract.md', import.meta.url), 'utf8');
+  const contract = parseContractCases(spec).get('plugin-host.channel.late-error-preserved');
+  assert.deepEqual(contract?.hosts, ['tauriv2']);
 });
 
 test('results are grouped by run and owner, and a name that one owner shares keeps a failure, then a pass, then a skip', () => {
