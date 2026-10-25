@@ -57,11 +57,11 @@ fn start_requests_start_the_requesting_main_webview_only() {
 }
 
 // contract: page.start.sok-core-owner
-/// Tauri serves the start document at soksak://core/start.json (docs/spec/native-host.md#application-addresses); the
-/// sok address of another owner answers not found without starting a window.
+/// Tauri serves the start document at soksak://core/start.json (docs/spec/native-host.md#application-addresses); an
+/// address of another owner answers not found without starting a window.
 #[test]
-fn start_document_is_served_at_the_core_owner_of_sok() {
-    assert_eq!(start::SCHEME, "sok");
+fn start_document_is_served_at_the_core_owner_of_soksak() {
+    assert_eq!(start::SCHEME, "soksak");
     assert_eq!(start::CORE, "core");
     let mut started = vec![];
     let mut start = |webview: &str| {

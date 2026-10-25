@@ -91,7 +91,7 @@ fn arguments_are_refused_with_the_shared_messages() {
 fn a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value() {
     let reply: documents::ViewReply = soksak_host_tauriv2::arguments::decode(
         "request",
-        &json!({"surface": "probe", "id": 1, "result": null}),
+        &json!({"page": "probe", "surface": "probe", "generation": 1, "id": 1, "result": null}),
     )
     .expect("a reply with a null result is accepted");
     assert_eq!(
@@ -106,7 +106,7 @@ fn a_view_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_value()
 fn a_view_event_keeps_a_null_data_as_its_value() {
     let event: documents::ViewEventRequest = soksak_host_tauriv2::arguments::decode(
         "request",
-        &json!({"surface": "probe", "event": "probe.changed", "data": null}),
+        &json!({"surface": "probe", "generation": 1, "event": "probe.changed", "data": null}),
     )
     .expect("an event with a null data is accepted");
     assert_eq!(
@@ -122,7 +122,7 @@ fn a_plugin_host_reply_keeps_a_null_result_as_the_result_of_a_command_without_a_
     let reply: soksak_host_tauriv2::plugin_host_channel::PluginHostReply =
         soksak_host_tauriv2::arguments::decode(
             "request",
-            &json!({"plugin": "probe", "id": 1, "result": null}),
+            &json!({"plugin": "probe", "generation": 1, "id": 1, "result": null}),
         )
         .expect("a reply with a null result is accepted");
     assert_eq!(
