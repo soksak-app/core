@@ -124,15 +124,15 @@ test("checklist permits a platform-excluded item only with a named unavailable p
   }
 });
 
-for (const [name, english, korean] of [
-  ["missing record", "- [-] G1 — failed once.\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n"],
-  ["empty record", "- [-] G1 — failed once. Not reproduced: .\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n"],
-  ["missing Korean record", "- [-] G1 — failed once. Not reproduced: three runs.\n", "- [-] G1 — 한 번 실패했다.\n"],
+for (const [name, english, korean, expectedError] of [
+  ["missing record", "- [-] G1 — failed once.\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n", /docs\/features\.md:1: closed checklist item G1 requires either a nonempty Not reproduced record or a complete Platform excluded record/],
+  ["empty record", "- [-] G1 — failed once. Not reproduced: .\n", "- [-] G1 — 한 번 실패했다. 재현되지 않음: 세 번.\n", /docs\/features\.md:1: closed checklist item G1 requires either a nonempty Not reproduced record or a complete Platform excluded record/],
+  ["missing Korean record", "- [-] G1 — failed once. Not reproduced: three runs.\n", "- [-] G1 — 한 번 실패했다.\n", /docs\/features\.ko\.md:1: closed checklist item G1 requires either a nonempty 재현되지 않음 record or a complete 플랫폼 범위 제외 record/],
 ]) {
   test(`checklist rejects [-] with ${name}`, { timeout: 3000 }, (t) => {
     const result = check(t, english, korean);
     assert.notEqual(result.status, 0, "documentation audit accepted a closed item without its attempts");
-    assert.match(result.stderr, /not reproduced checklist item .* requires/);
+    assert.match(result.stderr, expectedError);
   });
 }
 

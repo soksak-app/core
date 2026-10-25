@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-116: Align the closed-checklist negative fixture with the validator’s
+  shared missing-record error. Keep validation criteria unchanged. The focused
+  checklist file passes 29/29 on the current source; all three negative
+  fixtures still reject invalid closed records with file-qualified errors.
+
 - F239-114-2: Resolve the Rust fallback and census findings against their
   owning contracts. Map PID and timeout parse errors explicitly, use the
   registered-window Option API where window closure is expected, and state

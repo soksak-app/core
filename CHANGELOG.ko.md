@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-116: closed checklist의 누락 record negative fixture를 validator의
+  공통 오류에 맞춘다. 검증 기준은 유지한다. 현재 source에서 집중 checklist file은
+  29/29 통과한다. 세 negative fixture 모두 잘못된 closed record를 파일명이 포함된
+  오류로 계속 거부한다.
+
 - F239-114-2: Rust fallback 및 census finding을 소유 계약에 맞춰 해결한다.
   PID와 timeout parse 오류를 명시적으로 변환하고, window 종료가 정상적인
   상태 조회에는 등록 전용 Option API를 사용하며, 계약을 지키는 queue 판별과
