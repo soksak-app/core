@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-84: Workbench package payload에 `error-text.js`를 포함한다. 양쪽
+  candidate window는 `plugin-operations.js`, `exposure.js`, `plugin-host.js`가
+  import하는 모듈이 `package.json` `files`에서 빠져 시작에 실패했다. Red:
+  변경 전 staging closure test가 첫 누락 import에서 실패했다. Green:
+  기존 모듈을 추가한 뒤 `files-list.test.mjs`가 2/2 통과한다. Runtime 검증 전
+  변경된 frontend 및 application bundle을 다시 빌드해야 한다.
+
 - F239-83: 체크리스트는 Windows 전용 F54와 F239-48-4 runtime 검사, 남은
   Windows/Linux 구현인 R2-7을 현재 macOS 검증 범위에서 제외한다. Windows runtime
   환경은 없고 Linux host application은 구현되지 않았다. 기존 cross-compilation과

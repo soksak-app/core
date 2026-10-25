@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-84: Include `error-text.js` in the Workbench package payload. Both
+  candidate windows failed startup because `plugin-operations.js`, `exposure.js`
+  and `plugin-host.js` imported a module omitted from `package.json` `files`.
+  Red: the unchanged staging closure test failed at the first import. Green:
+  `files-list.test.mjs` passes 2/2 after adding the existing module. Affected
+  frontend and application bundles still require rebuilding before runtime
+  verification.
+
 - F239-83: The checklist excludes the Windows-only F54 and F239-48-4 runtime
   checks and remaining Windows/Linux implementation in R2-7 from the current macOS
   validation scope. Windows runtime is unavailable and no Linux host application

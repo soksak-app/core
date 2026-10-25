@@ -46,6 +46,7 @@
     "debug-state.js",
     "page-start-errors.js",
     "page-start-errors-install.js",
+    "error-text.js",
     "surface-status.js",
     "surface-composition-kind.js",
     "modal-order.js",
