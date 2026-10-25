@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-161: Decode a current Tauri view envelope once and select its
+  reply, call, snapshot or readiness handler without repeated decoding.
+  Keep existing wire validation, dispatch precedence, payloads and error
+  handling. The controlled second-decode Red becomes Green; two dispatch
+  owners and 50 documents owner cases pass. Both diagnostic hosts rebuild.
+  The drag run is blocked by the F239-162 diagnostic assertion; no runtime
+  latency improvement or drag acceptance is claimed.
+
 - F212.12-3: Enable existing supplier frame records in the drag consumer
   and report draw durations before alignment judgment. Preserve traced,
   untraced and sampled failure evidence separately. Supplier drawing takes

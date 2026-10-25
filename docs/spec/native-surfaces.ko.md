@@ -156,6 +156,8 @@ View surface mount는 native view 생성을 시작하는 composition을 선언�
   메인 page는 선택된 view 원천에 `viewEvent {surface, generation, event, data}`로 `declared-ui.expanded`를 보내며 `data`는 `{status, tree, path, expanded}`다. `generation`은 선택된 view source의 generation이다. `status`는 plugin 안의 이름이다. view는 `runtime.native.on(\"declared-ui.expanded\")`로 이를 받고 plugin 값을 갱신한 뒤 새 declared UI snapshot을 push한다. workbench는 그 snapshot을 받아들인 뒤에만 그리기를 바꾼다.
 
 페이지는 구독을 한 번만 등록한다. 같은 name이나 id의 두 번째 call은 다시 등록하지 않고 `null`로 답한다. 페이지는 구독한 view document의 generation을 사용해 각 event를 `viewEvent {surface, generation, event, data}`로 보낸다. Restart는 해당 document의 구독을 끝내며, 그 document의 pending 또는 늦은 callback은 취소 상태를 유지하고 replacement generation으로 이름을 바꾸지 않는다. 호스트는 current generation의 event만 받아들이고 generation을 `sok-view`에 노출하지 않은 채 `{sok: 1, event, data}`를 ready 문서에 post한다. current view에 ready 문서가 없으면 `<surface> has no ready document`로 실패하고, 페이지가 그 오류를 application log에 쓴다. 재시작한 view는 다시 구독한다. view는 event 이름의 listener에 각 event를 전달하고, listener가 없는 event는 무시한다.
+Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call, declared snapshot 및 readiness 우선순위로 dispatch한다. 기존 field 검증을 유지하고 관련 없는 handler에서 다시 파싱하지 않으며 전체 payload를 전달한다.
+
 - **view command.** view는 시작할 때 자기가 제공하는 각 command를 `runtime.command.register`(`{name}`) call로 선언한다.
 
   Command 등록은 하나의 view source generation에 속한다. 교체된 각 document는 새 generation에서 command를 한 번씩 등록하고 동일 generation의 두 번째 등록은 오류다. Surface는 등록된 command마다 전달 handler 하나를 유지하며 현재 view command layer로 보낸다.

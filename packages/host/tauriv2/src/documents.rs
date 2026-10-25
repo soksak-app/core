@@ -852,7 +852,60 @@ struct ViewState {
     navigations: Option<u64>,
 }
 
+#[derive(Debug, PartialEq)]
+enum ViewDispatch {
+    Reply(Value),
+    Call(Value),
+    Snapshot(Value),
+    Ready(Result<bool, String>),
+}
+
 impl ViewChannels {
+    fn dispatch(&self, surface: &str, value: &str) -> Result<ViewDispatch, String> {
+        self.dispatch_with_decoder(surface, value, |value| {
+            serde_json::from_str(value)
+                .map_err(|error| format!("{surface}: view message is not JSON: {error}"))
+        })
+    }
+
+    fn dispatch_with_decoder(
+        &self,
+        surface: &str,
+        value: &str,
+        mut decode: impl FnMut(&str) -> Result<ViewReceived, String>,
+    ) -> Result<ViewDispatch, String> {
+        let received = decode(value)?;
+        let message = received.message.as_ref();
+        if message.and_then(|message| message.get("reply")).is_some() {
+            return self.reply_received(surface, received).map(|payload| {
+                ViewDispatch::Reply(payload.expect("the reply field selected the reply handler"))
+            });
+        }
+        let field = |name| {
+            message
+                .and_then(|message| message.get(name))
+                .filter(|value| !value.is_null())
+        };
+        if field("command").is_some() || field("cancel").is_some() {
+            return self.call_received(surface, received).map(|payload| {
+                ViewDispatch::Call(payload.expect("a command or cancel selected the call handler"))
+            });
+        }
+        if message
+            .and_then(|message| message.get("event"))
+            .and_then(Value::as_str)
+            == Some(DECLARED_SNAPSHOT_MESSAGE)
+        {
+            return self.snapshot_received(surface, received).map(|payload| {
+                ViewDispatch::Snapshot(
+                    payload.expect("the snapshot event selected the snapshot handler"),
+                )
+            });
+        }
+        Ok(ViewDispatch::Ready(
+            self.message_received(surface, received),
+        ))
+    }
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, ViewChannel>> {
         self.0
             .lock()
@@ -1025,6 +1078,10 @@ impl ViewChannels {
     pub fn message(&self, surface: &str, value: &str) -> Result<bool, String> {
         let received: ViewReceived = serde_json::from_str(value)
             .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        self.message_received(surface, received)
+    }
+
+    fn message_received(&self, surface: &str, received: ViewReceived) -> Result<bool, String> {
         if let Some(error) = received.error {
             return Err(error);
         }
@@ -1074,6 +1131,14 @@ impl ViewChannels {
     pub fn reply(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
         let received: ViewReceived = serde_json::from_str(value)
             .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        self.reply_received(surface, received)
+    }
+
+    fn reply_received(
+        &self,
+        surface: &str,
+        received: ViewReceived,
+    ) -> Result<Option<Value>, String> {
         let Some(message) = received.message else {
             return Ok(None);
         };
@@ -1134,6 +1199,14 @@ impl ViewChannels {
     pub fn call(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
         let received: ViewReceived = serde_json::from_str(value)
             .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        self.call_received(surface, received)
+    }
+
+    fn call_received(
+        &self,
+        surface: &str,
+        received: ViewReceived,
+    ) -> Result<Option<Value>, String> {
         let Some(message) = received.message else {
             return Ok(None);
         };
@@ -1211,6 +1284,14 @@ impl ViewChannels {
     pub fn snapshot(&self, surface: &str, value: &str) -> Result<Option<Value>, String> {
         let received: ViewReceived = serde_json::from_str(value)
             .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+        self.snapshot_received(surface, received)
+    }
+
+    fn snapshot_received(
+        &self,
+        surface: &str,
+        received: ViewReceived,
+    ) -> Result<Option<Value>, String> {
         let Some(message) = received.message else {
             return Ok(None);
         };
@@ -1664,10 +1745,8 @@ fn view_message(
     if !accept_view_message(data.documents.views(), plugin, surface, origin, value) {
         return;
     }
-    // A reply of the view answers a request of the main page, and goes to the main page as view-reply.
-    let reply = window_data(window).and_then(|data| data.documents.views().reply(surface, value));
-    match reply {
-        Ok(Some(payload)) => {
+    let ready = match data.documents.views().dispatch(surface, value) {
+        Ok(ViewDispatch::Reply(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) =
                 crate::windows::emit_declared_source_event(window, "view-reply", payload)
@@ -1676,16 +1755,7 @@ fn view_message(
             }
             return;
         }
-        Ok(None) => {}
-        Err(error) => {
-            log_error("view channel", error);
-            return;
-        }
-    }
-    // A call request goes to the main page, which answers it (docs/spec/native-surfaces.md#view-surfaces).
-    let call = window_data(window).and_then(|data| data.documents.views().call(surface, value));
-    match call {
-        Ok(Some(payload)) => {
+        Ok(ViewDispatch::Call(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) =
                 crate::windows::emit_declared_source_event(window, "view-call", payload)
@@ -1694,18 +1764,7 @@ fn view_message(
             }
             return;
         }
-        Ok(None) => {}
-        Err(error) => {
-            log_error("view channel", error);
-            return;
-        }
-    }
-    // A declared UI snapshot goes to the main page of the window, which acknowledges it and draws it
-    // (docs/spec/declared-ui.md). The host relays the snapshot and writes no event for it (rule 2).
-    let snapshot =
-        window_data(window).and_then(|data| data.documents.views().snapshot(surface, value));
-    match snapshot {
-        Ok(Some(payload)) => {
+        Ok(ViewDispatch::Snapshot(payload)) => {
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) = crate::windows::emit_declared_source_event(
                 window,
@@ -1716,13 +1775,12 @@ fn view_message(
             }
             return;
         }
-        Ok(None) => {}
+        Ok(ViewDispatch::Ready(ready)) => ready,
         Err(error) => {
             log_error("view channel", error);
             return;
         }
-    }
-    let ready = window_data(window).and_then(|data| data.documents.views().message(surface, value));
+    };
     match ready {
         Ok(true) => {
             let first = match window_data(window) {
@@ -1784,7 +1842,10 @@ fn view_failed(
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
     retire_view_before_replacement(
-        &data, surface, plugin, origin,
+        &data,
+        surface,
+        plugin,
+        origin,
         || end_presentation_wait(window, surface, "process-ended"),
         || {
             // The page forgets the regions that the host closed with the ended view (docs/spec/native-surfaces.md#view-surfaces).
@@ -3078,3 +3139,7 @@ mod view_origin_tests;
 #[cfg(test)]
 #[path = "../tests/declared_source_origins/view_generation_test.rs"]
 mod view_generation_tests;
+
+#[cfg(test)]
+#[path = "../tests/documents/view_decode_test.rs"]
+mod view_decode_tests;

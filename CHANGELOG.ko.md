@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-161: 현재 Tauri view envelope를 한 번 decode하고 반복 decoding 없이
+  reply, call, snapshot 또는 readiness handler를 선택한다. 기존 wire 검증,
+  dispatch 우선순위, payload 및 오류 처리를 유지한다. 두 번째 decode를 거부하는
+  controlled Red가 Green이 되고 dispatch owner 두 개와 documents owner
+  50 case가 통과한다. 양 diagnostic host를 재빌드한다. Drag 실행은 F239-162의
+  진단 assertion에서 막혔으므로 runtime latency 개선이나 drag acceptance를
+  주장하지 않는다.
+
 - F212.12-3: Drag consumer에서 기존 supplier frame 기록을 활성화하고 정렬
   판정 전에 draw duration을 보고한다. Trace 실행, trace를 끈 실행 및 sampling
   실패 증거를 구분하여 보존한다. 해당 실행의 supplier 그리기는 수 ms이며

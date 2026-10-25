@@ -6137,6 +6137,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-161",
+    implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
+    tests: [
+      { file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "a_current_view_envelope_is_decoded_once_for_every_dispatch_kind" },
+      { file: "packages/host/tauriv2/tests/documents/view_decode_test.rs", id: "view_dispatch_preserves_precedence_and_invalid_field_errors" },
+    ],
+    expected: "Current view dispatch decodes once while preserving handler precedence, payloads and field errors.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-160",
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "if (nonceRef) CFRelease(nonceRef);" }],
     tests: [{ file: "native/darwin/tests/image_nonce_ownership_test.m", id: "nonce ownership mode" }],
