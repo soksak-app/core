@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.7b-1: Record both directions of fullscreen-card tab switching and require each completed presentation to expose only the selected native surface with positive dimensions. Validate complete decoded frame counts and no recording overflow. Both-host fullscreen and tab checks, error audits and normal shutdown pass. Close F212.7b-1 and its fully implemented parent F212.7b; retain the initial checker-property error separately from product evidence.
+
 - F239-78: Enable lifecycle debug in the consecutive-capture check and require one correlated start request, start completion and first sample per recording, with no failed lifecycle event. Both macOS arm64 hosts pass three recordings each, the error audit and normal shutdown; the controlled native callback owner passes 1/1. Preserve the original intermittent startup-delay investigation as active.
 
 - F212.12-3-1: Reject growing right raster insets, measure every post-drag content edge and require convergence by the second captured frame. Run functional geometry and movement checks independently of timing targets; preserve cadence and latency values, invalid-data failures and executable benchmark limits. All 14 owning measurement cases and all six two-host window cases pass, including white-frame, document-fill, error-audit and shutdown checks. Close F212.12-3 and F212.7c for functional acceptance; retain measured performance failures under F212.14. Align the IME cadence wording with F239-175.

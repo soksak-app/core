@@ -6613,6 +6613,34 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F212.7b",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
+      { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "joinShownViews" },
+      { file: "packages/host/tauriv2/src/presentation_wait.rs", symbol: "PresentationWait" },
+    ],
+    tests: [
+      { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
+      { file: "e2e/card-fullscreen.test.mjs", id: "a native click on another tab of a fullscreen card switches the tab and keeps fullscreen" },
+    ],
+    expected: "Recorded fullscreen and bidirectional tab switching complete presentation waits with the selected native surface visible and complete frame artifacts.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7b-1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "surfaceLayoutJoinView" },
+      { file: "packages/host/wailsv3/src/presentation_wait.go", symbol: "joinShownViews" },
+      { file: "packages/host/tauriv2/src/presentation_wait.rs", symbol: "PresentationWait" },
+    ],
+    tests: [
+      { file: "e2e/card-fullscreen.test.mjs", id: "card fullscreen fills the work area and restores live surfaces" },
+      { file: "e2e/card-fullscreen.test.mjs", id: "a native click on another tab of a fullscreen card switches the tab and keeps fullscreen" },
+    ],
+    expected: "Recorded fullscreen and bidirectional tab switching complete presentation waits with the selected native surface visible and complete frame artifacts.",
+    levels: ["application"],
+  },
+  {
     id: "F212.7c",
     implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
     tests: [

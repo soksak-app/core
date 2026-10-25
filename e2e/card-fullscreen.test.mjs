@@ -199,15 +199,33 @@ for (const app of Object.values(APPS)) {
     const other = card.tabs.find(tab => tab.id !== card.active);
     await s.run("core.card.fullscreen", { card: "terminal" });
     await s.until("core.grid", grid => grid.fullscreen === "terminal", "the card did not become fullscreen");
-    const index = card.tabs.findIndex(tab => tab.id === other.id);
-    const rect = await s.rect("core.card.tab", index);
-    await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2, (rect.document?.y ?? 0) + rect.y + rect.height / 2);
-    await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal").active === other.id,
-      "the click did not switch the tab");
-    // Reads the state after all drawing that the press and the release caused is displayed.
-    await s.presented();
-    const after = await s.get("core.grid");
-    assert.equal(after.fullscreen, "terminal", `the tab click left fullscreen: ${JSON.stringify(after.cards.map(c => ({ id: c.id, w: c.w, fullscreen: c.fullscreen })))}`);
+    const recording = await s.record();
+    let displayed = 0;
+    let stopped;
+    try {
+      for (const selected of [other.id, card.active]) {
+        const index = card.tabs.findIndex(tab => tab.id === selected);
+        const rect = await s.rect("core.card.tab", index);
+        await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,
+          (rect.document?.y ?? 0) + rect.y + rect.height / 2);
+        await s.until("core.grid", grid => grid.cards.find(item => item.id === "terminal").active === selected,
+          "the click did not switch the tab");
+        ({ displayed } = await s.presented());
+        const after = await s.get("core.grid");
+        assert.equal(after.fullscreen, "terminal", "the tab click left fullscreen");
+        const visible = (await s.get("host.window")).surfaces.filter(surface => surface.visible);
+        assert.deepEqual(visible.map(surface => surface.id), [selected],
+          "presentation completed without the selected native view");
+        assert.ok(visible[0].frame.width > 0 && visible[0].frame.height > 0,
+          "the selected native view has no presented area");
+      }
+    } finally { stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 }); }
+    const captured = frames(recording.frames).map(readFrame);
+    assert.equal(captured.length, stopped.count, "tab recording has missing frame files");
+    assert.ok(captured.length > 1, "tab switching recording is incomplete");
+    assert.equal(stopped.limited, false, "tab recording reached its bounded buffer");
+    assert.ok(stopped.longestGap <= 100, `tab recording gap ${stopped.longestGap}ms`);
+    t.diagnostic(`two tab presentation waits completed: ${captured.length} decoded frames`);
     await s.run("core.card.fullscreen", { card: "terminal" });
     await s.until("core.grid", grid => grid.fullscreen === null, "fullscreen did not end");
   });
