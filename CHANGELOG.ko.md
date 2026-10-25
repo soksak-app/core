@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-113-1: Go와 Rust event-log audit consumer fixture를 catalog schema 2에서
+  Draft 2020-12 field schema를 사용하는 schema 3으로 갱신한다. Raw event-log line
+  schema 2와 audit의 구형 catalog 거부는 유지한다. 보존된 Go default 및
+  diagnostics host-contract 실행은 fixture의 schema 2 때문에 실패했다. 집중 Go
+  audit test와 Rust audit test가 각각 1/1 통과한다.
+
 - F239-120: origin과 rectangle assertion이 의도한 검증에 도달하도록 Go
   view-sync fixture에 현재 페이지의 선언된 composition과 plugin을 준비한다.
   보존된 host-contract 실행은 두 fixture가 의도한 assertion 전에 실패함을

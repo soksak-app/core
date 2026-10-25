@@ -303,11 +303,11 @@ func TestTheEventLogPassesTheAuditOfTheContractPackage(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog := filepath.Join(directory, "catalog.json")
-	text := `{"schema":2,"events":{
-	  "log.open":{"layer":"host","class":"lifecycle","level":"info","fields":{"schema":"number","pid":"number","role":"string","boot":"string"}},
-	  "log.dropped":{"layer":"host","class":"lifecycle","level":"warn","fields":{"from_seq":"number","to_seq":"number","count":"number"}},
-	  "log.policy":{"layer":"host","class":"lifecycle","level":"info","fields":{"source":"string","classes":"object"}},
-	  "host.app.event":{"layer":"host","class":"lifecycle","level":"info","fields":{"kind":"string"}}}}`
+	text := `{"schema":3,"layers":["host"],"events":{
+	  "log.open":{"layer":"host","class":"lifecycle","level":"info","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"schema":{"type":"number"},"pid":{"type":"number"},"role":{"type":"string"},"boot":{"type":"string"}},"required":["schema","pid","role","boot"]}},
+	  "log.dropped":{"layer":"host","class":"lifecycle","level":"warn","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"from_seq":{"type":"number"},"to_seq":{"type":"number"},"count":{"type":"number"},"bytes":{"type":"number"},"reason":{"type":"string"},"channel":{"type":"string"},"queued":{"type":"number"}},"required":["from_seq","to_seq","count","bytes","reason","channel"]}},
+	  "log.policy":{"layer":"host","class":"lifecycle","level":"info","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"source":{"type":"string"},"classes":{"type":"object"}},"required":["source","classes"]}},
+	  "host.app.event":{"layer":"host","class":"lifecycle","level":"info","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"kind":{"type":"string"}},"required":["kind"]}}}}`
 	if err := os.WriteFile(catalog, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}

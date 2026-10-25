@@ -182,15 +182,28 @@ fn the_file_passes_the_audit_of_the_contract_package() {
     log.flush(Duration::from_secs(5)).unwrap();
     let catalog = directory.path().join("catalog.json");
     fs::write(&catalog, json!({
-        "schema": 2,
+        "schema": 3,
+        "layers": ["host"],
         "events": {
             "log.open": {"layer": "host", "class": "lifecycle", "level": "info",
-                "fields": {"schema": "number", "pid": "number", "role": "string", "boot": "string"}},
-            "log.policy": {"layer": "host", "class": "lifecycle", "level": "info",
-                "fields": {"source": "string", "classes": "object"}},
+                "fields": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+                    "properties": {"schema": {"type": "number"}, "pid": {"type": "number"},
+                        "role": {"type": "string"}, "boot": {"type": "string"}},
+                    "required": ["schema", "pid", "role", "boot"]}},
             "log.dropped": {"layer": "host", "class": "lifecycle", "level": "warn",
-                "fields": {"from_seq": "number", "to_seq": "number", "count": "number"}},
-            "host.app.event": {"layer": "host", "class": "lifecycle", "level": "info", "fields": {"kind": "string"}}
+                "fields": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+                    "properties": {"from_seq": {"type": "number"}, "to_seq": {"type": "number"},
+                        "count": {"type": "number"}, "bytes": {"type": "number"},
+                        "reason": {"type": "string"}, "channel": {"type": "string"},
+                        "queued": {"type": "number"}},
+                    "required": ["from_seq", "to_seq", "count", "bytes", "reason", "channel"]}},
+            "log.policy": {"layer": "host", "class": "lifecycle", "level": "info",
+                "fields": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+                    "properties": {"source": {"type": "string"}, "classes": {"type": "object"}},
+                    "required": ["source", "classes"]}},
+            "host.app.event": {"layer": "host", "class": "lifecycle", "level": "info",
+                "fields": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+                    "properties": {"kind": {"type": "string"}}, "required": ["kind"]}}
         }
     }).to_string()).unwrap();
     // The audit command of the repository audits the log with the event contract and prints the findings as JSON.

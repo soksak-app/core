@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-113-1: Update the Go and Rust event-log audit consumer fixtures from
+  catalog schema 2 to schema 3 with Draft 2020-12 field schemas. Preserve raw
+  event-log line schema 2 and the audit's rejection of old catalog formats.
+  The preserved Go default and diagnostics host-contract runs fail because the
+  fixture uses schema 2. The focused Go and Rust audit tests pass individually
+  (1/1 each).
+
 - F239-120: Prepare the Go view-sync fixtures with the current page's declared
   composition and plugin so the origin and rectangle assertions reach their
   intended validation. The preserved host-contract run exposed both fixture
