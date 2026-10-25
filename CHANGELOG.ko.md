@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-111: input-reference test의 기존 50ms drain 구간에 AppKit event
+  전달을 추가해 대기 중인 main-queue document check가 owner test에서 실행되게
+  한다. 보존된 Native 전체 suite log에 input-reference wait 및 timer 등록
+  assertion 실패 7개가 있다(7.340초; 전체 89개 중 87개 통과, 278.858초).
+  집중 target rebuild가 성공하고 기존 runner의 `input_reference_test`가 1/1,
+  7.205초에 통과한다. Production wait 제한과 completion 동작은 바꾸지 않았으며
+  전체 suite에는 다른 실패가 남아 있다.
+
 - F239-103: Source pixel-history eviction 뒤에도 기존의 제한된 source 및 tag
   artifact ledger를 결합해 tag-scoped identity를 보존한다. Committed 10진
   문자열 source identity는 canonical UInt64 parser로 읽고 pending record도 같은

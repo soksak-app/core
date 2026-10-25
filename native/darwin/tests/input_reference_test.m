@@ -40,7 +40,11 @@ static NSTextView *reference(NSWindow *window) {
 }
 static void drain(void) {
     NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:0.05];
-    while ([limit timeIntervalSinceNow] > 0) [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:limit];
+    while ([limit timeIntervalSinceNow] > 0) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:limit inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
+    }
 }
 int main(void) { @autoreleasepool {
     const int8_t allLevels[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};

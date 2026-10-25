@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-111: Dispatch AppKit events in the input-reference test's existing
+  50 ms drain interval so queued main-queue document checks run during the
+  owner test. The full native suite log contains seven failed input-reference
+  wait and timer-registration assertions (7.340 s; 87/89 suite tests passed in
+  278.858 s). The focused target rebuild succeeds and the existing runner
+  passes `input_reference_test` 1/1 in 7.205 s. Production wait bounds and
+  completion behavior are unchanged; the full suite had another failure.
+
 - F239-103: Preserve tag-scoped identity after source pixel-history eviction by
   joining the existing bounded source and tag artifact ledgers. Parse committed
   decimal-string source identities with the canonical UInt64 parser and keep
