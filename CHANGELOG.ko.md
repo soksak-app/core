@@ -62,6 +62,18 @@
   (`/tmp/F239-98-2-visual-index-green-01.log`,
   `/tmp/F239-98-2-terminal-document-green-01.log`).
 
+- F239-98-3: CoreGraphics sRGB 이름을 consumer 경계에서 매핑한다. Source
+  artifact와 capture callback의 raw metadata 및 raster byte는 유지하고
+  `kCGColorSpaceSRGB`만 semantic `sRGB`로 매핑하며 다른 이름은 거부한다.
+  Red: 두 owner 경계가 native 이름을 그대로 반환했다
+  (`/tmp/F239-98-3-color-name-red.log`). Green: unsupported-name 거부를 포함해
+  두 경계 test가 2/2, visual consumer가 19/19 통과한다
+  (`/tmp/F239-98-3-color-name-green-01.log`,
+  `/tmp/F239-98-3-visual-owner-green.log`). 보존된 네 실행의 첫 9단계 offline
+  replay는 retained-source status 누락 때문에 계속 `no-proof`다(Tauri 33/28,
+  Wails 3/3). 10번째 단계 경계는 추론하지 않았다
+  (`/tmp/F239-98-3-offline-first-nine-final.log`).
+
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar
   reader가 window 파괴 전에 조회한 owner를 보유할 수 있으므로, 사라진 owner는
   닫힌 window 오류를 기록하는 대신 shared message dispatcher를 통해 기존

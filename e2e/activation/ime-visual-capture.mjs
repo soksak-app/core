@@ -202,6 +202,12 @@ function sameFrame(left, right) {
   return frameKey(left, "left frame") === frameKey(right, "right frame");
 }
 
+function semanticRasterColorSpace(name) {
+  assert.ok(name === "sRGB" || name === "kCGColorSpaceSRGB",
+    `unsupported raster color space: ${String(name)}`);
+  return name === "kCGColorSpaceSRGB" ? "sRGB" : name;
+}
+
 /** Reads the complete retained source set and attaches only exact frame-bound status snapshots. */
 export function readRetainedSources(directory, frameStates) {
   const manifestPath = join(directory, "sources", "manifest.json");
@@ -252,7 +258,7 @@ export function readRetainedSources(directory, frameStates) {
       data: new Uint8Array(data),
       format: artifact.pixelFormat,
       alpha: artifact.alpha,
-      colorSpace: artifact.colorSpace,
+      colorSpace: semanticRasterColorSpace(artifact.colorSpace),
       scale: artifact.scale,
       screenBounds: artifact.screenBounds,
       ...(render ? { grid: {
@@ -293,7 +299,7 @@ export function captureFromCallback(decoded, callback) {
     data: decoded.data,
     format: "BGRA8",
     alpha: "premultiplied-first",
-    colorSpace: metadata.colorSpace,
+    colorSpace: semanticRasterColorSpace(metadata.colorSpace),
     scaleFactor: metadata.scaleFactor,
     screenRect: metadata.screenRect,
     contentRect: metadata.contentRect,

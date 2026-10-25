@@ -71,6 +71,18 @@
   (`/tmp/F239-98-2-visual-index-green-01.log`,
   `/tmp/F239-98-2-terminal-document-green-01.log`).
 
+- F239-98-3: Map the emitted CoreGraphics sRGB name at the consumer boundary.
+  The source artifact and capture callback keep their raw metadata and raster
+  bytes; the consumer maps only `kCGColorSpaceSRGB` to semantic `sRGB` and
+  rejects other names. Red: both owner boundaries returned the native name
+  unchanged (`/tmp/F239-98-3-color-name-red.log`). Green: both pass 2/2,
+  including unsupported-name rejection, and the visual consumer passes 19/19
+  (`/tmp/F239-98-3-color-name-green-01.log`,
+  `/tmp/F239-98-3-visual-owner-green.log`). First-nine offline replay across
+  four preserved runs remains `no-proof` due to missing retained-source status
+  (Tauri 33/28, Wails 3/3); no tenth-stage boundary is inferred
+  (`/tmp/F239-98-3-offline-first-nine-final.log`).
+
 - F239-90: Answer a transfer image after its window owner is retired. The
   sidecar reader can hold an owner resolved before window destruction; the
   retired owner now returns the existing `closed` image response through the

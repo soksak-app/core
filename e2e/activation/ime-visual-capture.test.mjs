@@ -90,7 +90,7 @@ function writeIdentityFixture(directory, rows, overrides = {}) {
   const artifact = { generation: "1", raster: "2", sequence: 3, regionToken: "region-1", nonce: "nonce",
     payload: "payload", roi: { x: 0, y: 0, width: 4, height: 6 }, file: "identity-1.bgra",
     width: 4, height: 6, stride: 16, pixelFormat: "BGRA8", alpha: "premultiplied-first",
-    colorSpace: "sRGB", byteCount: bytes.length,
+    colorSpace: "kCGColorSpaceSRGB", byteCount: bytes.length,
     sha256: createHash("sha256").update(bytes).digest("hex") };
   writeFileSync(join(identityDirectory, artifact.file), bytes);
   writeFileSync(join(identityDirectory, "decoded-frames.jsonl"), rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
@@ -139,10 +139,13 @@ testWithTimeout("IME visual consumer joins only issued capture identities and re
 testWithTimeout("capture callback adapter preserves the declared BGRA frame geometry", () => {
   const decoded = { width: 4, height: 6, stride: 16, scale: 1, data: sourceRaster() };
   const callback = { imageMatch: { captureFrame: { width: 4, height: 6, stride: 16,
-    pixelFormat: 0x42475241, colorSpace: "sRGB", scaleFactor: 1,
+    pixelFormat: 0x42475241, colorSpace: "kCGColorSpaceSRGB", scaleFactor: 1,
     screenRect: { x: 0, y: 0, width: 4, height: 6 },
     contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
   assert.deepEqual(captureFromCallback(decoded, callback), capture(decoded.data));
+  assert.throws(() => captureFromCallback(decoded, { imageMatch: { captureFrame: {
+    ...callback.imageMatch.captureFrame, colorSpace: "Display P3",
+  } } }), /unsupported raster color space/);
   assert.throws(() => captureFromCallback(decoded, { imageMatch: { captureFrame: {
     ...callback.imageMatch.captureFrame, pixelFormat: 0,
   } } }), /pixel format/);
@@ -152,7 +155,7 @@ testWithTimeout("capture frames map to one half-open input interval by exact Mac
   const decoded = { width: 4, height: 6, stride: 16, scale: 1, time: 1000, data: sourceRaster() };
   const callback = { displayTime: "1000000000", machTimebaseNumerator: 1, machTimebaseDenominator: 1,
     imageMatch: { captureFrame: { width: 4, height: 6, stride: 16, pixelFormat: 0x42475241,
-      colorSpace: "sRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
+      colorSpace: "kCGColorSpaceSRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
       contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
   const identityRows = [{ status: "matched", identity: { generation: "1", raster: "2", sequence: 3 } }];
   const grouped = capturesByInputStage([{ name: "frame-0001.bgra", callback, identityRows }], [decoded], [
@@ -200,7 +203,7 @@ testWithTimeout("capture stage attribution rejects continuous-time boundaries ev
   const decoded = { width: 4, height: 6, stride: 16, scale: 1, time: 1000, data: sourceRaster() };
   const callback = { displayTime: "1000000000", machTimebaseNumerator: 1, machTimebaseDenominator: 1,
     imageMatch: { captureFrame: { width: 4, height: 6, stride: 16, pixelFormat: 0x42475241,
-      colorSpace: "sRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
+      colorSpace: "kCGColorSpaceSRGB", scaleFactor: 1, screenRect: { x: 0, y: 0, width: 4, height: 6 },
       contentRect: { x: 0, y: 0, width: 4, height: 6 } } } };
   assert.throws(() => capturesByInputStage([{ name: "frame-0001.bgra", callback,
     identityRows: [{ status: "matched", identity: { generation: "1", raster: "2", sequence: 3 } }] }], [decoded], [
@@ -217,7 +220,7 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
     const sha256 = createHash("sha256").update(data).digest("hex");
     const artifact = { generation: "1", raster: "2", sequence: 3, file: "frame-1-2-3.bgra",
       width: 4, height: 6, stride: 16, pixelFormat: "BGRA8", alpha: "premultiplied-first",
-      screenBounds: { x: 0, y: 0, width: 4, height: 6 }, scale: 1, colorSpace: "sRGB",
+      screenBounds: { x: 0, y: 0, width: 4, height: 6 }, scale: 1, colorSpace: "kCGColorSpaceSRGB",
       byteCount: data.length, sha256 };
     writeFileSync(join(directory, "sources", artifact.file), data);
     writeFileSync(join(directory, "sources", "manifest.json"), JSON.stringify({ format: 2,
@@ -231,7 +234,13 @@ testWithTimeout("source manifest loads only digest-verified frame-bound rasters"
     assert.deepEqual(loaded.sources[0].raster.data, data);
     assert.deepEqual(loaded.sources[0].raster.grid, { rows: 1, cols: 1, cellWidth: 4,
       cellHeight: 6, x: 0, y: 0 });
+    assert.equal(loaded.sources[0].raster.colorSpace, "sRGB");
     assert.deepEqual(readRetainedSources(directory, new Map()).missingStates, ["1/2/3"]);
+    artifact.colorSpace = "Display P3";
+    writeFileSync(join(directory, "sources", "manifest.json"), JSON.stringify({ format: 2,
+      pixelFormat: "BGRA8", alpha: "premultiplied-first", droppedSources: 0, writeFailures: 0,
+      artifacts: [artifact] }));
+    assert.throws(() => readRetainedSources(directory, new Map()), /unsupported raster color space/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
