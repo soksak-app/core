@@ -3,6 +3,8 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+- F239-88: Lifecycle callback Mach tick을 canonical decimal string으로 기록해 event catalog 형식과 맞춘다. F84에서 Wails와 Tauri에 number 값 14건이 확인됐다. `first-sample` 7건과 `start-completion` 7건이며 나머지 non-null Mach-tick field는 schema와 일치했다. 제어된 owner Red는 phase별 형식 assertion과 `uint64` 최대값 사례에서 실패했다. Producer는 정확한 unsigned 값과 null 상태를 보존하며 `capture_callback_test`가 1/1 통과한다.
+
 
 - F239-84: Workbench package payload에 `error-text.js`를 포함한다. 양쪽
   candidate window는 `plugin-operations.js`, `exposure.js`, `plugin-host.js`가

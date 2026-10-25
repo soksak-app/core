@@ -108,6 +108,8 @@ static SPCaptureAttempt* captureAttempt = nil;
     if (!sp_event_gate(SP_CLASS_LIFECYCLE, level)) return;
     @synchronized (self) {
         id null = [NSNull null];
+        NSString *callbackMachTickString = callbackMachTicks == nil ? nil :
+            [NSString stringWithFormat:@"%llu", callbackMachTicks.unsignedLongLongValue];
         NSDictionary *facts = @{
             @"factsObservedMachTicks": self.factsObservedMachTicks == 0 ? null :
                 [NSString stringWithFormat:@"%llu", (unsigned long long)self.factsObservedMachTicks],
@@ -119,8 +121,8 @@ static SPCaptureAttempt* captureAttempt = nil;
             @"windowNumber": @(self.windowNumber),
             @"requestMachTicks": self.requestMachTicks == 0 ? null :
                 [NSString stringWithFormat:@"%llu", (unsigned long long)self.requestMachTicks],
-            @"callbackMachTicks": callbackMachTicks ?: null,
-            @"elapsedMachTicks": callbackMachTicks == nil ? null :
+            @"callbackMachTicks": callbackMachTickString ?: null,
+            @"elapsedMachTicks": callbackMachTickString == nil ? null :
                 [NSString stringWithFormat:@"%llu", (unsigned long long)(callbackMachTicks.unsignedLongLongValue - self.requestMachTicks)],
             @"machTimebaseNumerator": self.timebase.numer ? @(self.timebase.numer) : null,
             @"machTimebaseDenominator": self.timebase.denom ? @(self.timebase.denom) : null,

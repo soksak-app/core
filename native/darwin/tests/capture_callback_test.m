@@ -29,6 +29,19 @@ static NSDictionary *lifecycleEvent(NSArray<NSDictionary *> *events, NSString *p
     }
     return nil;
 }
+static BOOL lifecycleMachTickFieldsMatchSchema(NSArray<NSDictionary *> *events) {
+    NSArray<NSString *> *fields = @[@"requestMachTicks", @"callbackMachTicks", @"elapsedMachTicks",
+        @"displayTimeMachTicks", @"factsObservedMachTicks"];
+    for (NSDictionary *event in events) {
+        if (![event[@"name"] isEqual:@"native.capture.lifecycle"]) continue;
+        NSDictionary *values = event[@"fields"];
+        for (NSString *field in fields) {
+            id value = values[field];
+            if (value != [NSNull null] && ![value isKindOfClass:NSString.class]) return NO;
+        }
+    }
+    return YES;
+}
 static CMSampleBufferRef sampleWithStatus(BOOL includeStatus) {
     CMSampleTimingInfo timing = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
     CMSampleBufferRef result = NULL;
@@ -63,6 +76,21 @@ static void discard(void) {
 int main(void) { @autoreleasepool {
     signal(SIGALRM, expired); alarm(25);
     check(sp_event_set_policy(captureTracePolicy), @"the test enables the bounded capture lifecycle trace");
+    SPCaptureAttempt *maxTickAttempt = [[SPCaptureAttempt alloc] init];
+    maxTickAttempt.session = @"capture-uint64-boundary";
+    maxTickAttempt.timebase = (mach_timebase_info_data_t){ .numer = 1, .denom = 1 };
+    NSArray *maxTickEvents = capturedEvents(^{
+        [maxTickAttempt emit:@"uint64-boundary" level:SP_EVENT_DEBUG
+            callbackMachTicks:[NSNumber numberWithUnsignedLongLong:UINT64_MAX]
+            sampleType:nil statusPresent:NO status:nil displayTimePresent:YES
+            displayTimeMachTicks:@"18446744073709551615" error:nil reason:nil];
+    });
+    NSDictionary *maxTick = lifecycleEvent(maxTickEvents, @"uint64-boundary", maxTickAttempt.session);
+    check([maxTick[@"fields"][ @"callbackMachTicks"] isEqual:@"18446744073709551615"]
+        && [maxTick[@"fields"][ @"elapsedMachTicks"] isEqual:@"18446744073709551615"]
+        && [maxTick[@"fields"][ @"displayTimeMachTicks"] isEqual:@"18446744073709551615"],
+        @"uint64 maximum Mach ticks remain canonical decimal strings without precision loss");
+    [maxTickAttempt release];
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native delayed stream callback isolation\n");
     [NSApplication sharedApplication]; [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -148,6 +176,8 @@ int main(void) { @autoreleasepool {
                 NSDictionary *oldCompletion = lifecycleEvent(oldCallbackEvents, @"start-completion", oldSession);
                 NSDictionary *oldStop = lifecycleEvent(oldCallbackEvents, @"delegate-stop", oldSession);
                 NSDictionary *oldFailure = lifecycleEvent(oldCallbackEvents, @"failed", oldSession);
+                check(lifecycleMachTickFieldsMatchSchema(oldCallbackEvents),
+                    @"all old-stream lifecycle Mach-tick fields are strings or null");
                 check(oldCompletion != nil && oldStop != nil,
                     @"late start and delegate callbacks retain the old stream's session identity");
                 check([oldCompletion[@"fields"][@"errorDomain"] isEqual:@"capture.test"]
@@ -175,6 +205,8 @@ int main(void) { @autoreleasepool {
                     currentStart(fault(@"fixture active start failure"));
                     [captureSink stream:current didStopWithError:fault(@"fixture active delegate failure")];
                 });
+                check(lifecycleMachTickFieldsMatchSchema(currentCallbackEvents),
+                    @"all current-stream lifecycle Mach-tick fields are strings or null");
                 NSDictionary *currentCompletion = lifecycleEvent(currentCallbackEvents, @"start-completion", currentSession);
                 NSDictionary *currentStop = lifecycleEvent(currentCallbackEvents, @"delegate-stop", currentSession);
                 check(currentCompletion != nil && currentStop != nil,
@@ -208,6 +240,8 @@ int main(void) { @autoreleasepool {
         method_setImplementation(method, (IMP)inlineStart);
         NSArray *inlineEvents = capturedEvents(^{ check(start(directory),
             @"the inline-completion attempt starts"); });
+        check(lifecycleMachTickFieldsMatchSchema(inlineEvents),
+            @"inline lifecycle Mach-tick fields are strings or null");
         NSDictionary *inlineRequest = lifecycleEvent(inlineEvents, @"start-request", nil);
         NSDictionary *inlineCompletion = lifecycleEvent(inlineEvents, @"start-completion", inlineRequest[@"fields"][@"session"]);
         NSUInteger requestIndex = inlineRequest == nil ? NSNotFound : [inlineEvents indexOfObject:inlineRequest];
@@ -225,6 +259,8 @@ int main(void) { @autoreleasepool {
         if (idle != NULL) {
             NSArray *sampleEvents = capturedEvents(^{ [captureSink stream:captureStream didOutputSampleBuffer:idle ofType:SCStreamOutputTypeScreen]; });
             CFRelease(idle);
+            check(lifecycleMachTickFieldsMatchSchema(sampleEvents),
+                @"first-sample lifecycle Mach-tick fields are strings or null");
             NSDictionary *firstSample = lifecycleEvent(sampleEvents, @"first-sample", sampleSession);
             check(firstSample != nil && ![firstSample[@"fields"][@"statusPresent"] boolValue]
                 && firstSample[@"fields"][@"status"] == [NSNull null]
@@ -242,6 +278,8 @@ int main(void) { @autoreleasepool {
             withIntermediateDirectories:YES attributes:nil error:NULL], @"the failed-attempt folder exists before wait");
         __block int waited = -1;
         NSArray *failureEvents = capturedEvents(^{ waited = sp_capture_wait(); });
+        check(lifecycleMachTickFieldsMatchSchema(failureEvents),
+            @"failure lifecycle Mach-tick fields are strings or null");
         check(waited == 0, @"a missing first frame follows the normal capture-wait failure path");
         NSDictionary *failed = lifecycleEvent(failureEvents, @"failed", timeoutSession);
         NSUInteger failureCount = 0;

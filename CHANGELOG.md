@@ -3,6 +3,8 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+- F239-88: Encode lifecycle callback Mach ticks as canonical decimal strings, matching the event catalog. F84 observed 14 numeric values across Wails and Tauri: seven `first-sample` and seven `start-completion` events; other non-null Mach-tick fields already matched the schema. The controlled owner Red failed the phase type assertions and `uint64` maximum case. The producer now preserves the exact unsigned value and null state; `capture_callback_test` passes 1/1.
+
 
 - F239-84: Include `error-text.js` in the Workbench package payload. Both
   candidate windows failed startup because `plugin-operations.js`, `exposure.js`
