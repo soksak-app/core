@@ -307,20 +307,31 @@ pub(crate) fn window_data(window: &Window) -> Result<Arc<WindowData>, String> {
     window_records_in(&window.state::<Windows>(), window.label())
 }
 
+/// Returns window state when its record is still registered. A missing record means the window has been destroyed.
+pub(crate) fn window_data_if_registered(window: &Window) -> Option<Arc<WindowData>> {
+    window_records_if_registered(&window.state::<Windows>(), window.label())
+}
+
+/// Returns a registered window record without turning window destruction into an operational error.
+pub(crate) fn window_records_if_registered(
+    registry: &Windows,
+    label: &str,
+) -> Option<Arc<WindowData>> {
+    registry
+        .windows
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(label)
+        .cloned()
+}
+
 /// Returns the state of the window of label in the registry, or the error of a window that is closed.
 pub(crate) fn window_records_in(
     registry: &Windows,
     label: &str,
 ) -> Result<Arc<WindowData>, String> {
-    registry
-        .windows
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the window records, which are only read; the
-        // panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(label)
-        .cloned()
-        .ok_or_else(|| "project window is closed".into())
+    window_records_if_registered(registry, label).ok_or_else(|| "project window is closed".into())
 }
 
 /// Returns the main webview of the window.

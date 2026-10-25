@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar
+  reader가 window 파괴 전에 조회한 owner를 보유할 수 있으므로, 사라진 owner는
+  닫힌 window 오류를 기록하는 대신 shared message dispatcher를 통해 기존
+  `closed` image 응답을 보낸다. Live-owner와 malformed-body control을 포함한
+  focused owning route test 2개가 통과한다. 보존된 shutdown audit는 재실행하지
+  않았으므로 새로운 runtime acceptance를 주장하지 않는다.
+
 - F239-89: Region 내부 click-through press와 짝이 되는 release까지 image-region
   focus를 유지한다. F84 trace는 page focus command 뒤 mouseup에서 focus loss를
   기록했다. 변경 전 owning activation test에서 같은 실패가 재현됐다. 수정 후 같은

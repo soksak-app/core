@@ -67,6 +67,17 @@ pub trait ResponseSender: Send {
     fn send(&self, surface: &str, image: &str, body: &RawValue) -> Result<(), ResponseError>;
 }
 
+/// The result of routing a sidecar body to its current surface owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageEnvelopeDecision {
+    /// The body is not an image envelope and remains a sidecar message.
+    NotImage,
+    /// The image envelope was handled by the owning window.
+    Handled,
+    /// The sidecar reader resolved the owner before its window was retired.
+    OwnerRetired,
+}
+
 /// The error of a response to a sidecar. `Ended` states that the process of the sidecar is not running, so nothing
 /// receives the response; `Failed` is any other failure. The text is the same in both hosts.
 #[derive(Debug, Clone, PartialEq)]
@@ -93,16 +104,15 @@ pub trait Owner: Clone + Send + 'static {
     fn deliver(&self, message: Message);
     /// Passes a sidecar failure to the page of the window.
     fn deliver_failure(&self, failure: Failure);
-    /// Decides and handles an image envelope. There is no default implementation.
-    /// Return value: whether the image envelope was handled.
+    /// Decides and handles an image envelope for the current window lifecycle.
     fn decide_image_envelope(
         &self,
         _sidecar_name: &str,
         _surface: &str,
         _body: &RawValue,
         _response_sender: &dyn ResponseSender,
-    ) -> bool {
-        false
+    ) -> ImageEnvelopeDecision {
+        ImageEnvelopeDecision::NotImage
     }
     /// Consumes a supplier acknowledgement for a native image detach request.
     fn image_detach_ack(
@@ -3890,7 +3900,14 @@ fn try_handle_image_envelope<O: Owner>(
         return true;
     }
     // Checks whether it is an image envelope and requests the decision.
-    owner.decide_image_envelope(sidecar_name, surface, body, response_sender)
+    match owner.decide_image_envelope(sidecar_name, surface, body, response_sender) {
+        ImageEnvelopeDecision::NotImage => false,
+        ImageEnvelopeDecision::Handled => true,
+        ImageEnvelopeDecision::OwnerRetired => {
+            drop_message(response_sender, sidecar_name, surface, body);
+            true
+        }
+    }
 }
 
 /// The window used by the sidecar channel. It is distinguished by the window label and uses the project directory of
@@ -3963,19 +3980,12 @@ impl Owner for Window {
         surface: &str,
         body: &RawValue,
         response_sender: &dyn ResponseSender,
-    ) -> bool {
-        let data = match window_data(self) {
-            Ok(data) => data,
-            Err(e) => {
-                log_error(
-                    &format!("sidecar {sidecar_name}"),
-                    format!("image envelope for {surface}: {e}"),
-                );
-                return false;
-            }
+    ) -> ImageEnvelopeDecision {
+        let Some(data) = crate::windows::window_data_if_registered(self) else {
+            return ImageEnvelopeDecision::OwnerRetired;
         };
         let window = self.clone();
-        crate::images::handle_envelope_with_recovery(
+        let handled = crate::images::handle_envelope_with_recovery(
             body.get(),
             sidecar_name,
             surface,
@@ -4004,7 +4014,12 @@ impl Owner for Window {
             },
             || tauri::Manager::state::<WindowSidecars>(self).declared(sidecar_name),
             || crate::exposure::window_changed(&window),
-        )
+        );
+        if handled {
+            ImageEnvelopeDecision::Handled
+        } else {
+            ImageEnvelopeDecision::NotImage
+        }
     }
 }
 
@@ -4041,3 +4056,7 @@ mod image_detach;
 #[cfg(test)]
 #[path = "sidecars_lock_test.rs"]
 mod lock_test;
+
+#[cfg(test)]
+#[path = "sidecars_closed_image_test.rs"]
+mod closed_image_test;

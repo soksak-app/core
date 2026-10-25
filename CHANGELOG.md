@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-90: Answer a transfer image after its window owner is retired. The
+  sidecar reader can hold an owner resolved before window destruction; the
+  retired owner now returns the existing `closed` image response through the
+  shared message dispatcher instead of reporting a closed-window error. The
+  focused owning route tests pass 2/2, including live-owner and malformed-body
+  controls. The preserved shutdown audit was not rerun, so this change does not
+  claim a new runtime acceptance.
+
 - F239-89: Keep an image region focused through the release paired with an
   in-region click-through press. The F84 trace reported focus loss on mouseup
   after the page focus command. The unchanged owning activation test reproduced

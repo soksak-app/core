@@ -566,8 +566,8 @@ impl Owner for RecordingOwner {
         _surface: &str,
         _body: &RawValue,
         _response_sender: &dyn crate::sidecars::ResponseSender,
-    ) -> bool {
-        false
+    ) -> crate::sidecars::ImageEnvelopeDecision {
+        crate::sidecars::ImageEnvelopeDecision::NotImage
     }
 }
 
