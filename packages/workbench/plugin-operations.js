@@ -3,6 +3,7 @@
 // without a host, only the plugins that the window loaded are shown and there are no operations.
 
 import { beginOperation } from "./operations.js";
+import { errorText } from "./error-text.js";
 import { compareVersions } from "./version-range.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 
@@ -136,8 +137,7 @@ export function createPluginOperations({ host, loaded, changed }) {
       await host.call("pluginsRun", { action, plugin }, { cids });
       operation = { action, plugin, state: "done", error: null };
     } catch (error) {
-      // default: an error that is not an Error carries its value as the text.
-      operation = { action, plugin, state: "failed", error: String(error?.message ?? error) };
+      operation = { action, plugin, state: "failed", error: errorText(error) };
       throw error;
     } finally {
       await refresh();
@@ -222,11 +222,9 @@ export function createPluginOperations({ host, loaded, changed }) {
       if (state.starter?.state !== "complete") throw new Error("starter job was not recorded as complete");
       return installedAny;
     } catch (error) {
-      // default: an error that is not an Error carries its value as the text.
       const failedPack = job?.pack ?? pack;
-      log(`first run: the starter pack ${failedPack} was not installed: ${error?.message ?? error}`);
-      // default: an error that is not an Error carries its value as the text.
-      show(`시작 플러그인 묶음 ${failedPack}을 설치하지 못했습니다 · ${error?.message ?? error}.`);
+      log(`first run: the starter pack ${failedPack} was not installed: ${errorText(error)}`);
+      show(`시작 플러그인 묶음 ${failedPack}을 설치하지 못했습니다 · ${errorText(error)}.`);
       return false;
     }
   }

@@ -277,6 +277,26 @@ test("a first-run package-format failure preserves the error without promising n
   assert.ok(!shown[0].includes("연결된 뒤 다시 시작하면 다시 설치합니다"));
 });
 
+test("a structured starter failure keeps its code and data in operation, log, and display", async () => {
+  const host = starterHost({ index: starterIndex });
+  const call = host.call.bind(host);
+  host.call = async (method, params) => {
+    if (method === "pluginsRun") {
+      throw { code: -32000, message: "starter install refused", data: { plugin: params.plugin } };
+    }
+    return call(method, params);
+  };
+  const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });
+  await operations.refresh();
+  const lines = [];
+  const shown = [];
+  assert.equal(await operations.installStarter("starter", null, (line) => lines.push(line), (message) => shown.push(message)), false);
+  const reason = 'starter install refused (code -32000, data {"plugin":"alpha"})';
+  assert.equal(operations.status().operation.error, reason);
+  assert.deepEqual(lines, [`first run: the starter pack starter was not installed: ${reason}`]);
+  assert.deepEqual(shown, [`시작 플러그인 묶음 starter을 설치하지 못했습니다 · ${reason}.`]);
+});
+
 test("the first run sets the default registry of the environment before it installs the starter pack", async () => {
   const host = starterHost({ registry: null, index: starterIndex });
   const operations = createPluginOperations({ host, loaded: () => [], changed: () => {} });

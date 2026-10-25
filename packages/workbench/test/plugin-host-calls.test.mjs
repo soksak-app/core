@@ -80,7 +80,7 @@ const emit = (name, event) => {
 };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
-const { listenPluginHostCalls, hostCommandsOf, hostCommandGeneration, keepHostCommands, forwardHostExposure, errorText, createHostCommands } = await import("../plugin-host.js");
+const { listenPluginHostCalls, hostCommandsOf, hostCommandGeneration, keepHostCommands, forwardHostExposure, createHostCommands } = await import("../plugin-host.js");
 const { losses } = await import("../plugin-processes.js");
 const { registerSourceOrigin, seedSourceOrigins } = await import("../source-origins.js");
 const session = "plugin:probe:project-a:fixture-sidecar";
@@ -556,16 +556,6 @@ test("closing the plugin host call listener ends its pending exposure requests",
   const refused = await forwardHostExposure("probe", "dom.rect", { name: "probe.canvas" }).then(() => null, (error) => error.message);
   assert.match(refused, /^plugin host probe (?:has no exposure-request subscription|has no current source generation)$/);
   assert.equal(settled, true, "closing the host listener left a DOM request open");
-});
-
-// contract: plugin-host.channel.call-served-set
-test("a rejection that is an object of the host is reported with its message, code and data", () => {
-  assert.equal(errorText(new Error("refused")), "refused");
-  assert.equal(errorText("plain text"), "plain text");
-  assert.equal(errorText({ code: -32000, message: "refused", data: { path: "a" } }), 'refused (code -32000, data {"path":"a"})');
-  assert.equal(errorText({ code: -32000, message: "refused" }), "refused (code -32000)");
-  // An object without a message is reported as its JSON, so no report reads [object Object].
-  assert.equal(errorText({ code: 7 }), '{"code":7}');
 });
 
 // contract: plugin-host.channel.call-served-set

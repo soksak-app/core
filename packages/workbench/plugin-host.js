@@ -5,6 +5,7 @@
 // as replies that the host relays as the events plugin-host-reply.
 
 import { host as bridge } from "@soksak/runtime";
+import { errorText } from "./error-text.js";
 import { reportRecord } from "./page-log.js";
 import { createViewCommands } from "./view-commands.js";
 import { callReporter } from "./plugin-processes.js";
@@ -54,20 +55,6 @@ export function checkHostSidecarRequest({ plugin, sidecar, declared = [], sideca
   const readable = sidecarDeclaration.hostReadOperations ?? [];
   if (!declared.includes(operation) || !readable.includes(operation)) throw refuse(`operation ${operation} is not served`);
   return object;
-}
-
-/**
- * The text of a rejection: its message, with its code and data when it has them. An object without a message is written as its
- * JSON, so a report never reads [object Object] (docs/spec/logging.md).
- */
-export function errorText(error) {
-  if (typeof error === "string") return error;
-  if (typeof error !== "object" || error === null) return String(error);
-  if (typeof error.message !== "string") return JSON.stringify(error);
-  const extra = [];
-  if (error.code !== undefined) extra.push(`code ${error.code}`);
-  if (error.data !== undefined) extra.push(`data ${JSON.stringify(error.data)}`);
-  return extra.length === 0 ? error.message : `${error.message} (${extra.join(", ")})`;
 }
 
 /** The served calls of the channel of a plugin host (docs/spec/plugin-host.md#channel). */

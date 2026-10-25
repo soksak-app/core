@@ -8,7 +8,8 @@
 // In a browser runtime without a host, the registry also works inside this document. Then there is no path that
 // receives requests and no surface.
 import { host } from "@soksak/runtime";
-import { errorText, forwardHostExposure, hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
+import { errorText } from "./error-text.js";
+import { forwardHostExposure, hostKeyOf, hostCommandsOf, listenPluginHostCalls, pluginSidecarsOf } from "./plugin-host.js";
 import { SNAPSHOT_REQUEST_COMMAND, createPluginRuntime } from "@soksak/plugin-api";
 import { pluginRecords } from "./plugin-records.js";
 import { timed, trace } from "./performance.js";
