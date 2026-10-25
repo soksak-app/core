@@ -21,9 +21,9 @@ int main(void) { @autoreleasepool {
     check(!sp_capture_open(-1, false, &operationError), @"an invalid window is rejected by the native capture boundary");
     check(operationError != NULL && strlen(operationError) > 0, @"open failure is observable to the caller");
     free(operationError); operationError = NULL;
-    check(!sp_capture_start(directory, true, &operationError), @"frame identity requires the identity-session implementation");
-    check(operationError != NULL && strstr(operationError, "frame identity capture is not implemented") != NULL,
-        @"an unavailable frame-identity request returns an explicit native error");
+    check(!sp_capture_start(directory, true, &operationError), @"identity capture without a prepared target is rejected");
+    check(operationError != NULL && strstr(operationError, "capture has no prepared window") != NULL,
+        @"identity start validates its capture target before creating a session");
     free(operationError); operationError = NULL;
     check(!sp_capture_start(directory, false, &operationError), @"starting without a capture target is rejected");
     check(operationError != NULL && strlen(operationError) > 0, @"start failure is observable to the caller");
@@ -113,6 +113,28 @@ int main(void) { @autoreleasepool {
                 (unsigned long)decoded.length, (unsigned long long)(header + payload)]);
     }
     check(!NSApp.isActive, @"recording an unchanged window does not activate the application");
+    check(sp_capture_open(window.windowNumber, false, &operationError),
+        @"the window reopens for an opt-in identity recording");
+    free(operationError); operationError = NULL;
+    bool identityRecordingStarted = sp_capture_start(directory, true, &operationError);
+    check(identityRecordingStarted, [NSString stringWithFormat:@"opt-in identity recording starts (%s)",
+        operationError == NULL ? "" : operationError]);
+    free(operationError); operationError = NULL;
+    if (identityRecordingStarted) {
+        int firstIdentityFrame = sp_capture_wait();
+        check(firstIdentityFrame == 1, [NSString stringWithFormat:@"opt-in recording produces a first frame (%s)",
+            sp_capture_error()]);
+        int identityFrames = sp_capture_stop(0);
+        check(identityFrames > 0 && strlen(sp_capture_error()) == 0,
+            [NSString stringWithFormat:@"opt-in recording finalizes without error (%d, %s)",
+                identityFrames, sp_capture_error()]);
+        NSString *identityManifest = [[NSString stringWithUTF8String:directory]
+            stringByAppendingPathComponent:@"frame-identities/manifest.json"];
+        NSDictionary *identityMetadata = [NSJSONSerialization JSONObjectWithData:
+            [NSData dataWithContentsOfFile:identityManifest] options:0 error:NULL];
+        check(identityMetadata != nil && [identityMetadata[@"artifacts"] isKindOfClass:NSArray.class],
+            @"opt-in identity capture writes its separate tagged artifact manifest");
+    }
     [window close];
     [window release];
     NSError *removeError = nil;

@@ -7,8 +7,8 @@
 - F239-47-40-3: Add a strict optional `frameIdentity` boolean to
   `diagnostics.capture.start` and forward it through both host recording
   interfaces to Darwin capture start. Missing and false preserve ordinary
-  capture; null and non-booleans are rejected. Until the linked session wiring
-  is complete, true returns an explicit unsupported error. Parser Reds showed
+  capture; null and non-booleans are rejected. The opt-in path now starts a
+  capture-local identity session and tags presented source images. Parser Reds showed
   Wails accepting null as false and Tauri ignoring true; strict parser tests
   pass 3/3 and 1/1. Recording fakes verify true reaches each platform boundary
   (1/1 per host), and native `capture_test` passes 1/1. The source library
@@ -27,7 +27,20 @@
   matcher test passes 1/1, including cross-region tuple separation, eviction,
   capacity, slot reuse, and restart isolation. The canonical payload owner test
   passes 1/1, including invalid nonce rejection. Source-history eviction and
-  image presentation are not wired to this session yet.
+  image presentation are wired by F239-47-40-4-2.
+- F239-47-40-4-2: On explicit `frameIdentity:true`, tag the image-region
+  presentation with an issued QR inside a fixed top-right 192-by-192 raster
+  ROI, and write its raster and tuple metadata separately from raw source
+  artifacts. Raw BGRA and color metadata remain the source record and ordinary
+  presentation continues if tagging fails; identity finalization reports the
+  failure. Source-history eviction removes issued identities under the matcher
+  lock. Red: owner tests failed for missing tagging, tagged artifacts, and
+  small-raster finalization failure. Green: `image_region_test`,
+  `image_capture_match_test`, and `capture_test` pass 1/1 each; Wails Darwin
+  cgo and Tauri diagnostics recording targets compile and link against the
+  native library with CoreImage and Vision declared. ScreenCaptureKit frame
+  decoding remains open under F239-47-40-4-3; physical scanout and terminal
+  IME acceptance remain unverified.
 - F239-47-40-2: Correct the QR helper's ROI, detection, payload, and
   ownership boundaries. Red: the unchanged owner test failed for whole-image
   Vision detection, mutable image backing, symmetric-coordinate assumptions,

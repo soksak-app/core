@@ -1,4 +1,5 @@
 #import "../src/image_capture_match.h"
+#import "../src/capture_frame_identity.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,6 +113,141 @@ static void frameIdentitySessionChecks(void) {
     free(error); error = NULL;
     [issuedA release]; [restartNonce release]; [nonceA release];
     sp_image_capture_match_identity_session_end();
+}
+
+static void frameIdentityArtifactChecks(void) {
+    char directoryTemplate[] = "/tmp/soksak-frame-identity-artifact-XXXXXX";
+    char *directory = mkdtemp(directoryTemplate);
+    dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.artifact", DISPATCH_QUEUE_SERIAL);
+    const uint8_t regionToken[16] = { 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+    const size_t width = 256, height = 256, stride = width * 4;
+    NSMutableData *raw = [NSMutableData dataWithLength:stride * height];
+    memset(raw.mutableBytes, 0x5a, raw.length);
+    CGRect roi = CGRectMake((CGFloat)(width - 192), 0, 192, 192);
+    sp_image_capture_identity sourceIdentity = { 19, 23, 29 };
+    char *identityError = NULL;
+    check(directory != NULL, @"the tagged artifact fixture creates its capture directory");
+    sp_image_capture_match_begin(directory, writer);
+    check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
+        @"the tagged artifact fixture starts an identity session");
+    free(identityError); identityError = NULL;
+    check(sp_image_capture_match_retain(sourceIdentity, raw.bytes, width, height, stride,
+        CGRectMake(10, 20, 128, 128), 2, "DeviceRGB"), @"the raw source is retained independently");
+    NSString *regionNonce = nil, *issuedPayload = nil;
+    check(sp_image_capture_match_identity_region_nonce(regionToken, &regionNonce, &identityError)
+        && identityError == NULL, @"the artifact region receives its session nonce");
+    free(identityError); identityError = NULL;
+    check(sp_image_capture_match_identity_issue(regionToken, sourceIdentity, &issuedPayload, &identityError)
+        && identityError == NULL, @"the source tuple receives its canonical issued payload");
+    free(identityError); identityError = NULL;
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGImageRef taggedImage = NULL;
+    NSData *taggedPixels = nil;
+    NSString *encodedPayload = nil, *encodeError = nil;
+    BOOL encoded = sp_capture_frame_identity_encode(raw.bytes, width, height, stride, colorSpace, roi,
+        regionNonce, (SPCaptureFrameIdentity){ sourceIdentity.generation, sourceIdentity.raster,
+            (uint64_t)sourceIdentity.sequence }, &taggedImage, &taggedPixels, &encodedPayload, &encodeError);
+    check(encoded && taggedImage != NULL && taggedPixels.length == raw.length
+        && [encodedPayload isEqualToString:issuedPayload], @"the tagged raster carries the exact issued identity");
+    check(sp_image_capture_match_identity_record(regionToken, sourceIdentity, roi, taggedPixels.bytes,
+        width, height, stride, "DeviceRGB", &identityError) && identityError == NULL,
+        @"the tagged raster and region metadata are accepted for the separate artifact");
+    free(identityError); identityError = NULL;
+    check(sp_image_capture_match_write_manifest(directory),
+        @"raw source and tagged identity manifests finalize successfully");
+    sp_image_capture_match_end();
+
+    NSString *rawPath = [[NSString stringWithUTF8String:directory]
+        stringByAppendingPathComponent:@"sources/19-23-29.bgra"];
+    NSDictionary *rawManifest = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:
+        [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"sources/manifest.json"]]
+        options:0 error:NULL];
+    NSDictionary *identityManifest = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:
+        [[NSString stringWithUTF8String:directory] stringByAppendingPathComponent:@"frame-identities/manifest.json"]]
+        options:0 error:NULL];
+    NSArray *taggedRecords = identityManifest[@"artifacts"];
+    NSDictionary *taggedRecord = taggedRecords.count == 1 ? taggedRecords[0] : nil;
+    NSString *taggedPath = taggedRecord ? [[NSString stringWithUTF8String:directory]
+        stringByAppendingPathComponent:[@"frame-identities" stringByAppendingPathComponent:taggedRecord[@"file"]]] : nil;
+    NSData *rawArtifact = [NSData dataWithContentsOfFile:rawPath];
+    NSData *taggedArtifact = taggedPath ? [NSData dataWithContentsOfFile:taggedPath] : nil;
+    check(rawArtifact != nil && [rawArtifact isEqualToData:raw],
+        @"the raw source artifact keeps the original untagged BGRA bytes");
+    check(taggedArtifact != nil && [taggedArtifact isEqualToData:taggedPixels],
+        @"the separate tagged artifact keeps the immutable instrumented BGRA bytes");
+    check([rawManifest[@"artifacts"] count] == 1 && taggedRecord != nil
+        && [taggedRecord[@"regionToken"] isEqualToString:@"09080706050403020100000000000000"]
+        && [taggedRecord[@"nonce"] isEqualToString:regionNonce]
+        && [taggedRecord[@"payload"] isEqualToString:issuedPayload]
+        && [taggedRecord[@"generation"] isEqualToString:@"19"]
+        && [taggedRecord[@"raster"] isEqualToString:@"23"] && [taggedRecord[@"sequence"] intValue] == 29
+        && [taggedRecord[@"roi"][@"x"] intValue] == (int)(width - 192)
+        && [taggedRecord[@"roi"][@"y"] intValue] == 0,
+        @"tagged metadata binds region token, nonce, payload, source tuple, and top-left ROI");
+    if (taggedArtifact) {
+        BOOL outsideROIMatches = YES;
+        for (size_t y = 0; y < height; y++) for (size_t x = 0; x < width; x++) {
+            if (x >= (size_t)roi.origin.x && x < (size_t)CGRectGetMaxX(roi)
+                && y < (size_t)CGRectGetMaxY(roi)) continue;
+            const uint8_t *sourcePixel = (const uint8_t *)raw.bytes + y * stride + x * 4;
+            const uint8_t *taggedPixel = (const uint8_t *)taggedArtifact.bytes + y * stride + x * 4;
+            if (memcmp(sourcePixel, taggedPixel, 4) != 0) outsideROIMatches = NO;
+        }
+        check(outsideROIMatches, @"tagged artifact pixels outside the reserved ROI equal the raw artifact");
+    }
+    [regionNonce release]; [issuedPayload release]; [encodedPayload release]; [encodeError release]; [taggedPixels release];
+    if (taggedImage) CGImageRelease(taggedImage);
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    dispatch_release(writer);
+    NSError *removeError = nil;
+    check([[NSFileManager defaultManager] removeItemAtPath:[NSString stringWithUTF8String:directory]
+        error:&removeError], [NSString stringWithFormat:@"the tagged artifact fixture is removed (%@)", removeError]);
+}
+
+static void frameIdentityRetentionEvictionChecks(void) {
+    const uint8_t regionToken[16] = { 3, 1, 4, 1, 5, 9 };
+    const uint8_t sourcePixel[4] = { 0, 0, 0, 255 };
+    char *identityError = NULL;
+    sp_image_capture_match_begin(NULL, NULL);
+    check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
+        @"the source retention fixture starts an identity session");
+    free(identityError); identityError = NULL;
+    NSString *firstPayload = nil;
+    BOOL accepted = YES;
+    for (int sequence = 1; sequence <= 512; sequence++) {
+        sp_image_capture_identity identity = { 31, 37, sequence };
+        NSString *payload = nil;
+        if (!sp_image_capture_match_retain(identity, sourcePixel, 1, 1, 4,
+            CGRectMake(0, 0, 1, 1), 1, "DeviceRGB")
+            || !sp_image_capture_match_identity_issue(regionToken, identity, &payload, &identityError)) {
+            accepted = NO;
+            [payload release];
+            free(identityError); identityError = NULL;
+            break;
+        }
+        if (sequence == 1) firstPayload = [payload retain];
+        [payload release];
+        free(identityError); identityError = NULL;
+    }
+    check(accepted, @"the matcher retains and issues the first 512 source identities");
+    sp_image_capture_identity last = { 31, 37, 513 };
+    check(sp_image_capture_match_retain(last, sourcePixel, 1, 1, 4,
+        CGRectMake(0, 0, 1, 1), 1, "DeviceRGB"),
+        @"a new raw source evicts the oldest retained identity under the existing matcher bound");
+    NSString *lastPayload = nil;
+    check(sp_image_capture_match_identity_issue(regionToken, last, &lastPayload, &identityError)
+        && identityError == NULL, @"source-history eviction releases an identity slot for the new source");
+    free(identityError); identityError = NULL;
+    NSSet<NSString *> *allowlist = nil;
+    check(sp_image_capture_match_identity_copy_payloads(regionToken, &allowlist, &identityError)
+        && identityError == NULL && allowlist.count == 512 && ![allowlist containsObject:firstPayload]
+        && [allowlist containsObject:lastPayload],
+        @"the evicted source payload leaves the decoder allowlist while the new one enters");
+    free(identityError);
+    [firstPayload release]; [lastPayload release]; [allowlist release];
+    sp_image_capture_match_identity_session_end();
+    sp_image_capture_match_end();
 }
 
 int main(void) { @autoreleasepool {
@@ -244,6 +380,8 @@ int main(void) { @autoreleasepool {
     sp_image_capture_match_begin(NULL, NULL);
     frameIdentitySessionChecks();
     sp_image_capture_match_end();
+    frameIdentityArtifactChecks();
+    frameIdentityRetentionEvictionChecks();
     fprintf(stderr, "%s: native image capture identity matching\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;
 } }

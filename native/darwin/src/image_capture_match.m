@@ -34,6 +34,30 @@ static const size_t kImageCaptureArtifactPendingLimit = 64 * 1024 * 1024;
 }
 @end
 
+@interface SPImageCaptureIdentityArtifact : NSObject
+@property sp_image_capture_identity identity;
+@property CGRect roi;
+@property size_t width;
+@property size_t height;
+@property size_t stride;
+@property(retain) NSData *pixels;
+@property(copy) NSString *regionToken;
+@property(copy) NSString *nonce;
+@property(copy) NSString *payload;
+@property(copy) NSString *colorSpace;
+@end
+
+@implementation SPImageCaptureIdentityArtifact
+- (void)dealloc {
+    [_pixels release];
+    [_regionToken release];
+    [_nonce release];
+    [_payload release];
+    [_colorSpace release];
+    [super dealloc];
+}
+@end
+
 static NSCondition *historyLock;
 static NSMutableArray<SPImageCaptureSource *> *history;
 static size_t historyBytes;
@@ -54,22 +78,51 @@ static NSString *artifactDirectory;
 static dispatch_queue_t artifactWriterQueue;
 static NSUInteger artifactComparisons;
 static bool identitySessionActive;
+static bool identitySessionStarted;
+static atomic_bool identitySessionEnabled;
 static NSMutableData *identityCaptureNonce;
 static NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSString *> *> *identityIssuedPayloads;
+static NSMutableDictionary<NSString *, NSMutableSet<NSString *> *> *identityRegionsBySource;
+static NSMutableDictionary<NSString *, SPImageCaptureIdentityArtifact *> *pendingIdentityArtifacts;
+static NSMutableDictionary<NSString *, NSString *> *identityArtifactSignatures;
+static NSMutableArray<NSDictionary *> *identityArtifactRecords;
+static NSString *identitySessionFailure;
 static NSUInteger identityIssuedCount;
+static size_t identityArtifactBytes;
+static NSUInteger identityArtifactCount;
+static size_t identityArtifactDrops;
+static size_t identityArtifactWriteFailures;
+static size_t identityArtifactCleanupFailures;
+static NSMutableArray<NSDictionary *> *identityArtifactCleanupErrors;
 
 static void recordArtifactDrop(NSString *reason);
 static NSString *artifactName(sp_image_capture_identity identity);
 static NSDictionary *artifactRecord(SPImageCaptureSource *source, NSString *fileName, NSString *digest);
 static void writeArtifact(SPImageCaptureSource *source, NSString *directory, NSString *identityKey);
+static void writeIdentityArtifact(SPImageCaptureIdentityArtifact *artifact, NSString *directory, NSString *artifactKey);
+static void identityEvictSourceLocked(sp_image_capture_identity identity);
 
 static void clearIdentitySessionLocked(void) {
     if (identityCaptureNonce.length) memset(identityCaptureNonce.mutableBytes, 0, identityCaptureNonce.length);
     [identityCaptureNonce release];
     identityCaptureNonce = nil;
     [identityIssuedPayloads removeAllObjects];
+    [identityRegionsBySource removeAllObjects];
+    [pendingIdentityArtifacts removeAllObjects];
+    [identityArtifactSignatures removeAllObjects];
+    [identityArtifactRecords removeAllObjects];
+    [identitySessionFailure release];
+    identitySessionFailure = nil;
+    identitySessionStarted = false;
     identityIssuedCount = 0;
+    identityArtifactBytes = 0;
+    identityArtifactCount = 0;
+    identityArtifactDrops = 0;
+    identityArtifactWriteFailures = 0;
+    identityArtifactCleanupFailures = 0;
+    [identityArtifactCleanupErrors removeAllObjects];
     identitySessionActive = false;
+    atomic_store(&identitySessionEnabled, false);
 }
 
 static void initializeHistory(void) {
@@ -83,6 +136,11 @@ static void initializeHistory(void) {
         pendingArtifactSources = [NSMutableDictionary new];
         artifactIdentityRecords = [NSMutableDictionary new];
         identityIssuedPayloads = [NSMutableDictionary new];
+        identityRegionsBySource = [NSMutableDictionary new];
+        pendingIdentityArtifacts = [NSMutableDictionary new];
+        identityArtifactSignatures = [NSMutableDictionary new];
+        identityArtifactRecords = [NSMutableArray new];
+        identityArtifactCleanupErrors = [NSMutableArray new];
     });
 }
 
@@ -286,6 +344,7 @@ bool sp_image_capture_match_retain(sp_image_capture_identity identity, const uin
     while ((historyBytes + byteCount > kImageCaptureHistoryLimit || history.count >= kImageCaptureHistoryCountLimit)
         && history.count > 0) {
         SPImageCaptureSource *oldest = history.firstObject;
+        identityEvictSourceLocked(oldest.identity);
         historyBytes -= oldest.pixels.length;
         [history removeObjectAtIndex:0];
         historyDrops++;
@@ -391,6 +450,73 @@ static void writeArtifact(SPImageCaptureSource *source, NSString *directory, NSS
     [historyLock unlock];
 }
 
+static NSDictionary *identityArtifactManifestRecord(SPImageCaptureIdentityArtifact *artifact,
+    NSString *fileName, NSString *digest) {
+    return @{
+        @"generation": [NSString stringWithFormat:@"%llu", (unsigned long long)artifact.identity.generation],
+        @"raster": [NSString stringWithFormat:@"%llu", (unsigned long long)artifact.identity.raster],
+        @"sequence": @(artifact.identity.sequence), @"regionToken": artifact.regionToken,
+        @"nonce": artifact.nonce, @"payload": artifact.payload,
+        @"roi": @{ @"x": @(artifact.roi.origin.x), @"y": @(artifact.roi.origin.y),
+            @"width": @(artifact.roi.size.width), @"height": @(artifact.roi.size.height) },
+        @"file": fileName, @"width": @(artifact.width), @"height": @(artifact.height),
+        @"stride": @(artifact.stride), @"pixelFormat": @"BGRA8", @"alpha": @"premultiplied-first",
+        @"colorSpace": artifact.colorSpace ?: (id)NSNull.null,
+        @"byteCount": @(artifact.pixels.length), @"sha256": digest,
+    };
+}
+
+static void writeIdentityArtifact(SPImageCaptureIdentityArtifact *artifact, NSString *directory, NSString *artifactKey) {
+    NSString *identityDirectory = [directory stringByAppendingPathComponent:@"frame-identities"];
+    NSFileManager *manager = NSFileManager.defaultManager;
+    NSError *error = nil;
+    NSString *fileName = [artifactKey stringByAppendingString:@".bgra"];
+    NSString *path = [identityDirectory stringByAppendingPathComponent:fileName];
+    NSString *partial = [path stringByAppendingString:@".partial"];
+    NSData *pixels = artifact.pixels;
+    BOOL created = [manager createDirectoryAtPath:identityDirectory withIntermediateDirectories:YES attributes:nil error:&error];
+    BOOL written = created && [pixels writeToFile:partial options:NSDataWritingAtomic error:&error]
+        && [manager moveItemAtPath:partial toPath:path error:&error];
+    NSError *cleanupError = nil;
+    BOOL partialExists = [manager fileExistsAtPath:partial];
+    BOOL cleanupSucceeded = !partialExists || [manager removeItemAtPath:partial error:&cleanupError];
+    NSString *digestHex = nil;
+    if (written) {
+        uint8_t digest[CC_SHA256_DIGEST_LENGTH];
+        CC_SHA256(pixels.bytes, (CC_LONG)pixels.length, digest);
+        NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+        for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [hex appendFormat:@"%02x", digest[index]];
+        digestHex = hex;
+    }
+    NSDictionary *record = written ? identityArtifactManifestRecord(artifact, fileName, digestHex) : nil;
+
+    [historyLock lock];
+    artifactPendingBytes -= pixels.length;
+    [pendingIdentityArtifacts removeObjectForKey:artifactKey];
+    if (written) {
+        identityArtifactBytes += pixels.length;
+        [identityArtifactRecords addObject:record];
+    } else {
+        identityArtifactCount--;
+        identityArtifactWriteFailures++;
+        identityArtifactDrops++;
+        if (!identitySessionFailure) {
+            NSString *reason = error.localizedDescription ?: @"no file error was provided";
+            identitySessionFailure = [[NSString alloc] initWithFormat:@"frame identity artifact write failed: %@", reason];
+        }
+        atomic_store(&identitySessionEnabled, false);
+        if (!cleanupSucceeded) {
+            identityArtifactCleanupFailures++;
+            if (identityArtifactCleanupErrors.count < 32) {
+                [identityArtifactCleanupErrors addObject:@{ @"path": partial,
+                    @"error": cleanupError.localizedDescription ?: @"unknown cleanup error" }];
+            }
+        }
+    }
+    [historyLock broadcast];
+    [historyLock unlock];
+}
+
 bool sp_image_capture_match_write_manifest(const char *capture_directory) {
     initializeHistory();
     if (!capture_directory) return false;
@@ -426,6 +552,14 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
         @"cleanupErrorsOmitted": @(artifactCleanupFailures - artifactCleanupErrors.count),
     };
     BOOL noWriteFailures = artifactWriteFailures == 0;
+    BOOL identityStarted = identitySessionStarted;
+    NSArray<NSDictionary *> *identityRecords = [identityArtifactRecords copy];
+    NSArray<NSDictionary *> *identityCleanupErrors = [identityArtifactCleanupErrors copy];
+    NSString *identityFailure = [identitySessionFailure copy];
+    size_t identityBytes = identityArtifactBytes;
+    size_t identityDrops = identityArtifactDrops;
+    size_t identityWriteFailures = identityArtifactWriteFailures;
+    size_t identityCleanupFailures = identityArtifactCleanupFailures;
     [historyLock unlock];
     NSString *sourceDirectory = [directory stringByAppendingPathComponent:@"sources"];
     NSError *error = nil;
@@ -440,7 +574,33 @@ bool sp_image_capture_match_write_manifest(const char *capture_directory) {
     [manifest[@"dropReasons"] release];
     [manifest[@"cleanupErrors"] release];
     NSString *path = [sourceDirectory stringByAppendingPathComponent:@"manifest.json"];
-    return data && [data writeToFile:path options:NSDataWritingAtomic error:&error] && noWriteFailures;
+    BOOL sourceManifestWritten = data && [data writeToFile:path options:NSDataWritingAtomic error:&error];
+    BOOL identityManifestWritten = YES;
+    if (identityStarted) {
+        NSDictionary *identityManifest = @{
+            @"format": @1, @"pixelFormat": @"BGRA8",
+            @"limits": @{ @"issuedIdentities": @(kImageCaptureHistoryCountLimit),
+                @"pendingArtifactBytes": @(kImageCaptureArtifactPendingLimit) },
+            @"artifactBytes": @(identityBytes), @"artifacts": identityRecords,
+            @"droppedArtifacts": @(identityDrops), @"writeFailures": @(identityWriteFailures),
+            @"cleanupFailures": @(identityCleanupFailures), @"cleanupErrors": identityCleanupErrors,
+            @"cleanupErrorsOmitted": @(identityCleanupFailures - identityCleanupErrors.count),
+            @"identityFailure": identityFailure ?: (id)NSNull.null,
+        };
+        NSString *identityDirectory = [directory stringByAppendingPathComponent:@"frame-identities"];
+        NSError *identityError = nil;
+        identityManifestWritten = [NSFileManager.defaultManager createDirectoryAtPath:identityDirectory
+            withIntermediateDirectories:YES attributes:nil error:&identityError];
+        NSData *identityData = identityManifestWritten
+            ? [NSJSONSerialization dataWithJSONObject:identityManifest options:NSJSONWritingPrettyPrinted error:&identityError]
+            : nil;
+        NSString *identityManifestPath = [identityDirectory stringByAppendingPathComponent:@"manifest.json"];
+        identityManifestWritten = identityData
+            && [identityData writeToFile:identityManifestPath options:NSDataWritingAtomic error:&identityError];
+    }
+    [identityRecords release]; [identityCleanupErrors release]; [identityFailure release];
+    return sourceManifestWritten && noWriteFailures && identityManifestWritten
+        && identityFailure == nil && identityWriteFailures == 0;
 }
 
 static BOOL equalPixels(const SPImageCaptureSource *source, const uint8_t *pixels,
@@ -634,6 +794,21 @@ static NSString *identitySourceKey(sp_image_capture_identity identity) {
         (unsigned long long)identity.raster, identity.sequence];
 }
 
+static void identityEvictSourceLocked(sp_image_capture_identity identity) {
+    NSString *sourceKey = identitySourceKey(identity);
+    NSSet<NSString *> *regions = [identityRegionsBySource[sourceKey] copy];
+    for (NSString *regionKey in regions) {
+        NSMutableDictionary *issued = identityIssuedPayloads[regionKey];
+        if (issued[sourceKey]) {
+            [issued removeObjectForKey:sourceKey];
+            identityIssuedCount--;
+            if (!issued.count) [identityIssuedPayloads removeObjectForKey:regionKey];
+        }
+    }
+    [regions release];
+    [identityRegionsBySource removeObjectForKey:sourceKey];
+}
+
 static NSString *identityNonceLocked(const uint8_t token[16]) {
     uint8_t input[48];
     memcpy(input, identityCaptureNonce.bytes, 32);
@@ -666,6 +841,8 @@ bool sp_image_capture_match_identity_session_begin(char **error) {
     arc4random_buf(nonce.mutableBytes, nonce.length);
     identityCaptureNonce = nonce;
     identitySessionActive = true;
+    identitySessionStarted = true;
+    atomic_store(&identitySessionEnabled, true);
     [historyLock unlock];
     return true;
 }
@@ -676,9 +853,12 @@ bool sp_image_capture_match_identity_region_nonce(const uint8_t region_token[16]
     if (!nonce || !error || !region_token) return identityFailure(error, "frame identity region token or output is invalid");
     initializeHistory();
     [historyLock lock];
-    if (!identitySessionActive) {
+    if (!identitySessionActive || identitySessionFailure) {
+        NSString *reason = [identitySessionFailure copy];
         [historyLock unlock];
-        return identityFailure(error, "frame identity session is not active");
+        bool failed = identityFailure(error, reason.UTF8String ?: "frame identity session is not active");
+        [reason release];
+        return failed;
     }
     *nonce = [identityNonceLocked(region_token) copy];
     [historyLock unlock];
@@ -696,9 +876,12 @@ bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_im
     initializeHistory();
     NSString *regionKey = identityRegionKey(region_token);
     [historyLock lock];
-    if (!identitySessionActive) {
+    if (!identitySessionActive || identitySessionFailure) {
+        NSString *reason = [identitySessionFailure copy];
         [historyLock unlock];
-        return identityFailure(error, "frame identity session is not active");
+        bool failed = identityFailure(error, reason.UTF8String ?: "frame identity session is not active");
+        [reason release];
+        return failed;
     }
     NSMutableDictionary *issued = identityIssuedPayloads[regionKey];
     NSString *existing = issued[sourceKey];
@@ -735,6 +918,13 @@ bool sp_image_capture_match_identity_issue(const uint8_t region_token[16], sp_im
     }
     issued[sourceKey] = created;
     identityIssuedCount++;
+    NSMutableSet<NSString *> *regions = identityRegionsBySource[sourceKey];
+    if (!regions) {
+        regions = [NSMutableSet new];
+        identityRegionsBySource[sourceKey] = regions;
+        [regions release];
+    }
+    [regions addObject:regionKey];
     *payload = returnedPayload;
     [created release];
     [historyLock unlock];
@@ -760,6 +950,9 @@ bool sp_image_capture_match_identity_evict(const uint8_t region_token[16], sp_im
         identityIssuedCount--;
         if (!issued.count) [identityIssuedPayloads removeObjectForKey:regionKey];
     }
+    NSMutableSet<NSString *> *regions = identityRegionsBySource[sourceKey];
+    [regions removeObject:regionKey];
+    if (!regions.count) [identityRegionsBySource removeObjectForKey:sourceKey];
     [historyLock unlock];
     return true;
 }
@@ -772,9 +965,12 @@ bool sp_image_capture_match_identity_copy_payloads(const uint8_t region_token[16
     initializeHistory();
     NSString *regionKey = identityRegionKey(region_token);
     [historyLock lock];
-    if (!identitySessionActive) {
+    if (!identitySessionActive || identitySessionFailure) {
+        NSString *reason = [identitySessionFailure copy];
         [historyLock unlock];
-        return identityFailure(error, "frame identity session is not active");
+        bool failed = identityFailure(error, reason.UTF8String ?: "frame identity session is not active");
+        [reason release];
+        return failed;
     }
     NSDictionary *issued = identityIssuedPayloads[regionKey];
     *payloads = [[NSSet alloc] initWithArray:issued.allValues ?: @[]];
@@ -788,4 +984,164 @@ void sp_image_capture_match_identity_session_end(void) {
     [historyLock lock];
     clearIdentitySessionLocked();
     [historyLock unlock];
+}
+
+bool sp_image_capture_match_identity_session_active(void) {
+    initializeHistory();
+    return atomic_load(&identitySessionEnabled) && atomic_load(&historyEnabled);
+}
+
+bool sp_image_capture_match_identity_session_fail(const char *reason, char **error) {
+    if (error) *error = NULL;
+    if (!error || !reason || !reason[0]) return identityFailure(error, "frame identity failure reason or error output is invalid");
+    NSString *message = [NSString stringWithUTF8String:reason];
+    if (!message) return identityFailure(error, "frame identity failure reason is not valid UTF-8");
+    initializeHistory();
+    [historyLock lock];
+    if (!identitySessionActive) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity session is not active");
+    }
+    if (!identitySessionFailure) identitySessionFailure = [message copy];
+    atomic_store(&identitySessionEnabled, false);
+    [historyLock unlock];
+    return true;
+}
+
+char *sp_image_capture_match_identity_session_error_copy(void) {
+    initializeHistory();
+    [historyLock lock];
+    const char *message = identitySessionFailure.UTF8String;
+    char *copy = message ? strdup(message) : NULL;
+    [historyLock unlock];
+    return copy;
+}
+
+static bool validIdentityRaster(const uint8_t *pixels, size_t width, size_t height, size_t stride) {
+    return pixels && width && height && width <= SIZE_MAX / 4 && stride >= width * 4
+        && height <= SIZE_MAX / stride;
+}
+
+static bool validIdentityROI(CGRect roi, size_t width, size_t height) {
+    return isfinite(roi.origin.x) && isfinite(roi.origin.y) && isfinite(roi.size.width)
+        && isfinite(roi.size.height) && roi.origin.x >= 0 && roi.origin.y >= 0
+        && roi.size.width > 0 && roi.size.height > 0 && CGRectGetMaxX(roi) <= width
+        && CGRectGetMaxY(roi) <= height && floor(roi.origin.x) == roi.origin.x
+        && floor(roi.origin.y) == roi.origin.y && floor(roi.size.width) == roi.size.width
+        && floor(roi.size.height) == roi.size.height;
+}
+
+static NSString *identityArtifactKey(NSString *regionKey, NSString *sourceKey) {
+    return [NSString stringWithFormat:@"%@-%@", regionKey, sourceKey];
+}
+
+bool sp_image_capture_match_identity_record(const uint8_t region_token[16], sp_image_capture_identity identity,
+    CGRect roi, const uint8_t *tagged_pixels, size_t width, size_t height, size_t stride,
+    const char *color_space, char **error) {
+    if (error) *error = NULL;
+    if (!error || !region_token || !validIdentityRaster(tagged_pixels, width, height, stride)
+        || !validIdentityROI(roi, width, height)) {
+        return identityFailure(error, "frame identity artifact arguments are invalid");
+    }
+    NSString *sourceKey = identitySourceKey(identity);
+    if (!sourceKey) return identityFailure(error, "frame identity source identity is invalid");
+    NSString *regionKey = identityRegionKey(region_token);
+    NSString *colorSpace = color_space ? [NSString stringWithUTF8String:color_space] : nil;
+    size_t byteCount = stride * height;
+    if (byteCount > UINT32_MAX) return identityFailure(error, "frame identity artifact exceeds the digest input bound");
+    uint8_t digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(tagged_pixels, (CC_LONG)byteCount, digest);
+    NSMutableString *digestHex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [digestHex appendFormat:@"%02x", digest[index]];
+    NSString *signature = [NSString stringWithFormat:@"%zu:%zu:%zu:%.0f:%.0f:%.0f:%.0f:%@:%@",
+        width, height, stride, roi.origin.x, roi.origin.y, roi.size.width, roi.size.height,
+        colorSpace ?: @"<null>", digestHex];
+    NSString *key = identityArtifactKey(regionKey, sourceKey);
+
+    initializeHistory();
+    [historyLock lock];
+    if (!identitySessionActive || identitySessionFailure) {
+        NSString *reason = [identitySessionFailure copy];
+        [historyLock unlock];
+        bool failed = identityFailure(error, reason.UTF8String ?: "frame identity session is not active");
+        [reason release];
+        return failed;
+    }
+    NSString *issuedPayload = identityIssuedPayloads[regionKey][sourceKey];
+    if (!issuedPayload) {
+        [historyLock unlock];
+        return identityFailure(error, "frame identity artifact has no issued payload");
+    }
+    NSString *existingSignature = identityArtifactSignatures[key];
+    if (existingSignature) {
+        bool sameArtifact = [existingSignature isEqualToString:signature];
+        if (!sameArtifact && !identitySessionFailure)
+            identitySessionFailure = [@"frame identity artifact conflicts with a repeated source tuple" copy];
+        if (!sameArtifact) atomic_store(&identitySessionEnabled, false);
+        [historyLock unlock];
+        if (!sameArtifact) return identityFailure(error, "frame identity artifact conflicts with a repeated source tuple");
+        return true;
+    }
+    if (identityArtifactCount >= kImageCaptureHistoryCountLimit || byteCount > kImageCaptureArtifactPendingLimit
+        || artifactPendingBytes > kImageCaptureArtifactPendingLimit - byteCount) {
+        identityArtifactDrops++;
+        identitySessionFailure = [@"frame identity artifact pending capacity was exceeded" copy];
+        atomic_store(&identitySessionEnabled, false);
+        [historyLock unlock];
+        return identityFailure(error, "frame identity artifact pending capacity was exceeded");
+    }
+    NSString *nonce = identityNonceLocked(region_token);
+    NSString *payload = [issuedPayload copy];
+    NSString *nonceCopy = [nonce copy];
+    identityArtifactSignatures[key] = signature;
+    identityArtifactCount++;
+    if (!artifactWriterQueue || !artifactDirectory) {
+        CGRect roiCopy = roi;
+        NSDictionary *record = @{ @"generation": @(identity.generation), @"raster": @(identity.raster),
+            @"sequence": @(identity.sequence), @"regionToken": regionKey, @"nonce": nonceCopy,
+            @"payload": payload, @"roi": @{ @"x": @(roiCopy.origin.x), @"y": @(roiCopy.origin.y),
+                @"width": @(roiCopy.size.width), @"height": @(roiCopy.size.height) },
+            @"width": @(width), @"height": @(height), @"stride": @(stride),
+            @"colorSpace": colorSpace ?: (id)NSNull.null, @"byteCount": @(byteCount),
+            @"sha256": digestHex, @"file": (id)NSNull.null };
+        [identityArtifactRecords addObject:record];
+        [payload release]; [nonceCopy release];
+        [historyLock unlock];
+        return true;
+    }
+    NSData *pixels = [[NSData alloc] initWithBytes:tagged_pixels length:byteCount];
+    SPImageCaptureIdentityArtifact *artifact = [SPImageCaptureIdentityArtifact new];
+    artifact.identity = identity;
+    artifact.roi = roi;
+    artifact.width = width;
+    artifact.height = height;
+    artifact.stride = stride;
+    artifact.pixels = pixels;
+    artifact.regionToken = regionKey;
+    artifact.nonce = nonceCopy;
+    artifact.payload = payload;
+    artifact.colorSpace = colorSpace;
+    [pixels release]; [nonceCopy release]; [payload release];
+    if (!artifact.pixels) {
+        [artifact release];
+        [identityArtifactSignatures removeObjectForKey:key];
+        identityArtifactCount--;
+        identitySessionFailure = [@"frame identity artifact raster copy failed" copy];
+        atomic_store(&identitySessionEnabled, false);
+        [historyLock unlock];
+        return identityFailure(error, "frame identity artifact raster copy failed");
+    }
+    pendingIdentityArtifacts[key] = artifact;
+    artifactPendingBytes += byteCount;
+    NSString *directory = [artifactDirectory copy];
+    dispatch_queue_t queue = artifactWriterQueue;
+    [artifact retain];
+    [artifact release];
+    dispatch_async(queue, ^{
+        writeIdentityArtifact(artifact, directory, key);
+        [artifact release];
+        [directory release];
+    });
+    [historyLock unlock];
+    return true;
 }

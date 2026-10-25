@@ -5,6 +5,8 @@
 #include <unistd.h>
 #import "event_ring.h"
 #import "image_region.h"
+#import "image_capture_match.h"
+#import "capture_frame_identity.h"
 #import "input_inject.h"
 #import "input_press_context.h"
 #import "support/records.h"
@@ -271,6 +273,117 @@ int main(int argc, char **argv) { @autoreleasepool {
 
         sp_region_close(region1);
         CFRelease(testSurface1);
+    }
+
+    // TEST 1A: opt-in image identity tagging keeps the raw source and tags only the reserved corner.
+    {
+        void *identityRegion = sp_region_create(surface, "identity", testEvent, NULL);
+        sp_region_place(identityRegion, 0, 0, 0, 0, true);
+        double identityRaster[3] = {0};
+        check(sp_region_raster(identityRegion, identityRaster), @"TEST 1A: identity region reports its raster");
+        unsigned char identityToken[16];
+        IOSurfaceRef identitySurface = createColoredGlobalSurface((size_t)identityRaster[0],
+            (size_t)identityRaster[1], identityToken);
+        CGRect tagROI = CGRectMake(identityRaster[0] - 192, 0, 192, 192);
+        CGRect measuredGlyphROI = CGRectMake(identityRaster[0] / 2 - 16, identityRaster[1] / 2 - 16, 32, 32);
+        check(identitySurface != NULL && !CGRectIntersectsRect(tagROI, measuredGlyphROI),
+            @"TEST 1A: the reserved top-right tag ROI is outside the measured glyph ROI");
+        BOOL initialPresented = identitySurface && sp_region_present(identityRegion, IOSurfaceGetID(identitySurface),
+            identityToken, identityRaster[0], identityRaster[1], identityRaster[2], 91, 10, 1);
+        check(initialPresented, @"TEST 1A: the original source snapshot is presented before tagging");
+        CALayer *identityLayer = (CALayer *)((NSView *)identityRegion).layer.sublayers.firstObject;
+        CGImageRef rawSnapshot = identityLayer ? (CGImageRef)identityLayer.contents : NULL;
+        if (rawSnapshot) CGImageRetain(rawSnapshot);
+        sp_image_capture_match_begin(NULL, NULL);
+        char *identityError = NULL;
+        check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
+            @"TEST 1A: the fixture starts an opt-in identity session");
+        free(identityError); identityError = NULL;
+        BOOL taggedPresented = identitySurface && sp_region_present(identityRegion, IOSurfaceGetID(identitySurface),
+            identityToken, identityRaster[0], identityRaster[1], identityRaster[2], 91, 10, 1);
+        check(taggedPresented, @"TEST 1A: the tagged snapshot keeps the native presentation call successful");
+        CGImageRef taggedSnapshot = identityLayer ? (CGImageRef)identityLayer.contents : NULL;
+        check(rawSnapshot != NULL && taggedSnapshot != NULL && rawSnapshot != taggedSnapshot,
+            @"TEST 1A: the layer receives a tagged image separate from the raw source snapshot");
+        NSSet<NSString *> *issuedPayloads = nil;
+        bool copiedIssued = sp_image_capture_match_identity_copy_payloads(identityToken, &issuedPayloads, &identityError);
+        check(copiedIssued && identityError == NULL && issuedPayloads.count == 1,
+            @"TEST 1A: the presented region exposes exactly its issued decode payload");
+        free(identityError); identityError = NULL;
+        SPCaptureFrameIdentity taggedIdentity = {0};
+        NSString *unknownReason = nil, *decodeError = nil;
+        bool decodedTag = taggedSnapshot && sp_capture_frame_identity_decode(taggedSnapshot, tagROI, issuedPayloads,
+            &taggedIdentity, &unknownReason, &decodeError);
+        check(decodedTag && taggedIdentity.generation == 91 && taggedIdentity.raster == 10
+            && taggedIdentity.sequence == 1 && unknownReason == nil && decodeError == nil,
+            @"TEST 1A: Vision decodes the exact identity embedded in the presented layer inside its reserved ROI");
+        [issuedPayloads release]; [unknownReason release]; [decodeError release];
+        if (rawSnapshot && taggedSnapshot) {
+            CFDataRef rawBytes = CGDataProviderCopyData(CGImageGetDataProvider(rawSnapshot));
+            CFDataRef taggedBytes = CGDataProviderCopyData(CGImageGetDataProvider(taggedSnapshot));
+            size_t rawStride = CGImageGetBytesPerRow(rawSnapshot), taggedStride = CGImageGetBytesPerRow(taggedSnapshot);
+            BOOL unchangedOutsideROI = rawBytes && taggedBytes;
+            for (size_t y = 0; unchangedOutsideROI && y < CGImageGetHeight(rawSnapshot); y++) {
+                for (size_t x = 0; x < CGImageGetWidth(rawSnapshot); x++) {
+                    if (x >= (size_t)tagROI.origin.x && x < (size_t)CGRectGetMaxX(tagROI)
+                        && y < (size_t)CGRectGetMaxY(tagROI)) continue;
+                    if (memcmp((const uint8_t *)CFDataGetBytePtr(rawBytes) + y * rawStride + x * 4,
+                        (const uint8_t *)CFDataGetBytePtr(taggedBytes) + y * taggedStride + x * 4, 4) != 0) {
+                        unchangedOutsideROI = NO; break;
+                    }
+                }
+            }
+            check(unchangedOutsideROI, @"TEST 1A: the tagged image preserves every source pixel outside the reserved ROI");
+            if (rawBytes) CFRelease(rawBytes);
+            if (taggedBytes) CFRelease(taggedBytes);
+        }
+        if (rawSnapshot) CGImageRelease(rawSnapshot);
+        sp_image_capture_match_identity_session_end();
+        sp_image_capture_match_end();
+        sp_region_close(identityRegion);
+        if (identitySurface) CFRelease(identitySurface);
+
+        void *smallIdentityRegion = sp_region_create(surface, "small-identity", testEvent, NULL);
+        sp_region_place(smallIdentityRegion, 0, 0, 0, 330, true);
+        double smallRaster[3] = {0};
+        check(sp_region_raster(smallIdentityRegion, smallRaster) && smallRaster[1] < 192,
+            @"TEST 1A: the undersized identity raster cannot contain the reserved ROI");
+        unsigned char smallToken[16];
+        IOSurfaceRef smallSurface = createColoredGlobalSurface((size_t)smallRaster[0],
+            (size_t)smallRaster[1], smallToken);
+        char directoryTemplate[] = "/tmp/soksak-frame-identity-failure-XXXXXX";
+        char *identityDirectory = mkdtemp(directoryTemplate);
+        dispatch_queue_t identityWriter = dispatch_queue_create("test.frame-identity.writer", DISPATCH_QUEUE_SERIAL);
+        check(identityDirectory != NULL, @"TEST 1A: the failed-tag artifact directory is created");
+        sp_image_capture_match_begin(identityDirectory, identityWriter);
+        identityError = NULL;
+        check(sp_image_capture_match_identity_session_begin(&identityError) && identityError == NULL,
+            @"TEST 1A: the undersized-raster fixture starts an identity session");
+        free(identityError); identityError = NULL;
+        BOOL smallPresented = smallSurface && sp_region_present(smallIdentityRegion, IOSurfaceGetID(smallSurface),
+            smallToken, smallRaster[0], smallRaster[1], smallRaster[2], 92, 10, 1);
+        check(smallPresented, @"TEST 1A: an undersized tag ROI does not block raw image presentation");
+        check(!sp_image_capture_match_identity_session_active(),
+            @"TEST 1A: an untaggable source marks the opt-in identity session failed");
+        char *identityFailure = sp_image_capture_match_identity_session_error_copy();
+        check(identityFailure != NULL && strstr(identityFailure, "ROI") != NULL,
+            @"TEST 1A: the failed identity session preserves the explicit ROI error");
+        free(identityFailure);
+        BOOL failureManifest = identityDirectory
+            && sp_image_capture_match_write_manifest(identityDirectory);
+        check(!failureManifest, @"TEST 1A: finalizing an untaggable identity session reports failure");
+        NSString *failureManifestPath = [[NSString stringWithUTF8String:identityDirectory ?: ""]
+            stringByAppendingPathComponent:@"frame-identities/manifest.json"];
+        NSDictionary *failureMetadata = [NSJSONSerialization JSONObjectWithData:
+            [NSData dataWithContentsOfFile:failureManifestPath] options:0 error:NULL];
+        check([failureMetadata[@"identityFailure"] isKindOfClass:NSString.class],
+            @"TEST 1A: the tagged artifact manifest records why identity capture failed");
+        sp_image_capture_match_end();
+        dispatch_release(identityWriter);
+        sp_region_close(smallIdentityRegion);
+        if (smallSurface) CFRelease(smallSurface);
+        if (identityDirectory) [[NSFileManager defaultManager] removeItemAtPath:
+            [NSString stringWithUTF8String:identityDirectory] error:NULL];
     }
 
     // TEST 2: nonce mismatch - false return and "forbidden" event

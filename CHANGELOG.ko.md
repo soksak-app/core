@@ -7,8 +7,8 @@
 - F239-47-40-3: 선택형 strict boolean `frameIdentity`를
   `diagnostics.capture.start`에 추가하고 두 host recording interface를 거쳐 Darwin capture
   start까지 전달한다. 생략하거나 false이면 일반 capture를 유지하고 null 및
-  boolean이 아닌 값은 거부한다. identity session 연결이 끝날 때까지 true는
-  명시적 미지원 오류를 반환한다. Parser Red는 Wails가 null을 false로 받고
+  boolean이 아닌 값은 거부한다. Opt-in 경로는 capture-local identity session을
+  시작하고 source image presentation에 tag한다. Parser Red는 Wails가 null을 false로 받고
   Tauri가 true를 무시한 동작이었다. Strict parser test는 각각 3/3, 1/1 통과한다.
   Recording fake는 true가 양 host platform 경계에 도달함을 각 1/1 확인하고
   native `capture_test`도 1/1 통과한다. `make -C native/darwin all`로 source
@@ -25,7 +25,18 @@
   발급 및 allowlist assertion에 실패했다. Green: exact matcher test가 1/1 통과하며
   region 간 tuple 분리, eviction, 상한, slot 재사용, restart 격리를 확인한다. Canonical
   payload owner test도 잘못된 nonce 거부를 포함해 1/1 통과한다. Source-history
-  eviction과 image presentation은 아직 session에 연결되지 않았다.
+  image presentation과 source-history eviction 연결은 F239-47-40-4-2에서 완료한다.
+- F239-47-40-4-2: 명시적인 `frameIdentity:true`에서만 고정 top-right 192×192
+  raster ROI 안의 발급 QR로 image-region presentation을 tag하고 raster 및 tuple
+  metadata를 raw source artifact와 별도로 기록한다. Raw BGRA와 color metadata는
+  source record로 유지하며 tag 실패에도 일반 presentation은 계속하고 identity
+  finalization에서 오류를 보고한다. Source-history eviction은 matcher lock 안에서
+  발급 identity를 제거한다. Red: owner test는 tag, tagged artifact, 작은 raster의
+  finalization 실패 처리 누락에서 실패했다. Green: `image_region_test`,
+  `image_capture_match_test`, `capture_test`가 각각 1/1 통과한다. Wails Darwin cgo와
+  Tauri diagnostics recording target은 CoreImage 및 Vision을 포함한 native library에
+  compile/link한다. ScreenCaptureKit frame 디코딩은 F239-47-40-4-3에서 계속하며
+  물리적 scanout 및 terminal IME acceptance는 검증하지 않았다.
 
 - F239-47-40-2: QR helper의 ROI, 탐지, payload, ownership 경계를 수정한다.
   Red: 변경 전 owner test는 Vision 전체 이미지 탐지, mutable image backing,

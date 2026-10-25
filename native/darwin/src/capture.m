@@ -883,7 +883,13 @@ static bool writeCaptureDisplayLinkTrace(SPCapture *sink) {
 static bool finalizeCaptureArtifacts(SPCapture *sink) {
     [sink stopDisplayLinkObservation];
     bool sourceManifestWritten = sp_image_capture_match_write_manifest(sink.directory.fileSystemRepresentation);
-    if (!sourceManifestWritten) setCaptureError(@"diagnostic image source artifact manifest or source write failed");
+    if (!sourceManifestWritten) {
+        char *identityError = sp_image_capture_match_identity_session_error_copy();
+        NSString *reason = identityError ? [NSString stringWithUTF8String:identityError] : nil;
+        free(identityError);
+        setCaptureError(reason ? [NSString stringWithFormat:@"frame identity capture failed: %@", reason]
+            : @"diagnostic image source artifact manifest or source write failed");
+    }
     bool callbackStatusWritten = writeCaptureCallbackStatusTrace(sink);
     if (!callbackStatusWritten && !hasCaptureError()) {
         setCaptureError(@"capture callback status trace failed without a reason");
@@ -1072,9 +1078,6 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         return false;
     }
     *errorOut = NULL;
-    if (frameIdentity) {
-        return captureOperationFailure(errorOut, @"frame identity capture is not implemented");
-    }
     if (captureStream != nil) return captureOperationFailure(errorOut, @"capture is already running");
     clearCaptureError();
     if (captureFilter == nil) {
@@ -1119,9 +1122,25 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         setCaptureError(@"capture directory is not valid UTF-8");
         return captureOperationFailure(errorOut, @"capture directory is not valid UTF-8");
     }
+    sp_image_capture_match_begin(captureSink.directory.fileSystemRepresentation, captureWriter);
+    if (frameIdentity) {
+        char *identityError = NULL;
+        if (!sp_image_capture_match_identity_session_begin(&identityError)) {
+            NSString *reason = [NSString stringWithUTF8String:identityError ?: "identity session could not start"];
+            free(identityError);
+            sp_image_capture_match_end();
+            setCaptureError(reason);
+            return captureOperationFailure(errorOut, reason);
+        }
+    }
     SCStream *stream = [[SCStream alloc] initWithFilter:captureFilter
                                        configuration:captureConfig
                                             delegate:captureSink];
+    if (!stream) {
+        sp_image_capture_match_end();
+        setCaptureError(@"capture stream allocation failed");
+        return captureOperationFailure(errorOut, @"capture stream allocation failed");
+    }
     @synchronized([SPCapture class]) { captureStream = stream; }
     NSError* error = nil;
     captureQueue = dispatch_queue_create("sp.capture", NULL);
@@ -1135,11 +1154,11 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
         sp_log_error("capture start", message.UTF8String);
         @synchronized([SPCapture class]) { captureStream = nil; }
         [stream release];
+        sp_image_capture_match_end();
         return captureOperationFailure(errorOut,
             [NSString stringWithFormat:@"capture output was not added: %@", error.localizedDescription]);
     }
     [captureSink startDisplayLinkObservationForWindowNumber:captureWindowNumber];
-    sp_image_capture_match_begin(captureSink.directory.fileSystemRepresentation, captureWriter);
     // The copied completion block retains the original stream, so its identity is kept after a replacement.
     if (captureStartDone) dispatch_release(captureStartDone);
     captureStartDone = dispatch_semaphore_create(0);

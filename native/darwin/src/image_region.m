@@ -8,7 +8,9 @@
 #import <WebKit/WebKit.h>
 #import <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
+#include <stdlib.h>
 #import "application_log.h"
+#import "capture_frame_identity.h"
 #import "event_ring.h"
 #import "image_capture_match.h"
 #import "image_region.h"
@@ -18,6 +20,15 @@
 
 static BOOL inputRangeFitsLength(NSRange range, NSUInteger length) {
     return range.location != NSNotFound && range.location <= length && range.length <= length - range.location;
+}
+
+static void failFrameIdentitySession(NSString *message) {
+    char *error = NULL;
+    if (!sp_image_capture_match_identity_session_fail(message.UTF8String, &error)) {
+        sp_log_error("frame identity", error ?: "identity session could not record the tagging failure");
+    }
+    free(error);
+    sp_log_error("frame identity", message.UTF8String);
 }
 
 @class SPImageRegion;
@@ -1436,14 +1447,99 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         return false;
     }
 
-    // The previous snapshot is replaced only after all validation and copying are done. The layer does not point
-    // directly at the
-    // IOSurface that the provider rewrites.
+    BOOL identityTagging = sp_image_capture_match_identity_session_active() && !view.isHiddenOrHasHiddenAncestor;
+    CGImageRef displaySnapshot = snapshot;
+    CGImageRef taggedSnapshot = NULL;
+    CFDataRef sourceBytes = NULL;
+    if (identityTagging) {
+        CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
+        sourceBytes = provider ? CGDataProviderCopyData(provider) : NULL;
+        sp_image_capture_identity identity = { generation, raster, sequence };
+        const char *colorSpaceName = declaredColorSpaceName[0] ? declaredColorSpaceName : NULL;
+        NSRect localBounds = [view convertRect:view.bounds toView:nil];
+        NSRect screenBounds = [view.window convertRectToScreen:localBounds];
+        NSScreen *primaryScreen = NSScreen.screens.firstObject;
+        if (primaryScreen) {
+            // ScreenCaptureKit screenRect and window_facts use top-left coordinates. AppKit screen rectangles use a
+            // bottom-left origin, so normalize before retaining bounds for crop mapping.
+            screenBounds.origin.y = NSMaxY(primaryScreen.frame) - NSMaxY(screenBounds);
+        } else {
+            screenBounds = NSZeroRect;
+        }
+        size_t imageWidth = CGImageGetWidth(snapshot);
+        size_t imageHeight = CGImageGetHeight(snapshot);
+        size_t imageStride = CGImageGetBytesPerRow(snapshot);
+        bool sourceRetained = sourceBytes && sp_image_capture_match_retain(identity,
+            CFDataGetBytePtr(sourceBytes), imageWidth, imageHeight, imageStride,
+            NSRectToCGRect(screenBounds), scale, colorSpaceName);
+        NSString *identityFailure = nil;
+        if (!sourceBytes) {
+            sp_image_capture_match_drop();
+            identityFailure = @"frame identity source raster bytes could not be copied";
+        } else if (!sourceRetained) {
+            identityFailure = @"frame identity source raster could not be retained within its diagnostic bounds";
+        } else if (imageWidth < 192 || imageHeight < 192) {
+            identityFailure = @"frame identity source raster is too small for the reserved 192x192 ROI";
+        } else if (!CGImageGetColorSpace(snapshot)) {
+            identityFailure = @"frame identity source image has no color-space metadata";
+        } else {
+            CGRect roi = CGRectMake(imageWidth - 192, 0, 192, 192);
+            NSString *regionNonce = nil;
+            NSString *issuedPayload = nil;
+            char *identityError = NULL;
+            if (!sp_image_capture_match_identity_region_nonce(nonce, &regionNonce, &identityError)) {
+                identityFailure = [NSString stringWithUTF8String:identityError ?: "region nonce derivation failed"];
+            }
+            free(identityError); identityError = NULL;
+            if (!identityFailure && !sp_image_capture_match_identity_issue(nonce, identity,
+                &issuedPayload, &identityError)) {
+                identityFailure = [NSString stringWithUTF8String:identityError ?: "source identity issuance failed"];
+            }
+            free(identityError); identityError = NULL;
+            NSData *taggedPixels = nil;
+            NSString *encodedPayload = nil;
+            NSString *encodeError = nil;
+            if (!identityFailure && !sp_capture_frame_identity_encode(CFDataGetBytePtr(sourceBytes), imageWidth,
+                imageHeight, imageStride, CGImageGetColorSpace(snapshot), roi, regionNonce,
+                (SPCaptureFrameIdentity){ generation, raster, sequence }, &taggedSnapshot,
+                &taggedPixels, &encodedPayload, &encodeError)) {
+                identityFailure = encodeError ?: @"frame identity QR encoding failed";
+            }
+            if (!identityFailure && ![issuedPayload isEqualToString:encodedPayload])
+                identityFailure = @"frame identity encoder returned a payload outside the issued set";
+            if (!identityFailure && !sp_image_capture_match_identity_record(nonce, identity, roi,
+                taggedPixels.bytes, imageWidth, imageHeight, imageStride, colorSpaceName, &identityError)) {
+                identityFailure = [NSString stringWithUTF8String:identityError ?: "tagged source artifact was not accepted"];
+            }
+            free(identityError);
+            if (!identityFailure && !sp_image_capture_match_identity_session_active()) {
+                char *sessionError = sp_image_capture_match_identity_session_error_copy();
+                identityFailure = sessionError
+                    ? [NSString stringWithUTF8String:sessionError]
+                    : @"frame identity artifact failed before tagged presentation";
+                free(sessionError);
+            }
+            if (!identityFailure) displaySnapshot = taggedSnapshot;
+            else if (issuedPayload) {
+                char *evictionError = NULL;
+                if (!sp_image_capture_match_identity_evict(nonce, identity, &evictionError))
+                    sp_log_error("frame identity", evictionError ?: "failed to remove an unpresented issued payload");
+                free(evictionError);
+            }
+            [regionNonce release]; [issuedPayload release]; [taggedPixels release];
+            [encodedPayload release]; [encodeError release];
+        }
+        if (identityFailure) failFrameIdentitySession(identityFailure);
+    }
+
+    // The previous snapshot is replaced only after all validation and copying are done. The layer never points at
+    // the IOSurface that the provider rewrites; snapshot remains the unmodified source while displaySnapshot may
+    // carry the opt-in diagnostic QR.
     CGImageRef previous = view.snapshot;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     [view applyInsetsInTransaction];
-    view.imageLayer.contents = (id)snapshot;
+    view.imageLayer.contents = (id)displaySnapshot;
     [view updateContentsScale];
     [CATransaction commit];
     view.snapshot = snapshot;
@@ -1454,7 +1550,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     view.presentedRaster = raster;
     view.presentedSequence = sequence;
     view.presentationError = nil;
-    if (sp_image_capture_match_active() && !view.isHiddenOrHasHiddenAncestor) {
+    if (!identityTagging && sp_image_capture_match_active() && !view.isHiddenOrHasHiddenAncestor) {
         CGDataProviderRef provider = CGImageGetDataProvider(snapshot);
         CFDataRef snapshotBytes = provider ? CGDataProviderCopyData(provider) : NULL;
         const char *colorSpaceName = declaredColorSpaceName[0] ? declaredColorSpaceName : NULL;
@@ -1479,6 +1575,8 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
             sp_log_error("image capture match", "source snapshot bytes could not be copied for diagnostic retention");
         }
     }
+    if (sourceBytes) CFRelease(sourceBytes);
+    if (taggedSnapshot) CGImageRelease(taggedSnapshot);
     if (previous) CGImageRelease(previous);
 
     return true;
