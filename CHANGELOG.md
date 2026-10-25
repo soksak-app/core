@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-130: Add the requested absolute stop time, computed Mach target,
+  registration tick and latest accepted sample facts to capture timeout
+  summaries. The `capture_callback_test` Red assertion now passes 1/1; the
+  rebuilt-host comparison remains pending. Capture timing and stop behavior
+  are unchanged.
 - F239-127: Read image detach acknowledgements from their declared Serde path
   and parse only the declared acknowledgement fields. Red: the original owner
   test failed for a 140-level root member; its three-location extension exposed

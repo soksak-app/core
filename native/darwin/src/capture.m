@@ -17,6 +17,7 @@
 #import "application_log.h"
 #import "event_ring.h"
 #import <ImageIO/ImageIO.h>
+#include <math.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <objc/runtime.h>
 #include <compression.h>
@@ -83,6 +84,15 @@ static SPCaptureAttempt* captureAttempt = nil;
 @property (nonatomic) BOOL firstSampleSeen;
 @property (nonatomic) BOOL delegateStopSeen;
 @property (nonatomic) BOOL failed;
+@property (nonatomic, retain) NSNumber *stopAfterMilliseconds;
+@property (nonatomic) uint64_t stopTargetMachTicks;
+@property (nonatomic) uint64_t stopRegistrationMachTicks;
+@property (nonatomic) BOOL stopBoundaryRecorded;
+@property (nonatomic) uint64_t latestSampleCallbackMachTicks;
+@property (nonatomic) BOOL latestSampleStatusPresent;
+@property (nonatomic, retain) NSNumber *latestSampleStatus;
+@property (nonatomic) BOOL latestSampleDisplayTimePresent;
+@property (nonatomic) uint64_t latestSampleDisplayTimeMachTicks;
 @property (nonatomic) uint64_t factsObservedMachTicks;
 @property (nonatomic, retain) NSNumber *visible;
 @property (nonatomic, retain) NSNumber *occluded;
@@ -93,6 +103,11 @@ static SPCaptureAttempt* captureAttempt = nil;
     displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(id)displayTimeMachTicks
     error:(NSError *)error reason:(NSString *)reason;
 - (void)recordFirstSampleType:(SCStreamOutputType)type statusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
+    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
+    callbackMachTicks:(uint64_t)callbackMachTicks;
+- (void)recordStopBoundaryAfterMilliseconds:(double)after targetMachTicks:(uint64_t)targetMachTicks
+    registrationMachTicks:(uint64_t)registrationMachTicks;
+- (void)recordLatestSampleStatusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
     displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
     callbackMachTicks:(uint64_t)callbackMachTicks;
 - (void)recordWindowNumber:(long)windowNumber displayID:(NSNumber *)displayID visible:(BOOL)visible
@@ -133,6 +148,18 @@ static SPCaptureAttempt* captureAttempt = nil;
             @"reason": reason ?: null,
             @"startCompletionSeen": @(self.startCompletionSeen), @"firstSampleSeen": @(self.firstSampleSeen),
             @"delegateStopSeen": @(self.delegateStopSeen),
+            @"stopAfterMilliseconds": self.stopAfterMilliseconds ?: null,
+            @"stopTargetMachTicks": self.stopBoundaryRecorded
+                ? [NSString stringWithFormat:@"%llu", (unsigned long long)self.stopTargetMachTicks] : null,
+            @"stopRegistrationMachTicks": self.stopBoundaryRecorded
+                ? [NSString stringWithFormat:@"%llu", (unsigned long long)self.stopRegistrationMachTicks] : null,
+            @"latestSampleCallbackMachTicks": self.latestSampleCallbackMachTicks == 0 ? null
+                : [NSString stringWithFormat:@"%llu", (unsigned long long)self.latestSampleCallbackMachTicks],
+            @"latestSampleStatusPresent": @(self.latestSampleStatusPresent),
+            @"latestSampleStatus": self.latestSampleStatus ?: null,
+            @"latestSampleDisplayTimePresent": @(self.latestSampleDisplayTimePresent),
+            @"latestSampleDisplayTimeMachTicks": self.latestSampleDisplayTimePresent
+                ? [NSString stringWithFormat:@"%llu", (unsigned long long)self.latestSampleDisplayTimeMachTicks] : null,
         };
         NSMutableDictionary *record = [NSMutableDictionary dictionaryWithDictionary:fields];
         [record addEntriesFromDictionary:facts];
@@ -155,6 +182,27 @@ static SPCaptureAttempt* captureAttempt = nil;
         displayTimePresent:displayTimePresent displayTimeMachTicks:displayTimePresent ?
             [NSString stringWithFormat:@"%llu", (unsigned long long)displayTimeMachTicks] : nil error:nil reason:nil];
 }
+- (void)recordStopBoundaryAfterMilliseconds:(double)after targetMachTicks:(uint64_t)targetMachTicks
+    registrationMachTicks:(uint64_t)registrationMachTicks {
+    @synchronized (self) {
+        self.stopAfterMilliseconds = isfinite(after) ? @(after) : nil;
+        self.stopTargetMachTicks = targetMachTicks;
+        self.stopRegistrationMachTicks = registrationMachTicks;
+        self.stopBoundaryRecorded = YES;
+    }
+}
+- (void)recordLatestSampleStatusPresent:(BOOL)statusPresent status:(SCFrameStatus)status
+    displayTimePresent:(BOOL)displayTimePresent displayTimeMachTicks:(uint64_t)displayTimeMachTicks
+    callbackMachTicks:(uint64_t)callbackMachTicks {
+    @synchronized (self) {
+        if (!self.stopBoundaryRecorded || self.failed) return;
+        self.latestSampleCallbackMachTicks = callbackMachTicks;
+        self.latestSampleStatusPresent = statusPresent;
+        self.latestSampleStatus = statusPresent ? @(status) : nil;
+        self.latestSampleDisplayTimePresent = displayTimePresent;
+        self.latestSampleDisplayTimeMachTicks = displayTimePresent ? displayTimeMachTicks : 0;
+    }
+}
 - (void)recordWindowNumber:(long)windowNumber displayID:(NSNumber *)displayID visible:(BOOL)visible
     occluded:(BOOL)occluded applicationActive:(BOOL)applicationActive callbackMachTicks:(uint64_t)callbackMachTicks {
     if (windowNumber != self.windowNumber || !NSThread.isMainThread) return;
@@ -171,6 +219,7 @@ static SPCaptureAttempt* captureAttempt = nil;
 }
 - (void)dealloc {
     [_session release]; [_visible release]; [_occluded release]; [_displayID release]; [_applicationActive release];
+    [_stopAfterMilliseconds release]; [_latestSampleStatus release];
     [super dealloc];
 }
 @end
@@ -690,6 +739,14 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
             sp_log_error("capture sample", "discarded callback has no stream attempt context");
         }
         return;
+    }
+    if (attempt != nil) {
+        SCFrameStatus sampleStatus = SCFrameStatusComplete;
+        BOOL hasStatus = frameStatus(sample, &sampleStatus);
+        uint64_t shown = 0;
+        BOOL hasDisplayTime = displayTime(sample, &shown);
+        [attempt recordLatestSampleStatusPresent:hasStatus status:sampleStatus displayTimePresent:hasDisplayTime
+            displayTimeMachTicks:shown callbackMachTicks:callbackTime];
     }
     [self write:sample callbackTime:callbackTime];
     // A frame presented after the stop request means that the screen up to that time has been fully delivered, even
@@ -1556,6 +1613,7 @@ int sp_capture_stop(double after) {
         return 0;
     }
     SCStream* stream = captureStream;
+    SPCaptureAttempt *attempt = captureAttemptForStream(stream);
     // Stops after a callback delivers a display time at or beyond the later of the call time and requested
     // presentation time. A pending size change must finish first. If no qualifying callback arrives within the
     // existing one-second wait, the stop reports an explicit error.
@@ -1568,6 +1626,8 @@ int sp_capture_stop(double after) {
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = caughtUp;
         captureStopAfter = until;
+        [attempt recordStopBoundaryAfterMilliseconds:after targetMachTicks:until
+            registrationMachTicks:captureRawClock()];
     });
     if (dispatch_semaphore_wait(caughtUp, dispatch_time(until, NSEC_PER_SEC)) != 0) {
         NSString *message = captureResizing

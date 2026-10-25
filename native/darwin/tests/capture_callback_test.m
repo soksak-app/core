@@ -31,10 +31,17 @@ static NSDictionary *lifecycleEvent(NSArray<NSDictionary *> *events, NSString *p
 }
 static BOOL lifecycleMachTickFieldsMatchSchema(NSArray<NSDictionary *> *events) {
     NSArray<NSString *> *fields = @[@"requestMachTicks", @"callbackMachTicks", @"elapsedMachTicks",
-        @"displayTimeMachTicks", @"factsObservedMachTicks"];
+        @"displayTimeMachTicks", @"factsObservedMachTicks", @"stopTargetMachTicks",
+        @"stopRegistrationMachTicks", @"latestSampleCallbackMachTicks", @"latestSampleDisplayTimeMachTicks"];
     for (NSDictionary *event in events) {
         if (![event[@"name"] isEqual:@"native.capture.lifecycle"]) continue;
         NSDictionary *values = event[@"fields"];
+        NSArray<NSString *> *required = @[@"stopAfterMilliseconds", @"stopTargetMachTicks",
+            @"stopRegistrationMachTicks", @"latestSampleCallbackMachTicks", @"latestSampleStatusPresent",
+            @"latestSampleStatus", @"latestSampleDisplayTimePresent", @"latestSampleDisplayTimeMachTicks"];
+        for (NSString *field in required) if (values[field] == nil) return NO;
+        if (![values[@"latestSampleStatusPresent"] isKindOfClass:NSNumber.class]
+            || ![values[@"latestSampleDisplayTimePresent"] isKindOfClass:NSNumber.class]) return NO;
         for (NSString *field in fields) {
             id value = values[field];
             if (value != [NSNull null] && ![value isKindOfClass:NSString.class]) return NO;
@@ -91,6 +98,28 @@ int main(void) { @autoreleasepool {
         && [maxTick[@"fields"][ @"displayTimeMachTicks"] isEqual:@"18446744073709551615"],
         @"uint64 maximum Mach ticks remain canonical decimal strings without precision loss");
     [maxTickAttempt release];
+    SPCaptureAttempt *stopFactsAttempt = [[SPCaptureAttempt alloc] init];
+    stopFactsAttempt.session = @"capture-stop-facts";
+    stopFactsAttempt.timebase = (mach_timebase_info_data_t){ .numer = 125, .denom = 3 };
+    [stopFactsAttempt recordStopBoundaryAfterMilliseconds:123.5 targetMachTicks:987
+        registrationMachTicks:765];
+    [stopFactsAttempt recordLatestSampleStatusPresent:YES status:SCFrameStatusIdle displayTimePresent:YES
+        displayTimeMachTicks:888 callbackMachTicks:999];
+    NSArray *stopFactsEvents = capturedEvents(^{
+        [stopFactsAttempt recordFailure:@"stop catch-up timeout" error:nil];
+    });
+    NSDictionary *stopFacts = lifecycleEvent(stopFactsEvents, @"failed", stopFactsAttempt.session);
+    NSDictionary *stopFields = stopFacts[@"fields"];
+    check([stopFields[@"stopAfterMilliseconds"] isEqual:@123.5]
+        && [stopFields[@"stopTargetMachTicks"] isEqual:@"987"]
+        && [stopFields[@"stopRegistrationMachTicks"] isEqual:@"765"]
+        && [stopFields[@"latestSampleCallbackMachTicks"] isEqual:@"999"]
+        && [stopFields[@"latestSampleStatusPresent"] boolValue]
+        && [stopFields[@"latestSampleStatus"] intValue] == SCFrameStatusIdle
+        && [stopFields[@"latestSampleDisplayTimePresent"] boolValue]
+        && [stopFields[@"latestSampleDisplayTimeMachTicks"] isEqual:@"888"],
+        @"stop failure summaries preserve the requested boundary and latest callback facts");
+    [stopFactsAttempt release];
     CFTimeInterval began = CACurrentMediaTime();
     fprintf(stderr, "START: native delayed stream callback isolation\n");
     [NSApplication sharedApplication]; [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
@@ -282,6 +311,15 @@ int main(void) { @autoreleasepool {
             @"failure lifecycle Mach-tick fields are strings or null");
         check(waited == 0, @"a missing first frame follows the normal capture-wait failure path");
         NSDictionary *failed = lifecycleEvent(failureEvents, @"failed", timeoutSession);
+        check(failed != nil && failed[@"fields"][@"stopAfterMilliseconds"] == [NSNull null]
+            && failed[@"fields"][@"stopTargetMachTicks"] == [NSNull null]
+            && failed[@"fields"][@"stopRegistrationMachTicks"] == [NSNull null]
+            && failed[@"fields"][@"latestSampleCallbackMachTicks"] == [NSNull null]
+            && ![failed[@"fields"][@"latestSampleStatusPresent"] boolValue]
+            && failed[@"fields"][@"latestSampleStatus"] == [NSNull null]
+            && ![failed[@"fields"][@"latestSampleDisplayTimePresent"] boolValue]
+            && failed[@"fields"][@"latestSampleDisplayTimeMachTicks"] == [NSNull null],
+            @"a failure before stop retains explicit null stop and latest-sample facts");
         NSUInteger failureCount = 0;
         for (NSDictionary *event in failureEvents) {
             if ([event[@"name"] isEqual:@"native.capture.lifecycle"]

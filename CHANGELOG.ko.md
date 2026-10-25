@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F239-130: Capture timeout summary에 요청한 absolute stop 시간, 계산한 Mach
+  target, 등록 tick, 최신 accepted sample 사실을 기록한다. `capture_callback_test`
+  Red assertion이 1/1 통과했다. Rebuilt host 비교는 남아 있다. Capture timing과
+  stop 동작은 바뀌지 않았다.
 - F239-113: JavaScript event-catalog fixture를 schema 3 및 Draft 2020-12
   field schema로 갱신한다. Raw event-log line schema 2와 구형 catalog 거부는
   유지한다. 보존된 Node 실행은 audit-run의 schema 2 base catalog 때문에 실패했다.
