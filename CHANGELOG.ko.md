@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-121: Wails buffer-bound test helper가 마지막 flush 후 event-log writer를
+  닫도록 한다. Writer가 `TempDir`보다 오래 살아 cleanup이 비어 있지 않은
+  디렉터리로 실패할 수 있었다. 집중 relay-expiry test는 `make go-repeat`에서
+  3/3 통과하며 production relay 동작은 바뀌지 않았다.
+
 - F239-111: input-reference test의 기존 50ms drain 구간에 AppKit event
   전달을 추가해 대기 중인 main-queue document check가 owner test에서 실행되게
   한다. 보존된 Native 전체 suite log에 input-reference wait 및 timer 등록

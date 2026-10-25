@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-121: Close the event-log writer in the Wails buffer-bound test helper
+  after a final flush. The writer could outlive its `TempDir`, causing cleanup
+  to fail with a nonempty directory. The focused relay-expiry test passes 3/3
+  through `make go-repeat`; production relay behavior is unchanged.
+
 - F239-111: Dispatch AppKit events in the input-reference test's existing
   50 ms drain interval so queued main-queue document checks run during the
   owner test. The full native suite log contains seven failed input-reference

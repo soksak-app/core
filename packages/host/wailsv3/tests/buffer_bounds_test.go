@@ -105,7 +105,13 @@ func useRoomyEventLog(t *testing.T) *host.EventLog {
 	}
 	support.StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
-	t.Cleanup(func() { host.UseHostEventLog(nil) })
+	t.Cleanup(func() {
+		host.UseHostEventLog(nil)
+		if err := log.Flush(5 * time.Second); err != nil {
+			t.Errorf("flush event log before closing: %v", err)
+		}
+		log.Close()
+	})
 	return log
 }
 
