@@ -28,30 +28,42 @@
   findings, removing the view-origin test-path finding. `make parity-check` and
   `make docs-check` pass with 100 lanes, 698 implementation files, and 998
   test files.
-- F212.10-core-5-6-1: Wait until the revealed terminal declares
-  `status terminal.session` in `core.surfaces` before reading `terminal.session`.
-  Wails and Tauri runtime attempts returned endpoint error 1002 when the check
-  read the status immediately after the hidden background open; both had
-  already recorded the background open and headless sidecar mode. This was an
-  E2E readiness-order failure, not evidence of a product session failure. A
-  later Wails attempt waited 59.1 seconds for image mode before reveal;
-  `core.surfaces` and native regions contained only two Browser surfaces, while
-  VT recorded detach, headless mode, and an absent-surface background open. The
-  case now reveals the terminal before collecting sidecar headless-to-image
-  mode. This is an E2E readiness-order failure; Tauri was not rerun against
-  this ordering. Syntax, `make e2e-check`, and `make docs-check` pass; the
-  runtime rerun remains pending.
+- F212.10-core-5-6-2: Record the stale `status.watch host.window` value after
+  image presentation and track its owning host correction. The corrected hidden-terminal reload
+  case reached reveal on Wails and Tauri, then timed out because each watch
+  value kept the visible terminal region at `presented:null`. During the same
+  wait, direct `status.get host.window` returned a presented region at
+  generation 7 on Wails and generation 8 on Tauri (raster 1, sequence 2).
+  Both runtime audits passed with no error-level records, but the test failed
+  on each host; the direct reads mean the watch result does not prove the
+  image was absent. The owner follow-up verifies publication after successful
+  presentation and no publication for refused or retired frames. The focused
+  tests took 22.888 s on Wails and 22.599 s on Tauri. Both runs ended host and
+  sidecar processes, removed endpoints, and restored the same frontmost baseline.
+  Runtime acceptance remains open.
+- F212.10-core-5-6-1: Move the sidecar headless-to-image wait after the
+  declared `core.tab.select` reveal and wait for `core.surfaces` to expose
+  `status terminal.session` before reading the retained session. The previous
+  ordering waited for an image while the terminal had no native surface, so
+  the reveal command could never run. The corrected Wails and Tauri runs
+  reached reveal; their later `host.window` watch values stayed visible with
+  `presented:null` even though direct status reads returned presented
+  generations. This watch discrepancy is tracked separately and is not
+  evidence that the image was absent. The `core.surfaces` session exposure
+  assertion was not reached, so runtime acceptance remains open.
 - F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
   the old presented attachment generation, replacement page start, retained
   session opening headless, the sidecar's same-writer headless-to-image mode
-  transition after reload, and a newer presented generation after reveal.
+  transition after reveal, and a newer presented generation after reveal.
   Memory saver disabled can reattach a hidden view before reveal. F212.10-core-5-5
   host owner tests establish the exact detach acknowledgement barrier; this
   window case checks application continuity without claiming to measure that
-  boundary. `node --check`,
-  `make e2e-check`, `make docs-check`, and `make parity-check` pass with the
-  inventory at 100 lanes, 697 implementation files, and 997 test files.
-  Two-host runtime acceptance remains pending.
+  boundary. `node --check`, `make e2e-check`, `make docs-check`, and
+  `make parity-check` pass with the inventory at 100 lanes, 697 implementation
+  files, and 997 test files. The corrected runtime case reaches reveal on both
+  hosts but times out waiting for the presented region through `status.watch`;
+  direct status reads return generations 7 and 8. Runtime acceptance remains
+  open under F212.10-core-5-6-2.
 - F239-48-3-8: Pair both real start-module entries through module hooks.
   Both owner tests pass 2/2. The current host audit drops from 14 to 12
   findings, removing the two app-start paths without an allowance. The

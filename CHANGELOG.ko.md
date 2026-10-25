@@ -26,27 +26,41 @@
   Go focused test 다섯 개가 5/5 통과한다. Host audit은 view-origin test 경로를
   제거해 12개에서 11개 finding으로 줄었다. `make parity-check`와 `make docs-check`가
   lane 100개, 구현 파일 698개, test 파일 998개 결과로 통과한다.
-- F212.10-core-5-6-1: reveal된 terminal의 declared status를 기다린 뒤
-  `status terminal.session`을 `core.surfaces`에서 확인한 뒤 `terminal.session`을 읽는다.
-  Wails와 Tauri runtime 시도에서 hidden background open 직후 status를
-  읽자 endpoint error 1002가 반환됐지만, 두 host 모두 background open과
-  headless sidecar mode를 이미 기록했다. Product session 실패 증거가 아니라
-  E2E readiness 순서 실패다. 이후 Wails 시도는 reveal 전 image mode를 59.1초
-  기다렸다. `core.surfaces`와 native region에는 Browser surface 두 개만 있었고,
-  VT는 detach, headless mode, absent-surface background open을 기록했다.
-  수정한 case는 reveal 뒤 sidecar headless-to-image mode를 수집한다. Tauri는 같은
-  순서로 재실행하지 않았다. Syntax, `make e2e-check`, `make docs-check`가
-  통과하며 runtime 재실행은 대기 중이다.
-- F212.10-core-5-6: hidden terminal reload window check를 추가한다. Replacement
-  page start, 유지된 session의 headless open, 숨기기 전 old presented attachment
-  generation, reload 뒤 sidecar의 같은 writer에서 headless→image mode 전환,
-  표시 뒤 더 최신 generation의 presentation을 관측한다. Memory saver를 끄면
-  숨은 view가 표시 전에 다시 연결될 수 있다. F212.10-core-5-5 host owner test가
-  정확한 detach acknowledgement barrier를 입증한다. 이 window case는 해당 경계를
-  측정한다고 주장하지 않고 application 연속성을 확인한다. `node --check`,
-  `make e2e-check`, `make docs-check`, `make parity-check`가 lane 100개, 구현 파일
-  697개, 테스트 파일 997개 inventory로 통과한다. 양 host runtime acceptance는
-  진행 중이다.
+- F212.10-core-5-6-2: image presentation 뒤 stale `status.watch host.window`
+  값을 기록하고 owner host correction을 연결한다. 수정한 hidden-terminal reload
+  case는 Wails와 Tauri에서 reveal까지 진행했지만 watch 값이 visible terminal
+  region의 `presented:null`을 유지해 timeout이 났다. 같은 대기 중 직접
+  `status.get host.window`는 Wails generation 7, Tauri generation 8의
+  presented region을 반환했다(raster 1, sequence 2). 양 host runtime audit은
+  error-level 기록 없이 통과했지만 test는 각 host에서 실패했다. 직접 read가
+  성공했으므로 watch 결과만으로 image 부재를 입증하지 않는다. Owner follow-up은
+  성공 presentation 이후 게시와 거부 또는 폐기 frame의 미게시를 확인한다.
+  Focused test는 Wails 22.888초, Tauri 22.599초 걸렸다. 두 run 모두 host와
+  sidecar process를 종료하고 endpoint를 제거했으며 같은 frontmost baseline을 복원했다.
+  macOS 26.6.2 arm64에서 Wails와 Tauri 0.0.21, Terminal 0.0.21, VT 0.0.17,
+  Files 0.0.8, browser/editor 0.0.7, HWP 0.0.5로 실행했다. Runtime acceptance는
+  아직 열려 있다.
+- F212.10-core-5-6-1: sidecar headless-to-image 대기를 core.tab.select
+  reveal 뒤로 옮기고, 유지된 session을 읽기 전에 `core.surfaces`가
+  `status terminal.session`을 expose할 때까지 기다린다. 이전 순서는 native
+  surface가 없는 동안 image를 기다려 reveal command가 실행될 수 없었다.
+  수정한 Wails와 Tauri run은 reveal까지 진행했지만 이후 `host.window` watch
+  값은 visible 상태에서 `presented:null`을 유지했다. 직접 status read는
+  presented generation을 반환했다. 이 watch 불일치는 별도 추적하며 image가
+  없었다는 증거가 아니다. `core.surfaces` session exposure assertion에는
+  도달하지 않아 runtime acceptance는 열려 있다.
+- F212.10-core-5-6: hidden terminal reload window check를 추가한다. 이전에
+  표시된 attachment generation, replacement page start, 유지된 session의
+  headless open, reveal 뒤 같은 writer의 sidecar headless-to-image mode 전환과
+  더 최신 presented generation을 관측한다. Memory saver를 끄면 숨은 view가
+  reveal 전에 재연결될 수 있다. F212.10-core-5-5 host owner test는 정확한
+  detach acknowledgement barrier를 입증한다. 이 window case는 그 경계를
+  측정하지 않고 application 연속성을 확인한다. `node --check`,
+  `make e2e-check`, `make docs-check`, `make parity-check`가 100 lane, 구현 파일
+  697개, test 파일 997개 inventory로 통과한다. 수정한 runtime case는 양 host에서
+  reveal까지 진행했으나 `status.watch`의 presented region 대기에서 timeout이 났다.
+  직접 status read는 generation 7과 8을 반환했다. Runtime acceptance는
+  F212.10-core-5-6-2에서 계속 확인한다.
 - F239-48-3-8: 양쪽 실제 start-module entry를 module hook으로 짝지어
   검증한다. Owner test는 2/2 통과한다. 현재 host 감사는 예외 추가 없이
   app-start 경로 두 개를 제거해 14개에서 12개 finding으로 줄었다.
