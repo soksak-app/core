@@ -873,6 +873,7 @@ for (const app of Object.values(APPS)) {
     recordingStopAttempted = true;
     const recording = await capture.stop({ after: displayed + 100 });
     recordingResult = recording;
+    await stateObserver.stop();
     preserveCapture();
     let identityCapture;
     try {

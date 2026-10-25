@@ -458,11 +458,23 @@ export async function startTerminalStatusObserver(session, surface, onEvent = ()
     for (const name of watched.reverse()) await session.request("status.unwatch", { name, surface });
     throw error;
   }
+  let stopping = null;
   return {
     events,
     async stop() {
+      if (stopping) return stopping;
       off();
-      for (const name of [...watched].reverse()) await session.request("status.unwatch", { name, surface });
+      stopping = (async () => {
+        while (watched.length > 0) {
+          const name = watched.at(-1);
+          await session.request("status.unwatch", { name, surface });
+          watched.pop();
+        }
+      })().catch((error) => {
+        stopping = null;
+        throw error;
+      });
+      return stopping;
     },
   };
 }

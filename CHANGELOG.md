@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-179: End terminal status observation immediately after capture stop, before artifact copying and visual analysis. Make repeated/concurrent stop calls idempotent and retry only incomplete unsubscriptions. Two owner cases fail before correction; all 46 document owners pass afterward. The complete repeated-vowel and Backspace check now passes on both macOS arm64 hosts: 363/515 samples, ten measured visual stages each, no application errors, one restored baseline and normal shutdown. Close F239-47-6 and F239-47-24 with this current acceptance evidence.
+
 - F239-178: Allow sixteen uncommitted identity jobs while retaining two decode workers and the shared 64 MiB byte budget. Controlled admission/drain assertions fail with the earlier eight-job budget and pass with explicit seventeenth-job rejection. Both host gestures preserve and decode all 334/630 captured samples with ten measured visual stages each. This validates finite-burst admission; Tauri post-input timeout failures remain separately open.
 
 - F239-176-1: Await asynchronous launchd discovery in application usage attribution and its caller. Preserve each host result and failure instead of iterating a Promise. Two existing attribution cases fail before correction; all 16 measurement owners pass afterward.

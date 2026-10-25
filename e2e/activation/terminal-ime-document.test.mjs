@@ -1013,3 +1013,40 @@ test("terminal observation reports a failed presentation read after successful s
   }), (error) => error instanceof AggregateError && error.errors.length === 1 &&
     error.errors[0].message === "host.window read failed" && error.errors[0].cause === hostError);
 });
+
+
+test("terminal observer stop releases each subscription once across repeated and concurrent calls", { timeout: 1500 }, async () => {
+  const listeners = new Set();
+  const released = [];
+  const observer = await startTerminalStatusObserver({
+    window: "main",
+    client: { on(_name, listener) { listeners.add(listener); return () => listeners.delete(listener); } },
+    until: async () => ({ text: "" }),
+    request: async (method, { name }) => { if (method === "status.unwatch") released.push(name); },
+  }, "surface");
+  await Promise.all([observer.stop(), observer.stop()]);
+  await observer.stop();
+  assert.deepEqual(released, ["terminal.screen", "terminal.cursor", "terminal.compose"]);
+  assert.equal(listeners.size, 0);
+});
+
+test("terminal observer stop retries only subscriptions whose release did not succeed", { timeout: 1500 }, async () => {
+  const released = [];
+  let failCursor = true;
+  const observer = await startTerminalStatusObserver({
+    window: "main",
+    client: { on() { return () => {}; } },
+    until: async () => ({ text: "" }),
+    request: async (method, { name }) => {
+      if (method !== "status.unwatch") return;
+      released.push(name);
+      if (name === "terminal.cursor" && failCursor) {
+        failCursor = false;
+        throw new Error("cursor unwatch failed");
+      }
+    },
+  }, "surface");
+  await assert.rejects(observer.stop(), /cursor unwatch failed/);
+  await observer.stop();
+  assert.deepEqual(released, ["terminal.screen", "terminal.cursor", "terminal.cursor", "terminal.compose"]);
+});

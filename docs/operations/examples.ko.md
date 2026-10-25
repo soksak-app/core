@@ -275,3 +275,5 @@ Terminal mode가 아니면 runner는 main window의 `diagnostics.objects`를 조
 Cargo compile 또는 metadata discovery가 실패하면 Rust owner runner는 command 실패 보고 전에 capture한 stdout을 출력한다. JSON compiler diagnostic과 plain metadata 오류를 보존하며, 실패 결과를 유지하고 실패한 discovery에서 test를 시작하지 않는다.
 
 Stall sampling과 launchd process 조회는 각 process에 10초 제한을 둔 비동기 child process를 사용한다. Sample 실행 중에도 검사는 endpoint message를 계속 읽는다. Host와 page sample은 함께 시작하고 page 실패는 각각 보고하며 host 실패는 sample operation을 실패시킨다.
+
+IME window 검사는 capture stop 후 artifact 복사 또는 visual 분석 전에 소유 terminal status observer를 끝낸다. 모든 입력 단계와 terminal sequence boundary는 이미 저장돼 있다. Cleanup은 stop을 다시 안전하게 호출할 수 있으며 이전 해제에 실패한 구독만 재시도한다.

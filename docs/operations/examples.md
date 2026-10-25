@@ -275,3 +275,5 @@ The focused e2e/capture-lifecycle.test.mjs runs three consecutive recordings per
 When Cargo compilation or metadata discovery fails, the Rust owner runner prints the captured stdout before reporting the command failure. This preserves JSON compiler diagnostics and plain metadata errors. It retains the failed outcome and starts no test from a failed discovery.
 
 Stall sampling and launchd process discovery use asynchronous child processes with a ten-second limit for each process. The check continues to read endpoint messages while samples run. Host and page samples start together; page failures are reported individually and a host failure fails the sample operation.
+
+IME window checks end their owned terminal status observer after capture stop and before copying artifacts or running visual analysis. Every input stage and the terminal sequence boundary are already saved. Cleanup may call stop again safely and retries only subscriptions whose earlier release failed.
