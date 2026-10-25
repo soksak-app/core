@@ -13,7 +13,8 @@
     "test": "node --test test/*.test.mjs activation/terminal-ime-document.test.mjs",
     "verify:terminal-sidebar-current": "node ./run.mjs --test --test-global-setup=./setup.mjs observation/terminal-sidebar-current.test.mjs",
     "verify:shutdown": "node normal-shutdown.mjs",
-    "verify:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs"
+    "verify:terminal-focus-current": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs observation/terminal-focus-current.test.mjs",
+    "benchmark:view-drag": "node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs benchmark/view-drag.test.mjs"
   },
   "dependencies": {
     "@soksak/client": "workspace:*",

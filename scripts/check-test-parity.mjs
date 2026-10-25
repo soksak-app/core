@@ -776,6 +776,19 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F212.14-1",
+    implementation: [
+      { file: "e2e/drag-measurement.mjs", symbol: "export function measureDragPerformance(" },
+      { file: "e2e/benchmark/view-drag.test.mjs", symbol: "writeFileSync(result," },
+    ],
+    tests: [
+      { file: "e2e/test/drag-measurement.test.mjs", id: "drag performance keeps existing targets separate from valid measurements" },
+      { file: "e2e/benchmark/view-drag.test.mjs", id: "terminal view drag meets performance targets without diagnostic tracing" },
+    ],
+    expected: "The dedicated benchmark validates untraced application settings, preserves complete measured frames and writes results before enforcing unchanged cadence and latency limits.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },

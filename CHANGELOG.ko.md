@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.14-1: Diagnostic trace를 거부하고 실제 application mode를 확인하며 기존 성능 목표를 적용하기 전에 전체 측정값을 기록하는 opt-in drag benchmark를 추가한다. 두 host가 오류 없는 감사와 종료를 포함해 전체 137/141-frame report를 만들고 cadence와 모든 지연 목표에서 실패한다. Calculator owner는 12/12 통과한다. Runner를 완료하고 성능 acceptance는 F212.14에 유지한다.
+
 - F212.7-14: 오래된 first-pull 작업 문구 대신 현재 ready/queued-attachment 계약으로 view-composition 집계를 완료한다. Channel owner 52개, native page-world channel owner 및 양 editor/HWP start-value handoff case가 오류 없는 run-log 감사와 정상 종료를 포함해 통과한다. F212.7-14와 기능 상위 F212.7을 완료하고 view 비용 및 성능 benchmark는 별도로 유지한다. Product protocol은 변경하지 않는다.
 
 - F212.13: 보존된 F239-47-6/F239-179 acceptance로 승인된 양 host IME activation-check 집계를 완료한다. 두 AppKit reference가 terminal document 열 단계와 일치하고 전체 363/515-sample 녹화의 열 glyph/underline 단계 모두 측정 근거가 있다. Error 감사, 입력기 및 공통 baseline 복원과 정상 종료가 통과한다. Application 검사 반복이나 publication은 포함하지 않으며 별도 client lifecycle은 미완료로 유지한다.

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.14-1: Add an opt-in drag benchmark that rejects diagnostic tracing, verifies the actual application mode and writes complete measurements before applying unchanged performance targets. Both hosts produce complete 137/141-frame reports with clean error audits and shutdown, then fail cadence and all latency targets. Calculator owners pass 12/12. Complete the runner and retain performance acceptance under F212.14.
+
 - F212.7-14: Complete the view-composition aggregate against the current ready/queued-attachment contract rather than the obsolete first-pull task wording. All 52 channel owners, the native page-world channel owner and both editor/HWP start-value handoff cases pass with clean run-log audit and normal shutdown. Close F212.7-14 and functional parent F212.7; keep view cost and performance benchmarks separate. No product protocol is changed.
 
 - F212.13: Complete the approved two-host IME activation-check aggregate from the retained F239-47-6/F239-179 acceptance. Both AppKit references match all ten terminal documents, and all ten glyph/underline stages have measured proof in complete 363/515-sample recordings. Error auditing, input-source and shared baseline restoration, and normal shutdown pass. No repeated application check or publication is included; the separate client lifecycle remains open.
