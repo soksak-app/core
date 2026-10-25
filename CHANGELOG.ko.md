@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.12-1: Boolean surface flag를 선언처럼 읽는 대신 loaded plugin metadata에 선언 composition을 보존한다. Environment 및 plugin-row owner가 composition 누락을 재현하고 수정 후 owner 25개와 재빌드한 양 host metadata 검사가 오류 감사, baseline 복원 및 종료와 함께 통과한다. View content readiness를 녹화 중 검사하고 실패 시 연 tab을 닫으며 display-consumer owner 여섯 개가 모두 통과한다. 명시적인 expected-pixel case가 남아 전체 view display acceptance는 열어 둔다.
+
 - F212.14-4: 연속 layout을 포함한 모든 준비 응답 전에 Wails raster configuration을 시작한다. Post-DOM refresh, exact-raster 대기 및 cancellation 오류를 유지한다. 수정 전 누락 작업 assertion 두 개가 실패하며 수정 후 owner 다섯 개와 녹화 geometry 사례 세 개가 통과하고 감사, baseline 복원 및 종료도 통과한다. 완전한 trace 없는 benchmark는 여전히 모든 성능 목표를 실패하므로 F212.14를 열어 둔다.
 
 - F239-184: 표준 random-text API로 opaque image-detach request identifier를 생성하여 application 재시작이 persistent supplier request ID를 재사용하지 않게 한다. 수정 전 독립 manager 충돌 검사가 실패하며 수정 후 소유 detach 검사 여덟 개가 모두 통과한다. 재빌드한 Wails runtime이 reload와 녹화된 divider-drag 정렬, 오류 감사, frontmost baseline 복원 및 정상 종료를 통과하여 F239-183과 F239-184를 완료한다. 성능 acceptance는 별도로 유지한다.

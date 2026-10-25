@@ -1,6 +1,7 @@
 // Checks installed view display using explicit per-plugin content cases and declared surface/document statuses.
 // Missing content cases fail explicitly; sampled colour variation alone does not establish plugin content.
 import test from "node:test";
+import assert from "node:assert/strict";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { unansweredViewCalls } from "@soksak/window-check/view-calls.mjs";
@@ -32,5 +33,21 @@ for (const app of Object.values(APPS)) {
     const offsets = currentEventOffsets(s.app.configDir);
     await untilViewReady(s, offsets, () => fresh(s, { log: { call: "debug" }, reads: ["page.view.call", "page.view.reply"] }));
     await checkViewDisplay(s, t);
+  });
+}
+
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: installed plugin metadata matches the opened view composition`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    const opened = await fresh(s);
+    const surface = (await s.get("core.surfaces")).find(item => item.surface === opened.surface);
+    assert.ok(surface, "the fixture surface is absent");
+    assert.equal(surface.composition, "view");
+    const installed = await s.get("core.plugins");
+    assert.equal(installed.error, null);
+    const metadata = installed.plugins.find(item => item.id === surface.plugin);
+    assert.ok(metadata?.installed?.enabled, "the opened view plugin is not installed and enabled");
+    assert.equal(metadata.composition, surface.composition,
+      `${surface.plugin}: installed metadata differs from the opened surface composition`);
   });
 }

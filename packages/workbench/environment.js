@@ -7,6 +7,7 @@ import { registry as exposure } from "./exposure.js";
 import { declarePluginSidecars } from "./plugin-host.js";
 import { declareProjectData } from "./plugin-data.js";
 import { registerPlugin, registerSection } from "./registry.js";
+import { compositionKindOf } from "./surface-composition-kind.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
   checkReferences, manifestSidecars, mergeExposes, modulePath, validateDiagnostics, normalizeSidebarDefaults, validateEnvironment,
@@ -109,6 +110,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
   setSidebarDefaults(normalizeSidebarDefaults(environment, manifests.map(({ manifest }) => manifest)));
   units = manifests.map(({ manifest, version }) => ({
     id: manifest.id, name: manifest.name, description: manifest.description, version, surface: Boolean(manifest.surface),
+    composition: compositionKindOf(manifest.surface),
     // default: a plugin without a surface declares no surface.unload.
     unload: manifest.surface?.unload ?? false,
     // default: sections is an optional field of plugin.json; without it there are no sections.
@@ -125,7 +127,7 @@ export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => mod
 
 /**
  * Returns the installed plugins in id order. The settings window and the plugin list of the library use it.
- * It includes plugins without a surface. An item is {id, name, description, version, surface, sections, sidecars}.
+ * It includes plugins without a surface. An item is {id, name, description, version, surface, composition, sections, dependencies}.
  */
 export const pluginUnits = () => units;
 

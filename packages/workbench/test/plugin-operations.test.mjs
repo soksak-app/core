@@ -29,7 +29,7 @@ const state = {
 
 test("plugin rows report loaded surface compositions before any tab is open", { timeout: 5000 }, () => {
   const units = [
-    { ...loaded[0], surface: { composition: { kind: "view", page: "ui/page.html" } } },
+    { ...loaded[0], surface: true, composition: "view" },
     loaded[1],
   ];
   const compositions = (rows) => rows.map(({ id, composition }) => ({ id, composition }));

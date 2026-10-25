@@ -3,7 +3,7 @@ import test from "node:test";
 import { observeViewDisplay as checkViewDisplay, checkViewDisplay as acceptViewDisplay } from "../view-display.mjs";
 
 /** A window with two installed views but only one open card, and decoded frames of that card. */
-function fixture({ blank = false, offset = 0 } = {}) {
+function fixture({ blank = false, offset = 0, terminalOnly = false } = {}) {
   const applied = { x: 20, y: 40, w: 120, h: 80 };
   const card = { id: "probe-card", x: 0, y: 0, w: 160, h: 140, tabs: [{ id: "probe-original", plugin: "terminal" }] };
   const surface = (id, plugin) => ({ surface: id, plugin, visible: true, composition: "view", applied, declared: applied,
@@ -19,7 +19,7 @@ function fixture({ blank = false, offset = 0 } = {}) {
   };
   if (blank) for (let y = 0; y < 30; y++) for (let x = 0; x < 160; x++) paint(x, y, x < 80 ? 0 : 160);
   else for (let y = 40; y < 120; y++) for (let x = 20; x < 80; x++) paint(x, y, 0);
-  const plugins = ["terminal", "probe-unopened"].map((id) => ({ id, composition: "view", state: "loaded",
+  const plugins = (terminalOnly ? ["terminal"] : ["terminal", "probe-unopened"]).map((id) => ({ id, composition: "view", state: "loaded",
     installed: { enabled: true, version: "0.0.1" } }));
   const s = {
     async get(name, tab) {
@@ -77,5 +77,34 @@ test("the view display checker measures content at a nonzero capture offset", { 
 
 test("the view display checker rejects a missing plugin content case with its opened tab", { timeout: 5000 }, async (t) => {
   const f = fixture();
-  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording), /terminal.*probe-tab-1.*content case/);
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /terminal.*probe-tab-1.*content case/);
+});
+
+test("view content readiness is verified before the recording stops", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true });
+  let stopped = false;
+  f.s.record = async () => ({ frames: "fixture-recording", stop: async () => {
+    stopped = true;
+    return { limited: false, longestGap: 16 };
+  } });
+  await acceptViewDisplay(f.s, t, f.readRecording, new Map([["terminal", async () => {
+    assert.equal(stopped, false, "recording ended before content readiness");
+  }]]));
+  assert.equal(stopped, true);
+});
+
+test("a failed view readiness check closes the opened tab", { timeout: 5000 }, async (t) => {
+  const f = fixture({ terminalOnly: true });
+  const until = f.s.until;
+  let refused = false;
+  f.s.until = async (...args) => {
+    if (args[0] === "core.surfaces" && !refused) {
+      refused = true;
+      throw new Error("forced surface readiness failure");
+    }
+    return until(...args);
+  };
+  await assert.rejects(acceptViewDisplay(f.s, t, f.readRecording, new Map()), /forced surface readiness failure/);
+  assert.deepEqual((await f.s.get("core.surfaces")).map(item => item.surface), ["probe-original"],
+    "failed view preparation left its opened tab in the next check");
 });

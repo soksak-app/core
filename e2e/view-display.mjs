@@ -29,42 +29,44 @@ export async function observeViewDisplay(s, t, readRecording = (directory) => fr
   assert.equal(installed.error, null, `installed plugins failed: ${installed.error}`);
   const views = installed.plugins.filter((plugin) => plugin.installed?.enabled && plugin.composition === "view");
   t.diagnostic(`installed view plugins: ${views.map((plugin) => plugin.id).join(", ") || "none"}`);
-  assert.ok(views.length > 0, "core.plugins lists no installed enabled plugin with composition view");
+  assert.ok(views.length > 0, `core.plugins lists no installed enabled plugin with composition view: ${JSON.stringify(installed.plugins)}`);
   for (const view of views) {
     const recording = await s.record({});
     let displayed = 0;
     let stopped;
     let tab;
     try {
-      ({ tab } = await s.run("core.card.add-tab", { card: card.id, plugin: view.id }));
-      await s.until("core.surfaces", (all) => all.some((item) => item.surface === tab && item.visible
-        && item.exposes.includes("status core.surface.document")), `view ${view.id} did not show its document`);
-      ({ displayed } = await s.presented());
+      try {
+        ({ tab } = await s.run("core.card.add-tab", { card: card.id, plugin: view.id }));
+        await s.until("core.surfaces", (all) => all.some((item) => item.surface === tab && item.visible
+          && item.exposes.includes("status core.surface.document")), `view ${view.id} did not show its document`);
+        const document = await s.get("core.surface.document", tab);
+        assert.deepEqual(document.unbound, [], `${view.id}: view document controls without a command or dom name`);
+        if (verifyContent) await verifyContent({ plugin: view.id, tab, document });
+        ({ displayed } = await s.presented());
+      } finally {
+        stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
+      }
+      const captured = readRecording(recording.frames);
+      assert.equal(stopped.limited, false, `${view.id}: recording reached its bounded buffer`);
+      assert.ok(captured.length > 1, `${view.id}: recording has ${captured.length} frames`);
+      const now = (await s.get("core.surfaces")).find((item) => item.surface === tab && item.visible);
+      assert.ok(now, `${view.id}: opened tab ${tab} is not visible`);
+      assert.equal(now.status.phase, "ready", `${view.id}: surface failed: ${now.status.error}`);
+      assert.equal(now.composition, "view", `${view.id} reports composition ${now.composition}`);
+      assert.deepEqual((await s.get("core.surface.document", tab)).unbound, [],
+        `${view.id}: ready view document controls without a command or dom name`);
+      const counts = captured.map((frame) => colours(frame, now.applied));
+      const first = counts.findIndex((count) => count > 1);
+      assert.ok(first >= 0, `${view.id}: sampled surface area is blank in ${counts.length} frames`);
+      assert.ok(counts.at(-1) > 1, `${view.id}: the last sampled surface area is blank`);
+      t.diagnostic(`${view.id}: first varied-area frame ${first + 1} of ${captured.length}, gap=${stopped.longestGap}ms`);
     } finally {
-      stopped = await recording.stop({ after: displayed ? displayed + 100 : 0 });
-    }
-    const captured = readRecording(recording.frames);
-    assert.equal(stopped.limited, false, `${view.id}: recording reached its bounded buffer`);
-    assert.ok(captured.length > 1, `${view.id}: recording has ${captured.length} frames`);
-    const now = (await s.get("core.surfaces")).find((item) => item.surface === tab && item.visible);
-    assert.ok(now, `${view.id}: opened tab ${tab} is not visible`);
-    assert.equal(now.status.phase, "ready", `${view.id}: surface failed: ${now.status.error}`);
-    const counts = captured.map((frame) => colours(frame, now.applied));
-    const first = counts.findIndex((count) => count > 1);
-    assert.ok(first >= 0, `${view.id}: sampled surface area is blank in ${counts.length} frames`);
-    assert.ok(counts.at(-1) > 1, `${view.id}: the last sampled surface area is blank`);
-    t.diagnostic(`${view.id}: first varied-area frame ${first + 1} of ${captured.length}, gap=${stopped.longestGap}ms`);
-
-    assert.equal(now.composition, "view", `${view.id} reports composition ${now.composition}`);
-    const doc = await s.get("core.surface.document", now.surface);
-    assert.deepEqual(doc.unbound, [], `${view.id}: view document controls without a command or dom name`);
-    try {
-      if (verifyContent) await verifyContent({ plugin: view.id, tab, document: doc, captured, rect: now.applied });
-    } finally {
-      // Close the returned tab even when its explicit content case is absent or fails.
-      await s.run("core.tab.close", { tab });
-      await s.until("core.surfaces", (all) => !all.some((item) => item.surface === tab),
-        `view ${view.id} tab ${tab} did not close`);
+      if (tab) {
+        await s.run("core.tab.close", { tab });
+        await s.until("core.surfaces", (all) => !all.some((item) => item.surface === tab),
+          `view ${view.id} tab ${tab} did not close`);
+      }
     }
   }
   assert.deepEqual((await s.get("core.page.audit")).unbound, [], "main document controls without a command or dom name");

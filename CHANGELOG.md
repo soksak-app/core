@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F212.12-1: Preserve declared composition in loaded plugin metadata instead of reading a boolean surface flag as a declaration. Environment and plugin-row owners reproduce the missing composition; all 25 owners and both rebuilt host metadata checks pass with clean audit, baseline restoration and shutdown. Keep view content readiness inside its recording and close opened tabs on failure; all six display-consumer owners pass. Full view display acceptance remains open for explicit expected-pixel cases.
+
 - F212.14-4: Start Wails raster configuration before every preparation reply, including continuous layouts. Preserve post-DOM refresh, exact-raster waiting and cancellation errors. Two skipped-work assertions fail before correction; five owners and three recorded geometry cases pass afterward with clean audit, baseline restoration and shutdown. The complete untraced benchmark still fails all performance targets; F212.14 remains open.
 
 - F239-184: Generate opaque image-detach request identifiers with the standard random-text API so application restarts do not reuse a persistent supplier request ID. The independent-manager collision fails before correction; all eight owning detach tests pass afterward. The rebuilt Wails runtime passes reload and recorded divider-drag alignment with clean error audit, restored frontmost baseline and normal shutdown; close F239-183 and F239-184. Performance acceptance remains separate.

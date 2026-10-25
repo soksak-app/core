@@ -41,7 +41,7 @@ const installed = { plugins: [
   { id: "side", package: "@fixture/side", version: "0.0.1", manifest: files.side },
 ] };
 
-const { environment, installEnvironment, pluginDiagnostics } = await import("../environment.js");
+const { environment, installEnvironment, pluginDiagnostics, pluginUnits } = await import("../environment.js");
 const registry = await import("../registry.js");
 const settings = await import("../settings.js");
 const { pluginSidecarsOf } = await import("../plugin-host.js");
@@ -49,6 +49,9 @@ const { pluginSidecarsOf } = await import("../plugin-host.js");
 test("the environment registers card plugins, sections, and sidebar defaults from the installed manifests", async () => {
   assert.throws(() => environment(), /not loaded/);
   assert.doesNotThrow(() => installEnvironment(structuredClone(files["/environment.json"]), structuredClone(installed)), "the environment was rejected");
+  assert.deepEqual(pluginUnits().map(({ id, composition }) => ({ id, composition })), [
+    { id: "card", composition: "view" }, { id: "side", composition: null },
+  ], "loaded plugin metadata must preserve composition without opening a tab");
   assert.deepEqual(registry.plugins().map((p) => p.id), ["card"], "a plugin without a surface is not a card plugin");
   const { contributions, ...target } = registry.plugin("card").surface("tab 1");
   assert.deepEqual(target,
