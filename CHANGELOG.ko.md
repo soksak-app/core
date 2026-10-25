@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-129: View-retirement helper가 기존 `WindowData`를 사용해 source origin,
+  channel, event stream을 읽도록 한다. Sidecar root의
+  `filter_map(bool.then(...))`를 `filter`와 `map`으로 바꾼다. View order 및
+  retained-root owner test가 각각 1/1 통과하고 diagnostics와 default clippy가
+  통과했다. 동작은 바뀌지 않았다.
+
 - F239-127: 선언된 Serde 경로에서 image detach acknowledgement를 읽고
   선언된 acknowledgement field만 파싱한다. Red: 원래 owner test는 140단계 root
   member에서 실패했고, 세 위치로 확장한 테스트는 acknowledgement 내부 member에서

@@ -2059,10 +2059,13 @@ impl<O: Owner> Sidecars<O> {
                     .iter()
                     .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root}))
                     .collect();
-                keep.extend(state.roots.iter().filter_map(|(surface, root)| {
-                    (!listed.contains(surface.as_str()))
-                        .then(|| serde_json::json!({"surface": surface, "root": root}))
-                }));
+                keep.extend(
+                    state
+                        .roots
+                        .iter()
+                        .filter(|&(surface, _)| !listed.contains(surface.as_str()))
+                        .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root})),
+                );
                 let process = state
                     .running
                     .get(&name)

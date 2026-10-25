@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-129: Pass the existing `WindowData` to view retirement so the helper
+  reads its source origins, channels and event stream from their owner. Replace
+  the sidecar root `filter_map(bool.then(...))` with `filter` and `map`. The
+  view-order and retained-root owner tests pass 1/1 each; required clippy checks
+  pass for diagnostics and default builds. Behavior is unchanged.
+
 - F239-125: Register a test-owned filesystem platform for the Go CLI event-log
   loss tests and restore the previous registration during cleanup. The package
   tests do not run through `cmd/sok`, which registers the operating-system
