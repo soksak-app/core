@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-47-8: Native activation input-source 복원 검증을 완료한다. 추적 repeat은 명시적인
+  ABC baseline으로 focused 실행 세 번을 통과한다. 각 실행에서 두 input context의 Korean
+  adoption, 종료 전 ABC 복원, 종료 후 독립 조회에서 ABC와 원래 전면 application 복원을
+  확인한다(0.899초, 0.408초, 0.419초). 이전 Korean 사후 조회 결과는 재현되지 않았으며 원인은 확인되지
+  않았다. 이는 test fixture의 source 복원만 기록하며 terminal IME 수정으로 주장하지 않는다.
+
 - F239-93-3-1: Wails Darwin/Linux private-file mode test 선언 8건을 기존
   host-contract의 private log directory, 새 파일, append, process-lock mode
   case에 연결한다. Red: 변경 전 static audit에서 이 test들의 undefined-case

@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-47-8: Complete the native activation input-source restoration
+  verification. The tracked repeat passes three focused runs with an
+  explicit ABC baseline; each run confirms Korean adoption in both input
+  contexts, ABC restoration before exit, and independent post-exit
+  restoration of ABC and the original frontmost application (0.899 s,
+  0.408 s, 0.419 s). The earlier Korean post-run result did not recur;
+  its cause remains unknown. This records test-fixture restoration only
+  and does not claim a terminal IME fix.
+
 - F239-93-3-1: Map the eight Wails Darwin/Linux private-file mode test
   declarations to existing host-contract cases for private log directories,
   new files, appends and process-lock mode. Red: the unchanged static audit
