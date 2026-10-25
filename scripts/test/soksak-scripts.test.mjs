@@ -259,6 +259,24 @@ test("host structure audit permits only the Rust view-generation child module in
   ]);
 });
 
+test("host structure audit permits only the Rust private process-wait test in C6", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/sok/wailsv3/src/sok.go",
+    "packages/sok/tauriv2/src/sok.rs",
+    "packages/sok/wailsv3/tests/process_wait_test.go",
+    "packages/sok/tauriv2/src/process_wait_test.rs",
+  ];
+  const pairs = [{ left: "packages/sok/wailsv3", right: "packages/sok/tauriv2", rows: ["C6"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/sok/tauriv2/src/unlisted_process_wait_test.rs",
+  ], pairs, hostsSpec), [
+    "packages/sok/tauriv2/src/unlisted_process_wait_test: no counterpart in packages/sok/wailsv3",
+  ]);
+});
+
 test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {
   const source = `
 #[tauri::command]

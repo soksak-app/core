@@ -9,13 +9,6 @@ mod support;
 
 use support::run;
 
-#[test]
-fn process_wait_child() {
-    if std::env::var_os("SOKSAK_PROCESS_WAIT_CHILD").is_some() {
-        std::process::exit(0);
-    }
-}
-
 // contract: cli.process-wait.timeout-is-an-error
 #[test]
 fn process_wait_reports_timeout() {
@@ -32,10 +25,13 @@ fn process_wait_reports_timeout() {
 // contract: cli.process-wait.reports-pid-absent
 #[test]
 fn process_wait_reports_an_already_ended_pid() {
+    if std::env::var_os("SOKSAK_PROCESS_WAIT_CHILD").is_some() {
+        return;
+    }
     let executable = std::env::current_exe().expect("test executable");
     let mut child = Command::new(executable)
         .arg("--exact")
-        .arg("process_wait_child")
+        .arg("process_wait_reports_an_already_ended_pid")
         .arg("--nocapture")
         .env("SOKSAK_PROCESS_WAIT_CHILD", "1")
         .spawn()

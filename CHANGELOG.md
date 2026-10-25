@@ -14,6 +14,13 @@
   test CLI's configured core version. The focused catalog and install tests
   pass in default, diagnostics and dev configurations for both hosts.
 
+- F239-126: Record the exact Rust private unit-test path for the CLI process-wait
+  platform-error case. The Rust child module exercises the private injected
+  boundary; the Go external test covers the same public CLI result. The C6
+  allowance names only the placement difference and leaves shared behavior
+  coverage required in both hosts. The focused mapping test passes 1/1, and
+  `node scripts/check-hosts.mjs` passes all three pairs.
+
 - F239-119: Require the project member in Tauri ProjectShown while
   preserving explicit `null`. The production `Argument<ProjectShown>` decoder
   Red accepted `{}` as `None`; the same MockRuntime owner case now passes 1/1,

@@ -13,6 +13,12 @@
   맞춘다. 집중 catalog 및 install test가 양쪽 host의 default, diagnostics, dev
   구성에서 통과한다.
 
+- F239-126: CLI process-wait platform-error case의 정확한 Rust 비공개
+  unit-test 경로를 기록한다. Rust child module은 비공개 injected 경계를 검사하고,
+  Go external test는 같은 공개 CLI 결과를 검사한다. C6 허용은 배치 차이만
+  명시하며 양쪽 host의 공통 동작 검사는 계속 필수다. 집중 mapping test 1/1과
+  `node scripts/check-hosts.mjs`의 세 pair 검사가 통과했다.
+
 - F239-119: 명시적 null 의미는 유지하면서 Tauri ProjectShown의 project
   member를 필수로 요구한다. Production `Argument<ProjectShown>` decoder Red는
   `{}`를 `None`으로 허용했다. 같은 MockRuntime owner case는 이제 1/1 통과하며,

@@ -180,6 +180,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 | C3 | `src/dev.go` | 없음 | Go는 `dev` build 태그만 컴파일하는 파일의 `init`으로 `.dev` 식별자를 고르고, Rust는 `src/identity.rs` 안의 `cfg!(feature = "dev")`로 고르므로 따로 파일이 없다 |
 | C4 | none | `tests/support/folder.rs` | `sok` 시험을 위한 H12와 같은 guard다. `sok`의 Go 시험은 `testing.T.TempDir`를 쓴다. 시험은 다른 패키지의 경로를 읽지 않으므로 호스트와 `sok` 시험 crate가 각자 파일을 둔다 |
 | C5 | none | `src/event_log_lock_test.rs` | `sok`의 Rust writer는 panic한 thread가 poison한 lock을 복구하며, 이 in-crate 시험은 write observer의 lock을 poison시킨다. Go mutex는 poison되지 않으므로 Go writer에는 시험할 lock 상태가 없다 |
+| C6 | `tests/process_wait_test.go` | `src/process_wait_test.rs` | Rust test는 비공개 injected `run_with_process_wait` 경계를 public으로 만들지 않고 호출하도록 `sok.rs`의 child module로 둔다. Go test는 external test package에서 공개 `sok.Run`을 호출한다. 양쪽은 공유 `cli.process-wait.platform-error-is-reported` 결과를 검사한다. 이 정확한 두 경로는 비공개 test 배치 차이만 기록하며 공통 동작 검사를 면제하지 않는다 |
 
 ## Memory pressure
 

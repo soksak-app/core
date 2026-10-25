@@ -179,6 +179,7 @@ On Windows both hosts implement only directory identity (`platform/windows/ident
 | C3 | `src/dev.go` | none | Go selects the `.dev` identifier by an `init` in a file that only the `dev` build tag compiles; Rust selects it with `cfg!(feature = "dev")` inside `src/identity.rs`, so it has no file of its own |
 | C4 | none | `tests/support/folder.rs` | The same guard as H12 for the tests of `sok`; the Go tests of `sok` use `testing.T.TempDir`. The host and `sok` test crates each keep their own file, because a test does not read the paths of another package |
 | C5 | none | `src/event_log_lock_test.rs` | The Rust writer of `sok` recovers a lock that a panicking thread poisoned, and this in-crate test poisons the lock of the write observer; a Go mutex does not poison, so the Go writer has no such lock state to test |
+| C6 | `tests/process_wait_test.go` | `src/process_wait_test.rs` | The Rust test is a child of `sok.rs` so it can call the private injected `run_with_process_wait` boundary without making it public. The Go test calls public `sok.Run` through its external test package. Both assert the shared `cli.process-wait.platform-error-is-reported` result; these exact paths record only the private-test placement difference and waive no shared behavior |
 
 ## Memory pressure
 

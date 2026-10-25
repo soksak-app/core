@@ -707,7 +707,23 @@ pub fn run(
     stderr: &mut dyn Write,
     options: &Options,
 ) -> i32 {
-    let result = execute(args, stdout, stderr, options);
+    let mut wait_process_end = |pid, timeout| {
+        let platform = platform::current().map_err(process::WaitError::Platform)?;
+        platform
+            .wait_process_end(pid, timeout)
+            .map_err(process::WaitError::Operation)
+    };
+    run_with_process_wait(args, stdout, stderr, options, &mut wait_process_end)
+}
+
+fn run_with_process_wait(
+    args: &[String],
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    options: &Options,
+    wait_process_end: &mut dyn FnMut(i32, std::time::Duration) -> Result<bool, process::WaitError>,
+) -> i32 {
+    let result = execute(args, stdout, stderr, options, wait_process_end);
     // When the error cannot be written to standard error, there is nowhere to report it, so the code reports it with exit status 3 (docs/spec/cli.md).
     let (written, status) = match result {
         Ok(()) => return 0,
@@ -759,13 +775,14 @@ fn execute(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
     options: &Options,
+    wait_process_end: &mut dyn FnMut(i32, std::time::Duration) -> Result<bool, process::WaitError>,
 ) -> Result<(), Error> {
     // The arguments after -- are those of the application that starts again, so the command parses its own.
     if args.first().map(String::as_str) == Some("app") {
         return appupdate::run_app(&args[1..], stdout);
     }
     if args.first().map(String::as_str) == Some("process") {
-        return process::run(&args[1..], stdout);
+        return process::run(&args[1..], stdout, wait_process_end);
     }
     // A command word with a dot is a declared command (docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {
@@ -823,6 +840,10 @@ fn execute(
     outcome?;
     closed.map_err(Error::Failed)
 }
+
+#[cfg(test)]
+#[path = "process_wait_test.rs"]
+mod process_wait_tests;
 
 /// Sends the planned request and prints the result.
 fn send(client: &mut Client, request: Request, stdout: &mut dyn Write) -> Result<(), Error> {
