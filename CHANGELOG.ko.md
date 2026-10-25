@@ -49,8 +49,11 @@
 - F239-77: 역할별 `host.sampler.memory` record를 schema 3 JSON Schema로 엄격히
   검증한다. Event-log line schema 2는 유지한다. Owner test는 문서화된 성공 및 오류
   형식을 각각 확인하고 잘못된 조합을 거부하며 실제 capture 오류와 중단 표식을
-  보존한다. 집중 JS, Go, Rust 검사와 `make events-check`가 통과한다. Runtime 검증
-  전 plugin/sidecar package catalog를 schema 3 데이터로 배포하고 새로 설치해야 한다.
+  보존한다. 집중 JS, Go, Rust 검사와 `make events-check`가 통과한다.
+  F84 검증은 local schema 3 catalog 일곱 개와 event 116개를 검사해 finding 0건을
+  기록한다. Candidate 설치와 F84 두 host config는 해당 registry를 사용하며
+  frame-identity host case 두 개가 application error 없이 통과한다. Package는
+  publish하지 않았다.
 
 - F239-78: Diagnostic capture에 stream별 ScreenCaptureKit lifecycle event를 추가한다. 집중 `capture_callback_test`는 1/1 통과한다.
   Gate된 debug event는 start 요청/완료, 첫 sample, delegate-stop을

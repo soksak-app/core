@@ -54,8 +54,10 @@
   The owner tests cover each documented success and error shape, reject
   malformed combinations, and preserve real capture errors and interrupted
   markers. Focused JS, Go and Rust checks and `make events-check` pass.
-  Plugin and sidecar package catalogs still require schema-3 package data and
-  a fresh install before runtime verification.
+  F84 validation covers seven local schema-3 catalogs and 116 events with zero
+  findings. The candidate install and both host configs use that registry; both
+  F84 frame-identity host cases pass without application errors. Packages were
+  not published.
 
 - F239-78: Add per-stream ScreenCaptureKit lifecycle events for diagnostic captures. Gated debug events record start requests and completions, the first sample and delegate-stop callbacks; one error event records the first failure before capture wait returns. Each event carries a stable attempt sequence, raw Mach timestamps and timebase, and only timestamped main-thread window facts. The focused `capture_callback_test` passes 1/1. The observed startup delay remains unexplained.
 
