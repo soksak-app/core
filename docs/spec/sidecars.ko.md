@@ -155,7 +155,7 @@ plugin 세션의 실패는 그 sidecar의 실패 기록에 더해지며, 그 기
 | 요청 generation이 설정된 attachment보다 더 새로움 | `{ok: false, error: "futureGeneration", currentGeneration}` | 없음 |
 | request id를 다른 surface, image 이름 또는 generation에 이미 사용함 | `{ok: false, error: "requestMismatch"}` | 없음 |
 
-모든 결과는 opaque `request`, `name`, `generation`도 그대로 담는다. 같은 tuple이며 더 새 image owner가 생기지 않았을 때만 request id 재전송에 기존 결과를 돌려주며, 다른 tuple로 재사용하면 `requestMismatch`다. 호스트는 정확한 request id, sidecar, surface, image 이름, generation으로 응답을 연결하며 다른 surface, owner, request, generation의 응답은 기다리는 요청을 완료할 수 없다. Page 시작은 reload가 만든 모든 detach 응답을 받은 뒤 새 page의 background session open과 대체 image attach를 허용한다. 실패하거나 시간이 초과된 detach는 sidecar, surface, image 이름, generation, request id를 밝히며 page 시작을 실패시킨다.
+모든 결과는 opaque `request`, `name`, `generation`도 그대로 담는다. 같은 tuple이며 더 새 image owner가 생기지 않았을 때만 request id 재전송에 기존 결과를 돌려주며, 다른 tuple로 재사용하면 `requestMismatch`다. 호스트는 정확한 request id, sidecar, surface, image 이름, generation으로 응답을 연결하며 다른 surface, owner, request, generation의 응답은 기다리는 요청을 완료할 수 없다. 호스트는 JSON root, `image` 내부, acknowledgement object 내부의 무관한 member를 materialize하지 않고 선언된 경로의 `image.detached`를 인식한다. 더 깊은 무관한 member가 있어도 응답 처리를 막거나 원본 acknowledgement를 일반 메시지로 전달하지 않는다. Page 시작은 reload가 만든 모든 detach 응답을 받은 뒤 새 page의 background session open과 대체 image attach를 허용한다. 실패하거나 시간이 초과된 detach는 sidecar, surface, image 이름, generation, request id를 밝히며 page 시작을 실패시킨다.
 
 ## 테스트
 

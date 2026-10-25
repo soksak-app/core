@@ -5,7 +5,10 @@ use std::time::Duration;
 
 use serde_json::value::RawValue;
 
-use super::super::{Failure, ImageDetachWaiter, Message, Owner, SidecarDeclaration, Sidecars};
+use super::super::{
+    Failure, ImageDetachWaiter, Message, Owner, ResponseError, ResponseSender, SidecarDeclaration,
+    Sidecars, try_handle_image_envelope,
+};
 
 #[derive(Clone)]
 struct TestOwner;
@@ -130,7 +133,7 @@ fn manager() -> (tempfile::TempDir, Sidecars<TestOwner>) {
 }
 
 fn pending(
-    sidecars: &Sidecars<TestOwner>,
+    sidecars: &Sidecars<impl Owner>,
     request: &str,
 ) -> std::sync::mpsc::Receiver<Result<(), String>> {
     let (sender, receiver) = sync_channel(1);
@@ -147,8 +150,55 @@ fn pending(
     receiver
 }
 
+struct NoopResponseSender;
+
+impl ResponseSender for NoopResponseSender {
+    fn send(&self, _surface: &str, _image: &str, _body: &RawValue) -> Result<(), ResponseError> {
+        Ok(())
+    }
+}
+
 fn ack(value: serde_json::Value) -> Box<RawValue> {
     RawValue::from_string(value.to_string()).unwrap()
+}
+
+// contract: images.detach.ack-consumed
+#[test]
+fn a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement() {
+    let nested = format!("{}0{}", "[".repeat(140), "]".repeat(140));
+    let cases = [
+        format!(
+            r#"{{"image":{{"detached":{{"request":"request-a","name":"region-a","generation":7,"ok":true,"result":"detached"}}}},"metadata":{nested}}}"#
+        ),
+        format!(
+            r#"{{"image":{{"detached":{{"request":"request-a","name":"region-a","generation":7,"ok":true,"result":"detached"}},"metadata":{nested}}}}}"#
+        ),
+        format!(
+            r#"{{"image":{{"detached":{{"request":"request-a","name":"region-a","generation":7,"ok":true,"result":"detached","metadata":{nested}}}}}}}"#
+        ),
+    ];
+
+    for (index, raw_body) in cases.into_iter().enumerate() {
+        let fixture = fixture(silent_supplier(), &["fixture-sidecar"]);
+        let request = format!("request-{index}");
+        let response = pending(&fixture.sidecars, &request);
+        let raw_body = raw_body.replace("request-a", &request);
+        let body = RawValue::from_string(raw_body)
+            .expect("the fixture is valid JSON with an unrelated deep member");
+
+        assert!(try_handle_image_envelope(
+            &fixture.owner,
+            "fixture-sidecar",
+            "surface-a",
+            &body,
+            &NoopResponseSender,
+        ), "deep unrelated member location {index} must not hide the acknowledgement");
+        assert_eq!(
+            response.try_recv().expect("the acknowledgement settles synchronously"),
+            Ok(()),
+            "deep unrelated member location {index} must settle its exact waiter"
+        );
+    }
 }
 
 // contract: images.detach.ack-exact-owner

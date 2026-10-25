@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-127: Read image detach acknowledgements from their declared Serde path
+  and parse only the declared acknowledgement fields. Red: the original owner
+  test failed for a 140-level root member; its three-location extension exposed
+  an unsettled waiter when the member was inside the acknowledgement. An
+  intermediate correction still read the old envelope path and did not settle
+  the waiter. Green: Rust root, `image`, and acknowledgement deep-member cases
+  pass 1/1, as do exact-owner, mismatch, rejection, and multi-region tests; the
+  Wails counterpart passes all three locations 1/1. Request, sidecar, surface,
+  image, and generation validation remains intact.
+
 - F239-113: Update the JavaScript event-catalog fixtures to schema 3 and
   Draft 2020-12 field schemas. Keep raw event-log line schema 2 and reject old
   catalog formats. The preserved Node run failed because audit-run used a

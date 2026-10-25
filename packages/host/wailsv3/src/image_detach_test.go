@@ -247,6 +247,35 @@ func TestImageDetachAcknowledgementIsConsumedByTheHost(t *testing.T) {
 	}
 }
 
+// contract: images.detach.ack-consumed
+func TestImageDetachAcknowledgementIgnoresAnUnrelatedDeepMember(t *testing.T) {
+	deep := strings.Repeat("[", 140) + "0" + strings.Repeat("]", 140)
+	cases := []string{
+		`{"image":{"detached":{"request":"request-1","name":"view","generation":7,"ok":true,"result":"detached"}},"metadata":` + deep + `}`,
+		`{"image":{"detached":{"request":"request-1","name":"view","generation":7,"ok":true,"result":"detached"},"metadata":` + deep + `}}`,
+		`{"image":{"detached":{"request":"request-1","name":"view","generation":7,"ok":true,"result":"detached","metadata":` + deep + `}}}`,
+	}
+
+	for index, body := range cases {
+		owner := &imageDetachMessageOwner{}
+		target := imageDetachTarget{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar", Generation: 7, Owner: owner}
+		request := fmt.Sprintf("request-%d", index+1)
+		waiter := &imageDetachWaiter{target: target, owner: owner, result: make(chan imageDetachResult, 1)}
+		sidecars := &Sidecars{imageDetachRequests: map[string]*imageDetachWaiter{request: waiter}}
+		body = strings.ReplaceAll(body, "request-1", request)
+
+		if !sidecars.tryHandleImageEnvelope(owner, "fixture-sidecar", "surface-a", json.RawMessage(body)) {
+			t.Fatalf("image.detached was not consumed for deep member location %d", index)
+		}
+		if len(owner.events) != 0 {
+			t.Fatalf("host events %v, want no page event for deep member location %d", owner.events, index)
+		}
+		if result := <-waiter.result; !result.ok || result.result != "detached" {
+			t.Fatalf("detach result %+v, want detached success for deep member location %d", result, index)
+		}
+	}
+}
+
 // contract: images.detach.ack-exact-owner
 func TestImageDetachWaitsForTheMatchingSupplierAcknowledgement(t *testing.T) {
 	surfaces := sidecarSessionSurfaces(t)

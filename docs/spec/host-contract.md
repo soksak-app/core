@@ -395,7 +395,7 @@ Items:
 | `log.binding-failure.returned-not-logged` | A failed binding call is returned to the page without a log line of the framework transport, so the page writes the failure once. | wailsv3 only: the Wails HTTP transport carries binding calls; Tauri invoke writes no log line for a returned error |
 | `log.service.standard-error-goes-to-service-log` | A persistent service started by the host writes its standard error to `logs/<executable-name>.log`. | both |
 | `log.service.open-failure-fails-start` | A service log that cannot open fails the start with `sidecar <name>: service log: <error>` and the service does not start. | both |
-| `images.detach.ack-consumed` | A valid `image.detached` acknowledgement is consumed by the host and is not forwarded to the page. | both |
+| `images.detach.ack-consumed` | A valid `image.detached` acknowledgement is consumed by the host and is not forwarded to the page, even when an unrelated deeper JSON member at the root, inside `image`, or inside the acknowledgement object exceeds the materialization depth of `Value`. | both |
 | `images.detach.ack-exact-owner` | Only the acknowledgement matching request, supplier, surface, image name, and generation settles the detach; a mismatch leaves it pending. | both |
 | `images.detach.refusal-fails-start` | A supplier refusal fails page startup with its explicit reason and retains the exact detach target for a later start attempt. | both |
 | `images.detach.timeout-retains-target` | A missing acknowledgement fails page startup at the declared deadline and retains the exact detach target for retry. | both |
