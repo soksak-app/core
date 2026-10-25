@@ -30,7 +30,7 @@ func writeCatalogPlugin(t *testing.T, config, id, catalog string) string {
 func TestTheHostClassifiesPluginEventsByTheInstalledCatalogsAndRecordsACatalogItCannotUse(t *testing.T) {
 	log := useEventLog(t)
 	config := t.TempDir()
-	writeCatalogPlugin(t, config, "probe", `{"events":{"plugin.probe.frame":{"class":"frame"}}}`)
+	writeCatalogPlugin(t, config, "probe", `{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}`)
 	broken := writeCatalogPlugin(t, config, "broken", `{"events":`)
 	installed := `{"format":3,"plugins":{` +
 		`"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{}},` +

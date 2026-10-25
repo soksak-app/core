@@ -101,7 +101,7 @@ func TestPluginInstallExtractsCheckedReleasesAndRecordsTheState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	index := pluginVersionsFor(t, sok.CoreVersion, "0.2.0")
+	index := pluginVersionsFor(t, "0.0.2", "0.2.0")
 	config := t.TempDir()
 	if result := runJSON(t, "registry", "use", index, "--config-dir", config); result["index"] != "file://"+index {
 		t.Fatalf("registry use %v", result)

@@ -9,6 +9,11 @@
   catalog formats. The preserved Node run failed because audit-run used a
   schema-2 base catalog. The focused owner files pass 12/12 and 2/2.
 
+- F239-113-2: Update the host plugin-catalog fixtures to schema 3 with current
+  field schemas, and align each plugin-install registry's core range with its
+  test CLI's configured core version. The focused catalog and install tests
+  pass in default, diagnostics and dev configurations for both hosts.
+
 - F239-119: Require the project member in Tauri ProjectShown while
   preserving explicit `null`. The production `Argument<ProjectShown>` decoder
   Red accepted `{}` as `None`; the same MockRuntime owner case now passes 1/1,

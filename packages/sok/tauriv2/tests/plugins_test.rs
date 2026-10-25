@@ -160,7 +160,7 @@ fn plugin_versions_for(core: &str, versions: &[&str]) -> Registry {
 #[test]
 fn plugin_install_extracts_checked_releases_and_records_the_state() {
     let platform = soksak_sok::current_platform().expect("platform");
-    let registry = plugin_versions_for(soksak_sok::version::CORE_VERSION, &["0.2.0"]);
+    let registry = plugin_versions_for("0.0.2", &["0.2.0"]);
     let index = registry.index();
     let config = Folder::new("plugins");
     let used = run_json(&["registry", "use", &index, "--config-dir", config.text()]);

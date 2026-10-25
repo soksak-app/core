@@ -54,7 +54,7 @@ fn the_host_classifies_plugin_events_by_the_installed_catalogs_and_records_a_cat
     write_plugin(
         &config,
         "probe",
-        r#"{"events":{"plugin.probe.frame":{"class":"frame"}}}"#,
+        r#"{"schema":3,"events":{"plugin.probe.frame":{"layer":"plugin","class":"frame","level":"debug","fields":{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"sequence":{"type":"number"}},"required":["sequence"]}}}}"#,
     );
     let broken = write_plugin(&config, "broken", r#"{"events":"#);
     fs::write(
