@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-171-4: Notify outdated removals during shared stop cleanup and owned-session count changes during authoritative retention and surface-ID reuse. Enqueue changed complete values under the state lock and keep UI invalidation outside it. Six controlled missing-notification cases pass after Red, and both existing retain protocol owners pass. Repeated unchanged operations stay silent. This completes the notification units of F239-171 without claiming capture, IME or full-suite acceptance.
+
 - F239-171-3: Notify version-only installed declaration changes and outdated removal when the current persistent connection ends. Serialize declaration replacement with immutable status publication, preserving unchanged and rejected declarations and stale connections. Four controlled Red cases become Green; both existing sidecar-folder replacement owners also pass on macOS arm64. Parity and event checks pass. Stop and retain status changes remain separately tracked.
 
 - F239-172: Restore nine missing capability mappings to inspected implementation symbols and owning assertions. Update both current inventory records to 1034 test files, retaining 102 tracks and 710 implementation files. The parity audit and three focused audit owners pass without exclusions or criterion changes; this does not establish application behavior.

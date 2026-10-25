@@ -586,7 +586,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 			c.notifyConnection(name, nil)
 		}
 	}()
-	// A new surface or a new service of an outdated sidecar changes host.sidecars, which is announced after the unlock.
+	// Outdated UI invalidation runs after unlock; its status value is enqueued with the locked mutation.
 	var outdatedChanged bool
 	defer func() {
 		if outdatedChanged {
@@ -646,7 +646,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 	if other, ok := c.owners[surface]; ok && other != owner {
 		return fmt.Errorf("surface %s belongs to another window", surface)
 	}
-	outdatedChanged = (started || !process.surfaces[surface]) && c.outdated(process)
+	outdatedChanged = (started || !process.surfaces[surface] || c.owners[surface] == nil) && c.outdated(process)
 	process.surfaces[surface] = true
 	c.owners[surface] = owner
 	if _, ok := c.roots[surface]; !ok {
@@ -1124,18 +1124,20 @@ func (c *Sidecars) stop(detach bool) {
 	// so the surface close of a window that closes during the termination sends nothing. A sidecar on standard input and output ends, so it does not reply
 	// to the close. A persistent service replies to a close sent before the stop ahead of the close-owner reply, so that surface is kept until the reply or the end of
 	// the connection (docs/spec/sidecars.md#messages).
+	before := c.statusLocked()
 	processes := make([]*sidecar, 0, len(c.running))
 	forgot := false
 	for name, process := range c.running {
 		processes = append(processes, process)
 		forgot = c.detach(name, process) || forgot
 	}
-	if forgot {
+	changed := forgot || !reflect.DeepEqual(before, c.statusLocked())
+	if changed {
 		c.closingChanged()
 	}
 	c.mu.Unlock()
 	c.failImageDetaches("", "the host stopped before the image detach acknowledgement arrived")
-	if forgot {
+	if changed {
 		c.closingInvalidated()
 	}
 	c.stopProcesses(processes, detach)
@@ -1220,6 +1222,27 @@ type RetainedSurface struct {
 	Root    string `json:"root"`
 }
 
+// retainLayoutOwners removes layout owners omitted from an authoritative snapshot.
+// The caller holds c.mu; plugin and state sessions keep their explicit lifecycle.
+func (c *Sidecars) retainLayoutOwners(listed map[string]bool) bool {
+	before := c.statusLocked()
+	for surface := range c.roots {
+		_, pluginSession := parsePluginSession(surface)
+		_, stateSession := parseStateSession(surface)
+		if listed[surface] || pluginSession || stateSession {
+			continue
+		}
+		delete(c.roots, surface)
+		delete(c.owners, surface)
+		delete(c.persistentSurfaces, surface)
+	}
+	changed := !reflect.DeepEqual(before, c.statusLocked())
+	if changed {
+		c.closingChanged()
+	}
+	return changed
+}
+
 // retainTimeout is the time to wait for the service to answer retain. It includes the time to close the sessions.
 const retainTimeout = 10 * time.Second
 
@@ -1240,17 +1263,11 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	// The supplied list is the complete set of layout surface sessions. Retire stale owners before building each service's keep list;
 	// plugin-host and state sessions use their own explicit close paths and are not project layout surfaces.
 	c.mu.Lock()
-	for surface := range c.roots {
-		_, pluginSession := parsePluginSession(surface)
-		_, stateSession := parseStateSession(surface)
-		if listed[surface] || pluginSession || stateSession {
-			continue
-		}
-		delete(c.roots, surface)
-		delete(c.owners, surface)
-		delete(c.persistentSurfaces, surface)
-	}
+	changed := c.retainLayoutOwners(listed)
 	c.mu.Unlock()
+	if changed {
+		c.closingInvalidated()
+	}
 	c.declarations.RLock()
 	names := make([]string, 0, len(c.persistent))
 	for name, persistent := range c.persistent {

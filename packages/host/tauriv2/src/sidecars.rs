@@ -1588,15 +1588,18 @@ impl<O: Owner> Sidecars<O> {
         {
             return Err(format!("surface {surface} belongs to another window"));
         }
-        state.owners.insert(surface.to_string(), owner.clone());
+        let owner_added = state
+            .owners
+            .insert(surface.to_string(), owner.clone())
+            .is_none();
         state
             .roots
             .entry(surface.to_string())
             .or_insert_with(|| root.clone());
         let process = state.running.get_mut(name).expect("started above");
-        // A new surface or a new service of an outdated sidecar changes host.sidecars, which is announced after the
-        // unlock.
-        let outdated_changed = (started || !process.surfaces.contains(surface))
+        // New ownership or a service start changes the outdated session count. The status is enqueued under the
+        // state lock, and UI invalidation runs after unlock.
+        let outdated_changed = (started || !process.surfaces.contains(surface) || owner_added)
             && is_outdated(&self.core, name, process);
         process.surfaces.insert(surface.to_string());
 
@@ -2050,7 +2053,7 @@ impl<O: Owner> Sidecars<O> {
             .iter()
             .map(|(surface, _)| surface.as_str())
             .collect();
-        {
+        let changed = {
             let mut state = self
                 .core
                 .state
@@ -2058,21 +2061,10 @@ impl<O: Owner> Sidecars<O> {
                 // default: this reconciliation removes stale entries from the ownership maps; repeating each removal is
                 // safe, and the panic hook records the poison cause.
                 .unwrap_or_else(PoisonError::into_inner);
-            let stale: Vec<String> = state
-                .roots
-                .keys()
-                .filter(|surface| {
-                    !listed.contains(surface.as_str())
-                        && crate::plugin_host_sidecar::parse_session(surface).is_none()
-                        && crate::plugin_host_sidecar::parse_state_session(surface).is_none()
-                })
-                .cloned()
-                .collect();
-            for surface in stale {
-                state.roots.remove(&surface);
-                state.owners.remove(&surface);
-                state.persistent_surfaces.remove(&surface);
-            }
+            retain_layout_owners(&self.core, &mut state, &listed)
+        };
+        if let Some(changed) = changed {
+            changed();
         }
         let mut total = 0;
         let mut names: Vec<String> = self
@@ -2325,6 +2317,7 @@ impl<O: Owner> Sidecars<O> {
             // A standard-I/O sidecar ends, so it does not answer a close. A persistent service answers a close that was
             // sent before the stop earlier than the close-owner response, so that surface is kept until the answer or
             // the end of the connection (docs/spec/sidecars.md#messages).
+            let before = status_locked(&self.core, &state);
             let stdio: Vec<String> = state
                 .running
                 .iter()
@@ -2336,7 +2329,10 @@ impl<O: Owner> Sidecars<O> {
                 changed |= detach_stdio(&mut state, &name);
             }
             let processes = state.running.drain().collect();
-            let changed = closing_notification(&state, changed);
+            let changed = closing_notification(
+                &state,
+                changed || before != status_locked(&self.core, &state),
+            );
             (processes, changed)
         };
         if let Some(changed) = changed {
@@ -3450,6 +3446,31 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
         }
     }
     notify_connection(core, name, outcome.map(|_| ()));
+}
+
+/// Removes omitted layout owners while retaining explicitly managed plugin and state sessions.
+fn retain_layout_owners<O>(
+    core: &Core<O>,
+    state: &mut State<O>,
+    listed: &HashSet<&str>,
+) -> Option<ClosingChanged> {
+    let before = status_locked(core, state);
+    let stale: Vec<String> = state
+        .roots
+        .keys()
+        .filter(|surface| {
+            !listed.contains(surface.as_str())
+                && crate::plugin_host_sidecar::parse_session(surface).is_none()
+                && crate::plugin_host_sidecar::parse_state_session(surface).is_none()
+        })
+        .cloned()
+        .collect();
+    for surface in stale {
+        state.roots.remove(&surface);
+        state.owners.remove(&surface);
+        state.persistent_surfaces.remove(&surface);
+    }
+    closing_notification(state, before != status_locked(core, state))
 }
 
 /// Retires a connection independently of socket I/O while the caller holds the state lock.

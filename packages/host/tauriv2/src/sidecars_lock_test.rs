@@ -524,3 +524,132 @@ fn disconnect_notifies_outdated_removal_without_pending_closes() {
         }]
     );
 }
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+#[test]
+fn detach_notifies_outdated_removal_without_pending_closes() {
+    let (sidecars, _, _, _folder) = outdated_fixture("0.0.6", "0.0.7");
+    let (outbox, _receiver) = sync_channel(2);
+    sidecars
+        .core
+        .state
+        .lock()
+        .unwrap()
+        .running
+        .get_mut("fixture-service")
+        .unwrap()
+        .outbox = outbox;
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
+    sidecars.detach();
+    assert_eq!(
+        *snapshots.lock().unwrap(),
+        vec![super::SidecarStatus {
+            closing: vec![],
+            outdated: vec![]
+        }]
+    );
+    sidecars.detach();
+    assert_eq!(
+        snapshots.lock().unwrap().len(),
+        1,
+        "repeated detach announced unchanged status"
+    );
+}
+
+// contract: sidecars.retain.closes-sessions-absent-from-layout
+#[test]
+fn retain_notifies_outdated_session_counts() {
+    let (sidecars, _, _, _folder) = outdated_fixture("0.0.6", "0.0.7");
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
+    assert!(
+        super::retain_layout_owners(
+            &sidecars.core,
+            &mut sidecars.core.state.lock().unwrap(),
+            &["tab-fixture"].into(),
+        )
+        .is_none(),
+        "a status-only fixture has no UI invalidation consumer"
+    );
+    assert!(snapshots.lock().unwrap().is_empty());
+    assert!(
+        super::retain_layout_owners(
+            &sidecars.core,
+            &mut sidecars.core.state.lock().unwrap(),
+            &Default::default(),
+        )
+        .is_none(),
+        "a status-only fixture has no UI invalidation consumer"
+    );
+    {
+        let snapshots = snapshots.lock().unwrap();
+        assert_eq!(
+            snapshots.len(),
+            1,
+            "missing retained session-count notification"
+        );
+        assert_eq!(snapshots[0].outdated.len(), 1);
+        assert_eq!(snapshots[0].outdated[0].sessions, 0);
+    }
+    assert!(
+        super::retain_layout_owners(
+            &sidecars.core,
+            &mut sidecars.core.state.lock().unwrap(),
+            &Default::default(),
+        )
+        .is_none(),
+        "a status-only fixture has no UI invalidation consumer"
+    );
+    assert_eq!(
+        snapshots.lock().unwrap().len(),
+        1,
+        "repeated retention announced unchanged status"
+    );
+}
+
+// contract: sidecars.retain.closes-sessions-absent-from-layout
+#[test]
+fn reused_retained_surface_notifies_outdated_session_count() {
+    let (sidecars, _, _, _folder) = outdated_fixture("0.0.6", "0.0.7");
+    let (outbox, _receiver) = sync_channel(2);
+    sidecars
+        .core
+        .state
+        .lock()
+        .unwrap()
+        .running
+        .get_mut("fixture-service")
+        .unwrap()
+        .outbox = outbox;
+    assert!(
+        super::retain_layout_owners(
+            &sidecars.core,
+            &mut sidecars.core.state.lock().unwrap(),
+            &Default::default(),
+        )
+        .is_none(),
+        "a status-only fixture has no UI invalidation consumer"
+    );
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
+    sidecars
+        .send(
+            &TestOwner("probe-window".into()),
+            "fixture-service",
+            "tab-fixture",
+            &RawValue::from_string(r#"{"operation":"open"}"#.into()).unwrap(),
+        )
+        .unwrap();
+    let snapshots = snapshots.lock().unwrap();
+    assert_eq!(
+        snapshots.len(),
+        1,
+        "missing reused session-count notification"
+    );
+    assert_eq!(snapshots[0].outdated.len(), 1);
+    assert_eq!(snapshots[0].outdated[0].sessions, 1);
+}

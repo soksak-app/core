@@ -197,6 +197,40 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-171",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn publish_status<O>" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+    ],
+    expected: "Both hosts preserve ordered immutable closing and outdated status transitions independently of UI invalidation across close, declaration, disconnect, stop and retention.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-171-4",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) retainLayoutOwners(" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn retain_layout_owners<O>" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestDetachNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestReusedRetainedSurfaceNotifiesOutdatedSessionCount" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "retain_notifies_outdated_session_counts" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "reused_retained_surface_notifies_outdated_session_count" },
+    ],
+    expected: "Shared stop state cleanup and retained owner removal notify outdated changes without pending closes; reused owners restore counts and idempotent operations stay silent.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-171-3",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) persistentConnectionEnded(" },

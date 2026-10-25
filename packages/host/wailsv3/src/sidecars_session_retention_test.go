@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"net"
 	"reflect"
 	"testing"
 )
@@ -144,5 +145,70 @@ func TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
 	want := []SidecarStatus{{Closing: []ClosingSurface{}, Outdated: []OutdatedSidecar{}}}
 	if !reflect.DeepEqual(snapshots, want) {
 		t.Fatalf("disconnect notifications = %+v, want %+v", snapshots, want)
+	}
+}
+
+// contract: sidecars-transport.hello.reports-a-service-of-another-version
+func TestDetachNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
+	c, _, process := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
+	local, peer := net.Pipe()
+	t.Cleanup(func() {
+		if err := peer.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	process.conn = local
+	var snapshots []SidecarStatus
+	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
+	c.Detach()
+	want := []SidecarStatus{{Closing: []ClosingSurface{}, Outdated: []OutdatedSidecar{}}}
+	if !reflect.DeepEqual(snapshots, want) {
+		t.Fatalf("detach notifications = %+v, want %+v", snapshots, want)
+	}
+	c.Detach()
+	if len(snapshots) != 1 {
+		t.Fatalf("repeated detach announced unchanged status: %+v", snapshots)
+	}
+}
+
+// contract: sidecars.retain.closes-sessions-absent-from-layout
+func TestRetainNotifiesOutdatedSessionCounts(t *testing.T) {
+	c, _, _ := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
+	var snapshots []SidecarStatus
+	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
+	c.mu.Lock()
+	c.retainLayoutOwners(map[string]bool{"tab-fixture": true})
+	c.mu.Unlock()
+	if len(snapshots) != 0 {
+		t.Fatal("retaining all owners announced unchanged status")
+	}
+	c.mu.Lock()
+	c.retainLayoutOwners(map[string]bool{})
+	c.mu.Unlock()
+	if len(snapshots) != 1 || len(snapshots[0].Outdated) != 1 || snapshots[0].Outdated[0].Sessions != 0 {
+		t.Fatalf("retained session-count notifications = %+v, want one zero-session status", snapshots)
+	}
+	c.mu.Lock()
+	c.retainLayoutOwners(map[string]bool{})
+	c.mu.Unlock()
+	if len(snapshots) != 1 {
+		t.Fatal("repeated retention announced unchanged status")
+	}
+}
+
+// contract: sidecars.retain.closes-sessions-absent-from-layout
+func TestReusedRetainedSurfaceNotifiesOutdatedSessionCount(t *testing.T) {
+	c, _, _ := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
+	owner := c.owners["tab-fixture"]
+	c.mu.Lock()
+	c.retainLayoutOwners(map[string]bool{})
+	c.mu.Unlock()
+	var snapshots []SidecarStatus
+	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
+	if err := c.Send(owner, "fixture-service", "tab-fixture", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshots) != 1 || len(snapshots[0].Outdated) != 1 || snapshots[0].Outdated[0].Sessions != 1 {
+		t.Fatalf("reused session notifications = %+v, want one restored-session status", snapshots)
 	}
 }
