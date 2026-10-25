@@ -903,6 +903,7 @@ fn missing_native_surface_requests_a_fresh_raster_configuration() {
             Ok(())
         },
         || true,
+        || {},
     ));
     let next = recovered
         .lock()
@@ -1331,6 +1332,7 @@ fn a_frame_of_a_sidecar_that_no_plugin_declares_is_invalidated() {
         },
         |reason| panic!("recovery of {reason} was requested for a sidecar that no plugin declares"),
         || false,
+        || panic!("a frame of a sidecar that no plugin declares notified the window"),
     ));
     let answers = answers.lock().unwrap();
     assert_eq!(answers.len(), 1);

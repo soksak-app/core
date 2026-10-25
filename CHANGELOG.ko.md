@@ -3,7 +3,6 @@
 [English](CHANGELOG.md)
 
 ## 미배포
-
 - F239-47-40-4-2-1-1: 현재 failure를 보고한 정확한 `SCStream`에 queued capture-error
   복원을 fence하고 다음 tagged presentation 전에 해당 identity session을 실패 처리한다.
   Main-thread callback 동안 stream을 retain해 pointer 재사용이 이전 cleanup을 새 녹화에
@@ -11,6 +10,7 @@
   지연된 A cleanup의 B tag 삭제 assertion 세 개에서 실패했다. Green: 같은 test와 기존 stop,
   region-failure test가 각각 1/1 통과한다. Capture finalization은 최신 raw snapshot 복원을
   계속 동기 완료한다.
+
 - F239-47-40-4-2-1: Identity tagging 실패 또는 capture finalization 시 모든 live
   image-region layer를 최신 raw snapshot에서 복원한다. Capture error는 main-thread
   cleanup을 enqueue하고 finalization은 capture queue 종료 뒤 복원이 끝날 때까지 기다린다.
@@ -20,6 +20,7 @@
   Test는 정확한 provider byte, 반복 cleanup, 변경되지 않은 geometry, visibility, focus와
   region lifetime을 확인한다. `make docs-check`가 통과한다. Raw snapshot, 일반 image state,
   matcher 동작은 그대로 유지한다.
+
 - F239-47-40-3: 선택형 strict boolean `frameIdentity`를
   `diagnostics.capture.start`에 추가하고 두 host recording interface를 거쳐 Darwin capture
   start까지 전달한다. 생략하거나 false이면 일반 capture를 유지하고 null 및
@@ -32,6 +33,7 @@
   Wails 외부 recording test package는 `view_call_record_test.go`와
   `view_error_test.go`가 없는 `Surfaces.RegisterView`를 호출해 compile되지 않았다.
   이 fixture 문제는 F239-47-40-5에 기록한다.
+
 - F239-47-40-4-1: Native source matcher에 bounded frame-identity session state를
   추가한다. Session마다 secure 32-byte nonce를 만들고, 보관하는 region cache 없이
   session nonce와 stable 16-byte token으로 region nonce를 파생한다. Canonical issued
@@ -42,6 +44,7 @@
   region 간 tuple 분리, eviction, 상한, slot 재사용, restart 격리를 확인한다. Canonical
   payload owner test도 잘못된 nonce 거부를 포함해 1/1 통과한다. Source-history
   image presentation과 source-history eviction 연결은 F239-47-40-4-2에서 완료한다.
+
 - F239-47-40-4-2: 명시적인 `frameIdentity:true`에서만 고정 top-right 192×192
   raster ROI 안의 발급 QR로 image-region presentation을 tag하고 raster 및 tuple
   metadata를 raw source artifact와 별도로 기록한다. Raw BGRA와 color metadata는
@@ -65,6 +68,78 @@
   Vision API 오류와 artifact 기록 실패는 capture finalization을 실패시킨다.
   시간이나 sequence로 unknown identity를 추정하지 않는다. 이 결과는 물리적
   scanout이나 terminal IME acceptance를 입증하지 않는다.
+
+- F239-48-3-14: `ProjectShown` unknown-field test 두 개를 기존 Tauri project-data-order child module로 옮긴다. Assertion은 그대로 유지한다. 정확한 lib test는 각각 1/1 통과하고 paired-host audit에서 기존 source test 경로가 사라져 관련 없는 finding 네 개만 남는다. Parity inventory는 lane 101개, 구현 파일 703개, test 파일 1004개로 통과한다. Host 동작은 바뀌지 않았다.
+
+- F239-48-3-16: Rust view-generation test의 정확한 배치 차이를 H17에 기록한다. 공통 generation 및 reply assertion은 Wails owner test에서 계속 검사하고 Rust test는 `documents.rs`의 private child다. Focused checker는 1/1 통과하며 선언된 경로만 허용하고 미등록 sibling은 거부한다. Host audit에는 private-files OS 경로 세 개만 남는다. Host 동작은 변경하지 않았다.
+
+- F239-48-3-15: Wails view call은 응답이 현재 view generation에 게시된 뒤에만
+  종료한다. Red: test-controlled 교체와 native post 거부 후 정상 process-ended
+  처리가 받을 call이 남지 않았다. Green: `make go-repeat`의 집중 7-test owner
+  set이 성공, stale, 거부 및 peer-ended reply 경로를 포함해 통과한다. Contract는
+  실패하거나 오래된 post 뒤 call을 열린 상태로 둔다고 명시한다. `make parity-check`는
+  lane 101개, 구현 파일 703개, test 파일 1004개로 통과하고 `make docs-check`도
+  통과한다.
+
+- F239-48-3-12: 정확한 view-record test 배치 차이를 기록한다. Go test는 private fixture state에 접근하기 위해 `package host`가 필요하고 Rust 대응 test는 public `ViewChannels` API를 사용해 private module 배치가 필요하지 않다. 양쪽 logging assertion을 유지한다. Focused owner assertion은 1/1 통과하며 네 경로만 허용하고 미등록 sibling은 거부한다. Host audit은 finding 9개에서 5개로 줄었고 `make parity-check`, `make docs-check`가 통과했다. Host 동작은 바뀌지 않았다.
+
+- F239-48-3-11: Tauri source-channel adapter의 정확한 test 경로를 기록한다. Framework가 `Channel<DeclaredSourceEvent>`를 주입하며 Wails에는 typed-channel 대응이 없다. 공통 순서와 수명주기는 Wails owner test에서 계속 검사하고 두 host suite 모두 live framework IPC 전달을 증명하지 않는다. Focused assertion은 1/1 통과하며 두 경로만 허용하고 미등록 sibling은 거부한다. Paired-host audit은 finding 10개에서 8개로 줄었고, 나머지는 열려 있다. `make docs-check`가 통과했다.
+
+- F239-48-3-10: Darwin의 timeout 및 종료된 PID 동작과 Linux/Windows의 명시적
+  unsupported 오류를 확인하는 Wails process-wait test를 추가한다. Paired-host
+  감사에서 세 OS별 test 경로와 공통 process-wait helper finding이 사라졌다.
+  Darwin test는 2/2 통과했고 Linux/Windows target은 cross-compile했지만 실행하지
+  않았다. Platform 구현은 변경하지 않았다.
+
+- F239-47-40-7: Tauri `ProjectShown` 및 `ShownProject`가 공통 host-call contract에 따라
+  선언되지 않은 field를 무시하게 한다. Red: 집중 owner test는
+  알 수 없는 outer 또는 nested field를 각각 거부했다. `deny_unknown_fields`
+  선언을 제거한 뒤 두 exact test가 각각 1/1 통과한다. parity inventory가 구조체와
+  test를 연결하며 `make parity-check`는 lane 101개, 구현 파일 704개, test 파일
+  1005개로 통과한다.
+
+- F239-47-40-6: Wails `ProjectShown` 및 nested `ShownProject` 인자를 표준 host
+  argument decoder로 디코딩한다. Red: 변경 전 binding test와 새 owner case는
+  직접 JSON decoding이 잘못된 request 형태와 nested field에 비표준 오류를
+  반환해 실패했다. Green: binding test가 1/1, 집중 project owner test가 2/2
+  통과하며 unknown field 무시와 명시적 `project:null` 처리를 확인한다.
+  parity inventory가 구현과 owner test를 연결하며 `make parity-check`는 lane
+  101개, 구현 파일 704개, test 파일 1005개로 통과한다.
+
+- F239-47-40-5: Wails private view 기록 테스트를 `src`로 옮기고 일치하는
+  source generation과 `Documents` view channel을 등록한다. call/reply 및
+  `view.error` 기록 assertion은 `ViewMessage`를 통해 유지한다. Red: 두 외부
+  diagnostics test가 없는 `Surfaces.RegisterView`를 호출해 package compile이
+  실패했다. Green: 이동한 owner test가 2/2 통과하고 외부 diagnostics smoke
+  test `TestAnApplicationEventIsRecordedAsAnEvent`도 compile되어 1/1 통과한다.
+  Host public-call parity는 바뀌지 않았으며
+  `make host-parity-check`가 통과한다.
+
+- F212.10-core-5-6-2: image presentation 뒤 stale `status.watch host.window`
+  값을 기록하고 owner host correction을 연결한다. 수정한 hidden-terminal reload
+  case는 Wails와 Tauri에서 reveal까지 진행했지만 watch 값이 visible terminal
+  region의 `presented:null`을 유지해 timeout이 났다. 같은 대기 중 직접
+  `status.get host.window`는 Wails generation 7, Tauri generation 8의
+  presented region을 반환했다(raster 1, sequence 2). 양 host runtime audit은
+  error-level 기록 없이 통과했지만 test는 각 host에서 실패했다. 직접 read가
+  성공했으므로 watch 결과만으로 image 부재를 입증하지 않는다. Red: 변경 전
+  Wails와 Tauri image-handler owner test는 성공 presentation 뒤 notification이
+  없어 실패했다. Green: Wails owner test 2/2가 새 presented identity 뒤 notification과
+  실패/폐기 시 무알림을 확인한다. Tauri owner test도 같은 경우에 각각 1/1 통과한다.
+  Tauri image integration test target은 compile된다. Wails external test package는
+  현재 host에 없는 `RegisterView`를 참조하는 기존 `view_call_record_test.go`와
+  `view_error_test.go` 때문에 compile할 수 없다. Focused source owner test는 통과한다.
+  `make docs-check`는 문서 112개, failure record 422개, record check 1823개로 통과하고
+  `git diff --check`도 통과한다. Main에서 처음 실행한 `make parity-check`는 새 owner
+  test 파일로 늘어난 구현 파일 수만 예전 기록과 달랐다. 실제 inventory는 lane 101개,
+  구현 파일 701개, test 파일 1000개였고 uncovered implementation/test/feature link는
+  없었다. EN/KO inventory 기록을 이 수치로 맞춘 뒤 main parity 재실행이 통과했다.
+  Window test는 Wails 22.888초, Tauri 22.599초 걸렸다. 두 run 모두 host와 sidecar
+  process를 종료하고 endpoint를 제거했으며 같은 frontmost baseline을 복원했다.
+  macOS 26.6.2 arm64에서 Wails와 Tauri 0.0.21, Terminal 0.0.21, VT 0.0.17,
+  Files 0.0.8, browser/editor 0.0.7, HWP 0.0.5로 실행했다. Runtime acceptance는
+  아직 열려 있다.
+
 - F239-47-40-2: QR helper의 ROI, 탐지, payload, ownership 경계를 수정한다.
   Red: 변경 전 owner test는 Vision 전체 이미지 탐지, mutable image backing,
   대칭 좌표 가정, 정규 형식이 아닌 부호 및 공백 숫자, uint64 overflow,
@@ -83,10 +158,12 @@
   ownership cleanup을 확인한다. Helper는 CoreImage, Vision, SHA-256을 사용한다.
   일반 rendering, capture 연결, 물리적 scanout과 기존 시각 수용 검사는 아직
   검증하지 않았다.
+
 - F239-48-3-9: Wails current 및 retired view callback의 owner test를 추가한다.
   Go focused test 다섯 개가 5/5 통과한다. Host audit은 view-origin test 경로를
   제거해 12개에서 11개 finding으로 줄었다. `make parity-check`와 `make docs-check`가
   lane 100개, 구현 파일 698개, test 파일 998개 결과로 통과한다.
+
 - F212.10-core-5-6-1: reveal된 terminal의 declared status를 기다린 뒤
   `status terminal.session`을 `core.surfaces`에서 확인한 뒤 `terminal.session`을 읽는다.
   Wails와 Tauri runtime 시도에서 hidden background open 직후 status를
@@ -98,6 +175,7 @@
   수정한 case는 reveal 뒤 sidecar headless-to-image mode를 수집한다. Tauri는 같은
   순서로 재실행하지 않았다. Syntax, `make e2e-check`, `make docs-check`가
   통과하며 runtime 재실행은 대기 중이다.
+
 - F212.10-core-5-6: hidden terminal reload window check를 추가한다. Replacement
   page start, 유지된 session의 headless open, 숨기기 전 old presented attachment
   generation, reload 뒤 sidecar의 같은 writer에서 headless→image mode 전환,
@@ -108,28 +186,34 @@
   `make e2e-check`, `make docs-check`, `make parity-check`가 lane 100개, 구현 파일
   697개, 테스트 파일 997개 inventory로 통과한다. 양 host runtime acceptance는
   진행 중이다.
+
 - F239-48-3-8: 양쪽 실제 start-module entry를 module hook으로 짝지어
   검증한다. Owner test는 2/2 통과한다. 현재 host 감사는 예외 추가 없이
   app-start 경로 두 개를 제거해 14개에서 12개 finding으로 줄었다.
   Inventory 검사는 lane 100개, 구현 파일 697개, test 파일 996개로
   통과하고 `make docs-check`도 통과한다.
+
 - F239-48-3-7: Tauri starter binding의 잘못된 request argument를
   MockRuntime IPC로 검증한다. Tauri와 Wails owner test가 각각 1/1 통과한다.
   Host 구조 감사 finding은 12개에서 11개로 줄었다. Inventory 검사는
   lane 100개, 구현 파일 697개, test 파일 995개로 통과한다.
+
 - F239-48-3-6: Go diagnostics input-reference parser test를 계약 owner인
   Rust test module과 맞춰 배치한다. Host audit은 13개에서 12개 finding으로
   줄었다. 변경하지 않은 Go owner test는 1/1 통과한다. Inventory 검사는
   lane 100개, 구현 파일 696개, test 파일 991개로 통과한다.
   `make docs-check`가 통과한다.
+
 - F239-47-35: 완료된 cursor-baseline predicate를 exported 구현과 두 소유
   frame-identity test에 연결한다. Inventory audit이 누락된 feature link를
   거부했으며 exemption 없이 통과한다.
+
 - F239-47-38: 고정 zsh prompt fixture의 percent를 escape한다. Red:
   behavioral wrapper test가 `zle-check% ` 대신 `zle-check`를 출력했다.
   Green: zsh prompt escaping이 literal marker를 출력하며 fixture test는 2/2,
   activation document helper test는 35/35 통과한다. Application이나 activation은
   실행하지 않았다.
+
 - F239-47-36: Clean-zsh ZLE 입력 variant를 양 host 실행한다. Core/host
   0.0.21, terminal 0.0.21, VT 0.0.17에서 같은 창 AppKit reference와 terminal
   logical checkpoint 열 개가 일치했다. 두 capture 모두 변경하지 않은 33 ms
@@ -138,11 +222,13 @@
   아니다. Tauri stderr의 IMKCFRunLoopWakeUpReliable 및 TSM caps-lock message는
   원인 미분류 상태로 보존했다. /bin/zsh -f fixture는 사용자 startup file과
   highlighter 설정을 제외했다.
+
 - F239-48-3-5: Tauri Darwin input-reference 거부 test를 구현 옆에 두어
   Wails owner-test 경로와 맞춘다. 변경 전 host audit은 14개, 변경 후에는
   13개 finding을 보고한다. Tauri owning test는 1/1, `make docs-check`는
   통과했다. Inventory 검사는 lane 100개, 구현 파일 695개, test 파일
   990개로 통과했다.
+
 - F239-48-4: private event-log과 process-lock 파일 작업을 Tauri CLI
   platform interface 뒤로 옮긴다. Darwin/Linux의 기존 0700/0600 동작은
   유지하며 Windows에서는 private-file platform contract에 따라 명시적인
@@ -164,11 +250,13 @@
   기준을 넘어서 실패했다(Wails 33.71754166483879 ms, Tauri 33.65716664493084 ms).
   Visual acceptance는 열린 상태다. macOS 26.6.2 arm64의 core/host 0.0.21,
   terminal 0.0.21, VT 0.0.17에서 실행했다.
+
 - F212.10-core-3-13: 비동기 view-module loading 전에 host surface placement
   순서를 예약한다. Focused owner Red는 더 새로운 빈 layout이 declaration을
   retire한 뒤 앞선 view request가 sync되는 문제를 재현했다. 수정 후 host 배치와
   theme 순서 test가 통과했다. 앞선 두-host project startup 오류는 rebuilt-host
   검증 전까지 통과로 인정하지 않는다.
+
 - F212.10-core-3-14: view-composition 선언/폐기와 전체 native surface-sync
   request를 위한 opt-in page trace를 추가한다. 기록은 page identity, mount
   attempt, 실제 포함된 view ID, request ID, host 호출 결과를 연결한다. Page
@@ -176,6 +264,7 @@
   sync 기록이 없어 실패했고, 계측 뒤 같은 owner 파일들이 16/16 통과한다.
   Application runtime은 실행하지 않았으며 F3-4 missing-composition 원인은
   미확인 상태다.
+
 - F212.10-core-3-15: 이미 mount된 활성 view가 undrawn record에 슬롯이 없을
   때도 보이지 않는 surface로 undrawn 전체 placement request에 유지한다. 양 host의
   rebuilt trace에서 성공한 sync가 mount된 terminal view를 제외한 뒤 같은 mount
@@ -248,6 +337,7 @@
   First-frame pixel은 주장하지 않는다.
 
 - F239-47-30-3-1: 공개 display-link stop artifact의 consumer 검증을 추가한다. Stop 오류 뒤 incomplete artifact를 보존하는 case를 포함해 focused helper test가 7/7 통과한다. Two-host runtime check는 대기 중이며 cadence acceptance를 주장하지 않는다.
+
 - F239-47-30-3: ScreenCaptureKit callback record와 별도로 capture 수명 동안
   공개 AppKit display-link trace를 기록하고 두 host의 stop payload에서 artifact
   경로를 제공한다. Trace는 검증한 clock observation을 기록하고 bounded overflow를
@@ -485,6 +575,7 @@
   전에 비어 있지 않은 run metadata 두 값을 함께 요구한다. 전달된 ID와 폴더는
   child에 그대로 유지된다. 소유 실행기 test는 10/10 통과하고 syntax,
   `make e2e-check`, `make docs-check`도 통과한다. Application은 실행하지 않았다.
+
 - F239-47-25: 가장 바깥 scope마다 native input callback을 transaction 하나로
   보낸다. 기존 네 번째 모음 입력은 확정 insert와 두 글자 중간 preedit을 보낸 뒤
   최종 세 글자 marked text를 별도 report로 보냈다. Region은 순서가 있는 insert,
@@ -531,6 +622,7 @@
 - F239-47-6/F239-47-10: P85 양 host IME 실행을 기록한다. 고정 AppKit reference와 terminal 문서 10단계는 모두 일치했다. Tauri frame gap은 34.660750 ms, Wails는 33.694458 ms로 변경하지 않은 33 ms 기준을 넘었고 visual acceptance는 열린 상태다. Metadata상 모든 모음의 foreground/background는 같고 마지막 marked 모음만 underline됐다. Callback DTO에는 AppKit selector 이름과 `committedLength`가 없다. 두 번째 조회가 baseline을 대체했고 마지막 frontmost 관측은 runner 복원 로그와 달라 F239-47-24에서 유효한 세션 baseline을 추적한다. 두 host와 sidecar는 종료됐다. Structured JSONL에는 error-level record가 없었지만 두 native host stderr에는 `error messaging the mach port for IMKCFRunLoopWakeUpReliable`가 있었다. 이 메시지는 미분류이며 capture gap과의 연결은 확인되지 않았다.
 
 - F239-47-6: Fresh Wails window의 terminal prompt 경로 `preedit` 아래에서 관측한 파란 밑줄을 기록한다. 대응하는 terminal base cell에는 underline, inverse, link flag가 없었고 `terminal.cursor.preedit`은 `ㅏㅏㅏ`였다. 표시가 이미 나온 뒤 시작한 세 frame의 non-activating capture에는 source raster나 candidate가 없었고 source drop도 없었다. 표시를 그린 주체는 확인되지 않았으며 visual acceptance는 열린 상태다.
+
 - F239-47-23: AppKit composition 상태를 유지하면서 native image-region 입력
   문서를 투명하게 둔다. 변경 전 owning offscreen test는 attributed `ㅏ`에서
   파란 underline pixel 78개, `ㅏㅏ`에서 162개를 측정했다. 같은 frame에서
@@ -620,6 +712,7 @@
   마지막 `core.sidebars` payload를 포함한다. 변경 전 consumer test는 pending
   상태의 즉시 거부를 재현했고, focused consumer test 4/4가 통과한다. Producer와
   status 계약은 바뀌지 않았다.
+
 - F239-48-5-1: 다른 package 경로 읽기를 검사하기 전에 tracked package manifest에서
   test owner를 찾는다. Root `e2e` package도 포함한다. Red: production owner 목록이
   `e2e`를 빠뜨려 실제 browser cohort test 경로의 owner test가 실패했다. Green:
@@ -662,6 +755,7 @@
 
 - F239-37-3: 파일 열기 실패 window check에 test별 120초 timeout을 지정한다.
   이 annotation 변경은 새 test나 runtime 결과를 주장하지 않는다.
+
 - F262-6: 기존 project-close window 검사에 마운트된 Files section, 닫기 전
   데이터 snapshot, 닫은 뒤의 빈 no-project snapshot, 오래된 row 부재와 깨끗한
   application error audit을 요구한다. 집중 검사는 core 0.0.21 candidate와 frozen
@@ -695,6 +789,7 @@
   `files.open is a command, not a status`로 실패했다. Green: focused consumer
   test 2/2와 변경한 JavaScript 세 파일의 syntax check 및 `make e2e-check`가
   통과한다. Window case는 실행하지 않았으며 runtime acceptance는 대기 중이다.
+
 - F239-47-18: terminal input observation에 coherent한 최신 reread를 사용한다.
   일시적인 첫 compose/cursor read가 오래됐어도 뒤이은 reread는 현재 watched
   event와 presented screen에 맞을 수 있다. Activation caller가 하나의 coherent
@@ -705,6 +800,7 @@
   `git diff --check`, `make docs-check`가 통과한다. Key receipt, frame/render/source
   검사, visual 측정과 33 ms frame-gap 제한은 그대로다. Activation rerun은 하지
   않았으며 F239-47-6 acceptance는 계속 열려 있다.
+
 - F238-c-18: Terminal의 current-source view literal 검증 완료를 기록한다. Pinned SDK release와 owner pin 요구는 F238-c-11-1에 유지한다.
 
 - F238-c-20: 기존 current-source plugin 검사를 owner별로 기록하고 plugin check matrix를 바로잡는다. Source 구현과 공개 SDK release는 포함하지 않는다.
@@ -723,6 +819,7 @@
   remount-composition, compositor, native-paint, no-bridge 검사는 각각
   4/4, 1/1, 4/4, 8/8, 4/4 통과한다. Runtime 재검증은 남아 있고 host wire format은
   바뀌지 않았다.
+
 - F212.10-core-3-4: 전체 host placement 응답을 검증한 뒤 현재 compositor record에
   해당하는 결과만 투영한다. Workbench는 현재 record와 보존할 dormant tab을 함께
   보내므로 undrawn host 응답이 현재 record에 없는 ID를 deferred로 반환할 수 있다.
@@ -752,7 +849,9 @@
   request 전에 제거한다. 이미 mount된 dormant view는 마지막 배율을 유지하고 cold retained
   view는 저장된 owner card 값으로 시작한다. View start의 window project는 바꾸지 않는다.
   Runtime acceptance는 남아 있다.
+
 - F240-12: 감사한 local 개발·owner 검증·release·과거 closure 근거에 맞춰 개발 순서를 정리한다. 중복 측정을 제거하고 기존 open status와 재시도 조건을 보존한다.
+
 - F239-47-17: 이전 terminal rows로 frame-bound preedit 상태를 index한다.
   rows-only `terminal.screen` status는 JSON이 같은 값을 생략하므로 새 screen
   notification 없이 cursor frame과 preedit이 갱신될 수 있다. Activation caller는
@@ -764,6 +863,7 @@
   exact cursor/render frame 검사를 유지한다. Visual capture test 11/11, observer
   test 20/20 통과한다. `make e2e-check`와 `make docs-check`도 통과한다. Activation
   rerun은 하지 않았으며 F239-47-6은 계속 열린다.
+
 - F239-47-16: AppKit reference focus가 돌아온 뒤 raw terminal cursor
   observer 구독을 유지한다. 이전 caller는 raw request가 이미 구독한 cursor
   status에 managed `Client.watch` 기반 `s.until`을 사용했다. 이때 보낸
@@ -773,6 +873,7 @@
   watch를 유지한다. Owning `terminal-ime-document.test.mjs`는 19/19 통과한다.
   Activation rerun이나 IME 동작 acceptance는 주장하지 않으며 F239-47-6은
   계속 열린다.
+
 - F239-47-15: 새 terminal notification을 알려진 pre-key 상태와 대조한다.
   PTY rows가 그대로인 coherent composition update는 허용하고, rows 변경은
   일치하는 screen event가 있어야 허용한다. Stale notification, blink-only
@@ -783,6 +884,7 @@
   17/17 통과, activation 파일 syntax check, `make e2e-check` 및 `make docs-check`
   통과. 최신 Wails/Tauri runtime 실행은 각각 terminal `k` 한 번 뒤 중단됐으며
   Backspace/Space에는 도달하지 않았다. F239-47-6 acceptance는 계속 열린다.
+
 - F212.10-core-3-2: native surface 배치를 보내기 전에 각 view composition
   선언을 기다린다. 각 host는 현재 page의 선언이 없는 view를 거부하고 page
   reload는 이전 page의 declaration map을 지운다. Red: placement barrier
@@ -791,6 +893,7 @@
   배치는 선언을 기다리고 대기 중 surface가 dispose되면 거부된다. 현재 선언의
   plugin과 composition 일치 여부도 검사한다. 범위를 제한한 Workbench, Wails,
   Tauri owning test가 통과한다. Runtime 재검증은 남아 있다.
+
 - F212.10-core-3-1: native `view-call` 및 `view-reply` listener 등록을
   기다린 뒤 view composition을 선언해 native view 생성을 시작한다. 따라서
   첫 view call이 page listener 준비와 경합하지 않는다. Red: 변경 전
@@ -832,6 +935,7 @@
   값으로 보고했다. Green: channel test와 기존 unwrapped `String` 거부 검사가
   통과한다. Paired-host audit은 분류기 오류 없이 관련 없는 경로 finding
   18개를 보고하며, 해당 finding은 계속 열린 상태다.
+
 - F267.8: 완료된 capability 여섯 개를 소유 implementation 및 behavior test에
   연결한다(F239-47-12/-13/-14, F268/-269/-270). Red: 변경 전 parity audit은
   capability link 여섯 건 누락과 미등록 파일이 없음을 보고했다. Green: 여섯
@@ -864,6 +968,7 @@
   비활성 경로와 surface-reveal assertion을 유지한다. Focused binary가 빌드되고
   기본 비활성 경로는 9/9 통과했다. Activation 경로는 실행하지 않았으며 수용
   항목은 열린 상태다.
+
 - F212.16-8: JavaScript platform selector를 실행 가능한 syntax로 분석해
   benchmark runtime metadata와 정확한 test assertion을 구현 선택과 구분한다.
   String과 comment fixture는 audit을 trigger하지 않고 Go/Rust 규칙은 각 언어
@@ -906,10 +1011,13 @@
   검사 작업, Files local build 근거와 VT local package link/build 절차를 반영한다.
   F270은 source audit focused tests 11개, `make e2e-check`, `make docs-check`
   통과로 완료됐다. 이 계획은 publication이나 runtime acceptance를 주장하지 않는다.
+
 - F239-47-6: Activation caller는 diagnostic-only `diagnostics.clock` endpoint에서 입력 구간 경계를 읽고 canonical positive base-10 uint64 `mono_ns` text만 허용한다. Reference input 전에 endpoint와 reply를 확인하고 각 terminal key 경계에도 같은 clock을 쓴다. 이전 page-native `log` 요청은 endpoint method가 아니어서 양 host connection을 닫았다. Red: 변경 전 Wails와 Tauri의 owning socket test가 등록되지 않은 endpoint method에서 연결 종료를 재현했다. Green: 양 host endpoint test가 diagnostics build에서 같은 연결의 canonical positive uint64 응답 두 개와 nondecreasing 값을 확인하고, release test는 method가 선언되지 않아 연결이 닫힘을 확인한다. Caller test 10/10, syntax check, `make e2e-check`, `make docs-check`가 통과한다. Assertion 실패 전 `error`/`no-proof` 저장도 확인한다. 이전 양 host run은 AppKit reference 10단계를 마쳤지만 terminal input 전에 중단됐다. Activation 재실행은 하지 않았으며 양 host acceptance는 남아 있다. `make parity-check`는 미등록 test/implementation이나 feature link 없이 기존 examples count 불일치 두 건을 보고한다(기록 100/673/922, 발견 100/687/958). 기록된 count는 변경하지 않았다.
 
 - F239-47-12: Core visual calculator를 실제 VT `screen.render` metadata에 맞춘다. Producer는 소문자 `bgra8`/`premultiplied`, top-level underline metric, glyph별 width/font run/effective draw color/nullable cell-local bounds 및 underline rectangle, cursor draw state를 공개한다. Native capture artifact는 별도 `BGRA8`/`premultiplied-first` contract를 유지하며 consumer는 metadata를 바꾸지 않고 원본 byte를 color 비교용으로 decode한다. Red: producer-shaped fixture가 기존 helper에서 `bgra8`과 `BGRA8` 차이로 실패했다. Green: 같은 fixture와 negative control이 `terminal-ime-visual.test.mjs` 9/9 통과한다. Preedit/inverse color, width-2 glyph fractional geometry, blink-off cursor metadata, measure 전 malformed 거부, difference cursor pixel을 검사한다. `make docs-check`가 통과한다. Live input은 실행하지 않았으며 F239-47-6 acceptance를 완료하지 않는다.
+
 - F239-47-13: Core visual calculator에서 raw `CTFont`/`CTLine` glyph overhang과 same-frame source provenance를 보존한다. Signed fractional bounds를 leading-cell origin만큼 옮기고 측정 raster coordinate로 변환한 뒤에만 clip한다. Capture raster origin은 source `screenBounds`/scale와 capture `screenRect`/`contentRect`로 계산하며 padded row를 pixel 순서 변경 없이 mapping한다. Source raster identity는 cursor 및 renderer frame identity와 같아야 한다. Red: 변경 전 helper가 유효한 finite overhang을 `renderer glyph bounds: rectangle covers no cell pixels`로 거부했고, 후속 test는 다른 source sequence로 measured result를 만들 수 있음을 보였다. Green: owning fixture가 leading cell 밖의 ink를 측정하고 원래 metadata를 보존하며, raster 교차가 없는 rectangle, non-finite/양수 아닌 geometry, 다른 source generation/raster/sequence를 거부한다. `terminal-ime-visual.test.mjs` 10/10 및 `make docs-check`가 통과한다. Live input은 실행하지 않았다.
+
 - F239-47-14: VT가 cursor를 그리지 않았는데도 남아 있는 cursor geometry와 color를 거부한다. Visible, blink-visible, non-hidden이면 rectangle이 있어야 하고 그 외에는 rectangle과 color가 null이어야 한다. Red: 변경 전 validation은 blink-off cursor의 rectangle과 color를 받아들였다. Green: owning metadata test가 blink-off와 hidden cursor의 stale 값을 거부하고 올바른 null metadata와 drawn cursor 상태를 유지하며, `terminal-ime-visual.test.mjs` 10/10 통과한다.
 
 - F270: E2E source audit가 Acorn 8.18.0으로 timeout callback의 JavaScript
@@ -1018,7 +1126,6 @@
   capability X1을 계속 거부하며 focused test가 1/1 통과한다. Audit은 미등록
   implementation, test, feature link가 없다고 보고한다. 양언어 examples count는
   F267.5에 남긴다.
-
 
 - F262-9: 유효한 ready message마다 plugin host를 현재 project와
   동기화한다. Host document가 준비되지 않은 동안의 project 변경은 기존에
@@ -1143,6 +1250,7 @@
   보고했으며 정상 host 종료 뒤 baseline 복원은 성공했다. Status observer는 표시된
   screen을 수신한 frame, cursor, compose와 연결한다. 제어된 coherence fixture 3개가
   통과한다. 이 Wails 결과만으로 부모 항목을 닫지 않는다.
+
 - F239-47-4: `keepPointerOutside()` 대기가 실패하면 초기 포인터, visible screen
   bounds, 후보 frame, 최종 frame/pointer를 오류에 보존한다. Red: 변경 전 helper의
   오류에 계산 geometry가 없어 제어된 owning test가 실패했다. Green: 같은 test가
@@ -1259,6 +1367,7 @@
   표시했고 잘못된 선언도 허용해 실패했다. Green: 같은 test에서 sRGB 보존, 태그 없는
   경우의 DeviceRGB 동작, 잘못된 metadata 거절, 이전 snapshot 보존을 검증한다(1/1,
   1.142초).
+
 - F239-35-3: 선언된 window-sidebar control이 section status에 선택된 정확한
   source로 실행된다. Plugin-host source는 해당 host command 등록을 사용하고
   view source는 정확한 surface 등록을 사용한다. Source가 없을 때 다른 owner로
@@ -1305,9 +1414,11 @@
   기록한다. 기능 수정은 측정, audit 및 외부 release gate보다 먼저 둔다.
   독립 leaf 변경은 선행 조건 충족 뒤 병렬 진행하고, packaging, integration
   verification, audit는 해당 수정 후 진행한다. `make docs-check`가 통과한다.
+
 - F212.12-2-2-4-8-2-1: image transfer `{generation,raster,sequence}`를 generic host platform 호출을 거쳐 수락된 각 native image-region snapshot까지 보존한다. Red: `image_region_test`에서 snapshot facts가 source identity를 누락해 실패했다. Green: 같은 test로 정확한 identity, 교체, 거절 동작을 검증했다(1/1, 0.552초). Wails attached-image test(1/1, 0.032초)와 Tauri presented-frame identity test(1/1, 0.026초)도 통과했다. macOS 26.6.2 arm64에서 `make docs-check`가 통과한다. 보존한 identity는 source transfer를 설명하며 물리적 표시 timestamp가 아니다. 캡처 매칭은 열려 있다.
 
 - F212.12-2-2-4-8-2-2: 진단 캡처 중에만 source raster를 보존하고 64 MiB 및 512 snapshot 제한을 둔다. ScreenCaptureKit frame geometry를 exact source crop으로 변환하고 `displayTime`, retention drop, 비교 시간과 함께 matched, ambiguous, unmatched, 명시적 unknown 상태를 기록한다. Red: `capture_metadata_test`와 `image_capture_match_test`가 complete capture callback의 image-match metadata, 제한된 pixel 차이 정보, top-left ScreenCaptureKit geometry mapping 누락을 검출해 실패했다. Green: callback trace, exact matcher, ambiguity 및 비호환 상태, 정확한 BGRA 차이 정보, primary-screen top-left mapping, retention 상한, image-region integration test가 통과한다. 첫 실제 캡처는 crop이 terminal source보다 위에 있음을 보였다. Top-left mapping 수정 후 새 비활성 terminal capture는 제한에 도달하지 않고 121 frame을 저장했다. 101개는 `unknown-retention`, 20개는 `unmatched`였고 일치하거나 모호한 항목은 없었다. 안정된 unmatched sample은 1,797 pixel이 다르며 첫 차이는 crop `(45,5)`에서 expected BGRA `[129,107,72,255]`, actual `[129,107,73,255]`였다. Bounds, scale, sRGB metadata는 일치했지만 정확한 source raster를 시각 비교용으로 저장하지 않아 한 channel 차이의 원인은 모른다. 과거 terminal frame gap 원인도 모른다.
+
 - F212.12-2-2-4-8-2-2-4: 원본 image-source byte를 제한된 capture artifact로 보존하고 metadata와 byte가 일치할 때만 identity 반복을 멱등 처리한다. Conflicting identity 재사용과 BGRA width overflow는 거절한다. Partial-file cleanup 실패를 manifest에 기록하고 cleanup error 상세를 32개로 제한하며 artifact write failure가 있으면 capture finalization을 실패시킨다. Red: owning test는 duplicate identity, conflicting source byte, width overflow, partial-file cleanup 미보고에서 실패했다. Green: `make -C native/darwin all`, `make -C native/darwin repeat TEST=image_capture_match_test COUNT=1` (1/1, 1.003초), `make -C native/darwin repeat TEST=capture_metadata_test COUNT=1` (1/1, 1.286초), `make docs-check`, `git diff --check`가 통과한다. 이 변경 이후 live capture는 실행하지 않았다. 정확한 source-to-ScreenCaptureKit matching, 측정된 1,797-pixel mismatch 원인, 기존 33 ms gap은 미해결이다.
 
 - F267.2: 완료된 F239-38, F239-39, F239-40, F239-40-1, F263, F264
@@ -1316,8 +1427,11 @@
   네 건을 보고한다. 동작 test나 production code는 변경하지 않았다.
 
 - F239-45: Tauri view callback은 native document 생성 전에 등록한 local origin을 가진다. view를 닫거나 교체하거나 제거하면 native resource 해제 전에 origin을 retire하며, 오래된 origin의 message, navigation-state, process-end, responsiveness callback은 current view channel에 영향을 주지 않는다. performance trace가 켜져 있을 때 stale callback은 `host.trace.view.callback-cancelled`로 남기고, producer `view.error`는 캡처한 plugin과 surface를 보존한다. malformed와 native error envelope를 포함한 controlled origin test 7/7, 기존 view-error와 view-call record test는 각각 1/1 통과한다. host test target compile, `cargo fmt --check`, `make docs-check`, `make boundaries`, `make events-check`가 통과한다. `make parity-check`는 등록되지 않은 Wails starter test와 오래된 parity count 등을 포함해 기존 finding 4건을 보고한다: F266 feature link 누락, 양언어 examples parity count 불일치, Wails starter test 미등록. Application shutdown matrix는 F239-26-2에서 대기 중이다.
+
 - F239-46: Plugin-host와 view source instance는 window 단위 JavaScript-safe generation을 사용한다. Main page는 lifecycle/snapshot listener를 설치하고 event를 buffer한 뒤 active origin과 발급 generation floor를 atomic snapshot으로 seed한다. 지연된 등록/종료 event는 이전 source를 되살리거나 새 source를 제거하지 못한다. Snapshot 전달은 native 수락 뒤 정확한 source와 recipient를 재검사하며, pull과 expanded request는 내부 generation metadata를 전달하고 stale request는 명시적 cancellation을 반환한다. Red: 통제 test에서 같은 plugin 재생성 뒤 지연된 old registration, replacement recipient에 전달된 stale snapshot, generation 1의 view call이 generation 2 command layer에 도달하는 문제, startup floor의 retired registration이 ghost source를 만들 수 있는 경계를 확인했다. Green: Workbench declared-source, source-origin, declared-section, sidebar, plugin-host-call, view-command, surface-view test가 통과했다. Wails plugin-host/source-origin/view-call/restart-order 소유 test 48/48, Tauri origin 및 stale ACK/pull test가 통과했다. Plugin producer와 공개 `sok-view` snapshot message는 변경하지 않았다. `make docs-check`, `make boundaries`, `make exposure-check`, `make events-check`가 통과한다. `make parity-check`는 기존 finding 4건을 보고한다: F266 classification, 양언어 examples count, Wails starter test 미등록. 양 host의 Files project-folder/bookmark runtime case는 통과했고 나머지 Files runtime 검사는 F239-37에 남는다.
+
 - F239-49: Tauri는 source lifecycle, snapshot, call, reply, end, responsiveness event를 main-page ordered `Channel` 하나로 전달한다. Startup은 source origin을 query하기 전에 channel listener를 설치하며 page reload는 이전 channel을 retire하고 send failure는 반환한다. Wails는 FIFO transport를 유지한다. 양 host의 `view-responsiveness`에는 producer generation이 포함되고 Workbench는 current-generation notice만 적용하며 stale notice를 기록한다. Red: 변경 전 Tauri runtime/stream test에는 shared channel/allowlist 동작이 없었고, Workbench는 같은 surface가 generation 2로 교체된 뒤 generation 1 notice를 받아들였으며, Wails payload에는 `generation`이 없었다. Green: runtime test 12/12, Tauri stream test 8/8, Workbench consumer 및 Wails producer test가 통과하고 current/retired responsiveness callback을 각각 확인했다. 완료된 presentation wait 손실을 집계하는 `view-presentation-abandoned`는 기존 경로를 유지한다. `make docs-check`, `make boundaries`, `make exposure-check`, `make events-check`가 통과한다. `make parity-check`는 F266 link, 양언어 examples count, Wails starter test 미등록을 포함한 기존 finding 4건을 보고한다. Package test는 전체 application runtime 수용을 입증하지 않는다.
+
 - F267.1: F148과 F163 behavior evidence link를 수정한다.
   원래 parity 출력은 오래된 F148 test 이름과 F163 source symbol을
   지목했다. 두 link는 현재 test와 source를 가리키며 현재 audit의 feature-link
@@ -1326,30 +1440,51 @@
 - G1.4-101-1-1: tao Cargo patch를 제거하고 crates.io의 tao 0.37.2를 사용한다. 릴리스 기록은 tao 이슈 1327의 닫힌 창 메모리 증가 수정을 포함한다고 명시한다. Red: 이 릴리스 전의 과거 실패를 새로운 Red로 재사용하지 않았다. Green: 두 host를 tao 0.37.2로 다시 빌드하고 추적 `window-release.test.mjs`의 Tauri와 Wails 검사를 통과했다(macOS 26.6.2 arm64, 파일 1개, 9.872초). `make docs-check`가 통과한다.
 
 - F212.12-2-1-2: Native view-focus test의 선택적 activation variant는 아직 검증되지 않았다. 기록된 통합 시도는 다른 앱이 frontmost여서 해당 test 전에 거부됐고, 앞선 data-store test는 timeout됐다. Wails `AcceptFirstMouse` 후보는 main webview를 설정했지만 검증 대상 계약은 plugin `SPDocumentView`에 있으므로 원복했다. Main page의 별도 첫 클릭 실패는 재현되지 않았으며 해당 후보의 source 변경은 남아 있지 않다.
+
 - F239-43: Go와 Rust plugin-host callback을 등록된 host instance에 묶어 종료된 provider의 늦은 callback이 plugin ID로 재생성된 channel을 찾지 못하게 한다. Red: 변경 전 Wails 통제 callback test는 같은 plugin 재생성 후 이전 instance의 snapshot을 relay했고, Tauri test는 replacement channel에서 이를 수신했다. 새 Tauri owning test는 window record가 제거된 뒤 도착한 provider 오류가 아무 오류도 반환하지 않아 실패했다. Green: 두 host는 stale callback을 취소하고 현재 및 생성 중 메시지를 수락하며, replacement를 닫거나 재시작하지 않고 캡처한 plugin 식별자로 명시적 오류를 보존한다. 일반 late message는 계속 취소한다. Wails stale-instance, creation-time, current queue-full test는 3/3 통과했다. Tauri stale-instance, creation-time, late-error, view-error attribution test가 통과했다. `make events-check`, `make docs-check`가 통과한다. Apple은 WKScriptMessageHandler를 main-actor로 문서화하며 host callback, 생성, dispose 경로도 main thread에서 실행해 identity 검사와 dispatch를 직렬화한다. Native emit 후 framework event delivery는 별도의 reload 경계다.
+
 - F239-38: Wails와 Tauri는 모든 log policy에서 선언된 info level의 `host.test.start`, `host.test.end`를 저장하므로 lifecycle이 error 또는 off여도 진단 window check가 flush된 mark 위치를 받는다. 일반 lifecycle/info event는 계속 gate되고 수를 기록한다. Red: 변경 전 두 host 소유 검사가 start mark를 거부했다. Green: Wails는 두 policy의 mark 검사를 통과하고 Tauri `test_mark_test`는 4/4 통과하며 `make docs-check`도 통과한다. 보존된 window-release 실행은 fixture 준비 전에 실패해 release assertion을 실행하지 않았다.
+
 - F239-39: Workbench는 registry entry가 등록되거나 종료될 때 declared section source를 다시 선택한다. 이미 그려진 section이 새로 선택된 host 또는 view에서 값을 pull할 수 있고, source가 바뀌면 이전 snapshot subscription을 해제한다. Red: 바뀌지 않은 workbench consumer test는 section을 그린 뒤 host status가 등록돼도 pull하지 않았다. Green: 같은 test가 늦은 host pull/push, 동일 source 재등록의 중복 방지, view 전환, source 정리와 host 복구를 확인한다. sidebar, exposure, declared-section 검사는 각각 11/11, 34/34, 17/17 통과한다. `make docs-check`가 통과한다. 과거 Wails와 Tauri F35 실패의 registration 순서는 아직 unknown이며 app 검증은 계속 열려 있다.
+
 - F239-41: Workbench는 선택한 source를 pull하기 전에 declared UI snapshot listener readiness를 기다린다. 동기 subscription은 즉시 준비되고 비동기 subscription은 listener 설치 후 unsubscribe 함수를 resolve한다. readiness 전에 source가 바뀌거나 닫히면 완료 시 unsubscribe하고 오래된 source를 pull하지 않는다. Red: 변경 전 section test는 deferred listener가 준비되기 전에 `view-a`를 pull했다. Green: 첫 push를 pull 응답 전에 받아들이고, 더 오래된 pull이 이를 덮어쓰지 않으며, 늦게 완료된 오래된 subscription을 제거하고 새 source를 한 번 pull하고, readiness 전에 닫히면 pull하지 않으며, 반복 reconcile에서 listener와 pull이 하나뿐임을 확인한다. plugin API, declared-section, declared-source 검사는 60/60 통과하고 `make docs-check`가 통과한다. 과거 F35 application 원인은 아직 확인되지 않았다.
+
 - F239-41-1: Declared-section receiver는 같은 source가 다시 선택됐더라도 이전 source generation에서 온 snapshot callback을 버린다. Red: 통제된 A→B→A test에서 첫 A 등록의 queued callback을 늦은 unsubscribe 전에 전달하자 두 번째 A section에 `stale-a`가 그려졌다. Green: callback은 캡처한 generation을 확인하고 오래된 값을 버리며 현재 A 값을 그린다. Transport도 listener를 닫을 때 이미 queue된 callback을 차단한다. plugin API, declared-section, declared-source 검사는 61/61 통과하고 `make docs-check`가 통과한다.
+
 - F239-26-4: 직접 shutdown check는 host 또는 terminal-service 대기가 실패해도 캡처한 application log를 감사한다. wait 실패를 첫 원인으로 보존하고 audit의 application error line도 결과에 포함한다. Red: controlled shutdown wait가 application error를 기록했지만 변경 전 runner는 timeout만 보고했다. Green: 같은 실행이 timeout을 먼저 보고하고 error line도 보존하며 소유 shutdown test는 6/6 통과한다.
+
 - F239-26-5: Go와 Rust CLI에 `sok process wait <pid> --timeout-ms <milliseconds>`를 추가했다. application이나 service에 연결하지 않고 기존 platform process-exit wait를 재사용하며, 양수 int32 PID와 1~600000밀리초 제한 시간을 검증하고 timeout 및 platform 오류를 보고한다. Red: 변경 전 Go는 `--timeout-ms`를, Rust는 `process`를 거부했다. Green: Wails는 상위 6개와 잘못된 입력 하위 13개를 통과하고, Tauri는 macOS 종료 PID 관측과 실행 중 PID timeout을 포함해 6/6 통과한다. `make docs-check`가 통과한다.
+
 - F239-26-6: `verify:shutdown`은 service에 연결하지 않고 protocol-1 endpoint에서 terminal service PID를 읽는다. Host endpoint가 닫힌 뒤 bundled `sok process wait`로 PID를 관측하고 원래 service endpoint file 제거도 요구한다. Host endpoint 종료 뒤의 관측 지연을 기록하며 service lifetime이라 하지 않고, 자체 마감에 걸린 observer는 종료하고 회수한다. Red: 변경 전 orchestration은 endpoint EOF 뒤 controlled PID wait가 timeout됐는데도 통과해 `Missing expected rejection`으로 실패했다. Green: 소유 shutdown audit test는 잘못된 endpoint/PID, 원래 PID command argument, 잘못된 CLI 출력, 남아 있는 endpoint 거부와 observer 회수를 포함해 11/11 통과한다. `make docs-check`가 통과한다.
+
 - F239-26-2: 이전 cohort는 8개 중 여섯 shutdown 행이 통과하고 Wails와 Tauri의 terminal-command error audit가 실패했다(F239-44, F239-45). 두 수정 뒤 같은 macOS arm64 core 0.0.21 candidate debug bundle에서 command/signal과 terminal/no-terminal 8개 행이 모두 통과했다. no-terminal 네 행은 shutdown 전에 sidecar session과 service endpoint가 0개임을 기록하고 요구하는 F239-26-9 tracked runner를 사용했고, terminal 네 행은 terminal-service PID 종료를 확인했다. Host와 service PID가 모두 종료되고 endpoint가 제거됐으며 tracked error audit가 통과했고 accepted log에 error-level record가 없었다. Service 관측은 host endpoint 종료 뒤 측정하며 service lifetime이 아니다. 이전 실패 행은 보존하며 이번 acceptance에는 포함하지 않는다.
+
 - F239-26-7: Go와 Rust CLI가 명령별 허용 option 선언을 사용하는 shared token parser를 재사용하며 `--timeout-ms`는 `process wait` 밖에서 계속 거부한다. 반복 boolean `--help`는 shared parser의 idempotent 동작에 맞췄고, 중복 value option과 알 수 없는 option 거부는 유지한다. Red: 변경 전 소유 test는 반복 `--help`를 거부했다. Green: Wails process-wait와 관련 CLI test가 잘못된 입력 하위 14개를 포함해 상위 10개가 통과하고, Tauri process-wait test 7/7 및 generic CLI test 16/16이 통과하며 `make docs-check`가 112 files, 391 error records, 1727 record checks를 통과한다. `make parity-check`는 이 항목과 무관한 F148/F163 및 F239-38/F239-39/F263/F264/F266 link, 두 examples parity count, 소유 test inventory에 없는 Wails starter test를 포함한 10개 결과를 계속 보고하며 이 항목에 대한 finding은 없다.
+
 - F239-44: Wails는 폐기 image의 reply를 이를 보낸 process로 라우팅한다. Persistent service는 열린 연결로 `shutdown` 전에 reply를 받고, 중지 중 stdio image는 취소로 기록하며 host는 process 종료를 기다린다. Red: 변경 전 persistent test는 `answer of the image of closed surface surface: sidecars are stopped`를 기록하고 shutdown 전 reply가 없음을 확인했다. 변경 전 stdio test도 stdin EOF 뒤 같은 stopped 오류를 기록했다. Green: Wails sidecar test 2/2가 process 종료와 취소 기록을 확인하고, Tauri contract test 1/1은 기존 queued reply가 shutdown보다 앞서는지 확인한다. `cargo fmt --check`, `make boundaries`, `make events-check`, `make docs-check`가 통과한다. F239-26 application 종료 수용 검사는 계속 열린다.
 
 - F266: 선택된 `[-]` 기록 16개를 상태 변경 없이 감사했다. F73과 F131은 원래 실패 load가 포함된 owning suite 전체 실행 3회 이상과 재발 시 사용할 기록을 명시한다. 나머지 14개인 F69, F77, F78, F134, F142, F147, F160.7-1, F161.27, F161.56, F161.62, F161.59, F196.10.1, F160.6.5, F252-2-1에는 전체 suite 또는 load 근거가 모두 기록되지 않아 각각 열린 audit follow-up을 추가했다. F160.6.5는 load 27–44의 focused repeat 20회와 load 25–34의 crate 전체 실행 3회를 적었지만 원래 실패는 약 40으로, 전체 실행에서 비슷한 load를 검증했는지 근거가 없다. 실행은 하지 않았고 새 실패를 닫지 않았다.
+
 - F239-26-3: normal-shutdown runner는 성공하거나 실패한 뒤 열린 모든 client를 닫으며 terminal-service client도 포함한다. Close 실패를 보고하고 앞선 shutdown 또는 audit 실패를 결과 오류에 보존한다. Red: controlled shutdown-wait 실패 뒤 두 client가 모두 열린 상태였다. Green: 둘 다 닫히며 close-failure test가 두 오류를 보존한다. 소유 shutdown test는 5/5 통과한다.
+
 - F239-26-1: 직접 실행하는 normal shutdown은 시작 offset부터 process 종료까지 application error event를 읽고 새 error line이 있으면 실패한다. 기존 window check event reader를 사용하며 이전 로그의 error는 이번 실행에서 제외한다. Red: 변경 전 controlled-client orchestration은 `error host shutdown: quit failed`를 기록하고도 fulfilled되어 `assert.rejects`에서 `Missing expected rejection`으로 실패했다. Green: 같은 orchestration은 해당 event line과 함께 거부하고 이전 error는 무시하며 소유 shutdown test가 3/3 통과한다. `make docs-check`는 112 files와 1722 record check를 통과한다. 두 host runtime acceptance는 F239-26-2에서 계속 추적한다.
+
 - F263: view가 포함된 `syncSurfaces` 요청은 최신 `setTheme` reply를 기다린다. reply 확인과 `syncSurfaces` 발신을 같은 async continuation에서 실행해 reply 완료와 배치 사이 microtask에서 추가된 theme이 barrier를 통과하지 못하게 한다. 동기 첫 DOM 그리기는 유지한다. theme reply가 거부되면 view 배치를 막고 host 오류 log에 남기며, view가 없는 요청은 기다리지 않는다. Red: 변경 전 helper가 해당 microtask 경계에서 새로 요청된 theme reply 전에 배치를 보냈다. Green: host-theme placement test 4/4, project-switch와 host-chrome test 15/15, `make docs-check` 통과. 과거 runtime 원인은 확인되지 않았고 앱 실행 검증은 하지 않았다.
+
 - F239-32: macOS arm64에서 Wails 0.0.21 first-project 추적 검사를 한 번 실행해 1/1 통과했다. 같은 창에서 library가 교체됐고 `core.project.open`은 235ms에 응답했으며 page error가 없고 frontmost 기준을 복원했다. timing/system-load trace, stdout, host JSONL, debug JSONL, stderr를 보존했다. 이는 한 번의 미재현이며 과거 10초 timeout 원인은 아직 모른다. 반복 target을 마칠 때까지 항목은 열린 상태다.
+
 - F239-29: 격리된 Files와 VT clean install에서 shared store를 바꾸지 않고 native process identity package 누락을 재현했다. Red: pnpm 11.24.0은 optional Git dependency fetch 실패를 기록하고 성공 종료했으며 package 이름 link는 비어 있는 virtual-store 디렉터리를 가리킨다. 두 소유 resolve 검사는 `MODULE_NOT_FOUND`로 실패한다. Frozen lock은 404를 반환하는 codeload URL로 dependency를 resolve하고, 새 bare Git fetch도 pinned object를 `not our ref`로 거부한다. Lock이 지정한 source를 가져올 수 없음이 확인됐지만 pnpm 결함이나 과거 dangling-store 사건의 원인까지 입증하지는 않는다. 두 consumer 검사는 fetch 가능한 ref가 생겨 같은 검사가 통과할 때까지 미커밋 상태로 보존하며 각 저장소 checklist에 유지 조건을 기록했다. Package source는 바꾸지 않았으며 승인된 fetchable core ref는 F239-29-1에서 다룬다.
+
 - F212.10-core-5-4: Surface별 mount registration record가 desired plane 안에서 실패한 최신 attempt와 원래 이유를 보존한다. 이후 composition wait는 attempt와 원인을 보고하며 `page.surface.mount.failed` 진단 event는 error display를 호출하지 않는다. Red: 변경 전 소유 consumer test에서 통제된 listener rejection 뒤 ready view가 해제됐고 `page.drawn()`은 원래 이유 event나 attempt outcome 없이 실패했다. Green: `surface-remount-composition.test.mjs` 10/10, event class generation check, event catalog check, `make docs-check`가 통과한다. Retry 격리, reservation 재사용, dispose 및 plane 이탈 cleanup을 검증한다. 이전 Wails trigger는 미확인이다.
 
 - F239-33: `installStarter`는 실패 원문을 보존하고, network 연결과 재시작이 해결책이라고 약속하는 문구를 제거한다. Red: 존재하지 않는 pack과 제어된 manifest format 오류 시험이 변경 전 코드의 근거 없는 안내 문구로 실패했다. Green: 소유 plugin operations test 22/22과 `make docs-check` 문서 112개, 기록 1718개가 통과한다.
+
 - F239-34: Tauri와 Wails가 plugin-host `result` 멤버의 존재 여부를 구분하므로 `result: null`도 유효한 reply다. 두 멤버가 함께 있거나 모두 없는 reply는 거부하고, 비null 결과와 유효한 error는 보존한다. Red: 변경 전 각 소유 테스트가 `result: null`을 result와 error가 모두 없는 것으로 거부했다. Green: 두 Red/Green 소유 사례, Tauri plugin-host channel 테스트 24/24, Wails plugin-host channel 테스트 14/14와 `make docs-check`가 통과한다. 관찰한 Tauri `files.refresh` channel 오류는 이 parser 결함과 일치하지만 정확한 요청/reply 상관관계는 확인하지 않았다. macOS arm64에서 기존 canonical workspace index를 사용해 두 debug host bundle을 다시 빌드했고 code signature 검증을 통과했다. 기본 Tauri 0.0.21 development profile이 starter plugin 세 개 loaded, 필수 sidecar 두 개 installed, 다섯 `soksak://` plugin/sidecar 이름, ready host 상태, page/verification error 없음과 `files.refresh`의 성공한 null reply로 재실행됐다. 새 host log에는 error record가 없다. Wails first-project timeout은 F239-32에서 계속 조사한다.
+
 - F239-35: project-folder와 bookmark window check를 Files plugin의 declared UI snapshot에 대한 단일 `status.get` pull, 비동기 렌더 변경에 대한 core `core.sidebars` notification을 사용하도록 바꾼다. 기존 `{root, entries}` 가정과 선언되지 않은 `files.git` status 검사를 제거한다. 변경 전 추적 Tauri check는 plugin-host `status.watch` 거부로 실패했다. 다시 빌드한 Wails/Tauri host에서의 runtime acceptance는 대기 중이다.
+
 - F239-36: candidate sidecar runtime 결과를 F239-34와 별도로 기록한다. 다시 빌드한 Wails와 Tauri 0.0.21 host에서 starter plugin 세 개가 loaded였고 Files tree pull은 각 활성 project root를 보였다. 두 sidecar process는 각 disposable configuration에서 실행됐고 page 및 verification error는 없었으며 두 host는 `host.quit`으로 종료했다. Tauri Files window check는 명세에 따라 거부되는 `status.watch` 요청에서 실패했다. 두 host log에 error-class record는 없다. 종료 전에 Tauri의 다섯 native label을 캡처하지 못했으므로 label 검사 통과를 주장하지 않는다. Disposable configuration과 log를 보존했고 사용자 profile은 바꾸지 않았다.
+
 - F212.16-16: Wails와 Tauri는 더 이상 `sidecar.json`의 `displayName`을 `SOKSAK_SIDECAR_DISPLAY_NAME`에 설정하지 않으며 각 sidecar가 versioned manifest에서 process registration을 수행한다. Host는 display name이 없거나 올바르지 않으면 계속 거부하고 protocol version 1은 유지한다. Red: 두 host의 transient 및 persistent child-launch 검사는 변경 전 host가 선언된 이름을 child environment에 설정함을 관측했다. Green: Wails는 두 launch 검사와 manifest 검사가 통과하고 Tauri도 두 launch 검사와 manifest 검사가 통과한다. `make docs-check`가 통과한다. 설치기는 기존 version 경로를 덮어쓰지 않으므로 설치된 sidecar를 교체하려면 plugin package 폴더와 참조되지 않는 sidecar 폴더를 제거해야 한다. package 폴더 밖 plugin 데이터는 이 기록에서 분류하지 않는다. Sidecar release는 아직 publish되지 않았다.
 
 - F265-1: records 검사는 JSON object가 아닌 census 선언을 거부하고, 잘못된 `exclude` pattern은 census 파일과 실제 값을 담아 보고한다. Red: 두 오류 문맥 시험이 F265 코드에서 실패했다. Green: records-check 15/15와 `make docs-check` 문서 112개, record 1718개가 통과한다.
@@ -1357,19 +1492,27 @@
 - F265: records 검사는 census `exclude`가 없으면 아무 파일도 제외하지 않고, 선언된 비문자열 값은 census 파일과 실제 값을 담아 거부한다. Red: 새 소유 시험 2개가 변경 전 검사에서 실패했다. Green: records-check 13/13과 `make docs-check` 문서 112개, record 1718개가 통과한다.
 
 - F264: 작업공간 version을 immutable public tag `v0.0.20`과 구분되는 release candidate `0.0.21`로 맞췄다. Version checker가 두 identity를 명시하고, manifest audit와 workspace Cargo.lock 3개 항목이 candidate를 사용하며, 설치 명세가 candidate와 public release를 구분한다. Red: 변경 전 checker identity가 `0.0.20`과 `0.0.21` 불일치로 실패했다. 원래 Cargo.lock 항목을 되돌린 제어된 replay는 `soksak-host-tauriv2`에서 실패했다. Green: `versions.test.mjs` 7/7, version audit, `make docs-check` 112개 파일과 1718개 record가 통과한다. Tag, release asset, registry 항목은 게시하지 않았다.
+
 - F239-31-1: Go와 Rust host가 설정 폴더의 starter job을 읽고 검사하며 만들고 완료한다. 쓰기는 현재 registry URL을 확인하고 순서가 있는 정확한 snapshot을 보존하며, job 없이 기존 `installed.json`이 있는 legacy profile을 거부하고 job 파일을 원자적으로 교체한다. Complete는 나열된 plugin이 모두 설치돼야 하지만 disabled 상태는 보존하며 완료 job은 되돌릴 수 없다. Red: 변경 전 두 state reader는 유효한 pending job을 누락했고, 두 writer는 pending-write 검사를 통과하지 못했다. Green: Go와 Rust provider 검사는 잘못된 format/field, `firstRun: false`에서 재시작 readback, registry/snapshot 불일치와 무변경, 완료, disabled plugin 보존, legacy profile 거부, 완료 상태 idempotency를 검증한다. Host 및 Wails/Tauri runtime mapping 검사도 통과했다. Consumer 검사 21/21, `make docs-check` 통과.
+
 - F239-31-2: Workbench는 첫 starter plugin 설치 전에 job을 저장하고 pending 동안 설치되지 않은 ID만 재개한다. 나열한 모든 plugin이 설치되면 job을 complete로 바꾸며 완료 뒤 사용자가 제거한 plugin은 다시 설치하지 않는다. Red: 첫 plugin 설치, 다음 plugin 실패 후 `firstRun: false`와 pending job을 읽은 변경 전 consumer가 `false`를 반환했다. Green: `plugin-operations.test.mjs` 22/22; host fixture는 설치 전 job 저장, 누락 plugin만 재시도, 완료 뒤 사용자 제거 보존을 검증한다. `make docs-check` 통과. Host job persistence는 F239-31-1에서 검증한다.
 
 - F239-27: 선언된 workspace registry에서 만든 starter package로 실행 중인 Wails 개발 profile을 복구했다. sok CLI가 browser 0.0.6, terminal 0.0.15, files 0.0.7과 files 0.0.8, vt 0.0.12 sidecar를 설치했다. 재실행 뒤 세 plugin은 loaded, terminal과 browser surface는 ready, core.page.error는 null이며 lsappinfo는 soksak://plugin 이름 세 개와 soksak://sidecar 이름 두 개를 표시한다. 앱 registry command로 public index URL을 복원했다. Browser 0.0.6은 현재 workspace source에서 빌드했으며 공개된 0.0.6 archive와 다르다. 이 작업은 correction을 공개하지 않는다. local browser 0.0.7 upgrade와 public component release는 F239-28에서 추적한다. Registry G54는 각 release 뒤 browser 0.0.7, terminal 0.0.15, files 0.0.7과 sidecar 0.0.8, 0.0.12를 등록한다.
+
 - F212.10-core-5-3: Composition wait는 mount 등록이 pending이어도 mounted surface entry를 따른다. 선언 전에 dispose하면 wait가 명시적 dispose 오류로 끝나며, mount 실패는 원래 오류를 보존하고 replacement wait는 replacement entry를 따른다. Red: 통제된 declaration을 pending으로 둔 변경 전 코드에서 dispose 완료 후에도 기존 wait 결과가 정해지지 않았다. Green: `surface-remount-composition.test.mjs`와 `surface-view.test.mjs`가 27/27 통과하고 `make docs-check`가 통과한다. Wails 보고의 원인을 입증한 것은 아니다.
 
 - F239-30: 공개 core 0.0.20은 자체의 이전 plugin API를 가진다. 두 source tree는 모두 0.0.20 버전 문자열을 사용하지만 workspace reader와 공개 API identity는 다르며, 이번 복구가 공개 package 호환성을 입증하지 않는다. Debug Wails와 Tauri staging은 생성된 workspace registry에 의존하고 절대 `index.json` 경로를 전달한다. Staging은 Node `pathToFileURL`로 변환한 값을 staged `environment.json`에 설정한다. Release staging은 선언된 HTTPS URL을 유지한다. Red: 변경 전 owning test는 공백과 `#`가 있는 경로를 --registry-index로 전달했을 때 `Unknown option '--registry-index'`로 실패했다. Green: 같은 test가 인코딩된 staged URL과 변경되지 않은 원본 environment를 확인하고 `packages/workbench/test/stage.test.mjs` 11/11이 통과한다. `make -n frontend-wailsv3 frontend-tauriv2`는 두 debug target이 registry 생성 뒤 절대 경로를 staging에 전달함을 확인하고, `make -n wailsv3-build-release`는 release staging에 override가 없음을 확인한다. `make docs-check`가 통과한다.
 
 - F212.10-core-6: parity audit의 F73.1과 F83을 현재 recording 및 cleanup 테스트에 연결한다. 변경 전 audit의 baseline snapshot은 더 이상 존재하지 않는 테스트 이름을 보고했으며, F83은 현재 보존 계약과 달리 남은 녹화 제거를 기대했다. 현재 inventory는 lane 99개, implementation file 668개, test file 913개다. Examples 절차의 수치를 실제 발견값으로 갱신한다. 수정된 연결과 수치로 같은 audit가 통과하고 owning recording test 14/14 및 `make docs-check`가 통과한다. 최초 실패 출력은 보존되지 않아 기록한 Red는 baseline snapshot 재현이다.
+
 - F212.10-core-5-2: Pending native listener 등록은 mount readiness를 지연하지 않는다. Ready 전 실패는 mount와 composition wait를 원래 오류로 reject하고, ready 후 실패는 이미 끝난 결과를 바꾸지 않고 surface 오류를 보고한 뒤 view를 정리한다. Red: 변경 전 after-ready fault test는 surface를 ready로 남기고 listener와 view-command 상태를 보존했으며 unhandled rejection을 발생시켰다. Green은 authorization 대기 중 조기 실패, ready 후 정리, pending 등록 중 dispose, 즉시/늦은 cleanup, 오류 보고, 기존 cancellation 결과, unhandled rejection 부재를 확인한다. 기존 slow-listener remount 테스트는 원래 순서를 바꾸지 않고 통과한다. composition/remount 집중 테스트는 6/6, `surface-view.test.mjs`는 20/20, `make docs-check`는 통과한다. Wails 보고의 원인은 확인하지 않았다.
+
 - F212.10-core-4: `normal-shutdown`의 terminal 준비가 반복 status read와 `setImmediate` 대기 대신 visible terminal surface와 ready session의 제한 시간 있는 status notification을 기다린다. 변경 전 polling helper는 `client.watch`를 호출하지 않고 끝나 소유 단위 Red assertion에 실패했다. Green은 두 notification 이름, terminal surface, 15초 deadline, visible surface 도착 뒤 terminal input을 검증한다. 범위 테스트와 `make docs-check`가 통과했다. Application window check는 실행하지 않았다.
+
 - F212.10-core-3: Editor와 HWP 파일이 있는 disposable project를 닫고 host가 살아 있을 때 stderr를 읽는 Wails window 검사를 추가했다. 전체 fixture run 한 번은 `host.view.killed` 4개를 기록하고 새 `WebviewWindow #<id> not found` 경고 없이 통과했다. 검사 후 살아 있는 host stderr를 다시 읽어도 경고가 없었다. 한 번의 미재현이므로 항목은 계속 열려 있고 기존 경고의 원인은 미확인이다. 하네스는 원래 frontmost baseline을 복원했고 dedicated host는 이후 정상 종료됐다.
+
 - F212.10-core-5: Wails close-check 준비에서 exposure가 없는 `phase: ready` editor surface와 `exposure settled failed: surface <id> is not mounted`를 관측했다. Editor 0.0.7 manifest와 `ui/view.js`는 성공한 content-hash run과 같았지만 실패 설정에는 Files 0.0.7이 없었고, 별도 전체 fixture에서 Files를 설치하자 editor와 HWP status가 등록됐다. 원인은 미확인이며 runtime correction으로 기록하지 않는다.
+
 - F212.10-core-5-1: 같은 ID의 이전 surface dispose를 기다리는 동안 composition wait가 replacement mount를 관측하고, 등록 뒤 기존 mounted composition wait를 사용한다. 변경 전 소유 검사는 dispose/remount 공백에서 `surface fixture-remount-composition is not mounted`로 실패했다. Green은 same-ID replacement, same-slot 및 moved-slot 재사용, replacement 없는 dispose, 알 수 없는 ID, composition 실패, `null` rejection을 포함한 initial-state callback 실패를 검증하며 실패 host와 pending registration을 해제한다. 관련 view, mount-path, F50 tab-close 검사는 29/29, `make docs-check`가 통과한다. 재현한 workbench contract 공백을 수정했으며 Wails F212.10-core-5 trigger는 미확인이다.
 
 - F212.12-2-2-4: 승인된 두 host 검사에서 reference와 terminal 입력은 통과했고 Wails capture도 기준을 충족했다. Tauri 입력도 reference text와 terminal output이 예상대로 나왔지만 연속 complete frame 간 terminal 녹화가 33 ms를 0.1167917 ms 초과했다. Callback trace에는 중간 frame과 writer rejection이 없었다. Mach timebase 125/3에서 display 차이는 794803 tick, arrival 차이는 797653 tick, 동기 처리 구간은 33066 및 45061 tick이다. 처리 완료 시각은 비동기 compression과 file write 전이므로 writer I/O는 측정하지 않는다. Raw capture와 실행 출력은 진단을 위해 보존했으며 원인은 정하지 않았다. Input method와 처음 foreground였던 application을 복원했다. Display cadence 조사는 F212.12-2-2-4-8에 연결한다.
@@ -1445,100 +1588,178 @@
 - F244-2: `make declared-ui-benchmark`가 모든 branch를 펼친 16 level 이내의 node 5000개 tree와 command item 1000개 list를 별도의 supervised process에서 측정하며, 허용 bound 2000 ms와 500 ms를 유지한다. 각 JSON 측정은 전체 그리기와 binding 수, 경과 시간, 결과, package와 runtime version, platform 및 load를 기록한다. 잘못된 시간 측정, 누락된 그리기나 binding 및 bound 초과는 실패다. benchmark test 10개의 Red와 Green을 기록했고 기존 전체 크기 그리기 test 2개도 통과한다. workbench 0.0.20을 darwin arm64 25.6.0, Node 26.11.1, jsdom 30.0.1 및 load average 10.99에서 측정한 결과는 tree 327.2 ms, list 81.0 ms다. 문서, parity 및 boundary 검사가 통과한다.
 
 - F262-7: origin이 없는 뷰 탭의 표시 거부는 탭, plugin, space와 project, 탭을 만든 경로, 이 세션이 origin을 기록했는지를 밝힌다. 탭 생성 지점마다 경로를 밝힌다.
+
 - F212.12-2-1: view는 비활성 창의 첫 마우스 누름을 받는다. 그 누름이 페이지와 first responder에 닿아 view가 키보드 focus를 가진다. 이전에는 AppKit이 창 활성화를 위해 그 누름을 소비해 view card 클릭이 view에 키보드 focus를 주지 않았다. 문서 영역은 거부를 유지한다. Red: `view_focus_test`가 변경 전 소스에서 페이지 누름과 first responder 검사를 모두 실패했고, 변경 뒤 세 번 연속 통과했다.
+
 - F262-6a: view bridge가 `runtime.project(listener)`를 served한다. listener는 plugin host의 마지막 project를 바로 받고 host에 call을 보내지 않으며, 이는 `runtime.theme`과 같다. project message를 `runtime.native.on`으로 구독한 plugin host page는 host에 거부되었다.
+
 - F262-4a: 레이아웃 쓰기는 쓰기 경로(add space, saved layout, recreate 또는 library replacement)를 밝히며, origin 멤버 없이 저장하는 뷰 탭은 탭, plugin, 경로와 함께 응용 프로그램 로그에 기록된다.
+
 - F262-5: 창이 닫힌 뒤 도착한 plugin host의 navigation state나 message는 `project window is closed`로 보고되지 않는다.
+
 - F262-3: 두 host 모두 프로젝트 설정 파일을 현재 번호 있는 형태로 쓴다. settings 쓰기는 입구에서 파일을 migration하고 `format` member를 저장하며, diagnostics fixture도 현재 형태를 쓴다.
+
 - F262: 프로젝트 검사는 프로젝트 설정 파일을 현재의 번호 있는 형태로 읽고, 새 space의 tab은 저장된 layout이 가졌다가 버린 뒤에야 origin을 잃는다. 그래서 추가한 space의 첫 tab이 `has no origin`으로 표시에 실패하지 않는다.
+
 - F212.12-1-10-6: view import map 소유자의 native 전체 시험 실행(76개)은 75개를 통과했다. application map 없이 view page를 여는 시험을 고쳐 연속 세 번 통과시켰다. plugin 저장소는 아직 자기 import map을 담으므로, release가 그 map을 제거할 때까지 그 view page는 거부된다(F212.12-1-10-6g 참조).
+
 - F212.12-1-10-6: view import map의 소유자는 하나다. 호스트가 실행 중인 core의 import map을 각 view page의 doctype 바로 뒤에 넣으므로, view page는 자기 import map을 갖지 않는다. import map을 가졌거나 doctype으로 시작하지 않는 page는 주소와 이유를 담아 기록하고 거부한다. 자기 map을 아직 담은 plugin view page는 저장소가 그 map을 제거할 때까지 거부된다.
+
 - F212.12-1-19: surface.unload를 선언한 surface의 view call은 탭 상태 저장소를 시도할 때까지 기다린다. 그래서 페이지 시작 중의 view 첫 탭 상태 call은 `the tab state store is not open` 오류 대신 저장소가 답한다.
+
 - F212.12-1-18: view는 자기가 소유한 exposure 요청만 받으므로 core surface 항목은 surface 문서가 한 번 답한다. view 표지는 mount마다 가진다. plugin host의 call 기록은 오류 표시 대신 plugin 상태를 갱신한다. files sidecar의 body는 json-object 형식의 객체이며, plugin host의 sidecar event는 세션 data를 `sidecar.message` 또는 `sidecar.failure`로 싣는다.
+
 - F212.12-1-17: window check는 자기 boot의 host 이벤트 파일만 판정한다. 이전 실행이 offset 저장 뒤에 flush한 파일 기록은 이번 실행의 오류로 세지 않는다. plugin host 보고는 `[object Object]` 대신 거부의 message, code, data를 쓴다. plugin host의 sidecar 요청 body는 page가 보내는 JSON 객체다. host는 exposure 요청, 답, 짝이 없는 답을 id와 릴레이가 보관하는 위치와 함께 기록한다.
+
 - F212.12-1-15-1: Tauri host가 null result인 plugin host reply를 받는다. Wails host와 같다. plugin host의 reply, request params, event data가 null 값을 유지하므로, 값이 없는 명령이 `has both or neither of a result and an error`로 실패하지 않는다.
+
 - F212.12-1-15-4: 끊긴 영속 sidecar 연결의 error 기록이 연결이 어떻게 끝났는지(`end`)와 기다리던 요청 수(`waiting`)를 두 host에서 담는다.
+
 - F212.12-1-16: plugin host는 view bridge가 exposure 등록에 보내는 등록 통지 `runtime.native.call registered`를 `page.exposure.register`와 같이 served한다. 문서가 끝낸 exposure 요청에 대한 답은 받아들여 관측 `exposure reply <id> arrived after its request ended`로 두 host에 쓴다. 릴레이가 보낸 적 없는 요청에 대한 답은 여전히 거부한다.
+
 - F212.12-1-14-4: 끊긴 영속 sidecar 연결의 `host.sidecar.disconnect` 기록이 두 host에서 연결이 어떻게 끝났는지(`end`)와 기다리던 요청 수(`waiting`)를 담는다.
+
 - F257-3: test runner는 group에 zombie만 남아 macOS가 group 신호를 EPERM으로 거부하면, exit 경로와 한도 경로 모두에서 오류 없이 group을 끝낸다. 실행 중인 member가 거부되면 그 member를 이름으로 밝혀 실패한다. group의 멈춤, 목록, 종료는 하나의 신호 helper와 실행 중 member 판정을 명령 감독기와 공유한다. Red: runner 시험 `a refused group signal with no running member ends without error`와 `a refused group signal with a running member names it`이 변경 전 논리에서 `kill EPERM`으로 실패한다. Green: runner 시험 파일 3개가 39개 중 39개를, native repeat 시험 파일이 2개 중 2개를 통과한다.
 
 - F212.12-1-13: plugin host와 view의 project는 두 host, `project` event, workbench, plugin-api에서 `{id, root}`다. files host page와 sidecar session이 project id를 요구하기 때문이다. plugin host page는 `runtime.native.on`으로 exposure 요청을 구독하고 `runtime.native.call`의 `exposureReply`로 답하므로, host가 등록한 dom 항목이 그 page에 닿는다. 두 host는 두 call을 전달한다.
+
 - F257-2: benchmark runner 시험이 fixture에 6초 한도를 주고, 한도를 넘는 fixture는 30초를 잔다. 그래서 곧바로 끝나는 fixture가 부하 걸린 기계 때문에 멈추지 않는다. Red: load 105의 push check가 `TIME event_log_benchmark 2.012s exceeded 2.000s and was killed`로 실패했다. Green: 시험 통과.
+
 - F212.12-1-10-5: view page의 module graph 규칙은 import를 es-module-lexer(`es-module-lexer/js`, `@soksak/plugin-api`의 dependency)로 읽으므로, 문자열 리터럴의 텍스트는 import가 아니다. 규칙은 node 전용 export `./view-modules`이며, view page가 index를 불러오므로 index는 더 이상 이를 re-export하지 않는다. 명세는 view import map의 항목을 다섯 개로 센다. Red: `a string literal of a minified vendor bundle that reads as an import is not an import` 시험이 바꾸기 전에 `ui/vendor/libraries.js: import : tags5.moduleKeyword,`로 실패했다. Green: 그 시험이 통과하고, view 시험이 152개 중 152개를 통과하며, plugin-api 시험이 795개 중 795개를 통과한다.
+
 - F261: Tauri 테스트 `a_sidecar_receives_the_log_directory`가 반환하거나 실패할 때 자신의 sidecar를 멈춘다. 다른 sidecar 검사와 같은 drop guard를 사용하므로 sidecar 프로세스가 테스트 종료 후 남지 않는다. 호스트 코드는 변경하지 않았다. 애플리케이션은 종료 시 sidecar를 끝내며, 이 검사는 그렇게 하지 않았다.
+
 - F260-1: `sok`의 쓰기 명령은 host와 같이 명령 전체 동안 `process.lock`에 advisory lock(flock)을 쥔다. 잠긴 잠금은 사례의 host 문구로 명령을 거부하고, 잠기지 않은 잠금 파일은 넘겨받는다. 사례표에 잠긴 사례가 추가되어 host와 두 sok 구현이 재생한다.
 
 - F260: `sok`의 쓰기 명령은 host의 형식으로 `process.lock`을 읽고 쓴다(`{"pid", "boot"}`). 그래서 실행 중인 application의 잠금은 `invalid process lock` 대신 pid와 함께 거부되며, 다른 형식의 잠금은 내용을 밝혀 거부하고 남겨 둔다. 형식은 `docs/spec/endpoint.md`에 있고, 사례표 `docs/spec/cases/process-lock.json`은 Go와 Rust 시험이 재생한다.
 
 - F212.12-1-14-1: declared UI snapshot을 relay하는 window event는 두 host와 main page 모두에서 `declared-ui-snapshot`이다. Tauri가 점이 든 event 이름을 거부하기 때문이다. view와 plugin host 페이지가 보내는 message 이름 `declared-ui.snapshot`은 그대로 둔다.
+
 - F212.12-1-12-2: view의 text size와 settings 구독은 view의 모든 구독 등록과 같이 off 함수의 promise로 답한다. `subscribe`는 promise가 아닌 registrar 결과를 registrar 이름을 밝힌 오류로 거부하므로, `runtime.textSize.on`과 `runtime.settings.on`이 `register().then is not a function`으로 실패하지 않고 view에서 답한다.
+
 - F212.12-1-12-1: null result인 view reply를 Tauri host가 받아 `result: null`로 post한다. Wails host는 이미 그렇게 한다. Tauri decoder가 null field를 뺀 struct로 읽어서, 값이 없는 명령의 reply가 `view reply N has neither a result nor an error`로 거부되었다. view reply의 result, view event의 data, view request의 params는 null 값을 유지한다.
+
 - F212.12-1-11-1: plugin host도 자신의 navigation의 progress 동안 ready document를 유지한다. 문서 상태가 탐색 수를 세고, 두 host 모두 그 수가 올라갈 때만 ready 기록을 지운다. 수가 없거나 직전보다 작은 상태는 거부된다. Red와 Green은 체크리스트 항목에 기록했다.
+
 - F212.12-1-11: view가 자신의 첫 ready message 뒤에 보내는 reply가 두 host 모두에서 `<surface> has no ready document`로 거부되지 않도록, view의 ready document가 그 view 자신의 load의 progress를 지나도 유지된다. native document 상태는 각 탐색을 시작할 때 한 번씩 `navigations`에 세고, host는 그 수가 올라갈 때만 view의 ready 기록을 지운다. `navigations`가 없거나 직전보다 작은 수인 view 상태는 그 문구로 거부된다. 수정 전 코드의 Red: Tauri 테스트 `view_channel_keeps_the_ready_document_through_the_progress_of_its_load`가 `left: Err("probe-surface has no ready document")`로 실패하고, Go 테스트 `TestViewStateKeepsTheReadyDocumentThroughProgressOfTheSameNavigation`이 `post after the progress of the same navigation: probe-surface has no ready document`로 실패하며, native `view_channel_test`가 `every view state of one load counts one navigation`으로 실패한다. Green: Tauri `documents_test` 49/49, Go view 및 surface 테스트 57/57, `view_channel_test` 통과.
+
 - F212.12-1-9: theme 변경이 두 host에서 plugin host와 view document에 main thread에서 post된다. Wails theme binding과 Tauri async command가 자신의 thread에서 native document post를 호출했고, 그 main thread assertion이 application을 SIGABRT로 중단시켰다. Red: Go 테스트 `TestPluginHostPostsRunOnTheUIThread`와 `TestViewPostsRunOnTheUIThread`가 UI thread 작업 밖의 native post로 실패했고, Rust 테스트 `a_native_document_post_is_a_main_thread_task`가 SIGABRT로 중단되었다. Green: 같은 테스트가 통과하고, Wails host package와 Tauri host 단위 테스트가 통과한다.
+
 - F257-1: 한도에서 test runner는 leftover 목록을 만들기 전에 시험 process group에 SIGSTOP을 보내 멈추고, 시한 경과 시간을 그 멈춘 시점에서 잡은 뒤 group을 끝낸다. 그래서 load 아래의 느린 process table 읽기 때문에 시험이 한도를 넘어 실행되지 않는다. exit 경로도 같은 순서를 쓴다. Red: runner 시험 `a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop`은 PATH의 가짜 `ps`가 5초 잠들어 한도 2000 ms에 경과 7296 ms로 실패한다. Green: 시험이 통과하고 runner 시험 파일 3개가 37개 중 37개를 통과한다.
+
 - F212.6a-1-3-2-3: 두 host의 `host.stall`이 `watch_late_ms`를 가진다. 이는 250 ms 박자를 넘어 깨어난 정지 감시 자신의 지연이며, 일정에 들어가지 않은 process의 정지(감시 지연이 정지의 절반 이상)와 막힌 main thread의 정지(감시 지연 0)를 가른다. 감시는 host가 비워 두는 선언된 seam `clock`과 `wait`을 받는다.
 
 - F212.12-1-7: view surface는 view가 composition을 선언하면 phase `ready`를 보고한다. workbench는 module mount에서만 ready 상태를 풀었으므로 각 view가 `loading`에 머물고 카드에 불러오는 표시가 남았다. workbench는 view 호출마다 debug 기록 `page.view.call`과 `page.view.reply`도 쓰므로, 회신하지 않은 호출은 회신 없는 수신으로 보인다.
+
 - F258-3: log-contract fixture는 `docs/spec/cases/log-contract`로 옮기고, host event log 시험은 패키지의 audit 모듈을 경로로 읽는 대신 `scripts/audit-log.mjs`로 로그를 audit한다. 패키지는 더 이상 fixture를 export하지 않는다.
+
 - F258-2: manifest 사례표는 `docs/spec/cases/manifest-validation.json`으로 옮겼으며, reader와 두 sok 구현이 이를 읽는다. `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 - F212.12-1-5: view surface는 한 번만 mount된다. 페이지가 view의 core surface 항목을 view가 전달받은 요청에 쓰는 것과 같은 surface port에 등록하여 mount가 `already has an exposure port`로 실패했다. 이제 페이지는 view의 core surface 항목에 답하고 나머지 전달된 요청은 소비하며, view는 port 대신 surface에 표시되고, 실패한 mount는 자기 노출 port와 entry를 해제하므로 다음 mount가 새로 시작한다. 거부된 composition 선언은 더 이상 처리되지 않은 거부를 남기지 않는다. Red: `surface-view.test.mjs`는 core surface 항목을 가진 mount가 `already has an exposure port`로, 실패한 mount의 해제가 `the failed mount left its exposure port registered`로 실패한다. `exposure.test.mjs`는 view 확인을 빼면 전달 규칙이 `[2]` 대신 `[1, 2, 3]`으로 실패한다. Green: surface-view 14/14, exposure 30/30, workbench 시험 디렉터리 851/851 통과. view mount, 그 core 등록, 그 command 등록이 port 하나를 공유하는 순서를 시험이 다룬다.
+
 - F258-1: `sok plugin pack`과 `sok plugin install`은 reader의 manifest 검사(`validateManifest`)의 모든 규칙을 reader의 순서와 reader의 오류 문구로 적용하며, reader와 두 구현 모두 manifest 사례표 `packages/plugin-api/contract/manifest-validation.json`을 재생한다. reader는 이제 각 객체의 member를 정렬된 키 순서로 읽고, type 이름이 아닌 schema type을 거부하며, data schema를 schema 규칙으로 검사하고, enum member를 순서와 무관하게 비교하며, exposes의 commands가 목록이 아닐 때 menu, save, drop 항목에서 TypeError를 내지 않는다. Red: reader 시험은 reader 수정 전 사례 210개 가운데 8개가 실패했고, Go와 Rust 재생은 이식 전 기준 상태에서 실패했다.
 
 - F212.12-1-6-1: 모든 quit 요청은 준비된 창이 있든 없든 종료 상태를 시작한다. `host.quit`, Wails `shouldQuit`, Tauri 종료 요청이 quit을 실행하기 전에 그 상태를 시작하므로, 준비된 창이 없는 quit 중의 page process 종료는 오류 줄을 쓰지 않는다. Red: Go 시험 `TestAQuitRequestWithoutAReadyWindowBeginsTheQuitState`와 Rust 시험 `a_quit_request_without_a_ready_window_begins_the_quit_state`는 상태를 시작하지 않은 seam에서 `the end of a page process during a quit request is written`로 실패한다. Green: Go quit과 종료 시험 7/7, Rust quit과 종료 시험 6/6 통과. 두 host의 운영체제 quit 경로(`shouldQuit`과 `windows::quit`)는 추출된 결정을 통해 시험된다.
+
 - F212.12-1-6: 첫 종료 신호가 종료를 요청하기 전에 종료 상태를 시작하므로, 신호로 끝나는 quit 중의 WebContent process 종료는 두 host에서 오류 줄을 쓰지 않는다. Red: 상태를 시작하지 않은 신호 seam에서 Go 종료 시험은 `the end of a page process during the quit is written: error host page process: main: terminated`로, Rust 종료 시험은 `page process: main: terminated`로 실패한다. Green: Go 종료와 quit 시험 5/5, Rust 종료 시험 3/3 통과.
+
 - F257: 시험 runner는 process group 신호가 거부되면 자기 leader를 끝내고 leader의 close에서 결과를 끝내므로, 시험이 모두 통과한 뒤 시험 파일의 프로세스가 남지 않는다. 신호 실패 시험은 더 이상 프로세스를 직접 끝내지 않는다.
+
 - F258: `sok plugin pack`과 `sok plugin install`은 reader가 거부하는 `plugin.json`의 `exposes` 선언이나 surface `params` schema를 거부한다. schema는 `type`, `properties`, `items`, `enum`만 받으며, 거부 문구는 reader의 오류 문구다. Red: 시험 네 개(`TestPluginPackRefusesASchemaOutsideTheSubset`, `TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset`, `plugin_pack_refuses_a_schema_outside_the_subset`, `plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset`)은 이전 코드에서 실패했다. reader의 나머지 검사는 F258-1에 미완료로 남아 있다.
 
 - F256: CI의 structure 단계와 push 검사는 event catalog와 census 감사를 돌리므로, 지운 emitter의 catalog 항목이 남으면 push 전에 실패한다.
+
 - F255: tauriv2 sidecar transport 시험의 교체 service fixture는 Drop에서 설치된 service 프로세스의 종료를 기다린다. 프로세스는 SIGKILL로 끝내고 `waitpid`로 회수하므로, 뒤따르는 확인은 끝난 프로세스를 읽는다. 시험 `a_replaced_service_starts_after_the_end_of_its_process`는 프로세스 종료에 시간이 걸릴 때 수정 전 fixture에서 `the installed service process <pid> outlived the test`로 실패했고, 수정 뒤에는 통과한다. 제품 코드는 바뀌지 않았다.
+
 - F252-1-1: `createExpose`는 port의 report 함수를 요구하고, host가 거부한 reply를 보고하며, 실패한 report는 두 문장을 담아 `reportError`로 넘기므로 어떤 reply 실패도 page 오류 경로를 벗어나지 않는다. 앱 runtime은 exposure port에 report를 준다.
+
 - F254: 시험 runner는 시험 파일의 프로세스가 끝나면 그 프로세스 그룹을 끝낸다. 그룹에 남은 프로세스는 `left running after exit: pid <n> <command>`로 파일을 실패시키고, 한도에서는 `TIME` 줄이 파일의 프로세스 밖의 프로세스를 `left running: pid <n> <command>`로 이름 붙인다. 시험이 끝난 뒤 timer를 열어 둔 시험 파일은 남은 프로세스와 함께 보고되며, 자기가 시작한 자식이 계속 도는 채 프로세스가 끝난 파일은 한도가 아니라 그 종료 시점에 실패한다.
+
 - F252-1: `undefined`인 status 값, command 결과, 요청 결과는 `undefined`가 JSON 값이 아니므로 status나 command의 이름을 밝힌 오류로 거부한다. result 형식이 null인 command는 여전히 null로 답한다. 파싱되지 않는 `endpoint.json`은 경로와 함께 실패하며, 없는 파일만 아직 쓰이지 않은 것이다. 값 결과를 선언하고 아무것도 반환하지 않던 fixture는 선언에 맞게 고쳤다. `createExpose`의 응답 체인은 F252-1-1로 열어 둔다.
+
 - F252-1: JavaScript 원본의 오류 경로가 실패를 숨기지 않고 보고한다. `dom.rect`와 `dom.act` 요청은 null `index`를 -32602로 거부한다(생략된 index는 여전히 첫 요소를 고른다). 실패한 view 응답은 page 오류 경로로 보고한다. 실패한 status watch는 보고하며, 닫힌 surface는 여전히 watch를 끝낸다. `{seq, value}`가 아닌 status 응답은 거부한다. 파싱되지 않는 plugin host 본문은 파서 메시지를 포함한다. layer가 사라진 뒤 도착한 host 응답은 보고한다. plugin 작업의 Error가 아닌 실패는 그 글을 보고한다. JSON이 직렬화할 수 없는 console 인자는 `{"unserializable": "<reason>"}`로 기록한다. 프로세스 실패와 정리 실패가 함께 일어나면 두 오류를 모두 보고한다. 중괄호로 시작하지만 JSON이 아닌 cargo 줄은 discovery를 실패시킨다. 모든 시험과 언어 사례는 자신의 `timeoutMs`를 선언하며, `runTests`는 없는 시험을 이름과 함께 거부한다.
+
 - F212.11-1: reader는 plugin manifest의 `module`을 가진 사이드바 section과 `state` field를 plugin과 field를 밝혀 거부한다. section은 선언된 `status`를 쓰고, 프로젝트 데이터는 plugin host가 읽는다. 선언과 다른 format으로 저장된 값은 이름 있는 오류로 읽기에 실패한다. `sok plugin pack`의 두 field 거부도 같은 문구다.
+
 - F212.11-2a: reader는 `module`을 가진 표면과 `hybrid` 합성 종류를 plugin과 field를 밝혀 거부한다. dom 거부 문구는 view 종류만 말한다. 표면 합성 컨트롤러는 hybrid 페인트 경계와 dom 분기를 가지지 않는다.
+
 - F212.11-2b: 워크벤치는 view 표면만 mount하고, 표면 module을 가져오지 않으며, parking 조각을 만들지 않는다. 숨긴 표면 host는 문서에서 떨어지고 그 tab을 보이면 돌아온다. 페이지 진단은 parked 요소 수를 게시하지 않는다. module 포커스의 포커스 요청 연쇄를 제거했다. module mount 시험은 제거했고, 그것이 덮던 view 경로의 동작은 `test/surface-view-path.test.mjs`가 고정한다.
+
 - F212.11-2e: 명세는 view 합성만 적고, 표면 소유권 절이 표면 module 절을 대신하며, `diagnostics.objects`는 `parkedElements` 없이 페이지 요소와 문서 수를 보고한다.
+
 - F212.11-3: 두 probe 픽스처는 자기 `app.js`를 가진 view 페이지이고, manifest는 view 합성을 선언한다. module 섹션의 방향을 시험하는 창 시험은 제거했다.
+
 - F212.11-2c: Go와 Rust host는 제거된 `hybrid` surface composition을 `plugin <plugin> surface composition: kind hybrid is removed; the composition takes kind view`로 거절한다. 이 문구는 제거된 `dom` kind와 같은 형식이며, `dom` 문구도 이제 kind `view`만 적는다. surface 동기화 검사는 view composition만 받아들이므로 다른 composition의 start values 검사를 제거했다. `diagnostics.objects`는 두 host 모두에서 `parkedElements` 없이 page의 element와 document 수를 답한다. Red: 변경 전 코드에서 완전한 hybrid composition이 받아들여져 Go `TestHybridCompositionIsRefusedWithThePluginAndTheField`와 Rust `a_hybrid_composition_is_refused_with_the_plugin_and_the_field`가 실패했고, `parkedElements`를 응답에 다시 넣었을 때 Go `TestDiagnosticsObjectsReplyAndParams`와 Rust `diagnostics_objects_reply_and_params`가 실패했다. Green: 두 host가 이 테스트를 통과한다. Go `src`(104 tests)와 `tests`(465 tests)가 통과하며, Rust 패키지는 diagnostics 기능으로 652개 시험 중 652개가 통과한다.
+
 - F212.11-2d: darwin native 라이브러리는 surface host의 hybrid app DOM webview(`mainWebview`, hit-test 대체 경로, 이제 view web view를 답하는 `sp_surface_main_webview`)와 `sp_webview_count_objects`의 parked element 수를 제거한다. 이 함수의 page script는 element와 document 수만 센다. Red: `surface_host_test`는 변경 전 라이브러리에서 `a surface without a view has no app DOM of its own; the hybrid composition is removed` 검사가 실패했고, `page_objects_test`는 page가 던지는 parked 함수를 정의했을 때 page world 수가 `ok 0`으로 실패했다. count가 그 함수를 읽었기 때문이다. Green: `make native-darwin` 후 `surface_host_test`와 `page_objects_test`가 통과하며, `webview_geometry_test`, `surface_layout_test`, `image_region_test`도 통과한다. `webview_geometry_test`는 `mainWebview`를 key-value coding으로 설정하는 hybrid 사례를 제거했다. 그 사례가 시험을 중단시켰고, 제거된 사례에는 자체 Red가 없다.
+
 - F252-2: host와 명령 줄의 오류 경로가 버리거나 대체한 것을 보고한다. Rust endpoint와 Go endpoint 모두 accept 오류를 기록한다. 두 host는 endpoint 연결을 닫는 I/O 이유를 밝히고, `host.sidecar.reply`는 오류 글이 잘리면 `truncated: true`를 가진다. `projects.json`과 `settings.json`의 형식 번호는 오류를 반환하며 정수가 아닌 `format` member는 두 host가 거부한다. 범위 밖 수를 가진 debug 행은 JSON이 아닌 것으로 거부한다. 웹 뷰 생성 실패는 native 원인을 밝힌다. 거부된 이미지 nonce는 원인을 기록한다. 색인 head 읽기 오류는 갱신을 실패시킨다. 직렬화하거나 열 수 없는 기록기 줄은 `log.dropped`로 기록한다. code나 message가 없는 `view.error`, endpoint error member, document reply error는 두 host가 거부한다. window record를 읽을 수 없는 surface는 오류를 기록한다(Rust host).
+
 - F253: 명령 실행기의 heartbeat 시험은 시작과 cancelled 결과 사이의 모든 progress event를 받아들인다. 프로세스 그룹이 끝나기 전의 heartbeat 수는 끝나는 데 걸린 시간에 달려 있기 때문이다.
+
 - F251: view는 `runtime.status.watch {name}`과 `runtime.status.unwatch {name}` view call로 core status 또는 자기 plugin의 status를 따라가며, 첫 값을 포함한 각 값을 view event `status {name, value}`로 받는다. SDK의 `runtime.status.watch(name, listener)`는 watch를 끝내는 함수를 돌려준다. 다른 owner의 이름, exposure가 선언하지 않은 plugin status, 빈 이름은 아무것도 실행하지 않고 view의 오류 줄을 쓴다. 두 host는 call과 event를 바꾸지 않고 전달한다(host contract의 `view.status.relay`). 명세는 `docs/spec/native-surfaces.md`, `docs/spec/exposure.md`, `docs/spec/host-contract.md`에 있다.
+
 - F249: plugin host 페이지는 `runtime.command {name, params}`로 command를 실행하고 `runtime.log {level, event, fields, cids?}`로 event를 쓴다. 두 host가 이 call을 전달하고 main page는 view call의 검사로 답하므로, declared tree 행이 `core.file.open`으로 파일을 열고 host command가 기록을 남긴다. view call과 plugin host는 `packages/workbench/command-route.js`의 주인 routing을 함께 쓰며, 거부 문장은 호출한 쪽을 적는다.
+
 - F238-b-10: view와 plugin runtime은 더 이상 log level을 내보내거나 묻지 않는다. `log.enabled`, 첫 사용의 `runtime.log.levels` 요청, `logEnabled` hook을 제거했다. view call `runtime.log.levels`는 지원되지 않는 call로 거부되고, plugin은 기록마다 field를 만들며 저장 여부는 writer가 정한다. `log.levels` 변경 알림과 그 구독은 항목의 대로 workbench에 남는다. 어떤 view call도 view를 이 구독에 등록하지 않는다. 게시된 사례 `view.bridge.runtime-log-without-level-query`가 `view.bridge.runtime-log-level-gate`를 대신한다. 소유 시험: plugin-api 536/536, workbench 847/847.
+
 - F238-c-10: `docs/spec/plugins.md` Repositories는 `scripts/workspace-registry.json`이 선언한 plugin과 sidecar 폴더를 나열하고, 선언되지 않은 `shell` 저장소는 따로 적는다. 이 절은 core 이름 규칙과 선언된 plugin repository 각각의 `check` 하위 집합을 적으며, plugin build가 `checkViewPage`를 호출한다고 적는다(`docs/spec/plugin-processes.md`도 같다). 소유 테스트: check-boundaries 14/14; `make boundaries`와 `make parity-check` 통과. `soksak-view-check` bin을 게시하는 core release는 F238-c-11-1로 추적하며 미릴리스로 보고한다.
+
 - F250: workbench가 view로 전달하는 명령 요청은 원인의 멤버 `cids`를 싣고, 없으면 생략한다. exposure registry는 `run`과 `runOwned`에서 `cids`를 받고, 명령 계층은 이를 call envelope에 실어 보내며, view 브리지는 명령 handler에 두 번째 인자 `{cids}`로 넘긴다. host(Wails, Tauri)는 요청과 함께 post하고, 한 줄에 담을 수 없는 목록은 거부한다. `packages/plugin-api/contract/view-commands.json`이 사례를 게시하고, workbench, plugin-api, host 시험이 이를 고정한다(Red 후 Green).
+
 - F250-1: view는 `runtime.beginOperation(event, fields)`로 작업을 시작한다. 이는 page 작업의 형식으로 `p<time origin of the view>.<n>` 식별자를 정하고(`packages/plugin-api/operation.js`), 첫 event를 그 식별자로 저장하며, 식별자를 돌려준다. cids를 가진 view 호출은 plugin 명령과 core 명령에 그 식별자를 전달한다. core 명령은 context `{cids}`로 받고, `core.app.release`는 이를 link open 호스트 호출에 넘긴다. `packages/plugin-api/contract/view-operations.json`이 사례를 게시한다. Red와 Green은 기능 F250-1에 기록했다.
+
 - F238-d-18-2: F238-d-18의 pin을 마쳤다. plugin host 생성은 sidecar stop을 유지하고, 재시작 stop 뒤의 plugin 세션 send는 소유 창에 실패로 전달되며, plugin 세션 실패는 앱 오류 경고를 보이지 않고, host 페이지 시작은 원천이 바뀔 때 선언된 status를 한 번씩 pull한다. 각 pin은 수정 전 코드에서 통과하며 Red가 아닌 pin으로 기록한다. Rust `#[cfg(test)]` seam은 `Sidecars::stop_restarts_for_test`다. 계약 행은 `plugin-host.sidecar.stop-kept`와 `plugin-host.sidecar.failure`이며, project-switch 사례는 F229-1에 남는다.
+
 - F238-d-19: host 페이지는 listing 오류를 served call `runtime.error {where, text}`로 알리며 검사는 view call과 같다. main page는 `error plugin <id> <where>: <text>`를 오류 표시를 통해 쓴다. 두 host가 이 call을 전달한다(계약 `plugin-host.error.display`). Red: workbench 사례는 표시 줄 없이 실패했고, Go 사례는 전달 assertion에서 실패했으며, Rust 사례는 `plugin host call runtime.error is not served`로 실패했다. Green: workbench plugin host call 15/15, Go 사례 1/1, Rust 사례 1/1.
+
 - F238-d-18: 구독된 plugin 세션의 실패는 host 페이지에 failure event로 전달된다. workbench 사례가 이를 고정하며 수정 전 코드에서 통과한다. 이 항목의 나머지 pin은 F238-d-18-2에 있다.
+
 - F248-8: 실패한 declared pull은 section을 비워 둔 채로 남기고, 페이지 오류 event로 한 번 보고하며, 다시 시도하지 않는다. 페이지 오류 표시는 원본 파일이 없는 오류 event에 위치를 쓰지 않으므로, 실패한 pull의 보고에 `@ :0`이 더 이상 붙지 않는다. `docs/spec/declared-ui.md`가 결과를 정한다. 소유 시험: workbench 847/847. `make parity-check`는 시험 파일 857개를 센다.
+
 - F248-7: declared UI snapshot 요청에 대한 view의 답은 snapshot store에 값이 없을 때만 빈 값으로 답한다. 그 밖의 store 오류는 그 오류로 요청에 답하고 보고한다. `view-snapshot-pull.json`은 수정 전에 실패한 store 결함 사례를 게시한다. 소유 시험: plugin-api 전체 통과. view는 snapshot store에 값이 없을 때만 pull에 seq 0과 value null로 답한다. 그 밖의 이유로 실패한 pull은 오류로 답하고 bridge를 거쳐 보고한다. `view-snapshot-pull.json`은 store 결함 사례를 게시하며, 이 사례는 이전의 모든 오류를 빈 값으로 답하던 처리에서 실패했다.
+
 - F248-6: `packages/plugin-api/contract/view-tab-calls.json`은 view의 tab call(`tab.title`, `tab.footer`, `tab.directory`, `tab.notify`, `tab.modified`, `tab.error`, `tab.keep`)의 요청, 답, 거부를 게시하고, `view-snapshot-pull.json`은 host의 declared UI snapshot pull을 게시한다. 밀어낸 값, 밀어내기 전의 `{seq: 0, value: null}`, status 이름이 없는 거부다. 각 러너가 자기 파일을 view bridge에 대해 재생한다. 동작은 바뀌지 않았다. 소유 시험: plugin-api 전체 통과. `make parity-check`는 시험 파일 856개를 센다.
+
 - F248-5: `packages/plugin-api/contract/view-settings.json`은 view bridge의 `runtime.settings`와 `runtime.textSize` call을 게시한다. read와 그 답, host 변경 이벤트를 받는 `on` 구독, listener가 없는 구독의 거부, host 구독 거부가 listener를 제거하는 경우, 공유 구독이다. `test/view-settings-contract.test.mjs`가 모든 사례를 재생한다. 동작은 바뀌지 않았다. 소유 시험: plugin-api 전체 통과. `make parity-check`는 시험 파일 854개를 센다. bind의 `params` 함수는 실행마다 읽히고 그 요소에는 data-params가 없다. `exposure.md`가 이를 정하며, binder와 expose 사례가 이를 게시한다.
+
 - F248-4: `packages/plugin-api/contract/calls.json`은 call 시간 제한을 게시한다. 선언된 timeout이나 기본 timeout 안에 답이 없는 call은 `command <name> did not reply within <ms>ms`로 거부되며, 그 뒤의 답은 call에 전달되지 않는 늦은 답이다. 러너는 mock timer로 사례를 재생한다. 소유 시험: plugin-api 전체 통과. `make parity-check`는 시험 파일 852개를 센다.
+
 - F248-3: `createExpose`는 dispose 뒤의 등록이나 binding을 `exposure is disposed`로 거부하고, declarations가 적재되는 중에 dispose가 실행되면 요청 listener를 추가하지 않으므로, dispose 뒤의 요청에 더 이상 응답하지 않는다. `expose.json`은 거부, dispose 때 binding 제거, declarations 적재와의 경합을 게시하며, expose 러너에는 command, bind, click, race 단계가 있다. view bridge는 process가 끝날 때 host가 자원을 끝내므로 dispose가 필요하지 않다. 소유 시험: plugin-api 507/507. view exposure port에는 unregister가 없다. host가 surface 종료와 process 종료 때 view의 등록을 제거하기 때문이며, 결정은 `packages/plugin-api/view.js`에 기록했다.
+
 - F248-2: `packages/plugin-api/contract/contributions.json`은 `resolveContributions`의 모든 결과(connected, provider-missing, invalid, version-mismatch, 순서, contributes가 없는 plugin)를 게시하며 `test/contributions-contract.test.mjs`가 재생한다. `view-native.json`은 구독 전에 도착한 view 이벤트의 버림을 게시한다. 동작은 바뀌지 않았다. 소유 시험: plugin-api 504/504.
+
 - F248-1: `packages/plugin-api/contract/expose.json`은 exposure 등록의 dispose(`expose.dispose.ends-registrations-and-requests`)를 게시하고, `packages/plugin-api/contract/view-composition.json`은 문서 영역의 `load`와 `post`만 호출하는 경우와 view 합성의 teardown(`view.composition.load-alone`, `view.composition.post-alone`, `view.composition.dispose-twice-detaches-once`, `view.composition.dispose-reports-a-refused-detach`)을 게시한다. `createExpose`의 dispose는 이제 port가 `onRequest`에서 돌려준 remover를 호출하므로, dispose 뒤의 요청에 응답하지 않는다. 소유 시험: plugin-api 494/494.
+
 - F248: `packages/plugin-api/contract/create-binder.json`은 `when` 술어(`{key}`)를 가진 keydown bind와 `failed`를 거친 keydown 실행 실패의 사례를 게시한다. `packages/plugin-api/contract/view-composition.json`은 문서 영역의 `onMessage` listener, stream `subscribe`와 그 `close`, 상태를 복원한 영역의 `reload` 사례를 게시한다. view 합성의 영역은 이제 `subscribe`를 제공한다. plugin 페이지가 요소와 요청 stream에 이를 호출하지만 영역이 제공하지 않았다. 소유 시험: plugin-api 489/489.
+
 - F247: 생성 중 실패한 surface composition은 정리 실패를 하나씩 한 번만 보고하고, 묶음으로 다시 보고하지 않는다.
+
 - F212.12-1-3: view surface는 listener 등록이 끝날 때가 아니라 mount가 dispose될 때 노출 port를 제거한다. 그래서 Tauri에서 dispose 뒤 같은 surface의 mount가 port를 등록한다. Red: 수정 전 코드에서 `surface-view.test.mjs`의 재 mount가 `already has an exposure port`로 실패한다. Green: 같은 파일이 9/9 통과한다.
+
 - F212.12-1-1: view 상태가 `loading`을 JSON boolean으로 알린다. native view의 document 상태가 C 논리 연산자의 결과를 int로 박싱해, 두 host가 상태를 JSON이 아니라며 거부했다. 상태는 이제 boolean을 박싱한다. Red: 수정 전 코드에서 `view_channel_test`가 `every view state reports loading as a JSON boolean: 0`으로 실패했다. Green: 같은 시험이 통과한다. Go와 Rust payload 시험은 소비자가 이미 숫자를 거부하므로 수정 전후 모두 통과한다.
+
 - F244-3: 단축키 표 시험이 key 속성의 `typeof` 검사를 키보드 키 비교로 읽지 않는다.
+
 - F246: `packages/plugin-api/contract/`는 사례 파일을 게시한다. view 합성 영역(`view-composition.json`: `composition.create`, `document.*` call, 영역의 `state`, `onState`, `history` 값과 순서), `createExpose`의 status와 dom 메서드(`expose.json`), 표면 페이지의 명령 등록(`command-registration.json`)과 view의 명령 등록(`view-commands.json`), view의 `runtime.native` call(`view-native.json`), 선언된 UI snapshot push(`declared-ui-snapshot.json`), binder audit 행과 함께 `INTERACTIVE`(`interactive.json`)다. 각 파일은 패키지 `files`에 있고, `packages/plugin-api/test/`의 소유 시험이 모든 사례를 구현에 대해 실행한다. 거부된 `runtime.native.on` 구독은 이제 listener를 제거하므로, 거부된 listener는 host 이벤트를 받지 않는다. 소유 시험: plugin-api 483/483. `make parity-check`는 lane 97개, 구현 파일 641개, 테스트 파일 849개를 센다.
+
 - F238-d-23: plugin host 채널이 `runtime.data.get {key}`와 `runtime.data.set {key, value}`를 제공한다. 메인 페이지가 표시된 프로젝트에 대해 상태 모듈 context의 검사로 답하고, 선언되지 않은 키는 플러그인과 키를 naming하여 거부하며, 표시된 프로젝트가 없는 동안 두 call을 `plugin host <plugin>: no project is shown`으로 거부한다. `data` 매니페스트 필드는 `state` 또는 `host`를 요구하고, plugin host는 `exposes`를 받는다. 두 host가 두 call을 중계한다(사례 `plugin-host.data.calls`). Red: `validateManifest`가 plugin host의 `data`와 `exposes`를 거부했고, plugin host call과 plugin state 시험은 call이 제공되지 않는 것과 `declareProjectData is not a function`으로 실패했으며, Rust와 Go 중계 시험은 `plugin host call runtime.data.get is not served`로 실패했다. Green: plugin-api 450/450, workbench plugin host call 13/13과 plugin state 5/5, Rust plugin host 채널 14/14, Go plugin host 채널 10/10.
+
 - F238-d-22: 선언 tree 노드가 화살표 키, Home, End로 키보드 포커스를 옮긴다. Down, Up, Home, End는 보이는 노드의 focus target 사이로 포커스를 옮긴다. Right와 Left는 트리 키 절이 정하는 대로 가지를 펼치거나 접거나 포커스를 옮긴다. 포커스가 있던 노드를 없애는 다시 그리기는 focus target을 가진 가장 가까운 앞 노드로 포커스를 옮긴다. Red: 바뀌지 않은 workbench에서 `packages/workbench/test/declared-ui.test.mjs`의 새 사례 13개 가운데 9개가 실패했다(예: `focus did not move to the nearest preceding node`, 실제 `body`). shortcut-table 시험은 처리기가 없는 표 행에서 실패했다. Green: declared-ui와 declared-section 96/96, shortcut-table 8/8; `make exposure-check`, `make parity-check`, `make docs-check`, `make boundaries` 통과.
+
 - F245: view 합성의 영역(`surface-composition.js`의 `region()`)은 page 문서 손잡이와 같이 `history`를 알린다. attach 답이 오기 전까지 null이고, 그 뒤에는 답의 boolean이다. view의 attach 답은 workbench가 이미 `history`를 담으므로 두 host는 바뀌지 않았다. Red: `composition.region("page").history`가 `true`여야 할 자리에 `undefined`였다(surface-composition 시험 "a view composition region reports the history of its attach reply"). Green: surface-composition 17/17, plugin-api 전체 449/449. boolean `history`가 없는 attach 답을 영역 이름과 함께 거부하는 동작은 이미 있었다.
+
 - F238-d-20: plugin host 기준은 배치 규칙이다. host는 plugin의 view가 하나도 열려 있지 않은 동안 제공해야 하는 sidebar section의 선언 status가 있을 때만 존재하고, sidecar가 데이터를 주는 동안 그 status들의 presentation을 갖는다. host page는 보내기 전에 개수와 크기 한도를 자른다.
 - F238-d-1, F238-d-2, F238-d-4: Repositories 단락은 `make boundaries`가 선언된 각 폴더에서 읽는 것과 `make registry`, `make install-plugins`가 읽는 것을 적는다. `make install-plugins`는 `make registry`를 실행한 뒤 그 `index.json`의 plugin을 설치한다. 저장소 표는 선언된 plugin `browser`, `editor`, `files`, `hwp`, `terminal`을 적고, 사이드카 행은 `vt-alacritty`를 적는다. Registry 테스트는 표가 선언된 plugin을 적는지 검사한다. 이전 표에서 Red(actual `[browser, files, shell, terminal]`), 현재 표에서 Green(6/6).
+
 - F241: view call route가 surface context의 PNG clipboard payload를 제공한다. `runtime.clipboard.read`는 `png`에 base64 data를 담은 `{present, type, data}` 또는 `null`을 돌려주고, `runtime.clipboard.persistPNG`는 `{data}`의 payload를 저장해 `{path, shellQuotedPath}`를 돌려준다. Red: `packages/workbench/test/view-calls.test.mjs`의 F241 사례 3개가 바뀌지 않은 구현에서 `view call ... is not served`로 실패했다. Green: 같은 파일이 50/50 통과한다.
+
 - F242: view call `runtime.log`의 계약은 `cids`를 surface context의 log가 검사한다고 적는다. 기존 view call 전달이 이미 이를 넘긴다. 소유 테스트 통과: view call 50/50, surface 17/17. 빠진 동작이 확인되지 않아 Red는 없다.
+
 - F220: `make push-check`가 `node scripts/check-host-contract.mjs --static`을 실행한다. 이 검사는 시험을 돌리지 않고 두 호스트의 계약 선언을 검사한다. 정의되지 않은 사례, 호스트 범위 밖의 사례, 사례가 없는 표시는 관문에서 실패하며, 호스트 범위의 사례를 선언한 시험이 없어도 실패한다. sok Go 시험의 중복된 stall 표시를 제거했다. Red: 정적 audit의 단위 시험이 `auditDeclarations`와 `uncoveredCases`를 가져오지 못해 실패했다. Green: 검사 단위 시험 15/15 통과, `make host-contract-check`가 사례 799개와 시험 3232/3232로 통과, 정적 검사는 정의되지 않은 표시를 주입하면 실패하고 복원하면 통과한다. F220에 적힌 네 원인은 이 항목 시작 시점의 트리에 없었고, 변경 전 트리에서도 `make host-contract-check`가 통과했다.
 
 - F244: main에서 `pnpm test`가 통과한다(353/353). workbench 시험 fixture와 hidden-tab benchmark는 tab 생성이 기록하는 tab origin을 같이 기록한다. 선언된 UI draw-time 시험은 경과 시간을 assert하지 않고 모든 node와 item이 그려졌는지만 assert하며 경과 시간을 출력한다. `@soksak/workbench`는 릴리스 검사가 읽는 `./package.json`을 export한다. native 시험 실행 줄은 runner가 출력하는 제한 표지와 맞춘다. surface-dispose-pending 시험은 polling 대신 module 시작을 기다리므로, mount가 던지면 파일이 끝난다.
+
 - F244-1: `make push-check`가 push 범위에서 바뀐 각 workspace package의 Node test 파일을 실행한다(`node scripts/node-tests.mjs --changed <range>`). 어떤 package 폴더에도 속하지 않는 변경 파일은 root package의 시험을 고른다. 관문이 package 시험을 병렬로 돌리므로 toolchain 검사 시험의 제한(hang만 막는다)은 30초다.
 
 - F243: `make push-check`가 package의 모든 `bin` 대상이 `#!` 줄을 가진 실행 파일로 기록되었는지 검사한다. `packages/plugin-api/view-check.js`를 100755로 기록해 pnpm install이 작업 트리를 바꾸지 않는다.
@@ -1575,348 +1796,672 @@
 - F238-c-2: parity 소유권이 패키지 이름 접두사나 하드코딩한 소유자 이름 대신 workspace registry의 정확한 선언 component 이름과 `kind`를 사용한다. plugin과 sidecar 코드의 미선언 이름은 발견 사항이다. 회귀 테스트는 수정 전 구현에서 실패하고 선언 소유자 조회에서 통과한다. 소유자 범위 테스트는 125/125 통과한다. F238-c-3은 같은 분류기 수정으로 충족했다. F238-c-12의 기존 범위 표를 확인했으며 plugin 단언은 삭제하지 않았다.
 
 - F240-1: 플러그인 프로세스 handoff는 시험 시간 한도와 긴 실행의 진행 출력을 다시 적지 않고 AGENTS.ko.md를 참조한다. AGENTS.ko.md는 시험마다 자기 한도, 경과 시간을 포함한 running, finished, passed, failed 출력, 체크리스트 완료 시 전체 suite 한 번 실행을 적는다.
+
 - F238-b-5: 호환 깨짐: view 단축키 표(F234)와 `shortcuts.register()`를 제거한다. view는 `runtime.command(name, params)`로 workbench 명령을 실행한다. `runtime.shortcuts.missing`과 `runtime.shortcuts.run`은 제공하지 않는다. F231은 배포되지 않았으므로 deprecation을 두지 않는다.
+
 - F238-b-4: view는 선언된 명령을 `runtime.command(name, params)`로 실행한다. 이 경로는 어떤 이름이든 view call 경로로 보내며, 각 이름의 owner 검사는 call 계층이 맡고, view bridge는 단축키 listener를 설치하지 않는다.
+
 - F238-b-11: view bridge는 host가 거부한 view 기록과 view의 거부된 오류 줄을 모두 위치와 문장을 담아 페이지 보고로 보내므로, view 기록의 거부가 조용히 버려지지 않는다.
+
 - F238-a-15: tab은 로컬 절대 경로인 directory만 보고한다. `//` 또는 `/<letter>:` 접두사나 NUL 바이트를 담은 directory는 보고될 때 절대 경로가 아닌 경로와 같은 `TypeError`로 거부되며, 판정은 페이지가 쓰는 함수다.
+
 - F238-a-8: surface context는 origin을 요구한다. `createSurfaceContext`는 origin이 없는 값과 null 또는 로컬 절대 경로를 담은 `{directory}`가 아닌 모든 값을 실패한 검사의 문장과 함께 거부하며, `{directory: null}`을 채워 넣지 않는다.
+
 - F238-a-7: 로컬 절대 경로가 아닌 view 시작 값의 origin directory를 두 호스트가 거부한다. 상대 경로, `//` 또는 `/<letter>:` 접두사, NUL 바이트는 `surface <id>: view start origin directory is not an absolute path`로 거부되며, contract case `view.start-values.refuses-a-missing-origin`이 두 호스트의 시험에서 그 거부를 선언한다.
+
 - F237: `origin`이 없거나 `null`이거나 경로 또는 `null`을 담은 `{directory}`가 아니면 두 호스트가 `{directory: null}`을 주입하지 않고 origin을 이름으로 드러내는 오류로 거부한다. contract case `view.start-values.refuses-a-missing-origin`이 이 거부를 두 호스트의 시험에 선언한다.
+
 - F235: view의 시작 값 `origin`은 한 형식, 곧 경로나 `null`을 담은 `{directory}`를 가지며, 이는 surface context의 형식이고 두 호스트가 주입하는 형식이다. native-surfaces.md와 contract case `view.start-values.first-script`는 더 이상 맨 `null`을 적지 않는다. 코드는 바뀌지 않았고, 시작 값 script의 호스트 시험이 이미 그 형식을 확인한다.
+
 - F234: view가 shortcut table을 등록한다. view bridge의 `shortcuts.register()`가 view call `runtime.shortcuts.read`로 view가 keyboard focus를 가진 동안 성립하는 행을 읽는다. bridge는 workbench 키를 막고 `runtime.shortcuts.run`으로 넘기며, 다른 모든 키의 기본 동작을 유지하고, table 전 첫 키에서 `runtime.shortcuts.missing`을 보내며, main page는 이것을 `page.view.shortcut-table-missing {plugin}`으로 기록한다. 실패한 넘긴 명령은 `page.input.shortcut.failed {plugin, key, command}`로 기록된다. 두 event를 선언하고 class table을 다시 만들었다. view-calls와 view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 6) 변경에서 통과한다(surface-view, view imports와 함께 95/95).
+
 - F233: view가 자기 기록의 어떤 level이 저장되는지 안다. view bridge는 `runtime.log`를 가지며, 이것은 처음 쓰일 때 view call `runtime.log.levels`로 저장되는 level을 묻고, 답이 오기 전까지 모든 기록을 보내고, 그 뒤에는 저장되지 않는 level의 field builder를 실행하지 않는다. main page는 `log.enabled(level)`이 true인 level로 답하고, gate의 policy 변경이 그 level을 바꿀 때마다 `log.levels`를 보낸다. `runtime.log`는 `cids`를 page의 writer에 넘긴다. view-calls, view-events, log-gate, view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 5) 변경에서 통과한다(surface-view, view imports와 함께 104/104).
+
 - F232: view가 DOM surface처럼 깨진 contribution 항목을 invalid로 만든다. view bridge의 `contributions(point)`는 view call `runtime.contributions`로 그 point의 연결된 항목을 각자의 `index`와 core root 위 module과 함께 받고, 항목의 `fail(reason)`은 `runtime.contributions.fail`을 보내며, main page는 그 연결된 항목의 `fail(reason)`으로 답한다. surface context의 항목도 `index`를 가진다. view-calls, contributions, view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 5) 변경에서 통과한다(surface-view와 함께 79/79).
+
 - F231: view가 자기 page에 보여 주는 오류를 기록한다. view bridge 항목 `runtime.error(where, text)`가 view call `runtime.error`를 보내고, main page는 오류 표시의 기록 경로로 `error page surface <surface> <where>: <text>`를 써서 답한다. 비었거나 control 문자나 `: `를 가진 place와 빈 text는 거부된다. view-calls와 view bridge 시험이 바뀌지 않은 코드에서 실패하고(assertion 실패 3) 변경에서 통과한다(surface-view와 함께 74/74).
+
 - F229: host 계약은 sidecar의 retain-during-start, 선택적 닫기, project-release, page-start 사례를 정의하고 Go와 Rust 테스트가 이를 선언한다. `make host-contract-check`는 두 host에서 이 생명주기 동작을 검증한다.
+
 - F229-17: 두 host의 설치 문서는 사이드카 의존마다 `message`와 `hostReadOperations`를 사이드카 이름 아래 담고, `validateInstalledPlugins`가 이를 검사하며, staging이 이를 복사하고, environment는 이를 null 대신 plugin host에 선언한다. 그래서 선언된 사이드카 작업은 더 이상 `declares no message form`으로 거절되지 않는다. Red: 수정 전 코드에서 Go와 Rust의 installed 문서 테스트에는 `sidecars` 필드가 없고, workbench의 environment 테스트는 `unknown field sidecars`로 실패하며, staging 테스트는 facts에 undefined를 준다. Green: Go의 installed 테스트와 Rust의 installed 테스트(15개 중 15개)가 통과하고, plugin-api의 exposure 테스트는 16개 중 16개가 통과하며, workbench의 environment, stage, plugin host, environment 테스트가 통과한다.
+
 - F229: 표면은 선언하지 않은 사이드카 이름을 가리키는 view send를 `surface <id> cannot send to sidecar <name>`으로 거절하고 아무것도 보내지 않는다. Red: 거절을 뺀 `surface-modules.js` 사본에서 테스트는 `a send to an undeclared sidecar was not refused with its reason`으로 실패한다. Green: 표면 view 테스트가 통과하고(6개 중 6개), view 호출, 표면 module, 표면 view 테스트가 함께 통과한다(50개 중 50개).
+
 - F229: F229-17과 F229가 완료되었다. 페이지는 설치된 plugin마다 사이드카 facts를 받으며, 계약 사례 `installed.document.sidecar-facts`를 두 host의 테스트가 선언한다.
+
 - F229: Rust send check와 plugin session의 검사(`plugin_send_root`, `refuse_surface_send`)는 실패를 관찰했다. 각 검사를 사본에서 끄면 테스트 `a_sidecar_request_of_a_host_is_checked_before_its_send`가 그 assertion으로 실패하고(Red), 변경하지 않은 검사에서 통과한다(Green).
+
 - F229: Rust sidecar core의 retain hook에 이름 붙은 타입을 두었다. clippy의 `-D warnings`가 요구하기 때문이다. `soksak-host-tauriv2`의 clippy는 0으로 끝나고, `sidecars_transport_test`는 39개 중 39개를 통과한다.
+
 - F229: environment는 설치된 plugin마다 dependency를 그 plugin host의 sidecar로 선언하고, host call listener는 sidecar 요청을 그 목록으로 검사한다(Red: 수정 전 코드에서 `pluginSidecarsOf is not a function`). 페이지가 sidecar 선언을 받기 전까지 선언은 null이므로, 그 sidecar의 모든 operation은 거부된다(F229-17).
+
 - F229: view bridge는 sidecar를 이름으로 가리킨다. `runtime.sidecar(name)`은 `on`, `onFailure`와 함께 `send(id, body, cids)`를 제공하고, 각 요청은 이름을 담는다. 메인 페이지는 이름 없는 view send를 거부하고, 표면은 선언하지 않은 이름을 거부한다.
+
 - F229: 명세는 plugin session id, host 호출 `pluginHostSidecarSend`, plugin session에 대한 표면 send의 거부, plugin session의 닫기를 정한다. 선언된 UI 명세는 plugin host section이 host 페이지가 밀어 넣은 snapshot을 그린다는 것과, state module 등록이 선언된 status를 제공하지 않는 이유를 정한다.
+
 - F229: 계약 사례 `plugin-host.sidecar.send-checks`, `plugin-host.sidecar.surface-refusal`, `plugin-host.sidecar.close`를 두 host의 test가 선언한다.
 - F238-a-14-5 event: plugin 페이지가 구독할 수 있는 native event는 네 영역 event와 view exposure의 선언된 경로인 `exposure-request`다. 이는 `packages/workbench/view-calls.js`의 명시적 목록 `PLUGIN_NATIVE_EVENTS`에 한 번만 적였다(spec: `docs/spec/native-surfaces.md#plugin-host-calls`). F238-a-2가 `exposure-request`를 실수로 제거했던 것을 되돌렸고, 다른 event 이름은 구독할 수 없다. 이 변경 전에는 `exposure-request`를 구독하는 view 시험이 거부됐고, 변경 후 통과한다. 목록에 없는 event 거부는 그대로 남는다. F238-a-14-3과 F238-a-14-4는 plugin 변경 없이 core에서 해결되고, F238-a-14-1과 F238-a-14-2는 각 저장소 소유로 열려 있다.
 - F238-a-14 감사: plugin 저장소를 읽기 전용으로 감사하여, `runtime.native.call {name: "report"}`를 보내는 reporter가 shell과 flowmark에 있음을 찾았다. 기본 거부 게이트는 이를 막고, 각 plugin은 제공되는 `runtime.log`로 옥긴다. view 두 개(shell, editor)가 `runtime.native.on`으로 `exposure-request`를 구독하는데 event 게이트가 이를 막는다. 이는 core 결정(F238-a-14-5)으로 등록했고 허용 목록은 넓히지 않았다.
 - F238-a 허용 목록: workbench의 허용 목록 시험은 더 이상 Tauri 소스를 읽지 않는다. 새 host 계약 사례 `plugin-host.call.refuses-unlisted-commands`를 Go와 Rust host 시험이 선언한다. Wails와 Tauri 명령 표의 명령 중 플러그인 허용 목록 밖의 것은 host 페이지의 channel이 `plugin host call <name> is not served`로 거부한다. host 시험은 각각 1/1, workbench 시험은 2/2 통과한다.
 - F228-6 계약: host 계약 사례 `view.process-ended.forgets-regions`는 view process가 끝났을 때 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내는 것이다. Go와 Rust의 process 종료 시험이 이를 선언하고, 두 시험이 각각 1/1 통과한다.
+
 - F238-a-5: view overlay를 native mask까지 추적한다. `dom_overlays`는 선언 순서, 여백, 보임을 지키고 `overlay_values`는 overlay마다 값 5개를 보낸다. 두 단계의 단위 시험이 2/2 통과하고, native mask는 geometry 시험의 view surface 검사가 덮는다.
+
 - F238-a-4: 보이는 view 오버레이 아래의 native 히트 검사는 오버레이의 DOM 히트 또는 없음을 돌려주며, native view를 돌려주지 않는다. surface 히트 검사는 AppKit이 넘기는 대로 superview 좌표의 점을 받으므로 0이 아닌 원점의 surface도 올바르게 히트된다. 기하 시험의 새 히트 검사(5개 항목)는 바뀌지 않은 코드에서 실패했고 지금은 통과한다.
+
 - F238-a-14: plugin 쪽 native 핸들은 기본 거부다. `runtime.native.call`과 `call`은 `exposureReply`만 보내며, 허용 목록 밖의 host 명령은 거부되고 host에 닿지 않는다. 허용 목록은 host 명령 표와 대조한다. `linkOpen`을 host로 넘기던 시험은 바뀌지 않은 핸들에서 실패했고 지금은 통과한다.
+
 - F238-a-2: plugin과 view의 `runtime.native.on`은 네 region event `document-stream`, `document-state`, `document-message`, `image-event`만 받는다. view bridge event는 거부된다. 구독 시험은 바뀌지 않은 gate가 view bridge event를 구독하면서 실패했고 지금은 통과한다(2/2).
+
 - F238-a-1: view의 region 호출은 플러그인 쪽 모든 경로에서 거부된다. `REGION_HOST_CALLS`는 표의 region 종류 호스트 명령을 담으며 `documentQuery`와 `documentInteractionState`를 포함하고, 플러그인 쪽 native 핸들(`pluginNativeGate`)은 `runtime.native.call`, `call`, view run의 region 호출과 view bridge 호출을 모두 거부한다. 허용 목록은 Tauri 명령 표의 region 종류 명령과 같고, 워크벤치 호스트 경로의 리터럴 검사는 목록 밖의 region 호출을 찾지 못한다. 시험은 바뀌지 않은 집합에서 실패했고 지금은 통과한다.
+
 - F238-a-3: surface 구성의 image region은 자체 배치를 갖지 않는다. 워크벤치는 `image.place` 호스트 호출을 더 이상 제공하지 않고, plugin-api의 `attachImage`는 관찰, `visible`, `_place`를 갖지 않는다. 호스트는 region을 그 구성으로 배치한다. 요소 크기 변화에 `place`를 기대하던 image-region 시험은 바뀌지 않은 코드에서 실패했고 지금은 통과한다(12/12). `surface-composition`은 15/15 통과한다.
+
 - F228-6: view process가 끝나면 두 호스트는 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내고, page는 그 표면의 영역 기록을 잊으므로 재시작한 view가 영역을 다시 붙이기 전의 memory saver 판단은 닫힌 영역을 query하지 않는다. Go, Rust, page 시험이 바뀌지 않은 코드에서 실패하고 통과한다. Go와 Rust의 process 종료 시험, `surface-view`와 `document-regions`(14/14)가 통과한다.
+
 - F228: view의 영역은 process 종료 때 닫히고 page가 잊으며, view의 overlay와 view web view는 native plane 아래에 놓인다(F228-5). 하위 항목 F228-1부터 F228-6까지 완료되었다.
+
 - F228-5: view의 overlay mask는 view의 영역만 자른다. view 웹뷰를 표면 host에서 native plane 아래에 두므로 plane의 mask가 view를 자르지 않고, 보이는 view overlay 아래의 입력은 view 웹뷰로 간다. `view_channel_test`가 바뀌지 않은 코드에서 실패하고(plane 안의 view, 메인 page에 간 overlay 아래 입력) 통과한다. `surface_host_test`는 36/36 통과한다.
+
 - F228-4: 두 호스트는 view process가 끝나면 view를 다시 만들기 전에 view 표면의 document·image 영역을 닫으므로, 재시작한 view는 `document "<name>" is already attached`로 실패하지 않고 선언된 영역을 다시 붙인다. contract case `view.regions.close-with-process`. Go와 Rust 시험이 바뀌지 않은 코드에서 실패하고 통과한다.
+
 - F228-3: workbench가 view의 composition·영역 call을 표면의 page 동작으로 제공하므로, view 영역의 attach는 memory saver의 영역 기록을 거치고 배치는 document의 composition revision을 가진다. composition·영역 호스트 호출의 raw `runtime.native.call`은 거부된다. workbench 시험 넷이 바뀌지 않은 코드에서 실패하고 통과한다(`view-calls` 37/37, `surface-view`·`surface-modules` 16/16).
+
 - F228-2: plugin-api의 view bridge가 `composition.create({regions, overlays})`를 내보낸다. 이것은 view document에서 composition controller를 실행하고 각 영역 동작을 view call로 보내므로, view page가 선언된 document·image 영역의 composition을 만든다. `view.test.mjs` 시험 둘이 바뀌지 않은 코드에서 실패하고 통과한다(34/34).
+
 - F228-1: native-surfaces.md와 plugins.md(+ko)가 view의 composition을 명세한다: view bridge의 `composition.create`, 메인 page가 표면의 page 동작으로 제공하는 composition·영역 view call, composition·영역 raw 호스트 호출의 거부, 호출 envelope의 view에 대한 확인, view process 종료 시 영역 닫기.
+
 - F239-19: sidecar host의 hello test 두 개는 5.0초가 아니라 0.11초와 0.11초에, delay test는 5.6초가 아니라 0.51초에 끝난다. hello test는 hello 경계를 100ms로 설정하며 production 경계 5초는 그대로다. delay test의 fake service가 shutdown에 답하므로 Stop은 5초 기한을 더 기다리지 않는다. 변경 전 hello test는 5초 경계에서 실패했고 delay test의 stop은 5.002초였다.
+
 - F239-21: host의 writer 없는 panic test 두 개는 5.2초와 5.0초가 아니라 0.45초(Rust)와 0.12초(Go)에 끝난다. 각 test는 panic hook에 writer 기한 100ms를 주며, panic 기록은 그대로 standard error 전체에 나온다. production 기한 5초는 그대로다. 변경 전 자식은 그 기한 때문에 Rust 5.08초, Go 5.01초에 끝났다.
+
 - F239-13: sidecar host의 닫힌 surface 이미지 test(Go `TestAnImageOfAClosedSurfaceIsAnsweredClosed`, Rust `an_image_of_a_closed_surface_is_answered_closed`)가 5.3초 대신 0.37초와 0.35초에 끝난다. fixture가 입력이 닫히면 끝나므로 정리 단계의 stop이 5초 stop 기한을 기다리지 않는다. 변경 전에는 stop이 5.000초 걸려 assertion이 실패했다.
+
 - F239-15: sidecar host의 concurrent-hosts test와 dropped-message test가 5.0초와 5.4초 대신 0.01초와 0.48초에 끝난다. service가 close-owner 응답 뒤 닫은 persistent 연결의 shutdown이 stop 기한을 기다리지 않는다. read thread가 waiter를 실패시키기 전에 waiter lock 아래에서 connected flag를 지우고, 이후 요청은 기다리지 않고 즉시 실패한다. dropped-message fixture는 입력이 닫히면 끝난다.
+
 - F239-12: sidecar host의 Go restart test 두 개(`TestSidecarRestartsAfterThreeFailuresWithinTheWindow`, `TestSurfaceOpenClearsTheRestartLimit`)는 5.55초와 5.39초 대신 0.65초와 0.47초에 끝난다. cleanup stop이 응답하지 않는 재시작 sidecar를 위해 기본 stop 제한 5초를 기다렸다. fixture가 stop 제한을 100ms로 설정했고, 각 test는 stop이 1초 안에 끝나야 한다. 변경 전에는 stop이 5.0초 걸려 assertion이 실패했다.
+
 - F239-11: sidecar host의 restart test 두 개(`restarts_after_three_failures_within_the_window`, `surface_open_clears_the_restart_limit`)는 5.6초와 5.4초 대신 0.67초와 0.50초에 끝난다. stop이 응답하지 않는 재시작 sidecar를 위해 기본 stop 제한 5초를 기다렸다. fixture가 stop 제한을 100ms로 설정했고, 각 test는 stop이 1초 안에 끝나야 한다. 변경 전에는 stop이 5.0초 걸려 assertion이 실패했다.
+
 - F239-9: sidecar transport test의 replace fixture는 test가 끝날 때 host가 설치된 service를 위해 시작한 프로세스를 끝낸다. `a_replaced_service_starts_after_the_end_of_its_process` test는 이 프로세스가 test와 함께 끝나는지 검사한다. 변경 전 fixture에서 프로세스는 부모가 1인 `sleep 20`이었고, sleep이 끝날 때까지 test를 넘어 남았으며, assertion은 `the installed service process <pid> outlived the test`로 실패했다. 변경 후 test는 10회 중 10회 통과한다.
+
 - F239-9-1: Go sidecar transport test의 replace fixture(`TestAReplacedServiceStartsAfterTheEndOfItsProcess`)는 test가 끝날 때 설치된 service process를 끝낸다. test는 `ps`로 process가 실행 중이 아닌지 확인하고 회수(reap)하지 않는다. host가 설치된 process를 `cmd.Wait`에서 회수하기 때문이다. 변경 전에는 `installed service process <pid> outlived the test`로 1.67 s에 실패했고, 변경 후 0.74 s에 통과하며 남는 process가 없다.
+
 - F239-8: `make benchmark-rust`와 `make benchmark-go`는 benchmark마다 `scripts/benchmarks.mjs`와 test runner를 거쳐 제한 `BENCH_TIMEOUT`(기본 300초)과 함께 돌린다. 각 benchmark는 시작할 때 이름이 표시되고 결과·경과 시간이 보고되며, 출력은 측정값으로 남는다. 제한을 넘은 benchmark는 종료되고 `TIME`으로 보고된다. Red test는 바뀌기 전 대상에서 `RUN` 줄 없이 실패했고, 구현에서 2회 중 2회 통과한다.
+
 - F239-7: `make push-check`는 네 gate test 파일을 `scripts/gate-tests.mjs`와 test runner로 돌린다. 각 파일은 `node --test <file>`로 제한 `--timeout`(기본 120초)과 함께 실행된다. 각 파일은 시작할 때 이름이 표시되고 결과·경과 시간·제한이 보고되며, 제한을 넘은 파일은 종료되고 `TIME`으로 보고된다. Red test는 제한이 생기기 전 gate runner에서 실패했다. 멈추는 파일이 30초 전체를 돌았고 `RUN` 줄이 없었다. 구현에서 통과한다.
+
 - F239-6: `make -C native/darwin repeat`와 `repeat-suite`는 native test를 `scripts/native-tests.mjs`로 돌리고 출력을 보인다. 각 test는 시작할 때 이름이 표시되고, 결과·경과 시간·runner의 제한(120초)을 보고한다. `repeat-suite`는 test 실행 파일에 의존하며, 각 실행에서 `test`의 하위 make 대신 스위트에 runner를 돌린다. 하위 make의 출력은 `/dev/null`로 갔었다. Red test는 변경 전 대상에서 첫 assertion으로 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
+
 - F239-5: `make node-repeat`는 Node test 파일의 각 반복을 `scripts/node-repeat.mjs`를 거쳐 `node --test`의 한 process로 돌린다. 제한은 `TEST_TIMEOUT`(기본 120초)이다. runner는 각 반복을 시작할 때 이름을 표시하고, 제한에서 process group을 종료하며 `TIME`으로 보고한다. `--test-timeout`은 반복의 각 test에 같은 제한을 준다. 반복은 `NODE_TEST_CONTEXT` 없이 돌아서, test에서 시작된 대상도 파일을 실행한다. Red test는 변경 전 대상에서 첫 assertion으로 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
+
 - F239-4: `make go-repeat`는 Go package의 각 test를 test binary의 자기 process(`-test.run ^<name>$`)로 `scripts/go-tests.mjs`를 거쳐 돌린다. 각 test는 시작할 때 표시되고, 결과·경과 시간·자기 제한 `TEST_TIMEOUT`(기본 120초)을 보고한다. 제한을 넘은 test는 종료되고 `TIME`으로 보고된다. 이전 판정기 `scripts/go-repeat-result.mjs`와 그 시험은 `scripts/test/go-repeat.test.mjs`로 대체되었다. Red test는 변경 전 대상에서 `RUN` 줄 없이 실패했고, 구현에서 통과한다.
+
 - F239-24: `make rust-repeat`와 `make rust-tests-alone`이 Rust 라이브러리의 문서 테스트를 다시 돈다. 각 테스트는 이름으로 실행되고 자기 제한 `TEST_TIMEOUT`을 받으며, 다른 테스트와 같이 결과와 경과 시간이 보고된다(`scripts/rust-tests.mjs`). runner는 문서 테스트가 있는 라이브러리에 한해 `cargo test --doc -- --list`로 목록을 얻는다. 대상은 레시피에서 `TEST`를 인용하므로 공백이 있는 문서 테스트 이름도 실행된다. Red test(`scripts/test/rust-repeat.test.mjs`)는 변경 전 runner에서 `fixture has no test named src/lib.rs - doc_example (line 3)`으로 실패했고, 구현에서 통과한다.
+
 - F239-3: `make rust-repeat`와 `make rust-tests-alone`은 Rust 패키지의 각 test를 test 실행 파일의 자기 프로세스(`<executable> --exact <name>`)로 `scripts/rust-tests.mjs`를 거쳐 돌린다. 각 test는 시작할 때 표시되고, 결과·경과 시간·자기 제한 `TEST_TIMEOUT`(기본 120초)을 보고한다. 제한을 넘은 test는 종료되고 `TIME`으로 보고된다. test runner는 `RUN` 줄에 제한을 표시한다. Red test(`scripts/test/rust-repeat.test.mjs`)는 변경 전 대상의 첫 `RUN` 줄에서 실패했고, 구현에서 통과한다.
+
 - F239-2: Tauri host의 detach test는 60초가 아니라 0.01초에 끝난다. fixture는 시작한 endpoint 프로세스를 test와 함께 종료하고, 테스트 출력을 그 프로세스에 넘겨주지 않아 runner가 프로세스의 종료를 기다리지 않는다.
+
 - F239-1: 플러그인 프로세스 handoff에 test 실행 규칙을 적는다. 각 항목은 소유 검사만 돌리고, 전체 모음·host contract 검사·창 검사는 활성 체크리스트가 완료될 때 한 번 돌린다. 각 test는 자기 제한을 갖고 전체 suite에는 일괄 제한이 없다(docs/plans/plugin-processes-handoff.ko.md, 항목마다).
+
 - F230: 가로 사이드바 section의 선언된 tree를 받아들인다. section 너비의 한 줄을 모두 차지하고 상자 안에서 스크롤하며, tree 노드는 선택적 `detail` 필드를 받는다. 방향 검사와 방향 pull은 없앤다(docs/spec/declared-ui.ko.md#사이드바-section-형태).
+
 - F218-2.4-1: host 계약 검사가 sok source의 계약 선언도 읽으므로 sok crate 안의 test가 자기 case로 센다.
+
 - F212.8a-4: 300초와 실패 4번의 재시작 한도가 지속 service에도 적용된다(docs/spec/terminal-runtime.ko.md#서비스-전송, docs/spec/sidecars.ko.md#실패). 실패는 끊긴 연결의 부활이 스폰하기 전에 찾은 service 프로세스의 끝, 생성 경로의 시작 실패(ready 한계, endpoint 전 종료, hello 한계), 읽기 스레드가 protocol 위반으로 끝낸 연결이며, 모두 호스트가 종료 중이 아닐 때이고 앞의 둘은 그 사이드카를 교체 중이 아닐 때다. 살아 있는 service에 다시 붙는 부활은 아무것도 세지 않고, 끊김 하나는 실패를 많아야 하나 센다. 네 번째 실패는 `error: sidecar <name>: restart limit: 4 failures within 300 s`와 `host.sidecar.restart-limit`을 쓰고, 생성 경로가 돌기 전에 재시작을 멈춘다. 네 번째 실패가 service 끝인 부활은 아무것도 스폰하지 않고 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 알리며, 멈춘 동안의 전송은 `sidecar <name>: restart limit`로 실패하고 거부 줄을 쓰며, 전송한 표면에 `sidecar-failure` 대신 그 연결 알림을 준다. 의존 plugin의 표면 열기가 멈춤을 푼다. docs/spec/events.json의 두 재시작 event 설명은 두 transport를 가리킨다. Red: `TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn`과 `a_persistent_service_end_stops_the_restarts_before_the_spawn`은 변경 전 코드에서 `restart limit`를 기대한 자리에 알림 이유 `sidecar fixture-service: service exited before endpoint`(Rust: `sidecar @fixture/sidecar-echo: service exited before endpoint`)로, `TestPersistentProtocolViolationsStopTheRestarts`는 `send at 40s = <nil>`로, `persistent_protocol_violations_stop_the_restarts`는 `connect authenticated service: Connection refused`로 실패했다. Green: 네 시험과 두 호스트의 sidecar 소유 시험이 통과한다. F212.8a가 완료되었다.
+
 - F212.7-9: `docs/spec/plugin-processes.md`가 plugin 프로세스 계획의 승인된 계약을 checklist ID나 진행 상황 없이 담고, 계획은 지웠다. 계획을 가리키던 모든 link와 코드 주석은 명세를 가리킨다. 계획의 검토 기록은 옮기지 않는다. 받아들인 각 해결은 명세의 규칙이나 근거이며, F212.2, F212.5-1, F212.8-0부터 F212.8-0-23까지의 항목이 각 검토를 적는다. 계획의 작업 부분(배치, 통과값 실패, F212.11의 명세 변경, 되돌림 순서, 위험)은 `docs/plans/plugin-processes-handoff.md`로 옮겼다.
+
 - F212.9-4-2: 양쪽 host에서 plugin host가 sidecar 실패 계약의 재시작 한도 안에서 다시 시작한다. 현재 host web view의 페이지 프로세스 끝이나 그 channel의 queue overflow는 host를 닫고 `host.plugin-host.restart {plugin, attempt}`와 함께 다시 만든다. 모든 창에 걸쳐 300초 안의 네 번째 실패는 `error: plugin host <plugin>: restart limit: 4 failures within 300 s`와 `host.plugin-host.restart-limit`를 쓰고 모든 창에서 그 plugin의 host를 닫으며, plugin의 surface 열기만이 `host.trace.plugin-host.restart-reset`와 함께 멈춤을 지운다. sidecar와 plugin host는 한 기록 type으로 실패를 센다. 계약 사례 `plugin-host.restart.*` 세 개가 양쪽 host를 묶는다. Red: stub한 기록 method에 대해 Go 시험 세 개와 Rust 시험 세 개가 실패했다. Green: Go `TestPluginHost` 시험 20개와 Rust `plugin_host` 시험 20개가 통과한다.
+
 - F212.9-4-1: 양쪽 host에서 plugin host가 페이지의 재시작을 넘어 상태를 저장한다. `plugin.json`의 `host` 선언은 `state: {format, maxBytes}`를 받고, host는 host 페이지의 `state.write {value}`와 `state.read`에 plugin마다 하나인 저장 값에서 직접 답한다. host 프로세스는 이 값을 application이 끝나거나 plugin이 제거 또는 비활성화될 때까지 모든 창을 위해 가진다. field가 없는 host, value 없는 write, `maxBytes`를 넘는 값, 다른 format 값의 read는 plugin을 naming하는 오류로 거부된다. 계약 사례 `plugin-host.state.*` 네 개가 양쪽 host를 묶는다. Red: stub한 해석과 답에 대해 Go 시험 네 개와 Rust 시험 네 개가 실패했다. Green: Go `TestPluginHost` 시험 17개와 Rust `plugin_host` 시험 17개가 통과한다.
+
 - F212.9-3-3: declared section이 plugin host에서 값을 받을 수 있다. host의 source는 surface 없는 그 plugin의 snapshot을 받고, `pluginHostEvent`로 acknowledge하며, host 요청 계층으로 status를 pull하고, status를 등록한 surface 다음으로 선택된다. Red: 바뀌지 않은 source에서 host source의 channel 시험과 pull 시험이 실패했다. Green: declared-source.test.mjs와 declared-section.test.mjs의 시험 21개가 통과한다.
+
 - F212.9-3-2: main page는 plugin host의 등록 call에 owner key `plugin:<plugin id>`로 답하고, host별 요청 계층 하나로 host에 요청을 보내며, `plugin-host-ended`에서 열린 요청을 `surface-closed`로 끝내고 host의 등록을 지운다. 그 이름을 등록한 surface 페이지와 state module이 없는 `surface` 없는 요청은 host가 답한다. `command.run`은 command를 실행하고 `status.get`은 status를 pull한다. watch나 dom 요청은 `plugin host <plugin id> does not serve <method>`로 거부된다. Red: 동작을 끈 상태로 host 선택 시험과 끝 시험이 실패했다. Green: exposure.test.mjs와 plugin-host-calls.test.mjs의 시험 34개가 통과한다.
+
 - F212.9-3-1: 양쪽 host의 plugin host channel host 쪽. plugin host 페이지는 view channel로 main page의 요청에 답하고 등록 call을 보내며 declared UI snapshot을 보낸다. 각 host는 이를 surface 없이 `plugin-host-reply`, `plugin-host-call`, `declared-ui.snapshot`으로 main page에 중계하고, 다른 command의 call에는 직접 `plugin host call <name> is not served`로 답하며, ready document를 기록하고, 각 ready message와 각 theme 변경 뒤에 theme을 보내고, 첫 ready message에 `host.trace.plugin-host.process-ready`를 쓰고, queue overflow에 host를 닫으며, plugin 제거나 비활성화, queue overflow로 host를 처분하거나 페이지 프로세스가 끝나면 `plugin-host-ended {plugin}`을 보낸다. main page는 `pluginHostReply`, `pluginHostRequest`, `pluginHostEvent`로 reply, request, event를 보낸다. 계약 사례 `plugin-host.channel.*` 7개가 양쪽 host를 묶는다. Red: dispatch, 전송, 끝을 끈 상태로 Go와 Rust의 channel 시험 각 7개가 실패했다. Green: Go `TestPluginHost` 시험 13개와 Rust `plugin_host` 시험 13개가 통과한다.
+
 - F212.9-2: plugin host web view의 platform 연산과 양쪽 host에서의 수명 주기. `document_view.m`의 `sp_plugin_host_create`는 `sp_document_create`가 이제 `pluginView`로 함께 쓰는 view 구성으로 plugin의 host web view를 만들고, window content view 자체에 zero frame으로 숨게 붙이며, input과 hit test를 받지 않고, `sp_document_close`가 없앤다. Go와 Rust host는 연산을 declare하고 darwin이 구현하며 Windows는 `plugin host web view is not implemented on windows`로 거절한다. 수명 주기는 창의 main page가 ready가 될 때 `host`를 declare한 설치되고 켜진 각 plugin의 host web view를 만들고, theme script와 함께 `sok://<plugin>/<page>`를 load하며, `host.trace.plugin-host.process-request {plugin, window}`를 쓰고, plugin의 remove나 disable, 다시 불러온 main page의 시작, window close에서 view들을 없앤다. `host`가 object가 아니거나 `page`가 비어 있지 않은 문자열이 아닌 manifest는 양쪽 host가 같은 문항으로 거절한다. contract case `plugin-host.create-loads-page`, `plugin-host.create-once-per-plugin`, `plugin-host.declaration-requires-page`, `plugin-host.change-disposes`, `plugin-host.reload-disposes`, `plugin-host.close-disposes`가 양쪽 host를 이 행동으로 묶는다. Red: 널을 돌려 주는 생성 stub에서 native 검사가 실패했고 아무것도 만들고 없애지 않는 stub에서 Go와 Rust 수명 주기 시험이 실패했다; Green: `plugin_host_view_test`, `document_view_test`, `view_channel_test`, 여섯 Go `TestPluginHost` 시험, Rust `plugin_host_test` 모듈의 여섯 시험과 37개 `documents_test` 시험이 통과했다.
+
 - F236-10: 지속 service contract가 `docs/spec/terminal-runtime.md`(+ko)에서 `docs/spec/persistent-services.md`(+ko)로 옮겨졌다. 이 명세는 일반 전송, 종료, 복구, 업데이트, 화면 메시지 규칙을 담는다. 터미널 입력, 표시, 세션 오류, 검증 본문은 `docs/plans/decouple-handoff.md`(+ko)로 옮겨 terminal plugin repository가 가진다. 모든 링크와 anchor는 새 파일을 가리키며, image region과 양쪽 host의 주석은 terminal 대신 image region, 지속 service, surface를 말한다. 문서와 주석만 바꿨고 동작 변경은 없다.
+
 - F236-12: `docs/spec/surface-composition.md`의 인수 기준 목록은 그림 영역의 일반 기준만 담는다. 터미널 기준 둘(터미널 그림이 열 수 변경 때 논리 행을 재배치한다, 배치 중 터미널 셀 메트릭은 고정이다)는 터미널 plugin repository가 담도록 `docs/plans/decouple-handoff.md`로 옮겼다. 문서만 바뀌며 동작 변경은 없다.
+
 - F236-11: browser 예제가 설치 pack을 `apps/browser/environment.json`의 `install`(registry pack)으로 적는다. `scripts/workspace-registry.json`은 plugin `terminal`과 `browser`를 담은 pack `browser-example`을 나열하고, `make browser-frontend`는 Makefile이 적어 둘 plugin 대신 registry index에서 그 pack의 plugin을 설치한다. `docs/spec/plugins.md`가 field을 적고 환경 검증기가 그 field을 받는다. Red: 바꾸지 않은 검증기에서 `install` 시험이 알 수 없는 field로 실패했다. Green: 환경 시험 4개 중 4개, registry script 시험 5개 중 5개가 통과한다.
+
 - F236-8: `docs/spec/sidecars.md`는 sidecar 계약만 말한다. `shell`, `files`, 터미널 사이드카(`vt-core`) 절과 그 시험 문장을 sidecar repository가 전달하도록 `docs/plans/decouple-handoff.md`로 옮겼다. F102.2의 files 절 링크는 옮긴 절을 가리킨다. 문서만 바뀌며 동작 변경은 없다.
+
 - F236-6: log query fixture가 terminal sidecar role `vt` 대신 role `probe`와 event `sidecar.probe.*`를 쓴다(파일 `logs/probe-v1.jsonl`, `digests.json`의 그 색인 digest, 그리고 감사, event-log, debug-timeline, Go와 Rust 시험). event 읽기는 어떤 role의 sidecar 로그 파일도 받아들이고 `sidecar.<name>.*` event를 layer `<name>-core`로 옮기므로 읽기 코드가 sidecar 이름을 갖지 않는다. terminal sidecar의 layer `vt-core`는 그대로다. Red: 바꾸지 않은 읽기 코드에서 sidecar 파일의 event-log 시험이 행을 돌려주지 않았다. Green: 변경한 Node 시험 64개 중 64개와 Go, Rust sok fixture 시험이 통과한다.
+
 - F236-7: surface composition specification의 예가 shell, terminal page와 terminal sidecar 대신 probe 이름(`ui/view.html`, `ui/hybrid.html`, `@scope/sidecar-probe`)을 선언하고, 앱 DOM reload가 sidecar 세션을 닫지 않는다고 말한다.
+
 - F236-5: `make object-counts`(`scripts/measure-object-counts.mjs`)가 고정된 terminal, browser plugin 대신 필수 `PLUGINS`(`--plugin ID`)가 부르는 surface plugin의 탭을 열고 첫 plugin으로 카드를 나눈다. 그래서 core script가 plugin을 부르지 않는다. `make trace-share`는 `PLUGINS`를 넘긴다.
+
 - F236-4: workspace registry, app usage 측정, run과 event 감사, event class, window-source 감사의 script 시험이 fixture에 browser, files, editor, terminal plugin과 vt sidecar 대신 probe 이름을 쓴다. 동작 변경은 없다(70개 중 70개 통과).
+
 - F236-3: `scripts/check-test-parity.mjs`의 소유 감사가 실제 plugin과 sidecar package를 나열하는 대신 `@soksak/plugin-api`를 뺀 모든 `@soksak/plugin-*` package를 plugin으로, 모든 `@soksak/sidecar-*` package를 sidecar로 다룬다. 그래서 core는 그 이름을 갖지 않고 그중 어느 것을 부르는 core source도 보고한다. docs/spec/plugins.md가 규칙을 말한다.
+
 - F236-2: plugin 화면과 plugin 연산의 workbench 시험이 terminal sidecar 대신 fixture sidecar `@scope/sidecar-probe`와 `probe`를 쓴다. 동작 변경은 없다(19개 중 19개 통과).
+
 - F236-1: 인계 문서 `docs/plans/plugin-processes-handoff.md`의 "작업 방법"이 결합 금지 규칙을 말한다: 별개의 repository, manifest `dependencies`로만 선언하는 관계, contract wire와 노출된 entry로만 하는 교환, probe fixture로 자기 경계만 하는 시험, `e2e/` 설치 기반 창 검사의 예외.
+
 - F212.8a-4: 300초와 실패 4번의 재시작 한도가 지속 service에도 적용된다(docs/spec/persistent-services.ko.md#서비스-전송, docs/spec/sidecars.ko.md#실패). 실패는 끊긴 연결의 부활이 스폰하기 전에 찾은 service 프로세스의 끝, 생성 경로의 시작 실패(ready 한계, endpoint 전 종료, hello 한계), 읽기 스레드가 protocol 위반으로 끝낸 연결이며, 모두 호스트가 종료 중이 아닐 때이고 앞의 둘은 그 사이드카를 교체 중이 아닐 때다. 살아 있는 service에 다시 붙는 부활은 아무것도 세지 않고, 끊김 하나는 실패를 많아야 하나 센다. 네 번째 실패는 `error: sidecar <name>: restart limit: 4 failures within 300 s`와 `host.sidecar.restart-limit`을 쓰고, 생성 경로가 돌기 전에 재시작을 멈춘다. 네 번째 실패가 service 끝인 부활은 아무것도 스폰하지 않고 `{"event": "connection", "connected": false, "reason": "restart limit"}`을 알리며, 멈춘 동안의 전송은 `sidecar <name>: restart limit`로 실패하고 거부 줄을 쓰며, 전송한 표면에 `sidecar-failure` 대신 그 연결 알림을 준다. 의존 plugin의 표면 열기가 멈춤을 푼다. docs/spec/events.json의 두 재시작 event 설명은 두 transport를 가리킨다. Red: `TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn`과 `a_persistent_service_end_stops_the_restarts_before_the_spawn`은 변경 전 코드에서 `restart limit`를 기대한 자리에 알림 이유 `sidecar fixture-service: service exited before endpoint`(Rust: `sidecar @fixture/sidecar-echo: service exited before endpoint`)로, `TestPersistentProtocolViolationsStopTheRestarts`는 `send at 40s = <nil>`로, `persistent_protocol_violations_stop_the_restarts`는 `connect authenticated service: Connection refused`로 실패했다. Green: 네 시험과 두 호스트의 sidecar 소유 시험이 통과한다. F212.8a가 완료되었다.
+
 - F227: view가 다시 surface context의 `tab.state`로 자기 surface의 tab state를 읽고 쓴다. F212.7-11 이후 두 호출은 `tab.read is not a function`으로 실패했다. `view-calls` 시험 다섯이 바뀌지 않은 코드에서 실패하고 수정에서 통과한다(32/32, `surface-modules` 10/10).
+
 - F212.7-11: view call route가 view page의 tab report와 runtime 호출을 서비스한다. 호출한 view의 surface의 tab handler로 `tab.title`, `tab.footer`, `tab.directory`, `tab.notify`, `tab.modified`, `tab.error`, `tab.keep`을, page의 event writer로 `runtime.log {level, event, fields}`를 전달 시점에 level gate를 적용해 서비스하고, view bridge가 호출 위에서 read와 변경 subscription을 갖는 `runtime.textSize`와 `runtime.settings`를 내보낸다. route는 순수하게 main-page라 host 사례는 추가하지 않았다. 단위 시험은 바뀌지 않은 코드에서 실패하고(workbench 7과 2, plugin-api 2) 구현에서 통과한다(workbench `view-calls` 32/32, `view-events` 6/6, plugin-api `view` 30/30과 suite 328/328, 영향 받는 workbench 시험 67/67).
+
 - F212.7-13: view page의 시작 값. 페이지가 view surface의 준비로 시작 값을 보내면, 양쪽 호스트가 요청과 함께 검사하고 theme script와 함께 `window.sokSurface = Object.freeze({surface, params, origin, project, declarations})`를 page를 불러오기 전에 주입하며, view를 다시 만들 때 surface의 기록에서 다시 주입한다. plugins.md는 전달을 서술하고 `icon(name)`의 view page 전달이 아직 선언되지 않았음을 기록한다. 계약 사례 `view.start-values.first-script`가 양쪽 호스트에서 실행된다. 시험은 바뀌지 않은 코드에서 실패하고(workbench 2, Go 빌드, Rust import) 구현에서 통과한다(workbench 6, Go src package, Rust package suite). 시험 목록은 두 새 시험 file을 기록한다(92 lane, 구현 610, 테스트 792).
+
 - F212.7-12: view surface의 exposure: view page는 call `runtime.native.call {name: "registered", payload: {kind, name}}`으로 status나 dom 항목을 등록하고, main page는 exposure registry로 항목을 반영한 뒤 `exposureRegister` 호출로 호스트에 전달한다. 두 호스트는 이 호출을 surface 브리지와 함께 받으며, 호출자는 surface의 page view이거나 창의 메인 페이지이고 메인 페이지는 view를 가진 surface에만 허용된다. 호스트는 항목을 기록하고 `exposure-registered`로 알려, 다시 읽은 main page가 살아 있는 등록을 다시 받는다. 각 view는 전달된 exposure 요청을 소비하는 exposure port를 둔다. 요청은 view의 `exposure-request` 구독으로 도착하고 surface의 `exposureReply`로 답한다. plugin-api의 view bridge에 `exposure.register`와 `exposure.reply` helper가 생겼다. 시험은 변경 전 코드에서 실패했고(workbench 3, 호스트는 수락을 끈 상태에서 Red) 구현에서 통과한다(view-calls와 surface-view 31 of 31, plugin-api 330 of 330, Go src 패키지, Rust host suite, `make host-contract-check`).
+
 - F225: plugin-api의 exposure check가 section의 형식별로 module source를 모아, status 형식 section이 검사를 `Cannot read properties of undefined (reading 'horizontal')`으로 충돌시키지 않는다. 시험은 변경 전 검사에서 충돌했고(2) 구현에서 통과한다(exposure-check 6 of 6, plugin-api suite 328 of 328).
+
 - F226: workbench는 section의 선언된 전체 status 이름을 registry와 표시에, plugin 안에서의 짧은 이름을 snapshot channel과 pull에 써서, view의 declared section이 등록 대조 실패 대신 그려진다. declared-section 시험의 fixture를 production 형식에 맞췄다. 9개 시험이 변경 전 코드에서 실패하고 구현에서 통과한다(89 of 89, workbench suite 719 of 719).
+
 - F212.7-10: view의 declared UI snapshot 전송: 각 호스트는 view의 snapshot을 창의 event `declared-ui.snapshot {surface, plugin, status, seq, value, skipped}`로 전달하고 그에 대한 자체 event는 쓰지 않는다. view bridge는 pull `declared-ui.snapshot.request`에 status의 최신 값으로 답하고 snapshot을 view event `declared-ui.snapshot.ack`로 확인한다. workbench는 declared section을 view channel에 연결하고 메인 page의 load, source 변경, 방향 변경에서 pull하며, snapshot마다 skipped count를 `page.trace.declared-ui.snapshot.skipped`로 쓴다. view가 없는 source는 channel이 없으므로 그 section은 비어 있다. workbench 패키지의 files 목록이 staging이 빠뜨린 page module들을 naming하고, stage, library-preview, window-sidebar-restoration fixture는 hybrid composition으로 옮긴다. 단위 시험은 stub에서 실패했고(plugin-api 4, 호스트 4, workbench 8) 구현에서 통과한다(plugin-api 326 of 326, Go src 패키지와 Rust documents_test 39 of 39, workbench suite 719 of 719).
+
 - F224: plugin-api의 기록 검사가 검사 대상 저장소의 census 제외를 적용해, 커밋된 생성 bundle을 기록으로 읽지 않는다. 제외 밖의 위반은 여전히 보고된다.
+
 - F212.8-7: 한도에서의 declared UI 값 그리기 시간: 워크벤치 시험 `declared-ui-draw-time.test.mjs`는 16 level 안의 5000 node tree와 1000 item list에 대해 jsdom에서 `validateValue`와 `drawValue`를 잴 때 값마다 경과 밀리초를 출력 줄에 기록한다. 5회 실행에서 load average 40.99에서 tree 중앙값은 501.2 ms, list 중앙값은 116.4 ms다. 한도(2000 ms와 500 ms)는 jsdom이 layout이나 paint 없이 DOM node를 만드므로 구성과 연결만을 다룬다. 중앙값이 declared-ui.md의 한도가 정당화하는 범위를 넘지 않으므로 한도는 그대로 둔다.
+
 - F218-2.5: `make census-check`가 pending 항목 없이 census 규칙 `rs.lock-result`를 발견 0으로 강제한다. 규칙은 더 이상 `self`에 부른 `read`, `write`, `lock`(sok endpoint.rs의 socket `read()` 호출)을 보고하지 않고, 이제 변환되거나 unwrap되는 인자 있는 condition wait를 보고한다. F218-2가 완료되었다. Rust host와 sok crate의 모든 lock 결과가 poisoned lock을 복구한다.
+
 - F218-2.4: Rust host와 sok writer는 lock 결과에 `expect`나 `unwrap`을 부르던 87개 지점과 같은 lock의 condition wait 7개에서 poisoned lock을 `PoisonError::into_inner`로 복구한다. sidecars.rs 43, performance.rs 9, debug_follow.rs 8, diagnostics.rs 5, log_query.rs, deep_link.rs, host.rs 각 3, endpoint.rs, windows.rs, process_lock_hook.rs, log_policy_watch_hook.rs, sok event_log.rs 각 2, assets.rs, bindings.rs, exposure.rs 각 1. 각 지점은 `default:` 사유를 적는다. poisoned lock은 sidecar 조회, 선언, service owner close, log notice, log indexer, sampler, deep link queue, asset 보고, test hook, modal hold, subscriber와 relay 개수, 종료와 quit 경로, write observer를 실행하는 thread를 더 이상 panic시키지 않는다. census 규칙 `rs.lock-result`는 전의 87개 대신 2개를 보이며, 둘 다 규칙이 잘못 잡는 socket `read()` 호출이다(F218-2.5). 시험 14개가 lock을 poison시키며, 변경 전에 panic했고(예: `a_poisoned_state_lock_still_answers_the_sidecar_queries`가 `sidecar state: PoisonError`) 변경 뒤 통과한다.
+
 - F221: 확인: 전체 package 시험이 로컬에서 통과하고 수리 push의 CI 실행이 success로 끝났다.
+
 - F222: pre-push hook이 workflow 시험이 요구하는 형태인 `make -C "$(git rev-parse --show-toplevel)" push-check`를 다시 돌린다.
+
 - F223: window-check source 감사가 `report`로 관찰을 기록하는 timer를 받고, mock 시간으로 도는 harness 시험에는 timer 규칙을 적용하지 않는다. 이유는 주석에 적는다.
+
 - F221: 생성된 event class 표를 catalog에 맞게 다시 만들고, `make push-check`가 event-classes 시험을 돌려 못 미친 표가 관문에서 실패하게 한다.
+
 - F212.6a-1-3-2-2: page close 멈춤의 원인을 특정했다. `CFRunLoopWakeUp`의 pthread mutex는 main run loop의 `_lock`이며, main thread가 WebKit page close 일을 하는 동안 짧게 반복해 잡는다. 뒤따르는 대기자는 그 뒤에 줄 서고 IPC receive queue와의 원형 대기가 멈춤을 늘린다. 원인이 host code가 아니므로 코드는 바꾸지 않는다.
+
 - F212: `docs/plans/plugin-processes-handoff.md`가 F212와 그 옆 항목의 남은 작업, 각 branch와 worktree의 상태, 작업 규칙, 항목마다의 시험 명령을 적는다.
+
 - F219: record을 읽는 Tauri host의 restart-limit 시험 두 개(`packages/host/tauriv2/tests/sidecars_test.rs`의 `stops_at_the_fourth_failure_within_the_window`와 `surface_open_clears_the_restart_limit`)가 file의 `SERIAL` mutex를 잡는다. 둘 다 parent process에서 process 전역 record writer를 붙이고, 한 시험의 attach가 다른 시험의 event를 자신의 log으로 보냈으며, 전체 suite에서 한 번 `the opened surface recorded no host.trace.sidecar.restart-reset`으로 나타났다. Red: 변경 전 코드에서 두 시험의 order run이 5회 중 5회 `the stop recorded no host.sidecar.restart-limit error event`로 실패했다. Green: order run이 5회 중 5회 통과하고, 시험이 단독으로 통과한다(`make rust-repeat COUNT=1 TEST=surface_open_clears_the_restart_limit`). 전체 package 실행은 F218 checklist가 끝난 뒤 최종 통과로 남는다.
+
 - F218-2.3: Rust host는 poisoned lock을 오류 문자열이나 오류 결과로 바꾸던 106개 지점을 `PoisonError::into_inner`로 복구한다. surfaces.rs 27, modals.rs 20, windows.rs 19, exposure.rs 12, sidecars.rs 8, recording.rs 4, composition.rs 3, diagnostics.rs 2, endpoint.rs 2, shapes.rs 2, theme.rs 2, documents.rs, file_place.rs, object_counts.rs, performance.rs, workspace.rs는 각 1개이며, 각 지점은 `default:` 사유를 적는다. poisoned lock이 더 이상 surface 생성과 닫기, modal 기록 읽기, 프로젝트 owner 해제, relay 요청과 응답, sidecar 전송과 실행 목록, 녹화 종료, 상태 알림, surface 개수, trace switch, workspace 응답을 거절하지 않는다. 계약 `modal.state.poisoned-lock-is-reported`와 `recording.state.poisoned-lock-is-reported`는 `poisoned-lock-is-recovered`로 바뀌고, `modal state` 오류 줄은 diagnostics 표에서 빠진다. census 규칙 `rs.lock-result`는 변경 전 195개에서 89개 결과를 나열한다. 89개는 F218-2.4의 `expect`와 `unwrap` 지점과 규칙이 잘못 맞춘 socket `read()` 호출 둘이다. 열 개 module group에는 lock을 poison시키는 시험이 있고 변경 전 오류 결과로 실패했으며(예: `a_poisoned_surface_lock_still_creates_and_closes_a_surface`는 `left: None`, `right: Some(9)`), 변경 후 통과한다. 나머지 지점은 test binary가 만들지 않는 `Window`, `AppHandle`이나 시작된 sidecar나 capture가 필요하다.
+
 - F218-1: Rust host는 프로세스의 첫 동작으로 panic hook을 설치하므로, writer가 생기기 전의 `host.panic`은 시작 buffer에 남고 writer가 열릴 때 저장된다. panic 뒤 프로세스를 끝내는 스레드는 writer를 최대 5초 기다리며, 그 시간 안에 writer가 붙지 않으면 프로세스는 상태 101로 끝나고 record와 stack을 표준 오류에 쓴다. Go goroutine 진입점도 같은 방식으로 writer를 기다린다(docs/spec/hosts.ko.md#프로세스-수명, 계약 `log.panic.before-writer-is-stored-when-the-writer-opens`).
+
 - F218-2.1: 프로젝트 제거 요청, 알림 권한 상태, 버튼 mask는 모든 지점에서 poisoned lock을 `PoisonError::into_inner`로 복구하며, 각 지점에 `default:` 사유를 적는다. poisoned lock 뒤에도 요청은 등록, 응답, 종료되고, `state()`는 오류 대신 권한 상태를 읽는다. test: `project_removal_test.rs`(둘)와 `notifications_test.rs`(하나)는 변경 전에 실패하고 변경 후 통과한다. census 규칙 `rs.lock-result`(`packages/plugin-api/census-rules.json`)는 match, 오류 변환, unwrap되는 `lock()`, `read()`, `write()` 결과를 나열하며, F218-2.5에 pending이고 발견 221개가 남아 있어 F218-2의 나머지 group이 전환한다.
+
 - F218-2.2: Rust host는 poisoned lock 때문에 연산을 건너뛰던 26개 지점을 `PoisonError::into_inner`로 복구한다. 지점은 endpoint의 peer, 구독, writer lock, exposure의 relay와 등록 lock, surface의 press와 첫 commit lock, window의 owner와 window 기록, sidecar 상태이며 각 지점은 사유를 적는다. census 규칙 `rs.lock-result`는 변경 전 221개에서 195개 결과를 나열한다. endpoint, exposure, surface, window의 lock은 poison시키는 단위 시험이 있고, sidecar 상태 lock에는 시험이 없다.
+
 - F218: Rust host는 다섯 지점에서 poisoned lock을 `PoisonError::into_inner`로 복구하며, 각 지점에 `default:` 이유를 적는다. 지점은 `host.buttons`의 sender, exposure와 `set_language`의 메뉴 언어, notification 상태, button 상태(`Buttons::report`)다. button 상태는 poisoned 상태 오류를 더는 기록하지 않고, 실패 표는 `host.buttons`를 뺀다. docs/spec/logging.ko.md가 이 방식을 적는다. 나머지 poisoned lock 지점은 F218-2로 추적한다.
+
 - F212.1-2-2-6: 각 host는 host가 수행한 spawn마다 sidecar가 보내는 첫 메시지 줄에서 level `debug`의 event `host.trace.sidecar.ready`(`sidecar`, `pid`, `ms`)를 남기며, `ms`는 spawn부터 그 줄까지의 시간이다. 표준 입출력 sidecar와 host가 spawn하는 영구 service를 포함한다. event는 `docs/spec/events.json`에 선언되고 `docs/spec/logging.md`에 나열되며, contract case `sidecars.trace.first-answer-after-spawn-is-recorded`가 `docs/spec/host-contract.md`에 있다. Red: Go의 `TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded`, `TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded`와 Rust의 `standard_io_sidecar_first_answer_after_spawn_is_recorded`, `persistent_spawned_service_first_answer_after_spawn_is_recorded`가 변경 전 코드에서 `the first answer after the spawn was not recorded`로 실패했다. Green: 네 시험이 통과한다.
+
 - F212.8a: 표준 입출력 sidecar는 300초 sliding window 안의 네 번째 실패에 재시작을 멈춘다(docs/spec/sidecars.ko.md#실패). 두 호스트는 각 실패의 시각으로 실패를 세고, `error: sidecar <name>: restart limit: 4 failures within 300 s`를 쓰며, `host.sidecar.restart-limit`을 기록한다. 멈춘 동안 어느 표면의 요청이든 이유 `restart limit`으로 거절된다. 멈춤은 `dependencies`에 그 사이드카를 적은 plugin의 표면이 만들어질 때만 풀리며, 그 reset은 `host.trace.sidecar.restart-reset`을 기록한다. Red: 두 호스트의 거절 테스트가 변경 전 코드에서 실패했다(`send of the open surface s3 after the stop = <nil>`; `send was not refused: ()`). Green: 재시작 테스트와 reset 테스트가 두 호스트에서 통과한다. 지속 transport는 다루지 않으며 F212.8a-4로 열려 있다.
+
 - F217: 불러오지 않은 플러그인 탭의 placeholder는 이유 `unread`(플러그인 설치 상태를 읽지 못함)와 `params`(저장된 탭의 params가 불러온 플러그인의 선언과 맞지 않음)를 공용 오류 표시 경로 `showError`로 `surface <tab id> placeholder`라는 place에 보이며, 표면이 사라지거나 실패가 풀리면 화면 그리기가 `hideError`로 거둔다. 이유 `missing`, `disabled`, `reload`, `host`는 저장된 배치의 의도된 상태이므로 일반 placeholder 문구로 둔다([플러그인](docs/spec/plugins.ko.md#불러오지-않은-플러그인)). Red: `packages/workbench/test/plane-placeholder-error.test.mjs`는 수정 전 코드에서 `AssertionError: the unread placeholder did not show exactly one error for its surface`(실제 `[]`)로, `packages/workbench/test/plane-placeholder-params.test.mjs`는 `AssertionError: the mismatched params did not show exactly one error for their surface`(실제 `[]`)로 실패했다. Green: 두 테스트가 통과하며, plane·오류 표시·layout·탭·표면 관련 workbench 테스트 114개가 모두 통과한다. `packages/workbench/test/plane-placeholder-reasons.test.mjs`는 designed 이유를 지키며 첫 실행에서 통과했다.
+
 - F212.6a-1-3-2-2: code 변경은 없고 원인은 아직 찾지 못했다. 표본된 main thread는 WebKit IPC connection의 lock `m_incomingMessagesLock`을 기다린다(WebKit main, `Source/WebKit/Shared/IPC/Connection.cpp:1626-1630`). page close 중 이 lock을 잡은 thread는 확인하지 못했다. 항목은 재시도 단계와 함께 열려 있다. stall dump의 WebKit frame을 `atos`로 시스템 WebKit(dump의 OS build) 또는 dyld shared cache symbol로 symbolicate한다.
+
 - F212.6a-1-3-2-1: host의 stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 level `warn`을 유지하고, 이름 붙은 예외 `passes_every_gate`(`packages/sok/tauriv2/src/event_log.rs`)와 `PassesEveryGate`(`packages/sok/wailsv3/src/log_policy.go`)를 통해 모든 gate를 지나므로 기본 정책이 저장한다. 이 예외는 `docs/spec/logging.md`에서 `log.migrated` 옆에, `AGENTS.md`에 적히며, 두 host의 producer 사전 검사도 이를 본다. Red: Rust `the_stall_records_are_stored_under_a_policy_that_turns_lifecycle_off`는 이전 gate에서 `host.stall was refused`로 실패했고, Go `TestTheStallRecordsAreStoredUnderAPolicyThatTurnsLifecycleOff`는 `host.stall was refused`로 실패했다. Green: 두 test 모두 `make rust-repeat COUNT=3`과 `make go-repeat COUNT=3`에서 3회 중 3회 통과한다.
+
 - F212.1-2-2-2: WebKit의 `PerformanceObserver::supportedEntryTypes`에 `longtask` entry type이 없어 long task observer는 넣지 않는다. 페이지 stall의 출처는 F212.1-2-2-1의 페이지 프로세스 sample이 보여 준다.
+
 - F212.1-2-2-1: 3초 뒤에도 대기 중인 window-check 요청은 같은 turn에 host와 page thread 표본을 시작한다(`packages/window-check/app.mjs`의 `within`, `stall-sample.mjs`의 `STALL_AFTER`). 그래서 요청 한도 전에 끝난 stall도 stack을 남긴다. 결과는 step log에 남는다. 대기 중인 요청을 알리는 event가 없으므로 요청마다 timer를 쓴다. Red: `a request pending past 3 s starts the host and page samples in the same turn`이 수정 전 코드에서 `AssertionError` at `stall-sample.test.mjs:117`, `actual: []`, `expected: [ 10, 12, 13 ]`로 실패했다. Green: 이 test가 통과하고 `packages/window-check`의 test 119개가 모두 통과한다.
+
 - F212.1-2-2-4: 저장된 event offset이 호스트 log 파일의 이름을 붙이지 않으면 window-check session은 시작 뒤에 쓰인 기록만 판정한다. `sessionEventStart`가 그런 파일을 session 시작 시점의 끝에 두므로 이전 boot의 오류가 검사의 오류로 보고되지 않는다. 실행 중인 process의 파일은 여전히 처음부터 읽는다. Red: `with stored offsets, a file that the stored offsets do not name is judged from the end it had at the session start` test가 실제 오류에 이전 boot의 오류를 담고 실패했다. Green: 이 test가 통과하고 `packages/window-check/test/event-log.test.mjs`의 test 25개가 모두 통과한다.
+
 - F212.1-2-1-1: library는 library 목록에서 빠진 project의 표시된 오류 `library project <root>`를 공용 오류 표시 경로(`checkFolders`의 `hideError`)로 거둔다. 같은 폴더 없는 project를 다시 더하면 오류를 다시 쓴다. Red: 수정 전 코드에서 `packages/workbench/test/library-removed-project.test.mjs`가 `AssertionError: the error of a project added again is not written`, `1 !== 2`로 실패했다. Green: 이 테스트가 1 of 1 통과하고, workbench의 library 및 오류 표시 테스트가 14 of 14 통과한다.
+
 - F212.6-2-3: `sok`와 host의 설치된 plugin 문서, 설치와 제거 명령의 manifest 의존 검사는 설치 상태 reader가 한 번 읽고 해석한 plugin.json을 쓴다. 그 읽기 뒤에 plugin.json이 지워지거나 바뀌어도 두 번째 OS 오류 글이나 도달하지 않는 해석 분기가 생기지 않는다. Rust `read_installed_manifests`와 Go `ReadInstalledManifests`는 상태와 설치된 plugin별 manifest를 돌려주며, `read_installed`와 `ReadInstalled`의 결과는 그대로다. Red: 변경 전 코드에서 Rust 시험 `plugin_remove_uses_the_manifest_that_the_reader_returned`는 `plugin base is required by ext ^1.0.0`을 기대했으나 `<config>/plugins/ext/1.0.0/plugin.json: no such file or directory`로 실패했고, Go 시험 `TestPluginRemoveUsesTheManifestThatTheReaderReturned`는 같은 OS 글로 실패했다. Green: 두 시험이 통과하고, Rust package `soksak-sok-tauriv2`와 `soksak-host-tauriv2`, 두 host의 Go 설치와 plugin 시험이 통과한다.
+
 - F212.6-2-2: `sok`와 host의 설치 읽기 각각은 잘못된 `installed.json`, `package.json`, `plugin.json`을 두 언어에서 parser 세부 없이 `<file> is not valid JSON`으로 보고한다. 저장 파일의 migration reader도 같은 글을 보고하므로 `installed.json`에서 `read_installed`의 글에 도달하며, settings.json과 projects.json도 같은 글을 받는다. 두 호스트의 문서 수준 manifest 없음 분기는 제거했다. `read_installed`가 `<file>: the plugin manifest is missing`을 보고하고, 그 읽기 이후에 지워진 plugin.json은 호스트의 일반 오류 분기가 보고한다.
+
 - F212.6-2-1: 두 언어의 `sok` `read_installed` 검사는 잘못된 `plugin.json`을 parser 세부 없이 `<file> is not valid JSON`으로 보고한다. serde_json과 encoding/json의 parser 글이 달라서다. 없는 `plugin.json`은 `<file>: the plugin manifest is missing`으로 보고한다. 호스트 계약 case `installed.plugin-json.invalid-text`가 글을 정하며, Rust와 Go 시험이 확인한다. Red: `installed_plugins_document_reports_an_invalid_state`가 `EOF while parsing an object at line 1 column 1`(Rust)과 `unexpected EOF`(Go)로 실패했고, 새 case는 parser 세부를 담은 글로 실패했다. Green: 두 호스트에서 두 case가 통과하고, `soksak-host-tauriv2` package와 Go 설치 시험이 통과하며, 두 언어의 `sok` package 전체가 통과한다.
+
 - F216: `make go-repeat`는 `scripts/go-repeat-inputs.mjs`로 package마다 native library 입력을 정한다. `soksak-darwin` pkg-config package를 이름한 build graph의 package만 library define을 받으므로, library를 link하지 않는 package는 더 이상 library에 `shasum`을 실행하지 않고, build되지 않은 library가 필요한 package는 그 경로로 실패한다. Red: 수정 전 Makefile에서 `scripts/test/go-repeat-inputs.test.mjs`가 `./packages/sok/wailsv3/tests`의 recipe가 library를 이름하는 것으로 실패했고, `make go-repeat`는 `shasum: native/darwin/build/libsoksak-darwin.a: No such file or directory`를 출력했다. Green: 시험 3개가 통과하고, `make go-repeat PACKAGE=./packages/sok/wailsv3/tests COUNT=1 TEST=TestPluginPack`가 `1 of 1 runs pass`를 출력하며 shasum 줄이 없다.
+
 - F212.6a-1-5: `e2e/normal-shutdown.mjs`는 application의 endpoint 연결이 끝나는 시점(`packages/window-check/shutdown-wait.mjs`의 `untilShutdown`, client의 `ended` event)에 `endpoint.json`을 읽는다. 종료 시각을 폴더 watch로 재지 않는다(watch는 종료 뒤에 알렸다). 종료 service도 같은 방식으로 관찰하며, 외부 프로세스로 종료를 관찰하지 않는다. 두 host는 프로세스가 끝나기 전에 파일을 지운다. Red: 시험 파일은 기다리지 않고 resolve하는 선언된 stub에서 `the wait settled before the connection ended`로 실패했다. Green: 시험 3개가 통과하고, 다시 빌드한 Tauri host는 `host.quit`로(연결 종료 54 ms), 다시 빌드한 Wails host는 signal로(19 ms) check를 통과한다.
+
 - F212.6a-1-3-1b-2: 잠기지 않은 빈 `process.lock`은 `host.run.unrecorded-end` 없이 넘겨받는다. 시작자가 잠그기 전에 파일을 만들고, 소유자는 잠금 아래에서만 기록을 쓰기 때문이다. 내용이 있는 잠기지 않은 파일은 종전처럼 보고한다. endpoint 명세와 host 계약이 이 규칙을 적는다. Red: `an_empty_lock_file_is_taken_over_without_a_report`는 `left: Some(UnrecordedEnd { boot: None, pid: None, previous: Some("") })`로, `TestAnEmptyLockFileIsTakenOverWithoutAReport`는 `an empty lock file was reported as an earlier run`으로 실패했다. Green: 두 시험이 3회 중 3회 통과하고, 두 host의 lock 시험이 통과한다.
+
 - F212.6a-1-3-1c: 두 호스트의 process lock은 열린 `process.lock`에 거는 배타적 advisory lock(`flock`)이며 프로세스가 사는 동안 유지한다. 그래서 같은 오래된 파일을 본 두 시작자는 소유자를 하나만 남긴다. Red: 경쟁 시험에서 두 번째 시작이 받아들여졌다(Rust와 Go). Green: 경쟁 시험과 잠금 보유 시험이 두 언어에서 3회 모두 통과한다.
+
 - F212.6a-1-3-1a: 각 host의 writer는 quit 전의 첫 종료 signal(`EmitClosed`, `RecordClosed`), 각 `ExitRequested`, 각 `Exit`에서 최종 flush 전에 `log.closed {cause, signal?}`를 자기 경로로 기록한다. 이 event는 모든 gate를 지나며, `events.json`에 선언하고 `logging.md`에 적었다. Red: `a_closed_record_is_stored_under_a_policy_that_turns_lifecycle_off`는 `the record was refused`로, `a_termination_signal_records_log_closed_before_quit`는 `log.closed: none`으로 실패했다. Go 시험 `TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff`와 `TestTerminationSignalRecordsLogClosedBeforeQuit`는 같은 결과로 실패했다. Green: Rust 시험과 Go 시험이 3회 중 3회 통과한다.
+
 - F212.6a-1-3-1b-1: 잠기지 않은 `process.lock`은 내용과 관계없이 넘겨받고, `host.run.unrecorded-end`는 `boot`와 `pid`(다른 형식이면 null)와 256 바이트로 자른 `previous`를 담는다. 잠긴 lock의 내용이 비었거나 다른 형식이면 `already owned by a live process`로 거부하며, 소유 여부는 flock만으로 정한다. 시작 때의 event 저장을 event writer로 시험한다. Red: 다른 형식, 잠긴 형식, 빈 내용, 저장 시험이 수정 전 코드에서 두 호스트 모두 실패했다. Green: 이 시험과 잠금 시험이 두 호스트에서 3회 모두 통과한다.
+
 - F212.6a-1-3-1b: `process.lock`은 `{"pid","boot"}`를 담는다. 오래된 잠금을 넘겨받은 host는 event writer가 시작된 뒤 level `error`로 `host.run.unrecorded-end {boot, pid}`를 저장하며, 잠금을 지우지 않고 끝난 실행을 이름으로 가리킨다. Red: 오래된 잠금 넘겨받기 시험이 두 언어에서 `invalid process lock`으로 실패했다. Green: 잠금 시험이 두 언어에서 3회 모두 통과한다.
+
 - F212.6a-1-4: `host.window`의 마지막 watch가 끝난 뒤 시작한 watch는, 앞선 값과 같더라도 창의 다음 값을 받는다. Tauri host는 창의 마지막 watch가 끝나면 마지막으로 보낸 값의 기록을 지우고(`Service::unwatched`), `decide_window_notify`가 값마다 sent, unchanged, unwatched를 결정한다. Wails host는 기록을 두지 않으므로 계약 case `status.window.rewatch-notifies`는 수정 없이 통과한다. 두 host는 `host.trace.status.notify {status, window, decision}`(debug)을 쓰고, Wails 창 상태 읽기 실패를 오류로 기록하며, Escape 왕복 test는 실패한 회차 뒤 add 메뉴를 닫는다. Red: `exposure::status_test::a_new_watch_receives_the_next_window_value_after_a_stale_record`가 기록 삭제가 없는 결정에서 세 번째 assert에 `left: Unchanged`, `right: Sent(...)`로 실패했다. Green: 삭제를 넣은 뒤 테스트가 1/1 통과한다. 창 check는 F212.6a-1에서 다시 실행한다.
+
 - F212.6a-1: Escape 왕복 check를 F212.6a-1-2 수정이 들어간 tree에서 tauriv2에 처음 실행했다. 1회차는 0.000 ms로 통과했고, 2~5회차는 실패했다(2회차와 4회차: 20초 안에 native modal이 `modal.shown`을 보고하지 않았다. 3회차와 5회차: 20초 안에 picker가 열리지 않았다). 실행 중 호스트는 유지되었고 선언된 종료 check로 종료했다. 재발은 F212.6a-1-4로 추적하며, 5회차가 모두 측정될 때까지 F212.6a-1은 열린 채 둔다.
+
 - F212.6a-1: 두 호스트 모두 F212.6a-1-4 수정이 들어간 tree에서 Escape 왕복 check가 5회차 중 5회 통과했다. wailsv3 중앙값 0.000 ms(값 1.000, 0.000, 0.000, 0.000, 0.000 ms), tauriv2 중앙값 0.000 ms(값 1.000, 1.000, 0.000, 0.000, 0.000 ms). 두 중앙값은 page 기록의 분해능 1 ms보다 작아서, 각각 왕복 시간의 상한을 약 1 ms로 잡는다. Load average(1, 5, 15분): wailsv3는 시작 17.69 28.37 33.25, 끝 16.91 28.03 33.10이었고, tauriv2는 시작 16.04 25.62 31.82, 끝 19.69 25.92 31.81이었다.
+
 - F212.6a-1-2: tauriv2의 네이티브 모달 `ready`는 응답하기 전에 메인 스레드에서 모달을 표시하고 포커스를 주며 visible 플래그를 설정한다. 그래서 닫힌 메뉴 다음에 연 메뉴가 picker를 표시한다. id와 instance가 열린 모달의 것이 아닌 ready 요청은 두 호스트 모두에서 아무것도 바꾸지 않고 ok로 응답하며 `host.trace.modal.stale-ready` 이벤트를 기록한다. 표시가 실패하면 그 오류로 응답하고 모달은 다음 ready 요청까지 대기 상태로 남는다. Red: 임시로 visible 플래그를 설정하지 않은 상태에서 Rust 시험 `ready_after_a_reopen_leaves_the_second_modal_visible`이 실패했고(`left: Some(false)`, `right: Some(true)`), 수정 전 코드에서 Go 시험 `TestAStaleModalReadyChangesNothingAndWritesTheTrace`가 stale-ready 기록 없이 실패했다. Green: Rust 준비 시험과 Go 시험이 반복 실행 3회에서 모두 통과했다. 계약 사례는 [host contract](docs/spec/host-contract.ko.md#contract-cases)에 있다.
+
 - F212.6a-1-1: Escape 왕복을 두 page trace event로 기록한다. `page.trace.modal.answer {key}`는 메인 page가 네이티브 modal의 답을 받을 때(`host.js`) 쓴다. overlay 문서에는 trace 스위치가 없기 때문이다. 시간은 overlay 문서의 keydown이 아니라 수신 시점에서 시작한다. `page.trace.picker.close {reason}`는 picker가 닫힐 때(`plane.js`의 `closePicker(reason)`) 쓰며, reason은 `replaced`, `settled`, `fullscreen`, `toggle`, `pick`, `dismiss`, `command`다. 두 event는 `docs/spec/events.json`에 선언되고 [performance trace](docs/spec/performance-trace.ko.md#생산자)에 적힌다. Red: `packages/workbench/test/modal-answer-trace.test.mjs`와 `packages/workbench/test/picker-close-trace.test.mjs`는 수정 전 코드에서 trace에 대해 `actual: []`로 실패했다. Green: 두 시험이 통과하고 `make events-check`가 통과한다.
+
 - F212.6a-2: 네이티브 modal 메뉴의 Escape는 빈 key의 `page.modal.answer` 대신 선언된 명령 `core.modal.dismiss`로 응답한다. 명령은 `packages/workbench/exposure.json`에 선언되고 `core-exposure.js`에 등록된다. `card.js`는 Escape를 이 key로 응답하고, `picker-layer.js`의 `pickerAnswer`가 registry로 실행한다. `packages/workbench/shortcuts.json`과 명세 표의 `Escape` 행이 이 명령을 적는다. Red: 수정 전 코드에서 `packages/workbench/test/modal-dismiss.test.mjs`는 `actual: [ [ '', '' ] ]`, `expected: [ [ 'core.modal.dismiss', '' ] ]`와 `pickerAnswer is not a function`으로 실패했다. Green: 시험 2개가 통과하고, 단축키 표 시험은 7개 중 7개가 통과한다.
+
 - F212.6a: workbench 단축키 표는 `packages/workbench/shortcuts.json`에 선언되고, 각 23행의 주인(native menu, workbench, view)과 명령과 함께 [키보드 단축키](docs/spec/exposure.ko.md#키보드-단축키)에 적힌다. `scripts/test/shortcut-table.test.mjs`는 이 표를 호스트 계약의 애플리케이션 메뉴 표 및 workbench key handler의 키 비교와 양방향으로 검사한다. plugin processes 규칙 7이 이 표를 가리킨다. 워크벤치 행은 워크벤치 page와 그 네이티브 modal의 키이고, 플러그인 view의 Escape와 텍스트 입력 키는 명령 없는 규칙 행이다. Red: 표가 없을 때 시험은 `packages/workbench/shortcuts.json`에 대해 `ENOENT`로 실패했고, `cmd+k` 행을 뺐을 때는 `workbench key handler for k is missing from packages/workbench/shortcuts.json`으로 실패했다. Green: 시험 7개가 통과한다.
+
 - F215: 새 worktree에서 `make rust-clippy-check`가 `frontend-tauriv2`에 의존하므로, clippy 전에 Tauri frontend를 staging하고 `make push-check`가 통과한다. Red: 새 worktree에서 `make rust-clippy-check`가 `couldn't read apps/tauriv2/src/frontend/background.js`와 `frontendDist ... this path doesn't exist`로 2를 반환했다. Green: 같은 상태에서 0으로 종료하고 `Rust clippy check passed: 1 workspace, diagnostics and default builds`를 출력하며, `make push-check`도 0으로 종료한다.
+
 - F212.6-2: Go와 Rust의 `sok` 설치 library는 `plugin.json`의 `id`가 설치 기록의 id와 다른 release를 아무것도 풀기 전에 `plugin.json id <a> differs from the installed plugin <b>`로 거부한다. 기록된 폴더의 `plugin.json`이 다른 id를 밝히면 `plugins/installed.json` 읽기도 같은 문구로 실패하므로, 기록과 host가 제공하는 plugin이 같은 plugin을 가리킨다. Host 계약 case `install.plugin-id.mismatch-refused`가 이를 명시한다. Red: 변경 전 코드에서 Go 설치 시험은 `error <nil>, want "plugin.json id other differs from the installed plugin probe"`로, Go 읽기 시험은 같은 방식으로, Rust 설치 시험은 `install succeeded`로 실패했고, Rust 읽기 시험은 오류 없이 상태를 돌려주었다. Green: 네 시험이 `make go-repeat`와 `make rust-repeat` COUNT=1로 통과하고, 관련 sok 패키지가 전체로 통과한다.
+
 - F212.6-1: `index.js`의 `pageIdentity(location, read)`가 page의 plugin id를 준다. `sok://<host>` page는 host의 id를 가지며, 그 `plugin.json`의 `id`가 host와 같아야 한다(`plugin.json id <id> differs from the page plugin <host>`). 메인 origin page는 module 이름이 `package`인 `/installed-plugins.json` 항목의 `id`를 가지며, 항목이 없는 module은 package 이름을 밝힌 오류로 실패한다. `page.js`의 `ownManifest`와 공개 조건이 이를 쓴다. `pagePlugin(location)`은 sok page에 `{host, manifest}`, 메인 origin의 staged page에 `{package, manifest}`를 돌려준다. Red: 이전 동작을 새 형태로 감싼 임시 본문(sok page는 `plugin.json`을 읽지 않고 `{id: host}`를, 메인 origin page는 `installed-plugins.json`을 읽지 않고 `{id: package}`를 돌려줌)에서 `page-identity.test.mjs`는 11개 중 6개가 실패했다: sok id 시험은 `Expected values to be strictly deep-equal`과 manifest의 `actual: null`로, sok 불일치 시험은 `plugin.json id probe-name differs from the page plugin probe-id`에 대한 `Missing expected rejection`으로, 메인 origin id 시험은 `Expected values to be strictly equal`과 `'probe-id'` 기대값에 대한 `actual: 'probe-name'`으로, 항목 없음 시험은 `other-name: no installed plugin has this package`에 대한 `Missing expected rejection`으로, 항목 불일치 시험과 host 오류 시험은 `Missing expected rejection`으로 실패했다. Green: 시험이 11 of 11 통과하며, plugin-api 시험 디렉터리가 295 of 295 통과한다.
+
 - F212.6-4: window 검사는 필요한 집합의 애플리케이션에 build된 실행 파일이 없으면 실행 파일 이름을 밝힌 error로 실패한다. `open`(`packages/window-check/app.mjs`)은 집합을 `requiredApps(env)`에서 읽는다. 집합은 `SOKSAK_APP`이 고른 애플리케이션이며, `SOKSAK_APP`이 없으면 모든 애플리케이션이다. 집합 밖의 애플리케이션은 열리지 않고 null을 돌려준다. `e2e/`의 window 검사 파일 44개에 있던 `if (!s) return t.skip(...)` 가드 157개를 제거했다. `APPS`의 모든 애플리케이션이 세션을 주거나 실패하기 때문이다. Red: 수정 전 코드에서 `packages/window-check/test/required-apps.test.mjs`는 `harness.requiredApps is not a function`, binary가 없을 때 `Missing expected rejection`, 집합 밖 애플리케이션의 실행 파일을 읽은 경우 `true !== false`로 실패했다. Green: 이 파일의 시험 여섯 개가 통과하고, `pnpm -F @soksak/window-check test`는 시험 112개를 통과하며, `make e2e-check`는 0으로 종료한다.
+
 - F212.6-4-1: window 검사에서 `assert.ok(s, "... is not built")` 줄 71개를 `e2e/` 파일 43개에서 제거했다. `open`(`packages/window-check/app.mjs`)이 필요한 집합의 모든 애플리케이션에 세션을 주거나 실패하므로 이 줄들은 실패할 수 없다. `e2e/split-load-memory.test.mjs`의 `if (!session) return t.skip(...)` 가드도 같은 이유로 제거했다. `e2e/hosts.test.mjs`와 `e2e/placement.test.mjs`의 두 host 검사는 `requiresBoth(env)`가 참일 때만 등록되므로, 애플리케이션 하나가 선택되면 건너뛰지 않는다. Red: 수정 전 코드에서 `packages/window-check/test/required-apps.test.mjs`의 `requiresBoth` 시험은 `harness.requiresBoth is not a function`으로 실패했다. Green: 이 시험이 통과하고, `pnpm -F @soksak/window-check test`는 시험 113개를 통과하며, `make e2e-check`는 0으로 종료한다. 줄 71개의 제거는 Red가 없다. 실패할 수 없는 줄은 실패하는 입력이 없기 때문이다.
+
 - F214-1: `make push-check`가 주석 언어 시험을 돌려서, 다른 언어의 주석은 push gate에서 실패한다.
+
 - F214: 주석 언어 검사가 `.githooks`의 추적 파일 전부와, 확장자 없이 `#!` 줄로 시작하는 추적 파일 전부를 hash 주석 문법으로 읽는다(`scripts/check-comment-language.mjs`). `.githooks/commit-msg`와 `e2e/check-shell`의 주석은 영어이다. Red: 수정 전 코드에서 `scripts/test/comment-language.test.mjs`의 시험 `hook files and extensionless scripts are checked, and other extensionless files are not`가 `actual: []`로 실패했고, 기대값은 `.githooks/commit-msg:2`와 `scripts/run-tool:2`였다. Green: 파일의 시험 아홉 개가 통과하고, `make push-check`가 0으로 종료한다.
+
 - F212.5-8: darwin document region의 scheme handler는 거부된 plugin 페이지 요청(없는 파일, 다른 owner의 주소, dot 부분이 있는 경로)을 `error: document view: plugin file not found: <URL>`로 error 수준에 쓴다. binary 요청의 거부와 같은 수준이다. Red: `document_plugin_test`는 각 거부를 `native.record.info`로 보였다. Green: 시험이 거부 주소마다 error 기록을 확인하며 통과한다.
+
 - F213: push gate는 push하는 ref가 보내는 commit을 어느 branch에서든 검사한다. pre-push hook은 git이 준 ref 줄에서 각 ref의 범위를 `scripts/push-range.mjs`로 넘긴다. 원격 ref와 비교하며, 새 원격 ref는 `<remote>/main`과 비교한다. RANGE가 없는 `make push-check`는 `origin/main..HEAD`를 쓰며, upstream 없는 branch도 이 범위를 풀 수 있다. 기존의 `@{upstream}..HEAD`는 그 branch에서 128로 종료했다. `commits-check`는 여러 범위를 받는다. 시험 inventory의 lane은 이 script와 `scripts/test/push-range.test.mjs`를 나열한다. Red: 수정 전 코드에서 `scripts/test/push-range.test.mjs`의 시험 세 개가 `scripts/push-range.mjs`에 대한 `Cannot find module`로 실패했고, upstream 없는 branch에서 `make push-check`는 128로 종료했다. Green: 시험 세 개가 통과하고, upstream 없는 branch에서 `make push-check`는 0으로 종료한다.
+
 - F212.5-7: native scheme이 view 구성에 `sok://core/<path>`를 내보낸다. view 구성은 `sp_document_create`의 `isView`로 표시한다. 요청은 각 host가 platform에 등록한 core root resolver로 간다(Go의 `SetCoreRoot`, Rust의 `set_core_root`, native의 `sp_core_root_set_resolver`). 내보낸 응답은 view의 `Access-Control-Allow-Origin: sok://<plugin id>`를 담고, 거부 응답은 이 header가 없으며, 문서 영역은 `core`를 처리하지 않는다. host 계약 case `document.core-root.native`에는 같은 이름의 Go 시험과 Rust 시험이 있고, `native/darwin/tests/document_core_root_test.m`이 허용된 import, 거부된 path, region, header를 검사한다. view 구성에 `view-start.js`를 주입하는 일은 F212.5-7-1이 보류하고 있다. Red: native 시험은 `core`를 처리하지 않던 handler에서 실패했고(`a view imports the granted module of its core root`), Go 시험은 `found false`와 누락된 log 줄에서, Rust 시험은 `left: None`에서 실패했다. Green: native 시험, Go 시험 3개, Rust 시험 3개가 통과한다.
+
 - F212.5-6: 두 호스트의 core root resolver(Go의 `CoreRoot`, Rust의 `core_root`)가 plugin view의 `sok://core` 경로에 대한 파일을 돌려준다. view import map의 core target은 bundled frontend에서 오고, 설치 plugin 파일은 granted item 규칙이 요청 plugin에 허용한 경우에만 그 폴더에서 온다. 그 밖의 경로, enabled가 아닌 요청 plugin, grant가 이름 붙이지 않은 경로는 not found가 되며 각각 `error: core root: <path> is not granted to <plugin>`을 쓴다. 허용되었으나 없는 파일은 error이다. host 계약 case `document.core-root.grant`에 같은 이름의 Go와 Rust 시험이 있다. native scheme은 아직 resolver를 호출하지 않는다(F212.5-7). Red: 모두 거부하는 stub에서 Go와 Rust 시험이 실패했다. 호스트는 bundled frontend의 `core-root.json`에서 core target을 읽으며, 이 파일은 `@soksak/plugin-api`의 `viewCoreTargets`로 스테이징 도구가 쓴다. 없거나 잘못된 파일은 error이다. Green: Go 시험 열 개와 Rust 시험 열 개가 각각 통과한다.
+
 - F212.5-5: `index.js`의 `pagePlugin(location)`은 page 위치로 그 page의 plugin을 찾는다. `sok:` page는 host가 이름 붙인 plugin에 속하며 자기 origin의 `/plugin.json`을 읽고, 메인 origin의 `/modules/<name>/` 아래 page는 그 module의 `plugin.json`을 읽으며, 다른 page에는 plugin이 없고, plugin id가 아니거나 `core`인 sok host는 위치를 밝힌 오류를 던진다. `page.js`의 `ownManifest`와 exposure 조건이 이를 쓰므로, view page가 더 이상 `is not a plugin page`를 던지지 않는다. Red: `pagePlugin`이 변경 전 결과인 `pagePackage(location.pathname)`을 돌려줄 때 `page-identity.test.mjs`가 5개 중 3개 실패했다. sok page 시험은 `null`을 돌려주었고 `{ name: 'probe', manifest: '/plugin.json' }`을 기대했으며, host `Probe_1` 시험과 `core` host 시험은 아무 오류도 던지지 않았다. Green: 시험이 5 of 5 통과하고, plugin-api 시험이 286 of 286 통과한다.
+
 - F212.5-4: `packages/plugin-api/view-start.js`는 view page의 주입되는 document-start script다. 시작 시 ready message `{event: "view.ready", plugin, document}`를 `sok-view` handler로 보내고, event source가 window이고 `sok: 1`을 가진 host message를 256개 queue에 보관하며, 전역 `window.sokView` 하나를 노출한다. 그 `attach`는 queue의 message와 나중 message를 순서대로 전달한다. 검사에 실패한 message와 257번째 queue message는 `error: view channel: <reason> for <plugin>`으로 handler에 보고하고 버린다. `packages/plugin-api/view.js`(`@soksak/plugin-api/view`)의 `createViewChannel({handler})`는 handler로 보내고 `window.sokView.attach`로 host message를 읽으며, `createViewBridge({handler, report})`는 channel 위에서 `createCalls`와 `createSnapshotSender`를 실행한다. `index.js`는 view import map의 항목 네 개인 `VIEW_IMPORTS`를 내보낸다. closure 시험 `view-imports.test.mjs`는 `index.js`와 `view.js`의 import, 그리고 `view-start.js`에 import가 없음을 확인한다. Red: `view.test.mjs`가 `view-start.js`의 `ENOENT`로 15 of 15 실패했다. Green: 두 파일이 23 of 23 통과한다.
+
 - F212.5-3: Go와 Rust의 `sok`이 요청 plugin의 granted item을 계산한다(`GrantedFiles`와 `granted_files`, host 계약 case `install.granted-items`). 결과에는 요청 plugin의 point에 다른 enabled plugin이 기여하는 각 item의 `/modules/<package>/<module>` 파일과, 다른 plugin의 granted item이 있는 point(요청 plugin이 제공하거나 기여하는 point)의 각 shared module `/shared/<plugin id>.<point>/<specifier>.js` 파일이 들어간다. Item은 provider가 설치되어 enabled이고, point가 `version`을 선언하며, item의 `range`가 그 version을 포함할 때 granted이다. 선언되지 않은 point, version이 없는 point, disabled 또는 없는 provider, 범위 밖 item은 아무것도 허용하지 않으며, 잘못된 선언은 그것을 밝히는 error이다. Red: 빈 목록을 돌려주는 stub에서 case의 Go와 Rust 시험이 F212.5-3에 기록한 assertion으로 실패했다. Green: 같은 시험이 통과한다. 이 파일들을 서비스하는 core root는 F212.5-6에서 연결된다.
+
 - F212.5-9: `validateManifest`는 plugin id `core`를 `plugin.json: plugin id core is reserved for the core root`로 거부하고, `sok`은 plugin 버전의 설치 경로에서 같은 id를 `plugin id core is reserved for the core root`로 거부한다. core root가 예약된 host `core`이기 때문이다. Host 계약 case `install.plugin-id.core-reserved`가 이를 명시한다. Red: 변경 전 코드에서 `validate.test.mjs`는 `Missing expected exception`으로, Go `TestPluginIDCoreIsReservedForTheCoreRoot`는 `error <nil>`로, Rust `plugin_id_core_is_reserved_for_the_core_root`는 `Ok("plugins/core/0.2.0")`로 실패했다. Green: `validate.test.mjs`가 31 of 31 통과하고, Go와 Rust 시험이 통과한다.
+
 - F212.5-2: 시험 `core_root_cors_test`가 macOS 26.6.2 arm64에서 `sok://probe` page의 `sok://core/m.js` module import를 WebKit이 어떻게 다루는지 측정한다. module 요청은 `Origin: sok://probe`를 보낸다. `Access-Control-Allow-Origin: sok://probe`와 그 header 아래의 bare specifier import map에서 import가 성공하고, header가 없거나 `Access-Control-Allow-Origin: sok://other`이면 실패한다. 계획의 core root header 규칙은 측정된 계약으로 기록된다. production code는 바뀌지 않았다. 결과: `make -C native/darwin repeat TEST=core_root_cors_test COUNT=1`에서 시험이 1 of 1 통과한다.
+
 - F212.5-1: core root 설계(view 경로, granted item, view import map, ready message와 상한 있는 queue를 가진 view 통로, 고정된 CORS origin)가 적대 검증 6회 뒤 합의되었다.
+
 - F212.4-5: `sp_document_upload_body`(`document_upload_body.h`)는 업로드 요청의 `HTTPBody`를 복사 없이 돌려주고, `HTTPBodyStream`은 최대 16 MiB 제한을 넘어 한 chunk까지만 읽으며, binary 저장소는 업로드를 이것으로 답한다. 읽기 실패는 stream error의 설명과 함께 400으로 답한다. `document_binary_test`의 확인은 HTTPBody 동일성, 1 MiB stream의 byte 동일 읽기, 제한을 넘는 stream의 한 chunk 이후 거부, 실패하는 stream의 error 보고, 두 body 형태가 없는 요청의 400 글 유지를 다룬다. Red: nil을 돌려주고 error를 설정하지 않는 stub에서 `document_binary_test`는 새 확인 중 5개가 실패했다. Green: `make -C native/darwin repeat TEST=document_binary_test COUNT=1`로 `document_binary_test`가 43 of 43 통과하고, 같은 명령으로 `document_plugin_test`와 `document_view_test`가 통과한다.
+
 - F212.4-4: 두 package의 `sok plugin pack`은 `files`가 `.binary` 부분을 가진 경로를 나열하면 plugin-api `validateReleaseFiles`와 같은 글(`plugin release lists <path>: the .binary path is reserved for the binary store`)로 거부하며, release를 쓰지 않는다. Host 계약 case `cli.pack.binary-path-refused`가 이를 명시한다. Red: 변경 전 코드에서 Go `TestPluginPackRefusesABinaryPathInFilesWithoutWriting`은 `code 0 stderr ""`로, Rust `plugin_pack_refuses_a_binary_path_in_files_without_writing`은 `left: (0, "")`로 실패했다. Green: 두 test가 `make go-repeat`와 `make rust-repeat`에 COUNT=1로 1 of 1 통과하고, 두 package의 기존 pack test가 통과한다.
+
 - F212.4-2: darwin 문서 영역은 plugin이 올린 bytes를 binary 저장소에 보관한다. `POST sok://<plugin>/.binary`는 body를 host가 만든 id 아래 저장하고 `{id, length}`로 답하며, `GET sok://<plugin>/.binary/<id>`는 bytes를 주고 id를 해제한다. 거부(업로드 하나 16 MiB 초과, page 64 MiB 초과, 다른 origin, 빈 body, 저장되지 않은 id, 잘못된 method)는 `{error}`로 답하고 그 사유를 응용 프로그램 log에 쓴다. `sp_document_binary_take`는 id를 돌려주고 해제하며, `sp_document_binary_count`는 id 수를 세고, 영역을 닫으면 그 id들을 해제한다. plugin-api의 `validateReleaseFiles`는 plugin release의 `.binary` 경로를 거부한다. Red: stub에서 `document_binary_test`가 18개 assertion에 실패했고, `validate.test.mjs`는 `Missing expected exception`으로 실패했다. Green: `make -C native/darwin repeat TEST=document_binary_test COUNT=1`로 `document_binary_test`가 37개 assertion을 모두 통과하고, `document_plugin_test`와 `document_view_test`가 통과하며, plugin-api test가 258개 통과한다.
+
 - F212.4-1: darwin 문서 영역의 message script는 평범한 JSON이 아닌 page 메시지(ArrayBuffer, typed array, Date, Map, 순환, JSON이 버리는 property가 있는 값)를 `{}`, index 객체, 바뀐 값으로 전달하는 대신 type을 밝히는 `{error}`로 거부한다. Red: `document_plugin_test`가 buffer, bytes, date, cycle 답에서 실패한다. Green: 같은 시험이 통과한다.
+
 - F212.3-5: 두 host의 exposure relay가 표면 페이지로 전달한 command가 시간 제한을 넘기면 `host.call.timeout {plugin, command}`(error)를 쓰고, 그 시간 초과 뒤에 답이 도착하면 `host.trace.call.late-reply {plugin, command, delay}`(debug)를 쓴다. 두 event는 `events.json`에 선언되고, host-contract case `exposure.relay.timeout-writes-call-event`와 `exposure.relay.late-reply-writes-call-event`가 이를 명시한다. `host.call.peer-lost`는 F212.3-7로 옮겼다. Red: 두 host의 emit 호출을 뺀 상태에서 새 시험이 assertion에서 실패한다. Go는 `host.call.timeout = []`와 `host.trace.call.late-reply = []`(`exposure_test.go`), Rust는 `host.call.timeout`에서 `left: []`, `host.trace.call.late-reply`에서 `left: 0`(`exposure_test.rs`)이다. Green: Go relay 시험과 Rust `exposure_test`(시험 23개)가 통과하고, 두 host의 buffer, exposure reply, event record 시험이 통과한다.
+
 - F212.3-2: plugin-api의 `createSnapshotSender`, `createSnapshotReceiver`, `pullSnapshots`(`snapshots.js`)가 선언 UI snapshot을 status마다 전송 중인 값 하나로 push하고, 전송 중에 바뀐 status를 dirty로 표시해 확인 때 최신 값을 보내며, 덮인 값은 건너뛴 값으로, peer 종료로 확인을 잃은 값과 표면을 닫을 때 버린 dirty 값은 멈춘 값으로 세고, 메인 페이지 load 때 status마다 한 번씩 pull한다. `packages/workbench/plugin-processes.js`의 `snapshotReporter`가 이 수를 `core.plugin.losses`에 더한다. event는 선언하지 않는다. 두 trace event는 F212.3-6에서 host relay가 선언한다. Red: 변경 전 코드에서 `snapshots.test.mjs`가 `snapshots.js`의 `ERR_MODULE_NOT_FOUND`로 실패했고, `plugin-processes.test.mjs`의 추가 시험은 `snapshotReporter is not a function`으로 실패했다. Green: snapshot 시험 23개, plugin-api 시험 257개, plugin-process 시험 4개가 통과하고, exposure, events, docs, parity 검사가 통과한다.
+
 - F212.3-1: error에 message가 없는 호출 답은 `call reply <id> has an error without a message`로 거부하고 호출을 열어 둔다. 전에는 글로 바꿔 호출을 거부했다. Red: 이전 코드에서 시험이 실패했다. Green: 호출 계층 시험 19개가 모두 통과한다.
+
 - F212.3-1: plugin-api의 `createCalls`(`calls.js`)가 주어진 `send`와 `onMessage` 위에서 요청, 답, 취소, 선언된 timeout, peer-lost, 늦은 답을 처리한다. timeout은 -32000으로 reject하고 `losses.timeouts`를 세며, `surface-closed`는 `losses.peerLost`를, 늦은 답은 `losses.lateReplies`를 센다. `process-ended`와 `sidecar-ended`는 손실을 세지 않는 실패다. `packages/workbench/plugin-processes.js`의 `callReporter`가 status `core.plugin.open-calls`와 `core.plugin.losses`를 채운다. 이 항목은 event를 선언하지 않는다. 이를 쓰는 host relay는 F212.3-5다. Red: 변경 전 `calls.test.mjs`가 `calls.js`에 대해 `ERR_MODULE_NOT_FOUND`로 실패했고, `plugin-processes.test.mjs`의 추가 시험이 `onPluginProcessChange is not a function`으로 실패했다. Green: call 계층 시험 18개, plugin-api 시험 233개, plugin-process 시험 3개가 통과하고, exposure, events, docs, parity 검사가 통과한다.
+
 - F212.3-3: workbench가 status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`를 `exposure.json`에 선언하고, `plugin-processes.js`의 reader로 `core-exposure.js`에 등록하며, 각각 `[]`를 게시한다. 값은 plugin call 계층과 snapshot 계층이 채운다. event는 emitter와 함께 선언하므로 아직 선언하지 않았다. Red: 바뀌지 않은 코드에서 `plugin-processes.test.mjs`가 `core.plugin.open-calls is not declared in exposure.json`과 `plugin-processes.js`에 대한 `Cannot find module`로 실패했다. Green: 2개 test가 통과하며, exposure, events, docs, parity 검사가 통과한다.
+
 - F212.3-4: `SPNavigationDelegatePrivate`가 `_webViewWebProcessDidBecomeUnresponsive:`와 `_webViewWebProcessDidBecomeResponsive:`를 선언한다. WebKit은 view의 WebContent process가 responsiveness check에 응답을 멈추거나 다시 응답할 때 이 selector를 호출하며, 아직 아무도 호출하지 않는다. 비공개 native API 목록은 호출 조건과 WebKit tag `WebKit-7625.1.29.18.27`의 소스 줄을 적는다. SDK build 21624.5.1.11.3에는 공개 tag가 없어서 그 build와 대조하지 않았다. Red: 바뀌지 않은 header에서 `webview_responsiveness_test`가 `FAIL: SPNavigationDelegatePrivate declares _webViewWebProcessDidBecomeUnresponsive:`와 응답 회복 selector에 대해 실패했다. Green: 이 test가 4 of 4 assertion을 통과한다.
+
 - F212.1-2-2-3: event writer의 `log.dropped`는 `queued`를 담는다. 기록이 세는 거부 중 queue 깊이의 최댓값이다. 가득 찬 queue가 거부한 placed event(`EmitPlaced`, `emit_placed`)는 두 writer 모두 `the event writer refused <event> because its queue was full`로 실패하고, 정책이 거부한 것은 `because the policy does not store it`로 실패하며 손실이 아니라 gated event다. 가득 찬 queue는 더 이상 placed event를 요청용 slot에 받지 않는다. Red: `TestAPlacedEventRefusedByThePolicyNamesThePolicy`와 Rust `a_placed_event_refused_by_the_policy_names_the_policy`는 정책 거부에 queue 원인을 밝혔고, `TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent`와 Rust `refused_events_are_recorded_as_loss_before_the_next_accepted_event`는 가득 찬 queue에서 실패했으며 손실 기록에 `queued`가 없었다. Green: 네 테스트가 통과하고, writer, host, event, 문서, parity 검사가 통과한다. `log.dropped`를 선언하는 sidecar catalog는 `queued?`를 선언해야 하며, 각 sidecar의 다음 release부터 적용된다.
+
 - F212.2: plugin 프로세스 설계(docs/plans/plugin-processes.md)가 적대 검증 7회 뒤 남은 핵심 반론 없이 합의되었다. 각 단계는 명세 변경 표가 적은 명세를 바꾼다.
+
 - F212.1-2-2-5: 등록되지 않은 native surface의 window status 오류가 두 호스트에서 `unregistered native surface <id>`로 실패하며, `<id>`는 native view 주소다. 이전에는 tauriv2가 주소를 빼고 썼다. Red: `an_unregistered_native_surface_view_fails_with_its_address`가 left `unregistered native surface`, right `unregistered native surface 9`로 실패했다. Green: Rust test가 통과하고, wailsv3에서 `TestUnregisteredNativeSurfaceViewFailsWithItsAddress`가 통과한다.
+
 - F212.1-2-1: library는 project의 재확인이 대기 중인 동안 마지막 폴더 결과를 유지하고, 최신 check의 답으로만 바꾼다. 따라서 없는 폴더는 project 항목마다 한 번 알리며, project 목록이 바뀌어도 다시 알리지 않는다. 다시 나타난 폴더는 오류를 숨긴다. Red: `a missing project folder is reported once across project list changes, and a folder that appears again hides the error`가 `the missing folder error is not written once`로 실패했고, 실제 목록에 `library project /work/missing: 폴더가 없습니다.`가 4개 있었다. Green: 같은 test가 2 of 2 통과하고, library test 파일과 error display test가 11 of 11 통과하며, `make docs-check`가 통과한다.
+
 - F212.1-1: page는 plugin 표면의 모듈 mount가 끝나면 performance trace가 켜져 있는 동안 이벤트 `page.trace.surface.mount`(`plugin`, `surface`, `ms`)를 쓴다. `ms`는 mount 시작부터 모듈 mount 종료까지의 시간이므로 표면마다 DOM mount 시간을 기록에서 읽는다. 실패한 mount는 이벤트를 쓰지 않는다. Red: `a surface mount writes one surface.mount trace`가 `expected one surface.mount trace, found 0`으로 실패했고, `a trace call of the workbench emits the page trace event`가 `page.trace.surface.mount is declared and no source emits it`으로 실패했다. Green: surface-modules test 10 of 10이 통과하고 `make events-check`와 `make docs-check`가 통과한다.
+
 - F211: core 0.0.20을 release한다.
+
 - F210: 은퇴한 plugin이나 sidecar는 철회 항목과 함께 registry에서 제거한다. appview와 application sidecar를 제거했다.
+
 - F209: 철회된 version만 가진 plugin은 제안되지 않는다. 카드와 최신 버전은 철회되지 않은 version만 쓰므로 설치된 plugin도 철회된 update를 제안하지 않는다.
+
 - F208: 시스템 대화상자를 띄우는 명령(`core.library.choose-folder`, `core.file.place`)이 600000 ms의 timeout을 선언하므로, 대화상자에서 10초를 넘게 고른 사람은 더 이상 명령 timeout을 보지 않는다.
+
 - F192.3-3-6: 폴더 대기는 마감에서 폴더 상태를 판정하므로, 높은 부하에서 늦게 활성화되거나 알리는 감시가 상태에 도달한 대기를 실패시키지 않는다.
+
 - F207: language test adapter의 js-ts 한도는 다른 언어의 멈춤 한도인 30초다.
+
 - F206: core 0.0.19를 커밋의 CI가 통과한 뒤 release했다. 선언된 모든 workspace 버전은 0.0.19이며, 이 release는 이 section의 나머지 항목을 모두 담는다.
+
 - F205: 새 커밋의 작성자는 `min-0-max <max@blue.tools>`다. `.mailmap`이 이전 이름을 잇고, tao fork는 바뀐 계정 이름으로 부른다.
+
 - F204: Wails module이 fork를 바뀐 계정 이름 `min-0-max/wails`로 부른다.
 - V5-117-1-3-4-7-1-8: 두 호스트에서 실행 활성화를 시스템에 맡긴 F192.3-3-3으로 닫는다.
+
 - F192.3-3-5: event log 대기의 간헐적인 늦은 파일 알림을 부하로 분류한다. 높은 부하에서 시스템 event 서비스가 일부 변경을 2~3초 뒤에 전달했고, 대기는 변경을 놓치지 않는다.
+
 - F203: terminal runtime 명세가 영속 서비스의 모든 종료를 밝힌다. 폴더나 endpoint가 지워지거나 바뀔 때의 종료를 포함한다.
+
 - F200.4: Wails fork의 `WebviewWindow.EmitEvent`는 event를 그 event를 낸 window의 페이지에만 보내므로, 페이지가 다른 window의 event를 evaluate하지 않는다. application event는 여전히 모든 window에 간다. Red: `TestWindowEventIsEvaluatedOnlyInItsWindow`가 window event가 다른 window에서 evaluate되는 것을 찾았다. Green: test가 통과하고 fork package가 3회 중 3회 통과한다. Wails host는 fork branch `soksak/window-events`를 고정하며, 아직 배포되지 않았다.
+
 - F200.3: diagnostic method `diagnostics.host.events`는 host가 페이지가 listen하지 않는 host event를 보내게 하고, `make host-calls EVENTS=N`은 그 event가 페이지 process에 남기는 것을 측정한다. 두 debug host에서 측정: Wails 페이지는 event당 WebKit malloc 1411 B, Tauri 페이지는 0 B.
+
 - F201.4: `sp_document_store_close`가 document 디렉터리의 data store를 끝내고 WebKit network process가 session을 지운 때를 알리며, `document_view_test`와 `document_plugin_test`는 폴더를 지우기 전에 store를 끝낸다. 이전에는 검사가 끝난 뒤 network process가 지운 폴더에 `Cookies/Cookies.binarycookies`를 썼다. Red: `make temp-audit` 아래 `document_view_test` 3 of 3 실행이 `soksak-document-store-*`를 남겼다. Green: audit 아래 각 검사 3 of 3 실행이 entry를 남기지 않았다.
+
 - F202: 닫힌 document region이 다시 바로 해제된다. F196.29 이후 hidden delay block이 hidden clear delay 300초가 지날 때까지 region을 retain했고, 이제 region을 닫거나 보이거나 해제할 때 지워지는 token을 가진다. Red: `window_release_test`가 `the closed window releases its SPDocumentView`로 실패했다. Green: 3 of 3 실행.
+
 - F200.2: `make host-calls MINUTES=M`은 메인 페이지가 idle 동안 분당 할당하는 WebKit malloc을 collection 전후로 reclaimable byte와 함께 측정한다. 같은 project, terminal 2개, browser tab 1개로 두 debug host에서 측정: 분당 57 KB(Wails)와 -76 KB(Tauri), collection 뒤 두 host 모두 footprint 82 MB와 WebKit malloc 38 MB이므로 idle 페이지는 F200 차이의 source가 아니다.
+
 - F201.3: `make temp-audit COMMAND=<command>`가 command를 자기 임시 폴더로 실행하고, window check configuration 폴더 `soksak-check-*`를 빼고 command가 그곳에 남긴 `soksak-` entry를 하나씩 밝히며 실패한다. Red: audit 아래 `pnpm test`가 `soksak-stall-config-*`와 `soksak-event-log-*.event-offsets` 둘을 남겼다. Green: audit test 5 of 5가 통과하고, audit 아래 `pnpm test`가 entry를 남기지 않는다.
+
 - F201.2: stall-sample test가 configuration 폴더를 지우고, event-log test가 각 configuration 폴더 옆의 offsets file을 지운다. Red: 각 한 번의 실행이 entry를 남겼다. Green: 각 3 of 3이 entry 없이 통과했다.
+
 - F201.1: Objective-C 검사와 benchmark가 `tests/support/temporary_folder.h`의 `temporaryFolder`로 임시 폴더를 만든다. 이것은 실패한 검사가 `exit(1)`을 호출한 뒤에도 종료 시 폴더를 지우고, 제거가 실패하면 process를 실패시킨다. 이전에는 검사 15개와 benchmark 2개가 끝에서만 `error:nil`로 폴더를 지웠다. Red: 강제 실패를 넣은 `document_view_test`가 `soksak-document-store-<pid>`를 남겼다. Green: 같은 강제 실패가 검사가 지우는 폴더를 남기지 않았다. process가 끝난 뒤 WebKit network process가 쓰는 cookie file은 F201.4다.
+
 - F199.4: page는 project를 initialise한 뒤에만 plugin 변경을 따르므로, 첫 실행의 starter 설치가 더 이상 apply로 하여금 존재하기 전의 tab session을 flush하게 하지 않는다. page는 구독한 뒤 plugin 상태를 한 번 읽으므로 구독 전의 변경도 적용되고, 실행 중인 apply 동안의 event는 상태를 다시 읽는 apply 하나를 더 실행한다. initialise 전의 `projects.flush`는 명시적 error로 실패한다. Red: workbench test가 `Cannot read properties of null (reading 'flush')`, `the change made before the subscription was not applied`, `the change made during the apply was not applied`로 실패했다. Green: workbench test 562 of 562가 통과한다.
+
 - F200.1: 페이지 진단 method `diagnostics.page.calls`가 요청 하나에서 host call `theme`을 최대 50번 보내고, `make host-calls`가 페이지의 host call이 그 process에 남기는 WebKit malloc을 수집 전후로 측정한다. 두 debug host 측정: 수집 전 call당 약 0.7 KB(Wails), 1.1 KB(Tauri), 수집 뒤 없음.
 - F198.12, F196.7: plugin release browser 0.0.6, editor 0.0.4, hwp 0.0.2가 `surface.unload`를 선언하고 core `>=0.0.18`을 요구하며, browser 0.0.6은 document stream을 읽는다. registry가 셋을 나열한다. flowmark와 shell은 게시하지 않고 appview는 retired 되었다. F198과 F196이 완료되었다.
 - F193.5, F196.6, F198.11: core 0.0.18을 커밋의 CI가 통과한 뒤 release했다. release 문서는 메모리 절약이 기본으로 켜져 있다고 밝힌다.
+
 - F198.23-1: 두 host가 인증된 service endpoint 하나를 공유하는 Rust 시험은 fake service가 끝나기 전에 두 host를 stop하므로, folder guard가 configuration 폴더를 지우는 동안 어떤 host도 다시 연결해 service를 시작하지 않는다. Red: 바꾸지 않은 시험은 service가 끝난 뒤 쓰인 `logs`와 `services`를 찾았다. Green: 시험 10 of 10, `soksak-host-tauriv2` 3 of 3이 통과했다.
+
 - F192.3-3-4: window check가 folder의 file을 기다리는 wait는 `@parcel/watcher` 위의 `packages/window-check/folder-wait.mjs` `untilFolderState`로 watch가 active가 된 뒤 상태를 한 번 읽고 변경마다 다시 읽는다. 그 subscription은 FSEvents stream이 시작되면 resolve된다. Node의 `fs.watch`는 watch가 active가 되기 전에 반환하므로, relaunch된 host의 `endpoint.json`처럼 wait 시작 직후의 변경이 알려지지 않을 수 있었다. 바뀐 곳: `untilEndpoint`, `untilPolicy`, `untilEventLines`, `e2e/normal-shutdown.mjs`의 두 wait, `scripts/check-app-update.mjs`의 `untilChange`, test-command test의 pid file wait. Red: watch activation을 300 ms 늦추면 window-check의 세 wait가 timeout되었다. Green: 각각 20회 중 20회.
+
 - F192.3-2-5: `make go-repeat`는 `go test -json`을 실행하고 package 결과를 판정하므로, test file이 없는 support package가 test package가 통과한 run을 더 이상 실패시키지 않는다. Red: target이 `has no test files built with tags ''`로 실패했다. Green: target test가 5개 중 5개 통과한다.
+
 - F192.3-2-4: Wails host가 policy file의 알림이 시작하는 각 read 전에 file의 watch를 직접 추가하므로, `log-policy.json` 생성 직후 그 자리에서 한 write도 읽고 적용한다. fsnotify의 kqueue backend는 Create를 보낸 뒤에야 새 file을 감시하므로 그 write를 알리지 않는다. Red: `TestACreatedPolicyFileIsWatchedBeforeItsRead`가 file의 watch 없이 시작하는 read를 찾았다. Green: 이 test가 통과하고 policy test가 Go와 Rust에서 20개 중 20개 통과한다.
+
 - F192.3-2-3: 창을 열고 닫는 window check는 여전히 `visible` true인 `native.window.occlusion` event를 요구하며, 다른 애플리케이션이 새 창을 완전히 덮으면 실패는 timeout만 보고하지 않고 덮는 창을 밝히고 아무것도 측정하지 않았다고 말한다. Red: 덮인 창의 window-check frontmost test가 timeout 메시지로 실패했다. Green: 10개 중 10개.
+
 - F192.3-3-3: 두 host 모두 다른 애플리케이션이 active인 동안 실행을 마칠 때 스스로 activate하지 않으므로, `open -g -n`을 쓰는 `sok app relaunch`의 relaunch처럼 activation을 요청하지 않은 실행은 frontmost 애플리케이션을 바꾸지 않고, 사람이 연 애플리케이션은 Launch Services가 여전히 앞으로 가져온다. Wails host는 `MacOptions.DisableActivationOnLaunch`가 있는 Wails fork commit을 요구하고 그 option을 설정하며, Tauri host는 `activate_ignoring_other_apps(false)`를 설정한다. Red: Go와 Rust launch activation test가 `the application activates itself when it finishes launching`으로 실패했다. Green: 둘 다 3회 중 3회 통과한다.
+
 - F199.2-2: restart 뒤 tab의 첫 표시에서 문서 영역이 거부한 session history는 `page.tab.restore.failed`로 보고되고, 영역은 mount를 `unknown tab`으로 실패시키지 않고 그것 없이 다시 attach된다.
+
 - F199.2-1: 아무것도 load하지 않은 문서 영역은 session history를 돌려주지 않으므로, home page의 browser tab이 다음 attach가 거부할 session을 저장하지 않는다.
+
 - F192.3-2-2: 두 host가 page가 전달한 `page.start` event를 logging 명세대로 모든 log policy에서 저장하므로, class `lifecycle`이 오류만 저장할 때도 reload가 event log에 표시된다.
+
 - F192.3-3-2: Rust `sok`의 relaunch 시험이 오류를 알리는 폴더 guard로 폴더를 만들므로 test crate가 다시 빌드된다.
+
 - F192.3-3-1: host를 relaunch하는 window check는 다음 요청 전에 새 프로세스의 모든 창이 ready page를 알릴 때까지 기다리므로, event-log check의 cleanup이 더는 `the main page is not ready`로 실패하지 않는다.
+
 - F192.3-2-1: window check의 event audit가 F188.2가 도입한 format 3의 `plugins/installed.json`을 format 2가 아니라고 거부하지 않고 읽으므로, fixture를 준비하는 check가 첫 단계 전에 실패하지 않는다.
+
 - F199.3: workbench project switch test의 browsing check가 연 project를 제거하므로, 이후 window가 소유한 project가 없고 다음 check는 자기 snapshot의 layout을 읽는다. Red: session file check를 뒤에 두면 `closing a tab left its session file`; Green: 11 of 11.
+
 - F196.20-4: 시스템 warn pressure 뒤에도 남은 plain web view U의 증가는 엔진 plain web view의 동작이다; 같은 시스템 전체 pressure에서 document region R과 S는 돌려주었거나 늘지 않았다.
+
 - F196.20-3: region cost benchmark가 기다리는 동안 application event를 보내므로, `occlusionState`와 각 page의 visibility가 창을 만들 때의 상태가 아니라 window server를 따르고, collection mode는 창마다 순서와 덮는 창을 출력한다. 30분 동안 heap count는 평평했다; R은 증가를 collection에서 돌려주었고 U는 warn pressure 뒤에도 WebKit malloc 20 MB를 유지했다(F196.20-4).
+
 - F199.2: 브라우저 탭이 재시작 뒤에도 back/forward history를 유지한다. workbench는 탭의 각 문서 영역 session을 main-frame navigation commit 때(탭마다 1초에 한 번), unload 때, quit의 window 저장 때 `tab-sessions/<tab>.json`에 쓰고, restore와 재시작 뒤 첫 표시 때 영역의 attach에 넘긴다. decode한 크기가 1 MiB를 넘는 영역 값은 `page.tab.session.dropped`를 낸다. 메모리 절약은 history를 메모리에 두지 않는다. file은 tab-state 항목과 함께 지운다. Red: 재시작을 흉내 낸 뒤 attach에 `interactionState`가 없었고, 탭을 닫아도 file이 남음; Green.
+
 - F199.1: 두 host가 workspace kind `tabSession`, `tabSessionPut`, `tabSessions`로 탭 하나의 session file `tab-sessions/<tab>.json`을 읽고 바꾸고 지우고 나열하며, 오류가 같고 다른 탭이나 `tab-state.json`을 다시 쓰지 않는다. browser application은 같은 문서를 자기 저장소에 둔다. Red: 두 host가 `unknown workspace operation: tabSession`으로 답함; Green: Go와 Rust test가 통과.
+
 - F192.3-3: 진단 endpoint 메서드 `diagnostics.host.relaunch`가 `host.quit`처럼 애플리케이션을 종료하고 `sok app relaunch`로 같은 번들을 같은 인자로 활성화하지 않고 다시 시작한다. 따라서 window check는 자신이 설정한 policy 아래에서 host가 시작할 때 저장하는 기록을 읽는다. window-check harness는 폴더 watch로 새 `endpoint.json`을 기다려 다시 연결하고, event-log 검사는 `host.app.event` `started`를 단언한다. Red: relaunch 명령의 Go와 Rust 테스트와 harness 테스트가 빌드되거나 로드되지 않았다. Green: 통과한다. window check는 실행하지 않았다.
+
 - F192.5: test inventory가 F192를 `syncBackgroundSessions`와 그 background session test에 연결하므로 `make parity-check`가 더는 `F192: completed capability has no feature link`로 실패하지 않는다.
+
 - F192.3-2: `error`보다 낮은 record를 읽는 모든 window check가 그 record를 저장하는 log policy와 읽는 record를 선언한다. `prepareFixture`는 검사가 읽는 record를 policy가 저장하지 않는 선언을 거부하고 policy file이 그 policy를 담을 때까지 기다리며, event file을 기다리는 대기는 마감까지 기다리지 않고 record와 policy를 밝힌 error로 바로 실패한다. 해당 check: `terminal-hidden-tab`, `idle-tab-memory`, `memory-saver`, `input-latency`(policy를 설정이나 `core.settings.set`으로 주었다), `event-log`, `host-records`, `late-reply`, `plugin-outdated`, `settings`(trace switch), `terminal-replay`, `input-oracle`, `input-records`, `operation-chains`, 그리고 performance trace를 통해 `registration-lifecycle`, `projects`와 `fresh`의 registration timeline. Red: 대기가 `no event line matched within 3000 ms`로 시간 초과했고 준비가 그 선언을 받아들였다. Green: `packages/window-check`의 test가 통과한다. window check는 실행하지 않았다.
+
 - F192.3: window check `e2e/terminal-hidden-tab.test.mjs`가 main으로 build한 debug Wails와 Tauri application에서 terminal plugin 0.0.14, vt sidecar 0.0.11, browser plugin 0.0.5로 통과한다: 같은 card의 다른 tab 뒤에서 다시 보인 terminal이 Enter 뒤 출력을 그리고, background `open`과 headless surface가 없다. F192.3-1: 기본 policy가 error만 저장해 check가 출력의 record를 찾지 못했으므로 check가 `diagnostics.log`를 모든 class에서 `trace`로 정한다. Red: 두 host가 저장된 `sidecar.vt.pty_read` 없이 실패했다; Green.
+
 - F198.23: `packages/sok/tauriv2`의 Rust test는 공유 guard 하나로 임시 폴더를 지우며, assertion이 실패한 뒤에도 지우고 제거 실패를 알린다. host test 하나는 `tempfile`을 쓰고, `packages/host/wailsv3`와 `packages/sok/wailsv3`의 Go test는 실패한 `os.RemoveAll`을 알린다. Red: 실패한 assertion이 폴더를 남겼다. Green: 같은 assertion이 폴더를 남기지 않았다.
+
 - F198.23: `packages/sok/tauriv2`의 Rust test는 공유 guard 하나로 임시 폴더를 지우며, assertion이 실패한 뒤에도 지우고 제거 실패를 알린다. `packages/host/tauriv2`의 test는 제거 오류를 무시하는 `tempfile::TempDir` 대신 자기 guard를 쓰고, `packages/host/wailsv3`와 `packages/sok/wailsv3`의 Go test는 실패한 `os.RemoveAll`을 알린다. Red: 실패한 assertion이 폴더를 남겼다. Green: 같은 assertion이 폴더를 남기지 않았다.
+
 - F198.22: Rust migrate test는 설정 폴더를 drop guard로 지우며, assertion이 실패한 뒤에도 지우고, 제거 실패를 무시하지 않고 알린다.
+
 - F198.21: `surface.unload`는 없거나(탭은 unload되지 않는다, `undeclared`) `{format, maxBytes}`다. `validateManifest`는 `false`를 plugin을 이름하는 오류로 거부하고, 명세는 더 이상 선언을 필수로 부르지 않는다. Red: validator가 `unload: false`를 받아들였다(`Missing expected exception`). Green: plugin-api test가 통과한다.
+
 - F198.18: `surface.unload`는 선택으로 남는다. 선언이 없는 표면은 unload하지 않으므로 요구는 기능을 더하지 않고, 설치 가능한 plugin 버전 다섯 개를 revoke하게 만든다.
+
 - F196.20-2: 보이는 페이지의 느린 증가는 늦은 JavaScript full collection이다. 그 timer는 회수 예상 bytes에 비례해 CPU를 제한한다. 엔진은 idle 상태의 보이는 페이지를 더 일찍 거두는 공개 interface를 제공하지 않고, F198.6이 전달하는 시스템 메모리 압력이 표준 해제 경로다. 변경 없음.
+
 - F198.20: 저장 데이터 migration의 기록 `log.migrated`는 event log의 모든 gate를 지나므로, 오류만 저장하는 기본 정책도 이를 남기고 그것을 요구하는 release 단계가 통과한다. Red: Go와 Rust migrate 시험이 `log.migrated` 없이 `log.gated`를 찾음; Green: 둘 다 통과.
+
 - F198.19: 문서 영역의 handle은 워크벤치 attach 답 `{history}`에서 온 `history`를 알리며, attach가 세션 기록을 restore했으면 `true`다. 그래서 restore된 표면은 restore된 기록이 없을 때만 저장한 주소를 load한다. 그것이 없는 attach 답은 attach를 거부한다. Red: `history is unknown before the attach replies`(`undefined`), 워크벤치 attach가 `{ history: true }` 대신 `null`로 답함; Green: document-region 20 of 20, document-regions 6 of 6.
+
 - F198.17: `validateManifest`는 `surface.unload`가 없는 표면을 받아들이고 선언이 있으면 검사한다. 그런 표면은 unload하지 않으므로(`undeclared`), 이 field를 거부하는 core 0.0.17용으로 게시된 plugin 버전을 core 0.0.18에 계속 설치할 수 있다. release 본문은 메모리 절약이 기본으로 켜져 있음을 밝힌다. Red: 선언이 없는 표면에 `plugin probe: surface requires unload unless the plugin declares background`; Green: validate 30 of 30.
+
 - F192.4: vt sidecar 0.0.11이 image가 있는 surface에 대한 `image` 없는 `open`을 거부하고 surface의 그리기 mode를 기록하며, terminal plugin 0.0.14가 그것을 요구한다.
+
 - F197.7: vt sidecar 0.0.11과 files sidecar 0.0.6이 오류만 저장하는 기본 정책(F197.5)을 릴리즈한다. shell sidecar는 게시하지 않으므로 release가 없다.
+
 - F198.10-4: endpoint client는 reload가 watch를 지워 host가 unwatch를 1003으로 거부할 때 연결을 유지하고 그 거부로 watch를 reject한다. Red: 연결이 실패했다; Green.
+
 - F198.10-3: event `page.start`는 페이지의 모든 gate를 지나므로, reload된 문서의 시작이 setting의 policy가 gate에 닿기 전에 event 파일에 닿는다. Red: policy 전에 gate가 거부했다; Green.
+
 - F198.10-5: place가 빼는 surface는 place가 session을 끝낸 뒤 sidecar로 아무것도 보내지 않으므로, dispose가 보내는 session 종료가 이후 모든 retain이 거부하던 project root 없는 host 항목을 더 이상 남기지 않는다. Red: place 동안 send가 나갔다; Green.
+
 - F198.10-2: commit은 `host.place`를 실행하기 전에 빼는 각 surface의 composition을 멈추고 place가 실패하면 다시 시작하므로, layout 변경이 host가 `has no composition declaration`로 거부하는 placement를 더 이상 보내지 않는다. Red: place 동안 composition이 place를 보냈다; Green.
+
 - F198.10: 창 검사 `e2e/memory-saver.test.mjs`는 `surface.unload`를 선언하는 fixture plugin `e2e/fixtures/memory-saver/unload-probe`를 설치하고 두 host에서 `core.tab.unload`에 의한 unload와 사라진 document region, 같은 주소와 session history의 restore, warn pressure에서 숨은 후보를 하나씩 내리고 normal에서 멈추는 것, keep한 탭과 수정된 탭이 남는 것을 검사한다. 같은 설정에서 다른 검사 뒤에도 두 host에서 통과한다.
+
 - F198.9-2: `diagnostics.objects`가 page와 document region의 `elements`에 open shadow root의 요소를 세므로 보이는 surface의 DOM을 센다. Red: 세 요소의 open shadow root를 가진 host가 요소 하나로 세어졌다. Green.
+
 - F198.9-1-1: page diagnostic module이 `diagnostics.objects`용 parked element 수를 게시하므로 release page는 진단 global을 게시하지 않는다. Red: workbench module이 게시했다. Green.
+
 - F198.9-1: `diagnostics.objects`가 document 밖에 있어 세지 않던 숨겨진 tab의 park된 surface host 요소 수 `parkedElements`를 `page`에 보고하므로, 실행 중인 애플리케이션의 memory check가 숨겨진 tab이 쥔 DOM을 본다. Red: workbench, native library, 두 host에 수가 없었다. Green.
+
 - F198.9: `make hidden-tab-memory`는 숨겨진 DOM tab이 쥐고 unload가 돌려주는 JS heap과 DOM node를 측정한다. editor, rendered document, terminal fixture에서 unload가 99 percent 이상을 돌려주므로, specification은 DOM tab plugin이 `surface.unload`를 선언한다고 적는다.
+
 - F198.15: `scripts/test`와 `packages/plugin-api`의 시험은 성공을 경과 시간 대신 event, 출력 줄, 순서, 수, process 상태로 판정한다. 그 시험의 command limit은 hang만 제한한다. Red: 부하에서 기록된 실행과 controlled hold; Green.
+
 - F198.16: method가 값을 돌려주지 않거나 nil을 돌려주는 Wails host 호출은 Wails transport가 nil 결과에 쓰는 `{}` 대신 `null`로 응답하므로, 없는 `tab-state.json`이 더 이상 `tab state format missing is not 1`을 보이지 않는다; 두 host 모두 `null`로 응답한다(`binding.reply.absent-value-is-null`). Red: entrance가 nil 결과를 돌려주었다; Green.
+
 - F198.14: test runner의 pool 시험은 병렬 실행을 경과 시간 대신 `RUN` 줄의 running 수로 확인한다. 경과 시간 판정은 부하에서 실패했다. Red: 부하에서 기록된 실행; Green.
+
 - F198.8-4: commit은 `host.place`를 먼저 실행하고 성공한 뒤에만 뺀 표면을 release하며, 호스트가 place와 함께 닫은 영역은 detach하지 않는다; 실패한 place는 tab을 마운트되고 loaded인 채로 두고, tab 닫기도 같은 방식으로 그 commit이 release한다. Red: commit이 place 전에 표면을 release했다; Green.
+
 - F198.7.3: tab button의 오른쪽 클릭은 tab context menu(`core.tab.menu`)를 열고, 그 항목 `core.tab.menu-keep`은 표시 `kept`를 보이며 `core.tab.keep`으로 이를 설정하거나 지운다; 절대 unload될 수 없는 tab에는 항목이 없다. Red: menu module이 없었고 picker 항목이 자신의 dom 이름을 가질 수 없었다; Green.
+
 - F198.8-5: 문서 영역이 restore된 session history를 거부한 tab도 거부가 restore를 열어 두므로 마운트가 끝나면 `page.tab.restored`를 낸다. Red: saver에 restore를 열어 두는 경로가 없었다; Green.
+
 - F198.8-3: tab의 restore된 session history를 거부한 문서 영역은 실패를 알리고 history 없이 다시 붙으므로, tab은 문서를 유지하고 history만 잃는다. Red: attach가 실패했다; Green.
+
 - F198.8-2: tab button의 이름과 `data-tab-state`는 plane이 쓰고 unit test가 다루는 tab 보고의 함수 하나 `tabButtonData`에서 온다. Red: 함수가 없었다; Green.
+
 - F198.8-1: tab을 unload됨으로 표시한 뒤 실패한 commit은 더 이상 처리되지 않은 rejection으로 빠지지 않는다: 시도는 `page.tab.unload.failed`와 오류 표시로 끝나고, tab은 loaded로 돌아오며, 새 commit이 그 표면을 다시 선언한다. Red: tab이 처리되지 않은 rejection과 함께 unload된 채 남았다; Green.
 - F198.7.1, F198.7.2: 설정 창은 메모리 group에 switch `memorySaver`와 slider `memorySaverDelay`를 보이고; status `core.tab.memory`는 각 tab을 state와 보호와 함께 나열하며, `core.tab.unload`는 숨겨진 tab을 바로 unload하고, `core.tab.keep`은 표시 `kept`를 설정하거나 지우며, unload된 tab의 surface에 대한 요청은 `tab <id> is unloaded`로 실패한다. Red: control, saver method와 거부가 없었다; Green.
+
 - F198.8: tab button은 메모리 절약이 알리는 `data-tab-state`를 갖고, 보인 unload된 tab은 surface가 mount될 때까지 `restoring`이며, 실패한 restore는 `page.tab.restore.failed`를 내고 page의 오류 표시로 보인다. unload 시도 중 거부된 문서 영역 읽기는 더 이상 처리되지 않은 rejection으로 빠지지 않는다: 시도는 `page.tab.unload.failed`와 오류 표시로 끝나고 tab은 loaded로 남는다. Red: 실패 event가 없었고 rejection이 처리되지 않았다; Green: workbench 531 중 531.
+
 - F198.4: 메모리 절약은 숨겨진 모든 tab을 `media-unknown`으로 보호하는 대신 문서 영역의 질의로 숨겨진 browser tab을 판단하고, restore된 tab은 각 영역의 session history를 돌려받는다. Red: 영역 기록이 없었고 restore가 history를 넘기지 않았다; Green.
+
 - F198.5: 영역 질의는 한 번도 재생하지 않은 media 요소가 있는 페이지에 `playing`을 답하던 `requestMediaPlaybackState`의 답 대신, 페이지가 소리 나는 media를 재생하는지(`_isPlayingAudio`)를 `media`로 알린다; 두 host는 boolean `media`를 받는다. Red: 재생하지 않은 audio 요소가 `playing`을 알렸다; Green: 3회 중 3회.
+
 - F198.13: `test-command`의 정리 시험은 부하가 걸린 machine이 넘던 500 ms 대신 10초로 process 시작만 제한하고, pid 파일을 읽기 전에 상태를 확인한다. Red: 부하에서 34회 중 1회 실패; Green: 40회 중 40회.
+
 - F198.3: `surface.unload`를 선언한 plugin의 surface는 `context.tab.state`로 tab 상태를 유지하고, `context.tab.keep`으로 진행 중인 작업을 알리며, unload는 오류를 뺀 tab 보고를 유지한다. Red: API가 없었고 store가 열리기 전에 mount된 surface가 상태를 잃었다; Green.
+
 - F198.2: tab 상태 store `tab-state.json`(format 1): 두 host가 항목 단위로 쓰고, workbench가 쓰기를 합치며, layout 쓰기 뒤에 항목을 지우고, 고아를 맞추며, 내릴 수 있는 tab의 label cache를 유지한다.
+
 - F198.6: process마다 memory pressure source 하나가 normal, warn, critical을 관측한다; back-forward cache는 warn과 critical에서만 비우고, 두 host가 모든 창에 `memory-pressure {level, seq}`를 순서대로 보낸다.
+
 - F198.1: 메모리 절약을 명세한다(숨겨진 tab의 unload와 restore, 보호, tab 상태 store, 설정, status와 명령, host memory pressure source); `validateManifest`는 plugin이 `background`를 선언하지 않으면 `surface.unload`를 요구한다. Red: 그것이 없는 surface가 받아들여졌다; Green.
+
 - F196.29: 5분 동안 숨겨진 browser tab과 memory pressure 때의 모든 tab이 back-forward cache를 비우므로, 떠난 page의 중단된 process가 끝난다; 그 뒤 뒤로 가면 page를 다시 load한다. 비울 때마다 event `native.document.backforward_cleared`를 남긴다. Red: 뒤로 가면 page가 cache에서 복원되었다; Green: `document_backforward_test`.
+
 - F196.28: CI cache는 의존 build 산출물만 담는다(`Swatinem/rust-cache`); target 폴더 전체 cache가 8 GB로 커져 runner 디스크를 채웠다.
 - F196.14, F196.20-1: browser tab은 page가 쓰는 만큼 쓰고 document region과 plain web view에서 같다; 보이는 page는 JavaScript collector가 늦게 수집하는 할당만큼 늘고 page를 다시 그리면 내려가며, WebKit에는 보이는 page를 더 낮추는 표준 메커니즘이 없다.
+
 - F196.27-2: F196.27-1의 region document마다 새 process를 되돌린다: 메모리 수치를 낮추려고 같은 사이트 이동마다 약 0.5초와 cache를 내주었고, 그것이 해제한 이전 document는 엔진이 약 8분 뒤 스스로 해제한다.
+
 - F196.27-1: document region이 main webview처럼 main frame의 새 document를 새 process에서 열므로, reload나 이동이 더 이상 tab process에 이전 document를 남기지 않는다: 다섯 번 reload해도 최대 22개 document와 325 MB 대신 6개와 약 124 MB를 유지한다. 이동은 0.6초 대신 약 1.1초 걸린다. Red: document가 process 86315에 남았다; Green: `document_navigation_test`.
+
 - F196.19-1: `make -C native/darwin benchmark-occlusion`이 측정한 바, macOS는 제목 막대 창이 공유하는 각 모서리를 28 pt 넘을 때만 창을 덮인 것으로 보고하므로, 화면 왼쪽 위 모서리의 창은 최대화된 창 아래에서 보이는 상태로 남고 WebKit은 그 document를 보이는 상태로 유지한다; 그 입력을 바꾸는 API나 SPI는 없다.
+
 - F197.8: log policy가 모든 document에 닿는다: 두 host가 policy를 적용할 때 모든 window에 `log-policy`를 보내고 action `policy-read`에 답하며, 각 surface와 modal document가 policy를 자기 gate에 적용하므로 debug switch를 켜면 surface document가 debug event를 저장한다. Red: surface document가 `page.log.gated`만 batch했다; Green.
+
 - F196.26: package 시험이 다시 통과한다: 진단이 기본으로 꺼져 있으므로(F197) chain audit fixture가 debug policy를 기록하고, debug switch의 주석이 영어이며, 두 애플리케이션의 surface call 시험이 debug 상태를 설정한다.
+
 - F196.21-1: boundary 검사가 선언된 저장소를 main checkout에서 찾으므로 `make boundaries`가 worktree에서 실행된다. Red: `.claude/worktrees` 아래 plugin의 `ENOENT`; Green.
+
 - F196.25: 모든 host 시험이 자기에게 붙은 정의된 contract case를 선언하므로 `make host-contract-check`가 다시 통과한다(2451개 중 2451개 시험, 두 host의 모든 case); 2026-10-17부터의 CI 실패는 정의되지 않은 sampler case, case를 선언하지 않은 sok policy 시험, `mod support;`로 시험과 떨어진 Tauri 선언에서 왔다.
+
 - F196.24: 두 host가 unix socket 주소의 103 byte 한계를 넘는 endpoint socket 경로를 경로, 길이, 한계를 적은 같은 문장의 오류로 거부한다. Red: `bind: invalid argument`와 `path must be shorter than SUN_LEN`; Green.
+
 - F196.17-1: `make app-usage`가 host의 launchd domain으로 각 host의 WebKit service를 귀속하므로, 같은 초에 시작한 두 애플리케이션을 구별한다. Red: 아무것도 귀속되지 않았다; Green.
+
 - F196.23: `make object-counts` 30번 반복에서 host 메모리가 안정되고(Wails 80~89 MB, Tauri 70~76 MB) Go heap은 평평하다.
+
 - F196.12: 기본 설정에서의 최종 검증: 두 host가 log writer 자신의 event만 저장했고, 다섯 번 반복 동안 모든 object count가 기준값을 유지했으며, modal, idle tab, occlusion, window release 검사가 두 host에서 통과했다.
+
 - F196.18-2: host 구조 검사가 자기 목록 대신 native host 명세에서 허용된 파일 차이를 읽는다. Red: H1 행이 없는 표가 통과했다; Green.
+
 - F196.18-1: 허용된 host 차이가 `diagnostics.heap.profile`을 Wails 전용 method로 선언하고(E1 행), `make host-parity-check`가 그 선언을 읽어 검사가 통과한다. Red: 선언된 method를 보고했다; Green.
+
 - F196.22: host 시작이 더 이상 WebKit process를 끝내지 않는다. WebKit child 기록이 host 뒤에 시작한 다른 애플리케이션의 process를 적었고, 다음 시작이 그 process에 `kill -9`를 보내 다른 host의 page process(F196.13-1)와 check 중의 Tauri host process(F196.10.2-4)를 끝냈다. launchd가 끝난 host의 service를 0.2초 안에 끝내므로 두 host에서 기록과 reap를 없앴다. Red: `the start ended process 58287 of another application`; Green: `startup.ends-no-process`.
+
 - F196.9.5: `document_pressure_test`가 footprint 항목, malloc zone, 놓은 배열이 아직 살아 있는지를 출력한다; pressure 뒤 남는 메모리는 엔진이 수집하지 않은 살아 있는 page 객체이고, document region과 plain web view에서 같다.
+
 - F196.21: workspace registry가 선언된 plugin과 sidecar 폴더를 main checkout에서 찾으므로 `make install-plugins`가 worktree에서 동작한다. Red: worktree가 `.claude/worktrees/plugins/browser/`를 찾았다; Green.
+
 - F196.10.4: Tauri host의 page reload가 persistent sidecar에 보낸 적이 있는 surface에만 reconnect하므로, browser surface가 더 이상 terminal service의 session이 아니다; `diagnostics.objects`가 session을 나열하고 두 host가 같은 session을 나열한다. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
+
 - F196.8.1: 두 host가 object counter backend로 `diagnostics.objects`의 surface count와 wire를 시험한다(없는 window, 모르는 window, 응답 형태).
+
 - F196.16.1: Tauri surface 등록 시험을 Wails `src/surfaces_test.go`의 짝인 `src/surfaces_test.rs`로 옮겨 `make hosts-check`가 통과한다.
+
 - F196.13: `e2e/idle-tab-memory.test.mjs`가 빈 local page의 browser tab 비용(document process와 main web view 증가, 안정된 `host.sampler.memory` 값)이 50 MB 이하이기를 요구한다; Wails 18.9 MB, Tauri 19.0 MB를 측정했다.
+
 - F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>`가 같은 page의 plain web view와 document region을 1분마다 읽고 각각의 분당 증가를 출력한다; https://www.google.com/에서 둘 다 5분부터 30분까지 평평했고, 두 check 애플리케이션의 보이는 tab도 처음 10분 뒤 증가가 멈췄다. target은 `URL`이 설정된 경우에만 넘긴다.
 - F196.18 (Rust): Rust log indexer가 Go indexer처럼 추가된 byte 크기의 읽기 buffer를 쓴다. Red: `index_update_allocates_for_the_appended_bytes_only`(`left: 8388608, right: 800`); Green.
+
 - F196.19: `e2e/window-occlusion.test.mjs`가 창을 project 창으로 가리고 `occluded: true`와 숨겨진 document를 요구한다; 두 host에서 통과한다. 측정한 모든 배치에서 두 host가 같은 occlusion을 보고한다.
+
 - F196.18: Go log indexer가 갱신마다 8 MiB가 아니라 추가된 byte 크기의 읽기 buffer를 쓴다; 갱신마다의 buffer가 Wails host의 Go heap goal을 약 20 MB로 올리고 13~16 MB의 free heap을 dirty로 남겼다. 새로 시작한 Wails host는 73 MB에서 43 MB로 줄었다. Red: `TestLogIndexUpdateAllocatesForTheAppendedBytesOnly`가 2줄 갱신에 8,647,392 byte를 측정; Green: 1 MiB 미만. diagnostic build는 `diagnostics.objects`에 Go runtime 메모리를 보고하고 `diagnostics.heap.profile`로 heap profile을 쓴다.
+
 - F196.17: `make app-usage CONFIG_DIR=<dir>`가 실행 중인 애플리케이션의 각 process(host, page, document, WebKit GPU와 network, sidecar)의 footprint와 CPU 점유율, 합계를 보고한다. Red: script가 없을 때 `ERR_MODULE_NOT_FOUND`로, real path나 겹 slash로 실행된 data 폴더에서 `no host process has --config-dir`로 시험이 실패했다; Green: 18개 중 18개 통과.
+
 - F196.9.2: `make -C native/darwin test-pressure`가 page가 약 375 MB를 놓고 시스템이 warn과 critical pressure를 올린 뒤 document region과 plain web view가 돌려주는 메모리를 잰다; 둘 다 약 24 MB(6%)를 돌려주고, 시험은 region이 plain web view의 0.8 이상을 돌려주기를 요구한다. 시스템 전체에 pressure를 주므로 `make test`에 들지 않고, 1분 load가 20을 넘으면 판정을 거부한다.
+
 - F196.16.1: 두 host가 native view를 닫는 main-thread 단계에서 surface 등록을 지우므로, 닫는 동안의 `host.window` 읽기는 등록과 함께 view를 찾거나 둘 다 찾지 않는다. Red: Tauri `window_close_test`(`left: None`), Go `TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView`(got 1, want 0, 이전 순서의 close 단계로 실행); Green: 둘 다 통과.
+
 - F196.16: 두 host가 native view를 만드는 같은 main-thread 단계에서 surface를 등록하므로, surface를 만드는 동안의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않고(Tauri) 동기화되지 않은 map으로 이름 없는 view를 읽지 않는다(Wails). Red: `window_close_test`(`left: None`)와 `TestSurfaceIsNamedWhenItsNativeViewIsCreated`(named ""); Green: host contract case `exposure.host-window.reads-during-surface-creation`과 함께 둘 다 통과.
+
 - F196.10.3: workbench page의 창 배경 `body::before`가 fixed가 아니라 body 안의 absolute다: fixed 배경은 자기 합성 layer이므로 그 위의 layer들이 창 크기 버퍼를 차지했다. `make -C native/darwin benchmark-page-layers`가 변형을 잰다(fixed 배경과 rail은 창 버퍼 한 장을 더하고, absolute 배경과 같은 rail은 더하지 않는다). 두 애플리케이션에서 terminal 카드와 browser 카드를 가진 project, 1200×760일 때 main web view의 graphics 메모리가 70 MB에서 20 MB로, footprint가 122~168 MB에서 74~75 MB로 줄었다. workbench 시험 483개가 모두 통과하고 composition과 geometry window check가 두 host에서 통과한다.
 - F196.10.2-2, F196.10.2-3: `e2e/modal-release.test.mjs`가 settings modal을 네 번 열고 닫으며 창의 native 객체 수가 돌아오기를 요구한다. 창의 첫 자식 web view가 창이 사는 동안 main web view의 입력도 등록하므로(모든 수준 정책으로 돈 실행에서 기록 `native.webview.input`이 그것을 이름했다), 검사는 기준값 전에 modal 하나를 열고 닫는다. 두 host에서 모든 modal이 입력을 등록, 해제, dealloc하며 새는 modal은 없다. Green: Wails 애플리케이션을 새로 띄운 뒤 두 host에서 다섯 번 통과한다. `native.webview.input`이 각 등록을 web view, 단계, 수와 함께 기록한다(Red: `one registration cycle emits three input records (0)`).
+
 - F196.11: `make trace-share`가 switch 디버그를 켰다가 끄고 조작을 5번 반복한 뒤 host process를 쟀다: Wails host 105 MB와 94 MB, Tauri host 74 MB와 70 MB이므로 진단은 Wails host에서 약 11 MB, Tauri host에서 4 MB를 차지한다. `make object-counts`와 `make trace-share`를 예제 검증 문서에 적었다.
+
 - F196.10: `make object-counts`가 진단을 켠 두 host의 디버그 애플리케이션에 정해진 조작을 20번 반복했다. Wails host에서는 `diagnostics.objects`의 모든 수가 기준값에 머물렀다(surface 3, region 1, document 1, sidecar session 2, 대기 응답 0, 구독자 2, page 요소 256). Tauri host에서는 모든 수가 첫 반복 뒤 일정했고, sidecar session이 기준값보다 하나 많았다(F196.10.1). reload 직후 읽은 page process footprint는 195~244 MB였고 30초 뒤 120 MB로 가라앉았으므로, reload 직후의 읽기는 불러오는 동안의 최고치다.
 - F196.10 (target): `make object-counts`가 실행 중인 애플리케이션에 `scripts/measure-object-counts.mjs`를 돌려, 연속된 두 읽기가 같아진 뒤 `diagnostics.objects`의 수를 잡고, terminal 탭과 browser 탭 열고 닫기, 카드 분할과 닫기, plugin 적용, project 창 열고 닫기를 N번 반복하며, 반복마다 수와 page, document process의 footprint를 각 수의 `grows`와 함께 기록한다. Red: script가 생기기 전 시험이 `Cannot find module`로 실패했다. Green: 그 시험 7개가 통과한다. exposure 명세의 `host.window` 행이 F196.1이 더한 각 문서의 `process`를 이름한다.
+
 - F196.5.2: Wails 종료 callback이 `routine.Go`로 goroutine을 시작하고, `document-region.js`와 log audit의 nullish 기본값이 이유를 밝히므로 push의 census가 통과한다.
+
 - F196.5.1: Tauri host가 surface page를 가진 main web view의 스트림 구독을, page가 새 문서를 시작할 때(시작 요청에서)와 그 web content process가 끝날 때(framework가 전달하는 종료 handler) 지우므로, host 계약의 제거 행이 두 host에서 돈다. Red: `remove_surface_for_reload`와 `Streams::remove_page` 없이 시험이 build되지 않았다. Green: Tauri host 시험이 clippy 검사와 함께 통과한다.
+
 - F197.3-2: Rust host 시험이 쓰는 것만 import하고 `documents.rs`가 중첩 `if`를 합치므로 push의 clippy 검사가 통과한다.
+
 - F197.3-1: 모든 수준 공용 시험 helper와 객체 수 시험이 Go와 Rust에서 같은 이름을 가지므로 hosts 검사가 통과한다.
+
 - F196.5: 두 host가 `documentSubscribe {document, stream}`에 handle로, `documentUnsubscribe`에 답하고, 영역과 스트림마다 구독을 세어 첫 구독에서 native 수집을 켜고 마지막에서 끄며, 새 구독을 위해 200개 항목의 요청 기록을 `dropped`와 함께 두고, 스냅샷을 전한 뒤 native에 확인하며, 닫힌 영역이나 창의 구독을 지운다(Wails host는 새 문서를 불러오거나 process가 끝난 surface page의 구독도 지우고, Tauri host는 F196.5.1). `document-stream`은 구독한 surface에만 가고, plugin-api의 document handle에 `subscribe(stream, listener)`가 있다. Red: 구독 없이 Go와 Rust 시험이 build되지 않았고(`undefined: host.NewDocumentStreams`, `unresolved imports soksak_host_tauriv2::documents::StreamEffect`), plugin-api가 `region.subscribe is not a function`으로 실패했다. Green: main에서 두 언어의 host 시험, plugin-api 211개, workbench 483개가 모두 통과한다.
 - F196.9.3, F196.9.4: `document_processes_test`가 두 사이트의 영역 4개와 한 사이트의 영역 4개에서 영역마다 WebContent process 하나, 각 약 13 MB를 센다. 영역은 탭처럼 process 하나를 쓴다. `document_caches_test`가 영역을 문서 2 MB와 이미지 1 MB의 page 60개로 탐색하고 footprint가 10번째 page 뒤 229440 KB에서 60번째 뒤 171137 KB로 줄어드는 것을 읽으므로 cache는 한도가 있다. 둘 다 바꿀 것이 없으며 native suite에서 돈다.
+
 - F197.3: 두 host와 두 `sok` build가 정책 파일 없이 오류만 저장하는 기본 정책을 적용한다(`sok`의 기본값 부분은 F197.6의 커밋과 함께 들어갔다). `error` 아래 event를 읽는 시험은 writer에 모든 수준 정책을 주고, 그 수와 index는 그 `log.policy` 줄을 포함한다. Red: `log_policy_test.go:117: default class lifecycle is "trace", expected "error"`, `start without a file: the default policy stores a warn event of the class lifecycle`와 그 Rust 짝. Green: 두 host와 두 `sok` build의 Go, Rust 시험이 통과한다.
+
 - F196.9.1: `document_throttle_test`가 보이는 document region, 숨긴 영역, 가린 창의 영역을 잰다: 보일 때 초당 timer 125.3번과 animation frame 59.8번, 숨기거나 가렸을 때 1.0번과 0.0번이며 문서 visibility는 hidden이다. document view는 WebKit의 occlusion 감지를 유지하고, window facts와 surface geometry는 main web view와 붙인 surface web view에서만 그것을 끈다. 바꿀 것이 없으며, 검사는 native suite에서 돈다.
+
 - F197.4-1: `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test`, `quit_request_test`가 `error` 아래 기록을 읽기 전에 모든 수준을 저장하는 정책을 둔다. Red: 각각 그 기록에서 실패했다(예: `observe_test`의 `the registration is one event at the level info`와 index 오류). Green: 각각 2번 중 2번 통과하고, native 기본 suite가 58개 모두 통과한다.
+
 - F197.6: 두 `sok` build가 실행 시작에 `<config-dir>/log-policy.json`을 한 번 적용하고, 거부된 파일은 장소 `log policy`의 `sok.record.error`로 저장하며 기본 정책을 유지한다. `docs/spec/events.json`이 `sok.record.<level>`을 선언한다. Red: Go와 Rust에서 `the tool stored no sok.command under a policy file that stores every level: [log.open log.gated]`, Rust에서 `no sok.record.error of the place log policy`. Green: 두 build의 정책 시험이 event catalog 검사와 함께 통과한다.
+
 - F196.2: `make -C native/darwin benchmark-document`가 document region에서 요소 2000개의 트리를 바꾸는 page를 열고, 변경 0, 1000, 5000, 10000번마다 그 WebContent process의 physical footprint와 상태 보고 수, 바이트를 출력한다. F196.4 전: 변경 10000번에 보고 10006번, 259175913 바이트(변경마다 25910 바이트와 보고 1번), footprint 23904~41792 KB. F196.4 뒤 구독자 없이: 변경 10000번에 보고 6번, 1352 바이트, footprint 16192~20784 KB. footprint는 실행마다 그 기울기보다 크게 달라지므로 단계마다 표본 하나로는 증가량을 얻지 못한다.
+
 - F196.4: 문서 스크립트가 host가 스트림을 켠 동안만(`sp_document_stream_on`) document region의 요소와 요청을 모은다: 요소 observer는 다음 스냅샷까지 트리가 바뀌었다고 한 번만 표시하고, 스냅샷 `{seq, nodes, total, truncated}`는 이전 것의 확인(`sp_document_stream_ack`)을 기다리며, 요청 스트림은 `buffered: true`로 관찰한 새 항목만 보내고, 새 문서는 `reset`을 보내며, `document-state`는 요소와 요청을 싣지 않는다. Red: `document_view_test`가 상태에서 목록을 찾았고 트리 변경 50번에 상태 보고 51번을 받았다. Green: `make -C native/darwin repeat TEST=document_view_test COUNT=3`이 통과한다. 구독자 없는 문서는 스트림 메시지를 보내지 않고 변경 50번에 많아야 제목을 보고한다.
+
 - F196.8: 두 host가 `diagnostics.objects`에 창을 위해 host가 가진 객체와 page와 document region의 요소 수, 문서 수로 답한다. native 함수 `sp_webview_count_objects`가 page world나 document world에서 그것을 센다. Red: 수 없이는 시험이 build되지 않았다(`docs.Count undefined`, `unresolved import soksak_host_tauriv2::object_counts`, `undeclared function sp_webview_count_objects`). Green: `page_objects_test`가 3번 중 3번 통과하고, diagnostics tag의 Go 시험 422개와 Rust 객체 수 시험 6개가 모두 통과한다.
+
 - F197.5: files, shell, vt sidecar가 첫 정책 전과 정책 파일이 없는 동안 오류만 저장하는 기본 정책을 적용한다(files S23, shell S8, vt S64). 각각 core의 golden case를 복사해 가진다. 이 수정은 그 다음 release로 사람에게 닿는다.
+
 - F196.1.1: performance trace의 표본이 모든 창의 page process와 모든 문서 web view의 process에 대해 창과 surface와 함께 `host.sampler.memory`를 저장하고, 모든 읽기가 `rss_kb` 옆에 process의 physical footprint인 `footprint_kb`를 담는다. Red: `performance_test.go:308: no page sample names window-a`와 Rust 시험 `a page sample names window-a`. Green: 두 host의 performance 시험이 event, platform, parity 검사와 함께 통과한다.
+
 - F197.2: page의 log gate가 정책을 받기 전에는 `error`만 저장하고 `diagnostics.log`가 이름하지 않은 class는 `error`를 따른다. `diagnostics.performance`는 기본 false다. 설정 창의 진단 묶음이 `core.settings.debug {on}`을 실행하는 switch 디버그를 보인다. Red: `log-gate.test.mjs`가 `lifecycle warn`(`true !== false`)으로, `settings.test.mjs`가 trace 기본의 `true !== false`와 `debugOn is not a function`으로, `settings-debug-switch.test.mjs`가 `the 진단 row draws no 디버그 switch`로 실패했다. Green: workbench 시험 483개가 모두 통과하고 exposure 검사가 통과한다.
+
 - F197.4: native event ring이 첫 정책 전에 모든 class에서 `error`만 저장한다. `error` 아래의 event를 기록하는 시험은 먼저 모든 수준을 저장하는 정책을 둔다. Red: `event_ring_test`가 `the default policy stores each error of every class and no warn, info, debug or trace event`로 실패했다. Green: `make -C native/darwin repeat TEST=event_ring_test COUNT=2`가 `application_log_test`, `image_region_test`, `image_region_hangul_test`, `webview_process_end_test`와 함께 통과한다.
+
 - F196.3: 명세가 문서 영역의 요소와 요청 스트림을 정의한다. 정의는 `subscribe`와 `unsubscribe` 호출과 그 handle, 구독의 제거, `stream.ack`로 확인되는 요소 스냅샷, 200개 기록을 가진 요청 항목, 탐색의 `reset`, `document-stream` 메시지를 포함하며, `document-state`는 더 이상 요소나 요청을 나열하지 않는다. 용어 `stream`과 `snapshot`이 용어 목록에 있다. 검증: `make docs-check`. 스트림은 아직 구현되지 않았으며 구현은 F196.4와 F196.5가 맡는다.
+
 - F197.1: 기본 정책은 모든 class에서 `error`만 저장하고 `diagnostics.performance`는 기본 false다. 설정 창의 switch 디버그(`core.settings.debug {on}`)가 모든 class의 모든 수준과 trace를 켜고 끈다. `fixtures/policy/cases.json`이 기본을 `default`로 가지고, 기본 정책 파일이 그것을 가지며, `@soksak/log-contract`의 `DEFAULT_POLICY`가 그것과 같고, audit은 정책을 기록하지 않은 process를 그것으로 판단한다. Red: golden 시험이 이전 기본 파일에서 실패했고, `a process that recorded no policy is judged by the default policy, which stores only error`가 chain finding을 찾았다. Green: log-contract 시험 136개가 모두 통과하고, 두 `sok` build의 golden reader가 통과한다.
+
 - F193.6: 0.0 단계에서 sidecar protocol은 1로 남는다: 명세, 두 host, `sok`, plugin-api가 protocol 1로 돌아가며, F193.1, F193.2, F193.3을 되돌린다.
+
 - F193.5: 선언된 모든 workspace 버전이 0.0.18이다.
+
 - F193.3: 두 `sok` build가 index의 각 sidecar 버전의 `protocol`을 양의 정수로 읽고 protocol 2의 sidecar 버전만 고른다. 명세는 index가 protocol을 담지 않는 core 업데이트에 대해 그런 plugin을 호환되지 않음으로 나열하던 F193.1의 규칙을 지운다. Red: protocol 2의 sidecar 버전을 가진 index가 두 build에서 `protocol must be 1`로 실패했다. Green: `TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo`와 `installation_selects_only_sidecar_versions_of_protocol_two`가 두 build의 sok 시험과 함께 통과한다.
+
 - F193.2: 두 host가 2가 아닌 protocol의 sidecar를 생성 실패 없이 선언하고, 시작하지 않으며, 그것으로의 send마다 `sidecar <name> <version>: protocol <found> is not 2`로 실패한다. 지속 서비스의 endpoint와 hello는 protocol 2를 담고, plugin-api의 `validateSidecar`는 protocol 2를 요구한다. Red: `TestSidecarOfAnotherProtocolIsNotStarted`가 `send = <nil>`로, `a_sidecar_of_another_protocol_is_not_started`가 생성에서, plugin-api 검사가 `protocol must be 1`로 실패했다. Green: 같은 시험이 두 host의 sidecar 시험, plugin-api 검증 시험, parity 검사와 함께 통과한다.
+
 - F193.1: 명세가 `sidecar.json`의 `protocol`을 sidecar의 시작 인자와 메시지의 버전으로 정하고 2로 올리며, 다른 protocol의 sidecar를 애플리케이션 시작이 아니라 그 sidecar의 시작에서 거부하고, 설치와 업데이트 목록에서 protocol로 sidecar를 고르고 나열한다.
+
 - F194.10.5: core 0.0.17이 게시되었고, 그 CI 실행과 release workflow가 성공으로 끝났다.
+
 - F196.1: window facts의 각 web view row가 자기 WebContent process를 보고하고, 두 host가 그것을 `host.window`의 `documents` 각 항목에 `process`로 옮기므로, 브라우저 탭의 메모리가 그 surface에 연결된다. private API 목록이 window facts를 `_webProcessIdentifier`의 호출 위치로 밝힌다. Red: native window facts 검사가 web view row에서 `process`를 찾지 못했다. Green: `make -C native/darwin repeat TEST=window_facts_test` 2번 중 2번, 두 host가 build되고 host parity 검사가 통과한다.
+
 - F194.10.5: 선언된 모든 workspace 버전이 외부 애플리케이션 표면이 없는 release인 0.0.17이다. registry가 sidecar-app 0.0.1을 철회하고, embed kit과 애플리케이션 sidecar 저장소를 보관한다.
+
 - F194.10.4: 명세가 연결 plugin, `applications.json`, `runtime.applications`, `plugins-progress`를 밝히지 않고, 외부 애플리케이션 표면과 연결 plugin의 계획을 없앤다. 끝난 sidecar의 frame에 대한 native surface 명세의 규칙은 남는다.
 - 체크리스트 항목 `F194.3.4` 폐기: 120 Hz 관문은 F194.10이 폐기하는 외부 애플리케이션 표면을 재었다.
 - 체크리스트 항목 `F194.5.9` 폐기: 예시 애플리케이션의 연결 plugin은 F194.10이 폐기하는 외부 애플리케이션 표면에 속했다.
+
 - F194.10.3: 연결 plugin과 애플리케이션 관문의 창 검사를 없애고, workflow가 애플리케이션 sidecar와 embed kit을 checkout하지 않고 시험 애플리케이션을 빌드하지 않으며, workspace 선언에 애플리케이션 sidecar가 없다. Green: workflow와 registry 검사 10개 중 10개, 창 검사 source 규칙.
+
 - F194.10.2: 두 `sok` 패키지의 설치기가 애플리케이션을 연결, 기록, 제거하지 않고, plugin 상태가 애플리케이션을 보고하지 않으며, 두 host가 `plugins-progress`를 보내지 않는다. event `sok.application.step`, `host.application.step`과 애플리케이션 연결만 쓰던 platform 작업을 없애고, host 계약에서 연결 사례 24개를 뺀다. F194.8.4부터 F194.8.6까지의 host 수정은 남는다. Green: Go `sok`과 host 검사, Rust `sok` 검사 117개, Rust host 검사 408개, clippy, event class와 census 검사.
+
 - F194.10.1: `@soksak/plugin-api`에 embed page `mountApplication`과 manifest 필드 `application`이 없고, surface context에 `runtime.applications`가 없으며, workbench에 연결된 애플리케이션의 기록과 애플리케이션 연결의 진행 줄이 없다. 외부 애플리케이션 표면의 파일을 없앤다. Green: plugin-api 검사 208개 중 208개, workbench 검사 481개 중 481개.
 - 체크리스트 항목 `F194.9` 폐기: 캡처 연결 plugin은 애플리케이션 창의 frame을 복사해 보였는데, 그 지연과 입력 경로는 이 프로젝트의 surface가 요구하는 성능에 맞지 않는다. 제안을 없애고, 연결 plugin은 embed protocol로만 애플리케이션을 보인다.
+
 - F160.7-1: 반복 160번(그중 100번은 부하 아래)과 Tauri diagnostics host suite 전체 3번 뒤 재현되지 않음으로 닫는다. 두 host의 감시자가 source와 함께 오류 문장이나 policy를 보고하고, 두 검사가 각 대기의 단계를 이름하므로 재발하면 위치가 남는다.
+
 - F194.8.3: core 0.0.16이 두 host build와 함께 게시되었고, registry가 appview 0.0.2를 철회했다.
+
 - F194.8.1-1: embed page의 compose message, 없는 기록, event 없는 message의 기본값이 이유를 밝힌다. Red: push 검사의 census 검사가 이유 없는 기본값 3개를 보고했다. Green: census 검사 13개 중 13개, page 검사 9개 중 9개.
+
 - F194.8.3: 선언된 모든 workspace 버전이 0.0.16이다. 이 release에서 embed page는 core의 `mountApplication`이고 plugin appview는 끼지 않는다.
 - F194.8.5-1, F194.8.6: 두 host가 어떤 plugin도 선언하지 않는 사이드카의 그림을 native 표시 전에 `stale`로 답하므로 page는 오류 이벤트를 받지 않고, Tauri host의 page 재시작은 선언된 사이드카만 다시 연결하므로(`reconnect_targets`) 그런 제거 뒤에도 page 시작이 실패하지 않는다. 창 검사가 카드가 애플리케이션을 보이는 동안 연결 plugin을 제거한다. Red: 두 host의 image 검사가 native 표시가 불린 것을 찾았고, reload 검사는 `reconnect_targets` 없이 build되지 않았다. 창 검사는 page의 오류 이벤트와 다시 시작하지 않는 Tauri page를 찾았다. Green: 두 host의 image와 sidecar 검사.
+
 - F194.8.5: 두 host의 envelope handler가 보내는 사이드카를 plugin이 아직 선언하는지 받는다. 선언하지 않을 때 실패한 그림은 `stale`로 답하고 기록되며 복구되지 않고, 끝난 사이드카에 닿지 못하는 모든 답은 보내지 않음으로 기록된다. native surface 명세의 없는 anchor를 가리키던 주석이 `#image-regions`를 가리킨다. Red: 두 host의 새 검사가 그 predicate 없이 build되지 않았다. Green: 두 host의 image와 sidecar 검사.
 - F194.8.1, F194.8.2: `@soksak/plugin-api`가 embed page `mountApplication(root, context, { application })`을 내보내고, 각 연결 plugin이 자기 surface에 자기 이름으로 그것을 mount한다. `extends`를 가진 plugin에 surface가 필요하다는 규칙이 돌아온다. workspace와 workflow는 plugin-appview를 이름하지 않고, 창 검사는 core의 page를 mount하고 애플리케이션 sidecar에만 의존하는 연결 plugin을 설치한다(`e2e/connector-fixture.mjs`). 관문 검사는 `e2e/application-gate.test.mjs`이고, fixture의 cleanup은 plugin을 제거하기 전에 그 카드를 닫고 registry를 자기 단계에서 되돌린다. Red: export 검사가 그것 없이 실패했다. Green: plugin-api 검사 221개 중 221개, 두 host에서 연결 검사 3번 중 3번. 관문은 기계에 부하가 걸리기 전 두 host에서 median 16 ms로 통과했고, load average 25에서 30일 때의 drag median 26에서 29 ms는 부하로 분류한다.
+
 - F194.8.4: process가 실행 중이 아닌 sidecar로의 응답은 두 host에서 같은 문장의 끝난 오류(`ErrSidecarEnded`, `ResponseError::Ended`)이고, 그런 sidecar에 대한 버려진 transfer image의 `closed` 답은 오류 대신 `not sent`로 기록된다. Red: 두 host의 새 검사가 그 오류 종류 없이 build되지 않았고, 연결 검사가 3번 중 2번 오류를 기록했다. Green: 두 host의 sidecar 검사, Rust host의 buffer와 flush 검사와 함께.
+
 - F194.5.9: 레시피는 애플리케이션을 그 자신의 배포로만 설치하므로, 예시 애플리케이션이 자기 배포로 embed 어댑터를 가진 build를 줄 때까지 보류한다.
 - F194.6, F194.7.1, F194.7.3, F194.5.7.2, F194.5.8-1: core 0.0.15가 두 host build와 함께 게시되었다. plugin-appview 0.0.2(공유 embed page, `appview.surface`)와 sidecar-app 0.0.1(A1.10)이 게시되어 registry에 올랐고, registry의 publish와 ci workflow가 통과했다.
+
 - F194.7.2: 연결 창 검사가 자기 애플리케이션 이름을 가진 plugin을 만든다. 그 plugin은 공유 embed page `@soksak/shared/appview.surface/surface.js`를 import하는 자기 surface를 가지고, `appview.surface`에 기여하며, 애플리케이션 sidecar의 image region을 선언한다. 검사는 설정 없이 그 plugin의 카드를 연다. 애플리케이션 sidecar는 workspace 밖의 연결 plugin만 쓰므로, workspace registry가 선언된 모든 sidecar를 release한다. Red: registry 시험이 어떤 workspace plugin도 쓰지 않는 선언된 sidecar의 release를 찾지 못했고, 검사가 연결 plugin의 sidecar를 찾지 못했다. Green: registry 시험 4개 중 4개, 두 host에서 검사 3번 중 3번(macOS 26, F194.7.0을 담은 debug build).
+
 - F194.7.0: `validateManifest`가 모든 지점이 `modules`를 선언하면 `surface` 없는 `extends`를, 그리고 `extends`만 가진 plugin을 받는다. 명세가 공유 module 지점을 밝힌다. Red: module만 주는 제공자의 새 검사가 `extends requires a surface`로 거부되었다. Green: plugin-api 검사 213개 중 213개.
+
 - F194.6: 선언된 모든 workspace 버전이 연결 plugin의 release인 0.0.15다.
+
 - F194.5.8: 창 검사 `e2e/connector.test.mjs`가 embed kit 시험 애플리케이션의 연결 plugin을 자기 registry에 묶고, 애플리케이션의 release를 검사 registry의 인증서로 https에서 제공한다. 애플리케이션이 있으면 설치가 그 자리의 것을 연결하고, 없으면 release 레시피가 설정 폴더에 설치하며, 매번 `application:embed-test-app`을 가진 appview 카드가 기록된 경로로 그것을 시작한다. 이 검사가 F194.5.6.1-2와 sidecar-app A1.10을 찾았다. Green(macOS 26, F194.5.6.1-2와 sidecar-app A1.10을 담은 debug build): 두 host에서 3번 중 3번.
+
 - F194.5.6.1-2: 두 설치기가 설치되거나 업데이트된 연결 plugin마다, 연결이 실패한 이전 설치가 폴더를 풀어 두었어도 애플리케이션을 연결한다. Red: 두 `sok` 패키지의 새 검사가 두 번째 설치 뒤 애플리케이션을 찾지 못했다. Green: 각 언어 연결 검사 4개 중 4개, plugin과 ownership 검사와 함께.
+
 - F194.3.1-2: window-check workflow가 embed kit을 checkout하고 시험 애플리케이션을 빌드해 `pnpm verify`의 appview 관문이 요구하는 `SOKSAK_EMBED_TEST_APP`을 정한다. Red: 새 workflow 검사가 `window-checks.yml`이 `SOKSAK_EMBED_TEST_APP`을 정하지 않는다고 보고했다. Green: workflow 검사 6개 중 6개.
+
 - F194.5.7.1: 두 host의 `pluginsState`가 `plugins/applications.json`의 기록인 `applications`를 보고하고, surface context에 `runtime.applications`(`read`, `on`)가 있으며 page는 그것을 `applications.js`를 거쳐 plugin 상태에서 정한다. Red: 두 `sok` 패키지와 두 host의 상태 검사에 `applications`가 없었고, plugin-api context 검사에 `runtime.applications`가 없었고, surface 검사가 그것을 읽지 못했다. Green: 그 검사들.
+
 - F194.5.6.3: plugin 작업 동안 두 host가 연결 plugin의 애플리케이션을 연결하는 단계마다 모든 창에 `plugins-progress`를 보낸다. page는 그것을 실행 중인 작업에 `core.plugins`의 `step`으로 기록하고, plugin 카드는 "<plugin> <action> 진행 중 · <application> <step>"을 보인다. Red: host 검사가 진행 수신자 없이 compile되지 않았고, 작업 검사에 `progress`가 없었고, 카드는 "db install 진행 중"만 보였다. Green: 두 host의 plugin 검사, 작업과 library 검사.
+
 - F194.5.10-1: brew가 가지지 않은 package의 Rust 검사가 brew가 플랫폼의 관리자가 아니거나 검색 경로에 없으면 건너뛴다. Red: linux CI가 brew가 없다는 오류로 실패했다. Green: 로컬 레시피 검사 6개 중 6개. linux는 push의 CI가 확인한다.
+
 - F194.5.10: 애플리케이션은 플랫폼의 애플리케이션 식별자로 식별하고, 그 배포물이나 플랫폼의 표준 패키지 관리자로 설치한다: manifest는 `bundle`을 darwin에서만, 새 `appid`를 windows와 linux에서만, 플랫폼마다의 패키지 관리자(`brew`, `winget`, `flatpak`)를 받는다. 두 `sok` 구현은 새 platform 작업으로 `appid`를 시도하고 다른 플랫폼의 관리자를 거부하며, `appid`, `winget`, `flatpak`은 `not implemented on <os>`를 돌려준다. brew 검사는 brew가 플랫폼의 관리자가 아니거나 검색 경로에 없으면 건너뛴다. Red: manifest가 linux의 brew를 받았고, 두 `sok` 구현이 `appid`를 모르는 항목으로, 관리자를 "not brew"로 거부했다. Green: manifest 검사, 각 언어 연결 검사 5개와 6개.
+
 - F194.5.6.1-1: 애플리케이션의 각 Go·Rust 짝 검사가 host 계약이 이제 나열하는 `application.*` 계약 사례 20개 중 하나를 선언하고, package 검사는 brew가 없는 기계에서 `brew is not on the search path`를 단언한다. Red: F194.5.6.1 push의 CI가 `make host-contract-check`(`declares no contract case`)와 linux의 Go package 검사에서 실패했다. Green: 두 언어에서 로컬로 통과하고, 다음 push의 CI가 확인한다.
+
 - F194.5.6.2: 애플리케이션 연결의 각 단계(`locate`, `recipe`, `record`)가 두 `sok` 패키지의 설치 함수가 받는 관찰자에 닿는다. 명령줄은 그것을 run의 event 파일에 `sok.application.step`으로, 두 host는 `host.application.step`으로 방법, 결과, microsecond와 함께 저장한다. Red: 관찰 검사가 관찰자 인자와 함께 build되지 않거나 compile되지 않았다. Green: 각 언어 연결 검사 3개 중 3개, plugin과 ownership 검사와 함께.
+
 - F194.5.6.1: 두 `sok` 패키지의 설치기가 `installed.json`을 쓰기 전에, 설치가 푼 각 연결 plugin의 애플리케이션을 연결한다: 찾은 locate 항목이 있으면 located로 기록하고, 아니면 레시피가 설치해 그것이 준 실행 파일을 installed로 기록하며, 항목이 없는 플랫폼은 `application <id> does not support <platform>`으로 실패하고 아무것도 바꾸지 않고, plugin을 제거하면 그 애플리케이션을 제거한다. 연결이 읽는 선언의 모든 필드는 없을 때 이름과 함께 거부하고, PATH가 필요하며, unpack이 없는 release의 파일 이름은 주소의 마지막 segment이거나 오류다. Red: 연결 검사가 기록을 찾지 못했고 다른 플랫폼을 받아들였다. Green: 각 언어 2개 중 2개, plugin 시험(Rust 14개 중 14개, Go 전체)과 함께.
+
 - F194.5.3-1: Go 검사의 TLS server를 믿는 Fetcher를 `tests/fetch_test.go`에서 F194.5.3의 공유 Rust 모듈의 짝인 `tests/tls_support_test.go`로 옮긴다. Red: `make hosts-check`가 `packages/sok/tauriv2/tests/tls_support_test: no counterpart in packages/sok/wailsv3`로 실패했다. Green: 통과하고 Go 검사도 통과한다.
+
 - F194.5.5: 두 `sok` 패키지가 `plugins/applications.json`(format 1)을 관리한다: `ReadApplications`/`read_applications`가 그것을 읽고 다른 형식은 파일과 찾은 것을 이름해 거부하며, `RecordApplication`/`record_application`이 애플리케이션 하나를 한 번에 쓰고, `RemoveApplication`/`remove_application`이 설치한 애플리케이션은 폴더와 항목을, 찾아서 연결한 애플리케이션은 항목만 지운다. Red: 함수가 없어 기록 검사가 build되지 않거나 compile되지 않았다. Green: 각 언어 3개 중 3개.
+
 - F194.5.4: 두 `sok` 패키지가 package와 source 레시피를 실행한다. package 레시피는 `cask`를 선언하고, 설치기는 `brew install [--cask]`로 설치하기 전에 기계의 brew에 `brew info --json=v2`로 그 종류의 package가 있는지 묻는다. 설치 뒤 애플리케이션의 위치는 관리자에게서 추측하지 않고 locate 항목으로 찾는다. source 레시피는 https 저장소를 git으로 ref에서 애플리케이션의 폴더로 clone하고 거기서 각 build 명령을 실행한다. 검색 경로에도 clone 안에도 없거나 실패한 명령은 출력과 함께 자기를 이름하고 폴더를 남기지 않는다. source 레시피에는 `output`이 없다. `program`이 build된 실행 파일을 이름하기 때문이다. 검사는 실제 brew(읽기만)와 실제 git을 쓰며, git의 https 주소는 `url.<base>.insteadOf`로 검사의 저장소를 가리킨다. package 설치는 기계를 바꾸므로 F194.5.8의 설치 검사에서만 실행한다. 애플리케이션 검사의 fixture 애플리케이션 이름은 sketcher다. 이전 이름이 core에서 `make boundaries`가 거부하는 plugin id였기 때문이다. Red: 함수가 없어 레시피 검사가 build되지 않거나 compile되지 않았다. Green: 각 언어 5개 중 5개.
+
 - F194.5.3: 두 `sok` 패키지가 애플리케이션의 release 레시피를 설치한다(`InstallApplicationRelease`, `install_application_release`): fetcher의 release 제한으로 읽는 https 주소, SHA-256 비교, 그리고 platform의 bundle 추출로 푸는 zip, 폴더 안에 머무는 폴더·파일·symbolic link를 가진 tar.gz, 또는 실행 파일 하나. 실패한 단계는 자기를 이름하고 폴더를 남기지 않는다. Rust platform에 `symlink`가 생기고, Rust 검사의 TLS server는 fetch와 release 검사를 위해 `tests/tls_support_test.rs`로 옮겼다. Red: 함수가 없어 시험이 build되지 않거나 compile되지 않았다. Green: 각 언어 5개 중 5개.
+
 - F194.5.2: 두 `sok` 패키지가 설치된 애플리케이션을 찾는다(`LocateApplication`, `application::locate`): 각 locate 항목을 차례로 시도한다 — darwin의 metadata 색인(`mdfind`)으로 찾는 bundle identifier(`program`은 bundle을 담은 폴더에서 본다), 설치기가 `PATH`에서 넘기는 검색 경로의 이름, 또는 실행 파일의 절대 경로 — 그리고 애플리케이션을 처음 찾은 항목이 실행 파일과 방법을 준다. linux와 windows는 bundle 항목을 `not implemented on <os>`로 거부한다. Red: 함수가 없어 Go 시험이 build되지 않았고 Rust 시험이 compile되지 않았다. Green: 각 언어 4개 중 4개.
+
 - F194.5.1: plugin 명세가 연결 plugin의 `application` 필드를 가지며, 그런 plugin은 표면이 필요 없고 애플리케이션을 보이는 plugin에 의존할 수 있다. 설치 명세는 설치기가 기계를 조사해 설치된 애플리케이션을 연결하거나 레시피(`release`, `package`, `source`)를 실행하고, `plugins/applications.json`을 기록하며, 설치한 애플리케이션만 지우는 방식을 정한다. `validateManifest`가 그 필드를 검사한다. Red: `test/application.test.mjs`가 3개 중 3개 실패했다. Green: 3개 중 3개, 패키지 시험 211개 중 211개.
+
 - F192.2-1: 두 `sok` 패키지의 class 표를 `docs/spec/events.json`에서 다시 생성해 `page.background.session`을 가진다. Red: `scripts/test/event-classes.test.mjs`가 `packages/sok/wailsv3/src/event_classes.go differs from docs/spec/events.json`로 실패했다. Green: 3개 중 3개.
+
 - F194.3.1-1: `ci.yml`과 `window-checks.yml`이 애플리케이션 plugin과 애플리케이션 sidecar를 checkout하고, `scripts/test/workspace-registry.test.mjs`가 workspace registry가 선언한 모든 저장소의 checkout을 요구한다. 입력: 애플리케이션 표면 push의 CI가 `plugins/appview` checkout이 없어 `make boundaries`에서 실패했다. Red: 시험이 `ci.yml checks out no repository into plugins/appview, sidecars/app`로 실패했다. Green: 3개 중 3개.
 - 체크리스트 항목 `F192.1.1` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.1이다.
 - 체크리스트 항목 `F192.1.2` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.1.2이다.
@@ -1944,419 +2489,806 @@
 - 체크리스트 항목 `F192.4.6` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.6이다.
 - 체크리스트 항목 `F192.4.7` 폐기: 외부 애플리케이션 표면의 항목이 surface의 sidecar session 소유자를 하나로 유지하는 항목의 이 식별자로 기록되었다. 그 항목은 상태 그대로 F194.4.7이다.
 - F192.1, F192.2: background session은 surface가 mount되지 않은 tab에만 열리고, tab이 보이거나 surface가 mount되면 listener와 함께 끝난다. 그래서 같은 card의 다른 tab 뒤에 가려진 terminal이 출력을 그리지 않게 만들던 `image` 없는 두 번째 `open`을 더 받지 않는다. 각 결정은 event `page.background.session`이다.
+
 - F194.4: side 2를 마쳤다: 예시 애플리케이션이 patch된 renderer와 어댑터 crate로 appview 카드에서 실행되고, 애플리케이션 변경은 window platform 선택부에 머물며, 타임라인 드래그와 재생 중에 관문을 만족했다. F194.3.4는 120 Hz display와 core image configure의 refresh rate를 기다린다.
+
 - F194.4.5: 창 검사 `appview-gate`가 전체 화면 appview 카드에서 `SOKSAK_EMBED_PLAY`가 이름하는 control을 누르고, 약 3초의 재생을 present 횟수로 세며, host가 받아들인 frame 사이 간격을 잰다. 시험 클립을 재생하는 예시 애플리케이션이 wailsv3(macOS arm64, debug build)에서 세 번 통과했다: frame 334~337개, 간격 중앙값 18.0~18.1 ms, p99 22.9~25.1 ms, 거부되거나 건너뛴 frame 없음. 실행 뒤 캡처에서 playhead가 7초까지 나아갔다.
+
 - F194.4.7: 관문 검사가 appview 카드를 전체 화면으로 보이고, `SOKSAK_EMBED_TEST_ARGS`의 인자를 넘기며, region의 비율 `SOKSAK_EMBED_DRAG_X`와 `SOKSAK_EMBED_DRAG_Y`에서 드래그한다. 시험 클립이 있는 프로젝트(`--project`)를 연 예시 애플리케이션에서 타임라인 눈금자를 따라가는 드래그가 playhead와 미리보기를 움직였고, wailsv3(macOS arm64, debug build)에서 관문을 세 번 통과했다: 지연 중앙값 17.8~22.2 ms, p90 29.0~30.1 ms, frame 간격 p99 25.5~27.4 ms, 이동 100번 중 97~100번 측정, 거부된 frame 없음. 시험 애플리케이션도 전체 화면으로 같은 검사를 통과했다: 지연 중앙값 10.8 ms, p90 12.7 ms.
+
 - F194.4.6: 창 검사 `appview-gate`가 예시 애플리케이션을 실행하는 appview 카드와 함께 창을 최대화하고 복귀한다. Red: sidecar의 A1.9와 어댑터의 E1.6 전에는 이전 크기의 frame마다 크기 오류를 기록했다. Green: 오류 없이 wailsv3에서 각 단계 93~335 ms에 present. 애플리케이션 시작 화면에서의 드래그 관문은 그 화면이 드래그로 바뀌지 않아 이동 100번 중 12번만 쟀다(F194.4.7).
 - F194.4.1–F194.4.4: 예시 애플리케이션을 로컬에 fork했다. patch된 Skia renderer가 소유자가 정한 texture에 그리고, 어댑터 crate가 공유 device에서 window를 embed ring의 IOSurface에 그리며 sidecar에서 입력을 받고, `SOKSAK_EMBED_SOCKET`이 있으면 window platform 선택부가 어댑터를 고른다. 편집 코드는 바뀌지 않았다. socket과 함께 시작한 애플리케이션은 7초 만에 hello를 말하고 1280×800 frame을 보냈다.
+
 - F194.3.3: side 1의 관문이 60 Hz에서 두 host 모두 각 세 번 통과했다. macOS(arm64)에서 이 branch의 debug build로, load average 13~15에서 측정했다. Wails: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms. Tauri: 지연 중앙값 3.3~16.4 ms, p90 17.6~20.2 ms, frame 간격 p99 20.7~24.0 ms. 거부되거나 건너뛴 frame은 없었고, core는 바꾸지 않았으며, page는 native 주입 뒤 약 1 ms에 각 입력을 sidecar로 보냈다.
+
 - F194.3.2-1: 관문 검사는 `e2e-check`가 거부하는 활성화를 동반한 hover 이동 대신 press, present마다 한 번의 drag, release를 한다. F194.3.2의 commit은 실패를 가린 pipe를 거쳐 검사를 통과했다. load average 13~14에서 wailsv3로 세 번 통과했다: 지연 중앙값 12.2~13.8 ms, p90 14.7~15.2 ms, frame 간격 p99 22.0~24.1 ms, 거부되거나 건너뛴 frame 없음.
+
 - F194.3.2: 관문 검사 `e2e/appview-gate.test.mjs`가 시험 애플리케이션을 실행하는 appview 카드를 열고, present마다 한 번씩 native pointer를 100번 움직이며, native, host, page, sidecar 기록에서 각 이동부터 그것을 보이는 첫 frame에 대한 host 응답까지의 지연과 받아들여진 frame 사이 간격을 계산한다. 첫 실행들이 P2.3과 A1.8을 찾았다.
+
 - F194.3.1: workspace registry가 애플리케이션 plugin `appview`와 애플리케이션 sidecar를 선언하므로, 검사 설정이 side 1의 관문을 위해 그것들을 설치한다.
+
 - F194.2.6: 애플리케이션 plugin이 웹 주소인 프로그램을 document region에 보이고 sidecar를 시작하지 않는다.
 - F194.2.4, F194.2.5: 애플리케이션 plugin이 로컬 저장소로 시작하고, 그 page가 설정의 애플리케이션을 애플리케이션 sidecar가 공급하는 image region 하나에 보이며 카드의 입력을 그것에 넘긴다.
 - F194.2.2, F194.2.3: 애플리케이션 sidecar가 표면의 애플리케이션을 시작하고 멈추며, configure, frame, host 응답, page 입력을 중계하고, 스스로 끝난 애플리케이션을 그 종료를 이름하는 오류로 보고한다.
+
 - F194.2.1: 애플리케이션 sidecar가 standard input·output transport, 검사, 체크리스트, 체인지로그를 가진 버전 0.0.1 로컬 저장소로 시작한다.
+
 - F194.1.7: embed kit의 시험 애플리케이션이 매 frame 움직이는 막대와 pointer 표시를 그리고 각 입력과 present를 시각과 함께 기록한다.
+
 - F194.1.6: embed kit의 client가 애플리케이션을 sidecar의 socket에 잇고, configure와 입력을 받고 frame을 보낸다.
+
 - F194.1.5: embed kit이 darwin에서 host가 image region에 받는 형식인, 16-byte nonce를 가진 global IOSurface로 frame을 공유한다.
+
 - F194.1.4: embed kit의 버퍼 ring은 애플리케이션이 free 버퍼에만 그리게 하고, 뒤의 frame이 소비되면 버퍼를 free로 만든다.
+
 - F194.1.3: embed kit의 protocol 모듈이 모든 메시지를 한 줄로 읽고 쓰며, 문서를 어긴 줄을 그것을 이름하는 오류로 거부한다.
 - F194.1.1, F194.1.2: embed kit이 검사, 체크리스트, 체인지로그를 가진 로컬 저장소로 시작하고, 그 protocol 문서가 모든 메시지, framing, 시스템별 공유 버퍼 token을 정한다.
 - F161.56, F161.59, F161.62: 현재 build에서 재현되지 않음으로 닫았고, 재발을 보이는 기록이 있다.
+
 - F161.27: 두 애플리케이션에서 바깥 크기 변경 check를 세 번 반복한 뒤 재현되지 않음으로 닫았다.
+
 - F187: contract 주석이 다시 그 시험 위에 있고, 손실 시험이 writer의 속도에 기대지 않는다.
+
 - F182: input records 검사가 page.call을 쓴 page의 시계 anchor를 쓴다.
+
 - F160.20.2: 로그 분량 예산을 1분 이상의 창 검사 실행으로 정했다.
+
 - F191: 저장 데이터 마이그레이션을 담은 core 0.0.14가 릴리즈되었다. release workflow가 릴리즈로 빌드된 host에서 마이그레이션 단계를 실행하고 두 번들을 게시한다.
+
 - F190: 쓰기 sok plugin 명령이 쓰기 동안 설정 폴더를 소유하여 실행 중인 host 옆에서 거부되고 다른 명령과 경쟁하지 않는다.
+
 - F188.5: projects.json이 projects member 옆의 format member에 자기 형태를 실고, 첫 읽기에서 bare 배열에서 갱신된다.
+
 - F188.4: settings.json이 자기 형태를 format member에 실고 workspace 계층이 갱신하며 snapshot에서 감추고 쓸 때 보존한다.
+
 - F189: 릴리즈가 이전 릴리즈의 저장 데이터에서 릴리즈로 빌드된 host를 한 번 실행한다. 사슬·형식 언급·단계를 기계적으로 검사한다.
+
 - F188.2: 두 command line의 마이그레이션 engine이 plugins/installed.json의 정의 2→3을 적용하고, 공유 reader 입구가 읽기 전에 갱신한다.
+
 - F186: 애플리케이션의 활성화가 그 앞에 맨 앞이던 애플리케이션을 기록한다.
+
 - F183: 선언된 모든 workspace 버전이 0.0.13이며, 0.0.12 이후의 수정을 담은 릴리즈다.
+
 - F184: 모든 page와 plugin event가 그것을 쓴 page를 이름하고, 시간 초과된 다시 읽기가 기다린 host 호출을 이름한다.
+
 - F185: Tauri host의 native platform 시험이 하나씩 실행되고 비운 ring을 읽는다.
+
 - F181: debug 화면이 모두 저장의 진행을 보이고, host가 archive를 자기 thread에서 쓰며, 쓰는 중의 두 번째 저장을 거부하고, 버린 모달 응답을 모두 기록한다.
+
 - F180: 모든 script가 command line을 node:util의 parseArgs로 읽고 모르거나 반복된 option을 거부한다.
+
 - F160.19.3: `make host-allocations`가 option을 parseArgs로 읽고 모르는 option을 거부한다.
+
 - F179.1: page batcher 시험이 node:test의 mock timer를 쓰고, batcher에는 timer 인자가 없다.
+
 - F176.3: native 시험이 선언된 함수 `sp_region_set_input_context`로 응답 없는 키에 닿는다.
+
 - F177.2: 사슬 검사의 policy 시간표 기본값이 이유를 적는다.
+
 - F179: 거부된 event의 수가 batch마다가 아니라 초마다와 flush 때 나간다(두 host, page, native 라이브러리).
+
 - F160.20.1: 실행 감사가 1분 이상의 실행에서만 분량 예산을 판정한다.
+
 - F160.7.6: 입력 지연 check가 모든 class의 gate를 info로 둔 상태와 event 파일마다의 분당 byte를 잰다.
+
 - F178: Tauri event writer가 Go writer처럼 event가 계속 들어오는 동안에도 간격마다 batch를 쓴다.
+
 - F177.1: gate된 사슬 hop을 선언된 모든 level과 사슬 동안 적용된 모든 policy로 판정한다.
+
 - F177: 로그 감사가 적용 중인 policy가 저장하는 hop만 사슬에 요구한다.
+
 - F160.19.2: `make host-allocations`가 host process의 살아 있는 할당을 매 분 잰다. 두 host의 10분 실행이 증가를 보이지 않는다.
+
 - F160.21: Go와 Rust writer의 emit을 다시 측정해 부하와 함께 기록했다.
+
 - F176.2: test inventory가 F175와 F176을 시험에 연결한다.
+
 - F160.20: 실행 감사가 로그 class별 분량을 재고 catalog의 예산을 넘는 class를 실패시킨다.
+
 - F176.1: 입력 실패의 literal emit 위 marker를 지워 events check가 다시 통과한다.
+
 - F176: input method가 응답하지 않는 marked text 위의 키를 오류로 보고하고, 입력의 모든 오류가 키의 식별자를 가지며, 사슬이 그 error에서 끝난다.
+
 - F175: 실행 감사가 실행 구간 안의 줄에 놓인 finding만 판정한다. F161.4를 분류했다.
+
 - F174: 저장된 log offset이 없는 window check가 앞선 process의 기록이 아니라 실행 중인 process의 오류만 판정한다.
+
 - F160.18: trace on과 off의 입력 지연을 기록했다. F174가 Tauri check 애플리케이션이 찾은 update fixture를 적는다.
+
 - F160.17: native, Go, Rust benchmark 수치를 실행 시 부하와 함께 기록했다.
+
 - F173: input source 대기가 observer 입구로 등록하고, deep link parse가 경우를 밝히며, `make push-check`가 census와 fallback test를 돌린다.
+
 - F172: 두 host가 첫 창이 준비되기 전에 도착한 딥링크를 보관했다가 첫 창이 준비되면 도착한 순서대로 실행한다. 그 뒤에 도착한 링크는 바로 실행한다. 두 host의 queue test가 통과한다.
+
 - F161.57.7: preedit cursor check가 terminal plugin이 `terminal.cursor`에 노출한, service가 그린 preedit을 기다린다. activation IME check가 두 애플리케이션에서 통과한다.
+
 - F112: 두 host가 `soksak://<owner>/<command>?<params>`를 해석하고, key 창 또는 첫 창에서 선언된 command `<owner>.<command>`로 실행한다. 두 host의 parser 단위 test가 통과한다. 애플리케이션 밖에서 연 링크의 애플리케이션 수준 검사는 아직 실행하지 않았다.
+
 - F161.57.2: hwp activation check가 editor가 focus를 가진 뒤에 input source를 선택한다. F161.57.7이 간헐적인 preedit cursor 측정을 적는다.
+
 - F161.57.2: F161.57.5의 대기로 hwp check가 선택한 input source로 key를 입력한다.
+
 - F171: 부하에서 Wails main thread가 멈춘 원인이 AppKit의 동기 LaunchServices 호출에 있다. F161.27에 바깥 크기 변경 뒤 terminal의 추적 check가 생겼다.
 - F135, F160.24: 닫았다. document region의 입력 test가 통과하고 log query의 모든 항목이 완료되었다.
 - F162, F124: 빈 문서와 debug view 항목이 검증 규칙에 따라 완료되었다. save panel은 activation 등급에서 관측하지 않았다.
+
 - F161.29: terminal menu가 release되어 plugin의 surface menu가 완료되었다.
 - F162.4, F141, F123, F161.57.3: core 0.0.12, hwp plugin 0.0.1, terminal 수정이 release되었고, preedit cursor check가 두 애플리케이션에서 통과한다.
+
 - F161.57.5: `diagnostics.input.source`가 key view의 text input context가 선택한 source를 알린 뒤에 선택에 답한다.
 - F161.55.5, F161.55: frame 대기로 padding drag check가 두 애플리케이션에서 통과한다. F161.57.3은 Tauri 애플리케이션의 그려진 frame에 원인이 있다.
+
 - F161.57.5: 전환 중에 입력한 key가 사라졌으므로 F161.57.4의 text input context 강제 선택을 되돌렸다.
+
 - F161.57.4: input source 선택이 답하기 전에 key view의 text input context가 그 source를 갖게 하여, 첫 key가 선택한 input method에 닿는다.
+
 - F161.55.5: window check의 terminal pixel helper가 image region이 screen read가 가리키는 frame을 표시할 때까지 기다리고, 명세가 screen event와 `terminal.screen.read`의 `frame`을 적는다.
+
 - F164.3: Wails host의 stall watch가 `routine.Go`로 시작한다.
+
 - F168.1: class table generator가 edition 2024의 let chain을 쓴다.
+
 - F170: `make push-check`가 CI의 commit, 구조, format, clippy 검사를 실행하고, pre-push hook이 그것을 실행한다.
 - F149.2, F150.8.3, F161.57.1: activation 실행이 두 애플리케이션에서 한글 음절과 terminal keyboard를 통과했다. F161.57.3과 F161.57.4가 그 실행의 새 실패 두 개를 적는다.
+
 - F169: `.node-version`이 Node 26.11.1을 선언한다.
+
 - F166.7: host 배치가 Tauri host의 kqueue 감시를 차이 H10으로 허용한다.
+
 - F164.2: Tauri host의 stall sample이 Wails host의 짝인 `stall_sample.rs`이다.
+
 - F168: Rust package가 edition 2024로 build된다. 기본 configuration 폴더의 test는 더는 process의 환경을 바꾸지 않는다.
+
 - F162.4: 선언된 모든 workspace version이 0.0.12이다.
+
 - F160.23: 아무것도 기록하지 않던 sidecar와 plugin의 기록 항목은 저장소마다 자기 체크리스트에 있으며, 저장소별 ID는 F160.23 줄에 나열한다. 각 저장소가 누락된 기록의 항목을 이미 가지고 있어서 새 항목은 추가하지 않았다.
+
 - F166.3.2: page는 ES module만 load하고 semver는 CommonJS로만 배포되므로 workbench가 version을 읽는 자체 code를 유지하며, module이 그 이유를 적는다.
+
 - F166.3.1: Go와 Rust의 `sok` package가 version을 `github.com/Masterminds/semver/v3`와 crate `semver`로 읽고, library가 기본으로 받는 형태를 포함해 명세가 적지 않은 형태를 거부한다.
 - F114, F161.49: 닫았다.
 - F160.12, F160.14, F160.16, F154.3, F154: agent guidance의 검증 규칙에 따라 단위 Red와 Green으로 닫았다. 기다리던 실행은 돌리지 않는다.
+
 - F166: 애플리케이션 실행만 기다리던 17개 항목이 agent guidance의 검증 규칙에 따라 상위 항목의 단위 Red와 Green으로 완료되었고, 아래 항목이 모두 완료된 상위 항목 13개를 닫았다. 그 window check는 추적된 채 남고 실행하지 않았다.
+
 - F167: 용어 목록이 image region을 적고 picture region을 거부하며, 모든 기록이 image region을 쓴다.
+
 - F161.55.5: `host.window`가 각 image region의 표시된 frame의 generation, raster, sequence를 보고하며, 현재 raster의 frame이 표시되지 않은 동안 `presented`는 null이다.
+
 - F166.6: window check의 LZ4 decoder는 자체 code를 유지한다. lz4js 0.2.0이 잘린 입력과 잘못된 match reference를 오류 없이 받아들이기 때문이며, 그 이유는 decoder에 적는다.
+
 - F166.4: Tauri host가 clipboard PNG의 IHDR CRC를 자체 CRC-32 loop 대신 crc32fast 1.5.1로 계산한다. 잘못된 IHDR CRC의 거부는 바뀌지 않는다.
+
 - F166.5: window check의 `readPng`가 자체 decoder를 유지하고 이유를 적는다: pngjs는 짧은 image stream을 오류 없이 읽는다.
+
 - F166.2: checklist가 유지되는 library가 제공하는 core의 기능(semantic version, PNG CRC-32, window check의 PNG와 LZ4 decoder)을 적고, 남는 자체 기능을 유지하는 이유를 적는다.
+
 - F166.1: Wails host가 fsnotify로 정책 파일을 감시한다. platform 계층의 kqueue code를 제거했고, Tauri host는 자체 code를 유지하는 이유를 적는다.
+
 - F164.1: Wails host의 stall sample이 macOS에서만 build되어, source가 Windows용으로 compile된다.
+
 - F161.37: 다시 연 terminal surface의 첫 raster 답이 terminal sidecar S49의 대조로 그 surface에 닿는다(그 release 0.0.9까지 미배포).
+
 - F161.55.4: window check의 pasteboard cleanup이 복원과 비교 사이에 다른 process가 쓴 것을 change count로 밝힌다.
+
 - F166: agent guidance가 library가 제공하는 기능에 생태계의 유지되는 library를 쓰도록 요구한다.
+
 - F165: sidecar 명세의 image envelope 답 표가 모든 오류 답이 담는 generation과 raster를 보인다.
+
 - F164: 두 host가 1 s 이상의 main thread 정지, thread들의 stack, 정지의 끝을 window check 없이 기록한다.
+
 - F161.61: 각 시험 파일이 표준 오류에 TAP 형식으로도 보고하므로, 한도에서 종료된 파일도 그 전에 실패한 시험의 오류를 갖는다.
+
 - F161.60: 실행의 감사가 첫 시작 표시부터 마지막 끝 표시까지의 오류를 판정하므로, 같은 설정 폴더의 이전 실행 오류가 더 이상 감사를 실패시키지 않는다.
+
 - F161.52.1: Tauri host가 새 surface의 native surface를 만드는 main thread 단계에서 이름을 붙이므로, 생성 중의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않는다.
+
 - F161.54: 두 host가 process가 끝내지 못한 줄에서 sidecar 연결을 끝내고, 그 surface들을 `invalid message`로 실패시키지 않는다.
+
 - F161.53: verify V7b가 적용된 surface를 device pixel 안쪽으로 맞춘 선언 사각형과 비교하므로, point당 device pixel 하나인 화면이 반 point 때문에 verify 오류를 보이지 않는다.
+
 - F161.52: Tauri host가 제거된 surface의 이름을 native surface가 닫힐 때까지 유지하므로, 제거 중의 `host.window` 읽기가 더 이상 `unregistered native surface`로 실패하지 않는다.
+
 - F161.51: 예제 검증 문서가 새 검사 설정은 애플리케이션 시작 전에 `make install-plugins`로 workspace plugin을 받고, 하네스가 교체하는 것은 registry가 아니라 프로젝트 목록이라고 적는다.
+
 - F163: network가 없을 때처럼 registry를 읽지 못한 첫 실행은 starter pack 없이 창을 시작하고 이유를 밝히며, 다음 시작 때 pack을 설치한다.
+
 - F160.31: host writer와 도구 writer는 도구 패키지의 한 구현이다. host의 writer case는 host 계약의 case로 host 패키지에 남는다.
+
 - F162.5: `soksak-exposure`가 surface module이 `runtime.command`로 실행하는 core 명령을 받아들이고, core가 선언하지 않은 이름을 보고한다.
+
 - F162.3: surface module이 `context.runtime.command(name, params)`로 core의 명령을 실행하므로, 문서 plugin이 `core.file.place`에 닿는다.
 - R3.5.3: plugin-editor, plugin-hwp, plugin-flowmark, plugin-shell, sidecar-shell이 `make test`에서 `soksak-records`를 실행하고, workflow가 있는 plugin 셋은 CI에서 `soksak-commits`를 실행한다.
 - R3.5.2: plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt, registry가 core release 0.0.11의 `@soksak/plugin-api`로 `make test`에서 `soksak-records`를, CI에서 `soksak-commits`를 실행한다.
+
 - F150.8.4: core 0.0.11을 release했다. release workflow가 tag `v0.0.11`의 Wails와 Tauri bundle을 게시했고 registry가 이를 나열한다.
+
 - F161.47: CI의 job `test`가 cache와 600 s build 한도로 두 push에서 통과했다.
+
 - F161.37.2: 두 호스트가 소유 창이 없는 표면의 전송 그림에 `closed`로 답하므로, terminal sidecar가 그 frame을 놓고 같은 id로 다시 열린 표면이 자기 frame의 답을 받는다.
+
 - F161.50: Tauri host 가 surface sync 가 제거하는 surface 를 handle 을 닫기 전에 surface registry 에서 빼므로, 창 닫기가 같은 handle 을 다시 닫아 애플리케이션을 종료시키지 않는다.
+
 - F161.49: terminal service의 복구 check가 kill이 전달 중인 frame이나 쓰기를 만날 때 일으키는 오류를 선언한다.
+
 - F150.8.4: 선언된 모든 workspace version이 0.0.11이다. F150과 F160의 event contract, F160.35의 replay, F161과 F143의 수리, F162.1의 저장 위치를 담는 version이다.
+
 - F161.48: 한글 test가 주석에서 음절을 code point로 부르고, extension probe가 release version을 선언하며, F102가 window check를 link하므로 repository 검사가 다시 통과한다.
+
 - F161.47: CI runner에서 Tauri host test의 cold build가 300 s를 넘으므로 host contract check의 build는 600 s까지 걸릴 수 있고, CI workflow는 cargo와 Go cache를 실행 사이에 보관한다.
+
 - F135: exposure 명세가 애플리케이션이 한 번 활성이었으면 document 영역도 터미널처럼 활성 애플리케이션의 키 창에서만 입력한 문자를 받는다고 적는다. 활성화를 막는 native test가 여전히 입력하는 이유다.
+
 - F160.6.5.1: 두 host가 sidecar의 writer가 쓰는 줄의 크기를 보고하고, buffer 한도의 fixture는 writer가 pipe에서 막힌 뒤에야 쓰기 queue를 채우므로, 그 case가 writer thread의 시작 시점에 좌우되지 않는다.
+
 - F102.1.6: window check가 자기 registry에서 contributor probe와 provider probe를 설치하고, 두 애플리케이션에서 기여한 항목이 연결되고 provider page가 그것을 쓰기를 요구한다.
+
 - F102.1.8: workspace registry가 plugin entry에 sidecar 의존만 쓰고 선언된 plugin에 대한 의존을 받는다.
+
 - F161.46: window check가 endpoint 검사보다 먼저 시작 위치와 기존 recording을 읽으므로, 오래된 build에서 끝난 check는 그 오류만 보고한다.
+
 - F161.45: 설정 modal이 F146부터의 debug view처럼 overscroll 동안 native modal이 보고하는 음수 스크롤 위치를 유지하고, 숫자가 아닌 값만 거부한다.
+
 - F143: 한국어 입력기가 선택된 동안 image region이 가장 최근 insert 앞의 음절을 다음 insert나 조합의 끝까지 고칠 수 있게 둔다. 입력기가 그 음절을 고치기 전에 다음 음절을 먼저 붙일 수 있어 고쳐지지 않은 음절이 PTY로 갔기 때문이다.
+
 - F161.44: 예제 절차가 목록의 test 파일 627개를 기록한다.
+
 - F161.43: chain 검색 test가 F161.15부터 `chainOf`이 고르는 대로 log 순서의 첫 맞는 시작을 요구한다.
+
 - F161.42: catalog test가 F161.26부터 명세가 적는 대로 `page.call` 없는 chain `window`를 요구한다.
+
 - F161.41: 애플리케이션 test가 clock anchor 진술 없이 page의 batch를 확인한다. 그 진술은 workbench에 자기 test가 있다.
+
 - F161.40: 오른쪽 click의 handler가 event의 target에 `closest`를 바로 호출한다. `contextmenu` event는 늘 element를 target으로 하기 때문이다.
+
 - F161.39: Go, Rust, page의 생성 class 표가 F161.37.1이 catalog에 더한 `host.sidecar.write_wait`를 담는다.
+
 - F162.1: `core.file.place {name}`과 host call `filePlace`가 창의 save panel로 새 문서를 어디에 저장할지 묻고 고른 파일을 project root 기준 상대로 답한다. 두 host는 파일 이름이 아닌 name과 project 밖의 위치를 거부한다.
+
 - F161.27.1: window check가 같지 않은 terminal 카드를 다섯 번 균형 맞추고 모든 terminal이 새 크기의 raster를 보이기를 요구한다.
+
 - F161.29.1: plugin이 `plugin.json`의 `surface.menu`에 표면의 context menu를 선언하고, 그 표면에서 오른쪽 click은 `core.surface.menu`를 실행해 pointer 위치에 항목을 열고 고른 명령을 그 표면에서 실행한다. 다른 곳에서는 page menu가 남는다.
+
 - F161.24: 카드가 전체 화면인 동안 추가, 분할, 닫기 도구가 꺼지고 그 명령은 전체 화면 카드를 밝히는 error로 거부되므로, 배치는 원래 배치로 돌아간 뒤에만 바뀐다.
+
 - F161.28: 탭 목록 button(≡)이 모든 카드 머리의 시작에 있고, 머리는 탭이 접힐 때만 보이는 대신 모든 단계에서 그 너비를 남긴다.
+
 - F161.25: 카드의 탭은 최대 200 point 너비다. 더 긴 이름은 말줄임표로 자르고 탭의 tooltip이 이름 전체를 보인다.
+
 - F161.38: project 전환 test가 F161.13부터 `projects.js`가 import하는 page event queue를 mock하므로, 그 case가 다시 적재되고 실행된다.
+
 - F161.4.1: replay check의 alter case가 일부러 일으키는 자기 session의 event `sok.replay.divergence`를 선언하므로, 실행의 audit가 더는 그것을 선언되지 않은 오류로 세지 않는다.
+
 - F161.37.1: 두 host가 sidecar로 가는 줄이 쓰기 queue에서 1초 이상 기다렸거나 쓰기에 10 ms 이상 걸리면 `host.sidecar.write_wait`를 저장한다. log가 host가 늦게 쓴 줄과 깨어나지 않은 sidecar의 읽기를 구분하게 하기 위해서다.
+
 - F161.32: Wails host에서 `phase: starting`에 머문 hwp 파일의 studio를 영구 document store가 아니라, 편집기가 듣기 전에 첫 요청을 보낸 hwp plugin의 시작(hwp repository의 H13)으로 분류한다. core의 message contract는 바뀌지 않는다.
+
 - F161.34: activity observer의 할당 check가 notification을 보내는 thread의 할당을 센다. text view가 first responder가 된 뒤 system의 text input analytics가 자기 queue에서 한 번 할당하고, 그 block이 첫 측정 구간에 들어갔기 때문이다.
+
 - F161.14: page의 첫 batch가 clock anchor의 왕복 옆에 page 시계의 해상도를 `page.log.clock`(`resolution_us`)으로 적는다. `performance.now()`의 읽기값이 계단으로 진행하므로 page의 시간은 왕복의 절반에 그 계단을 더한 값만큼 host 시계와 달라진다.
+
 - F161.23: resize의 감싸진 줄 check가 새 폭의 화면만 판정하고 cursor가 자리 잡은 뒤에 줄을 읽는다. 이전 폭의 screen message도 입력을 한 번 보이기 때문이다.
+
 - F161.26: 창 닫기가 page의 event 대기열을 비우기 앞에서 연산을 시작해 식별자를 host 호출에 넘기고, chain `window`가 `page.window.operation`과 `host.binding.call`을 요구한다. 닫는 호출은 page가 호출을 기록하기 전에 page를 끝내고 host가 사라진 창의 batch를 거부하기 때문이다.
+
 - F161.18: divider drag check가 하나의 표시 경로가 주는 transcript 줄의 기록 형식(`info page page: host ...`)을 맞추고, 아무것도 표시하지 않는 표면이 frame 기록을 남기도록 trace를 켠 채 실행한다.
+
 - F161.31: window-check harness의 `readEvents`가 모든 process의 event를 concat으로 병합해 하루치 check의 어떤 수의 새 event도 읽는다. 한 호출의 spread가 stack을 넘겼다.
+
 - F161.33: 입력 영역의 보고가 catalog가 선언한 대로 dropped member를 boolean으로 기록한다. C의 논리합은 int라 수로 직렬화되었다.
+
 - F161.36: page가 시작에서 저장된 performance 스위치를 양방향으로 host에 알려, 끝난 page가 켠 채로 남긴 스위치가 저장된 상태로 돌아간다. 계약은 저장된 true의 보고만 적었고 host는 설정이 꺼짐인 동안 trace row를 계속 기록했다.
+
 - F161.13: page가 창을 닫는 host 호출 앞에서 자기 event 대기열을 비워, 닫기 사슬의 첫 event가 page가 끝나기 전에 host의 writer에 도달한다.
+
 - F161.20: `e2e/fixture.mjs`의 `pluginChangeApplied`가 plugin 변경이 다시 띄우는 page를 기다리고, chain과 registry check의 plugin 연산과 cleanup이 이를 기다린다.
+
 - F161.21: settings check가 고정된 목록 대신 자기 configuration의 활성화된 설치 plugin을 나열한다.
+
 - F161.19: 입력 기록 check가 terminal의 plugin event를 `plugin` 층 row로 읽고 page와 host의 clock 사이 순서에 page clock anchor의 bound를 허용한다.
+
 - F161.12: Tauri host가 종료할 때 창의 WebContent process를 main webview의 handle로 `with_webview` 밖에서 끝낸다. 이전에는 event를 보내던 thread와 deadlock이 났다.
+
 - F160.28.3: page의 첫 batch가 clock anchor의 왕복을 `page.log.clock`으로 적는다. 이는 그 event를 host의 event 사이에 두는 한도다.
+
 - F160.8.3: page의 sidecar port가 send의 상관 식별자를 host 호출 `sidecarSend`에 넘기므로, key의 요청이 key의 식별자를 갖는다.
+
 - F160.34.7: `sidecar.json`의 `replay.inputs`가 재생 입력 종류마다 event를 적고, 두 도구의 `sok debug replay`가 재생 실행 파일을 시작하기 전에 각 segment의 입력을 session 규칙으로 검사한다.
+
 - F160.25.6: `e2e/terminal-replay.test.mjs`가 출력, scroll, selection, theme 변경, resize, 입력이 있는 session을 모든 hash가 같게 재생하고, 바뀐 저장 출력을 계층 `sidecar`의 불일치로 보고한다.
+
 - F160.34.6: 두 도구의 policy 파일 reader가 `packages/log-contract/fixtures/policy/cases.json`의 모든 golden case를 실행하고, Go reader는 null level을 text여야 하는 level로 밝힌다.
+
 - F160.35.4: `e2e/terminal-replay.test.mjs`가 각 애플리케이션의 terminal session을 그 bundle의 `sok debug replay`로 재생하여 모든 sidecar와 page hash가 같은지, 중간에 바뀐 screen message(terminal plugin의 `terminal.screen.alter`)가 계층 `plugin`의 불일치인지 확인한다.
+
 - F160.36: host의 writer가 plugin event에 그 plugin의 catalog가 선언한 class를 준다. 두 host는 시작할 때와 plugin이 바뀔 때마다 활성화된 설치 plugin의 catalog를 읽고, 쓸 수 없는 catalog를 `error host plugin catalog`로 기록한다([plugin catalog](docs/spec/logging.ko.md#plugin-catalog)). 이전에는 모든 plugin event가 class 없이 `undeclared`로 저장되었다.
+
 - F160.35.7: page의 import map이 `@soksak/plugin-api/screen-hash`를 연결하므로 화면 메시지를 hash하는 plugin page가 읽힌다. 이것이 없어 두 애플리케이션에서 terminal surface가 mount되지 않았다.
+
 - F160.35.6: 두 도구의 `sok debug replay`는 page의 plugin이 `runtime.log`로 쓰는 계층 `plugin`의 page frame 기록을 비교하고 불일치에 그 계층을 밝힌다. frame 기록이 없는 계층 `page`를 읽었으므로 재생은 page frame을 하나도 비교하지 않았다.
+
 - F160.35.5: [화면 메시지](docs/spec/persistent-services.ko.md#화면-메시지)가 화면을 그린 sidecar 실행의 event 파일의 `boot`인 `segment`를 담는다. `screenFromMessage`는 비어 있지 않은 `segment`가 없는 메시지를 거부하고(fixture 메시지 `segment missing`), page는 이를 frame 기록의 `segment`로 저장하며, 두 도구의 `sok debug replay`는 segment가 하나인 session에서도 `fields.segment`가 없는 page frame 기록을 거부한다(계약 사례 `cli.debug.replay-segment-errors`).
+
 - F160.35.3: [화면 메시지](docs/spec/persistent-services.ko.md#화면-메시지)가 page는 있는 cursor 멤버를 각각 검사하고(`shape`는 `Block` 또는 `block`, `blinking`과 `focused`는 boolean) 없는 멤버는 이전 값을 유지하며 `terminal.screen.read`의 응답은 칸의 행이라고 정한다.
+
 - F160.35.1: [persistent services](docs/spec/persistent-services.ko.md#화면-메시지)가 sidecar에서 page로 가는 `screen` 메시지(해당 frame 기록의 `sequence`, `rows`, `cols`, `cursor`, 셀마다 `grapheme`, `width`, 해석된 `fg`와 `bg`, `attributes`)를 정의하고, [replay](docs/spec/replay.ko.md#보기-상태)가 page hash를 page가 받은 grid의 hash로 적어, sidecar hash와의 차이는 host와 page 사이 중계의 손실이나 변경을 찾고 raster의 결함은 비교 밖에 있음을 밝힌다. `@soksak/plugin-api/screen-hash`의 `screenFromMessage`가 메시지를 검증해 `screenHash`가 받는 화면을 돌려주며, `packages/log-contract/fixtures/replay/screen-message.json`이 화면 벡터마다 hash가 같은 메시지와 거부되는 메시지를 담는다. Red: `screenFromMessage`가 export되지 않았고 명세가 fixture를 이름으로 부르지 않았다. macOS에서 `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs`로 시험했다. sidecar와 plugin은 F160.35.2, F160.35.3에서 메시지를 채택한다.
+
 - F160.25.8: [replay](docs/spec/replay.ko.md#segment)는 replay segment(sidecar의 한 실행이 만든 event이며 `sequence`가 1부터 다시 시작한다)를 정의하고, 두 도구의 `sok debug replay`는 segment마다 재생 실행 파일을 한 번 시작해 각 segment를 자기 저장 hash와 비교하며, 불일치와 `sok.replay.divergence`에 segment(`segment`)를 밝히고, 한 번에 한 segment의 event 줄만 보관하며(`held_lines`), segment가 여럿인 session에서 `fields.segment`가 없거나 모르는 page frame 기록을 거부한다. 용어 `replay segment`를 선언한다
+
 - F160.25.7: 두 도구의 `sok sidecar release`는 `sidecar.json`이 선언한 `replay.executable`을 `files`가 나열하지 않으면 그 파일 이름을 담은 오류로, 실행 파일 없는 `replay`도 거부한다(계약 사례 `cli.release.requires-the-replay-executable`)
+
 - F160.3.2.1: 두 host가 종료할 때 writer의 마지막 flush 전에 native observer를 flush하므로 counted source의 마지막 전달분이 기록되고(`FlushNativeObservers`, `flush_native_observers`, 계약 사례 `log.native.platform-flushes-the-observers`, `log.native.shutdown-*`), 문서 view는 AppKit이 view에 등록한 알림 때문에 `native.observe.failed`를 저장하지 않는다. `sp_observe_key_path`가 context를 받고 view는 다른 context의 알림을 상위 class에 넘긴다
+
 - F160.9.3: 창 검사가 시작하는 fixture가 공통 설정을 행위자 `diagnostics.fixture`로 바꾸므로, 창 검사가 행위자 없는 설정 변경 때문에 `fresh`에서 실패하지 않는다. fixture는 `diagnostic-fixture.js`에 있고 시험이 있다.
+
 - F160.31: 공유 writer 옵션, reply ledger 순서, routine panic의 시험이 계약 사례(`cli.log.writer-options.*`, `buffers.sidecar-replies.*`)를 선언하고, 도구의 panic 시험이 별도 시험 함수 대신 자기 자신을 child로 시작하므로 `make host-contract-check`가 사례 592개로 통과한다.
+
 - F160.24.12: event 파일의 indexer가 쓰기 알림 뒤에 rotation이나 보존이 지운 파일에 대해서는 아무것도 보고하지 않고, 있는 파일의 실패한 갱신은 보고하기 전에 한 번 더 한다. native library의 appearance 검사가 기대하는 시험 수는 6이다.
+
 - F160.7: Go host 시험이 시작한 event writer를 폴더를 지우기 전에 끝내므로 지워진 폴더에 쓰는 writer가 없고, host 시험 패키지가 150초 이상 대신 48초에 돈다. panic hook 시험의 한도는 1500 ms로, 멈춘 writer를 기다리는 hook의 2초 대기보다 작고 부하에서 잰 606 ms보다 크다.
+
 - F160.16: `marks.jsonl`의 선언 시험이 실행기가 시험 프로세스의 환경에 넣는 실행 식별자에 더는 의존하지 않는다. 실행 밖의 session은 선언을 session에만 둔다.
+
 - F160.34.4: [replay](docs/spec/replay.ko.md#골든-벡터)가 화면 hash의 골든 벡터, 거부하는 화면, 재생 입력의 session을 이름으로 적고, `packages/log-contract/test/replay-vectors-named.test.mjs`가 문서와 번역이 각각을 적었는지 요구한다.
+
 - F160.34.3: [replay](docs/spec/replay.ko.md#보기-상태)가 선택, viewport 스크롤, theme을 재생 입력으로 정의하고, field 규칙, 순서, viewport의 커서, class를 적고, 적대 검증의 반론과 함께 결정을 기록한다(hash에서 제외와 frame 기록의 상태 field는 거부했다). hash 정의와 표지는 바뀌지 않으며 viewport 밖의 커서는 열을 유지한다. `@soksak/log-contract`가 `replayInputProblem`, `replaySessionProblem`, `REPLAY_INPUT_KINDS`를 골든 사례, 벡터 셋과 함께 내보낸다. `packages/log-contract` 시험으로 검증했으며, 재생 실행 파일은 F160.34.7에서 따른다.
+
 - F160.34.2: [logging](docs/spec/logging.ko.md#정책-파일)이 `log-policy.json`의 정확한 schema(member `schema`와 `classes`, class의 여섯 값, 기본값, sidecar를 위한 로그 폴더 옆의 위치, 거부와 그 text, 파일 시스템 event 감시, event `log.policy`)를 적고, `packages/log-contract/fixtures/policy`가 골든 사례를 갖고, `@soksak/log-contract`가 sidecar 시험을 위해 `parsePolicy`, `policyAllows`, `policyIsBeingWritten`과 fixture를 내보낸다. `packages/log-contract/test/policy.test.mjs`로 검증했으며, Go package `sok`와 Rust crate `soksak_sok`의 reader는 F160.34.6에서 사례를 실행한다.
+
 - F160.34.1: 저장소의 census 선언(`--census`)이 `emitters`, 곧 언어의 writer 메서드와 level, event 이름, field가 있는 인자의 위치를 받아, `soksak-events --catalog`가 Rust sidecar writer(`emit`, `emit_for`, `record_error`, `record_info`)의 emit 지점을 찾고 census가 이를 해당 함수의 event로 센다. `packages/plugin-api/test/events-check.test.mjs`로 검증했으며, sidecar 저장소에서의 관찰은 F160.34.5이다.
+
 - F160.33.4: `scripts/audit-run.mjs`와 `scripts/check-events.mjs --logs`가 설정 폴더마다 이 저장소의 catalog를, `plugins/installed.json`의 각 sidecar `sidecar.json`이 `events`로 가리키는 catalog와 합치고(`installedSidecarCatalogs`, `catalogOf`), 나열되어 있던 다섯 이름 대신 어떤 role의 event 파일도 읽는다. `scripts/test/audit-run.test.mjs`와 `scripts/test/check-events.test.mjs`로 검증했으며, 실행 중인 application에서의 관찰은 F160.33.5이다.
 - F160.33.2, F160.33.3: sidecar catalog는 자기 sidecar의 이름(`sidecar`)을 쓰고 `extends`(`{chain, after, events}`)로 사슬을 확장한다. `composeCatalogs`(`packages/log-contract`)가 이를 이 저장소의 catalog와 합치며, sidecar 이름이 없거나 다른 layer를 소유하거나 남의 event를 선언하거나 공유 `log.*` event와 모순되는 catalog는 거부한다. 감사는 sidecar를 지목하는 `host.sidecar.request`의 cid에 대해서만 확장 event를 요구한다(`chain input of <cid> lacks <event> after host.sidecar.request of <sidecar>`). layer `sidecar`의 lifecycle event는 선언된 대로 통과한다. 검증: `node --test packages/log-contract/test/audit.test.mjs`(24 test, 새 test는 `composeCatalogs`가 없어 먼저 실패했다).
+
 - F160.33.1: 두 host는 표준 입출력 sidecar를 `--log-dir <config-dir>/logs`와 함께 시작하므로 event contract를 따르는 sidecar가 event 파일을 남긴다. contract case `sidecars.start.passes-log-directory`와 각 host의 test(가짜 sidecar가 인자를 기록한다. 이전에는 인자 목록이 비어 있었다)가 macOS에서 Go host(`go test -tags diagnostics ./tests -run Sidecar`)와 Tauri host(`cargo test --test sidecars_test`, 41 test)로 통과한다.
 
 - F160.7: event 줄이 `class`(catalog가 선언한 class. 선언되지 않은 이름은 class 없이 `undeclared`로 표시해 저장)를 가지고, 두 host와 두 도구의 writer가 level을 `<role>-<boot>.jsonl`(`error`, `warn`, `info`)과 `<role>-<boot>.debug.jsonl`(`debug`, `trace`)로 나누며 `seq`는 두 파일에 걸쳐 잇고 `log.dropped`는 channel별 손실 수를 담으며, 회전은 파일을 세대 `<file>.<n>`으로 닫고 어떤 세대도 지우지 않는다. 생산자 gate `enabled(class, level)`(Go, Rust, page, native 라이브러리)는 `<config-dir>/log-policy.json`을 따른다. 이 파일은 host가 설정 `diagnostics.log`에서 쓰고 host의 모든 프로세스가 파일 시스템 event로 감시한다. 닫힌 gate는 field를 만들지 않고 정확한 수는 `log.gated`, `page.log.gated`, `native.log.gated`로 나가며 정책 변경은 `log.policy`다. run 단위 보존은 `logs/`를 6 GiB로 묶고 현재 run과 `.keep` 파일이 있는 run을 남기며 `log.pruned`를 저장한다. 질의는 `class`를 맞추고 두 channel을 끝까지 읽는다(F160.24.10). 검증: macOS에서 Go host, Rust host, 두 도구, workbench, native 라이브러리, scripts의 소유 시험. 애플리케이션 관찰, sidecar(F150.6.2), `debug`를 더 많은 수준으로 나누기, 조용한 기계의 측정은 열려 있다(F160.7.6).
+
 - F160.32.4: state module의 컨텍스트에 `trace`와 `log`를 가진 `runtime`이 있다(표면 컨텍스트와 호출, 검사, gate가 같고 event에는 플러그인 id가 붙으며 `surface`는 없다). 그래서 state module에서 `runtime.log`가 더 이상 예외를 던지지 않는다. Red: `a state module is mounted for the shown project, answers its commands, stores data, and is disposed on switch`의 state module이 `context.runtime.log.info`를 호출했고 mount가 `Cannot read properties of undefined (reading 'log')`로 실패하여, 마운트된 module `1`개를 기대했으나 실제 `undefined`로 test가 실패했다. Green: 이 test와 `an event of a state module has the plugin in its name and no surface in its fields`가 나머지 workbench test 449개와 함께 통과한다.
+
 - F160.32.2: plugin은 event가 저장될 때만 event의 field를 만든다. `context.runtime.log.enabled(level)`와 `context.runtime.trace.enabled()`가 gate를 알려 주고, `fields` 자리의 함수는 그 level이 저장되거나 트레이스가 켜져 있을 때만 실행된다(이름과 `cids`를 먼저 검사하고, 돌려준 객체는 `fields`처럼 검사한다). log의 gate는 `page-log.js`의 `eventEnabled`(host가 있으면 모든 level, 없는 page에서는 없음. class별 선택은 F160.7의 log 정책과 함께 온다)이고 트레이스의 gate는 `performance.js`의 `traceEnabled`다. gate 질의 없이 `log` 또는 `trace`를 주는 runtime은 거부한다. Red: `a plugin asks whether a level is stored and builds the fields of an event only then`가 `TypeError: context.runtime.log.enabled is not a function`으로, `a plugin trace builds its fields only while the trace is on`이 `TypeError: context.runtime.trace.enabled is not a function`으로, `a runtime that stores events or traces without the query of its gate is refused`가 `Missing expected exception`으로 실패했다. Green: 이 test 세 개와 `plugin-records.test.mjs`가 통과한다.
+
 - F160.32.1: plugin event가 `cids`를 page writer에 전달한다. `context.runtime.log.<level>(event, fields, {cids})`는 따옴표, 역슬래시, 제어 문자가 없는 비어 있지 않은 문자열의 배열(page writer와 host의 규칙)을 받고, 다른 값이나 다른 key는 아무것도 저장하기 전에 `TypeError`를 던지며, 목록을 `emitEvent`로 batch에 넘긴다. runtime의 기록 함수는 `surface.js`에서 `createPluginRuntime`(`plugin-runtime.js`)으로 옮겼고, workbench는 여기에 `pluginRecords`(`plugin-records.js`)를 준다. Red: `a plugin event carries the cids of its chain to the page writer`가 `[["p1.1", "p1.2"], undefined, undefined]`를 기대했으나 실제 `[undefined, undefined, undefined]`로 실패했다. Green: 이 test와 `plugin-records.test.mjs`가 나머지 workbench test 447개와 함께 통과한다.
+
 - F160.32.5: `soksak-events`는 `runtime.log.<level>(event, fields)`와 `runtime.log[level]` called with the same arguments를 plugin event의 입구로 인식한다. `plugin.<plugin>.` 없는 이름은 catalog 항목 `plugin.<plugin>.<event>` 하나에 대응하고(선언이 없으면 `plugin.*.<event>`로 보고), level은 member에서, fields는 object literal 또는 builder `() => ({…})`에서 읽는다. `emitEvent(`도 그대로 동작하며 plugin branch의 emitter module은 선택 사항이 된다. Red: `runtime.log entrances …`가 첫 단언에서 `events.json: plugin.fixture.input.key is declared and no source emits it`로 실패했다. Green: 이 test와 `events-check.test.mjs`의 나머지 19개 test가 통과한다.
+
 - F160.32.3: `soksak-events --census <file> --catalog <file>`(`catalogReport(root, catalog, census)`)은 census `exclude`가 남긴 소스만 읽으므로, lexer 오류가 있는 vendored 파일이 더 이상 catalog 검사를 멈추지 않는다. Red: `the census exclude removes a vendored file before the catalog check parses it`가 종료 상태 1과 `ui/vendor/bundle.js:1: a string that starts here does not end`로 실패했다. Green: 이 test와 `events-check.test.mjs`의 나머지 18개 test가 통과한다.
+
 - F160.31: host와 명령줄 도구가 언어마다 하나의 event writer를 시작하며, writer는 도구 패키지(`packages/sok/wailsv3/src/event_log.go`, `packages/sok/tauriv2/src/event_log.rs`)에 event 필드의 상한(`event_bounds.go`, `event_bounds.rs`)과 함께 있다. 층, 역할, 시계, thread 진입점, rotate, writer에 호출할 수 없는 source를 위한 pull은 옵션이다. 도구는 `StartToolEventLog`와 `start_tool_event_log`로 시작하고, host 파일은 층, 시계, native ring pull, logs 폴더에서의 시작만 남긴다. 도구의 두 번째 구현은 제거했다. 이미 있는 파일은 도구처럼 host도 거부하고, `EmitCids`는 계약 밖 level을 거부하며, Go host의 `Close`는 거부된 정지 요청을 보고한다. `event_log_options_test.go`, `event_log_options_test.rs`와 도구와 host의 기존 writer 시험으로 검증했다.
+
 - F160.26: `docs/operations/examples.md`가 입력 유휴 시간의 검토한 event source(listen-only event tap, HID manager, 전역 monitor, IO registry·전원 관리 알림, `CGEventSourceSecondsSinceLastEventType`)와, 사람이 없는 실행이 줄 수 없는 권한 없이는 각각 `--when-idle` 관문에 쓸 수 없는 이유를 적는다. 관문은 5초마다 `HIDIdleTime`을 읽는 방식을 `whenIdle`의 이유와 함께 유지한다. source는 interface 계약으로 검토했고 실행하지 않았다.
+
 - F160.19.1: window의 첫 응답자는 정수 identity가 바뀔 때만 저장하므로, 바뀌지 않은 update는 observer 없는 알림보다 더 할당하지 않는다. 수동으로 참조를 세는 소스에서 `emit()`(`activity_observers.m`)과 `storeRecord()`(`application_log.m`)가 할당한 문자열을 release하고, 시험 record 해독기도 문자열을 release한다. process의 할당을 malloc logger로 세는 `activity_observers_allocation_test`로 검증했다. 10분 측정은 실행하지 않았다(F160.19.2).
+
 - F160.9.2: window check `e2e/operation-chains.test.mjs`가 두 애플리케이션에서 plugin, project, window, settings, update 작업을 수행하고, `log.query`와 `host.log`의 알림으로 찾은 각 사슬에 `docs/spec/events.json`이 선언한 모든 event를 요구한다. 탐색 `e2e/chains.mjs`는 `e2e/test/chains.test.mjs`로 시험한다. 검사는 실행하지 않았다.
+
 - F160.24.9.1: Go와 Rust 구현에서 event 파일 질의가 한 행 둘레의 행을 돌려준다(`around`과 `earlier`, `later`, 각각 500까지, 줄 글은 page처럼 제한, 각 행에 `context` 표시). `sok debug query --around <cursor> --earlier <n> --later <n>`이 context 행을 공백 둘로 들여 출력하고, endpoint 메서드 `log.query`와 host 호출 `logQuery`가 답한다. `packages/log-contract/fixtures/query/cases.json`에 golden 사례 여섯을 더했다. 두 `sok` 구현의 golden, 거절, 바이트 한도 시험과 두 host의 endpoint 시험으로 검증했다.
+
 - F160.24.9.2: debug 타임라인의 각 행에 앞의 5개 행과 뒤의 5개 행을 담은 행에 들이는 단추(`core.debug.timeline.context`)가 있다. 담고 있지 않던 행은 공백 둘로 들여 쓰며 `core.debug` 상태의 `context`로 센다. `debug-timeline-ui.test.mjs`로 검증했다.
+
 - F160.24.11.3: debug 화면은 host의 알림마다 `tail`부터 질의로 바로 답하고 자기 간격이 없다(`FOLLOW_INTERVAL_MS` 제거). host가 알림의 비율을 제한하고 화면 자신의 질의 기록은 변경을 알리지 않으므로 따라가기는 맴돌지 않고 끝난다. `debug-timeline-ui.test.mjs`로 검증했다.
+
 - F160.24.11.2: 두 host가 색인이 줄을 덮은 뒤 색인기와 색인을 갱신하는 모든 질의에서 event log의 변경 알림을 250 ms에 한 번까지, 합쳐진 알림을 세어(`coalesced`) endpoint의 host 상태 `host.log`(`{path, size, notices, coalesced}`)와 host event `debug-log-changed`로 발행한다. writer는 더 이상 알림을 먹이지 않는다. Go와 Rust의 `debug.follow.*` 사례로 검증했다.
+
 - F160.24.11.1: Go와 Rust 구현에서 event 파일 색인의 갱신이 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`, `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 색인 바이트는 그대로다. `TestLogIndexCountsTheLinesThatAnnounceAChange`와 `index_counts_the_lines_that_announce_a_change`로 검증했다.
+
 - F160.25.3: 두 도구의 `sok debug replay <session> [--until <sequence>]`가 질의로 session의 event를 읽고, 그 role의 설치된 sidecar가 선언한 재생 실행 파일을 실행하며(표준 입력에 층 `sidecar` event, 표준 출력에 frame 기록마다 `{"sequence", "hash"}` 한 줄), 저장된 sidecar와 page의 모든 hash를 순번 순서로 비교하고, 처음 다른 곳에서 `sok: replay divergence: session <session> sequence <n> layer <sidecar|page> expected <hash> found <hash>`를 쓰고 event `sok.replay.divergence`(level `error`)를 저장하며 상태 1로 끝난다. 계약 사례는 `cli.debug.replay-equal`, `-until`, `-divergence`, `-errors`다. Red(바꾸지 않은 도구): Go `tests/replay_test.go`와 Rust `tests/replay_test.rs`가 `sok: unknown command: debug replay`(상태 2, 기대는 0과 `replay session s1: 2 sidecar frames and 2 page frames equal`)로, `--until`은 Rust에서 `unknown option --until`로 실패했다. Green: 각 도구의 시험 4개 중 4개. 시험용 재생 실행 파일(입력 바이트를 세는 shell script)로 바뀐 입력, 바뀐 sidecar hash, 바뀐 그린 hash, sidecar frame이 없는 page frame을 올바른 층으로 보고하고 거부되는 session 여덟 가지를 다룬다. `go test ./...`, `cargo test -p soksak-sok-tauriv2`, `cargo clippy -D warnings`, `make events-check parity-check exposure-check census-check`, `node scripts/check-fallbacks.mjs`가 통과한다. [examples](docs/operations/examples.ko.md)에 기록된 parity 개수가 새 파일을 따른다. 확인 환경: macOS, 2026-10-11, 이 항목의 작업 트리. 전체 host 계약 실행은 체크리스트의 끝에서 한다.
+
 - F160.25.2: 화면을 만드는 sidecar의 `sidecar.json`이 `replay`(event 파일의 role인 `role`과 패키지 안 재생 실행 파일 경로인 `executable`)를 선언하며 `validateSidecar`가 검사한다. Red: `packages/plugin-api/test/validate.test.mjs`가 `sidecar.json: unknown field replay`로 실패했다. Green: 그 파일 28개 중 28개.
+
 - F160.25.1: [replay](docs/spec/replay.ko.md)가 터미널 session 재생의 기록(`sequence`와 발생마다 완전한 `hex`를 가진 재생 입력, `sequence`, `rows`, `cols`, `hash`를 가진 층 `sidecar`와 `page`의 `frame` 기록), 화면 hash(정규 바이트열의 SHA-256: grapheme, 너비, 색, 속성을 가진 칸과 커서), 재생 실행 파일, 명령을 정의한다. `@soksak/plugin-api/screen-hash`가 `screenBytes`와 `screenHash`를 계산하고, `packages/log-contract/fixtures/replay/screen-hash.json`이 독립 구현으로 계산한 golden vector 4개와 오류 글이 있는 거부 화면 7개를 담는다. Red: `packages/plugin-api/test/screen-hash.test.mjs`가 `Cannot find module .../packages/plugin-api/screen-hash.js`로 실패했다. Green: 그 시험 4개 중 4개, `packages/log-contract/test/screen-hash.test.mjs` 12개 중 12개.
+
 - F160.24: 설정 폴더의 event 파일을 channel, level, class, layer, event, 표면, session, `cids`, run, 글, 시간으로 묻는 하나의 질의(`log.query`, `sok debug query`)가 각 파일 옆의 Bloom filter가 있는 segment 색인으로 답하고, debug 화면이 이 질의로 쪽을 넘긴다. 1,000,000건(169 MB) 로그의 색인은 3~5초에 만들어지고 첫 쪽은 12~38 ms에 나온다. 쪽의 `scanned`에서 로그 파일 수의 이름은 `logs`다.
+
 - F160.10.3: sidecar의 reply를 기다리는 요청의 ledger가 순서를 기다리는 요청만 남도록 줄여 응답한 요청이 순서를 한도 없이 키우지 않으며, 한도 4,096에서 잊는 요청마다 `host.buffer.dropped`를 저장한다.
+
 - F160.9: 애플리케이션을 바꾸는 page의 작업은 상관 식별자로 묶인 사슬이다. page는 plugin의 설치, 갱신, 제거, 켜기, 끄기, 프로젝트의 열기나 제거, 창의 열기나 닫기, 설정 변경(`actor`와 `keys` 포함), 애플리케이션 업데이트가 시작될 때 `p<time origin>.<n>`을 부여하고, 사슬의 첫 event(`page.plugin.operation`, `page.project.operation`, `page.window.operation`, `page.settings.change`, `page.update.operation`)를 저장하며, host 호출에 식별자를 함께 넘긴다(`host.call(name, arg, {cids})`. `Bindings.Call`의 네 번째 인자, Tauri command의 key `cids`). 그래서 `page.call`과 `host.binding.call`이 식별자를 담는다. catalog가 다섯 사슬을 선언하고 `auditLogs`가 검증하며, 두 host는 줄이 담을 수 없는 식별자를 거절한다. 설정의 `set`은 actor 없는 변경을 거절한다. page, 두 runtime, 두 host, 감사, catalog의 owning 시험으로 검증했으며, 각 작업을 수행하는 창 검사는 F160.9.2다.
+
 - F160.10: 호출 입구는 결과를 한 형식으로 밝힌다. `ok`, `micros`, 실패하면 `<code>: <text>` 형식의 `error`다(`page.call`, `page.command`, `host.endpoint.call`, `host.binding.call`과 새 `host.sidecar.reply`). code가 없는 실패는 그 입구의 내부 code를 가진다. catalog가 이들을 `"result": true`로 표시하고 `auditLog`가 형식을 검사한다. host는 요청의 `cids`를 밝히거나 `error`를 밝히는 sidecar 메시지와, sidecar가 실패할 때 기다리는 요청에 대해 `host.sidecar.reply`를 저장한다. terminal, files, shell sidecar는 요청 줄의 `cids`를 reply 줄에 써야 한다(F160.10.1). 감사, page, 두 host의 owning 시험으로 검증했으며 실행 중인 애플리케이션에서는 관찰하지 않았다(F160.10.2).
+
 - F160.15: 두 host는 stall dump의 경로를 event `host.stall.dump`(`path`)로 저장하고(새 진단 method `diagnostics.stall.dump`, 응답하지 않는 host의 thread를 sample한 뒤 창 검사 library가 보낸다), 애플리케이션의 crash report를 다음 시작에 `host.crash.found`(`path`, `pid`, `time`)로 한 번씩 알린다. report `<executable name>-<date>.ips`는 platform이 알려 주는 폴더(`native/darwin`의 `sp_diagnostic_reports_directory`, platform 연산 `DiagnosticReportsDirectory` / `diagnostic_reports_directory`)에서 찾고, 최신 64개를 읽으며, `logs/crash-found.txt`에 알린 경로를 둔다. Wails host는 프레임워크 logger에 level `warn`을 주므로 표준 오류에 요청한 파일마다 `[AssetFileServerFS] Handling request` 줄이 더 이상 남지 않고(Tauri host는 그런 줄을 쓰지 않는다), `docs/operations/examples.md`는 더 이상 `application.log`를 서술하지 않는다. native 라이브러리, 두 host, 창 검사 library의 owning 시험이 시험이 주입한 fixture로 검증했다. 실행 중인 애플리케이션에서는 관찰하지 않았다(F160.15.2).
+
 - F160.24.7: 추적되는 test `TestLogQueryAnswersAMillionEventsWithinTheLimit`(Go)와 `query_answers_a_million_events_within_the_limit`(Rust)가 event 1,000,000개의 로그와 그 색인을 만들고 첫 page와 종류별 질의의 시간을 밝힌 한도(색인 30 s, 첫 page 500 ms, cid·event 이름·짧은 범위 하나 1 s, page를 채우는 filter 5 s, text 10 s)와 비교해 잰다. 잰 시간은 체크리스트에 있다.
+
 - F160.24.6: debug 화면은 host 호출 `logQuery`로 page를 넘기며 event 파일을 읽지 않는다. 타임라인은 행 500개의 가장 새로운 page로 열리고, 단추 이전 행(`core.debug.timeline.older`)이 가장 오래된 행 앞의 page를 앞에 놓으며, filter 항목(`channel`, `level`, `class`, `layer`, `text`, `event`, `event_prefix`, `surface`, `session`, `cid`, `run`, `from`, `to`)은 가장 새로운 page를 다시 요청하고, 따라가기는 앞선 답의 `tail` 뒤의 행을 page 단위로 요청한다. 화면은 행을 최대 2000개 담고 따라가기가 덜어 낸 가장 오래된 행을 센다(`omitted`). 파일 전체를 읽는 코드, 설정 `context`, 상태 항목 `sources`, `limited`, `total`, `shown`, `lines`, `drawn`, golden fixture `packages/log-contract/fixtures/timeline`은 지웠다(context 행은 F160.24.9에서 돌아온다). workbench test로 검증했고 window 검사 `e2e/modal.test.mjs`는 새 상태에 맞게 바꾸었으며 실행하지 않았다.
+
 - F160.24.5: 두 host는 writer가 batch를 쓴 뒤 event 파일의 색인을 최신으로 맞춘다(쓰기 알림이 깨우는 goroutine이나 thread이며, 그동안 오는 알림은 갱신 한 번으로 합쳐진다). 회전할 때 색인 파일을 세대와 함께 옮기고(최신으로 맞출 수 없는 색인은 회전을 막지 않고 보고된다), 파일 전체로 만든 색인은 event `host.log.index_rebuilt`로 저장하며, 실패한 갱신은 문구마다 한 번 장소 `log index`의 `error` 기록으로 보인다. endpoint 메서드 `log.query`(모든 빌드, `window` 없음)와 host 호출 `logQuery`가 질의에 답하며, host 호출 `debugReadRange`와 그 test는 지우고 `logQuery`는 page 호출로 기록하지 않는다. macOS에서 두 host의 Go와 Rust test로 검증했다.
+
 - F160.24.3: Rust `sok` crate에도 같은 색인과 질의(`log_index.rs`, `log_query.rs`. crate `memchr`이 줄바꿈과 글을 찾는다)와 `sok debug timeline`을 대신하는 `sok debug query`가 있다. 같은 파일에 Go 구현과 같은 색인 바이트를 쓰고(golden fixture의 digest가 일치한다) 같은 page, cursor, 오류 문구를 주며, platform 인터페이스에 `lock_file`, `unlock_file`, `same_file`이 생겼다. 워크스페이스의 test profile은 crate `soksak-sok-tauriv2`, `serde_json`, `memchr`을 최적화하므로 event 1,000,000개의 test가 배포되는 최적화 수준을 잰다. macOS에서 `soksak-sok-tauriv2`의 Rust test로 검증했다.
+
 - F160.24.2: Go `sok` 패키지가 각 파일 옆의 색인(`<name>.idx`: 4,096줄 segment, event·surface·session·run·`cids`의 Bloom filter 다섯 개, 검사합이 있는 상태 block 둘. 색인이 없거나 색인한 파일이 아니면 파일 전체로 만들고, 아니면 부분 segment부터 갱신한다)으로 event 파일을 읽어 channel `other`, `debug`, `all`에 대한 질의의 page 하나(`ParseLogQuery`, `QueryLogs`)를 `ts_us`, `role`, `boot`, `seq` 순서와 cursor, 따라가기용 `tail`, 읽은 segment 수와 함께 답한다. `sok debug query`가 `sok debug timeline`을 대신한다: page 하나의 글 줄을 출력하고 뒤에 행이 있으면 `more: --after <cursor>`를 쓴다. 파일 전체를 읽는 코드와 설정 `--context`는 지우고 layer `sok`와 줄의 항목 `class`를 받아들인다. platform 인터페이스에 여러 프로세스가 한 색인을 갱신하도록 `LockFile`과 `UnlockFile`(`flock`)이 생겼다. golden fixture `packages/log-contract/fixtures/query`는 event 파일, 각 색인의 SHA-256, 질의 25개와 그 page와 줄을 담는다. macOS에서 `packages/sok/wailsv3`의 Go test로 검증했다. Rust 구현, host, debug 화면은 F160.24.3부터 F160.24.6까지 이어서 한다.
+
 - F160.6.4: Tauri 시험 `presentation_wait_timeout_returns_its_failure_and_writes_no_log_line`은 native observer가 시작할 때 저장하는 event `native.observe.registered`를 무시하므로, 기다림이 자기 event를 쓰지 않는다는 단언은 그대로다.
+
 - F160.2: `scripts/check-fallbacks.mjs`가 사유 없이 나열한 `routine.rs`와 `events-check.js`의 기본값 세 곳이 `default:` 사유를 갖는다.
+
 - F160.6.4: 남은 buffer에 상한을 두고 모든 자름과 거절을 저장한다. page는 event의 fields를 직렬화하는 동안 65,536바이트에서 자르고, record의 text와 place를 8,192와 1,024바이트에서 자르며, 큐를 event 4,096개 외에 4,194,304바이트로 제한한다(`page.log.dropped`에 `bytes`가 생긴다). host는 event의 fields를 1,048,576바이트까지만 직렬화하고 멈출 때까지 쓴 바이트 수를 `truncated`에 적으며, record의 text와 place를 자르고 시작 buffer를 4,194,304바이트로 제한한다. 두 host는 page를 기다리는 topic 하나의 구독 변경을 256개로 제한하고 거절한 변경에 오류 `-32000`으로 답하며, Wails host는 endpoint 연결의 출력 큐를 frame 256개와 16,777,216바이트로 제한한다. 거절은 모두 `host.buffer.dropped`다.
+
 - F160.5.2: 두 host는 page의 모든 host 호출을 성능 trace 없이 event `host.binding.call`(`name`, `args`, `micros`, `ok`, `truncated`, `error?`)로 저장한다. Wails page는 새 서비스 `Bindings`의 바인딩 메서드 `Bindings.Call` 하나를 메서드 이름과 인자 배열로 부르고, 이것이 `Host`의 내보낸 메서드를 이름으로 실행하며(`apps/wailsv3/runtime/index.js`와 host 명세의 서비스 이름이 `Host`에서 `Bindings`로 바뀐다), native web view 문서의 호출은 `invokeNative`에서 기록한다. Tauri host는 모든 command를 매크로 `bindings!` 안에서 정의하며 매크로가 각 command를 기록하고 등록을 생성하고, `sidecars_outdated`는 다른 command처럼 `Result`를 돌려준다. parity 검사는 `bindings!` 블록의 command를 읽는다.
+
 - F160.27: census 규칙 `rs.ok-discard`는 발견 0으로 강제된다. 버려지던 결과 14곳은 `default:` 사유를 적고, overlay 상태와 recording 상태는 poisoned lock을 없는 값 대신 `host.record.error`로 보고하며, 두 host는 WebKit 프로세스의 `ps` 목록에서 프로세스 번호로 시작하지 않는 줄을 보고한다(Tauri host는 `ps`가 공백으로 채운 프로세스 번호의 줄도 읽는다. 이전에는 건너뛰었다).
+
 - F160.30: 두 `sok` 도구가 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다(층 `sok`, schema 2). `log.open`, `sok.command`(명령 단어, 1024바이트로 자른 인자와 오류 글, 마이크로초, `ok`, 종료 상태. level은 `debug`, 상태가 0이 아니면 `warn`), `sok.panic`(goroutine이나 thread, 글, panic 시점의 stack)을 저장한다. 명령이나 goroutine, thread의 panic은 저장되고 도구를 새 종료 상태 4로 끝낸다. 모든 goroutine은 `Go`로, 모든 thread는 `spawn_named`로 시작하며, 이 둘이 면제 `^packages/sok/`를 대신해 `go.go-statement`, `go.recover`, `rs.thread-spawn`의 census 입구가 된다. 두 도구의 플랫폼 인터페이스에 `MonotonicNanos`가 추가되고 Go 도구는 `golang.org/x/sys`를 요구한다. catalog에 층 `sok`과 두 event가 선언되고, 감사가 `sok-` 파일을 읽으며, `events-check`가 도구의 emit 위치를 읽는다. 시험은 `packages/sok/wailsv3/tests/event_log_test.go`와 `packages/sok/tauriv2/tests/event_log_test.rs`다. F160.31이 host와 도구의 공유 writer를 등록한다.
+
 - F160.29.1: workflow `.github/workflows/window-checks.yml`이 레이블 `self-hosted`, `macOS`, `soksak-desktop`의 self-hosted runner에서 두 애플리케이션을 빌드하고 `pnpm verify:windows --when-idle 45`를 실행한 뒤 가장 새 실행 폴더에 `node scripts/audit-run.mjs`를 실행하며, 실패한 job에는 실행 폴더와 검사 설정의 로그를 남긴다. [examples](docs/operations/examples.ko.md#지속적-통합)가 레이블과 runner가 제공할 것을 선언하고, `scripts/test/workflows.test.mjs`가 레이블과 단계 순서를 검사한다. 아직 실행된 job은 없다(F160.29.2).
+
 - F160.8.1: image region은 키가 도착할 때 상관 식별자 `<boot>.<n>`을 부여하고, 장소 `input method`와 `input report`의 자유 형식 기록 대신 `native.input.key_down`, `native.input.callback`, `native.input.report`를 그 식별자로 저장한다. page로의 보고는 `cids`를 나르고, host는 식별자를 가진 region event에 `host.input.relay`를, 식별자를 가진 sidecar 요청에 `host.sidecar.request`를 기록하며, `sidecarSend`의 `page.call`은 요청의 식별자를 나르고, catalog는 사슬 `input`(`native.input.key_down`, `host.input.relay`, `page.call`, `host.sidecar.request`)을 선언하며, 감사는 `cids: "required"`로 선언되었는데 `cids`가 없는 event를 거부한다. 터미널 plugin과 터미널 sidecar는 자기 checklist에서 식별자를 이어 나른다. 실행 중인 앱에서의 관찰은 F160.8.2다.
+
 - F160.28.1: event 파일의 모든 줄이 `mono_ns`를 가진다(schema 2). page는 `Date.now() * 1000`을 변환해서 `ts_us`가 세 자리 0으로 끝났고 단조 시계가 없었다. 이제 event마다 `performance.now()`를 읽고, host에 시계를 요청해(host 호출 `log`의 `{action: "clock"}`, 다섯 번, 가장 짧은 왕복이 page를 고정한다) 읽은 시점의 host `ts_us`와 `mono_ns`를 저장한다. host와 native 라이브러리는 한 단조 시계(`sp_mono_ns`, `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)`, 플랫폼 연산 `MonotonicNanos`와 `SetEventBoot`)를 읽고, native ring record는 두 시계와 상관 식별자를 나르며(`sp_event_cids`, `sp_cid_new`, `sp_event_set_boot`), 두 host의 writer, 감사(`packages/log-contract`), catalog, reader(`sok debug timeline`, debug view의 timeline)는 schema 2를 쓰고 schema 1 파일을 파일 이름과 함께 거부한다. sidecar 저장소는 자기 checklist에서 schema 2를 채택한다. 실행 중인 앱에서 키 하나를 재는 일은 F160.28.2다.
+
 - F160.3.1: native 라이브러리의 모든 observer, monitor, key-value observer, run loop observer, dispatch source, Apple event handler, delegate가 하나의 입구 `native/darwin/src/observe.m`으로 등록되고, 입구는 `native.observe.registered`와 `native.observe.failed`를 저장하며 모든 전달을 정확히 센다(전달마다 `native.observe.delivered`, frame이나 장치 속도의 source는 초당 한 번 이하의 `native.observe.counted`). census가 나열한 등록 25곳, delegate, 오류 반환 13곳이 이제 입구를 거치거나 event를 저장하거나 사유를 밝히고, 창 controls, window facts, file drop, surface, clipboard, link, appearance, input source, dock menu의 native 실패 경로는 `error` 기록을 저장한다. 기다린 시간을 넘긴 프로세스는 `native.process.exit_timeout`을 저장한다. census는 `m.registration`, `m.delegate`, `m.error-return`을 발견 없이 강제하고 `sp_log_error`와 `sp_log_info` 호출을 그 함수의 event로 센다. 관찰하지 않은 것: 실행 중인 애플리케이션의 event(F160.3.2).
 - F160.6.1~F160.6.3: 한도가 있는 모든 buffer가 한도를 밝히고 손실을 센다. sidecar의 보류 응답과 close는 최대 메시지 1,024개와 4,194,304바이트, relay는 만료된 요청 256개를 기억하고, 거절은 event `host.buffer.dropped`(`buffer`, `count`, `bytes`, `reason`)이며 거절된 응답은 호출자에게 오류이기도 하고 거절된 close는 기다리지 않는다. `page.call`의 인자(1,024바이트)와 `console`의 글(8,192바이트, `truncated` 필드)은 `packages/workbench/bounded-json.js`가 직렬화하는 동안 자른다. 두 writer는 fields가 1,048,576바이트를 넘는 event를 `{"head": ...}`와 원래 크기인 `truncated`로 저장하고 `packages/log-contract`는 그 줄을 받아들인다. F160.6.4(page 큐, 시작 buffer, record 글의 바이트 한도)는 남아 있다.
+
 - F160.5.1: 두 host는 endpoint client의 모든 요청을 성능 trace가 켜져 있는지와 상관없이 event `host.endpoint.call`(`name`, 1024바이트로 자른 `args`, `micros`, `ok`, `truncated`, 실패한 요청이면 level `warn`과 `<code>: <message>` 형식의 `error`)로 저장한다. trace에서만 남던 기록 `host.trace.endpoint`는 없앴다. 시험은 `packages/host/wailsv3/tests/endpoint_record_test.go`와 `packages/host/tauriv2/tests/endpoint_record_test.rs`다. F160.5.2(binding의 host 쪽 기록)는 남아 있다.
+
 - F160.16: 실행 감사가 시험마다 로그로 판정한다. 실행 폴더에 시험과 애플리케이션마다 한 행(줄 범위, 범위의 `error` event와 그 선언, 찾은 기대 event와 빠진 event)을 가진 `judgment.json`을 쓰고, 새 `expectEvent`로 event를 선언한 시험의 범위에 그 event가 없으면 `marks.jsonl`의 끝 표시에서 빠진 이름과 함께 실패한다. window-check 라이브러리는 `expectEvent`에 대해 `expect_event`를 덧붙인다. 소유 시험으로 검증했고, 기대 event를 선언하는 창 검사는 아직 없으며 애플리케이션 로그에서의 범위는 아직 관찰하지 않았다.
+
 - F160.14: `node scripts/audit-run.mjs <run folder>`는 `marks.jsonl`이 가리키는 설정 폴더의 모든 층(`host-`, `vt-`, `files-`, `shell-`, 그 세대와 debug 파일)의 event 파일을 감사하고, `pnpm verify:windows`와 새 `pnpm verify:activation`이 시험이 실패했을 때도 끝에서 이를 실행한다. 세대와 debug 파일을 건넌 `seq` 틈, 폴더의 파일을 합친 사슬, 선언 없는 event, 시험의 `expectError`가 선언하지 않은 모든 `error` event를 `<file>:<line>: <message>`와 종료 상태 1로 보고한다. window-check 라이브러리는 표시마다 `config`를 기록하고 `expectError`에 대해 `expect_error`를 덧붙인다. `node scripts/check-events.mjs --logs`도 모든 층의 파일을 감사한다. 소유 시험으로 검증했고, 애플리케이션에서 창 검사를 실행한 관찰은 아직 없으며, 지속적 통합은 창 검사를 실행하지 않으므로 감사의 시험을 실행한다.
 
 - F160.2: census(`packages/plugin-api/census-rules.json`, JavaScript, Go, Rust, Objective-C의 규칙 10개)가 같은 함수에 event도 reason marker도 없는 발생 원천을 모두 나열하고, `@soksak/plugin-api`의 `soksak-events` 명령이 그것을 F160.1의 catalog 검사(`--catalog`)와 함께 어느 저장소에나 적용한다. 이 저장소에서는 `make census-check`와 `scripts/test/census.test.mjs`가 실행한다. reason marker의 형식은 `(default|silent): <reason>` 하나이고, `scripts/check-fallbacks.mjs`와 census는 `기본값:`과 다른 모든 형식을 파일과 줄과 함께 거부한다. 규칙 다섯은 발견 없이 강제한다(`js.empty-catch`, `js.swallowing-catch`, `go.recover`, `rs.unwrap-or`, `rs.dropped-send`). 다섯은 입구 항목을 기다리며 매 실행이 발견 수와 함께 출력한다: `go.go-statement` 37(F160.4), `m.registration` 25, `m.delegate` 1, `m.error-return` 13(F160.3), `rs.ok-discard` 18(F160.27). 빈 catch 둘에 `silent:` 사유를 적었고, 두 host의 test mark parser는 없는 `kind`나 `result`를 더 이상 강제 변환하지 않는다(Rust parser의 `unwrap_or`, Go parser의 무시한 두 번째 결과). 시험: `packages/plugin-api/test/events-check.test.mjs` 17개 중 17개, `scripts/test/census.test.mjs`, `scripts/test/fallbacks.test.mjs`, `scripts/test/check-events.test.mjs`.
+
 - F160.4.1: Go host의 모든 goroutine은 `routine.Go(name, fn)`으로, Rust host의 모든 스레드는 `spawn_named(name, body)`로 시작한다. panic은 event `host.panic`(`name`, `text`, `stack`)을 저장하고 프로세스를 상태 2(Go) 또는 101(Rust)로 끝낸다. Rust panic hook은 panic한 스레드에서 writer를 최대 2초 기다리지 않는다. hook이 event를 저장하고, 자기 스레드가 writer를 기다린 뒤 프로세스를 끝낸다. 계약 사례 `log.panic.writes-an-error-line`은 `log.panic.records-an-event`(두 host)와 `log.panic.does-not-wait-for-the-writer`(Tauri)로 바뀐다. 두 host의 소유 시험으로 검증했다. 맨 `go` 문을 찾는 규칙(F160.4.2)과 실행 중인 애플리케이션의 관찰은 열려 있다.
+
 - F160.12: 두 host의 진단 메서드 `diagnostics.test.mark`가 event `host.test.start`와 `host.test.end`(`name`, `run`, `result`)를 저장하고 flush 뒤 그 줄의 위치 `{boot, seq}`로 답한다. window-check 라이브러리는 `SOKSAK_RUN_ID`가 있을 때 검사마다 시작과 끝(`pass` 또는 `fail`)을 표시하고 위치를 `SOKSAK_RUN_FOLDER`의 `marks.jsonl`에 덧붙이며, 시험 실행기는 이 폴더를 실행 id 옆에 정한다. 두 host, window-check 라이브러리, 실행기의 소유 시험으로 검증했고, 창 검사 실행 로그의 표지는 아직 관찰하지 않았다.
 - F160.11, F160.13: 시험 실행기가 실행마다 id(`SOKSAK_RUN_ID`)를 주고, 모든 시험의 출력을 도착하는 대로 `target/test-runs/<run>/`에 저장하며, 각 시험의 상태, 시작, 끝이 담긴 `manifest.json`을 유지한다. `node scripts/test-runs.mjs prune`은 실패가 없거나 모든 실패가 분류된 실행만 제거한다.
+
 - F160.1: `make events-check`가 Go, Rust, JavaScript, Objective-C 소스의 emit 지점을 읽어 `docs/spec/events.json`에 선언되지 않은 채 emit된 이름, emit 지점이 없는 선언된 event, 선언이 허용하지 않는 literal 지점의 level이나 field를 실패시키며, 지점이 만드는 이름은 주석 `events: <names>` 또는 `events: forwarded`로 적는다. catalog는 `page.log.dropped`와 `sidecar.record.<level>`을 선언하고 `log.rotated.removed`의 타입을 `string|null`로 하며 지점이 쓰는 level과 선택 field를 적고, 로그 감사는 선택 field와 `|` 타입을 받아들인다. `host.app.event`의 kind `reopened`는 두 host에서 제거했고, image region의 콜백 `inputSourceChanged`는 `native.input.source_changed`가 기록하는 변화를 더 이상 기록하지 않는다.
+
 - F161.3: 창 검사 `e2e/card-sidebar-space.test.mjs`가 정리에서 terminal card의 sidebar를 `inherit`로 되돌려 제거된 set의 선택이 layout에 남지 않으며, 두 앱에서 통과한다.
+
 - F161.2: 창 검사 `e2e/browser.test.mjs`와 `e2e/hosts.test.mjs`가 호스트가 기록하는 형태(`info page page: host <call> …`)로 transcript 줄을 맞추며, 두 앱에서 통과한다.
+
 - F161.1: 창 검사 `e2e/sidecar-recovery.test.mjs`가 호스트가 기록하는 죽인 terminal service의 재시작을 선언하며, 두 앱에서 5.0초에 통과한다.
+
 - F160: 체크리스트가 기록의 감사 결과(core, sidecar와 plugin의 원천, 시험 결과와 로그의 매핑) 전부인 F160.1~F160.23과, 창 검사 전체 실행의 실패에 대한 F161을 등록한다.
+
 - F154.4.3: `pnpm verify:windows --when-idle <seconds>`가 사람이 그 시간 동안 입력하지 않은 뒤에야 창 검사 파일을 시작해, 검사가 사람의 focus를 가져가지 않고 사람의 입력에 실패하지도 않는다. 실행기는 기다리는 시험을 `WAIT`로 이름 붙인다.
+
 - F156: debug 화면이 이미지가 load될 때 native modal을 다시 배치해 modal이 이미지를 담은 card의 높이를 가진다.
+
 - F157: debug 화면의 타임라인이 가장 새로운 1000줄을 그리고 그리지 않은 줄 수를 알리며, 자라는 파일을 따라가는 갱신을 500 ms 간격으로 두고, 줄이 없는 파일을 화면과 `sok debug timeline`에서 행이 없는 것으로 읽는다. 큰 event 파일에서 페이지가 더 이상 응답을 멈추지 않는다.
+
 - F154.3: `make host-contract-check` 전체 실행(1586개 시험, 480초)이 서비스가 보내지 않는 메시지를 120초 기다려 실행기의 한도에서야 통과하던 Tauri 시험 하나를 찾았다. 그 대기를 없애 시험이 0.3초에 끝난다. `sok debug timeline`의 계약 사례와 알림 사례의 범위를 표에 적었다.
+
 - F145.15.4: 창 검사 `e2e/event-log.test.mjs`가 두 애플리케이션에서 trace가 배치된 표면의 기하, sidecar 프로세스의 메모리, 다시 불러온 뒤 각 쪽 문서의 시작을 저장하는 것을 관측한다.
+
 - F111.4: hwp 창 검사를 `e2e/hwp.test.mjs`(애플리케이션이 비활성인 동안의 열기, 그리기, 키보드 focus)와 `e2e/activation/hwp.test.mjs`(활성 키 창의 입력, 선택, 저장)로 나누고 공통 단계를 `e2e/hwp-support.mjs`에 둔다. Tauri 호스트는 활성 검사를 안정적으로 통과하지 못한다(F111.4).
+
 - F155: Tauri 호스트가 시작 단계의 실패에서 프로세스를 abort시켜 시스템 충돌 대화상자를 보이는 대신, 메시지와 상태 1로 끝나고 실패를 event log에 저장한다.
+
 - F104.6.3: 주석 언어 검사가 줄바꿈 앞에 역슬래시가 있는 문자열 뒤와 정규식 리터럴 뒤의 주석에 닿고, 저장소 시험이 `pnpm test`에서 실행된다. `scripts`의 주석 16줄이 영어다.
+
 - F104.5: `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `packages/mcp`, `packages/soksak`, `packages/log-contract`의 주석 1,070줄이 영어이며, `scripts/check-comment-language.mjs`가 나열하지 않는 `packages/plugin-api/records-check.js`의 6줄을 포함한다. 주석 줄만 바뀌었고 해당 테스트가 통과한다.
+
 - F104.2.1: `packages/host/wailsv3`의 주석(85개 파일의 1,798줄)이 영어이다. `scripts/check-comment-language.mjs`가 이곳에서 보고하는 줄이 없고, 모든 파일의 코드가 주석을 뺀 채 같으며, macOS에서 `go vet`과 `tests`의 컴파일이 성공한다.
+
 - F104.2.2: `packages/host/tauriv2`의 주석(파일 88개, 2,066줄)이 영어이고, `scripts/check-comment-language.mjs`가 그곳에서 보고하는 줄이 없으며, 모든 파일의 코드가 주석을 빼면 같고, `cargo fmt --all --check`와 `cargo check -p soksak-host-tauriv2 --tests`가 통과하며, 틀렸거나 낡은 주석 아홉 개를 고쳤다.
 - F104.5.1, F104.6.1: `apps`, `e2e`(`e2e/hwp.test.mjs` 제외), `scripts`, Makefile의 주석이 영어이다. `scripts/check-comment-language.mjs`가 이 파일들에서 보고하는 주석 줄이 없고, 주석 줄만 바뀌었다.
 - R5.4: `plugins/installed.json`이 `package`를 담지 않는다. `sok`, 두 host, workbench staging은 설치된 plugin의 `name`을 기록된 `path`의 `package.json`에서 읽고, Go와 Rust reader는 `package`를 담은 plugin을 `<file>: plugins/installed.json <id>: unknown field package`로 거부한다. `sok plugin install`의 출력에 더 이상 `package`가 없다.
+
 - F104.4: `native/darwin`의 주석(`src`, `tests`, `Makefile`의 95개 파일 1,327줄)이 영어이다. `scripts/check-comment-language.mjs`가 그곳에서 한 줄도 보고하지 않고, 모든 파일의 코드는 주석을 빼면 같으며, `make -C native/darwin all`과 native 시험 실행 파일의 빌드가 성공한다. 틀린 주석 세 개(`applyInsets`, `sp_region_facts`, `appearance.h`의 주석)를 고쳤다.
+
 - F104.3: `packages/workbench`의 주석을 영어로 썼다. `scripts/check-comment-language.mjs`가 이 폴더에서 보고하는 줄이 없으며, 코드, 문자열, 식별자는 바뀌지 않았다.
+
 - F154.4.3: `pnpm verify:windows`가 창 검사 파일을 파일마다 자기 프로세스로 test runner에 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 10초마다 실행 중인 파일, 파일마다 600초 한도를 쓴다.
+
 - F154.4.2: `make -C native/darwin test`가 native 시험을 test runner로 하나씩 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 시험의 10초 간격 줄, 시험마다 120초 한도를 쓰며 `NATIVE_TEST_ONLY=<text>`로 범위를 정한다.
+
 - F154.4.1: `pnpm test`가 workspace의 Node 시험 파일을 파일마다 자기 프로세스로 test runner에 실행한다. `RUN`, `PASS`, `FAIL`, `TIME` 줄, 실행 중인 파일, 가장 느린 파일, 파일마다 120초 한도를 쓰며 `--only <text>`로 범위를 정한다.
+
 - F107: 제거된 plugin만 선언한 세트를 가리키는 저장된 연결이 더 이상 설정 불러오기를 실패시키지 않는다. `validateSidebars`가 불러오지 않은 plugin의 연결을 유지하고, 불러온 plugin의 없는 세트 연결은 계속 실패한다.
+
 - F140: `e2e/files.test.mjs`의 창 검사가 파일을 열지 못한 실패가 main document의 오류 표시가 아니라 파일 트리의 메시지 행(files plugin의 status `files.open`)에 보이는 것을 관측한다.
+
 - F142: 창 검사 `e2e/terminal-fullscreen-fit.test.mjs`가 전체 화면이 끝나는 표시에서 터미널이 card의 rows, cols, region 기하를 가지는 것을 측정한다. 두 애플리케이션에서 증상이 재현되지 않았다.
+
 - F147: `e2e/browser.test.mjs`의 창 검사가 browser card의 문서가 설정을 적용하는 같은 표시에서 색 구성의 변화를 받는 것을 보이는 card와 다른 card의 전체 화면으로 숨은 card에서 측정한다. 두 애플리케이션에서 증상이 재현되지 않았다.
+
 - F145.14: 두 host는 event `host.project.removal_allowed`(창이 끝나 허용된 제거), `host.workspace.settings`(설정 변경마다의 키), `host.notification.event`(알림 센터의 상태, 게시, 눌림 사건마다)를 저장하고, 알림 센터의 실패마다 장소 `notification`의 `error` 기록을 쓰며, WebKit 자식에 대한 `ps` 질의의 실패를 존재하지 않는 프로세스로 취급하지 않고 장소 `webkit children`의 `error` 기록으로 보고한다. Tauri host는 실패한 `kill`도 보고한다.
+
 - F145.13: 두 host는 분리 실행하는 `sok app update`를 event log의 마지막 flush 전에 시작하고, host의 표준 오류(`logs/host-<boot>.stderr`)를 주며(Wails host는 주지 않아 실패 메시지가 사라졌다), event `host.update.start`(`pid`, `command`)를 저장한다. 시작에 실패한 오류도 이제 저장된다. 다른 `sok` 명령의 실패는 그대로 종료 상태와 표준 오류의 메시지다.
+
 - F145.18: `make failures-check`(`make docs-check`에 포함, `scripts/check-failure-table.mjs`)가 host나 네이티브 라이브러리가 리터럴 장소로 쓰는 모든 오류 기록의 장소를 읽고, diagnostics의 실패 표가 영어나 한국어에서 그것을 빠뜨리면 실패한다. 표는 빠뜨렸던 약 백 곳의 행(host가 창에 전달하지 못하는 event, endpoint, 종료, 창, 표면, 문서, 이미지, 모달, 사이드카, WebKit 자식, 화면 캡처, 입력기)을 얻었다.
+
 - F145.17: browser, editor, hwp, shell, files plugin의 trace는 plugin API의 입구 `context.runtime.log`를 향해 각 저장소의 체크리스트(P17, E14, H12, P4, P20)로 추적한다. core 코드는 바뀌지 않았다.
+
 - F145.16: files와 shell 사이드카의 event 파일은 event 계약, 요청 봉투의 필드 `cids`, `sidecar.json`의 member `events`를 향해 각 저장소의 체크리스트(S18, S4)로 추적한다. core 코드는 바뀌지 않았다.
+
 - F145.15.3: 메인 page의 첫 모듈이 `time_origin`과 `url`을 가진 event `page.start`를 내므로, reload가 timeline의 표시된 경계가 된다.
+
 - F145.15.2: 두 host가 trace의 표면 생명주기를 단계 `created`, `placed`(`x`, `y`, `w`, `h`, `visible` 포함), `destroyed`를 가진 `host.trace.surface`로 저장한다. 이전에는 `destroyed`만 저장했다.
+
 - F145.15.1: 두 host가 시작하거나 연결한 사이드카 process의 프로세스 등록부를 두고, host와 등록된 process마다 `host.sampler.memory` event(`role`, `name`, `pid`, `rss_kb`, 또는 `error`)를 저장하며 process에 이름을 붙일 때 `host.trace.process`를 저장한다. sampler는 host process만 읽었다.
+
 - F150.8.1: 창 검사 `e2e/input-oracle.test.mjs`가 Tab, Escape, Backspace, Enter, Control+A에 대해 sidecar가 PTY에 쓴 것으로 기록한 바이트를 터미널의 독립 수신자 프로세스가 읽은 바이트와 비교한다. 두 애플리케이션에서 같다.
+
 - F150.8.2: 전체 입력 경로의 지연을 성능 trace 끔, 켬, 끔으로 측정했다(`e2e/input-latency.test.mjs`). 중앙값은 Wails 23~25 ms, Tauri 26~38 ms다.
+
 - F151.6: `sok debug timeline`이 설정 폴더의 host 이벤트 파일에서 filter(`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`)를 통과한 행을 실행 중인 애플리케이션 없이 debug 화면의 글 줄로 출력한다. Go와 Rust 구현이 같은 줄을 출력하며 golden 파일 `packages/log-contract/fixtures/timeline`과 debug 화면 시험이 이를 검사한다. 시험과 관측: 두 구현이 두 검사 애플리케이션의 이벤트 파일에 같은 출력을 낸다.
+
 - F150.6.3: `sidecar.json`과 `plugin.json`의 필드 `events`는 패키지의 event catalog 파일의 패키지 안 경로다. 검증기는 이를 받고 패키지 밖의 경로는 거절한다.
+
 - F150.3.7: host 프로세스가 성능 trace의 스위치를 가진다. 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 더 이상 없다. 표식은 event `host.trace.on`과 `host.trace.off`이고, 표본 추출은 trace가 꺼지면 끝난다(스위치보다 오래 산 표본 추출 스레드가 다른 검사의 시작 버퍼에 써서 두 번에 한 번 실패하게 했다). 두 host는 영구 service를 `--log-dir <config-dir>/logs`로 시작하며 vt sidecar가 이를 요구한다.
+
 - F151.2.3: 호출 `overlayUpdate`와 `overlayPlace`는 `page.call`로 기록하지 않는다. 네이티브 모달을 그리고 놓는 호출(class `frame`)이고, event 파일을 따라가는 debug 타임라인은 늘어난 행마다 다시 그려 기록하면 끝없이 스스로 먹이가 되었기 때문이다.
+
 - F151.2.3: debug 타임라인이 각 host event 파일을 `debugReadRange`로 범위로 나누어 읽고(`ROW_LIMIT` 행까지이며 상태의 `limited`가 거기서 멈춘 파일을 밝힌다), host event `debug-log-changed`를 따라 늘어난 줄을 시간 순서로 덧붙이며 필터와 행 선택을 유지한다. `core.debug.timeline.follow {on}`이 따라가기를 멈추고 다시 시작한다(다시 시작하면 먼저 늘어난 것을 읽는다). 상태 `core.debug`는 `truncated` 대신 `following`, `appended`, `limited`를 보고하고, 타임라인은 더 이상 `debugRead`로 파일 끝을 읽지 않으며, `debugReadRange` 호출은 `page.call` event로 기록하지 않는다. 창 검사는 `e2e/modal.test.mjs`에 있고 실행하지 않았다.
 - F151.2.1, F151.2.2: 두 host의 host 호출 `debugReadRange({path, offset})`는 `logs/` 아래 파일의 온전한 줄을 offset부터 돌려주고 그 뒤의 offset을 알린다. host는 event 기록기가 한 묶음을 쓴 뒤 모든 창에 host event `debug-log-changed {path, size}`를 알린다(기록기가 observer를 부르고, 창에 알리는 동안 오는 알림은 하나가 된다).
+
 - F139: 상태 `core.picker`는 `columns`, 곧 제목과 항목마다 아이콘과 이름의 x를 선택 레이어 기준으로 보고한다. 선택 레이어가 열릴 때 재는데, 네이티브 뷰가 그리는 동안 메인 문서가 선택 레이어를 숨겨 그 요소에 상자가 없기 때문이다.
+
 - F151.4.2: debug 타임라인의 행을 선택하고 선택 해제할 수 있다(`core.debug.timeline.select {row, selected}`, 각 행 앞의 단추). `core.debug.timeline.save`는 선택한 행의 글 줄을 타임라인 순서로 `debugSaveText`를 통해 `soksak-timeline-<time>.txt`로 저장한다(저장 창 취소는 오류가 아니고 빈 선택은 오류로 거부한다). 파일에 입력한 글자가 들어 있을 수 있다는 경고가 저장 단추 옆에 있고, `core.debug`가 `selected`, `warning`과 작업 `save-rows`를 보고한다. 단위 검증만 했다. window check `e2e/modal.test.mjs`와 저장 창은 실행 중인 애플리케이션에서 실행하지 않았다.
+
 - F151.4.1: 두 host의 host 호출 `debugSaveText({name, text})`는 page가 만든 글을 사람이 고른 곳에 저장한다. 파일 이름이 아닌 이름과 비었거나 16 MiB를 넘는 글을 거절하고, 같은 저장 창을 보이며, `{saved}`로 답한다.
+
 - F139: 노출이 DOM 이름 `core.picker.group-icon`, `core.picker.group-name`, `core.picker.item-icon`, `core.picker.item-name`과 상태 `core.picker`의 `groups`(`id`, `name`, `depth`)를 선언한다. `e2e/space-apps.test.mjs`가 각 항목의 아이콘 x와 이름 x가 제목과 같은지 확인한다. 검사 환경은 로드되지 않은 플러그인의 항목을 만들 수 없다. host에서 실행하지 않았다.
+
 - F150.7.4: `docs/spec/events.json`은 계층 `native`, `host`, `page`의 event catalog다. `make events-check`는 선언한 event마다 이를 적는 소스를 요구하고, `node scripts/check-events.mjs --logs <config-dir>…`는 창 검사가 남긴 host event 파일을 감사한다(선언된 event, 필수 field와 그 타입). 자리 표시자를 가진 catalog 이름은 계열을 선언한다. 감사가 `native.window.occlusion`이 `visible`을 숫자로 저장하는 결함을 찾았고, 이제 boolean이다.
+
 - F151.5: `debug-state.js`를 workbench 패키지의 files 목록에 넣고, `page` 멤버가 배열인 state 파일(host가 쓰는 형태)을 트리로 보인다.
+
 - F150.6.1: 사이드카로 가는 페이지 요청은 이어받는 입력의 상관 식별자를 나를 수 있다. 사이드카 포트의 `send(surface, body, cids)`, 두 runtime의 host 호출 `sidecarSend`, 두 host가 `cids`를 전달하고, 요청 줄은 목록이 비어 있지 않을 때만 `root`와 `body` 사이에 필드 `cids`를 가진다.
+
 - F151.5: 디버그 화면이 상태 파일 `logs/state-<time>.json`을 key와 값의 트리로 보이고(`core.debug.state`, 상태 파일 행의 상태 단추) 다른 상태 파일과 값이 다른 경로를 나열해 비교한다(`core.debug.state.compare`). 상태가 아닌 파일은 파일과 찾은 값을 밝혀 거부하고, `core.debug`는 `state`를 보고한다. 원본 `.stderr`와 `.crash` 파일은 목록에 나열되고 글로 보인다. 실행 중인 애플리케이션에서 관측하지 않았다.
+
 - F150.7.3: 그림 영역은 자신이 답하는 입력기 질의(`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`)마다 인자, 답, 포커스를 가진 level `debug`의 event `native.input.query`를 기록한다.
+
 - F150.7.2: native 라이브러리는 창의 first responder 변경마다 창 번호와 변경 전후의 class를 가진 event `native.window.first_responder`를 기록한다. 창은 갱신마다 이전 갱신의 first responder와 비교한다. 창을 key-value observing으로 관찰하면 Wails host가 첫 창 표시에서 죽었기 때문이다.
+
 - F150.7.1: native 라이브러리는 애플리케이션(활성화, 숨김), 창(key, main, 최소화, 가림), 입력 소스의 알림을 ring의 event `native.app.*`, `native.window.*`, `native.input.source_changed`로 기록하고, 두 host는 writer를 시작할 때 플랫폼 연산 `ObserveActivity`로 observer를 설치한다.
+
 - F139: 묶음 선택기(스페이스 앱)에서 제목과 항목의 아이콘 칸이 `.picker`에 선언한 너비(`--picker-icon`), 왼쪽 안쪽 여백(`--picker-pad`), 간격(`--picker-gap`), 깊이당 들여쓰기(`--picker-indent`) 하나씩을 쓰고, 항목이 제목의 `--depth`를 가져 같은 깊이에서 아이콘이 한 열에 서고 이름이 같은 x에서 시작한다(이전에는 제목과 항목이 12 px, 6 px 어긋났다). 로드되지 않은 플러그인의 항목도 아이콘 칸을 둔다. `test/picker-columns.test.mjs`가 `app.css`와 그려진 markup에서 열을 계산한다(Red: 항목 아이콘 16 px, 제목 8 px). 실행 중인 애플리케이션에서 재지 않았다.
+
 - F151.3: 디버그 화면의 타임라인이 level, layer, 글 외에 event 이름(`event`), `surface`, `session`, correlation identifier(`cid`), 경계를 포함하는 UTC 시간 범위(`from`, `to`)로 거르고, 통과한 행 앞뒤 `context`개 행을 `data-context`로 표시해 보인다. 잘못된 값은 member와 찾은 값을 밝힌 오류로 거부하고, `core.debug`는 member와 `lines`(context 행을 포함한 보이는 줄 수)를 보고한다. 실행 중인 애플리케이션에서 관측하지 않았다.
+
 - F150.5.3.2: host가 등록하는 모든 애플리케이션 event는 `kind`(`started`, `activated`, `deactivated`, `reopened`, `exit_requested`, `exit`)를 가진 event `host.app.event`이며 level은 `info`다. Wails host는 `started`, `activated`, `deactivated`, `exit_requested`, `exit`를, Tauri host는 `started`, `exit_requested`, `exit`를 저장한다.
+
 - F150.5.2: 표면 문서의 runtime `page` 객체가 보내는 모든 host 호출은 event `page.call`이다(메인 page와 같은 필드와 level이며 하나의 `callEvent`가 만든다). 문서의 batcher에 쌓이므로 한 turn의 호출은 host 호출 `log` 한 번으로 간다. 문서의 `report`도 같은 batcher 뒤에 쌓이고, Tauri runtime은 Wails runtime과 같은 호출 이름과 인자로 command와 인자를 정한다. 중계가 실패하면 문서의 console에 쓴다.
+
 - F154.3: `make host-contract-check`는 두 호스트의 패키지를 빌드하고 모든 시험을 실행기로 시험마다 자기 프로세스에서 병렬로 실행하며 시험마다 한도는 120초다. 옛 출력 파서는 제거했고, `--run`과 `--only`는 계약 검사 없이 일부만 실행한다.
+
 - F154.2: `scripts/test-discovery.mjs`는 Go 패키지(`go test -c`)와 Rust 패키지(`cargo test --no-run`)를 실행기로 빌드해 시험 목록을 만들며, 시험마다 자기 패키지의 작업 디렉터리에서 자기 프로세스로 실행된다. 빌드되지 않는 패키지는 그 패키지를 밝히는 실패이고, `#[ignore]`인 Rust 시험은 건너뜀이다.
+
 - F154.1: `scripts/test-runner.mjs`는 시험 목록을 시험마다 자기 프로세스로 제한된 풀에서 실행한다. 시험마다 자기 한도(600초 이하)를 갖고, 출력은 시험마다 시작(`RUN`), 끝(`PASS`, `FAIL`, `TIME`)과 경과 시간, 일정 간격으로 실행 중인 시험과 그 실행 시간, 가장 느린 시험, 합계를 밝힌다.
+
 - F150.5.3.1: host가 등록하는 모든 창 event는 `window`와 `kind`(`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`)를 가진 event `host.window.event`로 event log에 저장된다. 흐름으로 오는 세 kind는 level `debug`다. 두 애플리케이션에서 관측했다: 열렸다 닫히는 새 창은 `closed`를 저장한다.
+
 - F150.5.5.2: 두 host는 영구 service 연결을 event `host.sidecar.connect`(`name`, `pid`, `spawned`), 그 끝을 `host.sidecar.disconnect`(`name`, `pid`, `stopping`, `violation`)로 level `info`에 저장한다.
+
 - F150.5.5.1: 두 host는 표준 입출력 sidecar 프로세스의 시작을 event `host.sidecar.start`(`name`, `pid`), 종료를 `host.sidecar.exit`(`name`, `pid`, `status`, `stopping`)로 level `info`의 event log에 저장한다. `EmitHost`와 `emit_host`는 기록이 아닌 host 원천의 event를 위한 입구다.
+
 - F150.5.4: page의 모든 `command.run` 요청은 성능 trace가 켜져 있든 꺼져 있든 필드 `name`, `micros`, `ok`, `error`를 가진 event `page.command`다(level `debug`, 실패한 명령은 `warn`).
+
 - F150.5.1: 메인 page의 모든 host 호출은 event `page.call`이다(level `debug`, 거절된 호출은 `warn`). 필드는 `name`, `args`(1024자에서 자름), `micros`, `ok`, `error`이며, 두 runtime이 `host.call` 둘레에 두는 감싸개가 기록한다. 호출 `log`와 `performance`는 기록하지 않는다.
+
 - F150.4.3: 표면의 context에 `context.closing`이 있다. 워크벤치는 표면 제거가 시작될 때 모듈 composition의 region을 떼기 전과 `dispose` 전에 이 `AbortSignal`을 abort한다. fixture 초기화 1초쯤 뒤 떼어진 region에 입력이 닿던 오류(`terminal input failed: image view is detached`)는 detach와 `dispose` 사이에 plugin이 사이드카의 커서 event를 처리해서 생겼다. 신호를 읽지 않는 모듈은 떼어진 region의 거절을 그대로 받는다.
+
 - F150.4.2: plugin이 `context.runtime.log.<level>(event, fields)`로 event log의 event를 저장한다(level은 `error`, `warn`, `info`, `debug`, `trace`이고 event 이름은 `plugin.<plugin>.<event>`이며 field에 표면이 붙는다). page의 batcher에 큐로 들어간다. host 호출 `log`는 접두 `page.`와 `plugin.`을 받고 접두가 가리키는 계층으로 저장한다. page가 콘솔에 쓰는 것은 field `text`를 가진 event `page.console.<method>`로 저장하며(`console.error`와 `console.warn`은 level `warn`이므로 콘솔은 window 검사를 실패시키지 않는다), 중계 실패는 수집 전의 콘솔에 쓰이고 다시 event가 되지 않는다. 커밋된 체크리스트 검사(`scripts/test/checklist.test.mjs`, 한도 3초)는 부하 평균 16에서 한 번 4.2초가 걸렸고 단독 3회는 0.8~1.3초였으므로 부하로 분류한다.
+
 - F150.4.1: page의 기록(`report`, `log`, 시작 오류, 순서가 있는 호출의 실패)은 `where`와 `text` field를 가진 event `page.record.<level>`이며 기다리지 않고 큐에 넣어 host 호출 `log`의 배치로 중계한다(`emitAndWait`는 그 event를 실은 배치가 중계되면 대기를 끝낸다). host 호출 `report`, `PageRecord`, `PageEntry`는 두 host와 두 runtime에서 제거했고, `log` 중계는 배치의 page 기록의 줄을 돌려주어 host가 창의 transcript에 보이며, surface 문서의 runtime page `report`는 event 하나의 배치다.
+
 - F150.3.6: Rust host의 기록은 Go host의 `Entry`처럼 구조화된 `Entry`(`level`, `layer`, `place`, `text`)로 다니고 `Entry::log`로 저장되며 `Entry::line`으로 그 줄이 보인다. 줄을 다시 기록으로 파싱하는 `log_entry`와 두 host의 시각이 붙은 줄(`record_line`, `RecordLine`)은 제거했고, `presentation_outcome`은 결과의 `Entry`를 돌려준다.
+
 - F150.3.5.2: 두 host의 trace 관측(`PerformanceObserve`, `performance::observe`, sampler)은 `performance.ndjson`의 줄 대신 event 이름을 field에 반복하지 않는 level `debug`의 event `host.trace.<event>`와 `host.sampler.<event>`로 event log에 저장된다. event 이름이 없는 관측은 오류 `performance trace`로 보고한다. 표식 `trace_on`과 `trace_off`는 trace 파일이 제거될 때까지 그 파일에 남는다.
+
 - F150.3.5.1: page의 trace가 event마다 `performance` 호출 한 번 대신 batcher와 host 호출 `log`를 거쳐 event `page.trace.<event>`(level `debug`, `ts_us`에 page의 wall clock, 두 번째 시각 없음)를 낸다. `performance` 호출은 `on`과 `off`만 받고, 끄기는 수락한 event가 중계될 때까지 기다린다. page의 trace를 읽는 window 검사는 event log를 읽는다(`traceRows`, `currentEventOffsets`). page batcher는 `packages/workbench`의 files 목록에 들어갔다. trace를 켠 입력 지연(debug 빌드): Tauri 중앙값 21.3 ms(끔 19.2 ms), Wails 18.6 ms(끔 18.1 ms).
+
 - F150.3.4: 두 host가 raw 표준 오류를 더는 어떤 실행도 쓰지 않는 `logs/application.log` 대신 `logs/host-<boot>.stderr`(`logs/host-<boot>.jsonl`과 공유하는 시작 시각(초)과 프로세스 식별자)에 쓰고, 실행 기록 `info host run: <identifier> pid <pid>`는 event다. `StartApplicationLog`와 `start_application_log`는 `StartStandardError`와 `start_standard_error`가 되었고, panic hook은 writer가 기록을 저장할 때까지 기다린다. window-check 하네스는 application log를 읽지 않으며(`application-log.mjs` 제거), `e2e/application-log.test.mjs`는 `e2e/host-records.test.mjs`다. native 라이브러리의 fatal 줄은 stderr 파일의 글 줄로 남는다.
+
 - F150.3.3: native 라이브러리가 `sp_log_error`와 `sp_log_info`를 표준 오류의 줄 대신 `where`와 `text` field를 가진 event `native.record.error`와 `native.record.info`로 프로세스의 ring에 저장하므로 따옴표, 제어 문자, 줄바꿈이 text에 그대로 남는다. native 라이브러리의 시험은 `tests/support/records`로 기록을 글 형식의 줄로 읽고, `e2e/input-records.test.mjs`는 두 애플리케이션에서 host writer가 ring에서 pull한 native 기록을 event log에서 읽는다. fatal signal과 uncaught exception 줄은 F150.3.4까지 표준 오류에 남는다.
+
 - F150.3.2: 두 host의 오류·정보 기록(`LogError`, `LogInfo`, `log_error`, `log_info`)과 page가 `report`로 보내는 기록은 application log의 줄 대신 event log의 `where`와 `text` field를 가진 event `<layer>.record.<level>`다. writer가 생기기 전에 쓴 기록은 1024개를 담는 시작 buffer가 담고 writer는 거부한 기록을 `log.dropped`로 센다. panic hook과 fatal 경로는 writer가 그 기록을 저장할 때까지 기다린다. 진단 메서드 `diagnostics.log.flush`는 기록이 event log에 들어갈 때까지 기다린다. window-check 하네스는 기록 event를 `<level> <layer> <where>: <text>` 줄로 출력하므로 `expectError`의 형식이 그대로 유효하고, host 기록을 읽는 window 검사는 event log를 읽는다. 거부된 plugin manifest의 window 검사는 자신이 일으키는 reload의 timeout 오류를 선언한다.
+
 - F150.3.1: window-check 하네스가 application log에 더해 애플리케이션의 모든 `logs/host-<boot>.jsonl`에서 level이 `error`인 event를 읽고(`readEventErrors`, 위치는 `<config-dir>.event-offsets`), `application error: error <layer> <event>: <fields>`로 출력하며, `expectError`로 선언하지 않은 오류 event가 있으면 검사를 실패시킨다. event가 아닌 줄, 읽은 위치보다 짧은 파일, host event log가 없는 폴더는 파일 이름을 담은 오류다.
+
 - F150.2.6.4: benchmark가 빈 native ring의 pull 한 번과 손실 읽기 한 번을 cgo와 FFI에서 잰다(debug 빌드): pull은 cgo 평균 35 ns·p99 125 ns, FFI 평균 17 ns·p99 42 ns(타이머 단위가 약 42 ns)이므로 경계 비용은 배치 간격 100 ms에 비해 없는 것과 같다. `make benchmark-go`와 `make benchmark-rust`가 실행한다.
 - F150.2.6.2, F150.2.6.3: 두 host writer가 플랫폼 연산 `PullNativeEvents`와 `TakeNativeEventLoss`(Go는 cgo, Rust는 FFI이며 Windows 플랫폼은 `not implemented on windows`를 돌려준다)로 배치 간격마다와 flush할 때 native ring을 pull하고, pull한 record를 library가 준 시각 그대로 계층 `native`로 저장하며, ring이 거부한 event를 이유 `the native ring was full`의 `log.dropped`로 세고, `native.` 밖의 이름, 정의되지 않은 level, JSON 객체가 아닌 field, 맞지 않는 길이를 가진 record는 거부해 표준 오류에 보고하고 이유 `a native record was refused`의 `log.dropped`로 센다. ring을 pull하지 못하는 플랫폼은 host의 시작에 실패한다.
+
 - F150.2.6.1: native 라이브러리에 프로세스의 ring이 생겼다: `sp_event(level, name, fields_json)`은 어느 스레드에서든 마이크로초 단위 wall clock, level, 이름(1~255바이트), field를 저장하고, `sp_event_drain`은 record를 순서대로 돌려주며, `sp_event_take_loss`는 없거나 비었거나 더 긴 이름, 열거에 없는 level, 없는 field, 가득 찬 4 MiB ring이 거부한 event의 수를 돌려준다.
+
 - F150.2.5: 두 host writer가 파일을 회전한다: 파일은 `rotate_bytes`(host에서 100 MB)를 넘게 될 줄 앞에서 닫히고, 최신 `generations`개(5)가 `.1`부터 `.5`로 보관되며, 가장 오래된 것은 지워지고, 새 파일은 `log.open`과 `log.rotated` `{bytes, kept, removed}`로 시작하되 `seq`는 이어진다. 양의 경계나 세대 수가 없는 writer는 시작을 거부하고, 실패한 회전 단계는 보고하되 writer는 가진 파일로 계속 쓴다.
+
 - F150.2.4.5: window 검사가 native 입력으로 주입한 `Enter`부터 그 키가 PTY에 닿은 뒤 셸이 출력하는 프롬프트까지의 시간을 성능 trace를 끄고, 켜고, 다시 끈 상태에서 잰다(각 12개 키). debug 빌드, 부하가 낮은 기계: Wails 중앙값은 끔 20.3 ms, 켬 19.5 ms, 다시 끔 17.5 ms이고 Tauri 중앙값은 끔 20.3 ms, 켬 23.1 ms, 다시 끔 19.7 ms이다. 즉 trace는 Tauri에서 키마다 약 3 ms가 들고 Wails에서는 산포를 넘는 비용이 없다. 이 숫자는 입력 경로를 event writer로 옮길 때의 기준선이다.
+
 - F150.2.4.4: 두 host는 application log 뒤에 event writer를 시작하고(`logs/host-<boot>.jsonl`, mode 0600, 첫 줄 `log.open`), 종료 때 flush하며, page 호출 `log`에 배치 중계로 답한다. 두 애플리케이션의 runtime이 그 호출 이름을 가진다. 두 애플리케이션의 debug 빌드를 재시작해 관측했다: 프로세스의 파일에 프로세스 식별자를 담은 `log.open`과 연속인 `seq`가 있고 application log에는 오류가 늘지 않았다.
+
 - F150.2.4.3: 두 host는 page event 배치를 하나라도 쓰기 전에 배치 전체를 검증하고(`LogCommand`, `log_command`) 모든 event를 page가 준 시각 그대로 계층 `page`로 저장한다. 이름이 `page.`로 시작하지 않는 event, 계약에 없는 level, 양의 정수가 아닌 `ts_us`, 객체가 아닌 `fields`는 `events[<index>]`를 가리키는 오류로 배치를 거부하며 그 배치는 아무것도 쓰이지 않는다.
+
 - F150.2.4.2: 두 host의 writer는 프로세스의 다른 계층이 중계한 event(`EmitRelayed`, `emit_relayed`)를 그 event가 가진 `layer`와 `ts_us` 그대로 받는다. 계층으로 시작하지 않는 event 이름, 계약에 없는 계층, JSON이 아닌 field는 오류로 거부하고 `seq`는 여전히 writer가 부여한다. `make benchmark-rust`와 `make benchmark-go`가 benchmark를 실행한다.
+
 - F150.2.4.1: page에 event 배치 모듈(`log-batch.js`)이 생겼다: `emit`은 event를 기다리지 않고 큐에 넣고, 한 턴의 event는 `batch` 호출 한 번으로 host에 가며, 호출은 한 번에 하나만 진행해 host가 순서대로 받고, 큐가 가득 차면 event를 거부하고 다음 배치가 그 수를 센 `page.log.dropped`로 시작하며, 실패한 호출은 `page event batch of <n> events failed: <reason>`으로 보고한다.
 - F150.2.2, F150.2.3: 두 host에 event writer(`event_log.rs`, `event_log.go`)가 생겼다: `emit`은 개수와 바이트로 제한한 큐에 직렬화한 event를 기다리지 않고 넣고 자리가 없으면 false를 돌려주며, writer 스레드 하나가 `seq`를 부여하고 첫 줄 `log.open`을 쓰며 100 ms마다 배치로, `error`는 즉시 쓰고, 거부된 event마다 그 범위 뒤에 `log.dropped`를 저장하고, `flush`는 받아들인 event가 디스크에 기록될 때까지 기다린다. 폴더는 mode 0700, 파일은 mode 0600이며, 계약 사례 `log.writer.*` 6개가 두 host에서 실행되고 `make benchmark-rust`와 `make benchmark-go`가 writer를 측정한다.
+
 - F151.1: 디버그 화면에 타임라인 단추(`core.debug.timeline`)가 생겼다. `logs/host-<boot>.jsonl`의 event를 시간, `seq` 순으로 정렬한 행(행마다 글 한 줄)으로 합치고, level, layer, 글 필터(`core.debug.timeline.filter`)를 둔다. event 구조를 어긴 파일은 파일 이름, 줄, 찾은 값과 함께 거부하며 `core.debug`는 `timeline`을 보고한다.
+
 - F150.2.1: native 라이브러리에 event ring(`event_ring.h`)이 생겼다: 여러 생산자 스레드가 락, 할당, 시스템 호출 없이 가변 길이 event를 넣고 소비자 하나가 비우는 bounded lock-free ring이며, 가득 찼거나 ring의 절반보다 큰 event는 false를 돌려주고 잃은 event와 바이트를 센다. `make -C native/darwin benchmark`가 호출 스레드에서의 push(약 80~100 ns)를 현재 글 기록(약 1.1 마이크로초, 최악은 수십~수백 마이크로초)과 비교해 잰다.
+
 - F150.1: `docs/spec/logging.md`가 event 계약(구조, class와 정책, writer, 파일, catalog, 개인정보, 한계)을 정하고, `@soksak/log-contract`가 로그를 catalog로 감사하며(선언된 event와 field, `log.dropped`로 설명되는 틈 외의 연속된 `seq`, 선언된 사슬) golden catalog와 golden lines를 담고, 용어 `event`, `event class`, `correlation identifier`를 정의한다.
+
 - F149.1: window check가 두 host에서 endpoint의 native 입력으로 Enter를 입력하고, 입력 경로의 모든 층의 기록을 애플리케이션 로그와 성능 trace에서 시간순으로 요구한다.
+
 - F153: 주입한 키의 기록이 키를 받는 first responder의 class와 창이 key window인지를 밝히고, 입력 문서의 모든 상태가 애플리케이션이 active인지와 창이 key window인지를 기록한다.
+
 - F145.12: 두 host가 제한 시간 오류 1005로 끝나는 endpoint 요청마다 client가 오류를 받기 전에 `error host endpoint timeout: <method>: <message>`를 써서, 시간이 초과된 대기를 애플리케이션 로그에 이름으로 남긴다.
+
 - F152: 메인 페이지에서 sidecar로 보낸 전송이 실패해도 이후 전송을 막지 않고 `error page sidecar <name>: send failed: <reason>`으로 기록하며, `orderedSidecar`는 없는 실패 처리기를 거부한다.
+
 - F145.11: 두 host가 창의 진단 기록 줄(렌더링된 modal, 끌기, navigation callback)을 `info host transcript <window>: <line>`으로 애플리케이션 로그에도 쓰고, Wails host는 진단 기록에만 실리던 오류(`host.window`, `rewatch`)를 오류 기록으로 쓴다.
+
 - F145.10.2: Wails host의 native web view(surface, modal)의 delegate가 WebContent process의 종료를 `sp_webview_log_process_end`로 `error native surface webview: web content process terminated: <address>`로 쓴다. Tauri host는 이미 모든 web view의 종료를 썼다.
+
 - F145.10.1: native 라이브러리가 document view의 실패를 쓴다. 이유와 주소를 담은 이동 실패, 거부한 주소, 찾지 못한 plugin 파일, 데이터 없는 메시지, WebContent process의 종료(오류)가 그 대상이며, 문서는 영역을 소유한 page를 위해 실패를 유지한다.
+
 - F145.9: 두 host가 소유 창이 없는 사이드카 메시지를 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`로 쓰고, Wails host도 Tauri host처럼 가득 찬 큐를 기다리는 closed 알림을 `close <surface>: outbox full, buffered`로 쓴다.
+
 - F145.8: 두 host가 거부하는 image 영역의 각 프레임을 프레임과 영역의 현재 상태와 함께(`info host image frame: ... refused: notAttached|stale ...`, `error host image frame: ... refused: unsupported ...`), 봉투가 아닌 image 필드를 `error host image frame: ... malformed image envelope: <image>`로 쓴다.
+
 - F145.7: page API(plugin API의 `page.js`)가 표면이나 modal 문서의 오류, 로드되지 않은 module, 처리되지 않은 rejection을 아무도 읽지 않는 console 대신 `error page surface <id>: <text>`(표면 id가 없으면 `document`)로 같은 글은 한 번만 쓴다.
+
 - F145.6: 두 host의 runtime `page`에 표면 문서에서 layer page의 기록을 쓰는 `report({level, where, text})`를 더하고, page가 sidecar로 보낸 전송의 실패를 표면 문서의 console 대신 `error page sidecar <name>: send failed: <reason>`으로 쓴다.
+
 - F145.5: page가 각 파일 drop을 `info page drop: received <payload>`로, 명령이 받으면 `info page drop: command <name> accepted <n> file(s) on surface <id>`로, drop이 잘못되었거나 아래에 표면이 없거나 plugin이 drop 명령을 선언하지 않았거나 명령이 실패하면 `error page drop: <reason>`으로 쓴다. `core.drop`은 마지막 drop만 계속 유지한다.
+
 - F145.4: native 라이브러리가 endpoint가 주입하는 각 pointer·key 입력을 인자, 결과, 거부 이유(창 없음, 열린 누름 없음, 비활성 창, AppKit이 보고한 눌린 버튼, 알 수 없는 키 이름, 도착하지 않은 수신)와 함께 `info native input inject`로 쓴다.
+
 - F145.3: native 라이브러리가 webview 입력 수신 대기가 끝나는 모든 경우를 기록한다. 종류와 한도를 담은 timeout, 거부된 전송, 등록 종료로 끝난 대기, 대기와 맞지 않거나 다른 frame에서 온 수신, 없는 WebKit pointer API가 그 대상이다.
+
 - F145.2: native 라이브러리가 영역이 버리는 모든 입력을 이유와 함께 기록한다. `noop:` 명령(`"dropped":"noop"`), 글이 아닌 insert나 marked text(`"dropped":"not text"`), 닫힌 영역으로 가는 보고(`info native input report dropped`)가 그 대상이다.
+
 - F145.1: 두 host가 endpoint 연결의 소켓을 닫기 전에 `info host endpoint: connection closed: <reason>`을 쓴다. 이유는 peer, 한도를 넘은 frame, JSON-RPC 2.0 요청이 아닌 frame(본문 포함), 선언되지 않은 메서드, endpoint의 종료이며, Wails host는 가득 찬 출력 대기열, 실패한 쓰기, 인코딩할 수 없는 답도 쓴다.
+
 - F148: core 0.0.10을 릴리스하고(tag `v0.0.10`, 번들 둘) registry에 나열했다. 선언된 모든 workspace 버전이 0.0.10이다. 이 버전은 F138의 글 기록, F144의 입력 경로 기록, F146의 수정을 담는다.
+
 - F138.4: 창 검사가 애플리케이션 로그의 글 기록을 읽는다(`parseRecord`, `withoutTime`). `readErrors`는 level `error`인 기록을 `error <layer> <where>: <text>`로, 형식이 없는 줄(운영체제와 런타임의 출력)을 따로 돌려주고, `e2e/`의 검사는 이전 줄이 아니라 기록을 비교한다. F138이 끝났다.
+
 - F138.3: page가 host 호출 `report`로 기록 `{level, where, text}`를 보내고(`report-record.js`의 `recordOf`가 줄 `<where>: <text>`를 처음 나오는 `: `에서 나눈다), 두 host가 이를 검사해 `<time> <level> page <where>: <text>`로 쓰며, 시작 오류 handler는 place `start`를 쓰고, native 라이브러리는 capture 관측을 기록 `info native capture: <text>`로 쓴다.
+
 - F146: debug 화면은 내용이 시작을 지나 당겨진 동안 native modal이 보고하는 음수 스크롤 위치를 `debug scroll position is invalid`로 던지지 않고 그대로 두며, 숫자가 아닌 값은 계속 거부한다.
+
 - F144.6: 두 host에서 로그 파일과 performance trace가 10 MB와 한 세대가 아니라 100 MB에서 회전하고 이전 세대 다섯 개(`.1`부터 `.5`까지)를 남기므로 기록이 긴 세션을 덮는다.
+
 - F144.4: 두 host가 sidecar로 보내는 각 요청(`sidecar.send`), sidecar에서 받는 각 메시지(`sidecar.receive`), native 영역의 각 event(`region`)를 같은 이름과 필드로 본문 전체와 함께 layer `host`의 trace event로 쓴다.
+
 - F144.3: terminal plugin 0.0.10과 terminal service 0.0.8이 입력 경로 전체를 기록한다(F144.5와 plugin 저장소 참고).
+
 - F144.2: native 라이브러리가 입력기의 모든 콜백(`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`, 확정, 조합, 포커스, 입력 소스 변경)을 인자, 입력한 글, 전과 후의 입력 문서 상태를 담은 `info native input method`로, page로의 모든 보고를 `info native input report`로, 실패를 전체 상태와 함께 기록한다. `sp_log_info`와 기록의 시각(`clock_gettime`과 정수 산술이므로 치명 신호 처리기도 쓴다)이 새로 생겼고, 라이브러리의 기록은 `<time> <level> native <where>: <text>` 형식이다.
+
 - F144.1: 기록이 입력한 글자를 담지 않는다는 규칙을 [진단](docs/spec/diagnostics.ko.md)에서 지웠다. 입력 경로의 기록은 계층이 본 모든 것을 담고, 명세가 계층별 기록을 나열한다.
+
 - F138.2: 두 host가 모든 기록을 `<time> <level> <layer> <where>: <text>` 형식으로 쓴다. `LogError`/`log_error`는 level `error`를, 새 `LogInfo`/`log_info`는 관측(늦은 답, webkit 자식, sidecar 대기열과 교체, 무효화된 이미지 프레임)을 두 host에서 같은 문구로 쓰고, 실행은 `info host run: <identifier> pid <pid>`로 시작하며, 본문의 줄바꿈은 `\n`으로 쓰고, 표준 입출력 sidecar의 표준 오류 각 줄은 level `info`, layer `sidecar`, sidecar 이름의 기록이다. page와 native 라이브러리는 F138.3까지 이전 형식을 쓴다.
+
 - F138.1: 명세가 모든 글 기록의 한 형식을 정한다. `<time> <level> <layer> <where>: <text>`, level은 `error`와 `info`, layer는 `page`, `host`, `native`, `sidecar`, 기록 하나는 한 줄이며, 쓰는 쪽마다의 helper, sidecar 표준 오류를 감싸는 방법, 영속 서비스가 쓰는 형식을 함께 정하고 실패 표가 이를 쓴다. host, native 라이브러리, page는 F138.2와 F138.3까지 이전 형식을 쓴다.
+
 - F117.8.5: 공개 registry index가 core 0.0.9, terminal plugin 0.0.7, sidecar vt 0.0.7을 나열하고, 그 workflow는 core tag `v0.0.9`로 `sok`을 build한다.
+
 - F117.8.4: 선언된 모든 작업공간 버전은 0.0.9이며, 이 버전이 F117, F121, F122를 담는다.
+
 - F117.8.3: release workflow가 core release의 파일을 registry의 core release가 쓰는 이름 `soksak-<version>-darwin-arm64-wailsv3.zip`과 `soksak-<version>-darwin-arm64-tauriv2.zip`으로 짓고, 설치 안내가 그 이름을 쓴다.
+
 - F121.8: `make app-update-check HOST=wailsv3|tauriv2`가 빌드한 디버그 번들을 복사하고, 더 새 버전의 core release를 내고, 복사본을 일회용 설정 디렉터리로 시작하고, `core.app.update`를 실행한 뒤 `sok app update`가 두 host에서 번들을 교체하고 애플리케이션을 다시 시작했는지 검사한다. 시작한 애플리케이션을 끝내고 하나라도 남으면 실패한다.
+
 - F117.7.4: plugin 페이지의 업데이트 목록은 core release와 그 release 링크로 시작하며, F121.6이 이를 구현한다. 업데이트 N 컨트롤이 이를 센다.
+
 - F137: Rust `sok`의 `replace_app`이 쓰는 시작 함수의 타입에 `OpenApplication`이라는 이름을 붙여 `cargo clippy`가 통과하고, 애플리케이션 번들을 준비하고 교체하는 `sok` 테스트는 그 연산을 macOS만 구현하므로, 구현하지 않는 플랫폼에서는 그 플랫폼의 `not implemented on <os>` 메시지로 바로 끝난다(Go `requireBundles`, Rust `bundles_supported`).
+
 - F121.7: plugin 페이지의 core 업데이트 행은 `engines.soksak`이 후보를 포함하지 않는 설치된 plugin을, 범위가 후보를 포함하고 철회되지 않은 그 plugin의 가장 새 버전 또는 그런 버전이 없다는 표시와 함께 나열한다. status `core.app`은 이를 `incompatible`로 담고, workbench는 `version-range.js`의 `satisfies`로 명세의 버전 범위를 읽는다.
+
 - F121.6: plugin 페이지가 업데이트 목록 맨 위에 core 업데이트를 `core: <running> → <available>`, 그 버전의 release 페이지, 업데이트 동작, 동작의 단계와 오류와 함께 나열한다. status `core.app`과 명령 `core.app.update`, `core.app.release`를 선언했고, 창은 시작할 때, 활성이 될 때, registry를 바꿀 때, plugin 페이지를 열 때 후보를 읽으며, 창의 업데이트 N 컨트롤이 core 업데이트를 센다. 두 host의 창 검사가 더 새 core release를 나열하는 registry index를 내고, 동작이 내려받는 단계에서 그 release를 거부한다.
+
 - F121.5: 두 host가 host 호출 `appUpdateApply`에 답한다. 실행 중인 번들의 `sok`을 설정 디렉터리의 `updates/`에 복사하고, 새 세션에서 시작할 `sok app update`를 준비하고, `host.quit`처럼 종료한다. 종료는 사이드카를 분리(Go `Detach`, Rust `detach`)하므로 상주 service는 연결만 끊기고 `close-owner`와 `shutdown`을 받지 않아 세션이 남으며, 명령은 종료에 답한 뒤 시작한다. 수정된 탭이 취소한 종료는 보류한 업데이트를 버린다.
+
 - F121.4: `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]`(Go와 Rust)가 커널 알림으로 프로세스의 끝을 기다리고, 옆에 만든 복사본으로 번들을 바꾸고, `--` 뒤의 인자로 애플리케이션을 다시 시작하며, 새 번들이 시작하지 못하면 이전 번들을 다시 시작한다. `sok`의 플랫폼 인터페이스에 `WaitProcessEnd`, `CopyBundle`, `OpenApplication`이 더해진다.
+
 - F121.3: 두 host가 host 호출 `appUpdateState`(실행 중인 core와 registry index의 후보)와 `appUpdateStage`에 답한다. `appUpdateStage`는 후보의 release를 받아 `sha256`을 확인하고 zip을 설정 디렉터리의 `updates/` 아래에 풀고 번들의 버전을 확인해 그 경로를 돌려주며, 후보가 아닌 버전은 거부한다. `sok`의 플랫폼 인터페이스에 `ExtractBundle`과 `BundleVersion`이 더해진다.
+
 - F121.2: registry 저장소가 `core.json`에 core release를 가진다. `add-version.mjs core`가 core 저장소의 release URL로 버전을 쓰고, `validate.mjs`가 그 URL을 검사하며, 게시된 index가 버전 없는 `core`를 나열한다. registry 저장소는 이를 항목 G17로 기록한다.
+
 - F121.1: `sok registry build`(Go와 Rust)가 registry 폴더의 `core.json`을 읽고 모든 core release의 `sha256`을 확인해 index의 `core`를 쓴다. index 검사는 `<platform>-<host>` 키의 `core`와 `revoked`의 `core`를 받아들이고 잘못된 것을 거부하며, `core`가 없는 index는 core release를 나열하지 않는다.
+
 - F121: 명세가 애플리케이션 업데이트를 정한다. registry index가 `core`에 core release를 나열하고 `revoked.core`로 버전을 철회하며, host 호출 `appUpdateState`, `appUpdateStage`, `appUpdateApply`가 업데이트를 준비하고 시작하고, `sok app update --wait <pid> --bundle <path> --target <path>`가 애플리케이션이 종료한 뒤 번들을 바꾼다. 체크리스트 항목은 F121.1~F121.7로 나눴다.
+
 - F125: 공개 registry index가 `release`와 `releases`로 게시되어 `scripts/check-registry-manifests.mjs`가 현재 core로 이를 읽고(전에는 plugin 버전 7개 모두 실패) core release를 검사할 수 있다. core 0.0.8의 애플리케이션은 이를 읽지 못하며 다시 설치한다. registry 저장소는 이를 항목 G16으로 기록한다.
+
 - F124.3.4: 두 host에서 `core.debug.save`가 저장 패널을 열고 검사의 네이티브 입력이 그 단추를 누를 수 없다는 것을 측정했다. `e2e/person/debug-save.test.mjs`와 `pnpm -F @soksak/e2e verify:person`은 사람이 저장과 취소를 누르는 동안 검사가 저장된 파일과 답을 확인하게 한다.
+
 - F113.2: 애플리케이션이 활성이고 그 창이 key window이면 두 host의 문서 영역이 입력한 글자를 받는다(`e2e/activation/document-typing.test.mjs`). 실패했던 검사는 애플리케이션이 비활성인 채 실행되었고 `e2e/browser.test.mjs`에서 지웠다. F135는 일반 AppKit 창은 비활성일 때도 글자를 받고 host는 받지 못하는 차이를 기록한다.
+
 - F117.5.5: `e2e/plugin-outdated.test.mjs`가 두 host에서 plugin 페이지가 다른 버전의 상주 service를 오래된 것으로 보이고 그 동작이 service를 교체하는 것을 관측한다. AGENTS.md는 창 검사가 관측할 상태를 만드는 선언된 항목이 없을 때 자기 일회용 설정 디렉터리의 파일을 쓰는 것을 허용한다.
+
 - F133: 두 host가 지속 service의 owner 닫기를 연결마다 한 번만 실행한다. 오래된 service의 교체가 owner를 닫는 동안 시작한 종료가 두 번째 `close-owner`를 보내지 않으므로, Rust host는 표면의 닫기에 두 번 답하지 않고 Go host는 `close of closed channel`로 패닉하지 않는다. F134는 재발하지 않은 시간 의존 테스트의 CI 실패를 기록한다.
+
 - F117.6: terminal 플러그인 저장소가 교체된 terminal service의 새 shell을 그 terminal의 마지막 작업 디렉터리에서 시작하는 항목 P23을 등록한다.
+
 - F102.6: 창이 수정된 탭을 지키면 두 host가 대기 중인 운영체제의 종료 요청(Dock, 로그아웃, 다른 프로그램)마다 새 플랫폼 연산 `CancelQuitRequests`(`sp_quit_request_cancel`)로 `userCanceledErr`로 답하므로, 보낸 쪽이 애플리케이션이 남는다는 것을 안다.
+
 - F132: Tauri host는 파일 이름이 아닌, 파일 확장자가 있는 경로에 프레임워크가 대신하는 시작 문서로 답하지 않는다. 프레임워크가 asset 오류(상태 500)로 답하고 Wails 서버는 404로 답한다. `e2e/page-asset.test.mjs`가 실행 중인 두 host에서 400 이상의 상태를 단언한다.
+
 - F127.3: 진단 요청 `diagnostics.page.request {window, path}`가 page에 애플리케이션의 파일을 요청하게 하고, `e2e/page-asset.test.mjs`가 실행 중인 두 host에서 없는 경로가 `error: page asset: <path>: not found`를 한 번 쓰는 것을 관측한다. 이 관측으로 Tauri host가 없는 경로에 대한 프레임워크 조회 `<path>.html`과 `<path>/index.html`도 보고한다는 것을 알았고, 이제 보고하지 않는다. F132는 Tauri host가 그런 경로에 시작 문서로 답하는 차이를 기록한다.
+
 - F117.7.3: 창이 key window가 될 때마다 두 host가 그 창에 `window-active` event를 보내고 page가 plugin 상태를 다시 읽는다. 그래서 변경 event를 보내지 않는 원격 registry의 더 새 버전이 사용자가 창으로 돌아올 때 나타난다. host가 창을 포커스해도 Tauri webview는 DOM `focus` event를 보내지 않으므로 page는 그 event를 쓰지 않는다.
+
 - F117.7.2: registry에 plugin 업데이트가 있는 동안 모든 창이 막대 맨 앞에 업데이트 N 컨트롤을 보이고, 이 컨트롤은 새 명령 `core.plugins.show-updates`로 업데이트 목록이 있는 plugin 페이지를 보인다. 업데이트 목록과 오래된 service 행은 카드 격자의 한 줄 전체를 차지한다.
+
 - F117.7.1: plugin 화면이 registry에 더 새 버전이 있는 plugin을 카드 위에 `<id>: <installed> → <latest>`로 나열하고, 새 명령 `core.plugins.update-all`에 묶인 모두 업데이트 동작이 id 순서로 업데이트하며 첫 실패에서 멈춘다.
+
 - F122.5: 다른 창이 보여 주는 프로젝트를 제거하면 그 창에 묻는다. `windows.askRemoveProject`가 새 host 호출 `projectRemoveAsk`를 보내고, host가 프로젝트를 보이는 창에 `project-remove-request`를 보내며, 그 창이 수정된 탭마다 묻고 `projectRemoveAnswer`로 답하고, 제거는 그 답을 기다린다. 탭을 지키면 프로젝트가 registry에 남고 `core.project.close`는 `closed: false`로 답한다. 묻는 동안 끝나는 창은 제거를 허용한다. `core.project.close`, `core.library.remove`, `core.space.close`는 사람을 기다리므로 `timeout` 600000을 선언한다.
+
 - F131: window-close 검사에서 한 번씩 기록되고 여섯 번의 실행에서 재발하지 않은 오류 세 건을 기록했다. 재발하면 원인을 보여 줄 기록은 갖춰져 있다.
+
 - F122.4: `core.project.close`는 프로젝트를 보이는 창의 수정된 탭마다 프로젝트를 제거하기 전에 저장하고 닫기, 저장하지 않고 닫기, 닫지 않기를 묻고 `{closed}`로 답한다. 탭을 지키면 프로젝트가 남는다.
+
 - F122.3: `core.space.close`는 활성 스페이스를 제거하기 전에 그 스페이스의 수정된 탭마다 저장하고 닫기, 저장하지 않고 닫기, 닫지 않기를 묻고 `{closed}`로 답한다. 탭을 지키면 스페이스가 남는다. 마지막 스페이스는 닫히지 않고 `closed: false`로 답한다.
+
 - F122.2: 수정된 탭을 지켜 취소한 종료는 두 host의 종료 상태를 끝낸다. page가 새 host 호출 `windowCloseKept`로 알리고, host가 종료 상태(`quit.go`, `quit.rs`의 `Quit`)를 지우며, `host.window`가 이를 `quitting`으로 보고한다. 이후 마지막 창을 닫아도 애플리케이션이 종료되지 않고, WebContent process의 종료는 다시 오류 줄이 된다.
+
 - F122.1: 창을 닫거나 애플리케이션을 종료할 때 창의 수정된 탭마다 탭을 닫을 때처럼 저장하고 닫기, 저장하지 않고 닫기, 닫지 않기를 묻는다. 닫지 않은 탭이 있으면 창은 열려 있고 프로젝트는 저장하지 않는다. `e2e/window-close.test.mjs`가 두 host에서 질문과 두 답을 관측한다.
+
 - F130: 두 host는 디버그 화면이 상태를 기록한 뒤 가장 새 `logs/state-<time>.json` 20개만 두고 더 오래된 것을 지운다. 그래서 logs 폴더가 열 때마다 커지지 않는다.
+
 - F120: Tauri host가 상주 service에 보내는 `hello`가 Wails host와 같이 애플리케이션의 설정 폴더를 `client`로 싣는다. terminal runtime 명세가 `client`를 정의한다.
+
 - F117.5.6: host는 교체한 상주 sidecar의 설치된 service를 옛 service의 process가 끝난 뒤에만 시작한다. 모든 빌드에서 process 종료의 커널 알림으로 기다리며, 중지 기한 안에 끝나지 않는 process는 오류 줄과 함께 교체를 실패시키고 sidecar는 오래된 채로 남는다.
+
 - F124.3.7: 디버그 화면이 가장 새 파일을 먼저 나열하고, 파일의 글을 가장 새 줄이 있는 끝에서 열며, 목록 단추가 있는 머리줄을 스크롤하는 pane 위에 고정한다. `core.debug`는 `scroll`을 보고한다.
+
 - F128.1: host가 종료하는 동안 일부러 끝낸 WebContent process는 기록하지 않고 Tauri host는 page를 다시 불러오지 않는다. 다시 불러오면 애플리케이션이 끝나지 못했다.
+
 - F117.5.4: plugin 화면이 카드 위에 오래된 상주 service마다 `<running> → <installed>`와 새 명령 `core.plugins.replace {sidecar}`를 실행하는 동작 터미널 <sessions>개를 끝내고 적용을 보인다. `core.plugins`는 `outdated`를 보고하고, 두 host는 `sidecarsOutdated`에 답하고 `sidecars-changed`를 보낸다.
+
 - F117.5.3: 두 host가 `hello` version이 설치된 version과 다른 상주 service를 마지막 세션이 닫힐 때와 host 호출 `sidecarsReplace({sidecar})`에서 교체한다: `close-owner`, `shutdown`, 설치된 service를 시작하는 재연결, 각 표면의 연결 알림, `outdated`에서 sidecar가 빠진 `host.sidecars`, 애플리케이션 로그의 `sidecar <name>: service <running> replaced by <installed>`.
+
 - F128.4: Tauri host의 fatal signal이나 잡히지 않은 예외를 process가 끝나기 전에 `error: fatal: …` 한 줄로 애플리케이션 로그에 쓴다. native 라이브러리가 handler를 설치하고 앞서 설치된 handler를 호출한다.
+
 - F128.3: Tauri host의 panic을 기본 panic 메시지보다 먼저 `error: panic: <file>:<line>: <message>`로 애플리케이션 로그에 쓴다.
+
 - F128.1: 창의 WebContent process가 끝나면 두 host가 한 번 `error: page process: <window>: terminated`를 쓰고 page를 다시 불러온다. 이전에는 Tauri host가 다시 불러오지 않아 창이 page 없이 남았다.
+
 - F128.2: host가 상주 service의 연결 손실을 관측이 아니라 오류 줄 `error: sidecar <name>: connection lost; restarted`(실패하면 `restart failed: <reason>`)로 쓴다.
+
 - F129: 창 검사의 준비는 바꾼 설정(`diagnostics.performance` 포함)을 검사가 끝날 때 되돌린다. 그래서 그 뒤에 검사 애플리케이션을 쓰는 사람도 performance trace를 가진다.
+
 - F124.3.6: 디버그 화면의 모든 파일이 같은 칸에 보기와 저장을 가지고, PNG 파일(캡처)은 이미지로 보인다. `debugRead`는 `kind` `text`이면 `text`를, `kind` `image`이면 `data:image/png;base64,` 주소 `image`를 답하고, 16 MB보다 큰 PNG 파일과 PNG signature가 없는 `.png` 파일을 거부한다. Wails runtime의 선택 파일 `/wails/custom.js`는 없는 page 파일로 알리지 않는다.
+
 - F127.2: 두 host가 내줄 수 없는 page 파일마다 한 번 `error: page asset: <path>: not found`를 쓴다. 파일 확장자가 없는 경로는 문서 경로이므로 알리지 않는다.
+
 - F124.3.5: 디버그 화면이 보기 단추로 `logs/`의 글 파일 내용을 보이고 목록 단추로 목록에 돌아간다. 256 KB보다 큰 파일은 문자 경계에서 시작하는 마지막 256 KB를 보이고 앞부분이 생략됐다고 밝힌다. host 호출 `debugRead`는 `logs/` 밖의 경로와 글이 아닌 파일을 거부하고, `core.debug`는 `viewing`을 보고한다.
+
 - F124.3.3: 두 host의 도움말 > 디버그가 디버그 화면을 연다. 화면은 `logs/state-<time>.json`을 기록하고 `logs/`의 파일을 크기와 시각과 함께 나열하며 파일 하나나 전부를 저장 창으로 저장한다. page는 `core.debug`, `core.debug.open`, `core.debug.close`, `core.debug.save`, `core.debug.save-all`을 선언하고, 화면이 열려 있는 동안 `core.screen`은 `modal` `debug`를 보고한다.
+
 - F126: main page가 시작하지 못하게 하는 오류(불러오지 못하거나 해석하지 못하거나 실행 중 던진 module)를, 시작 문서의 첫 module이 설치하고 page가 첫 화면 뒤에 거두는 handler가 `error: page start: <text> @ <file>:<line>`로 애플리케이션 로그에 쓴다. 시작 문서와 page module이 import하는 모든 파일을 `package.json` `files`가 담아야 한다는 test가 있다.
+
 - F127.1: `docs/spec/diagnostics.md`가 `logs/`의 파일, 기록의 세 형태(오류 줄, event, state file), 규칙, 각 실패 지점의 기록을 정하고, 용어 목록에 application log, performance trace, state file, debug view가 있다.
+
 - F124.3.2: 두 host가 host 호출 `debugFiles`, `debugRecord`, `debugSave`, `debugSaveAll`에 답한다. `<config-dir>/logs/`의 모든 파일을 나열하고, host, core·macOS·설치된 plugin의 version, 모든 창의 status를 담은 `logs/state-<time>.json`을 쓰며 진단 빌드에서는 각 창의 정지 캡처도 쓴다. `logs/`의 파일 하나를 저장 창으로 저장하고 다른 경로는 거부하며, 폴더 전체를 gzip으로 압축한 tar 파일 하나로 저장한다. 계약 사례 4개가 Go와 Rust에서 돈다.
+
 - F124.2: 표면이 `context.runtime.trace(event, fields)`로 자기 event를 plugin과 표면 이름과 함께 performance trace에 쓴다. 그래서 plugin은 입력의 단계를 host와 sidecar의 event와 함께 `<config-dir>/logs/performance.ndjson`에 기록한다.
+
 - F124.2: 두 host가 정지 캡처와 녹화를 `<config-dir>/logs/captures/`에 쓴다. 그래서 애플리케이션의 모든 진단 파일이 `<config-dir>/logs/`에 있고, `hosts.md`는 이 폴더를 넘겨줄 유일한 폴더로 적는다.
 - F124, F124.1: release version이 0.0.x인 동안 `make wailsv3-build-release tauriv2-build-release`가 두 host, `sok`, page를 진단 포함으로 빌드하고, `scripts/check-release.mjs`는 그런 release에 진단 method와 page 진단 module이 있기를 요구하며, `diagnostics.performance`의 기본값은 true다. `.dev` 식별자는 debug 빌드만 정하는 새 `dev` build 플래그(Go 태그, Cargo 기능)에서 오므로, 진단 release는 `app.soksak.<host>`와 설치된 애플리케이션의 설정 폴더를 유지한다.
+
 - F123: 두 host가 image frame에 대한 모든 답(consumed나 그 까닭을 담은 거절)을 performance trace의 `image.frame` event로 쓴다. 그래서 frame 표시가 멈춘 terminal에서 service가 frame을 보냈는지와 host가 표시했는지를 알 수 있다.
+
 - F123: `image.frame` trace event의 핵심 부분은 consumed 답과 거절 답을 각각 검사하는 Go `TestFrameAnswerEventRecordsConsumedAndRefusedAnswers`와 Rust `frame_answer_event_records_consumed_and_refused_answers`가 덮는다(계약 `trace.image-frame-answer-is-recorded`). `FrameAnswerEvent`와 `frame_answer_event`가 두 쓰기 지점이 쓰는 event field를 만든다.
+
 - F117.5.2: 두 host가 persistent service의 `hello` 응답에서 `version`을 읽고, `installed.json`의 기록과 다르거나 version이 없는 service를 실행 중인 version, 설치된 version, 열린 표면 수와 함께 `host.sidecars` `outdated`로 보고한다.
+
 - F117.4: 두 host는 plugin 작업마다 `plugins-changed`를 보내기 전에 설치된 sidecar를 다시 선언한다. 폴더가 바뀌었거나 어느 plugin도 더 이상 지정하지 않는 표준 입출력 sidecar는 중지 규칙대로 멈추므로, 다음 send가 설치된 실행 파일을 시작한다. 교체는 멈춘 process의 읽기 스레드가 끝나기 전에 같은 이름의 process를 시작할 수 있으므로, Tauri host는 읽기 스레드의 process를 pid로 구분한다.
+
 - F119.1: 첫 종료 신호에 Tauri host가 프로세스를 바로 끝내지 않고 `host.quit`처럼 정상 종료를 실행한다. 그래서 창이 저장하고 sidecar가 멈추며 terminal service가 끝난다. Tauri host는 종료 중 닫히는 각 창의 WebContent 프로세스를 죽인다. `e2e/normal-shutdown.mjs`는 `SOKSAK_SHUTDOWN_BY=signal`로 SIGTERM을 보내고, `SOKSAK_SHUTDOWN_TERMINAL=1`로 terminal service가 끝나기를 요구한다.
+
 - F117.3: 창은 수정된 탭마다 물은 뒤(저장하고 적용, 저장하지 않고 적용, 적용하지 않기) page를 다시 불러와 plugin 작업을 적용한다. 유지한 page는 바뀐 plugin을 `reload`와 적용(`core.plugins.apply`)으로 보이고, 카드는 다시 시작 문구를 보이지 않는다. `exposure.json`이 `core.plugins.apply`, `reload` 상태, 그리고 F117.2가 선언 없이 보고한 `core.plugins`의 `updates` 필드를 선언한다.
+
 - F117.2: plugin 카드는 registry가 설치된 것보다 새 version을 나열할 때만 업데이트를 보이고, `core.plugins`가 `updates`를 보고한다.
+
 - F117.1: 명세가 plugin 작업이 바로 적용된다고 정한다. host는 바뀐 표준 입출력 sidecar를 교체하고, 각 창은 수정된 탭을 물은 뒤 page를 다시 불러오며, 카드 상태 `restart`는 `reload`가 되고, `core.plugins`는 `updates`를 보고한다. 다른 version의 terminal service는 `host.sidecars`에 `outdated`로 보고되고, 그 session이 끝날 때나 `core.plugins.replace`로 교체된다. 구현은 F117.2–F117.5에 남아 있다.
+
 - F119: 두 host가 표면의 답을 기다리는 닫기를 수로 센다. 사이드카가 답하기 전에 다시 닫은 표면이 더 이상 "unexpected close answer"로 사이드카를 실패시키지 않는다. 그 실패는 종료 중 owner close 전에 terminal service 연결을 끝내, service가 애플리케이션보다 오래 남았다.
+
 - F118: 창 검사가 시작하는 요청과 status 대기마다 `step <app> +<seconds> s <step>`을 써서, test 시간 제한으로 끝난 검사가 실행하던 단계를 알려 준다.
+
 - F115: `document_press_test`가 문서 영역의 첫 누름이 그 페이지에 닿는지 검사한다.
+
 - F116: mount를 끝내지 않은 모듈의 탭을 닫으면 mount를 기다리지 않고 표면을 바로 없앤다.
 - R5.3.4, R5.3.5: plugin과 sidecar 저장소가 plugin, sidecar, release를 그 말로 부른다.
 - R5.2.1: 용어 검사가 실제 npm package를 가리키는 "package folder"와 "package name"을 더 이상 거부하지 않는다.
@@ -2367,158 +3299,282 @@
 - R5.3.3: core의 명세, 주석, 오류가 `package.json`의 name 필드를 `package.json`의 `name`이라고 부르고, `sok`가 `expected a package.json name`을 보고한다.
 - R5.3.2: `sok plugin pack`과 `sok sidecar release`가 쓴 파일을 `release`로 출력하고, `sok`의 식별자와 계약 사례가 release라고 부른다.
 - R5.3.1: core의 명세와 주석이 plugin은 plugin, sidecar는 sidecar, 그 `.tgz` 파일은 release라고 부르고, `sok`의 오류와 식별자도 따른다.
+
 - F111.7.6: 계약 사례 `page.start.sok-core-owner`가 Tauri 시작 문서 주소를 다룬다.
+
 - F111.7.5: Tauri 시작 문서 처리기가 host 없는 요청이 찾을 수 없다고 답하는 이유를 적는다.
 - R5.1: `AGENTS.md`가 한 개념을 한 용어로 부르게 하고, `packages/plugin-api/terms.json`이 용어와 거부 동의어를 적는다.
+
 - F113.1: `document_typing_test`가 비활성 애플리케이션에서 문서 영역이 입력한 글자를 받는지 검사한다.
+
 - F111.7.4: `sok` 변경이 고친 주석을 영문으로 썼다.
+
 - F111.7.3: Tauri 애플리케이션이 `sok://core/start.json`으로 창을 시작하므로 `soksak` scheme이 딥링크에 비어 있다.
+
 - F111.7.2: 문서 영역이 plugin 문서를 `soksak-package://<plugin>/<path>` 대신 `sok://<plugin>/<path>`에서 연다.
+
 - F111.7.1: 명세가 웹뷰 안의 애플리케이션 문서를 `sok://<owner>/<path>`로 부르고, `soksak` scheme은 딥링크에 남기며, plugin의 문서를 plugin 문서라고 부른다.
+
 - F111.5: 창 동기화가 표면마다 plugin을 실으므로, browser 카드 같은 hybrid 표면이 `changed its composition declaration`으로 실패하지 않고 올라온다.
+
 - F111.6: 두 애플리케이션의 runtime이 `documentPost`를 host로 넘기므로, 페이지가 `unknown host call: documentPost`로 실패하지 않고 package 문서에 message를 보낸다.
 - R4: `AGENTS.md`는 체크리스트 항목 하나를 기능 하나의 크기로 정하고, 완료한 항목마다 changelog 항목과 커밋을 요구한다.
+
 - F110: 창 검사 `e2e/hwp.test.mjs`가 두 host에서 `.hwp` 파일을 hwp plugin으로 열고 네이티브 키로 고쳐 저장한다. workspace registry에 hwp plugin이 들어간다.
+
 - F109: files sidecar는 32 MiB까지의 binary 파일에 `readBytes`와 `writeBytes`를 명세한다.
+
 - F108: 선언된 모든 version은 0.0.8이고, core 0.0.8을 릴리스했다.
+
 - F102.1.7: host는 확장 지점의 공유 module을 `/shared/<plugin id>.<point>/<specifier>.js`에서 내보내므로, Tauri webview가 그것을 JavaScript로 불러온다.
+
 - F102.11: core 명령은 표면 composition이 `dom`인 탭을 더는 끝없이 기다리지 않는다.
+
 - F102.8: 창 검사 `e2e/editor.test.mjs`가 두 host에서 tree의 파일을 편집기 plugin으로 열고 저장, 탭 오류, 다시 읽기, 닫기 질문을 확인한다. workspace registry에 편집기 plugin이 들어간다.
+
 - F103: 저장된 배치와 설정은 현재 형식으로만 읽는다. 이전 형식은 `projects.json`이나 설정 파일을 밝히는 오류로 실패하고, 변환은 지웠다.
+
 - F106: 선언된 모든 version은 0.0.7이고, core 0.0.7을 릴리스했다.
+
 - F102.10: 표면은 `tab.error(text)`로 실패한 작업의 오류를 카드 상태 행에 보이고 `tab.error(null)`로 지운다. `core.grid`는 탭마다 `error`를 보고한다.
+
 - F105: 두 애플리케이션 번들이 macOS 최소값 14.4를 선언하고, Tauri 애플리케이션이 그 값으로 build되며, `make release-check`가 `LSMinimumSystemVersion`과 각 실행 파일의 최소 macOS version을 `MACOS_MINIMUM`과 비교한다.
+
 - F102.9: 선언된 모든 version은 0.0.6이고, `make release-check`는 새 core를 허용하는 registry의 모든 plugin version의 manifest를 새 core가 받는지 검사한다. core 0.0.6을 릴리스했다.
 - F102.1.3, F102.1.4: `sok`은 plugin의 plugin 의존을 설치하고, 필요한 plugin의 제거와 끄기를 거절하며, update에서 dependent 범위를 지키고, `sok registry build`는 plugin 의존을 검사한다. host는 plugin package를 sidecar에서 빼고, 확장 지점의 `/shared/`를 내보낸다(F102.1.5).
+
 - F102.5: 표면은 `tab.modified`로 저장하지 않은 변경을 알리고, 수정된 탭이나 그 카드를 닫으면 저장, 버리기, 두기를 묻는다.
+
 - F102.4: `core.file.open`은 project의 파일을 `surface.opens`에 그 확장자를 선언한 plugin에서, 없으면 `*`를 선언한 plugin에서 연다.
+
 - F102.3: plugin은 `surface.params`에 탭 인자를 선언하고, `core.card.add-tab`은 검사한 `params`를 탭과 함께 저장하며, surface context는 그것을 `tab.params`로 준다.
+
 - F104.1: 주석은 영어로 쓰고, 주석 언어 검사는 한글을 담은 주석 줄을 보고한다.
+
 - F102.1.5: workbench는 page를 불러올 때 확장 지점에 대한 기여를 해석하고, `core.contributions`와 plugin 카드에 보고하며, 제공자 표면에 `contributions(point)`를 주고, page import map은 `@soksak/shared/`를 확장 지점의 공유 module에 대응한다. manifest의 sidecar 목록은 설치된 plugin의 package를 뺀다.
+
 - F102.1.2: plugin manifest는 `extends`에 확장 지점을, `contributes`에 기여를 선언하고, `dependencies`는 plugin package를 가리킬 수 있다.
+
 - F102.1.1: `sok`, plugin manifest, `soksak-engines`의 version 범위는 상한 없는 `>=x.y.z`를 받고, plugin manifest는 sidecar 범위 `*`를 받는다.
 - 체크리스트 항목 `R3.1` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
 - 체크리스트 항목 `R3.3` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
 - 체크리스트 항목 `R3.4` 폐기: 체크리스트 항목은 project 작업을 담고, 이 항목은 AGENTS.md가 담는 작업 규칙이나 그 적용을 담았다.
 - R3.5.1: `@soksak/plugin-api`가 기록 검사와 커밋 형식 검사를 `soksak-records`와 `soksak-commits` 명령으로 제공한다.
+
 - F101.3: locale 변수 없이 시작한 terminal service의 zsh 프롬프트에서 한글 input method 조합이 두 host의 activation tier 검사를 통과한다.
 - R3.2: `make records-check`는 저장소에 관한 사실이 아닌 기록 줄을 보고하고, `make commits-check`와 commit-msg hook과 CI는 꼬리말 없는 커밋 형식 `type(scope): Subject (#ID)`를 검사한다.
+
 - F101.2: shell을 UTF-8 locale로 실행하는 terminal service 0.0.6과 terminal plugin 0.0.6이 공개 registry에 있다.
+
 - F101.1: terminal service에 `LANG`, `LC_ALL`, `LC_CTYPE`이 없을 때 터미널 shell은 UTF-8 locale로 실행된다.
+
 - F100.2: plugin과 sidecar 저장소의 release workflow는 자기 이름의 core tag 대신 선언된 core release에서 `sok`를 build한다.
+
 - F100.1: plugin 명세는 plugin과 sidecar의 version이 core version과 관계가 없고, 그 release workflow가 `sok`를 build할 core release를 선언한다고 적는다.
+
 - F99: F95, F95.1, F97을 담은 soksak 0.0.5를 릴리스했고, F98을 담은 terminal service 0.0.5와 terminal plugin 0.0.5가 공개 registry에 있다.
+
 - F99.1: 선언된 모든 version은 0.0.5다. parity audit은 릴리스 기록 F96과 F99를 feature link 없이 나열한다.
+
 - F98: terminal service는 `close-owner`에서 소유자 session보다 surface actor를 먼저 닫으므로, terminal이 열린 채 끝내도 `close owner` 오류를 쓰지 않는다(sidecar-vt S23).
+
 - F95.1: native 테스트가 창의 변경 뒤에도 cursor rect가 꺼진 채로 남는지 확인하고, image region은 더 이상 `resetCursorRects`를 오버라이드하지 않는다.
+
 - F95: 창은 cursor rect를 끄므로 Tauri 콘텐츠 뷰의 화살표 rect가 더 이상 터미널 글자 위의 텍스트 포인터를 대신하지 않는다.
+
 - F97: `soksak-engines`의 성공 줄은 선언된 범위를 출력한다.
+
 - F96: soksak 0.0.4를 릴리스했고, `engines.soksak` `*`를 선언한 browser, files, terminal plugin 0.0.4가 공개 registry에 있다.
+
 - F96.2: 선언된 모든 작업공간 버전은 0.0.4다.
+
 - F96.1: 설치기와 `soksak-engines`는 상한이 없는 `>=0.0.0`인 범위 `*`를 받는다.
+
 - F94: 실제 휠 검사는 터미널 카드를 전체 화면으로 하므로 터미널이 이력 줄을 담을 만큼 넓다.
+
 - F73.2: `real/focus`는 예전 `axis` 대신 `side: "bottom"`으로 카드를 나누며, 두 실입력 검사는 `s.record`로 통과한다.
+
 - F73.2: 실입력 검사 `real/focus`와 `real/tui-drag`는 `s.record`로 녹화를 시작하며, 이것은 stop을 한 번 보내고 그 오류를 유지한다.
 - 문서 감사는 항목이 `[-]` 체크리스트 상태에서 시도를 `Not reproduced:`(한국어 체크리스트는 `재현되지 않음:`) 뒤에 기록하면 받아들이고, `[-]`를 벗어나는 항목은 거부한다.
+
 - F92: 페이지는 준비된 배치를 다음 animation frame 대신 다음 task에서 그리므로 host의 표시 기다림이 시작하는 rendering update가 그 그리기를 담는다. 60 Hz 디스플레이에서 끌기는 다시 매 frame 새 배치를 보인다(트랜잭션 간격 33.4 ms 대신 16.7 ms).
 - F92(측정): 녹화의 layout trace는 페이지가 그린 DOM의 표시를 기다리도록 host에 요청한 시각인 `requested`를 기록하고, 끌기 검사는 배치 트랜잭션의 시작 간격과 단계를 출력한다.
+
 - F93: `make go-repeat`는 `TAGS`를 받고 빌드된 테스트 파일이 없으면 실패하며, `make rust-repeat`와 `make rust-tests-alone`은 `FEATURES`를 받으므로 `diagnostics` 태그나 feature 뒤의 테스트를 반복할 수 있다.
+
 - F73.1: 창 검사는 `s.record`로 녹화를 시작하며, 이것은 stop을 한 번 보내고 그 오류를 유지한다. 세션 정리는 멈추지 않은 녹화를 멈추고 폴더를 지운다.
+
 - F90: 배치 뷰는 각 배치를 그 commit이 알린 device pixel 격자로 쓰므로, 그리기 전에 바뀐 비율이 더 이상 카드를 host가 놓은 사각형 밖으로 옮기지 않는다. V7c 실패 문장은 그려진 카드, 그 style, 판, device pixel ratio를 밝힌다.
+
 - F91: 워크벤치는 포커스가 표시를 기다리는 동안 제거가 시작된 표면에 포커스를 주지 않으므로, 카드 포커스 직후 탭을 닫아도 더 이상 `image view is detached`를 기록하지 않는다.
+
 - F89: 페이지의 `W` 검증 행은 창 단추의 세로 가운데를 한 device pixel 안에서 판정하므로 scale 1 디스플레이에서도 통과한다.
+
 - F88: native 제목줄 검사는 창 단추의 세로 가운데를 한 device pixel 안에서 판정하므로 backing scale 1 디스플레이에서도 통과한다.
+
 - F46.1: 창 검사의 거부된 native pointer 오류는 단계, 버튼, 위치, 창을 밝히고, 정리는 끝낸 열린 누름마다 버튼이 떼어지기를 기다린 시간을 출력한다.
+
 - F83: 창 검사는 captures 폴더 아래에 녹화 폴더를 남기면 실패하고, 하네스가 그 폴더를 지운다. 설정 모달 검사와 끌기 녹화는 이제 세션 정리에서 녹화를 지운다.
+
 - F82: Wails host는 종료할 때 자신이 닫은 영속 서비스 연결을 더 이상 읽기 오류로 기록하지 않는다.
+
 - F84: 전체 화면 카드는 머리 맨 앞에 스페이스 앱 단추를 보인다. 단추는 스페이스의 모든 탭을 slicing tree 순서로 카드마다 묶어 나열하고 묶음 제목마다 카드 지도를 보이며, 탭을 고르면 전체 화면이 그 카드로 옮겨 간다.
 - F86, F87: 거부된 설치 plugin manifest는 로고가 창 버튼 아래에 놓인 빈 창 대신, plugin과 그 version과 package를 밝힌 오류를 보이고 기록한 채 page 시작을 멈춘다.
+
 - F85: 전체 화면 카드의 다른 탭을 클릭하면 전체 화면을 유지한 채 탭이 바뀐다. 탭 드래그만 카드를 일반 크기로 되돌린다.
+
 - F81: 좁은 카드 머리는 탭 목록 버튼, 현재 탭 제목, 도구 메뉴 버튼 `⋯`를 보인다. 메뉴는 사이드바 버튼과 활성 도구를 나열하고 그 명령을 실행한다(`core.card.tools`).
+
 - F80: 프로젝트 목록 단추 뒤의 카드 자동 정렬 단추가 `core.layout.balance`를 실행한다. 이 명령은 배치를 유지하고 모든 카드에 공정한 몫을 주므로, 각 축에서 카드가 가장 많은 줄의 카드들이 같은 크기가 된다(`Soksak.balance()`).
+
 - F79: 두 host는 시간이 초과된 중계 요청을 `the document did not reply within <ms> ms`로, 늦은 답을 그 지연과 함께(`exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`) 보고한다.
 - 검증: 2026-10-05 열다섯 번째 전체 window run은 5분 뒤 디스크가 가득 차(`ENOSPC`) 무효다. 열여섯 번째(macOS 26.6.2 arm64, 11 processor에 load average 최대 218)는 344개 중 338개 check를 통과했다. 두 host의 정렬 시간(33.3ms에 대해 89.5ms와 124.4ms)과 Tauri의 21개 중 20개 frame divider 녹화는 부하다. F69의 Wails document 멈춤이 글꼴 family 검사를 실패시켰고, F77과 F78이 Tauri의 zsh 다시 그리기와 files bookmark 실패를 기록한다.
+
 - F70: Wails host는 fork `min-median-max/wails`(`soksak/http-error-log`)를 쓴다. 그 HTTP transport는 page에 돌려주는 오류를 더 이상 로그에 쓰지 않으므로 실패한 binding 호출은 한 번만 기록된다.
 - 검증: 4a51f38d에서 다시 게시한 core release v0.0.3은 첫 실행에서 공개 registry로 시작 plugin 묶음을 설치하고, 두 host 모두 다시 시작하지 않고 terminal을 시작한다(macOS 26.6.2 arm64).
+
 - F75: 첫 실행이 설치한 plugin은 다시 시작하지 않고 그 sidecar를 시작한다. 두 host는 성공한 install, update, enable의 sidecar를 바로 선언한다.
+
 - F74: `make hosts-check`는 더 이상 Tauri host를 Windows용으로 compile하지 않는다. 그 검사는 llvm-mingw가 필요해 core의 모든 GitHub CI run을 실패시켰다. `windows-build-check`는 계속 Wails host를 Windows용으로 vet한다.
 - 검증: 2026-10-05 열네 번째 전체 window run(c2f21e69, 앱 eb707869, macOS 26.6.2 arm64)은 344개 중 338개 check를 통과했다. 11 processor에 load average 93에서 118인 부하 실패: 두 host의 `native content, cards, and the sidebar rail stay aligned`(33.3ms에 대해 최악 245.0ms와 160.4ms)와 Tauri 최대화 정착(150ms에 대해 225ms). F69의 Tauri page 멈춤이 `the application log file holds the lines the page reports`를, 그 선언되지 않은 `exposure reply does not match a pending request`로 `a page reload loses no host reply`를 실패시켰고, F73의 Tauri 녹화 stop이 `a new window shows its complete first screen from its first frame`을 실패시켰다.
+
 - F69: 멈춘 요청은 page의 WebContent process도 기록하며, page가 답하지 않아 host가 끝낸 요청도 포함한다.
+
 - F72: `pnpm -F @soksak/e2e run verify:shutdown`이 종료 생명주기 검사를 실행하고, 아무것도 실행하지 않던 window 검사 probe 두 개를 지웠다.
+
 - F25.1: window 검사 harness는 package `@soksak/window-check`다. 애플리케이션 실행 파일은 `SOKSAK_BINARY_WAILSV3`와 `SOKSAK_BINARY_TAURIV2`가 선언하며, core의 `e2e/setup.mjs`가 cargo target 폴더에서 가져온다.
 - 검증: 2026-10-05의 열세 번째 전체 window 실행(eb707869, macOS 26.6.2 arm64)은 검사 344개 중 334개를 통과했다. 실행 중 사람이 Safari를 써서 Wails pointer 거부, activation 실패, 바뀐 최전면 기준선이 생겼다. 11개 processor의 load average 58에서 93에서의 load 실패: 109에서 242ms의 녹화 간격, 정렬 timing(33.3ms 한도에 161.7ms), divider frame 21개 중 20개. 남은 실패는 F71이다.
+
 - F69: 한도 안에 답하지 않은 window 검사 요청은 그 순간 호스트의 thread를 `sample`로 기록하고 오류에 그 파일을 적는다.
+
 - F43: library로의 전환은 관찰 round 전의 animation frame에서, 판을 비우는 준비된 그리기 안에서 library 화면을 보이며, 진단 기록기는 callback slot 안의 각 `body` dataset 쓰기의 stack을 보고한다.
+
 - F64: 두 host는 멈추는 sidecar의 출력을 끝까지 읽고 멈춤이 뺀 닫기에 대한 답을 받아들이므로, sidecar가 더는 SIGPIPE로 끝나지 않는다. 멈추는 동안 0이 아닌 종료는 두 host에서 `exit status <code>` 또는 `signal <number>`로 쓴다.
+
 - F68: 두 host가 WebKit 자식 기록 쓰기를 직렬화하므로, 겹친 페이지 적재가 더는 그 이름 바꾸기를 실패시키지 않는다.
+
 - F52: `make hosts-check`는 Makefile 변수 `LLVM_MINGW`가 가리키는 llvm-mingw의 Windows C compiler로 Tauri host도 Windows용으로 compile한다.
+
 - F67: `@soksak/plugin-api`는 control 목록을 제자리에서 갱신하는 `drawList(list, entries, { key, create, update })`를 export하므로, plugin section은 항목이 바뀌지 않은 목록을 더는 다시 만들지 않는다.
+
 - F66.2: settings와 menu dialog 문서는 내용을 제자리에서 갱신한다. 같은 종류와 명령의 node는 문서에 남고 바뀐 속성, 글, 값만 정해지므로, 누름과 뗌 사이의 갱신이 더는 click을 잃지 않는다.
+
 - F66.1: library는 render 사이에 바뀌지 않은 project card와 plugin card, 그 control을 문서에 두고 순서가 틀린 요소만 옮기므로, 누름과 뗌 사이의 render가 더는 click을 잃지 않는다.
 - 검증: 2026-10-05의 열한 번째 전체 window 실행(core a3498ed4, terminal service b9b46c4, terminal plugin dfd2858, macOS 26.6.2 arm64)은 검사 344개 중 339개를 통과했다. `native content, cards, and the sidebar rail stay aligned`는 11개 processor의 load average 27에서 42에서 최악 frame 한도 33.3ms에 대해 64.8ms(Wails)와 44.1ms(Tauri)로 두 host에서 실패했고 이는 load다. 나머지 실패는 F43, F64, F65다.
+
 - F65: card header 그리기는 sidebar 접기 control을 순서가 틀릴 때만 옮긴다(`packages/workbench/plane.js`의 `drawSideToggles`). 이전에는 card 도구 바로 앞의 control을 뺀 모든 보이는 control을 `insertBefore`로 옮겼고, 이는 control을 먼저 문서에서 빼며, WebKit은 node가 문서에서 빠진 누름에 `click`을 보내지 않는다. 열한 번째 전체 window 실행은 Wails에서 앞선 접기의 그리기가 누름과 뗌 사이에 실행되어 header click이 접힌 왼쪽 sidebar를 열지 않은 것을 기록했다. 이 규칙은 exposure 명세에 적었다. 검증: `a draw keeps the pressed card header fold control in the document`(`packages/workbench/test/plane-side-toggles.test.mjs`)가 변경 전에는 뺀 control `["top", "left"]`로 실패했고 변경 뒤 통과한다. workbench 검사 301개가 통과한다.
+
 - F62: Wails 영속 transport harness는 받은 처음 두 연결 대신 `open` 요청을 echo한 연결을 끊는다. 그래서 한 host가 다시 맺은 연결이 다른 host의 첫 연결보다 먼저 service에 닿아도 각 host는 첫 연결을 잃고 연결 event를 받는다. `TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck`에 subtest `second opens after the first reconnected`를 더했고, 이 subtest는 변경 전에 `no connection event; the test stalled`로 실패했다. host code와 Tauri harness는 바꾸지 않았다. macOS 26.6.2 arm64에서 Wails host test package로 검증했다.
+
 - F63: 정리 확인이 거부되면(`kill(-pgid, 0)`이 EPERM을 답하면) command 감독기는 process table(`ps -A -o pid=,pgid=,stat=`)에서 group의 구성원을 읽어 `verify` 정리 관찰에 기록하고, 실행 중인 구성원이 나열되지 않으면 group이 정리된 것으로 본다. 실행 중인 구성원이 있으면 EPERM 실패를 유지한다. macOS는 구성원이 모두 끝나 부모가 거두기를 기다리는 zombie만 남은 group에 EPERM을 답하며, 여기서 그 부모는 부모가 이미 끝난 자손을 거두는 launchd였다. `forwards CLI SIGTERM to command cancellation and cleanup`은 부하 아래에서 이렇게 한 번 실패했다. zombie에 대한 `kill(pid, 0)`은 성공하므로, 감독기 테스트는 끝난 자손을 process state로 판정한다. 새 테스트 `counts a process group that holds only zombies as gone after a denied probe`는 변경 전에 실패하고 변경 후에 통과한다.
+
 - F59: 두 host는 owner 전용 파일과 directory를 platform 연산으로만 만든다. Darwin은 `platform/darwin/private_files.*`에서 mode 0700과 0600으로 구현하고, Windows는 `<operation> is not implemented on windows`를 반환한다. Go에는 `CreatePrivateDirectories`, `AppendPrivateFile`, `CreatePrivateFile`, `WritePrivateFile`, `SecureServiceDirectory`, `PrivateDirectory`가, Rust에는 있으면 안 되는 파일을 만드는 `create_private_file`과 파일 내용을 바꾸는 `write_private_file`이 생겼다. Go의 log, 설정, settings, process lock, clipboard, service, performance, 진단 위치는 더 이상 Windows에서 compile되지만 owner 전용 접근을 주지 않는 `os` 권한 mode를 정하지 않는다. Tauri process lock은 umask mode 0644였고 이제 Wails처럼 mode 0600이다. Tauri의 services, clipboard, settings, endpoint 기록, performance logs directory, performance switch·service flag·출력, WebKit child 기록, 진단 fixture settings도 이제 Wails처럼 owner 전용이다. 새 contract case `platform.private.creates-owner-only-directories`, `platform.private.appends-owner-only-file`, `platform.private.creates-new-owner-only-file`, `platform.private.writes-owner-only-file`, `performance.trace.owner-only-files`, `webkit-children.record.owner-only`, `endpoint.process.lock-mode-0600`을 더했고, 마지막 세 case는 변경 전 Tauri에서 실패했다. macOS 26.6.2 arm64에서 두 host suite와 `make windows-build-check`로 확인했다.
+
 - F43: page는 준비한 배치의 DOM을 네이티브 준비가 답한 뒤 다음 animation frame의 callback에서 그린다(`packages/workbench/layout-queue.js`의 `drawPrepared`와 `animationFrame(work)`). 이전에는 준비를 이행한 microtask checkpoint에서 그렸고, 그 checkpoint는 ResizeObserver callback의 것일 수 있다. 열 번째 전체 window 실행은 library로의 전환이 files tree observer의 관찰 round 안에서 plane을 지운 것을 기록했고, WebKit은 이를 `ResizeObserver loop completed with undelivered notifications.`로 알렸다. 그 frame 전에 배치 세대가 바뀌면 그리기를 취소한다. [Native surfaces](docs/spec/native-surfaces.ko.md)가 규칙을 적는다. 새 workbench test `a prepared draw runs at the next animation frame when its preparation is answered inside an observation round`는 변경 전에 실패했고 변경 뒤에 통과한다.
+
 - F60: 표면을 제거할 때 workbench는 module의 `dispose`를 호출하기 전에 그 module이 만든 composition의 영역을 뗀다(`packages/workbench/surface-modules.js`의 `disposeModule`). terminal과 shell module은 `dispose`에서 영역을 떼기 전에 sidecar session을 끝내고, 공급자는 session이 끝날 때 전송 그림을 놓으므로, 그 전에 보낸 프레임이 아직 붙은 영역에 표시되려다 열 번째 전체 window 실행의 Tauri에서처럼 `error: image present: … reason=notFound`로 실패했다. 이제 그런 프레임은 뗀 영역의 프레임으로 `stale` 답을 받는다. 두 host는 이미 이 경우를 같게 다루었으므로 host는 바뀌지 않았다. [Plugins](docs/spec/plugins.ko.md#표면-소유권)가 그 순서를 정한다. Red: `removing a surface detaches its regions before the module ends its sidecar session`이 `session close`, `imageDetach view` 순서로 실패했다. Green: 이 검사와 workbench 검사 297개가 통과한다.
 - 검증: 2026-10-05의 열 번째 전체 window 실행(7eca547a, macOS 26.6.2 arm64)은 검사 344개 중 336개를 통과했다. 11개 processor의 load average 50에서 69에서의 load 실패: 두 host의 `native content, cards, and the sidebar rail stay aligned`(최악 121.7ms, 한도 33.3ms), 두 host의 `shaking the vertical boundary exposes no unrendered area`(녹화 간격 117ms와 113ms), Tauri의 `multiple terminals keep fixed cells during a divider drag`(frame 21개 중 20개). 나머지 세 실패는 F43, F60, F61이다.
+
 - F58: main page의 오류 표시와 layout 연결을 `packages/workbench/index.html`의 inline script에서 `packages/workbench/page-layout.js`(`createErrorDisplay`, `reportUncaught`, `createPageLayout`)로 옮겼다. 이 module은 문서, host 표면, 판, compositor를 인자로 받는다. `index.html`이 이를 import하고 workbench가 staging한다. `presentation-failure-lines.test.mjs`와 `layout-failure-lines.test.mjs`는 그 연결의 복사본을 다시 만들었고, 이제 module을 import하므로 page의 code를 검증한다. 단언은 바뀌지 않았다. 동작은 바뀌지 않았다.
+
 - F54: Windows처럼 창 크기 변경 연산이 없는 platform에서 Tauri 애플리케이션은 Wails 애플리케이션처럼 창을 열기 전에 오류를 쓰고 상태 1로 끝난다. 전에는 그 실패를 기록하고 계속한 뒤 plugin setup에서 늦게 실패했다. 이제 [hosts](docs/spec/hosts.ko.md#windows-상태)는 두 host가 `window resize animation is not implemented on windows`로 끝난다고 정한다. 전에는 종료 요청 오류를 적었다.
+
 - F53: Tauri host는 Wails host처럼 platform 연산 `new_session`(Go에서는 `NewSession`)으로 영속 서비스를 새 session에서 시작하며, 이 연산은 macOS에서 자식이 `setsid`를 부르게 한다. 서비스는 더 이상 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. 새 contract case `sidecars-transport.persistent.starts-in-new-session`은 변경 전 Tauri에서 실패했고 두 host에서 통과한다.
+
 - F52: `make windows-build-check`가 Wails host source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet하고 `make hosts-check`가 이를 실행한다. main에서 Windows build는 정의되지 않은 helper `missing`, `unreachableError`와 `sidecars.go`의 `syscall.SysProcAttr.Setsid`에서 실패했다. directory identity 밖의 모든 Windows 연산은 두 host에서 같은 이름으로 `<operation> is not implemented on windows`를 반환하고, 영속 서비스를 새 session에서 시작하는 일은 platform 연산 `NewSession`이며, Rust log는 platform 연산 `create_private_directories`와 `append_private_file`로 만든다. Go의 `ConfigureMainWindow`, `PreferredLanguage`, `MainWindow`, `ServiceProcessExists`는 호출자가 보고하는 오류를 반환하고, 읽을 수 없는 system 언어는 Rust에서 기본 언어를 고르는 대신 두 host 모두에서 시작을 실패시킨다. 두 host는 service pid의 거부된 signal 확인(EPERM)을 존재하는 process로 본다. `make windows-build-check-rust`는 Tauri host를 `aarch64-pc-windows-gnullvm`용으로 check하며, Windows C compiler `aarch64-w64-mingw32-clang`가 설치되어 있지 않으면 그 이름을 적고 실패한다.
+
 - F57: 한 번의 layout 실패는 화면이 시작한 project 전환이나 몸짓이 그 layout을 예약했을 때도 layout queue의 줄 `error: page: surface presentation failed: <text>` 하나만 쓴다. `layouts.run`은 `failed`가 실패를 보인 뒤에도 호출자에게 거부를 돌려주었으므로, project 탭의 `core.project.activate`와 어떤 명령도 기다리지 않은 몸짓 layout의 거부가 문서의 `unhandledrejection` 처리기에 닿았고, `projects.js`의 활성화는 그것을 `error` 이벤트로 보내 각각 `error: page: <text>`를 다시 썼다. 이제 `layouts.run`은 실패한 layout에 `{ status: "failed" }`로 답하고, project 전환은 `layouts.wait()`로 기다린다. 새 workbench test `a layout failure of a project switch started from the interface writes one page error line`과 `a layout failure that no command waits for writes one page error line`은 변경 전에 실패했고 변경 뒤에 통과한다.
+
 - F56: 한 번의 그림 presentation timeout은 두 host에서 page 표시 줄 `error: page: surface presentation failed: <text>` 하나를 쓴다. Tauri의 presentation 기다림은 기다린 준비나 표시 요청이 그 실패로 답하는데도 `error: image presentation timeout: …`을 썼고, page는 같은 실패를 `host presentSurfaces failed while advancing the layout queue: …`와 `exposure settled failed: …`로 다시 썼다. 이제 layout transaction 순서는 실패한 단계 뒤에 줄 없이 이어 가고, layout queue의 `wait()`는 가장 새 배치가 실패하면 `false`로 답하므로 core 명령의 settled 기다림은 slot을 읽지 않고 끝난다. 새 contract case는 `images.wait.timeout-writes-no-log-line`이며, window 검사 `a presentation that fails while the terminal service is stopped`는 page 줄만 선언한다.
+
 - F41: window 검사 `late-reply.test.mjs`(`a surface reply that arrives after its surface closed is discarded as an observation`)는 페이지가 답을 붙잡는 새 browser 탭에 `core.surface.hit`를 보내고, 답이 붙잡혀 있는 동안 탭을 닫고, 요청이 1003으로 끝났는지, 애플리케이션 로그에 그 탭의 관측 `exposure reply <id> of removed surface "<surface>" arrived after its request ended`가 있는지, `error: ` 줄이 쓰이지 않았는지 요구한다. 새 진단 메서드 `diagnostics.surface.hold`와 `diagnostics.surface.held`([endpoint](docs/spec/endpoint.ko.md))가 timer 없이 답을 늦춘다. 두 host는 이를 main page에 보내고, page의 진단 module(`packages/workbench/surface-reply-hold.js`, `--diagnostics`로만 staging한다)은 host가 그 표면의 `closed`가 있는 `exposure-registered`를 보낼 때까지 표면의 모든 exposure 답을 붙잡은 뒤 붙잡은 답을 보내고, host가 그 답들에 응답한 뒤 `held exposure replies of surface "<surface>" were sent after the surface closed (<count>)`를 쓴다. 검사는 transcript에서 이 줄을 기다린다. `e2e/application-log.mjs`에 `readLines`를 더했고 `readErrors`가 이를 쓴다. `e2e/late-reply.mjs`가 줄을 판정한다. Red: `surface-reply-hold.test.mjs`와 e2e 단위 검사 `application-log.test.mjs`, `late-reply.test.mjs`는 `surface-reply-hold.js`, `readLines`, `late-reply.mjs`가 없어 실패했고, `an installed reply gate decides when a surface exposure reply is sent`는 `gateSurfaceReplies is not a function`으로 실패했다. Green: 같은 test, `pnpm -F @soksak/workbench test`, `pnpm -F @soksak/e2e test`, 구조 검사가 통과한다. window 검사는 아직 실행하지 않았다.
+
 - F55: 검사 전 최전면 application이 검사 대상 host이면 window 검사 실행은 첫 검사 전에 한 번 스스로 거부하고, 그 application을 pid, 이름, bundle identifier로, 검사 대상 host를 pid로 밝힌다. `e2e/session.mjs`가 `e2e/frontmost.mjs`의 `sessionBaseline`을 `verify`, `verify:activation`, `verify:real`, `verify:terminal-sidebar-current`, `repeat`의 node:test global setup으로 실행한다. 이전에는 실행이 검사 대상 host를 기준선으로 잡아 모든 검사가 따로 실패했고, 2026-10-05의 여덟 번째 window 실행은 그렇게 검사 161개가 실패했다. 단위 테스트 `a session whose frontmost application before the checks is a tested host is refused`는 변경 전에 실패했고 변경 뒤 통과한다.
 - 검증: 2026-10-05의 아홉 번째 전체 window 실행(36fb65d2, macOS 26.6.2 arm64)은 두 host에서 검사 342개 중 339개를 통과했다. `native content, cards, and the sidebar rail stay aligned`는 11개 processor의 load average 51에서 최악 frame 한도 33.3ms에 대해 58.5ms(Wails)와 52.9ms(Tauri)로 두 host에서 실패했고, 이는 load다. `a presentation that fails while the terminal service is stopped`는 F56의 host 오류 줄로 Tauri에서 실패했다. 같은 build의 여덟 번째 실행은 Wails 검사 application이 최전면 기준선이어서 아무것도 측정하지 못했다(F55).
+
 - F35.2: window 검사 `titlebar-recording.test.mjs`는 프레임 배율이 1에서 3까지 오르고 1까지 내려오는 동안과, 다른 창이 공통 `textSize`를 바꾼 뒤 main window가 다시 읽는 동안 창을 녹화하고, 창 단추 중심이 첫 행 중심과 0.5px 넘게 다른 frame, 잴 수 없는 frame, 녹화가 놓친 표시된 행이 있으면 실패한다. 두 중심은 frame 픽셀로 잰다(`e2e/titlebar-measurement.mjs`). 그 단위 검사는 단추가 행 중심에서 6px 벗어난 합성 frame을 거부한다.
+
 - F35.1: 다시 읽기에서 각 host는 새 페이지의 첫 표시와 함께 커밋하는 창의 배치 transaction 안에서 시작 title bar를 정하므로(`surfaceLayoutStartPage`), 그때까지 화면에 남는 이전 페이지가 새 페이지의 title bar와 함께 보이지 않는다. 아직 보이지 않는 창은 높이를 바로 받는다. 네이티브 검사 `window_titlebar_reload_test`는 새 WebContent 프로세스에서의 다시 읽기를 녹화하고, 보이는 페이지의 행 가운데에 창 단추가 없는 frame이 있으면 실패한다.
+
 - F50: `core.tab.close`는 탭 닫기가 surface를 dispose하고 그 그리기가 slot을 지운 뒤 답한다. handler가 닫기를 반환하지 않아 명령이 dispose 중에 답했고, 뒤이은 명령의 settled 기다림이 dispose된 surface의 slot을 읽어 `exposure settled failed: surface … is not mounted`를 기록했다. core 명령의 settled 기다림은 이제 layout queue의 `wait()`로 가장 새 배치를 기다리며, 기다리는 동안 더 새 배치가 예약되면 다시 기다린다. 전에는 시작할 때의 배치를 한 번 기다렸고, 더 새 배치가 대신한 배치는 그리지 않고 끝난다. [Exposure](docs/spec/exposure.ko.md#등록)가 이 규칙을 밝힌다. 새 workbench 검사 `core.tab.close answers after the tab close and its draw`, `the wait for the drawn layout continues through a layout that a newer layout replaces`, `the wait for the drawn layout fails with the failure of the newest layout`는 변경 전에 실패하고 변경 뒤에 통과한다.
+
 - F35.1: 각 host는 페이지의 시작 문서에 답하기 전에 창 title bar를 공통 `textSize`의 첫 행 높이로 정하므로, frame 배율이 1이 아닌 창의 첫 그리기는 더 이상 창을 만들 때의 40pt title bar 아래에 행을 보이지 않는다. `textSize`는 두 host와 페이지에서 공통 전용이다. 라이브러리로의 전환은 현재 frame 배율을 쓰는 준비한 배치다. 전환은 새 배율을 쓰는 그리기였을 수 있는 준비한 그리기를 취소하기 때문이다. title bar를 정한 뒤 실패한 준비는 취소하기 전에 이전 높이를 다시 정한다.
+
 - F35.1: 창 title bar 높이가 layout transaction에 들어간다. 각 표면 준비(`syncSurfaces`)는 그 뒤 그리기의 첫 행 높이 `titlebar`를 담고, 두 host는 창의 transaction을 시작한 뒤, 표면을 놓기 전에 title bar를 정하므로 행과 창 단추가 같은 표시 frame에서 바뀐다. 준비는 창의 `chrome`을 답하고, 검증 W는 행을 마지막으로 표시한 준비의 `chrome`과 비교한다. frame 배율 변경은 이제 배율을 문서에 쓰는 준비한 배치가 그린다. 전에는 설정이 배율을 바로 썼고 페이지가 그리기 뒤에 `windowTitlebar`로 title bar를 요청했으며, 이 호출은 `packages/workbench/titlebar.js`와 함께 제거되었다. 전체 화면에서 host는 실패하지 않고 title bar를 바꾸지 않으며, 페이지는 `windowControls` 답의 title bar가 행과 다르면 행을 다시 준비한다.
+
 - F35.1: 네이티브 검사 `window_titlebar_layout_test`는 열린 layout transaction 안에서 제목줄 높이를 정하는 동안 창을 녹화하고, 녹화 frame이 `surfaceLayoutCommit` 전에 창 단추를 새 자리에 보이거나 그 뒤에 보이지 않으면 실패한다. macOS 26.6.2에서 단추는 commit과 함께만 옮겨졌다.
+
 - F46: 두 host는 1007 거부가 읽는 `NSEvent.pressedMouseButtons` mask인 status `host.buttons` `{mask}`를 선언한다. `native/darwin`은 AppKit이 애플리케이션에 전달하거나 global event monitor로 다른 애플리케이션에 전달하는 mouse 버튼의 누름과 뗌마다 mask를 읽고, host는 값이 바뀌면 감시자에게 알린다. window 검사 하네스는 검사가 열어 둔 누름을 `status.watch`로 `host.buttons`가 mask 0을 보고할 때까지 기다린 뒤 뗌이 전달되기를 요구해 끝낸다. 이전에는 사람이 아직 버튼을 누르고 있는 동안 뗌을 다시 보냈고, 그 뗌도 거부되어 그 host의 이후 pointer 검사가 모두 1008로 실패했다.
+
 - F48: Tauri의 `host.windows`는 모든 창의 닫기 상태, 제목, 초점을 하나의 main thread 단계에서 읽는다. 이전에는 닫기 상태를 endpoint thread에서 읽고 창마다 별도의 main thread 왕복으로 조회해서, 그 사이 main thread가 처리한 닫기가 목록을 `runtime error: failed to receive message from webview`로 실패시켰다. 새 계약 사례 `exposure.windows.listed-in-one-main-thread-step`가 test main thread에 넣은 닫기로 변경 전 실패를 재현하고 변경 뒤 통과한다. Wails의 목록은 바꿀 것이 없다.
+
 - F49: 프로젝트 탭이나 다른 창의 `core.library.remove`로 registry에서 프로젝트를 지우면, 그 프로젝트를 보이는 창은 탭을 닫을 때처럼 그 프로젝트를 끝낸다. 그 창은 registry 변경 알림으로 제거를 읽고, 그 프로젝트 탭들의 surface module을 정리한 뒤 sidecar 세션을 끝내며, 남은 첫 프로젝트를 열거나 프로젝트 없는 창으로 library를 보인다. 이전에는 그 창이 지운 프로젝트의 surface module과 terminal 세션을 남기고 다음 프로젝트 탭을 열지 않았다.
+
 - F51: native 창을 쓰는 각 host 요청은 native 창을 native code에 넘기는 main thread 단계에서 읽는다. Tauri의 `host.window`, `host.window.fullscreen`, `host.window.move`, `host.hit`, `input.pointer`, `input.key`, 표면 누름 감시, 표면 배치 단계는 한 main thread 단계에서 NSWindow를 읽고 다음 단계에서 썼다. tauri-runtime-wry는 닫기를 받아들이는 main thread 처리에서 NSWindow를 닫고 tao는 `Destroyed` 전에 그 창을 놓으므로, 그 사이의 닫기가 닫혔고 해제되었을 수 있는 창을 native code에 넘겼다. Wails host는 창을 쓰는 단계에서 읽었지만 destroy된 창의 nil을 native code에 넘겼다. 이제 두 host에서 그 단계 전에 닫힌 창은 요청을 1003 `window "<name>" does not exist`로 실패시키고 native code에 닿지 않으며, 그 창의 `host.window` 변경은 아무것도 알리지 않는다. `input.pointer` 뒤의 Tauri 표면 누름은 더 이상 endpoint thread에서 AppKit view를 hit test하지 않고, Tauri의 없는 창 메시지는 Wails처럼 이름을 따옴표로 감싼다. 새 계약 사례 `window-close.native-window.used-in-reading-step`은 변경 전 두 host에서 실패했고 변경 뒤 통과한다.
+
 - F47: host는 모든 실패를 page와 같은 형식의 오류 줄 `error: <where>: <text>`로 `LogError`(Go), `log_error`(Rust), native `sp_log_error`를 거쳐 쓰고, 공유하는 위치에서는 두 host가 같은 문장을 쓴다. 그래서 window 검사가 host 실패를 본다. Wails framework 오류도 같은 경로를 거친다. `error: `로 시작하지 않는 host 줄은 `<result> arrived after its request ended`처럼 예상된 상태를 밝히는 관측이며, 실패를 담고 늦게 도착한 결과는 이제 오류로 쓴다. workbench는 `exposure settled failed: …`, `exposure: …`, layout queue 실패를 `error: ` 없이 썼고 이제 오류 줄로 쓴다. native surface settle 줄은 문자 그대로의 `\n`을 써서 다음 log 줄을 그 줄에 붙였다.
+
 - F35: 페이지는 새 `windowTitlebar` host 호출로 창 title bar를 첫 행 높이로 정하므로, AppKit이 모든 frame 글자 배율에서 창 단추를 행 가운데에 둔다. host는 title bar를 40pt로 고정하던 항목 없는 unified compact toolbar 대신 AppKit의 `-[NSWindow setTitlebarHeight:]`로 높이를 정하고, 행은 더 이상 창에서 높이를 되읽지 않으므로 줄어들 수 있다. 두 host는 32 이상 200 이하 point 밖의 높이와 전체 화면 중의 요청을 같은 문장으로 거부한다. `window_controls_test`는 제목 변경과 크기 변경 뒤 40에서 108pt의 title bar와 가운데 정렬을 측정하고, `titlebar.test.mjs`는 페이지가 행 높이마다 한 번 요청하는지 검사한다.
+
 - F37: AppKit이 0이 아닌 `NSEvent.pressedMouseButtons` mask로 거부한 합성 `input.pointer` 누름이나 뗌은, 거부와 같은 main run loop 차례에 측정한 mask와 frontmost 애플리케이션의 bundle identifier와 pid를 담은 1007을 두 host에서 같은 문장으로 반환한다. 이전 메시지는 둘 다 적지 않았다.
+
 - F43: ResizeObserver loop 오류 뒤 진단 기록기가 오류 frame의 DOM 변경을 callback slot별로 보고한다. 첫 callback 때 아직 전달되지 않은 변경, observer를 만든 코드와 함께 각 callback과 그 microtask checkpoint의 변경, round 뒤 다음 animation frame까지의 변경이다. 이전에는 첫 callback부터 다음 animation frame까지의 모든 변경이 한 줄에 있었다.
+
 - F45: 페이지가 보이는 모든 오류는 그것을 기록하는 하나의 표시 경로를 거치고, 그 경로의 요소만 오류 색을 가진다. source test가 둘을 검사한다. 이 경로가 로그 줄 없이 보이던 애플리케이션 오류 배너 메시지 여섯 개를 찾았다.
+
 - F39: document region과 image region은 관찰 중 실패한 배치나 처리기가 없는 image 사건처럼 어떤 호출자도 받지 않는 실패를, 애플리케이션이 기록하지 않는 콘솔 대신 surface page의 report로 보고한다. `observeRegionInsets`는 animation frame에서 관찰을 시작한다.
+
 - F40: 설정 dialog는 더 이상 main 문서의 native paint clip을 받지 않는다. 그 clip은 main page의 native surface 구멍을 dialog의 어두운 막에 냈고, 마지막 커밋의 frame에 따라 두 host가 다른 dialog 스타일을 보내게 했다.
+
 - F42: 페이지는 보이는 모든 오류를 보이는 순간 기록한다. 카드 surface 상태, library 오류, plugin 상태 오류, 실패한 plugin 작업, 사라진 project 폴더, library preview 오류가 이제 `error: <where>: <text>`를 써서, 다음 그리기가 지우는 오류도 window check가 판정한다.
+
 - F38: space가 열리기 전의 library처럼 포커스된 카드가 없는 창은 frame을 글자 크기 범위로 가진다. 그 창에서 글자 크기 명령이 `text size card undefined is not in the layout`으로 실패했다.
+
 - F36: space 줄, 왼쪽 project 열, 첫 행은 frame 배율을 곱한 크기를 정수 pixel로 가져서, 판이 device pixel 격자에 남고 host가 페이지가 선언한 자리에 네이티브 표면을 앉힌다. 배율 1.1에서 반 pixel 어긋났다. 실패한 V7b는 표면과 두 사각형을 밝힌다.
+
 - F33: layout transaction의 그리기는 그 transaction이 네이티브 표면 자리를 예측할 때 쓴 표시 상태로 카드 sidebar를 그린다. 그리기 전에 온 sidebar 크기 명령이 DOM과 네이티브 표면을 끌기 한 걸음만큼 어긋나게 했다. 실패한 자리 검증(V7a, V7c)은 표면, 두 사각형, 예측한 sidebar 띠와 그려진 띠를 밝힌다.
+
 - F34: 페이지 검증 R은 판이 그려진 카드의 크기일 때만 선을 잰다. 그리기 전에 새 크기가 되는 grid와 판을 비교해서, 대체된 배치의 선을 판 밖으로 나간 선으로 보고했다.
+
 - F31: window check는 그 동안 애플리케이션이 기록한 모든 오류를 판정한다. 페이지는 실패를 `error: `로 시작하는 줄로, 관측을 `log`로 보고하고, 하네스는 이전 check 뒤로 애플리케이션이 쓴 오류 줄을 읽어 각각 `application error:`로 출력하며 check가 `expectError`로 선언하지 않았으면 check를 실패시킨다. 이전에는 정리의 reload가 문서에서 오류를 지운 뒤 `core.page.error`를 한 번 읽었다. browser 예제는 `surfaces.report`의 실패를 버리지 않고 콘솔에 쓴다. 전체 window 실행(test 338개, 319개 통과)이 페이지 오류 F32~F35를 기록했다.
+
 - F30: 느린 sidecar와 멈추지 않는 sidecar의 test가 standard input을 읽지 않는 program을 쓴다. `cat`은 pipe를 읽었고 `cat &`은 곧바로 끝날 수 있어 두 test가 기계 속도와 shell에 따라 달랐으며, core CI의 GitHub 실행에서 실패했다. macOS 26에서 Go와 Rust repeat target이 5/5 통과한다.
+
 - F29: build 환경 검사가 GitHub runner에서 `pnpm/action-setup`이 설치하는 것처럼 npm package 밖의 pnpm 실행 파일을 받아들인다. `pnpm --version`이 실행되는 version을 측정하며, core CI는 모든 GitHub 실행에서 `make preflight`가 `pnpmExecutable=unknown`으로 실패했다. `scripts/test/check-build-environment.sh`가 변경 전 실패를 재현하고 변경 뒤 통과한다.
+
 - F26: plugin은 sidecar와 그 version 범위를 `plugin.json`의 `dependencies`로 선언한다. `plugin.json` `sidecars`와 `package.json` `soksak.sidecars`를 없애고, `sok plugin pack`은 `soksak`이 있는 `package.json`을 거부한다. `@soksak/plugin-api`, workbench, 두 host, `sok plugin pack`, `sok registry build`, `make registry`가 새 필드를 읽으며, registry index와 `installed.json`은 `sidecars` 범위를 그대로 둔다. plugin-api, workbench, host, `sok`, workspace registry test가 새 계약을 재현하고(변경 전 Red: `unknown field dependencies`, 설치된 sidecar 선언 없음, 정의되지 않은 `ManifestSidecars`와 `manifest_sidecars`), macOS 26(darwin-arm64)에서 root `pnpm test`, `make boundaries`, `make exposure-check`, `make hosts-check`, `make docs-check`가 통과한다.
+
 - F28: 뒤의 pasteboard가 다른 window check는 항목, 형식, 각 쪽의 길이와 digest를 밝힌다.
+
 - F27: OSC 9 알림 정책의 window check가 bundle 애플리케이션에 맞는다. 정해지지 않은 알림 권한을 밝히고, tab 정책이 시스템 알림을 더하지 않는지 확인한다.
+
 - F24: 실패한 terminal 표시의 window check는 다음 terminal이 아직 표시되지 않은 동안 실패하지 않고 표시를 기다린다.
 - R2-4-3: `docs/spec/registry.md`가 공개 registry를 명세한다. commit한 항목 파일, 항목 소유자의 pull request, 자동 검사와 merge, merge 때의 index 게시를 담는다.
 - R2-9: 애플리케이션과 `sok`은 더 이상 0.0.2 설정 폴더를 옮기거나 `installed.json` format 1을 바꾸지 않는다. 다른 형식의 파일은 그 이름과 함께 실패한다.
 - R2-7-3: `docs/plans/linux-host.md`가 Linux host를 제안한다. framework 사실, host 동작 묶음과 비공개 API마다의 Linux 방식, vt frame 전송, 결정 D1–D8, 구현 순서를 담는다.
 - R2-7-2: files sidecar는 Linux에서 inotify로 디렉터리를 감시한다(sidecar-files S8).
 - R2-7-1: `sok`은 `$XDG_CONFIG_HOME`이나 `~/.config` 아래의 설정 폴더로 Linux에서 실행된다. `sok path`는 Linux에 경로 항목 폴더가 없다고 알리고, CI workflow가 Linux에서 `sok` 테스트를 실행한다.
+
 - F23: Go `sok`은 프로세스 umask와 무관하게 푼 파일을 mode 0755나 0644로 쓴다. 이전에는 umask 077에서 sidecar 실행 파일을 mode 0700으로 썼다.
+
 - F14: 두 애플리케이션은 운영체제의 종료 요청(Dock, 로그아웃, 재시작, 다른 프로그램)에 저장을 마친 뒤 오류 없이 답한다. 이전에는 Wails 애플리케이션이 취소로 답해 로그아웃도 멈췄고, Tauri 애플리케이션은 페이지 저장을 기다리지 않고 끝났다.
+
 - F21: 두 host는 종료 전에 보낸 닫기에 대한 지속 service의 답을 받아들인다. 그래서 종료가 `shutdown`을 보내고 terminal service가 애플리케이션과 함께 끝난다.
 - R2-5-1: core에 CI workflow와 release workflow가 있다. tag는 두 애플리케이션을 zip 파일로 설치 안내 `docs/operations/install.md`와 함께 게시한다.
+
 - F22: 반복 도구의 테스트는 넘기는 환경에서 `NO_COLOR`를 뺀다. 그래서 `NO_COLOR`가 있는 환경에서도 node 경고가 테스트가 맞춰 보는 출력에 들어가지 않는다.
 - R2-6-2: command `core.plugins.registry`가 registry index를 정하고, window check가 검사 소유 TLS registry에서 https로 설치하며 틀린 hash, revoked version, 닿지 않는 registry를 거부한다.
 - R2-6-1: 진단 build는 `--registry-ca PATH`를 받아 window check가 local TLS registry를 쓸 수 있다. release build는 이 인자를 거부한다.
+
 - F20: 두 애플리케이션은 선언하지 않은 인자, 값 없는 flag, 두 번 준 flag를 같은 문장과 상태 2로 거부한다. Tauri 애플리케이션은 더는 그것을 무시하지 않는다.
+
 - F15: 두 host는 잘못된 `process.lock`을 같은 문장 `<path>: invalid process lock`으로 보고한다.
 - F18, F19: 터미널은 네이티브 영역이 view보다 작은 띠의 포인터 점을 받고, 실패한 mouse 연산은 자기 결과로 답하므로 페이지가 더는 `unexpected mouse inputId`를 보고하지 않는다.
 - R2-4-1: 두 host와 `sok`은 정해진 redirect, 시간, 크기 한도로 registry index와 archive를 https로 읽고, 첫 실행은 `pluginsUseRegistry`로 `environment.json`의 기본 registry를 정한다.
+
 - F17: 두 host의 시작 시간 초과 테스트는 응답 없는 service가 언제 시작하는지에 더는 기대지 않는다.
 - R2-2-2: plugin과 sidecar 저장소는 version 0.0.3을 선언하고, `@soksak/plugin-api`는 plugin의 `engines.soksak`이 빌드에 쓰는 plugin API의 `^<version>`이 아니면 실패하는 `soksak-engines`를 제공한다.
+
 - F16: `soksak-exposure`와 `soksak-engines`는 plugin 저장소가 link된 package로 시작해도 검사를 실행한다. 전에는 검사하지 않고 끝났다.
 - R2-2-1: 모든 core 선언은 0.0.3이고, 버전 검사는 애플리케이션 `Info.plist` 버전과 native pkg-config 버전도 본다.
 - R2-8: 두 release 애플리케이션은 bundle 식별자 `app.soksak.wails`와 `app.soksak.tauri`의 `soksak.app`이다. 개발 build는 `.dev` 식별자를 쓴다. release의 첫 시작은 이전 `com.soksak.*` 설정 폴더를 한 번 옮기고, `plugins/installed.json` 형식 2는 설치 폴더를 설정 폴더에 대한 상대 경로로 기록하며 형식 1 파일을 한 번 변환한다(R2-8-1).
@@ -3224,39 +4280,59 @@
 - V5-81: 터미널이 배경, 글자, 커서, 선택을 테마의 표면 색(`--surface`, `--surface-fg`, `--edge`)으로 그리고 테마나 모드가 바뀌면 다시 그린다. 사이드카는 올바른 색이 없는 테마를 거부한다. 브라우저 빈 상태는 창 배경 대신 카드 색을 칠한다.
 - V5-79: 프로젝트의 새 터미널이나 셸이 홈 디렉터리가 아니라 프로젝트 루트에서 시작한다. 쪼갠 표면은 여전히 원래 표면이 있던 곳에서 시작하고, 프로젝트가 없는 창은 홈 디렉터리를 유지한다. 표면 컨텍스트가 `project.root`를 갖고, 셸 사이드카의 `open`이 `directory`를 받는다.
 - V5-78: 파일 트리의 북마크가 프로젝트의 어느 트리에서나 동작한다. 선택은 파일 상태의 `files.selection`(`files.select`)이며 모든 트리가 보인다. 모든 트리가 `files.tree`에서 빠진 폴더를 지우고, 새로 고침 도중에도 `files.tree`가 비어 보이지 않는다.
+
 - F13: 다시 빌드한 Wails와 Tauri 호스트에서 플러그인 사이드바 섹션과 플러그인 중심 설정 창을 완료했다. 브라우저·파일·셸의 아홉 섹션이 선언된 상태를 보이며, 매니페스트 기반 설정 화면, 사이드바 세트 작업, 호환 창 검사, 브라우저 빈 상태가 두 호스트에서 통과한다.
+
 - F13-5-2: 카드 안 사이드바 경계선을 누르면 곧바로 접거나 편다. 두 번 누름과 호스트 `pointerTiming` 호출을 없앴고, 접힌 경계선은 2포인트 선을 보인다.
 - F13-2-6(파일): 파일 트리 머리가 새 섹션 문맥 `icon(name)`으로 카드 머리식 아이콘 단추(star, rotate-cw)를 쓴다. 트리에 여분의 여백이 없고, 머리 글자와 행 접기 표시가 섹션 머리 접기 표시와 한 열에 놓이며, 행은 사이드바의 12pt 글자와 20pt 행 높이를 쓴다.
 - F13-2-6(코어): 섹션 행은 `fill: true`를 선언할 수 있다. `list` 레이아웃에서 펼친 fill 섹션은 다른 섹션이 남긴 사이드바 높이를 나눠 쓰고 본문을 스크롤하며, 파일 트리가 이를 선언한다.
+
 - F13-1-1: 사이드바마다 고른 탭과 접은 섹션을 스페이스와 함께 저장하고(스페이스 배치의 `sidebars`) 다시 불러오기나 다시 시작 뒤에 다시 보인다. `sidebar-sections.js` 부분은 d5e71587에 들어갔다.
 - V5-76-1: 브라우저 예제가 페이지 오류 없이 프로젝트를 연다. 호스트가 없으면 사이드카나 네이티브 영역이 필요한 표면은 실패하지 않고 자리 표시를 보이고, 컴포지터는 페이지가 앉힌 자리를 받으며, `report`는 콘솔에 쓴다. `make browser-example-check`는 headless Chrome에서 프로젝트를 열고 콘솔 오류가 있으면 실패한다.
+
 - F13-3-5: 설정 `railWidth`를 없앴다. 새 레일 열은 `sidebarWidth`로 연다. `railWidth`가 남은 설정 파일은 "unknown setting railWidth"로 불러오기에 실패하므로 파일에서 그 키를 지워야 한다. 최소, 최대, 처음 폭은 60–800 범위를 함께 쓰고 이름은 최소 폭, 최대 폭, 처음 폭이다. 창 검사는 바꾼 공통 설정을 되돌린다.
+
 - F13-5-2: 카드 안 사이드바를 경계선으로 접는다. 끌면 폭이 바뀌고, 한 번 누르면 호스트가 새로 알리는 시스템 두 번 누름 간격(`pointerTiming`)이 지난 뒤 접거나 펴며, 두 번 누르면 최소 폭 대신 `sidebarWidth`로 편다. 접힌 사이드바는 경계선만 남고, 접기 단추, 카드 안 상태 줄, `sidebarFoldedWidth` 설정을 없앴다(검사 앱 settings.json의 키도 지웠다). tabs 레이아웃의 탭은 줄바꿈하지 않고, 섹션을 접어도 이름이 움직이지 않는다. 다시 빌드한 Wails와 Tauri 호스트에서 검증했고, 게시한 두 번 누름은 실제 입력 등급을 기다린다.
+
 - F13-2-5: 파일 트리가 프로젝트 폴더를 `@pierre/trees`(라이선스 원문과 함께 번들)로 그린다. 파일 형식 아이콘, 선택, 4pt 스크롤 막대, 테마 토큰에 묶인 색, 열 때 나열되는 폴더, 폴더별로 맞추는 디스크 변경, 파일 사이드카의 새 `git` 동작(`files.git`)에서 오는 git 상태 표시를 갖는다. ☆는 고른 파일을 북마크한다. 다시 빌드한 Wails와 Tauri 호스트(`e2e/files.test.mjs`)와 dark, light 캡처로 확인했다.
+
 - F13-2-4: 파일 트리가 디스크를 따른다. 파일 사이드카가 프로젝트 폴더와 펼친 디렉터리를 감시하고(macOS는 kqueue) 변경을 알리며, 파일 상태 모듈이 다시 나열하므로 애플리케이션 밖에서 만들거나 지운 파일이 새로 고침 없이 나타나고 사라진다.
 - V5-77: 저장된 폭이 없는 카드 안 사이드바는 190포인트(`sidebarWidth`)로 열린다. 최소 폭은 120으로 유지되고, 손잡이를 두 번 누르면 여전히 그 폭이 된다.
 - V5-75: 사이드바 위치(`rail`)의 기본값이 카드 안 사이드바인 `inset`이고, 컨트롤이 카드 안을 처음에 보여 준다. 다른 값을 저장한 설정 파일은 그 값을 유지한다.
 - V5-76: `environment.json`은 사이드카를 실행하지 못하는 런타임을 위해 `sidecars: false`를 받고, 그 환경에서 상태 모듈이 사이드카를 쓰는 플러그인을 검사가 거부한다. 브라우저 예제는 이를 선언하고 파일 플러그인을 더 이상 나열하지 않으므로, 프로젝트를 열 때 "requires exactly one declared sidecar"를 보고하지 않는다.
+
 - F13-2-3: 파일 플러그인이 파일 트리에 프로젝트 폴더를, 북마크에 그 북마크를 그린다. 플러그인은 워크벤치가 보이는 프로젝트마다 한 번 마운트하는 `state` 모듈을 선언할 수 있다. 상태 모듈은 플러그인의 status와 명령을 애플리케이션 문서에 등록하고, 프로젝트 폴더를 `root`로 하는 사이드카를 쓰며, 선언한 프로젝트별 `data`를 `projects.json`의 `plugins` 아래에 저장한다. 새 파일 사이드카는 프로젝트 폴더 안의 디렉터리를 나열한다. 트리는 폴더 펼침이나 `files.refresh` 뒤에 갱신된다. 다시 빌드한 Wails와 Tauri 호스트에서 확인했다(`e2e/files.test.mjs`).
+
 - F13-5-1: 사이드바 섹션 머리, 탭 줄, 상태 줄이 카드 테두리 선을 써 윤곽이 디자인처럼 뚜렷하다. 머리는 카드 머리 높이, 상태 줄은 카드 발 높이여서 선이 이웃 카드와 한 줄에 놓인다. 접기 표시는 코어의 chevron-down 획 아이콘이다. 창 검사가 캡처에서 머리 배경에 대한 선의 대비를 잰다.
+
 - F13-5: 사이드바가 사이드바 디자인을 따른다. 세트 제목과 자리 표시가 없고, 섹션 머리는 머리까지 접히는 26pt 띠이며, 모든 사이드바가 26pt 상태 줄로 끝나고, 빈 목록은 흐린 UI 글꼴이며, 카드 안 사이드바와 카드 사이는 선 하나다. 색은 테마 토큰에서 온다. 새 dom 이름 `core.sidebar`, `core.sidebar.status`. 다시 빌드한 Wails와 Tauri 호스트에서 다크·라이트 캡처로 검증했다.
 - V5-74: 브라우저 탭과 탭 섹션이 문서 제목을, 페이지에 제목이 없으면 주소를 보인다.
+
 - F13-2-2: 브라우저 DOM 섹션이 문서의 요소를, 네트워크 섹션이 Performance API가 기록한 요청을 나열한다(`browser.elements`, `browser.requests`). 공유 문서 뷰의 콘텐츠 월드 스크립트가 보고한다. `make exposure-check`는 섹션 모듈의 코어 이름을 받는다.
+
 - F13-2-1: 브라우저 히스토리 섹션이 문서 영역의 세션 기록을 나열하고 누르면 그 항목을 연다(`browser.history`, `browser.history.go`, 문서 `go` 동작 `entry`). 탭 섹션은 `core.grid`와 `core.tab.select`로 카드의 브라우저 탭을 나열하고 누르면 고른다. 섹션은 코어 status를 따라가고 코어 명령을 연결할 수 있다.
+
 - F13-3-4: 설정 창이 더 이상 플러그인이나 섹션마다 컨트롤을 반복하지 않는다. 일반에 사이드바 위치, 왼쪽·오른쪽 사이드바 스위치와 세트, 폭이 있다. 플러그인은 manifest 이름과 설명의 검색할 수 있는 목록이며(`plugin.json`의 `description`이 이제 필수다), 행은 설정, 섹션, 왼쪽·오른쪽·레일 선택이 있는 플러그인 페이지를 열고 목록이 돌아온다. 플러그인의 왼쪽이나 오른쪽 선택(세트, 사용 안 함, 일반 따름)은 그 카드가 포커스된 동안 일반 선택보다 앞선다. 사이드바는 세트를 나열하고, 편집에는 이름, 배치, 섹션 행이 있다. 각 행은 플러그인별로 묶은 선택 상자와 ▲ ▼ −이고 +가 있으며, 반복 섹션을 거부하는 `core.settings.sets.row`를 실행한다. `core.settings.link`는 세트 id, `off`, `inherit`을 받는다.
 - V5-73: 브라우저 홈 주소는 브라우저 플러그인 페이지의 플러그인 설정 `홈 주소`(`browser.home`, 기본값 빈 값)다. 새 브라우저 카드는 이를 열고, 비어 있으면 빈 상태로 시작한다. manifest의 `home` 키와 표면 컨텍스트의 `metadata`를 없애고, 플러그인 설정에 `address` 형식이 생겼다.
 - V5-70-2: 문서 영역이 사이트 데이터를 앱의 WebKit 컨테이너 대신 앱 설정 디렉터리 안의 `document-data`에 두므로, 일회용 검사 디렉터리를 포함해 `--config-dir`마다 쿠키와 캐시가 따로 있다.
 - F13-2(셸): 사이드바 섹션이 실제 내용을 그린다. 섹션 모듈은 카드의 탭(또는 기본 표면)에서 자기 플러그인의 status를 따라가고 감시, 값 읽기, 해제의 실패를 페이지 오류로 보고하는 `context.status(name, fn)`과, 조작 요소를 dom 이름 `core.sidebar.section.control`로 자기 플러그인의 명령에 연결하는 `context.bind(element, name, params)`를 받는다. `core.sidebars`는 섹션마다 `text`와 `controls`를 보고한다. 셸은 `shell.history`(`shell.write`로 쓴 비어 있지 않은 줄)와 `shell.jobs`(끝나지 않은 `shell.run` 명령)를 공개한다. 실행 기록은 그 줄을 보이고 누르면 다시 쓰며, cwd는 `shell.cwd`를 보이고, 작업은 끝나지 않은 실행을 중단 조작과 함께 보인다. 다시 빌드한 Wails와 Tauri 호스트에서 확인했다(`e2e/sidebar.test.mjs`). 브라우저와 파일 섹션은 아직 자리 표시 내용을 그린다(F13-2-1부터 F13-2-3).
+
 - F13-3-1: 저장된 사이드바 `sets`와 `links`는 `environment.json`을 검사하는 plugin-api 함수 `validateSidebars`와 `checkSidebarReferences`를 거친다. 등록되지 않은 섹션을 가리키는 세트나 없는 세트 또는 플러그인을 가리키는 연결은 설정 불러오기를 오류로 실패시키고, 변경은 -32602로 실패한다. 사이드바는 더 이상 등록되지 않은 섹션을 건너뛰지 않는다.
+
 - F13-3-2: 사이드바 섹션의 해제 뒤 마운트 실패와 해제 실패를 무시하지 않고 페이지 오류로 보고한다.
+
 - F13-3-3: 모든 플러그인 설정이 한국어 `label`과 필요한 곳에 `description`을 선언하고, 설정 창의 플러그인 페이지가 이를 보인다.
 - V5-70-1: Google 모양 검사가 더 이상 라이트 Google 페이지를 요구하지 않는다. 측정 결과 영역이 라이트 색 구성을 받는 동안 Google이 저장한 자기 다크 페이지를 그렸고, 문서 영역은 실행 사이에 사이트 데이터를 유지한다. 이제 검사는 영역의 라이트 색 구성과 호스트 테마 사이에서 바뀌지 않는 Google 페이지를 요구하고, 실패하면 잰 상태를 보고한다.
 - V5-72: 표면 컨텍스트가 코어 아이콘을 `icon(name)`으로 제공하고, 브라우저의 뒤로, 앞으로, 새로 고침 단추가 문자 ‹ › ↻ 대신 Lucide 셰브런과 회전 화살표를 카드 머리 단추의 크기, 색, 획, hover로 그린다.
+
 - F13-3: 설정 창의 절은 일반, 플러그인, 사이드바다. 합성 절을 합성기의 커밋 지연과 적용 오차(`latency`, `skew`), `diagnostics.knob`, `core.layout.reset`과 함께 제거했다. `latency`나 `skew`가 남은 설정 파일은 "common settings: unknown setting latency"(프로젝트 파일이면 같은 형식의 오류)로 불러오기에 실패하므로 파일에서 그 키를 지워야 한다. 플러그인 절은 환경의 플러그인 목록과 각 플러그인이 선언한 설정, 레일과 오른쪽 사이드바 세트, 섹션을 보여 주고, 일반에는 플러그인 설정과 사이드바 설정이 없다. 사이드바 절에는 사이드바 위치, 왼쪽과 오른쪽 사이드바, 폭, 그리고 `core.settings.sets.*`로 만들기, 편집(제목, `list` 또는 `tabs` 배치, 섹션), 삭제를 하는 세트 목록이 있다. 카드 안 사이드바의 최소, 최대, 처음, 접은 폭과 새 레일 폭은 설정 `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth`, `sidebarFoldedWidth`, `railWidth`다.
+
 - F13-1: 모든 사이드바(좌측, 우측, 레일, 카드 안)가 세트의 각 섹션 `module`을 `{card, surface}`로 마운트한다. 세트의 `layout`이 `list`이면 모든 섹션을 접기 머리(`core.sidebar.section.fold`) 아래 쌓고, `tabs`이면 고른 섹션만 마운트한다(`core.sidebar.section.select`). 접힘과 선택은 사이드바마다 유지되며 `core.sidebars`가 보고한다. 섹션 행은 `module`을, 세트는 `layout`을 요구하고, 스테이징은 패키지가 배포하지 않는 섹션 모듈을 거부한다. 아홉 섹션은 F13-2 전까지 자리표시 목록을 그린다. 다시 빌드한 Wails와 Tauri 호스트에서 검증했다(`e2e/sidebar.test.mjs` 4/4, `e2e/audit.test.mjs` 2/2).
 - V5-71: 브라우저 주소 칸이 입력에서 오지 않은 이동 뒤에 연 주소를 보이며, Enter 뒤 포커스를 유지하는 동안에도 그렇다. 입력 중인 글자는 이동 명령이 실행되거나 칸이 포커스를 잃을 때까지 유지된다. 새 상태 `browser.address.text`가 칸의 글자와 포커스를 보고한다.
 - V5-70: 문서 영역은 같은 WebKit의 Safari 사용자 에이전트(`applicationNameForUserAgent`로 시스템 Safari의 `Version/<major>.<minor> Safari/605.1.15`)를 보낸다. 브라우저 이름으로 페이지를 고르는 사이트가 더 이상 축소된 페이지를 보내지 않으며, Google 검색은 회색 버튼이 있는 기본 페이지 대신 현재 페이지를 보낸다. `document_view_test`가 요청 헤더와 `navigator.userAgent`를 검사한다(이전 Red: WebKit 기본 사용자 에이전트). 로컬 `prefers-color-scheme` 페이지는 이미 두 호스트의 캡처 픽셀에서 앱 모드를 따랐다.
+
 - F13-4: 주소 없는 브라우저 카드는 문서 영역을 숨기고 그 자리에 빈 상태 `browser.empty`("주소를 입력하세요")를 보인다. 이를 누르면 `browser.address.select`로 주소창이 초점을 받고, 첫 로드 뒤 영역이 다시 보인다. 이전에는 보이는 빈 WKWebView가 누름으로 네이티브 초점을 받아 흰색을 그렸다. 다시 빌드한 Wails와 Tauri 호스트에서 검증했다(`e2e/browser.test.mjs` 14/14, `e2e/audit.test.mjs` 2/2).
+
 - F13-0: 카드 안 사이드바 손잡이를 두 번 누르면 가장 좁은 폭 120이 된다(손잡이가 포인터 기본 동작을 막아 `dblclick`이 오지 않던 것을 고쳤다). 저장된 폭이 없는 사이드바는 120으로 열리고, 실제 입력 도구는 누름 횟수를 실어 게시한 두 번 누름이 실제 두 번 누름이 된다.
 - V5-69-2: 설정 창과 메뉴가 카드와 사이드바가 놓이는 곳을 "위치"로 부르고, 묶음 설명이 각 묶음이 바꾸는 것을 말한다.
 - V5-69-1: 카드 안 사이드바의 접기 단추가 사이드바를 접고, 손잡이가 테두리 위에 놓여 표면 옆에 틈이 없으며, 끌 때 사이드바 글자가 선택되지 않는다.
@@ -3266,10 +4342,12 @@
 - V5-68: 제목줄에 dark와 light 모드의 색으로 soksak 로고가 보이고, 두 애플리케이션은 Dock에 soksak 아이콘을 쓴다.
 - V5-67: `host.window`가 다른 창이 창 전체를 가리는지 알리고, 가리는 동안 끌기 측정은 실행되지 않는다.
 - V5-65, V5-66: Wails 설정 웹뷰가 다시 창 내용 크기와 같고, 다른 창 뒤에 가려진 채 열린 Wails 창도 메인 웹뷰를 등록하고 프로젝트를 연다.
+
 - F8: 한국어 입력기 동작(조합 중 글자, 편집, Escape, 정확히 한 번 확정, 캐럿 위치)을 두 호스트에서 실제 입력기로 확인했다. 조합 중 Escape는 별도의 네이티브 검사를 가진다.
 - V5-60: 긴 기록 위의 터미널 휠 스크롤이 두 호스트에서 실제 입력 한도를 통과하고, 사용자가 그 속도를 받아들였다.
 - V5-51-4-1, V5-51-4, V5-51: 두 호스트에서 보이지 않는 터미널의 시스템 알림을 누르면 그 탭이 선택된다. Tauri 엔드포인트는 `diagnostics.notifications`를 선언한다.
 - V5-51-4-1(일부): 애플리케이션은 macOS 애플리케이션 번들에서 실행되고, 탭 알림은 누르면 그 탭을 고르는 시스템 알림으로도 게시된다. `core.notifications`는 권한, 마지막 실패, 받아들여진 알림을 알린다.
+
 - F8-6-2: 경계를 끄는 동안 각 걸음의 배치가 50ms가 아니라 34ms(60Hz 두 프레임) 안에 보이며, 두 호스트에서 검사한다.
 - F8-6-2(일부): `diagnostics.drag`가 네이티브 배치 트랜잭션마다 시작, 앱 DOM 표시 확인, 커밋 시각을 알리고, 끌기 정렬 검사가 가장 늦은 프레임의 그 시각들을 보고한다.
 - V5-6-5: 다른 애플리케이션에서 창으로 끈 파일은 Wails나 Tauri가 가져가지 않고, 네이티브 파일 놓기 뷰와 표면이 선언한 놓기 명령을 거쳐 놓인 점 아래 터미널에 따옴표 친 경로로 들어간다.
@@ -3318,11 +4396,14 @@
 - V5-36: Tauri release 실행 파일의 기호를 벗긴다(14.8 MB에서 10.3 MB, Wails 12.8 MB보다 작음). release 검사는 녹화 코드를 클래스 이름으로 찾는다.
 - V5-17-1: 배치 준비는 다음 슬롯을 잰 표면을 보인 채로 두므로, 화면에 표면이 보이는 자리의 누름이 페이지 대신 그 표면에 간다.
 - V5-35: 두 호스트의 사이드카 정상 정지 테스트는 따로 정한 250 ms 한도 대신 정지가 기한 전에 돌아오기를 요구한다.
+
 - F8-13: 두 칸보다 좁은 넓은 글리프를 두 칸 안 가운데에 그린다. 프레임 검사와 창 검사가 잉크 여백을 잰다.
 - V5-6-6: 터미널 프로토콜 inventory 검사가 명세의 OSC 보고서를 엔진 목록과 선택자 하나씩 비교하고, 적힌 테스트가 모두 있기를 요구한다.
+
 - F8-6-3: 부하 평균 10 미만에서 끌기 지연 검사가 두 호스트의 전체 기본 실행 안에서 통과한다.
 - V5-33: 마운트 도중 판에서 빠진 표면은 실패하지 않고 마운트한 때의 글자 배율을 읽으므로, 뒤의 명령이 `surface … is not in the layout`으로 실패하지 않는다.
 - V5-22: 호스트 비교 검사는 뒤에 여는 설정 모달과 따로 기록한, 끌기가 끝난 때의 확정 배치를 비교한다.
+
 - F8-19: 두 호스트에서 새 터미널 서비스의 첫 터미널 비용을 쟀고, 엔드포인트 전의 기본 글꼴 읽기를 받아들인다고 명세에 적었다.
 - V5-24: 패키지 테스트 명령 검사는 `pnpm test`를 멈춤에 대해서만 제한하고 걸린 시간을 보고한다. 걸린 시간은 컴파일이 아니라 부하 속의 `pnpm` 시작이었다.
 - V5-31: 감독 SIGTERM 테스트는 원자적으로 쓴 pid 파일을 읽고 양의 pid를 기다린다. 새 대상 `make node-repeat`.
@@ -3340,19 +4421,28 @@
 - V5-23: 활성화 등급 키보드 검사가 다시 빌드한 Wails와 Tauri에서 통과했고 추적 반복 5회 중 5회 통과했다.
 - V5-27: 터미널 사이드카는 마지막 완전한 열이나 행 뒤의 영역 여백에 있는 선택 점을 가장 가까운 칸에 대응시킨다. `host.window`는 시스템 포인터 위치를 보고하고, 활성화 등급 검사는 창을 포인터 옆에 둔다. 다시 빌드한 Wails와 Tauri에서 여백 창 검사, 모든 활성화 검사, 키보드 검사의 추적 반복 5회 중 5회로 검증했다.
 - V5-23(진행): 터미널 그림 영역은 활성 애플리케이션의 키 창 밖에서 입력기가 답하지 않은 문자 키를 버리지 않고 오류로 보고한다. 네이티브 키보드 검사는 이 오류 검사와 함께 활성화 등급의 `e2e/activation/terminal-keyboard.test.mjs`로 옮겼다. 다시 빌드한 Wails와 Tauri에서 한 번 검증했고, 추적 반복은 V5-27 뒤로 남았다.
+
 - F12-4: 카드와 프레임은 배율이 1이 아닐 때만 CSS `zoom`을 선언하므로 Tauri에서 끌기 프레임이 모두 표시된다.
+
 - F8-6-4: 빠른 끌기 검사는 60Hz 두 프레임 이상 유지된 모든 배치가 녹화에 나오기를 요구한다. 더 짧은 배치는 표시되기 전에 대신될 수 있다.
+
 - F12-3: 브라우저 문서의 페이지 확대는 카드의 실제 글자 배율이며, 새 호스트 문서 연산 `documentZoom`으로 정한다.
+
 - F12-2: 터미널 카드의 글꼴 크기는 13포인트 × 실제 글자 배율이다. 사이드카 `font` 연산은 `size`를 받고, `terminal.session`은 `fontSize`를 보고한다.
+
 - F12-1: View 메뉴의 Command `=`, `-`, `0`이 마지막으로 누른 카드의 글자를, 프레임을 누른 뒤에는 프레임과 모든 카드의 글자를 크게, 작게, 기본 크기로 바꾼다. 프레임 배율은 공통 설정 `textSize`이고 카드 배율은 레이아웃과 함께 저장된다.
 - V5-21: Wails 애플리케이션 메뉴가 더 이상 웹뷰 전체를 확대하거나 다시 읽지 않는다. View 메뉴에는 Tauri 메뉴처럼 전체 화면만 있다. 두 호스트는 애플리케이션 메뉴를 `host.menu`로 보고한다.
 - V5-18: 두 호스트는 표면의 root를 첫 사이드카 요청에서 정하고 이후 요청과 closed 알림에 보내므로, 이전 프로젝트 root로 열린 터미널 세션도 닫힌다. F8-6-3, F8-6-4, V5-22, V5-23, V5-24, V5-25를 등록했다.
 - V5-20: Tauri의 `host.window` 읽기는 메인 스레드를 기다리기 전에 모달 웹뷰 뮤텍스를 풀므로 모달 배치와의 교착이 없어진다.
 - V5-17: 배치 중에 숨긴 표면이 다시 보일 때 키보드 포커스를 소유자에게 되돌리므로 한 번의 클릭으로 브라우저 문서에 포커스가 간다. `host.window`가 첫 응답자를 보고한다. V5-17-1을 등록했다.
+
 - F8-22: 터미널 모듈은 `selection.start`, `selection.update`, `paste`에 대한 사이드카 확인 응답을 지원하지 않는 이벤트로 기록하지 않고 받는다.
+
 - F8-21-1: `NSEvent.pressedMouseButtons`가 0이 아닌 동안 합성한 포인터 누름이나 뗌은 이동으로 문서에 도달하지 않고 1007을 반환하며, 뗌은 문서가 `pointerup`을 받은 뒤 완료된다. V5-19를 등록했다.
+
 - F8-21: 빈 칸 위의 터미널 끌기가 더 이상 `invalidParams: selection is empty`를 보고하지 않는다. 사이드카는 글자 없는 선택을 지우고 `copied: false`인 `selection.end`로 답한다. `terminal.session`은 `selecting`과 `selectionReleases`를 보고한다.
 - V5-12: F8-6 수정 뒤 `native content, cards, and the sidebar rail stay aligned`가 두 호스트에서 통과한다.
+
 - F8-6: 경계 끌기가 포인터를 따라간다. 배치 큐는 가장 새 대기 배치만 유지하고 대신된 배치를 애플리케이션 로그에 보고한다. 레일 외곽선은 `SoksakView.painted`로 그려진 카드를 따라간다. 앱 DOM 웹뷰는 화면 갱신 주기로 렌더링한다. 정렬 검사는 끌기 지연을 재며 한도는 50ms다.
 - V5-6: 다시 확인한 터미널, 클립보드, 프로토콜, 브라우저 외형 주장은 모두 현재 빌드에서 통과하는 이름 있는 테스트에 연결된다. 약하거나 없는 검사는 V5-6-1–V5-6-6으로 등록했다.
 - V5-15-1: 쓰이지 않던 표면 프레임 유지를 없앴다. 표면을 옮기는 현재 사례가 없으며, 명세는 호스트가 바깥 변경에 맞서 표면 프레임을 붙잡지 않는다고 적는다.
@@ -3361,8 +4451,11 @@
 - V5-15: 인스펙터 활성화 검사가 기다리는 동안 이벤트를 처리해 앱이 활성화되고, WebKit이 인스펙터를 붙일 만큼 높은 표면을 쓴다. WebKit 비공개 선언을 비공개 헤더로 옮겼다. 3회 연속 통과한다.
 - V5-14-1: 저장 배치 검사가 등록 파일을 임시 파일과 이름 바꾸기로 써서, 실행 중인 앱이 부분 `projects.json`을 읽지 않는다. 프로젝트 검사가 두 호스트에서 8회 연속 통과한다.
 - V5-16: 활성화 실행 뒤 터미널 프로세스 검사 실패는 활성화 검사가 아니라 터미널 서비스가 유지하는 강제 종료된 앱 인스턴스의 세션 때문이었다. 앱을 강제로 끝낸 뒤 그 서비스를 멈추라고 절차에 적었다.
+
 - F8-9-1: F8-9의 일반 `NSView` 입력 클라이언트가 Tauri에서 멈춤과 `EXC_BAD_ACCESS` 충돌을 만들어 `NSTextView` 클라이언트로 되돌렸다. 상속 편집을 모두 끄고 서비스가 입력 문서를 쓰지 못하게 했으며, 테스트가 각 편집이 꺼져 있음을 단언한다. 같은 재현 주기가 되돌린 클라이언트에서 10회 통과한다.
+
 - F8-9: 터미널 그림 영역의 입력 클라이언트가 `NSTextView` 대신 자기 입력 문서를 가진 일반 `NSView`가 되어, 터미널이 선언하지 않은 텍스트 편집을 상속하지 않는다. 같은 한국어 순서에서 두 클라이언트가 모두 `ddd한글 `을 만든다는 측정으로 단순한 쪽을 골랐고, 두 호스트의 활성화 등급 한국어·일본어 검사가 통과한다.
+
 - F8-7: 활성화 등급 창 검사 `marked-text.test.mjs`가 일본어 입력기의 marked text(`日本`)를 조합이 끝날 때 두 호스트의 PTY에 정확히 한 번 쓰는 것을 확인한다.
 - V5-4: 모든 네이티브 검사가 공용 종료 hook을 링크해, 활성화를 선언하지 않은 검사는 종료할 때 프로세스가 활성이면 실패한다. hook이 찾은 `webview_geometry_test`의 활성화(OS 활성화 이벤트까지 처리하던 이벤트 펌프)를 고쳤다.
 - V5-10: 두 Rust 워크스페이스를 `rustfmt`로 형식화했고, `make native-test`가 실행하는 `make rust-format-check`가 형식에 맞지 않는 Rust 코드에서 실패한다. 형식화된 CSI 목록 행을 읽도록 터미널 프로토콜 목록 검사를 고쳤다.
@@ -3370,10 +4463,15 @@
 - V5-11: `host.hit`는 도달할 수 없던 `surface` 종류를 더 이상 정의하지 않는다. DOM 표면과 그림 영역의 점은 `page`다. 두 호스트의 해당 분기를 없애고 창 검사를 맞췄으며, 두 호스트에서 통과한다.
 - V5-14: 저장 배치 검사가 셸 카드의 탭이 둘이라고 가정하던 것을 고쳐, 알 수 없는 플러그인의 첫 탭을 뺀 모든 탭이 남기를 요구한다. 두 호스트에서 통과한다.
 - V5-13: 프로젝트 명세가 프로젝트 범위의 공통 전용 설정 요청을 -32602로 거부한다고 정하고, 이전 코드 -32000을 요구하던 창 검사를 맞췄다. 두 호스트에서 통과한다.
+
 - F8-6-1: `host.window.presented`와 명령 정착이 웹 콘텐츠 프로세스의 렌더링 커밋(`_doAfterNextPresentationUpdate:`)을 기다린 뒤 표시 시각을 보고한다. 이전에는 마지막 DOM 변경이 그려지기 전의 시각을 보고해, 드래그 녹화가 마지막 복귀를 놓쳤다. 두 드래그 e2e 사례가 두 호스트에서 3회 연속 통과한다.
+
 - F8-17: 터미널 세션 오류는 출처별로 관리되며, 그 오류를 해소하는 같은 종류의 유효한 이벤트만 지운다. 관련 없는 `state`, `session`, `theme` 이벤트는 더 이상 오류를 지우지 않으며, 카드 표시기와 `terminal.session.error`가 함께 남는다. 단위 테스트 10개의 Red와 두 디버그 앱의 e2e 사례로 확인했다.
+
 - F11-4: `make release-check`가 잘못된 형식의 스테이징된 `sidecar.json`을 파일과 오류와 함께 보고한다. 이전에는 조용히 건너뛰어 그 실행 파일을 검사하지 않았다.
+
 - F11-2: 플러그인은 검사 전용 항목을 `diagnostics.json`과 그 모듈에 선언하며, 이는 진단 빌드에만 스테이징된다. 터미널의 `terminal.compose.update`와 `terminal.ime.trace`가 그리로 옮겨졌고, `make release-check`는 릴리스 스테이징에 플러그인 진단 선언이나 모듈이 있으면 실패한다. 릴리스 두 앱에서 `terminal.ime.trace`는 1001을 반환하고, 디버그 두 앱에서 새 e2e 사례가 통과한다.
+
 - F2-1: `e2e/normal-shutdown.mjs`가 프로세스 종료를 종료 알림(`caffeinate -w`)으로 기다린다. 이전 관찰기는 파일 이벤트가 올 때만 종료를 확인해, Wails가 종료 전에 `endpoint.json`을 지우면 시간 초과로 실패했다. 재빌드한 두 호스트에서 각각 10회 통과했다.
 - G4-2: 두 호스트가 첫 창을 등록한 뒤에만 `endpoint.json`을 쓰므로 파일이 나타난 직후의 첫 창 요청이 응답을 받는다. 재빌드한 두 앱에서 각각 5회 확인했고, `make native-test`가 두 호스트에서 207개 사례 모두로 통과한다.
 - G2-3-19: flush 순서, 다른 사이드카 이미지 거부, 비정규 설정 디렉터리, PNG 저장 호스트 테스트가 선언한 동작을 단언하고, 그 동작을 제거하면 실패한다. `make native-test`가 두 호스트에서 206개 사례 모두로 통과한다.
@@ -3399,31 +4497,44 @@
 - G2-3-5: Wails 노출 중계가 Tauri 중계와 같은 구조의 공개 `Relay[T]`가 되었고, Wails 테스트가 노출 목록과 중계 계약 사례를 다룬다. `make host-contract-check`는 Wails에 대해 205개 중 188개를 보고한다.
 - G2-3-3: Wails endpoint 테스트가 Tauri 호스트만 검사하던 endpoint 계약 사례 12개를 다루며, `make host-contract-check`는 Wails에 대해 205개 중 177개를 보고한다.
 - V1-1: 한국어 변경 기록이 이제 모든 항목을 같은 순서로 번역하고, 두 변경 기록은 미배포 구역 하나를 가지며, `make docs-check`가 구역, 항목 수, 작업 ID, 코드 조각을 비교한다.
+
 - F8-20: 한글 조합 중 그림 영역은 특수 키를 먼저 입력기에 주므로 Backspace가 `한`을 `하`로 편집한다. 입력기가 처리하지 않은 키는 조합을 확정한 뒤 키로 보고한다. 네이티브 활성화 테스트와 재빌드된 두 호스트에서 확인했다.
+
 - F8-16-1: macOS 한국어 입력기가 선택된 동안 그림 영역은 한글이 없는 문자열을 즉시 확정하므로, 물리 키보드로 음절 뒤에 친 Space와 숫자가 다음 키 없이 PTY에 도착한다. F8-16의 `handleTSMEvent:completionHandler:` 재정의를 제거했다. 네이티브 활성화 테스트와 재빌드된 두 호스트의 `e2e/activation/ime.test.mjs`로 확인했다.
 - V5-8: `sp_input_key`가 이름 있는 키를 키 코드로 만들므로 주입한 Backspace, Enter, 화살표가 하드웨어 키처럼 입력기에 도착한다. terminal 키보드 창 검사는 입력에 쓰는 ABC 자판을 선택한다. 물리 키 Space로 F8-16이 사용자 사례를 고치지 못했음이 드러났으며 F8-16-1(P0)로 다룬다. V5-9를 등록했다.
+
 - F8-5: 활성화 IME 검사가 `terminal.ime.trace`를 기록하고, 재빌드된 두 호스트에서 조합 순서, 커서 덮음, 네이티브 콜백과 터미널 입력 대기열의 `ddd한글 한 ` 한 번 확정, 같은 세션의 두 번째 명령을 검증한다. F8-20(조합 중 Backspace)을 등록했다.
 - G2-3: 호스트 테스트가 실행하는 호스트 계약 사례를 선언하고, `make host-contract-check`는 두 호스트의 테스트를 실행해 어느 호스트에든 통과하는 테스트가 없는 사례가 있으면 실패한다. 현재 출력은 격차 63건과 호스트 코드가 없는 테스트 두 개를 나열하며, G2-3-1부터 G2-3-19로 등록했다.
+
 - F8-18-1: 초기 터미널 글꼴에 대한 vt-core 주석이 시스템 고정폭 글꼴을 적는다.
 - V5-7: vt-core `serve_contract` 테스트가 받은 모든 이미지에 답하고 EOF 시간 테스트가 타이머 전에 글꼴을 읽으므로, 모든 vt-core 테스트가 혼자서도 통과한다. 새 대상 `make rust-tests-alone PACKAGE=<package>`는 Rust 테스트를 하나씩 혼자 실행한다. F8-18-1(오래된 글꼴 주석)과 F8-19(새 프로세스의 첫 CoreText 호출이 약 2초 걸림)를 등록했다.
+
 - F8-16: 그림 영역은 한글 음절 뒤의 Space처럼 입력기 이벤트 밖에서 도착한 문자열을 앞의 문자열과 함께 확정하므로, 공백이 다음 키 없이 PTY에 도착한다. 영역의 입력 컨텍스트가 `-[NSTextInputContext handleTSMEvent:completionHandler:]`를 표시한다(비공개 네이티브 API 목록에 기록). 네이티브 활성화 테스트와 재빌드된 두 호스트의 `e2e/activation/ime.test.mjs`로 확인했다. F8-16-1(음절 뒤 숫자가 조합 문자열로 남음), G4-2(Tauri에서 `endpoint.json`이 나타난 직후의 요청 실패), V5-7(테스트 순서에 의존하는 vt-core 테스트)을 등록했다.
 - G4-1: 증거 기록기가 작업 트리 patch를 digest로 스트리밍하므로, 수 MB 바이너리 변경이 더 이상 `pnpm test`를 `ENOBUFS`로 실패시키지 않는다.
+
 - F8-18: 터미널은 더 이상 글꼴을 포함하지 않는다. `font.family`는 `;`로 이은 우선순위 목록(기본값 `D2Coding;Menlo`)이며, 설치된 첫 family를 쓰고, 없는 family는 오류로 보고하지 않고 로그에 남기며, 하나도 설치되어 있지 않으면 시스템 고정폭 글꼴을 쓴다. `terminal.session`은 `font`와 `fontSystem`을 보고한다. 재빌드된 두 호스트에서 확인했다.
+
 - F8-14: 터미널은 번들 고정폭 한글 글꼴 D2Coding(OFL 1.1)을 기본으로 쓰고 새 `font.family` 문자열 설정을 따른다. 코어 설정은 `string` 값을 지원한다. 사이드카 `font` 연산은 메트릭을 다시 계산하고 없는 family를 명시적으로 거부하며, 페이지는 글꼴이 적용될 때까지 글꼴 오류를 유지한다. 재빌드된 두 호스트에서 확인했다. F12(글꼴 확대), F8-16(한글 조합을 끝내는 입력이 다음 키를 기다림), F8-17(오류 수명)을 등록했다.
 - G1.4-4: parity 감사는 현재 inventory 수를 완료된 G1.4 항목이 아니라 운영 문서의 현재 상태 문장과 비교하며, G1.4는 원래 증거를 유지한다.
 - V5-3: 선언된 모든 작업공간 버전은 0.0.1이다. `scripts/check-versions.mjs`가 `pnpm test`에서 이를 강제하고, vt-alacritty manifest 두 개를 0.0.0에서 바꿨다. 완료된 터미널·클립보드·프로토콜·브라우저 외관 주장을 현재 빌드에서 다시 검증하는 V5-6을 등록했다.
+
 - F8-15: 넓은 조합 글자가 더 이상 잘리지 않는다. 이어짐 셀이 엔진 spacer처럼 폭 0이므로 배경이 오른쪽 절반을 덮지 않는다. 프레임 검사와 호스트 검사가 오른쪽 절반 잉크를 측정한다.
+
 - F11-3: native/darwin의 `sp_capture_still`을 바탕으로 두 호스트에 `diagnostics.capture.still`, CLI에 `soksak capture`를 추가해 포커스 없이 창 정지 이미지를 얻는다. F8-11에서 쓴 임시 PNG 기록기를 대신하며 재빌드된 두 앱에서 확인했다.
+
 - F8-11: 재빌드된 Tauri와 Wails는 ASCII 뒤에서 한 칸 커서, 넓은 한글 조합 글자 위에서 두 칸 커서를 그리며, 활성화 등급 검사의 창 캡처로 측정했다. F8-13(넓은 글자 뒤 빈틈)과 F11-3(관측용 창 정지 캡처)을 등록했다.
+
 - F8-12: `terminal.cursor`와 입력기 caret이 모든 `screen` 이벤트의 커서를 따르며, 불완전한 커서는 오류로 알린다. 재빌드된 Tauri와 Wails는 `ddd한` 입력 뒤 13열과 포커스를 보고한다.
 - F8-11 진행: vt-core 프레임 렌더러가 넓은 조합 문자열을 포함해 커서 아래 글자의 폭만큼 커서를 그린다. 새 프레임 테스트가 넓은 조합 글자, 넓은 확정 글자, 좁은 조합 글자를 다룬다. F8-12 등록: `terminal.cursor`와 입력기 caret이 `screen` 이벤트의 커서를 무시한다.
 - F8-10과 F8-3: 두 호스트가 `diagnostics.input.source`를 노출하고, 활성화 등급 창 검사 `e2e/activation/ime.test.mjs`가 ABC `ddd`를 친 뒤 한국어 2벌식으로 바꿔 `한글`, Space, Enter를 친다. 재빌드된 Tauri와 Wails에서 화면 행 `sh-3.2$ ddd한글`, `sh: ddd한글: command not found`로 통과하고, 수정 전 그림 영역으로 빌드한 Wails에서는 실패한다. 잘못된 한글 사례를 기본 창 검사에서 제거했고, `make e2e-check`는 `activate: true`를 `e2e/activation/`에서만 허용하며, 터미널 화면 도우미를 `e2e/terminal-screen.mjs`로 옮겼다. 조합 커서 폭을 F8-11로 등록했다.
 - F8-10 진행: 공용 Darwin 그림 영역은 한국어 입력기가 이전 insert를 고칠 수 있도록 입력기 문자열을 문서에 두고, 입력기가 더 고치지 않는 문자열만 확정하며, 나머지는 특수 키·명령·포커스 해제·입력 소스 전환·닫기 전에 확정한다. 활성화 등급 테스트는 이제 `ddd한글 `과 Enter를 정확히 한 번 확정한다. 테스트 파일 추가가 완료된 G1.4 증거 수정을 강제하므로 G1.4-4를 등록했다.
+
 - F8-8: 입력기 동작은 AppKit 텍스트 뷰 대조군을 포함한 활성화 등급 검사로만 검증한다. 주입기 경로는 활성 키 창에서만 한국어 입력기에 도달한다. `image_region_ime_test`는 사용자의 `ddd한글` 결함을 F8-10 Red로 재현한다. 그림 영역은 `dddㅎㅏㄴ글 `을 확정하고 대조군은 `ddd한글 `을 만든다.
 - F8-8 진행: 활성화 등급 `image_region_ime_test`를 추가했다. 활성 키 창에서 endpoint 주입기 경로로는 그림 영역과 AppKit `NSTextView` 대조군 모두 `나`를 조합하지 못했고, 매 실행 첫 키에서 IMK mach port 오류가 기록되었다. 따라서 이 경로는 입력기 증거가 아니며, 도구 셸 밖 실행 측정이 남아 있다.
 - V5-2: `document_view_test`가 활성화하지 않는 `make test` 스위트 안에서 앱을 활성화했고, 이후 테스트 프로세스가 활성 상태로 실행되어 `webview_geometry_test`가 간헐적으로 시간 초과되었다. OS 이벤트 대기열 사례는 이제 `make test-activation`의 `document_view_test --activation`에서만 실행되고, 기본 실행은 활성화하지 않았음을 확인하며, geometry 실패는 단계·창·활성 상태·스크롤 표본을 보고한다. `make -C native/darwin repeat`와 `repeat-suite`를 추가했다. 스위트 10번 연속과 필수 검사가 모두 통과했고, 옮긴 활성화 사례는 실행하지 않았다.
 - F8-7 진행: `-[NSTextView unmarkText]`가 marked text를 `insert` 하나로 확정함을 측정했고, 그 확정 뒤에 빈 `compose`를 한 번 더 보고하던 그림 영역 재정의를 제거했다. TEST 8은 이벤트를 해석해 확정 한 번, 그 뒤 조합 이벤트 없음, marked text가 없을 때 이벤트 없음을 확인한다. terminal plugin 회귀검사는 보고된 순서에서 PTY 쓰기가 한 번인지 확인한다. 패키지·경계·노출·문서 검사는 통과했고 `make native-test`는 `webview_geometry_test`에서 간헐적으로 실패한다(V5-2).
 - F8-5 진행: 빈 native `compose` callback이 이전 marked 문자열을 PTY 확정 입력으로 합성하던 결함을 수정했다. Red 회귀검사는 `compose("한글") → compose("")`가 `insert` callback 없이 `한글`을 쓰는 것을 재현한다. 이제 빈 조합 상태는 지우기/취소로 처리하고 `insert`만 확정한다. 터미널 런타임 명세와 한영 F8-5 기록에 계약을 반영했다. 네이티브 입력, 후보창 픽셀, 재빌드 호스트의 실제 IME 동작 검증은 아직 남아 있다.
+
 - F8-4: 모호했던 네이티브 Ctrl 문자 실패 경로를 바로잡았다. 지원하는 물리 ANSI Ctrl 키는 대응시키고, 대응하지 않는 네이티브 Ctrl 키는 쓸 수 없는 `Char`를 전달하지 않고 키 코드와 문자 스칼라를 담은 명시적 네이티브 오류를 낸다. VT-core 오류도 거부한 문자를 밝힌다. 네이티브와 VT-core 회귀 검사, `pnpm test`, 전체 `make native-test`, 경계·노출·문서 검사, 두 호스트 빌드가 통과한다. 스크린샷의 정확한 키와 실제 UI 결과는 검증하지 않았으며, 실제 호스트 IME 검증은 F8/F8-3에서 열려 있다.
 - F8-3 Red: 실제 IME E2E가 `activate: true`인 `input.pointer`를 썼는데, 엔드포인트 계약은 이것을 사용자의 키보드 포커스를 가져가는 동작으로 정의한다. 소스 감사 회귀 검사를 추가하고 활성화 옵션을 제거한다. IME 검사는 이미 활성인 호스트에서만 실행한다.
 - F8-3 진행: `check-e2e.mjs`가 명시적 애플리케이션 활성화를 거부한다. 주입한 Red/Green과 전용 소스 감사 스위트가 통과한다. 한국어 IME 시나리오에서 `activate: true`를 제거했다. 실행 중인 앱이 없고 현재 입력 소스가 ABC이므로 런타임 IME는 검증하지 않았다.
@@ -3681,43 +4792,60 @@
 - F8은 계속 미완료다. 재빌드 Tauri probe에서 한글 2-set 입력 소스는 확인했지만 필요한 System Events 실제 키 주입이 macOS 권한 오류 1002로 거부됐고, 실제 `terminal.compose` 이벤트는 관측되지 않았다. 합성 이벤트는 IME 근거로 세지 않았다.
 - F8 native 활성화 Green: 명시적 활성화가 입력을 받을 수 없는 숨겨진 WebView를 더 이상 기다리지 않는다. 집중 실행한 `native/darwin/build/input_activate_test`가 새 숨김 WebView 케이스와 기존 활성화 케이스를 모두 통과했다. 전체 `make test-activation` lane은 기존 inspector 부착 실패를 별도로 보고하므로 전체 통과로 기록하지 않았다. host IME 확정 기준은 아직 열려 있으며, 재빌드 Wails probe에서 보이는 `나` preedit 뒤 PTY에 원시 `ㄱㅏ`가 남았다.
 - F8 protocol Green: focus와 compose ACK가 이제 `ack`만 포함한다. 집중 실행한 `native_input_ack_is_not_reported_as_an_unsolicited_event` 계약 검사가 1/1 통과해 정상 ACK가 terminal의 unsupported 이벤트 목록을 오염시키지 않는다. host IME 확정 기준은 계속 열어 둔다.
+
 - F239-42: workbench는 첫 draw 전에 window마다 declared UI snapshot ingress 하나를 시작한다. ingress는 push마다 한 번 검사하고 확인 응답한 뒤 plugin, 출처, status가 일치하는 recipient에게 전달한다. mount된 recipient가 없는 event도 확인 응답한 뒤 버리며, listener readiness 뒤에 surface placement와 plugin-host를 시작한다. rebase 후 combined workbench owning tests는 48/48 통과했고 docs, boundaries, exposure, events 검사도 통과했다. F42 parity link를 통과했으며 남은 parity 문제 4건은 F266 link, inventory count와 등록되지 않은 Wails test다. Native stale-provider callback은 F239-43에서 추적하므로 이 변경은 reload-safe application 동작을 주장하지 않는다.
+
 - F239-42-1: ingress는 listener registration readiness Promise를 즉시 관측한다. Promise rejection을 즉시 관측해 early unhandled rejection을 막고, startup consumer에는 원래 rejected Promise를 계속 전달한다. Red: 변경 전 delayed registration refusal이 첫 event-loop turn에 unhandled rejection으로 owning test를 실패시켰다. Green: 같은 test는 early unhandled rejection 없이 동일한 registration error가 await에서 거부됨을 확인한다.
+
 - F239-42-2: ingress ACK consumer test가 이전 test의 fixture 설정에 의존해 이름으로 단독 실행할 때 무기한 대기했다. Test에 자체 listener 상태와 3초 timeout을 둔다. Red: 이름 지정 run은 3초 뒤 timeout됐다. Green: 같은 이름 지정 run과 combined workbench owning tests가 통과한다.
 
 - F238-c-27-1: `packages/plugin-api/contract/view-bridge.json`에 `view.js`의 요청/응답, 이벤트 전달, 지원하지 않는 페이지 거부에 대한 producer 순서 사례를 공개하고 `packages/plugin-api/test/view.test.mjs`의 core view 테스트에서 실행한다.
+
 - F238-c-27-2: `packages/plugin-api/contract/view-bridge.json`의 view bridge 사례에 주입된 script를 통한 순서 있는 theme 이벤트 전달과 잘못된 host message 거부를 추가하고, `packages/plugin-api/test/view.test.mjs`에서 실행한다.
+
 - F238-c-27-3: plugin-api package 파일 목록에 `contract/view-bridge.json`을 포함한다. 소유 회귀 검사는 1/1 통과하고 `npm pack --dry-run --json`이 계약의 포함을 확인했다. 게시하지 않았다.
+
 - F238-c-27-4: 소유 view 테스트가 빈 계약 사례 집합, 필수 사례 누락, 예상하지 않은 action 순서와 축약된 지원하지 않는 페이지 거부 문구를 거부하고 실행 메시지를 정확히 비교한다. 집중 view 테스트가 47/47 통과한다.
+
 - F238-c-27-5: Flowmark tab state, 이름이 지정된 sidecar send/subscription 및 이벤트, view log-level gate/log call의 ordered producer 사례를 추가한다. 집중 producer test가 실제 `createViewBridge`로 10/10 통과하며 dependency pin은 변경하지 않는다.
+
 - F238-c-27-6: sidecar-send producer command literal을 구현과 일치하게 수정하고 ordered case 전반에서 정확한 open-call count 전이 및 미결 호출 0개를 검사한다. 집중 producer gate가 10/10 통과한다.
+
 - F238-c-27-7: 모든 host-event 입력에 `sok: 1`을 기록하고 wire envelope를 그대로 전달하며 marker가 빠진 계약 복사본을 거부한다. 집중 producer gate가 10/10 통과한다.
+
 - F238-c-27-8: 미등록 host-event 이름과 sidecar subscription kind를 거부하고 두 subscription kind를 모두 요구하며 인식되지 않은 step에서 route runner가 실패하도록 한다. 집중 producer gate가 10/10 통과한다.
+
 - F212.16-12: plugin-api host-operations test fixture에 필수 sidecar
   display name을 추가한다. Red: package suite가 `displayName` 없는
   fixture를 거부했다. Green: 소유 테스트가 5/5로 통과한다.
+
 - F212.16-11: canonical `soksak://` view origin에 맞게 refusal assertion을
   수정한다. Red: focused test가 `sok://`를 기대했다. Green: plugin-api
   package test가 809/809로 통과한다.
+
 - F239-40-1: zero-HelloTimeout Go 시험이 현재 `processPersistent` signature를
   사용하도록 한다. Red: 시험이 삭제된 네 번째 인자를 전달해 Wails host
   test package가 compile되지 않았다. Green: refusal assertion을 유지한 소유
   시험이 1/1 통과한다.
+
 - F239-40: plugin host `view.error` 기록에 channel의 plugin을 표시한다.
   Red: 일반 script 오류에서 Go와 Rust 소유 시험이 plugin id를 잃었다.
   Green: 양쪽 host가 실제 plugin을 한 번 prefix로 붙이고 기존 일치 prefix와
   queue-overflow 처리를 유지한다. 집중 Go 시험 3/3, Rust queue·attribution·
   empty-reason 시험은 각각 1/1 통과한다. Event와 docs 검사도 통과한다.
   원본 JavaScript 오류는 아직 확인되지 않았다.
+
 - F239-46-4: View surface가 composition 생성 전에 listener를 설치하고 accepted
   native source registration에서 current generation을 받은 뒤 command layer를
   만든다. 소유 mount test는 generation 누락 실패, source-ended 뒤 process-ended,
   replacement 뒤 늦은 old end를 확인한다. `surface-view.test.mjs` 22/22 통과한다.
+
 - F239-37-6: 선언된 status-line root를
   `{sidebar, section, key}` 주소로 노출한다. 별도 이름은 command/control role을
   부여하지 않고 정확한 static text geometry를 찾는다. 소유 declared-ui 및
   section-address test가 92/92 통과하고 exposure와 docs 검사도 통과한다. F37
   window 검사는 기존 첫 visible node 행 기준을 사용해 runtime 재검증해야 한다.
+
 - F212.10-hwp-2: visible HWP surface가 document status를 등록한 뒤 조회하도록
   기다린다. Red: focus된 native Enter 뒤 HWP surface는 보였지만 두 host 모두
   `hwp.document` 등록 전에 즉시 요청해 실패했다. Green: helper가 `core.surfaces`
@@ -3731,6 +4859,7 @@
   shutdown acceptance 통과, source-generation 작업 완료, rebuilt host에서
   남은 Files 검사를 기록한다. Checklist 수정이며 동작 변경이나 Files runtime
   통과 주장은 없다.
+
 - F262-10: `projectOpen`은 ownership을 예약해도 native shown-project 상태를
   바꾸지 않는다. Workbench가 project data와 settings를 준비한 뒤
   `projectShown`으로 프로젝트를 확정·게시하며, 각 data call은 시작 시점의
@@ -3753,12 +4882,15 @@
   27개, Tauri 17개). 정상 종료 뒤 process와 endpoint는 남지 않았다. 이전
   P44/P45 오류는 과거 기록으로 보존하며 정확한 원인을 소급해 단정하지 않는다.
   IME 입력은 보내지 않았다.
+
 - F239-28: browser cohort status check를 두 host에서 실행한다. Wails와 Tauri가 Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce`, candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`에서 추적 check를 통과했다. 각 실행은 설치된 plugin/sidecar version, ready surface 및 application error 0개를 확인했다. 두 host와 sidecar가 종료됐고 endpoint와 lock은 남지 않았다. 기존 cohort 실패는 과거 증거로 보존하며 public release를 주장하지 않는다.
+
 - F239-47-29: native input trace의 0-based sequence를 받되 native report가
   terminal request보다 먼저 오도록 유지하고 음수, 소수, 안전 범위를 넘는
   값을 거부한다. sequence 0 거부를 재현한 뒤 집중 consumer case가 2/2
   통과한다. P87 runtime input은 해당 거부 때문에 각 host에서 terminal key
   하나 뒤 중단됐으므로 visual acceptance를 주장하지 않는다.
+
 - F212.10: plugin 소유 view 이전의 기능 완료와 측정 및 publication을 구분해
   기록한다. Browser P27.3, editor E24, terminal P49, HWP H22의 기능 이전은 각
   소유 저장소의 Red/Green 근거와 함께 완료됐다. P27.4, E25, P49.2, H23 측정은

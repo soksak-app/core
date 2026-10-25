@@ -3,7 +3,6 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
-
 - F239-47-40-4-2-1-1: Fence queued cleanup to the current `SCStream`
   that reported the current failure and fail its identity session
   before accepting another tagged presentation. Retaining the stream through
@@ -13,6 +12,7 @@
   cleanup stripped B's tags. Green: the same test and the existing stop and
   region-failure tests pass 1/1 each. Capture finalization still restores the
   latest raw snapshots synchronously.
+
 - F239-47-40-4-2-1: Restore every live image-region layer from its latest raw
   snapshot when identity tagging fails or capture finalization runs. Capture
   errors enqueue main-thread cleanup; finalization waits for restoration after
@@ -23,6 +23,7 @@
   repeated cleanup, and unchanged geometry, visibility, focus, and region
   lifetime. `make docs-check` passes. Raw snapshots, ordinary image state, and
   matcher behavior remain unchanged.
+
 - F239-47-40-3: Add a strict optional `frameIdentity` boolean to
   `diagnostics.capture.start` and forward it through both host recording
   interfaces to Darwin capture start. Missing and false preserve ordinary
@@ -35,6 +36,7 @@
   for F239-47-40-4. The Wails external recording test package could not compile
   because `view_call_record_test.go` and `view_error_test.go` call missing
   `Surfaces.RegisterView`; F239-47-40-5 tracks that fixture issue.
+
 - F239-47-40-4-1: Add bounded frame-identity session state to the native
   source matcher. Each session gets a secure 32-byte nonce; each region nonce
   is derived without a retained region cache from the session nonce and its
@@ -47,6 +49,7 @@
   capacity, slot reuse, and restart isolation. The canonical payload owner test
   passes 1/1, including invalid nonce rejection. Source-history eviction and
   image presentation are wired by F239-47-40-4-2.
+
 - F239-47-40-4-2: On explicit `frameIdentity:true`, tag the image-region
   presentation with an issued QR inside a fixed top-right 192-by-192 raster
   ROI, and write its raster and tuple metadata separately from raw source
@@ -59,6 +62,7 @@
   cgo and Tauri diagnostics recording targets compile and link against the
   native library with CoreImage and Vision declared. ScreenCaptureKit frame decoding is completed under F239-47-40-4-3; physical
   scanout and terminal IME acceptance remain unverified.
+
 - F239-47-40-4-3: Decode complete BGRA ScreenCaptureKit samples inside
   mapped tag ROIs for retained source regions. Accept only exact currently
   issued payloads, write per-frame results to a separate JSONL artifact, and
@@ -71,6 +75,82 @@
   Vision API errors and artifact writes fail capture finalization. Unknown
   identities are never inferred from time or sequence. This evidence does not
   establish physical scanout or terminal IME acceptance.
+
+- F239-48-3-14: Move the two `ProjectShown` unknown-field tests into the existing Tauri project-data-order child module. Their assertions remain unchanged. The exact lib tests pass 1/1 each; the paired-host audit no longer reports the old source test path and retains four unrelated findings. The parity inventory passes with 101 lanes, 703 implementation files, and 1004 test files. No host behavior changed.
+
+- F239-48-3-16: Record the exact Rust view-generation test placement in H17. The shared generation and reply assertions remain covered by Wails owner tests; the Rust test is a private child of `documents.rs`. The focused checker passes 1/1, allows only the declared path, and rejects an unlisted sibling. The host audit retains only the three private-files platform paths. No host behavior changed.
+
+- F239-48-3-15: Settle Wails view calls only after their replies post to the
+  current view generation. Red: test-controlled retirement and native post
+  refusal each left no call for normal process-ended settlement. Green:
+  `make go-repeat` passes the focused 7-test owner set, including successful,
+  stale, refused, and peer-ended reply paths. The contract now states that a
+  failed or stale post leaves the call open. `make parity-check` passes with
+  101 tracks, 703 implementation files, and 1004 test files; `make docs-check`
+  passes.
+
+- F239-48-3-12: Record the exact view-record test placement difference. Go tests need `package host` to access private fixture state, while Rust counterparts use public `ViewChannels` APIs and do not need private-module placement. Keep both sides’ logging assertions. The focused owner assertion passes 1/1, accepts only the four listed paths, and rejects an unlisted sibling. The host audit drops from 9 findings to 5; `make parity-check` and `make docs-check` pass. No host behavior changes.
+
+- F239-48-3-11: Record the exact Tauri source-channel adapter test paths. The framework injects `Channel<DeclaredSourceEvent>` and has no Wails typed-channel counterpart. Shared ordering and lifecycle behavior remain covered by Wails owner tests; neither host suite proves live framework IPC delivery. The focused assertion passes 1/1, accepts only the two listed paths and rejects an unlisted sibling. The paired-host audit drops from 10 findings to 8; other findings remain. `make docs-check` passes.
+
+- F239-48-3-10: Add Wails process-wait tests for Darwin timeout and ended-PID
+  behavior, plus explicit unsupported errors on Linux and Windows. The paired
+  host audit no longer reports the three platform test paths or the shared
+  process-wait test helper. Darwin tests pass 2/2; Linux and Windows targets
+  cross-compile but were not executed. No platform implementation changed.
+
+- F239-47-40-7: Make Tauri `ProjectShown` and `ShownProject` ignore
+  undeclared fields as required by the shared host-call contract. Red: the
+  focused owner tests each rejected an unknown outer or nested field. Green:
+  after removing `deny_unknown_fields`, both exact tests pass 1/1. The parity
+  inventory links the structs and tests; `make parity-check` passes with 101
+  lanes, 704 implementation files, and 1005 test files.
+
+- F239-47-40-6: Decode Wails `ProjectShown` and nested `ShownProject`
+  arguments with the standard host argument decoder. Red: the unchanged
+  binding test and new owner cases failed because direct JSON decoding
+  returned nonstandard errors for invalid request shapes and nested fields.
+  Green: the binding test passes 1/1 and the focused project owner tests pass
+  2/2, including ignored unknown fields and explicit `project:null` handling.
+  The parity inventory links the implementation and owner tests, and
+  `make parity-check` passes with 101 lanes, 704 implementation files, and
+  1005 test files.
+
+- F239-47-40-5: Move the private Wails view record tests into `src` and
+  register the matching source generation and `Documents` view channel. Keep
+  the call/reply and `view.error` log assertions through `ViewMessage`. Red:
+  the external diagnostics package failed to compile because both tests called
+  missing `Surfaces.RegisterView`. Green: the relocated owner tests pass 2/2;
+  the external diagnostics smoke test `TestAnApplicationEventIsRecordedAsAnEvent`
+  compiles and passes 1/1. Host
+  public-call parity is unchanged, and `make host-parity-check` passes.
+
+- F212.10-core-5-6-2: Record the stale `status.watch host.window` value after
+  image presentation and track its owning host correction. The corrected hidden-terminal reload
+  case reached reveal on Wails and Tauri, then timed out because each watch
+  value kept the visible terminal region at `presented:null`. During the same
+  wait, direct `status.get host.window` returned a presented region at
+  generation 7 on Wails and generation 8 on Tauri (raster 1, sequence 2).
+  Both runtime audits passed with no error-level records, but the test failed
+  on each host; the direct reads mean the watch result does not prove the
+  image was absent. Red: unchanged Wails and Tauri image-handler owner tests
+  observed no notification after successful presentation. Green: Wails owner
+  tests pass 2/2, verifying the notification follows the current presented
+  identity and is absent after failure or retirement; Tauri owner tests pass
+  1/1 each for the same cases. The Tauri image integration test target compiles.
+  The external Wails test package cannot compile because existing
+  `view_call_record_test.go` and `view_error_test.go` refer to `RegisterView`,
+  which the current host does not provide; the focused source owner checks pass.
+  `make docs-check` passes 112 files, 422 failure records and 1823 record checks;
+  `git diff --check` passes. The first main `make parity-check` found only the
+  stale implementation-file count: the new owner test raised the inventory to
+  101 lanes, 701 implementation files and 1000 test files, with no uncovered
+  implementation, test or feature-link issues. The English and Korean inventory
+  records now use those counts; the main parity rerun passes.
+  The window tests took 22.888 s on Wails and 22.599 s on Tauri. Both runs ended
+  host and sidecar processes, removed endpoints, and restored the same frontmost
+  baseline. Two-host runtime acceptance remains open.
+
 - F239-47-40-2: Correct the QR helper's ROI, detection, payload, and
   ownership boundaries. Red: the unchanged owner test failed for whole-image
   Vision detection, mutable image backing, symmetric-coordinate assumptions,
@@ -82,6 +162,7 @@
   quiet zone, immutable backing, nonce scope, canonical uint64 parsing, and
   undersized ROI rejection. The matcher and capture cadence limit are
   unchanged; physical scanout remains unverified.
+
 - F239-47-40-1: Add the opt-in native QR frame-identity helper. Red: the
   owning test failed against the unimplemented helper because it returned no
   immutable image or raster copy. Green: the same test passes 1/1, covering
@@ -90,11 +171,13 @@
   and Display P3 metadata, and invalid-input ownership cleanup. The helper uses
   CoreImage, Vision, and SHA-256; ordinary rendering, capture wiring, physical
   scanout, and the original visual acceptance remain unverified.
+
 - F239-48-3-9: Add Wails owner tests for current and retired view callbacks.
   The five focused Go tests pass 5/5. The host audit falls from 12 to 11
   findings, removing the view-origin test-path finding. `make parity-check` and
   `make docs-check` pass with 100 lanes, 698 implementation files, and 998
   test files.
+
 - F212.10-core-5-6-1: Wait until the revealed terminal declares
   `status terminal.session` in `core.surfaces` before reading `terminal.session`.
   Wails and Tauri runtime attempts returned endpoint error 1002 when the check
@@ -108,6 +191,7 @@
   mode. This is an E2E readiness-order failure; Tauri was not rerun against
   this ordering. Syntax, `make e2e-check`, and `make docs-check` pass; the
   runtime rerun remains pending.
+
 - F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
   the old presented attachment generation, replacement page start, retained
   session opening headless, the sidecar's same-writer headless-to-image mode
@@ -119,28 +203,34 @@
   `make e2e-check`, `make docs-check`, and `make parity-check` pass with the
   inventory at 100 lanes, 697 implementation files, and 997 test files.
   Two-host runtime acceptance remains pending.
+
 - F239-48-3-8: Pair both real start-module entries through module hooks.
   Both owner tests pass 2/2. The current host audit drops from 14 to 12
   findings, removing the two app-start paths without an allowance. The
   inventory check passes with 100 lanes, 697 implementation files, and
   996 test files; `make docs-check` passes.
+
 - F239-48-3-7: Add Tauri MockRuntime IPC coverage for the starter binding's
   invalid request argument. The Tauri and Wails owner tests pass 1/1 each.
   The host structure audit drops from 12 to 11 findings. The inventory check
   passes with 100 lanes, 697 implementation files, and 995 test files.
+
 - F239-48-3-6: Place the Go diagnostics input-reference parser test beside
   its contract owner, matching the Rust test module. The host audit drops
   from 13 to 12 findings. The unchanged Go owner test passes 1/1. The
   inventory check passes with 100 lanes, 696 implementation files, and
   991 test files. `make docs-check` passes.
+
 - F239-47-35: Link the completed cursor-baseline predicate to its exported
   implementation and the two owning frame-identity tests. The inventory audit
   rejected the missing feature link and now passes without an exemption.
+
 - F239-47-38: Escape the percent in the fixed zsh prompt fixture. Red: the
   behavioral wrapper test rendered `zle-check` instead of `zle-check% `.
   Green: zsh prompt escaping now renders the literal marker; the fixture tests
   pass 2/2 and the activation document helper tests pass 35/35. No application
   or activation run was performed.
+
 - F239-47-36: Run the clean-zsh ZLE input variant on both hosts. The ten
   same-window AppKit reference and terminal logical checkpoints matched on
   core/host 0.0.21 with terminal 0.0.21 and VT 0.0.17. Both captures exceeded
@@ -149,11 +239,13 @@
   available, so this is not visual acceptance. Tauri stderr retains unclassified
   IMKCFRunLoopWakeUpReliable and TSM caps-lock messages. User startup files and
   highlighter settings were excluded by the /bin/zsh -f fixture.
+
 - F239-48-3-5: Place the Tauri Darwin input-reference rejection test beside
   its implementation, matching the Wails owner-test path. The unchanged host
   audit drops from 14 to 13 findings. The Tauri owning test passes 1/1 and
   `make docs-check` passes. The inventory check passes with 100 lanes,
   695 implementation files, and 990 test files.
+
 - F239-48-4: Move private event-log and process-lock file operations behind
   the Tauri CLI platform interface. Darwin and Linux keep the existing
   0700/0600 behavior; Windows reports explicit unsupported errors, consistent
@@ -176,11 +268,13 @@
   capture-gap limit (33.71754166483879 ms Wails; 33.65716664493084 ms Tauri),
   so visual acceptance remains open. The run uses core and host 0.0.21,
   terminal 0.0.21, and VT 0.0.17 on macOS 26.6.2 arm64.
+
 - F212.10-core-3-13: Reserve host surface placement order before asynchronous
   view-module loading. The focused owner Red reproduced an earlier view request
   syncing after a newer empty layout retired its declaration. Host placement
   and theme-ordering tests pass after the fix. The earlier two-host project
   startup error remains unaccepted until rebuilt-host verification.
+
 - F212.10-core-3-14: Add opt-in page trace records for view-composition
   declaration/disposal and complete native surface-sync requests. Records
   correlate the page identity, mount attempt, exact included view IDs, request
@@ -188,6 +282,7 @@
   Unchanged owner tests failed because the declaration and sync records were
   absent; the same owner files pass 16/16 after instrumentation. No application
   runtime was run; the F3-4 missing-composition cause remains unknown.
+
 - F212.10-core-3-15: Keep an already-mounted active view in undrawn complete
   placement requests as invisible when it has no slot in that record. A
   rebuilt two-host trace showed an accepted sync omitting a mounted terminal
@@ -268,6 +363,7 @@
   claim is made.
 
 - F239-47-30-3-1: Add consumer validation for the public display-link stop artifact. The focused helper tests pass 7/7, including preservation of an incomplete artifact when stop reports an error. The two-host runtime check remains pending; no cadence acceptance is claimed.
+
 - F239-47-30-3: Add a capture-lifetime public AppKit display-link trace beside
   ScreenCaptureKit callback records, and expose its artifact path from both
   host stop payloads. The trace records validated clock observations, reports
@@ -535,6 +631,7 @@
   probes the frontmost application or starts a child. The runner preserves
   the supplied ID and folder for the child. The owning runner tests pass 10/10;
   syntax, `make e2e-check`, and `make docs-check` pass. No application ran.
+
 - F239-47-25: Publish native input callbacks as one transaction per outer
   scope. The fourth Korean vowel previously emitted a committed insert with
   a two-unit intermediate preedit, then a second report with the final
@@ -583,6 +680,7 @@
 - F239-47-6/F239-47-10: Record the P85 two-host IME attempt. Both fixed AppKit reference sequences and all ten terminal documents matched. Tauri recorded a 34.660750 ms frame gap and Wails 33.694458 ms, exceeding the unchanged 33 ms limit; visual acceptance remains open. Metadata assigns all vowels the same foreground/background and underlines only the last marked vowel. The callback DTO does not expose AppKit selector names or `committedLength`. A second query replaced the original baseline, and the final frontmost observation conflicts with the runner's restore log; F239-47-24 tracks a valid session baseline. Both hosts and sidecars exited. Structured JSONL logs had zero error-level records, but both native host stderr logs contained `error messaging the mach port for IMKCFRunLoopWakeUpReliable`; the messages remain unclassified, with no established link to the capture gaps.
 
 - F239-47-6: Record a blue underline observed beneath `preedit` in the terminal prompt path on a fresh Wails window. The corresponding terminal base cells had no underline, inverse or link flag, while `terminal.cursor.preedit` held `ㅏㅏㅏ`. Capture began after the mark was already present; its three non-activating frames produced no source raster or candidates and recorded no source drops. The painter remains unknown and visual acceptance remains open.
+
 - F239-47-23: Keep the native image-region input document visually
   transparent while preserving AppKit composition state. The unchanged owning
   offscreen test measured 78 blue underline pixels for attributed `ㅏ` and 162
@@ -678,6 +776,7 @@
   `core.sidebars` payload on failure. The unchanged consumer test reproduced
   immediate refusal of the pending state; the focused consumer tests pass
   4/4. No producer or status contract changed.
+
 - F239-48-5-1: Discover test owners from tracked package manifests, including
   the root e2e package, before checking cross-package path reads. Red: the
   production owner list omitted `e2e`; the owning test failed on the actual
@@ -724,6 +823,7 @@
 
 - F239-37-3: Give the file-open failure window check its own 120-second
   timeout. This annotation change does not claim a new test or runtime result.
+
 - F262-6: Extend the existing project-close window check to require mounted
   Files sections, populated snapshots before close, empty no-project snapshots
   after close, no stale rows, and a clear application error audit. The focused
@@ -761,6 +861,7 @@
   consumer tests pass 2/2, all three changed JavaScript files pass syntax
   checks, and `make e2e-check` passes. The window case was not run; runtime
   acceptance remains pending.
+
 - F239-47-18: Use the coherent current reread for a terminal input observation.
   A transient first compose/cursor read can be stale even when the subsequent
   reread matches current watched events and the presented screen. The activation
@@ -772,6 +873,7 @@
   docs-check` pass. Key receipts, frame/render/source checks, visual measurement
   and the 33 ms frame-gap limit are unchanged. No activation rerun was made;
   F239-47-6 acceptance remains open.
+
 - F238-c-18: Record terminal current-source view-literal validation as complete. Keep the pinned SDK release and owner-pin requirement under F238-c-11-1.
 
 - F238-c-20: Record existing current-source plugin checks by owner and correct the plugin check matrix. No source implementation or public SDK release is included.
@@ -791,6 +893,7 @@
   unhandled preparation promise. The focused host, remount-composition,
   compositor, native-paint and no-bridge tests pass (4/4, 1/1, 4/4, 8/8 and
   4/4). Runtime revalidation is pending; the host wire format is unchanged.
+
 - F212.10-core-3-4: Validate full host placement replies before projecting the
   result onto the current compositor record. The workbench sends retained
   dormant tabs with the active record, so an undrawn host reply can defer an ID
@@ -826,7 +929,9 @@
   request. A mounted dormant view continues to retain its last scale, while a
   cold retained view starts from its stored owner card. The window project in
   view start values is unchanged. Runtime acceptance remains pending.
+
 - F240-12: Align the development order with audited local, owner, release and historical-closure evidence. Remove duplicate measurement scheduling while preserving existing open states and retry conditions.
+
 - F239-47-17: Index frame-bound preedit state with prior terminal rows.
   The rows-only `terminal.screen` status suppresses JSON-identical values,
   so a cursor frame and preedit update can arrive without a new screen
@@ -840,6 +945,7 @@
   visual capture tests pass 11/11 and observer tests pass 20/20.
   `make e2e-check` and `make docs-check` pass. No activation rerun was performed;
   F239-47-6 remains open.
+
 - F239-47-16: Keep the raw terminal cursor observer subscribed after
   AppKit reference focus returns. The old caller used managed
   `Client.watch` through `s.until` for a cursor status already watched by
@@ -850,6 +956,7 @@
   cleanup. The owning `terminal-ime-document.test.mjs` passes 19/19. No
   activation rerun or IME behavior acceptance is claimed; F239-47-6 remains
   open.
+
 - F239-47-15: Reconcile fresh terminal notifications with known pre-key state.
   The observer accepts a coherent composition update when PTY rows remain
   unchanged, while requiring changed rows to have a matching screen event and
@@ -861,6 +968,7 @@
   `make docs-check` pass. The latest Wails and Tauri runtime attempts each
   stopped after one terminal `k`; neither reached Backspace or Space, so
   F239-47-6 acceptance remains open.
+
 - F212.10-core-3-2: Wait for each view composition declaration before sending
   native surface placement. Each host now rejects a view without a declaration
   from the current page, and page reload clears the previous page's declaration
@@ -870,6 +978,7 @@
   the surface is disposed while waiting; current declarations are checked for
   matching plugin and composition. The focused Workbench, Wails, and Tauri
   owner tests pass. Runtime revalidation remains pending.
+
 - F212.10-core-3-1: Wait for native `view-call` and `view-reply` listener
   registration before declaring a view composition, which starts native view
   creation. This prevents the first view calls from racing page listener
@@ -914,6 +1023,7 @@
   undecoded. Green: the channel test and the existing unwrapped `String`
   rejection pass. The paired-host audit now reports the 18 unrelated path
   findings without the channel classifier error; those findings remain open.
+
 - F267.8: Link six completed capabilities to their owning implementation and
   behavior tests: F239-47-12/-13/-14 and F268/-269/-270. Red: the unchanged
   parity audit reported six missing capability links and no uncovered files.
@@ -948,6 +1058,7 @@
   assertions. The focused binary builds and the default non-activation path
   passes 9/9. The activation path has not run; its acceptance item remains
   open.
+
 - F212.16-8: Parse JavaScript platform selectors as executable syntax so
   benchmark runtime metadata and its exact test assertion are distinguished
   from implementation selection. String and comment fixtures do not trigger
@@ -997,10 +1108,13 @@
   Files local-build evidence and the VT local package-link/build procedure. F270 is complete:
   its 11 focused source-audit tests, `make e2e-check` and `make docs-check`
   pass. The plan does not claim publication or runtime acceptance.
+
 - F239-47-6: Read input boundaries through the diagnostic-only `diagnostics.clock` endpoint and accept only canonical positive base-10 uint64 `mono_ns` text. The caller checks the endpoint and reply before reference input and uses that same clock for every terminal key boundary; the previous page-native `log` request was not an endpoint method and closed both host connections. Red: unchanged Wails and Tauri owning socket tests closed on the undeclared endpoint method. Green: both endpoint tests pass in diagnostics builds, validating two same-connection canonical positive uint64 replies with nondecreasing values; release tests confirm the method is undeclared and closes the connection. The caller tests pass 10/10, including request selection, strict reply validation, mixed-clock rejection and persistence of `error`/`no-proof` before assertion failure; syntax checks, `make e2e-check` and `make docs-check` pass. The earlier two-host run completed ten AppKit reference states but stopped before terminal input. No activation rerun was made; two-host acceptance remains open. `make parity-check` reports no uncovered tests, implementations or feature links, while retaining the two existing examples count mismatches: 100/673/922 recorded versus 100/687/958 discovered; the recorded counts were not changed.
 
 - F239-47-12: Align the core visual calculator with actual VT `screen.render` metadata. The producer reports lowercase `bgra8`/`premultiplied`, top-level underline metrics, per-glyph width, font runs, effective draw colors, nullable cell-local bounds and underline rectangles, and cursor draw state. Native capture artifacts retain their own `BGRA8`/`premultiplied-first` contract; the consumer decodes the original bytes for color comparison without changing artifact metadata. Red: the producer-shaped fixture failed the unchanged helper at `bgra8` versus `BGRA8`. Green: the same fixture and negative controls pass in `terminal-ime-visual.test.mjs` (9/9), including preedit/inverse colors, wide-glyph fractional geometry, blink-off cursor metadata, malformed-before-measure validation and difference cursor pixels. `make docs-check` passes. No live input was run; this does not complete F239-47-6 acceptance.
+
 - F239-47-13: Preserve raw `CTFont`/`CTLine` glyph overhang and same-frame source provenance in the core visual calculator. Signed fractional bounds are translated by the leading-cell origin and clipped only after conversion to measured raster coordinates. The capture raster origin is derived from source `screenBounds`/scale and capture `screenRect`/`contentRect`; padded capture rows are mapped without changing pixel order. The source raster identity must match cursor and renderer frame identities. Red: the unchanged helper rejected valid finite overhang with `renderer glyph bounds: rectangle covers no cell pixels`; a follow-up test showed a different source sequence could produce a measured result. Green: the owning fixture measures overhang pixels outside the leading cell, preserves original metadata, returns no proof for an empty raster intersection, rejects non-finite or non-positive geometry and mismatched source generation/raster/sequence; `terminal-ime-visual.test.mjs` passes 10/10 and `make docs-check` passes. No live input was run.
+
 - F239-47-14: Reject stale cursor geometry and color when VT reports no cursor draw. The renderer cursor draw condition requires a rectangle when visible, blink-visible and non-hidden, and requires null rectangle/color otherwise. Red: unchanged validation accepted a blink-off cursor with a rectangle and color. Green: the owning metadata test rejects stale values for blink-off and hidden cursors while retaining valid null metadata and drawn cursor cases; `terminal-ime-visual.test.mjs` passes 10/10.
 
 - F270: The E2E source audit uses Acorn 8.18.0 to check timeout callbacks as
@@ -1119,7 +1233,6 @@
   capability (X1). Focused test passes 1/1. Parity reports no uncovered
   implementations, tests, or feature links; bilingual examples counts remain
   for F267.5.
-
 
 - F262-9: Synchronize plugin hosts with the current project after each valid
   ready message. A change while the host document was unready was previously
@@ -1269,6 +1382,7 @@
   cursor and compose. Its three controlled coherence fixtures pass. The parent
   item remains active; this Wails result does not close the Tauri or two-host
   criteria.
+
 - F239-47-4: A failed `keepPointerOutside()` wait now retains the initial
   pointer, visible screen bounds, candidate frame and final frame/pointer in
   its error. Red: the unchanged helper failed the controlled pointer-outside
@@ -1365,7 +1479,6 @@
   and leaves `NSApp.currentEvent` unchanged. Focused `image_region_test` and
   `input_inject_test` pass. This verifies diagnostic input, not physical HID.
 
-
 - F239-35-5: The project-folder and bookmark window case now addresses
   declared controls by key, path and role, obtains their DOM rectangles and
   sends native clicks. Label selection and branch expansion are separate.
@@ -1396,6 +1509,7 @@
   accepted. Green: the same test verifies sRGB preservation, DeviceRGB behavior
   without a tag, rejection of invalid metadata, and preservation of the prior
   snapshot (1/1, 1.142 s).
+
 - F239-35-3: Declared window-sidebar controls now run through the exact source
   selected for the section status. Plugin-host sources use the host command
   registration; view sources use the exact surface registration. A missing
@@ -1446,9 +1560,11 @@
   external release gates. Independent leaf changes may proceed in parallel only
   after their prerequisites; packaging, integration verification and audits
   follow those fixes. `make docs-check` passes.
+
 - F212.12-2-2-4-8-2-1: Preserve image transfer `{generation,raster,sequence}` through the generic host platform call into each accepted native image-region snapshot. Red: `image_region_test` failed because snapshot facts omitted source identity. Green: the same test verifies exact identity, replacement, and rejection behavior (1/1, 0.552 s); the Wails attached-image test (1/1, 0.032 s) and Tauri presented-frame identity test (1/1, 0.026 s) pass. `make docs-check` passes on macOS 26.6.2 arm64. The retained identity describes the source transfer and is not a physical presentation timestamp; capture matching remains open.
 
 - F212.12-2-2-4-8-2-2: Retain image source rasters only during diagnostic capture with a 64 MiB and 512-snapshot bound, map ScreenCaptureKit frame geometry to exact source crops, and record matched, ambiguous, unmatched, and explicit unknown states with `displayTime`, retention drops, and comparison duration. Red: `capture_metadata_test` and `image_capture_match_test` failed because complete capture callbacks lacked image-match metadata, unmatched results lacked bounded pixel-difference facts, and top-left ScreenCaptureKit geometry did not map to source pixels. Green: the callback trace, exact matcher, ambiguity and incompatibility cases, exact BGRA mismatch facts, primary-screen top-left mapping, retention bound, and image-region integration tests pass. The first live capture located the crop above the terminal source. After correcting the top-left mapping, a fresh inactive terminal capture saved 121 frames without reaching its limit: 101 were `unknown-retention`, 20 were `unmatched`, and none matched or were ambiguous. Stable unmatched samples differed at 1,797 pixels; the first difference was expected BGRA `[129,107,72,255]` versus actual `[129,107,73,255]` at crop `(45,5)`. Bounds, scale, and sRGB metadata aligned, but the exact source raster was not persisted for visual comparison and the one-channel difference cause remains unknown. The historical terminal frame gap cause remains unknown.
+
 - F212.12-2-2-4-8-2-2-4: Preserve original image-source bytes in bounded capture artifacts and make identity reuse idempotent only when metadata and bytes match. Reject conflicting identity reuse and BGRA width overflow. Report failed partial-file cleanup in the manifest, bound cleanup error details to 32 entries, and fail capture finalization on artifact write failures. Red: the owning tests failed on duplicate identities, conflicting source bytes, width overflow and unreported partial-file cleanup. Green: `make -C native/darwin all`, `make -C native/darwin repeat TEST=image_capture_match_test COUNT=1` (1/1, 1.003 s), `make -C native/darwin repeat TEST=capture_metadata_test COUNT=1` (1/1, 1.286 s), `make docs-check` and `git diff --check` pass. No live capture followed this change; exact source-to-ScreenCaptureKit matching, the measured 1,797-pixel mismatch cause and the historical 33 ms gap remain unresolved.
 
 - F267.2: Link the completed F239-38, F239-39, F239-40, F239-40-1, F263 and F264
@@ -1458,8 +1574,11 @@
   No behavior tests or production code changed.
 
 - F239-45: Tauri view callbacks carry a local origin registered before native document creation. Closing, replacing or removing a view retires that origin before resource release; message, navigation-state, process-end and responsiveness callbacks from stale origins cannot affect the current view channel. Stale callbacks write `host.trace.view.callback-cancelled` when performance tracing is enabled, while a producer `view.error` retains its captured plugin and surface. The controlled origin tests pass 7/7, including malformed and native error envelopes; existing view error and view call record tests pass 1/1 each. The host test targets compile, and `cargo fmt --check`, `make docs-check`, `make boundaries` and `make events-check` pass. `make parity-check` reports four existing findings: the missing F266 feature link, stale bilingual examples parity counts and the unclaimed Wails starter test. The application shutdown matrix remains pending under F239-26-2.
+
 - F239-46: Plugin-host and view source instances use a window-wide JavaScript-safe generation. The main page installs and buffers lifecycle and snapshot listeners before atomically seeding the active origins and issued-generation floor; delayed registration and end events cannot restore or remove an older source. Snapshot delivery waits for native acceptance and rechecks the exact source and recipient, while pull and expanded requests carry internal generation metadata and stale requests return an explicit cancellation. Red: controlled tests exposed an old queued registration after same-plugin recreation, a stale snapshot routed to a replacement recipient, a view call from generation 1 reaching the generation 2 command layer, and a startup-floor registration that could create a ghost source. A controlled Wails replacement during an old reply verifies that generation-scoped cleanup preserves a reused call ID. A delayed old host-end removes only its generation's exposure registrations and preserves the replacement layer and sessions. Native lifecycle ordering supports the global floor across plugin-host and view sources: both hosts serialize source changes on the window main thread and deliver lifecycle events in emission order. Green: the Workbench declared-source, source-origin, declared-section, sidebar, plugin-host-call, view-command and surface-view tests pass; the Wails plugin-host, source-origin, view-call and restart-order tests pass 48/48; Tauri origin and stale-ACK/pull tests pass. The plugin producer and public `sok-view` snapshot messages are unchanged. `make docs-check`, `make boundaries`, `make exposure-check`, and `make events-check` pass. `make parity-check` reports four unrelated findings: F266 classification, bilingual examples counts, and the unclaimed Wails starter test. The named Files project-folder/bookmark runtime case passed on both hosts; remaining Files runtime checks stay under F239-37.
+
 - F239-49: Tauri routes source lifecycle, snapshot, call, reply, end and responsiveness events through one ordered main-page `Channel`; startup installs it before querying source origins, page reload retires it, and send failures are returned. Wails keeps its FIFO transport. Both hosts tag `view-responsiveness` with the producing generation, and the workbench applies only current-generation notices while recording stale notices. Red: the unchanged Tauri runtime and stream tests lacked the shared channel/allowlist behavior; the unchanged workbench accepted a delayed generation 1 notice after generation 2 replaced the same surface; the unchanged Wails payload omitted `generation`. Green: runtime stream tests pass 12/12, Tauri stream tests pass 8/8, current/retired responsiveness callback tests pass, Workbench consumer tests pass, and the Wails producer test passes. `view-presentation-abandoned` remains on its existing path because it records completed presentation-wait loss rather than live view state. `make docs-check`, `make boundaries`, `make exposure-check`, and `make events-check` pass. `make parity-check` retains four existing findings: the F266 link, bilingual examples counts, and the unclaimed Wails starter test. Package tests do not establish full application runtime acceptance.
+
 - F267.1: Repair the F148 and F163 behavior evidence links.
   The original parity output named the stale F148 test title and F163 source
   symbol. The links now resolve to the current test and source; the current
@@ -1469,30 +1588,51 @@
 - G1.4-101-1-1: Removed the tao Cargo patch and resolved tao 0.37.2 from crates.io. Its release notes state that it fixes the closed-window memory growth in tao issue 1327. Red: no historical failure was recreated as a new Red; the recorded unpinned failure predates this release. Green: rebuilt both hosts with tao 0.37.2 and passed the tracked `window-release.test.mjs` checks on Tauri and Wails (macOS 26.6.2 arm64, 1 file, 9.872 s). `make docs-check` passes.
 
 - F212.12-2-1-2: The optional activation variant of the native view-focus test remains unverified. The recorded aggregate attempt was refused before the test because another application was frontmost, and the preceding data-store test timed out. The Wails `AcceptFirstMouse` candidate was reverted because it configured the main webview while the verified contract belongs to plugin `SPDocumentView`; no main-page first-click failure was reproduced. No source change remains from the candidate.
+
 - F239-43: Bind Go and Rust plugin-host callbacks to the registered host instance so a delayed callback from a disposed provider cannot resolve a recreated channel by plugin ID. Red: the unchanged Wails controlled callback test relayed the disposed instance snapshot after same-plugin recreation; the unchanged Tauri test received it through the replacement channel. A new Tauri owning test also failed because a provider error arriving after window records were removed returned no error. Green: both hosts cancel stale callbacks, accept current and creation-time messages, and preserve explicit stale-provider errors with the captured plugin identity without closing or restarting a replacement; ordinary late messages remain canceled. Wails stale-instance, creation-time, and current queue-full tests pass 3/3. Tauri stale-instance, creation-time, late-error, and view-error attribution tests pass. `make events-check` and `make docs-check` pass. Apple documents WKScriptMessageHandler as main-actor; host callback, creation and disposal paths run on the main thread, serializing identity validation and dispatch. Framework event delivery after native emission remains a separate reload boundary.
+
 - F239-38: Wails and Tauri store `host.test.start` and `host.test.end` at their declared info level under every log policy, so diagnostic window checks receive flushed mark positions even when lifecycle is error or off. Ordinary lifecycle/info events remain gated and are counted. Red: both unchanged owning host tests refused the start mark. Green: Wails passes marker checks under both policies; Tauri `test_mark_test` passes 4/4; `make docs-check` passes. The preserved window-release attempt failed before fixture setup and did not exercise release assertions.
+
 - F239-39: The workbench reselects declared-section sources when registry entries register or end. This lets an already drawn section pull from a host or view that becomes its chosen source and releases the previous snapshot subscription on a source change. Red: the unchanged workbench consumer test did not pull after a host status registered following the section draw. Green: the test verifies late host pull/push, same-source idempotence, view takeover, source cleanup and host recovery; the sidebar, exposure and declared-section tests pass 11/11, 34/34 and 16/16. `make docs-check` passes. The historical Wails and Tauri F35 failures still have an unknown registration order and remain open for application validation.
+
 - F239-41: The workbench waits for a declared UI snapshot listener to become ready before pulling the chosen source. Synchronous subscriptions are ready immediately; asynchronous subscriptions resolve with their unsubscribe function after listener installation. A source change or close before readiness unsubscribes on completion and skips the obsolete pull. Red: the unchanged section test pulled `view-a` before the deferred listener was ready. Green: the first push is accepted before the pull reply, an older pull does not replace it, late obsolete subscriptions are removed, the new source is pulled once, closing before readiness skips the pull, and repeated reconciliation keeps one listener and one pull. The plugin API, declared-section and declared-source tests pass 60/60; `make docs-check` passes. The historical F35 application cause remains unconfirmed.
+
 - F239-41-1: The declared-section receiver discards a snapshot callback from an obsolete source generation, even after that same source is selected again. Red: a controlled A→B→A test delivered a queued callback from the first A registration before its late unsubscribe and drew `stale-a` into the second A section. Green: the callback checks the captured generation, the stale value is discarded and the current A value is drawn; the transport also blocks callbacks already queued when unsubscribe closes its listener. The plugin API, declared-section and declared-source tests pass 61/61; `make docs-check` passes.
+
 - F239-26-4: The direct shutdown check audits captured application logs even when the host or terminal-service wait fails. It preserves the wait failure as the primary cause and includes application error lines from the audit. Red: a controlled shutdown wait wrote an application error but the unchanged runner reported only the timeout. Green: the same run reports the timeout first and retains the error line; the owning shutdown tests pass 6/6.
+
 - F239-26-5: Added `sok process wait <pid> --timeout-ms <milliseconds>` to the Go and Rust CLIs. It reuses the existing platform process-exit wait without connecting to an application or service, validates positive int32 PIDs and 1–600000 ms timeouts, and reports timeout and platform errors. Red: unchanged Go rejected `--timeout-ms`; unchanged Rust rejected `process`. Green: Wails passes 6 top-level cases and 13 invalid-input subcases; Tauri passes 6/6, including ended-PID observation and live-PID timeout on macOS. `make docs-check` passes.
+
 - F239-26-6: `verify:shutdown` reads the terminal service PID from its protocol-1 endpoint without connecting to it, waits for the host endpoint to close, then observes the PID with the bundled `sok process wait` command and requires the original service endpoint file to be absent. It reports post-host-closure observation latency, not service lifetime, and reaps the observer on its outer deadline. Red: unchanged orchestration passed after endpoint EOF while the controlled PID wait timed out (`Missing expected rejection`). Green: the owning shutdown audit tests pass 11/11, including invalid endpoint/PID, original PID command arguments, malformed CLI output, retained endpoint rejection and observer cleanup. `make docs-check` passes.
+
 - F239-26-2: The earlier cohort passed six of eight shutdown rows and failed the Wails and Tauri terminal-command error audits (F239-44 and F239-45). After both corrections, all eight command/signal and terminal/no-terminal rows passed on the same macOS arm64 core 0.0.21 candidate debug bundles. The four no-terminal rows used the F239-26-9 tracked runner, which recorded and required zero sidecar sessions and service endpoints before shutdown; the four terminal rows verified terminal-service PID exit. All host and service PIDs ended, endpoints were absent, tracked error audits passed, and accepted logs contained no error-level records. Service observation is measured after host endpoint closure, not as service lifetime. The earlier failed rows remain preserved and are not counted in this acceptance.
+
 - F239-26-7: Reused the shared Go and Rust CLI token parsers with command-scoped option declarations, keeping `--timeout-ms` unknown outside `process wait`. Repeated boolean `--help` now follows the shared idempotent parser behavior; duplicate value options and unknown options remain rejected. Red: unchanged owning tests rejected repeated `--help`. Green: Wails process-wait and related CLI tests pass 10/10 top-level cases with 14 invalid-input subcases; Tauri process-wait tests pass 7/7 and generic CLI tests pass 16/16; `make docs-check` passes 112 files, 391 error records and 1727 record checks. `make parity-check` still reports 10 findings unrelated to this item: F148 and F163 links, F239-38, F239-39, F263, F264 and F266 links, two examples parity counts, and an unclaimed Wails starter test; it reports no F239-26-7 finding.
+
 - F239-44: Wails answers a discarded image from the process that emitted it. A persistent service receives the reply over its open connection before `shutdown`; a stdio image emitted during stop is recorded as canceled while the host waits for process exit. Red: the unchanged persistent test logged `answer of the image of closed surface surface: sidecars are stopped` and observed no reply before shutdown; the unchanged stdio test logged the same stopped error after stdin EOF. Green: Wails sidecar tests pass 2/2, including process-exit and cancellation evidence; the Tauri contract test passes 1/1 and confirms its existing queued reply precedes shutdown. `cargo fmt --check`, `make boundaries`, `make events-check`, and `make docs-check` pass. F239-26 application shutdown acceptance remains open.
 
 - F266: Audited 16 selected `[-]` records without changing their statuses. F73 and F131 document at least three full owning-suite runs, include a run at the recorded original-failure load, and identify the recurrence records. Fourteen records do not show all closure evidence: F69, F77, F78, F134, F142, F147, F160.7-1, F161.27, F161.56, F161.62, F161.59, F196.10.1, F160.6.5 and F252-2-1 each have a linked open audit follow-up naming the missing full-suite or load evidence and the next validation. F160.6.5 lists 20 focused repeats at load 27–44 and three full crate runs at 25–34, while its original failure is listed at about 40; the records do not establish comparable load for a full run. No runs were performed and no new failure was closed.
+
 - F239-26-3: The normal-shutdown runner closes every opened client after success or failure, including the terminal-service client. It reports close failures and preserves an earlier shutdown or audit failure in the resulting error. Red: the controlled shutdown-wait failure left both clients open. Green: both close, and the close-failure test preserves both errors; the owning shutdown tests pass 5/5.
+
 - F239-26-1: Direct normal shutdown now reads application error events from its start offset through process exit and fails with every new error line. The audit ignores earlier log errors and uses the existing window-check event reader. Red: the unchanged controlled-client orchestration fulfilled despite writing `error host shutdown: quit failed`, failing `assert.rejects` with `Missing expected rejection`. Green: the same orchestration rejects with the event line and ignores an earlier error; the owning shutdown tests pass 3/3. `make docs-check` passes 112 files and 1722 record checks. Two-host runtime acceptance remains open under F239-26-2.
+
 - F263: View-containing `syncSurfaces` requests now wait for the latest `setTheme` reply. The check and send run in one async continuation so a theme queued between reply settlement and placement cannot pass the barrier. This keeps the document-start theme valid without delaying the synchronous first DOM draw. A rejected theme reply prevents view placement and remains in the host error log; requests without a view do not wait. Red: the unchanged helper returned before a theme queued in that microtask gap, and placement was sent before the queued theme reply. Green: host-theme placement tests 4/4; project-switch and host-chrome tests 15/15; `make docs-check` passes. The historical runtime cause is unconfirmed; no application run was performed.
+
 - F239-32: One tracked run of the Wails 0.0.21 first-project check on macOS arm64 passes 1/1. The same window replaces the library, `core.project.open` replies in 235ms, no page error is reported, and the frontmost baseline is restored. Its timing and system-load trace, stdout, host JSONL, debug JSONL and stderr are preserved. This is one non-reproduction; the earlier 10-second timeout cause remains unknown and the item remains open pending its repeat target.
+
 - F239-29: Clean isolated Files and VT installs reproduce the missing native process identity package without altering shared stores. Red: pnpm 11.24.0 reports the optional Git dependency fetch failed, exits successfully, and links the package name to an empty virtual-store directory; both owning resolution checks fail with `MODULE_NOT_FOUND`. The frozen locks resolve the dependency through a codeload URL that returns 404; a fresh bare Git fetch also rejects the pinned object as `not our ref`. This confirms the locked source is not fetchable and does not establish a pnpm defect or explain the historical dangling-store incident. Both failing consumer checks remain uncommitted until a fetchable ref allows the same checks to pass; their repositories record the retention conditions. No package source changed; an authorized fetchable core ref is tracked by F239-29-1.
+
 - F212.10-core-5-4: A per-surface mount registration record retains the latest attempt and failure reason for a failed entry in the desired plane. Late composition waits report the attempt and original cause, and `page.surface.mount.failed` records the diagnostic without invoking the error display. Red: the unchanged consumer test released a ready view after controlled listener rejection, then `page.drawn()` failed without the original-reason event or attempt outcome. Green: `surface-remount-composition.test.mjs` passes 10/10, event class generation check, event catalog check, and `make docs-check` pass. Retry isolation, reservation reuse, disposal and plane departure cleanup are covered. The earlier Wails trigger remains unknown.
 
 - F239-33: `installStarter` preserves the failure text and removes the unsupported claim that a network connection and restart will fix it. Red: the missing-pack and controlled manifest-format tests failed on the unchanged recovery message. Green: the owning plugin-operations tests pass 22/22 and `make docs-check` passes 112 files and 1719 records.
+
 - F239-34: Tauri and Wails now distinguish a present plugin-host `result` from an absent member, so `result: null` is a valid reply. They reject a reply with both members or neither and preserve non-null results and valid errors. Red: each unchanged owning test rejected `result: null` as having neither result nor error. Green: both focused Red/Green cases pass, Tauri plugin-host channel tests 24/24, Wails plugin-host channel tests 14/14, and `make docs-check` passes. The observed Tauri `files.refresh` channel error is consistent with this parser defect; the exact request/reply correlation was not established. On macOS arm64, both debug host bundles rebuild and pass code-signature verification against the unchanged canonical workspace index. The default Tauri 0.0.21 development profile relaunches with the three starter plugins loaded, both required sidecars installed, all five `soksak://` plugin and sidecar names present, ready host state, no page or verification error, and a successful null `files.refresh` reply; the new host log has no error record. The Wails first-project timeout remains under F239-32.
+
 - F239-35: Update the project-folder and bookmark window check to use one-shot `status.get` pulls for the Files plugin's declared UI snapshots and core `core.sidebars` notifications for asynchronous rendered changes. Remove the check's former `{root, entries}` assumption and undeclared `files.git` status assertion. The unchanged tracked Tauri check failed with the plugin-host `status.watch` refusal; runtime acceptance on rebuilt Wails and Tauri hosts is still pending.
+
 - F239-36: Record the candidate sidecar runtime result separately from F239-34. Rebuilt Wails and Tauri 0.0.21 hosts load all three starter plugins; Files tree pulls show their active project roots, both sidecar processes run from their disposable configurations, page and verification errors are absent, and both hosts exit through `host.quit`. The Tauri Files window check fails at its unsupported `status.watch` request, which the plugin-host specification requires the host to reject. No error-class records appear in either host log. Tauri's five native labels were not captured before shutdown, and the record does not claim that label check passed. Disposable configurations and logs remain preserved; the user profile is unchanged.
+
 - F212.16-16: Wails and Tauri no longer set `sidecar.json` `displayName` in `SOKSAK_SIDECAR_DISPLAY_NAME`; each sidecar owns process registration from its versioned manifest. Hosts still reject missing or invalid display names, and protocol version 1 is unchanged. Red: transient and persistent child-launch checks in both hosts observed the host setting the declared name in the child environment. Green: Wails passes its two launch checks and manifest validation; Tauri passes its two launch checks and manifest validation. `make docs-check` passes. Replacing an installed sidecar requires removing the plugin package folders and unreferenced sidecar folder because installation does not overwrite an existing version path; plugin data outside package folders is not classified here. The sidecar releases remain unpublished.
 
 - F265-1: The records check rejects an existing census that is not a JSON object and reports malformed `exclude` patterns with the census file and value. Red: both contextual-error tests fail against F265. Green: records-check passes 15/15 and `make docs-check` passes 112 files and 1718 records.
@@ -1500,19 +1640,27 @@
 - F265: The records check treats an absent census `exclude` as no exclusions and rejects a present non-string value with the census file and found value. Red: both new owning tests failed on the unchanged checker; Green: records-check passes 13/13 and `make docs-check` passes 112 files and 1718 records.
 
 - F264: The workspace version is now release candidate `0.0.21`, distinct from immutable published tag `v0.0.20`. The version checker names both identities, the manifest audit and three workspace Cargo.lock entries use the candidate, and the installation specification distinguishes candidates from published releases. Red: unchanged checker identity failed with `0.0.20` versus `0.0.21`; a controlled replay with original Cargo.lock entries failed for `soksak-host-tauriv2`. Green: `versions.test.mjs` passes 7/7, the version audit passes, and `make docs-check` passes 112 files and 1718 records. No tag, release asset or registry entry was published.
+
 - F239-31-1: Go and Rust hosts now read, validate, create and complete the config-scoped starter job. Writes require the current registry URL, preserve an exact ordered snapshot, reject legacy profiles that already have `installed.json` without a job, and atomically replace the job file. Completion requires every listed plugin to be installed but preserves disabled plugins; completed jobs cannot be reset. Red: both unchanged state readers omitted a valid pending job, and both unchanged writers failed the pending-write test. Green: Go and Rust provider tests cover invalid format/fields, restart readback with `firstRun: false`, registry and snapshot mismatches without mutation, completion, disabled plugin preservation, legacy-profile refusal and completed-state idempotency; host tests and Wails/Tauri runtime mapping tests pass. `make docs-check` passes.
+
 - F239-31-2: The workbench persists a starter job before the first starter plugin install and resumes only missing IDs while the job is pending. It marks the job complete after every listed plugin is installed and does not reinstall plugins removed after completion. Red: the unchanged consumer returned `false` after the first plugin installed, the next failed, and a restarted consumer read `firstRun: false` with a pending job. Green: `plugin-operations.test.mjs` passes 22/22; its host fixture verifies job-before-install ordering, retry of only the missing plugin and preservation of a later user removal. `make docs-check` passes. Host-side job persistence is covered by F239-31-1.
 
 - F239-27: Recovered the running Wails development profile with the starter packages built from the declared workspace registry. The sok CLI installed browser 0.0.6, terminal 0.0.15 and files 0.0.7, plus the files 0.0.8 and vt 0.0.12 sidecars. After relaunch, all three plugins report loaded, the terminal and browser surfaces report ready, core.page.error is null, and lsappinfo lists the three soksak://plugin names and both soksak://sidecar names. The application registry command restored the public index URL. Browser 0.0.6 was built from current workspace source and differs from the published 0.0.6 archive; this does not publish the correction. F239-28 tracks the local browser 0.0.7 upgrade and the public component releases; registry G54 lists browser 0.0.7, terminal 0.0.15, files 0.0.7 and sidecars 0.0.8 and 0.0.12 after their releases.
+
 - F212.10-core-5-3: A composition wait follows a mounted surface entry even while mount registration is pending. Disposal before declaration ends the wait with an explicit disposal error; failed mounts preserve their original failure, and replacement waits follow the replacement entry. Red: a controlled pending declaration left the existing wait without an outcome after disposal completed on unchanged code. Green: `surface-remount-composition.test.mjs` and `surface-view.test.mjs` pass 27/27; `make docs-check` passes. This does not establish the cause of the Wails report.
 
 - F239-30: Published core 0.0.20 has its own earlier plugin API. The workspace reader and published API are distinct identities even though both source trees use version text 0.0.20; this recovery does not establish public package compatibility. Debug Wails and Tauri staging now depends on the generated workspace registry and passes its absolute `index.json` path; staging converts it with Node's `pathToFileURL` before writing the staged `environment.json`. Release staging leaves the declared HTTPS URL. Red: the owning test failed on unchanged code with `Unknown option '--registry-index'` for a path containing spaces and `#`. Green: the same test verifies the encoded staged URL and unchanged source environment; `packages/workbench/test/stage.test.mjs` passes 11/11. `make -n frontend-wailsv3 frontend-tauriv2` confirms registry generation before both debug stage commands and their absolute paths; `make -n wailsv3-build-release` confirms release staging omits the override. `make docs-check` passes.
 
 - F212.10-core-6: The parity audit now links F73.1 and F83 to their current recording and cleanup tests. A baseline snapshot of the unchanged audit reported test names that were no longer present; F83 also expected leftover recordings to be removed, contrary to the current preservation contract. The current inventory is 99 lanes, 668 implementation files, and 913 test files. The examples procedure now reports the discovered total. The same audit passes with the corrected links and count; the owning recording tests pass 14 of 14 and `make docs-check` passes. The initial failure output was not retained, so the recorded Red is a baseline snapshot reproduction.
+
 - F212.10-core-5-2: Pending native listener registration remains non-blocking for mount readiness. A failure before readiness rejects mount and composition wait with the original error; a failure after readiness reports the surface error and releases the view without changing resolved results. Red: the unchanged after-ready fault test left the surface ready, retained listener and view-command state, and produced an unhandled rejection. Green verifies early failure during pending authorization, after-ready cleanup, disposal during pending registration, immediate and late cleanup, error reporting, original cancellation, and no unhandled rejection. The existing slow-listener remount test passes without changing its original ordering. The focused composition/remount tests pass 6/6, `surface-view.test.mjs` passes 20/20, and `make docs-check` passes. This does not establish the cause of the Wails report.
+
 - F212.10-core-4: `normal-shutdown` terminal preparation now waits for the visible terminal surface and ready session through bounded status notifications instead of repeated status reads and `setImmediate` waits. The owning unit Red failed on the unchanged polling helper because it completed without calling `client.watch`; Green verifies both notification names, the terminal surface, the 15-second deadlines, and that preparation sends input only after the visible surface arrives. The scoped test and `make docs-check` pass. No application window check was run.
+
 - F212.10-core-3: Added a Wails window check that closes a disposable project containing editor and HWP files, then reads stderr while the host remains live. One full fixture run passed with four `host.view.killed` records and no new `WebviewWindow #<id> not found` warning; a post-test read of the live host stderr also found none. This is one non-reproduction, so the item stays open and the prior warning cause remains unknown. The harness restored the frontmost baseline; the dedicated host was then stopped normally.
+
 - F212.10-core-5: A Wails close-check preparation observed an editor surface at `phase: ready` with no exposures and `exposure settled failed: surface <id> is not mounted`. The editor 0.0.7 manifest and `ui/view.js` matched the successful content-hash run; the failing configuration omitted Files 0.0.7, while a full fixture run with Files installed registered editor and HWP statuses. The cause remains unknown; no runtime correction is claimed.
+
 - F212.10-core-5-1: Composition waits now observe a same-ID mount while it waits for the previous surface disposal, then use the normal mounted composition wait. The unchanged owning test failed with `surface fixture-remount-composition is not mounted` in the disposal/remount gap. Green covers same-ID replacement, same-slot and moved-slot reuse, disposal without replacement, unknown IDs, composition failure, and initial state callback failure including a `null` rejection; failed hosts and pending registrations are released. The focused view, mount-path and F50 tab-close tests pass 29/29, and `make docs-check` passes. This fixes the reproduced workbench contract gap; the Wails F212.10-core-5 trigger remains unconfirmed.
 
 - F212.12-2-2-4: The approved two-host reference and terminal input checks passed, and Wails met the capture bound. Tauri input also produced the expected reference text and terminal output, but its terminal recording exceeded 33 ms by 0.1167917 ms between consecutive complete frames. The callback trace records no intervening frame and no writer rejection. With mach timebase 125/3, the display delta is 794803 ticks, arrival delta 797653 ticks, and synchronous processing spans 33066 and 45061 ticks. Processing completion precedes asynchronous compression and file writing, so these measurements do not cover writer I/O. The raw capture and runner output remain available for diagnosis; no cause is assigned. The input method and original frontmost application were restored. F212.12-2-2-4-8 tracks display-cadence investigation.
@@ -1588,100 +1736,178 @@
 - F244-2: `make declared-ui-benchmark` measures a fully expanded 5000-node tree within 16 levels and a 1000-item command list in separate supervised processes, keeping the 2000 ms and 500 ms acceptance bounds. Each JSON measurement records complete drawing and binding counts, elapsed time, outcome, package and runtime versions, platform and load. Invalid timing, missing drawing or binding work, and exceeded bounds fail. The 10 benchmark tests have Red and Green evidence, and both existing full-size drawing tests pass. Workbench 0.0.20 on darwin arm64 25.6.0, Node 26.11.1 and jsdom 30.0.1 measured 327.2 ms for the tree and 81.0 ms for the list at load average 10.99. Documentation, parity and boundary checks pass.
 
 - F262-7: The presentation refusal of a view tab without an origin names the tab, its plugin, its space and project, the path that created the tab, and whether this session recorded its origin. Each tab creation site names its path.
+
 - F212.12-2-1: A view accepts the first mouse down of an inactive window, so the press reaches the page of the view and the view becomes the first responder. Before, AppKit consumed that press for the activation of the window, so a click on a view card gave the view no keyboard focus. A document region keeps the refusal. Red: `view_focus_test` failed both the page press and the first responder assertions on the unchanged source; Green after the change, three consecutive runs.
+
 - F262-6a: The view bridge serves `runtime.project(listener)`, which gives the listener the last project of the plugin host at once and makes no call to the host, as `runtime.theme` does. A plugin host page that subscribed the project message through `runtime.native.on` was refused by the host.
+
 - F262-4a: A layout write names its writing path (add space, saved layout, recreate or library replacement), and each view tab that it stores without an origin member is recorded in the application log with its tab, plugin and path.
+
 - F262-5: A navigation state or message of a plugin host that arrives after its window closed is not reported as `project window is closed`.
+
 - F262-3: The project settings file is written in the current numbered form by both hosts: a settings write migrates the file at its entry and stores the `format` member, and the diagnostics fixture writes the current form too.
+
 - F262: The projects check reads the project settings file in its current numbered form, and a tab of a new space keeps its origin until a stored layout has held it and dropped it, so the first tab of an added space no longer fails to present with `has no origin`.
+
 - F212.12-1-10-6: The native suite run of the view import map owner (76 tests) passed 75 tests; a test that loads a view page without the application map was corrected and passed three runs. The plugin repositories still ship their own import maps, so their view pages are refused until their releases remove them (see F212.12-1-10-6g).
+
 - F212.12-1-10-6: The view import map has one owner. The host inserts the import map of the core it runs directly after the doctype of each view page, so a view page holds no import map of its own. A page that holds an import map or has no doctype at its start is refused and logged with its address and the reason; the plugin view pages that still ship their own map are refused until their repositories remove it.
+
 - F212.12-1-19: A view call of a surface that declares surface.unload waits for the tab state store to be tried, so a view's first tab state call during the page start is answered by the store instead of failing with `the tab state store is not open`.
+
 - F212.12-1-18: A view receives only the exposure requests it owns, so a core surface entry is answered once, by the surface document; a view mark belongs to its mount. Plugin host call records update the plugin statuses instead of the error display. The files sidecar body is the object of the json-object form, and a plugin host sidecar event carries its session data as `sidecar.message` or `sidecar.failure`.
+
 - F212.12-1-17: The window check judges the host event files of its own boot: the files of an earlier run that were flushed after the stored offsets no longer count as errors. Plugin host reports carry the message, code and data of a rejection instead of `[object Object]`. A sidecar request body of a plugin host is the JSON object that the page sends. The host records each exposure request, reply and unmatched reply with the id and where the relay holds it.
+
 - F212.12-1-15-1: The Tauri host accepts a plugin host reply with a null result, as the Wails host does: the reply, request params and event data of a plugin host keep their null values, so a command without a value no longer fails with `has both or neither of a result and an error`.
+
 - F212.12-1-15-4: The lost persistent sidecar connection error record names how the connection ended (`end`) and how many requests waited (`waiting`), in both hosts.
+
 - F212.12-1-16: The plugin host serves the registration notice `runtime.native.call registered`, which the view bridge sends for an exposure registration, as `page.exposure.register` does. A reply to an exposure request that its document ended is accepted and written as the observation `exposure reply <id> arrived after its request ended`, in both hosts; a reply to a request the relay never sent is still refused.
+
 - F212.12-1-14-4: The `host.sidecar.disconnect` record of a lost persistent sidecar connection names how it ended (`end`) and how many requests waited for it (`waiting`) in both hosts.
+
 - F257-3: The test runner ends a test's process group without error when macOS refuses the group signal with EPERM because only zombies remain, at the exit path and at the limit, and it fails with the running members named when a running member is refused. The stop, list and kill of a group share one signal helper and one predicate for running members with the command supervisor. Red: the runner tests `a refused group signal with no running member ends without error` and `a refused group signal with a running member names it` fail with `kill EPERM` on the unchanged logic. Green: the three runner test files pass 39 of 39 tests, and the native repeat test file passes 2 of 2.
 
 - F212.12-1-13: The project of a plugin host and of a view is `{id, root}` in both hosts, in the `project` event, in the workbench and in plugin-api, as the files host page and the sidecar sessions require the project id. A plugin host page subscribes to exposure requests with `runtime.native.on` and answers them with `runtime.native.call` `exposureReply`, so a dom entry that the host registered reaches its page. Both hosts forward the two calls.
+
 - F257-2: The benchmark runner test gives its fixtures a limit of 6 s and lets the fixture that runs over it sleep 30 s, so a fixture that ends at once is not stopped by a loaded machine. Red: the push check at load 105 failed with `TIME event_log_benchmark 2.012s exceeded 2.000s and was killed`. Green: the test passes.
+
 - F212.12-1-10-5: The module graph rule of a view page reads the imports with es-module-lexer (`es-module-lexer/js`, a dependency of `@soksak/plugin-api`), so the text of a string literal is not an import. The rule is the node-only export `./view-modules`, and the index no longer re-exports it, because a view page loads the index. The spec counts five entries of the view import map. Red: the test `a string literal of a minified vendor bundle that reads as an import is not an import` failed with `ui/vendor/libraries.js: import : tags5.moduleKeyword,` before the change. Green: that test passes, the view tests pass 152 of 152, and the plugin-api tests pass 795 of 795.
+
 - F261: The Tauri test `a_sidecar_receives_the_log_directory` stops its sidecar when it returns or fails, through the same drop guard as the other sidecar checks, so the sidecar process no longer outlives the test. The host code is unchanged: the application ends its sidecars at exit, and this check did not.
+
 - F260-1: The writing commands of `sok` hold the advisory lock (flock) on `process.lock` for the whole command, as the host does: a held lock refuses the command with the host text of its case, and a free lock file is taken over. The case table gains the held cases, which the host and both sok implementations replay.
 
 - F260: The writing commands of `sok` read and write `process.lock` in the form of the host (`{"pid", "boot"}`), so a running application's lock is refused with its pid instead of `invalid process lock`; a lock in another form is refused with its content named and kept. The form is defined in `docs/spec/endpoint.md`, and the case table `docs/spec/cases/process-lock.json` is replayed by the Go and Rust tests.
 
 - F212.12-1-14-1: The window event that relays a declared UI snapshot is `declared-ui-snapshot` in both hosts and in the main page, because Tauri refuses an event name with a dot. The message name `declared-ui.snapshot` that views and plugin host pages send is unchanged.
+
 - F212.12-1-12-2: The view's text size and settings subscriptions resolve with a promise of the off function, as every subscription registration of the view does. `subscribe` refuses a registrar result that is not a promise with an error that names the registrar, so `runtime.textSize.on` and `runtime.settings.on` resolve in a view instead of failing with `register().then is not a function`.
+
 - F212.12-1-12-1: A view reply with a null result is accepted and posted as `result: null` in the Tauri host, as the Wails host already does. The Tauri decoder read a struct with its null fields removed, so a command without a value was refused with `view reply N has neither a result nor an error`. The view reply, view event data and view request params keep their null values.
+
 - F212.12-1-11-1: The plugin host keeps its ready document through the progress of its own navigation, as the view does: its document state counts navigations, and the host clears the ready record only when the count rises in both hosts. A state without the count, or with a lower one, is refused. Red and Green are recorded in the checklist item.
+
 - F212.12-1-11: A view keeps its ready document through the progress of its own load, so the replies that a view sends after its first ready message are no longer refused with `<surface> has no ready document` in either host. The native document state counts each navigation once, when it starts, in `navigations`, and the host clears the ready record of a view only when that count rises. A view state without `navigations`, or with a lower count, is refused with its text. Red on the unchanged code: the Tauri test `view_channel_keeps_the_ready_document_through_the_progress_of_its_load` fails with `left: Err("probe-surface has no ready document")`, the Go test `TestViewStateKeepsTheReadyDocumentThroughProgressOfTheSameNavigation` fails with `post after the progress of the same navigation: probe-surface has no ready document`, and the native `view_channel_test` fails with `every view state of one load counts one navigation`. Green: the Tauri `documents_test` passes 49 of 49, the Go view and surface tests pass 57 of 57, and `view_channel_test` passes.
+
 - F212.12-1-9: A theme change posts to the plugin host and view documents on the main thread in both hosts. The Wails theme binding and the Tauri async commands called the native document post from their own threads, and its main-thread assertion aborted the application with SIGABRT. Red: the Go tests `TestPluginHostPostsRunOnTheUIThread` and `TestViewPostsRunOnTheUIThread` failed with a native post outside a UI-thread task, and the Rust test `a_native_document_post_is_a_main_thread_task` aborted with SIGABRT. Green: the same tests pass, and the Wails host package and the Tauri host unit tests pass.
+
 - F257-1: At its limit the test runner stops the test's process group with SIGSTOP before it lists the leftovers, takes the elapsed time of the timeout at that stop, and then kills the group, so a slow process-table read under load no longer lets a test run past its limit. The exit path uses the same order. Red: the runner test `a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop` fails with a 7296 ms elapsed time against a 2000 ms limit, because the fake `ps` on PATH sleeps 5 s. Green: the test passes, and the three runner test files pass 37 of 37 tests.
+
 - F212.6a-1-3-2-3: `host.stall` carries `watch_late_ms`, the lateness of the stall watch's own wake beyond its 250 ms beat, in both hosts, so that a stall of an unscheduled process (watch lateness at least half of the stall) is told apart from a blocked main thread (watch lateness 0). The watch takes the declared seams `clock` and `wait`, which the hosts leave unset.
 
 - F212.12-1-7: A view surface reports phase `ready` once its view declares its composition: the workbench released the ready state only for a module mount, so each view stayed at `loading` and its card kept the loading label. The workbench also writes the debug records `page.view.call` and `page.view.reply` for each view call, so a call that never replies shows as a receipt without a reply.
+
 - F258-3: The log-contract fixtures move to `docs/spec/cases/log-contract`, and the host event log tests audit their logs through `scripts/audit-log.mjs` instead of reading the audit module of the package by path. The package no longer exports its fixtures.
+
 - F258-2: The manifest case table moves to `docs/spec/cases/manifest-validation.json`, which the reader and both sok implementations read. `make boundaries` refuses a test of a core package that reads a path of another core package.
 
 - F212.12-1-5: A view surface mounts once. The page registered the core surface entries of a view through the same surface port that the view used for its forwarded requests, so the mount failed with `already has an exposure port`. The page now answers the core surface entries of a view and consumes its other forwarded requests, a view is marked on its surface instead of registering a port, and a failed mount releases its exposure port and its entry, so the next mount starts again. A refused composition declaration no longer leaves an unhandled rejection. Red: `surface-view.test.mjs` fails the mount with the core surface entries with `already has an exposure port`, and the failed-mount release with `the failed mount left its exposure port registered`; `exposure.test.mjs` fails the routing rule with `[1, 2, 3]` against `[2]` when its view check is removed. Green: surface-view 14 of 14, exposure 30 of 30, the workbench directory 851 of 851. A view mount, its core registration and its command registration share one port, which a test of that sequence covers.
+
 - F258-1: `sok plugin pack` and `sok plugin install` apply every rule of the reader's manifest check (`validateManifest`) in the reader's order with the reader's error texts, and the reader and both implementations replay the manifest case table `packages/plugin-api/contract/manifest-validation.json`. The reader now reads the members of each object in sorted key order, refuses a schema type that is not a type name, checks the data schema with the schema rules, compares enum members without regard to their order, and no longer raises a TypeError for a menu, save or drop entry when the commands of exposes are not a list. Red: the reader runner failed 8 of 210 cases before the reader fix; the Go and Rust replays failed on the base before the port.
 
 - F212.12-1-6-1: Every quit request begins the quit state, with or without a ready window: `host.quit`, the Wails `shouldQuit` and the Tauri exit request begin it before the quit runs, so a page process end during a quit with no ready window writes no error line. Red: the Go test `TestAQuitRequestWithoutAReadyWindowBeginsTheQuitState` and the Rust test `a_quit_request_without_a_ready_window_begins_the_quit_state` fail with `the end of a page process during a quit request is written` on the seam with the state not begun. Green: the Go quit and termination tests 7 of 7, the Rust quit and termination tests 6 of 6. The operating system quit path of both hosts (`shouldQuit` and `windows::quit`) is tested through the extracted decision.
+
 - F212.12-1-6: The first termination signal begins the quit state before it requests quit, so the end of a WebContent process during a signal quit writes no error line in both hosts. Red: the Go termination test fails with `the end of a page process during the quit is written: error host page process: main: terminated`, and the Rust termination test fails with `page process: main: terminated`, both on the signal seam with the state not begun. Green: the Go termination and quit tests 5 of 5 and the Rust termination test 3 of 3 pass.
+
 - F257: The test runner ends its own leader when a process-group signal is refused, and finishes its result at the leader's close, so the process of a test file no longer stays alive after its tests pass. The signal-failure test no longer ends processes itself.
+
 - F258: `sok plugin pack` and `sok plugin install` refuse a `plugin.json` whose `exposes` declaration or surface `params` schema the reader refuses: a schema accepts only `type`, `properties`, `items` and `enum`, and the refusal uses the reader's error text. Red: the four tests `TestPluginPackRefusesASchemaOutsideTheSubset`, `TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset`, `plugin_pack_refuses_a_schema_outside_the_subset` and `plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset` failed on the earlier code. The remaining checks of the reader are open in F258-1.
 
 - F256: The structure step of CI and the push check run the event catalog and census audits, so a removed emitter with a remaining catalog entry fails before a push.
+
 - F255: The replace service fixture of the tauriv2 sidecar transport tests waits for the exit of the installed service process in its Drop: the process is ended with SIGKILL and reaped with `waitpid`, so the check that follows reads a process that has ended. The test `a_replaced_service_starts_after_the_end_of_its_process` fails on the unchanged fixture when the process takes time to exit (`the installed service process <pid> outlived the test`), and passes with the change. No product code changed.
+
 - F252-1-1: `createExpose` requires the port report function, reports a reply that the host refuses, and gives a failing report with both texts to `reportError`, so no reply failure leaves the page error path. The application runtimes give their exposure port a report.
+
 - F254: The test runner ends the process group of each test file when the file's process exits: a process that remains in the group fails the file with `left running after exit: pid <n> <command>`, and at its limit the `TIME` line names the processes other than the file's process as `left running: pid <n> <command>`. A test file that leaves a timer open after its tests pass is reported with its remaining process, and a file whose process exits while a child it started keeps running fails at that exit, not at its limit.
+
 - F252-1: A status value, a command result and a request result of `undefined` are refused with an error that names the status or command, because `undefined` is not a JSON value; a command that declares result type null still answers null. A corrupt `endpoint.json` fails with its path; only a missing file is not yet written. The fixtures that declared a value result and returned nothing now declare their results. The reply chain of `createExpose` stays open as F252-1-1.
+
 - F252-1: Error paths of the JavaScript sources report their failures instead of concealing them. A `dom.rect` or `dom.act` request refuses a null `index` with -32602 (an absent index still selects the first element). A failed view reply is reported through the page error path. A failed status watch is reported, and a closed surface still ends it. A status reply without `{seq, value}` is refused. A plugin-host body that does not parse includes the parser message. A host reply that arrives after its layer left is reported. A non-Error failure in the plugin operations reports its text. A console argument that JSON cannot serialize is recorded as `{"unserializable": "<reason>"}`. A command whose process fails and whose cleanup also fails reports both errors. A cargo line that starts with a brace and is not JSON fails the discovery. Every test and every language case declares its own `timeoutMs`; `runTests` refuses a test without one and names it.
+
 - F212.11-1: The reader refuses a sidebar section with `module` and a `state` field of a plugin manifest, each with the plugin and the field named. A section takes a declared `status`, and project data is read through the plugin host. A stored value in a format other than the declared one fails the read with a named error. The `sok plugin pack` refusal of both fields has the same text.
+
 - F212.11-2a: The reader refuses a surface with `module` and a composition of kind `hybrid`, each with the plugin and the field named. The dom refusal names kind view alone. The surface composition controller no longer has the hybrid paint boundary or the dom branch.
+
 - F212.11-2b: The workbench mounts only a view surface, imports no surface module, and draws no parking fragment. A hidden surface host leaves the document and returns when its tab is shown. The page diagnostics publish no parked element count. The focus request chain of module focus is removed. The module-mount tests are removed; the view-path behaviour they covered is pinned by `test/surface-view-path.test.mjs`.
+
 - F212.11-2e: The specifications state the view composition alone, the surface ownership section replaces the surface module section, and `diagnostics.objects` reports the page elements and documents without `parkedElements`.
+
 - F212.11-3: The two probe fixtures are view pages with their own `app.js`, and their manifests declare the view composition. The orientation window test of module sections is removed.
+
 - F212.11-2c: The Go and Rust hosts refuse the removed `hybrid` surface composition with `plugin <plugin> surface composition: kind hybrid is removed; the composition takes kind view`, the same form as the removed `dom` kind, whose text now also names only the kind `view`. The surface sync checks accept only view compositions, so the start-values check of other compositions is removed. `diagnostics.objects` replies the page counts of elements and documents without `parkedElements` in both hosts. Red: `TestHybridCompositionIsRefusedWithThePluginAndTheField` (Go) and `a_hybrid_composition_is_refused_with_the_plugin_and_the_field` (Rust) failed on the unchanged code because a complete hybrid composition was accepted; `TestDiagnosticsObjectsReplyAndParams` (Go) and `diagnostics_objects_reply_and_params` (Rust) failed when `parkedElements` was reinstated in the reply. Green: both hosts pass these tests; the Go packages `src` (104 tests) and `tests` (465 tests) pass, and the Rust package passes 652 of 652 tests with the diagnostics feature.
+
 - F212.11-2d: The darwin native library drops the hybrid app DOM webview of a surface host (`mainWebview`, its hit-test fallback, and the `sp_surface_main_webview` answer, which is now the view web view) and the parked element count of `sp_webview_count_objects`; its page script counts elements and documents only. Red: `surface_host_test` failed on the unchanged library with `a surface without a view has no app DOM of its own; the hybrid composition is removed`; `page_objects_test` failed with `ok 0` for the page-world count when the page defines a throwing parked element function, because the count read that function. Green: `surface_host_test` and `page_objects_test` pass after `make native-darwin`; `webview_geometry_test`, `surface_layout_test` and `image_region_test` also pass. `webview_geometry_test` drops its hybrid cases, which set `mainWebview` through key-value coding and aborted the test; those cases have no Red of their own.
+
 - F252-2: The host and command-line error paths report what they dropped or coerced. The Rust endpoint records an accept error and the Go endpoint does too; both hosts state the I/O reason that closes an endpoint connection; `host.sidecar.reply` carries `truncated: true` when its error text is cut; the format numbers of `projects.json` and `settings.json` return their error and a non-integer `format` member is refused in both hosts; a debug row with an out-of-range number is refused as not JSON; a failed web view creation states the native cause; a refused image nonce writes its cause; a log index head read error fails the update; a line the writer cannot serialize or open is recorded as `log.dropped`; a `view.error`, an endpoint error member, or a document reply error without a code or message is refused in both hosts; a surface whose window record cannot be read records the error (Rust host).
+
 - F253: The heartbeat test of the command runner accepts every progress event between the start and the cancelled result, because the number of heartbeats before the process group ends depends on the time the end takes.
+
 - F251: A view follows a core status or a status of its plugin with the view calls `runtime.status.watch {name}` and `runtime.status.unwatch {name}`, and receives each value, the first one included, as the view event `status {name, value}`. The SDK `runtime.status.watch(name, listener)` returns the function that ends the watch. A name with another owner, a status of the plugin that the exposure does not declare, and an empty name run nothing and write an error line of the view. Both hosts relay the calls and the event unchanged (host contract `view.status.relay`). Specification: `docs/spec/native-surfaces.md`, `docs/spec/exposure.md`, `docs/spec/host-contract.md`.
+
 - F249: A plugin host page runs a command with `runtime.command {name, params}` and writes an event with `runtime.log {level, event, fields, cids?}`. Both hosts forward the calls, and the main page answers them with the checks of the view calls, so a declared tree row opens a file through `core.file.open` and a host command leaves its records. The view call and the plugin host share the owner routing of `packages/workbench/command-route.js`, whose refusal text names the caller.
+
 - F238-b-10: the view and the plugin runtime no longer export or query a log level: `log.enabled`, the first-use `runtime.log.levels` request and the `logEnabled` hook are removed. A view call `runtime.log.levels` is refused as not served, and a plugin builds the fields of each record while the writer decides whether it is stored. The `log.levels` change notice and its subscription stay in the workbench as the item states; no view call subscribes a view to them. The published case `view.bridge.runtime-log-without-level-query` replaces `view.bridge.runtime-log-level-gate`. Owning tests: plugin-api 536 of 536; workbench 847 of 847.
+
 - F238-c-10: `docs/spec/plugins.md` Repositories lists the declared plugin and sidecar folders of `scripts/workspace-registry.json` and names the undeclared `shell` repositories separately. The section states the core-name rule and the `check` subset of each declared plugin repository, and names the plugin build as the caller of `checkViewPage` (also in `docs/spec/plugin-processes.md`). Owning tests: check-boundaries 14 of 14; `make boundaries` and `make parity-check` pass. The core release that publishes the `soksak-view-check` bin is tracked as F238-c-11-1 and is reported as unreleased.
+
 - F250: A command request that the workbench relays to a view carries the member `cids` of its cause, omitted when there are none. The exposure registry takes `cids` in `run` and `runOwned`, the command layer sends them in the call envelope, and the view bridge passes them to the command handler as the second argument `{cids}`. The host posts them with the request (Wails and Tauri), and a list that a line cannot hold is refused. `packages/plugin-api/contract/view-commands.json` publishes the case, and the workbench, plugin-api and host tests pin it (Red then Green).
+
 - F250-1: A view starts an operation with `runtime.beginOperation(event, fields)`, which assigns `p<time origin of the view>.<n>` in the form of the page's operations (`packages/plugin-api/operation.js`), logs the first event with it, and returns the identifiers. A view call with cids reaches a plugin command and a core command with them: the core command gets them in its context `{cids}`, and `core.app.release` passes them to its link open host call. `packages/plugin-api/contract/view-operations.json` publishes the case. Red and Green are recorded in the feature F250-1.
+
 - F238-d-18-2: The pins of F238-d-18 are complete. A plugin host creation keeps a sidecar stop, a send of a plugin session after the restart stop fails to its owner window, a plugin session failure shows no application error alert, and the host page start pulls each declared status once at the change of source. Each pin passes on the unchanged code and is recorded as a pin, not Red. The Rust `#[cfg(test)]` seam is `Sidecars::stop_restarts_for_test`. The contract rows are `plugin-host.sidecar.stop-kept` and `plugin-host.sidecar.failure`; the project-switch cases stay with F229-1.
+
 - F238-d-19: The host page reports a listing error through the served call `runtime.error {where, text}`, with the checks of the view call, and the main page writes `error plugin <id> <where>: <text>` through its error display. Both hosts forward the call (contract `plugin-host.error.display`). Red: the workbench case failed with no display line, the Go case failed at its forwarding assertion, and the Rust case failed with `plugin host call runtime.error is not served`. Green: workbench plugin host calls 15 of 15, the Go case 1 of 1, and the Rust case 1 of 1.
+
 - F238-d-18: A failure of a subscribed plugin session is posted to its host page as the failure event; a workbench case pins it and passes on the unchanged code. The other pins of this item are in F238-d-18-2.
+
 - F248-8: a failed declared pull leaves its section cleared, is reported once through the page error event, and is not retried. The page error display writes no location for an error event without a source file, so the report of a failed pull no longer carries `@ :0`. `docs/spec/declared-ui.md` states the outcome. Owning tests: workbench passes 847 of 847; `make parity-check` counts 857 test files.
+
 - F248-7: the view answer of a declared UI snapshot request answers an empty value only when the snapshot store has no value. Any other store error answers the request with its error and is reported. `view-snapshot-pull.json` publishes the store fault case, which failed before the fix. Owning tests: plugin-api passes in full. The view answers a pull with seq 0 and value null only when the snapshot store has no value. A pull that fails for any other reason answers the request with the error and reports it through the bridge; `view-snapshot-pull.json` publishes the store fault case, which failed on the previous catch-all answer.
+
 - F248-6: `packages/plugin-api/contract/view-tab-calls.json` publishes the view's tab calls (`tab.title`, `tab.footer`, `tab.directory`, `tab.notify`, `tab.modified`, `tab.error`, `tab.keep`) with their requests, replies and refusals, and `view-snapshot-pull.json` publishes the host's pull of a declared UI snapshot: the pushed value, `{seq: 0, value: null}` without a push, and the refusal of a missing status. Each runner replays its file against the view bridge. No behavior changed. Owning tests: plugin-api passes in full; `make parity-check` counts 856 test files.
+
 - F248-5: `packages/plugin-api/contract/view-settings.json` publishes the view bridge's `runtime.settings` and `runtime.textSize` calls: the reads and their replies, the `on` subscriptions with host change events, a refused listener-less subscription, a refused host subscription that removes its listener, and a shared subscription. `test/view-settings-contract.test.mjs` replays every case. No behavior changed. Owning tests: plugin-api passes in full; `make parity-check` counts 854 test files. A bind `params` function is read at each run, and its element has no data-params; `exposure.md` states it, and the binder and expose cases publish it.
+
 - F248-4: `packages/plugin-api/contract/calls.json` publishes the call limit: a call with no reply within its declared or default timeout is rejected with `command <name> did not reply within <ms>ms`, and a later reply is a late reply that is not passed to the call. The runner replays the cases with mock timers. Owning tests: plugin-api passes in full; `make parity-check` counts 852 test files.
+
 - F248-3: `createExpose` refuses a registration or a binding after dispose with `exposure is disposed`, and adds no request listener when dispose runs while the declarations load, so a request after dispose is no longer answered. `expose.json` publishes the refusal, the removal of bindings at dispose and the race with declaration loading, and the expose runner has command, bind, click and race steps. The view bridge needs no dispose, because the host ends its resources at process end. Owning tests: plugin-api 507 of 507. The view exposure port has no unregister, because the host removes a view's registrations at surface close and at process end; the decision is recorded in `packages/plugin-api/view.js`.
+
 - F248-2: `packages/plugin-api/contract/contributions.json` publishes every outcome of `resolveContributions` (connected, provider-missing, invalid, version-mismatch, ordering, and a plugin without contributions), replayed by `test/contributions-contract.test.mjs`, and `view-native.json` publishes the drop of a view event that arrives before its subscription. No behavior changed. Owning tests: plugin-api 504 of 504.
+
 - F248-1: `packages/plugin-api/contract/expose.json` publishes a dispose of an exposure registration (`expose.dispose.ends-registrations-and-requests`), and `packages/plugin-api/contract/view-composition.json` publishes the document region `load` and `post` alone and the teardown of a view composition (`view.composition.load-alone`, `view.composition.post-alone`, `view.composition.dispose-twice-detaches-once`, `view.composition.dispose-reports-a-refused-detach`). `createExpose` dispose now calls the remover that the port returns from `onRequest`, so a request after dispose is not answered. Owning tests: plugin-api 494 of 494.
+
 - F248: `packages/plugin-api/contract/create-binder.json` publishes a keydown bind with its `when` predicate (`{key}`), and a failed keydown run through `failed`. `packages/plugin-api/contract/view-composition.json` publishes the document region `onMessage` listener, the stream `subscribe` with its `close`, and `reload` of a region that restored its state. The region of a view composition now exposes `subscribe`, which plugin pages call for their element and request streams and which the region did not provide. Owning tests: plugin-api 489 of 489.
+
 - F247: a surface composition that fails during creation reports each cleanup failure once, not again as an aggregate.
+
 - F212.12-1-3: The view surface removes its exposure port when its mount is disposed, not when its listener registrations settle, so a mount of the same surface after a dispose registers its port on Tauri. Red: `surface-view.test.mjs` fails the remount with `already has an exposure port` on the unchanged code; Green: the file passes 9 of 9.
+
 - F212.12-1-1: The view state reports `loading` as a JSON boolean. The document state of the native view boxed the result of a C logical operator as an int, so both hosts refused each state as not JSON. The state now boxes a boolean. Red: `view_channel_test` on the unchanged code fails `every view state reports loading as a JSON boolean: 0`; Green: the same test passes. The Go and Rust payload tests pass before and after, because the consumers already refuse a number.
+
 - F244-3: the shortcut table test no longer reads a `typeof` test of a key property as a keyboard key comparison.
+
 - F246: `packages/plugin-api/contract/` publishes case files for the view composition region (`view-composition.json`: `composition.create`, the `document.*` calls, and the region `state`, `onState` and `history` values in order), the `createExpose` status and dom methods (`expose.json`), command registration on a surface page (`command-registration.json`) and on a view (`view-commands.json`), the `runtime.native` calls of a view (`view-native.json`), the declared UI snapshot push (`declared-ui-snapshot.json`), and `INTERACTIVE` with the binder audit rows (`interactive.json`). Each file is in the package `files`, and its owning test in `packages/plugin-api/test/` runs every case against the implementation. A refused `runtime.native.on` subscription now removes its listener, so the refused listener receives no host event. Owning tests: plugin-api 483 of 483; `make parity-check` counts 97 lanes, 641 implementation files and 849 test files.
+
 - F238-d-23: The plugin host channel serves `runtime.data.get {key}` and `runtime.data.set {key, value}`. The main page answers them for the shown project with the checks of the state module context, refuses an undeclared key with the plugin and the key named, and refuses both calls with `plugin host <plugin>: no project is shown` while no project is shown. The `data` manifest field requires `state` or `host`, and `exposes` is accepted for a plugin host. Both hosts forward the two calls (contract `plugin-host.data.calls`). Red: `validateManifest` refused a plugin host with `data` and with `exposes`; the plugin host calls and plugin states tests failed with the call not served and `declareProjectData is not a function`; the Rust and Go forwarding tests failed with `plugin host call runtime.data.get is not served`. Green: plugin-api 450/450, workbench plugin host calls 13/13 and plugin states 5/5, Rust plugin host channel 14/14, Go plugin host channel 10/10.
+
 - F238-d-22: Declared tree nodes move keyboard focus with the arrow keys, Home and End. Down, Up, Home and End move focus between the focus targets of the visible nodes. Right and Left expand or collapse a branch, or move focus, as the Tree keys section of declared UI states. A redraw that removes the focused node moves focus to the nearest preceding node that still has a focus target. Red: 9 of the 13 new cases in `packages/workbench/test/declared-ui.test.mjs` failed on the unchanged workbench (for example `focus did not move to the nearest preceding node`, actual `body`), and the shortcut-table test failed on the table rows that had no handler. Green: declared-ui and declared-section 96 of 96; shortcut-table 8 of 8; `make exposure-check`, `make parity-check`, `make docs-check` and `make boundaries` pass.
+
 - F245: The region of a view composition (`region()` of `surface-composition.js`) reports `history` as the page document handle does: null until its attach replies, then the boolean of the reply. A view attach reply already carries `history` from the workbench, so neither host changed. Red: `composition.region("page").history` was `undefined` where `true` was expected (surface-composition test "a view composition region reports the history of its attach reply"); Green: surface-composition 17 of 17, plugin-api suite 449 of 449. The refusal of an attach reply without a boolean `history` names the region and was already in place.
+
 - F238-d-20: the plugin host criterion is a placement rule: a host exists only for a declared status of a sidebar section that must be served while no view of the plugin is open, and it holds the presentation of those statuses while the sidecar supplies data; the host page cuts count and size limits before it sends.
 - F238-d-1, F238-d-2, F238-d-4: The Repositories paragraph states what `make boundaries` reads from each declared folder, and what `make registry` and `make install-plugins` read; `make install-plugins` runs `make registry` and installs from its `index.json`. The repository table lists the declared plugins `browser`, `editor`, `files`, `hwp` and `terminal`, and names `vt-alacritty` in the sidecar row. A registry test asserts that the table names the declared plugins: Red on the earlier table (actual `[browser, files, shell, terminal]`), Green on the current table (6/6).
+
 - F241: The view call route serves the PNG clipboard payload of the surface context: `runtime.clipboard.read` with `png` returns `{present, type, data}` with base64 data or `null`, and `runtime.clipboard.persistPNG` with `{data}` persists the payload and returns `{path, shellQuotedPath}`. Red: the three F241 cases of `packages/workbench/test/view-calls.test.mjs` failed on the unchanged implementation with `view call ... is not served`. Green: the file passes 50/50.
+
 - F242: The view call `runtime.log` contract states that `cids` is validated by the log of the surface context, which the existing view call forwarding already passes. Owning tests pass: view calls 50/50, surface 17/17. No Red, because no missing behavior was found.
+
 - F220: `make push-check` runs `node scripts/check-host-contract.mjs --static`, which checks the contract declarations of both hosts without running tests: a marker that names an undefined case, a case outside the host scope, or no case fails the gate, and a case in a host scope that no test declares fails it too. The duplicated stall marker in the sok Go test is removed. Red: the unit test of the static audit failed at import of `auditDeclarations` and `uncoveredCases`. Green: the checker unit tests pass 15/15; `make host-contract-check` passes with 799 cases and 3232 of 3232 tests; the static check fails on an injected undefined marker and passes after its restore. The four causes listed in F220 are absent from the tree at the start of this item, and `make host-contract-check` passed on the unchanged tree.
 
 - F244: `pnpm test` passes on main, 353 of 353 tests. The workbench test fixtures and the hidden-tab benchmark record the tab origin as tab creation does; the declared UI draw-time tests assert that every node and item is drawn and print the elapsed time instead of asserting it; `@soksak/workbench` exports `./package.json`, which the release check resolves; the native test run lines match the limit label that the runner prints; the surface-dispose-pending test waits for the module start instead of polling, so a mount that throws ends the file.
+
 - F244-1: `make push-check` runs the Node test files of each workspace package that the push range changes (`node scripts/node-tests.mjs --changed <range>`). A changed file outside every package folder selects the tests of the root package. The toolchain audit test's limit, which bounds a hang, is 30 s, because the gate runs the package tests in parallel.
 
 - F243: `make push-check` checks that every package `bin` target is tracked as executable with a `#!` line; `packages/plugin-api/view-check.js` is tracked as 100755, so a pnpm install no longer modifies the working tree.
@@ -1718,348 +1944,672 @@
 - F238-c-2: Parity ownership now uses exact declared component names and `kind` values from the workspace registry instead of package-name prefixes or hard-coded owner names. Undeclared names in plugin and sidecar code are findings. The regression test failed against the pre-fix implementation and passes with the declared-owner lookup; the ownership coverage tests pass 125/125. F238-c-3 is satisfied by the same classifier correction. F238-c-12's existing coverage table was confirmed; no plugin assertions were removed.
 
 - F240-1: The plugin processes handoff refers to AGENTS.md for the test time limits and the progress output of long runs instead of restating them; AGENTS.md states each test's own limit, the running, finished, passed and failed lines with elapsed time, and the single full-suite run at checklist completion.
+
 - F238-b-5: Breaking: the view shortcut table (F234) and `shortcuts.register()` are removed; a view runs a workbench command with `runtime.command(name, params)`. `runtime.shortcuts.missing` and `runtime.shortcuts.run` are not served. F231 was never released, so no deprecation is kept.
+
 - F238-b-4: A view runs a declared command with `runtime.command(name, params)`, which sends any name through the view call route; the call layer keeps the owner check of each name, and the view bridge installs no shortcut listener.
+
 - F238-b-11: A view bridge reports a view record that the host refuses, and a refused error line of the view: both go to the page report with their place and text, so a refusal of a view record is not dropped silently.
+
 - F238-a-15: A tab reports only a local absolute directory: a directory with a `//` or `/<letter>:` prefix or a NUL byte is refused when it is reported, with the same `TypeError` as a path that is not absolute, through the predicate that the page uses.
+
 - F238-a-8: A surface context requires its origin: `createSurfaceContext` refuses a missing origin and every value that is not `{directory}` with null or a local absolute path, with the text of the failed check, and it no longer fills in `{directory: null}`.
+
 - F238-a-7: A view start whose origin directory is not a local absolute path is refused by both hosts: a relative path, a `//` or `/<letter>:` prefix, and a NUL byte are refused with `surface <id>: view start origin directory is not an absolute path`; the contract case `view.start-values.refuses-a-missing-origin` declares the refusal in both hosts' tests.
+
 - F237: A view start whose `origin` is missing, `null`, or not `{directory}` with a path or `null` is refused by both hosts with an error that names the origin, instead of injecting `{directory: null}`; the contract case `view.start-values.refuses-a-missing-origin` declares the refusal in both hosts' tests.
+
 - F235: The start value `origin` of a view has one form, `{directory}` with a path or `null`, the form of the surface context and of what both hosts inject; native-surfaces.md and the contract case `view.start-values.first-script` no longer name a bare `null`. No code changed; the host tests of the start values script already assert the form.
+
 - F234: A view registers its shortcut table: `shortcuts.register()` of the view bridge reads the rows that hold while a view has keyboard focus with the view call `runtime.shortcuts.read`; the bridge prevents and passes on a workbench key with `runtime.shortcuts.run`, keeps the default action of every other key, and at the first key before the table sends `runtime.shortcuts.missing`, which the main page records as `page.view.shortcut-table-missing {plugin}`; a passed command that fails is recorded as `page.input.shortcut.failed {plugin, key, command}`. Both events are declared and the class tables regenerated. The view-calls and view bridge tests failed on the unchanged code (6 assertion failures) and pass on the change (95 of 95 with surface-view and view imports).
+
 - F233: A view knows which levels of its records are stored: the view bridge has `runtime.log`, which asks the stored levels with the view call `runtime.log.levels` at its first use, sends every record until the answer, and then runs no field builder of a level that is not stored; the main page replies with the levels for which `log.enabled(level)` is true and pushes `log.levels` at each change of the policy of its gate that changes them. `runtime.log` passes `cids` to the writer of the page. The view-calls, view-events, log-gate and view bridge tests failed on the unchanged code (5 assertion failures) and pass on the change (104 of 104 with surface-view and view imports).
+
 - F232: A view makes a broken contribution item invalid as a DOM surface does: `contributions(point)` of the view bridge resolves with the connected items of the point through the view call `runtime.contributions`, each with its `index` and its module on the core root, and `fail(reason)` of an item sends `runtime.contributions.fail`, which the main page answers with `fail(reason)` of that connected item; the surface context items name their `index` too. The view-calls, contributions and view bridge tests failed on the unchanged code (5 assertion failures) and pass on the change (79 of 79 with surface-view).
+
 - F231: A view records the errors that it shows on its own page: the view bridge entry `runtime.error(where, text)` sends the view call `runtime.error`, which the main page answers by writing `error page surface <surface> <where>: <text>` through the record path of its error display; a place that is empty or holds a control character or `: `, and an empty text, are refused. The view-calls and view bridge tests failed on the unchanged code (3 assertion failures) and pass on the change (74 of 74 with surface-view).
+
 - F229: The host contract lists sidecar retain-during-start, selected close, project-release and page-start cases, and the Go and Rust tests declare them. `make host-contract-check` verifies these lifecycle behaviors in both hosts.
+
 - F229-17: The installed document of both hosts carries each sidecar dependency's `message` and `hostReadOperations` under its sidecar name, `validateInstalledPlugins` checks them, staging copies them, and the environment declares them to the plugin host instead of null, so a declared sidecar operation is no longer refused as `declares no message form`. Red: on the unchanged code the Go and Rust installed document tests lack the `sidecars` field, the workbench environment test fails with `unknown field sidecars`, and the staging test gives undefined for the facts. Green: the Go installed tests and the Rust installed test (15 of 15) pass, the plugin-api exposure test passes 16 of 16, and the workbench environment, stage, plugin host and environment tests pass.
+
 - F229: The surface refuses a view send that names a sidecar which the surface does not declare, with `surface <id> cannot send to sidecar <name>`, and sends nothing. Red: on a copy of `surface-modules.js` without the refusal, the test fails with `a send to an undeclared sidecar was not refused with its reason`. Green: the surface view tests pass (6 of 6), and the view call, surface module and surface view tests pass (50 of 50).
+
 - F229: F229-17 and F229 are complete. The page receives the sidecar facts of each installed plugin, and the contract case `installed.document.sidecar-facts` is declared in both hosts' tests.
+
 - F229: The Rust send checks of a plugin session (`plugin_send_root` and `refuse_surface_send`) are observed failing: each of the five checks, disabled on a copy, fails the test `a_sidecar_request_of_a_host_is_checked_before_its_send` with its assertion (Red), and the unchanged checks pass it (Green).
+
 - F229: The retain hook of the Rust sidecar core has a named type, which clippy requires under `-D warnings`. Clippy for `soksak-host-tauriv2` exits 0, and `sidecars_transport_test` passes 39 of 39.
+
 - F229: The environment declares each installed plugin's dependencies to its plugin host as sidecars, and the host call listener checks a sidecar request against them (Red: `pluginSidecarsOf is not a function` on the unchanged code). The declaration is null until the page receives sidecar declarations (F229-17), so every operation of such a sidecar is refused.
+
 - F229: The view bridge names its sidecar: `runtime.sidecar(name)` offers `send(id, body, cids)` beside `on` and `onFailure`, and each request carries the name. The main page refuses a view send without a name, and the surface refuses a name that it does not declare.
+
 - F229: The specifications state the plugin session id, the host call `pluginHostSidecarSend`, the refusal of a surface send to a plugin session, and the close of plugin sessions. The declared UI specification gives the reason that a state module registration serves no declared status.
+
 - F229: The contract cases `plugin-host.sidecar.send-checks`, `plugin-host.sidecar.surface-refusal` and `plugin-host.sidecar.close` are declared in both hosts' tests.
 - F238-a-14-5 event: The native events a plugin page may subscribe to are the four region events and `exposure-request`, the declared route of view exposure, named once in the explicit list `PLUGIN_NATIVE_EVENTS` of `packages/workbench/view-calls.js` (spec: `docs/spec/native-surfaces.md#plugin-host-calls`). F238-a-2 had removed `exposure-request` by mistake; it is restored, and no other event name is subscribable. A view test that subscribes to `exposure-request` was refused before the change and passes after it. The refusal of an unlisted event stays. F238-a-14-3 and F238-a-14-4 are resolved by core, with no plugin change; F238-a-14-1 and F238-a-14-2 stay open under their repositories.
 - F238-a-14 audit: A read-only audit of the plugin repositories found two reporters that send `runtime.native.call {name: "report"}` (shell, flowmark), which the deny-by-default gate refuses; each moves to the served `runtime.log`. Two views (shell, editor) subscribe to `exposure-request` through `runtime.native.on`, which the event gate refuses; this is registered as a core decision (F238-a-14-5) and no allowlist is widened.
 - F238-a allowlist: The allowlist tests of the workbench no longer read the Tauri source. The new host contract case `plugin-host.call.refuses-unlisted-commands` is declared in the Go and Rust host tests: every command of the Wails and Tauri command tables outside the plugin allowlist is refused by the channel of a host page with `plugin host call <name> is not served`. Both host tests pass 1 of 1 and the workbench tests pass 2 of 2.
 - F228-6 contract: The host contract case `view.process-ended.forgets-regions` names the window event `view-process-ended {surface}` after the region close of a view process end. The Go and Rust process-end tests declare it, and both pass 1 of 1.
+
 - F238-a-5: A view overlay is traced to the native mask: `dom_overlays` keeps the declared order, insets and visibility, and `overlay_values` sends five values per overlay. The unit tests of both steps pass 2 of 2, and the native mask is covered by the view-surface check of the geometry test.
+
 - F238-a-4: A native hit test under a visible view overlay returns the DOM hit of the overlay or nothing, and never a native view. The surface hit test takes its point in the superview coordinates, as AppKit passes it, so a surface at a non-zero origin is hit correctly. The new hit-test checks of the geometry test failed on the unchanged code (5 cases) and pass now.
+
 - F238-a-14: The plugin-facing native handle is deny by default: `runtime.native.call` and `call` send only `exposureReply`, a host command outside the plugin allowlist is refused and never reaches the host. The allowlist is checked against the host command table. The test that forwarded `linkOpen` failed on the unchanged handle and passes now.
+
 - F238-a-2: `runtime.native.on` of a plugin and of a view accepts only the four region events, `document-stream`, `document-state`, `document-message` and `image-event`; a view-bridge event is refused. The subscription test failed on the unchanged gate, which subscribed the view-bridge events, and passes now (2 of 2).
+
 - F238-a-1: The region calls of a view are refused on every plugin-facing path. `REGION_HOST_CALLS` lists the region-kind host commands of the table, including `documentQuery` and `documentInteractionState`, and the plugin-facing native handle (`pluginNativeGate`) refuses each region call and each view bridge call on `runtime.native.call`, `call` and a view run. The allowlist equals the region-kind commands of the Tauri command table, and a literal scan of the workbench host routes finds no region call outside it. The tests failed on the unchanged sets and pass.
+
 - F238-a-3: An image region of a surface composition has no placement of its own. The workbench no longer serves the `image.place` host call, and `attachImage` of plugin-api has no observation, `visible` or `_place`; the host places the region with its composition. The image-region test that resized an element and expected a `place` call failed on the unchanged code and passes now (12 of 12); `surface-composition` passes 15 of 15.
+
 - F228-6: When a view process ends, both hosts send the window event `view-process-ended {surface}` after they close the regions of the surface, and the page forgets the regions of that surface in its region record, so a memory saver decision before the restarted view attaches them no longer queries a closed region. The Go, Rust and page tests failed on the unchanged code and pass; the Go and Rust process-end tests and `surface-view` with `document-regions` (14 of 14) pass.
+
 - F228: The view channel regions of a view are closed at the process end and forgotten by the page, and the view overlays and the view web view are placed below the native plane (F228-5); the children F228-1 to F228-6 are complete.
+
 - F228-5: The overlay mask of a view cuts only the regions of the view: the view web view is placed in its surface host below the native plane, so the mask of the plane no longer cuts the view, and the input under a visible overlay of a view goes to the view web view. `view_channel_test` failed on the unchanged code (the view inside the plane, the input under the overlay on the main page) and passes; `surface_host_test` passes 36 of 36.
+
 - F228-4: Both hosts close the document and image regions of a view surface when its view process ends, before the view is created again, so the restarted view attaches its declared regions again instead of failing with `document "<name>" is already attached`; contract case `view.regions.close-with-process`. The Go and Rust tests failed on the unchanged code and pass.
+
 - F228-3: The workbench serves the composition and region calls of a view with the page operations of its surface, so the attach of a view region goes through the region record of the memory saver and its placement carries the composition revision of the document; a raw `runtime.native.call` of a composition or region host call is refused. Four workbench tests failed on the unchanged code and pass (`view-calls` 37 of 37, `surface-view` and `surface-modules` 16 of 16).
+
 - F228-2: The view bridge of plugin-api exports `composition.create({regions, overlays})`, which runs the composition controller in the view document and sends each region operation as a view call, so a view page creates the composition of its declared document and image regions. Two `view.test.mjs` tests failed on the unchanged code and pass (34 of 34).
+
 - F228-1: native-surfaces.md and plugins.md (+ko) specify the composition of a view: `composition.create` of the view bridge, the composition and region view calls that the main page serves with the page operations of the surface, the refusal of a raw host call of the composition or the regions, the check against the view of the call envelope, and the close of the regions when the view process ends.
+
 - F239-19: The hello tests of the sidecar host take 0.11 s and 0.11 s instead of 5.0 s, and the delay test takes 0.51 s instead of 5.6 s. The hello tests set the hello bound to 100 ms; the production bound of 5 s is unchanged. The delay test's fake service answers shutdown, so Stop no longer waits the 5 s deadline. Before the change the hello tests failed on the 5 s bound and the delay test's stop took 5.002 s.
+
 - F239-21: The no-writer panic tests of the host take 0.45 s (Rust) and 0.12 s (Go) instead of 5.2 s and 5.0 s. Each test gives the panic hook a writer deadline of 100 ms, and the panic record still goes to the standard error in full. The production deadline of 5 s is unchanged. Before the change the child ended after 5.08 s (Rust) and 5.01 s (Go) by that deadline.
+
 - F239-13: The closed-image tests of the sidecar host (`TestAnImageOfAClosedSurfaceIsAnsweredClosed` in Go, `an_image_of_a_closed_surface_is_answered_closed` in Rust) take 0.37 s and 0.35 s instead of 5.3 s. The fixture now ends when its input closes, so the cleanup stop does not wait the 5 s stop deadline. Before the change the stop took 5.000 s and the assertion failed.
+
 - F239-15: The concurrent-hosts test and the dropped-message test of the sidecar host take 0.01 s and 0.48 s instead of 5.0 s and 5.4 s. The shutdown of a persistent connection that the service closed after its close-owner answer no longer waits the stop deadline: the read thread clears the connected flag under the waiter locks before it fails the waiters, and a later request fails at once instead of waiting. The dropped-message fixture now ends when its input closes.
+
 - F239-12: The two Go restart tests of the sidecar host (`TestSidecarRestartsAfterThreeFailuresWithinTheWindow`, `TestSurfaceOpenClearsTheRestartLimit`) take 0.65 s and 0.47 s instead of 5.55 s and 5.39 s. The cleanup stop waited the default stop timeout of 5 s for a restarted sidecar that does not answer the shutdown; the fixture now sets a 100 ms stop timeout, and each test requires its stop to end within 1 s. Before the change the stop took 5.0 s and the assertion failed.
+
 - F239-11: The two restart tests of the sidecar host (`restarts_after_three_failures_within_the_window`, `surface_open_clears_the_restart_limit`) end in 0.67 s and 0.50 s instead of 5.6 s and 5.4 s. Their stop waited the default stop timeout of 5 s for a restarted sidecar that does not answer the shutdown; the fixture now sets a 100 ms stop timeout, and each test requires its stop to end within 1 s. Before the change the stop took 5.0 s and the assertion failed.
+
 - F239-9: The replace fixture of the sidecar transport tests ends the installed service process that the host starts for it, when the test ends. The test `a_replaced_service_starts_after_the_end_of_its_process` asserts that this process ends with the test. On the unchanged fixture the process was a `sleep 20` that outlived the test with its parent set to 1 until the sleep ended, and the assertion failed with `the installed service process <pid> outlived the test`. After the change the test passes 10 of 10 runs.
+
 - F239-9-1: The Go replace fixture of the sidecar transport tests (`TestAReplacedServiceStartsAfterTheEndOfItsProcess`) ends the installed service process when the test ends. The test checks with `ps` that the process is not running; it does not reap it, because the host reaps its installed process in `cmd.Wait`. Before the change the test failed with `installed service process <pid> outlived the test` in 1.67 s; after it passes in 0.74 s with no process left.
+
 - F239-8: `make benchmark-rust` and `make benchmark-go` run each benchmark through `scripts/benchmarks.mjs` and the test runner, with the limit `BENCH_TIMEOUT` (default 300 s). Each benchmark is named when it starts and reported with its result and elapsed time, and its output is kept as the measurement; a benchmark over its limit is killed and reported as `TIME`. The Red test failed on the unchanged targets, which printed no `RUN` line, and passes on the implementation (2 of 2).
+
 - F239-7: `make push-check` runs its four gate test files through `scripts/gate-tests.mjs` and the test runner, each as `node --test <file>` with the limit `--timeout` (default 120 s). Each file is named when it starts and reported with its result, elapsed time and limit; a file over its limit is killed and reported as `TIME`. The Red test failed on the gate runner before the limit existed, with the hanging file running its full 30 s and no `RUN` line, and passes on the implementation.
+
 - F239-6: `make -C native/darwin repeat` and `repeat-suite` run the native tests through `scripts/native-tests.mjs` with their output shown: each test is named when it starts and reported with its result, elapsed time and the limit of the runner (120 s). `repeat-suite` depends on the test executables and runs the runner over the suite in each run, instead of a sub-make of `test` whose output went to `/dev/null`. The Red test failed on the unchanged target at its first assertion, with no `RUN` line, and passes on the implementation.
+
 - F239-5: `make node-repeat` runs each repeat of a Node test file as one process of `node --test` through `scripts/node-repeat.mjs`, with the limit `TEST_TIMEOUT` (default 120 s). The runner names each repeat when it starts and kills its process group at the limit, reporting `TIME`; `--test-timeout` gives each test of a repeat the same limit. The repeat runs without `NODE_TEST_CONTEXT`, so a target started from a test runs the file. The Red test failed on the unchanged target at its first assertion, with no `RUN` line, and passes on the implementation.
+
 - F239-4: `make go-repeat` runs each test of a Go package as its own process of the test binary (`-test.run ^<name>$`) through `scripts/go-tests.mjs`. Each test is named when it starts and reported with its result, elapsed time and its own limit `TEST_TIMEOUT` (default 120 s); a test over its limit is killed and reported as `TIME`. The old judge `scripts/go-repeat-result.mjs` and its tests are replaced by `scripts/test/go-repeat.test.mjs`. The Red test failed on the unchanged target with no `RUN` line, and passes on the implementation.
+
 - F239-24: `make rust-repeat` and `make rust-tests-alone` run the documentation tests of a Rust library again, each by name with its own limit `TEST_TIMEOUT` and reported with its result and elapsed time, as the other tests (`scripts/rust-tests.mjs`). The runner lists them with `cargo test --doc -- --list` only for a library that has them. The target quotes `TEST` in its recipe, so a documentation test name with spaces runs. The Red test (`scripts/test/rust-repeat.test.mjs`) failed on the unchanged runner with `fixture has no test named src/lib.rs - doc_example (line 3)` and passes on the implementation.
+
 - F239-3: `make rust-repeat` and `make rust-tests-alone` run each test of a Rust package as its own process of the test executable (`<executable> --exact <name>`) through `scripts/rust-tests.mjs`. Each test is named when it starts and reported with its result, elapsed time and its own limit `TEST_TIMEOUT` (default 120 s); a test over its limit is killed and reported as `TIME`. The test runner prints the limit on each `RUN` line. The Red test (`scripts/test/rust-repeat.test.mjs`) failed on the unchanged target at its first `RUN` line and passes on the implementation.
+
 - F239-2: The detach test of the Tauri host takes 0.01 s instead of 60 s. Its fixture ends the endpoint process it started with the test and does not pass the test output to that process, so the runner no longer waits for the process to end.
+
 - F239-1: The plugin processes handoff states the test-run rule: each item runs its owning checks; the full suites, the host contract check and the window checks run once when the active checklist completes; each test has its own limit and no suite has a blanket limit (docs/plans/plugin-processes-handoff.md, Every item).
+
 - F230: A declared tree in a horizontal sidebar section is accepted: it takes a full line of the section width and scrolls inside its box, and a tree node accepts an optional `detail` field. The orientation check and the orientation pull are removed (docs/spec/declared-ui.md#sidebar-section-form).
+
 - F218-2.4-1: The host contract check reads the contract declarations of the sok sources too, so an in-crate sok test counts for its case.
+
 - F212.8a-4: The restart limit of 300 s and four failures applies to persistent services (docs/spec/terminal-runtime.md#service-transport, docs/spec/sidecars.md#failure). A failure is the end of the service process that the revival of a lost connection finds before it spawns, a start failure of the creation path (the ready bound, an exit before the endpoint, the hello bound), or a connection that the reader ends for a protocol violation, each while the host is not stopping and, for the first two, not replacing the sidecar. A revival that reattaches a live service counts nothing, and one disconnect counts at most one failure. The fourth failure writes `error: sidecar <name>: restart limit: 4 failures within 300 s` and `host.sidecar.restart-limit`, and stops the restarts before the creation path runs: a revival whose fourth failure is the service end spawns nothing and announces `{"event": "connection", "connected": false, "reason": "restart limit"}`, and a send while stopped fails with `sidecar <name>: restart limit`, writes the refusal line and gives the sending surface that connection notice instead of `sidecar-failure`. The open of a surface of a dependent plugin clears the stop. The descriptions of both restart events in docs/spec/events.json name either transport. Red: `TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn` and `a_persistent_service_end_stops_the_restarts_before_the_spawn` failed on the unchanged code with the notice reason `sidecar fixture-service: service exited before endpoint` (Rust: `sidecar @fixture/sidecar-echo: service exited before endpoint`) where `restart limit` was expected, `TestPersistentProtocolViolationsStopTheRestarts` with `send at 40s = <nil>`, and `persistent_protocol_violations_stop_the_restarts` with `connect authenticated service: Connection refused`. Green: the four tests and the owning sidecar tests of both hosts pass. F212.8a is complete.
+
 - F212.7-9: `docs/spec/plugin-processes.md` holds the accepted contract of the plugin process plan, without checklist IDs or progress, and the plan is removed. Every link and code comment that named the plan names the specification. The review records of the plan are not carried over: each accepted resolution is a rule or a reason of the specifications, and the entries of F212.2, F212.5-1 and F212.8-0 to F212.8-0-23 record each review. The work parts of the plan (placement, failed pass values, the specification changes of F212.11, rollback order, risks) moved into `docs/plans/plugin-processes-handoff.md`.
+
 - F212.9-4-2: A plugin host restarts within the restart limit of the sidecar failure contract in both hosts. An end of the page process of the current host web view or a queue overflow of its channel closes the host and creates it again with `host.plugin-host.restart {plugin, attempt}`; the fourth failure within 300 seconds over every window writes `error: plugin host <plugin>: restart limit: 4 failures within 300 s` and `host.plugin-host.restart-limit` and closes the host of the plugin in every window, and only the open of a surface of the plugin clears the stop with `host.trace.plugin-host.restart-reset`. The sidecars and the plugin hosts count their failures with one record type. Three contract cases `plugin-host.restart.*` hold both hosts. Red: the three Go and the three Rust tests failed against the stubbed record methods; Green: the 20 Go `TestPluginHost` tests and the 20 Rust `plugin_host` tests pass.
+
 - F212.9-4-1: A plugin host saves its state across a restart of its page in both hosts. The `host` declaration of `plugin.json` takes `state: {format, maxBytes}`, and the host answers `state.write {value}` and `state.read` of the host page itself from one saved value per plugin that the host process holds for every window until the application ends or the plugin is removed or disabled; a host without the field, a write without a value, a value over `maxBytes` and a read of a value of another format are refused with an error that names the plugin. Four contract cases `plugin-host.state.*` hold both hosts. Red: the four Go and the four Rust tests failed against the stubbed parse and answer; Green: the 17 Go `TestPluginHost` tests and the 17 Rust `plugin_host` tests pass.
+
 - F212.9-3-3: A declared section can take its values from a plugin host: the source of the host receives the snapshots of its plugin that carry no surface, acknowledges them through `pluginHostEvent`, pulls a status through the request layer of the host, and is chosen after the surfaces that registered the status. Red: the channel and pull tests of a host source failed on the unchanged source; Green: the 21 tests of declared-source.test.mjs and declared-section.test.mjs pass.
+
 - F212.9-3-2: The main page answers the registration calls of a plugin host under the owner key `plugin:<plugin id>`, sends its requests to the host through one request layer per host, and on `plugin-host-ended` ends the open requests with `surface-closed` and removes the registrations of the host. A request without `surface` for a name that no surface page and no state module registered is answered by the host: `command.run` runs the command and `status.get` pulls the status; a watch or a dom request is refused with `plugin host <plugin id> does not serve <method>`. Red: the host choice and the end test failed with the behavior disabled; Green: the 34 tests of exposure.test.mjs and plugin-host-calls.test.mjs pass.
+
 - F212.9-3-1: The host side of the plugin host channel in both hosts. A plugin host page answers the requests of the main page, sends its registration calls and pushes its declared UI snapshots through the view channel; each host relays them to the main page as `plugin-host-reply`, `plugin-host-call` and `declared-ui.snapshot` without a surface, answers a call of any other command itself with `plugin host call <name> is not served`, records the ready document, posts the theme after each ready message and each theme change, writes `host.trace.plugin-host.process-ready` at the first ready message, closes the host on a queue overflow, and sends `plugin-host-ended {plugin}` when it disposes the host on a plugin removal or disable, on a queue overflow, or when the page process ends. The main page posts replies, requests and events through `pluginHostReply`, `pluginHostRequest` and `pluginHostEvent`. Seven contract cases `plugin-host.channel.*` hold both hosts. Red: the seven Go and the seven Rust channel tests failed with the dispatch, the posts and the end disabled; Green: the 13 Go `TestPluginHost` tests and the 13 Rust `plugin_host` tests pass.
+
 - F212.9-2: The platform operation of the plugin host web view and its lifetime in both hosts. `sp_plugin_host_create` in `document_view.m` creates the host web view of a plugin with the view configuration that `sp_document_create` now shares through `pluginView`, attaches it hidden at a zero frame to the window content view itself, takes no input and no hit testing for it, and `sp_document_close` disposes it. The Go and Rust hosts declare the operation, darwin implements it and Windows refuses with `plugin host web view is not implemented on windows`. The lifecycle creates the host web view of every enabled installed plugin whose manifest declares `host` when the main page of the window becomes ready, loads `sok://<plugin>/<page>` with the theme script, writes `host.trace.plugin-host.process-request {plugin, window}`, and disposes the views on the removal or disable of the plugin, on the start of a reloaded main page, and on the window close. A manifest whose `host` is not an object, or whose `page` is not a non-empty string, is refused with the same text in both hosts. The contract cases `plugin-host.create-loads-page`, `plugin-host.create-once-per-plugin`, `plugin-host.declaration-requires-page`, `plugin-host.change-disposes`, `plugin-host.reload-disposes` and `plugin-host.close-disposes` hold both hosts to the behavior. Red: the native check failed against a creation stub that returned NULL, and the Go and Rust lifecycle tests failed against stubs that created and disposed nothing; Green: `plugin_host_view_test`, `document_view_test` and `view_channel_test`, the six Go `TestPluginHost` tests, and the Rust `plugin_host_test` module and 37 `documents_test` tests pass.
+
 - F236-10: The persistent service contract moves from `docs/spec/terminal-runtime.md` (+ko) to `docs/spec/persistent-services.md` (+ko), which keeps the generic transport, closing, recovery, update, and screen message rules. The terminal input, display, session error, and verification text moves to `docs/plans/decouple-handoff.md` (+ko) for the terminal plugin repository to hold. Every link and anchor points at the new file, and the comments of the image region and of both hosts name an image region, a persistent service, or a surface instead of the terminal. Documentation and comments only; no behaviour change.
+
 - F236-12: The acceptance list of `docs/spec/surface-composition.md` (+ko) states only the generic criteria of image regions. The two terminal criteria (a terminal image reflows its logical rows when its columns change, and terminal cell metrics stay fixed during layout) move to `docs/plans/decouple-handoff.md` (+ko) for the terminal plugin repository to hold. Documentation only; no behaviour change.
+
 - F236-11: The browser example names its install pack in `apps/browser/environment.json` (`install`, a registry pack). `scripts/workspace-registry.json` lists the pack `browser-example` with the plugins `terminal` and `browser`, and `make browser-frontend` installs that pack's plugins from the registry index instead of the plugins that the Makefile listed. `docs/spec/plugins.md` states the field, and the environment validator accepts it. Red: the validator test of `install` failed on the unchanged validator with an unknown field. Green: 4 of 4 environment tests and 5 of 5 registry script tests pass.
+
 - F236-8: `docs/spec/sidecars.md` (+ko) states only the sidecar contract. The sections of the `shell`, `files` and terminal sidecars (`vt-core`) and their test sentences move to `docs/plans/decouple-handoff.md` (+ko) for the sidecar repositories to deliver. The F102.2 link points at the moved files section. Documentation only; no behaviour change.
+
 - F236-6: The log query fixtures name the sidecar role `probe` and the events `sidecar.probe.*` instead of the terminal sidecar role `vt` (file `logs/probe-v1.jsonl`, the digest of its index in `digests.json`, and the consuming audit, event-log, debug-timeline, Go and Rust tests). The event reader accepts a sidecar log file of any role and maps `sidecar.<name>.*` events to the layer `<name>-core`, so the reader names no sidecar; the terminal sidecar keeps its layer `vt-core`. Red: the event-log tests of a sidecar file returned no rows on the unchanged reader. Green: 64 of 64 Node tests of the change, and the Go and Rust sok fixture tests pass.
+
 - F236-7: The surface composition specification declares probe names in its examples (`ui/view.html`, `ui/hybrid.html`, `@scope/sidecar-probe`) instead of the shell and terminal pages and the terminal sidecar, and states that an app DOM reload closes no sidecar session.
+
 - F236-5: `make object-counts` (`scripts/measure-object-counts.mjs`) opens the tabs of the surface plugins that the required `PLUGINS` (`--plugin ID`) names and splits a card with the first, instead of the fixed terminal and browser plugins, so the core script names no plugin; `make trace-share` passes `PLUGINS` on.
+
 - F236-4: The script tests of the workspace registry, the app usage measurement, the run and event audits, the event classes and the window-source audit use probe names in their fixtures instead of the browser, files, editor and terminal plugins and the vt sidecar; no behaviour change (70 of 70 pass).
+
 - F236-3: The ownership audit of `scripts/check-test-parity.mjs` treats every `@soksak/plugin-*` package except `@soksak/plugin-api` as a plugin and every `@soksak/sidecar-*` package as a sidecar instead of listing the real plugin and sidecar packages, so core holds none of their names and reports a core source that names any of them. docs/spec/plugins.md states the rule.
+
 - F236-2: The workbench tests of the plugin page and the plugin operations name the fixture sidecar `@scope/sidecar-probe` and `probe` instead of the terminal sidecar; no behaviour change (19 of 19 pass).
+
 - F236-1: The handoff document `docs/plans/plugin-processes-handoff.md` states the no-coupling rule under "How to work": separate repositories, relations only as manifest `dependencies`, exchange only through the contract wire and exposed entries, tests only at their own boundary with probe fixtures, and the exception of the installation-based window checks of `e2e/`.
+
 - F212.8a-4: The restart limit of 300 s and four failures applies to persistent services (docs/spec/persistent-services.md#service-transport, docs/spec/sidecars.md#failure). A failure is the end of the service process that the revival of a lost connection finds before it spawns, a start failure of the creation path (the ready bound, an exit before the endpoint, the hello bound), or a connection that the reader ends for a protocol violation, each while the host is not stopping and, for the first two, not replacing the sidecar. A revival that reattaches a live service counts nothing, and one disconnect counts at most one failure. The fourth failure writes `error: sidecar <name>: restart limit: 4 failures within 300 s` and `host.sidecar.restart-limit`, and stops the restarts before the creation path runs: a revival whose fourth failure is the service end spawns nothing and announces `{"event": "connection", "connected": false, "reason": "restart limit"}`, and a send while stopped fails with `sidecar <name>: restart limit`, writes the refusal line and gives the sending surface that connection notice instead of `sidecar-failure`. The open of a surface of a dependent plugin clears the stop. The descriptions of both restart events in docs/spec/events.json name either transport. Red: `TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn` and `a_persistent_service_end_stops_the_restarts_before_the_spawn` failed on the unchanged code with the notice reason `sidecar fixture-service: service exited before endpoint` (Rust: `sidecar @fixture/sidecar-echo: service exited before endpoint`) where `restart limit` was expected, `TestPersistentProtocolViolationsStopTheRestarts` with `send at 40s = <nil>`, and `persistent_protocol_violations_stop_the_restarts` with `connect authenticated service: Connection refused`. Green: the four tests and the owning sidecar tests of both hosts pass. F212.8a is complete.
+
 - F227: A view reads and writes the tab state of its surface through `tab.state` of the surface context again; since F212.7-11 both calls failed with `tab.read is not a function`. Five `view-calls` tests failed on the unchanged code and pass on the fix (32 of 32, `surface-modules` 10 of 10).
+
 - F212.7-11: The view call route serves the tab reports and the runtime calls of a view page: `tab.title`, `tab.footer`, `tab.directory`, `tab.notify`, `tab.modified`, `tab.error`, `tab.keep` through the tab handlers of the calling view's surface, `runtime.log {level, event, fields}` through the event writer of the page with the level gate applied at delivery, and `runtime.textSize` and `runtime.settings` with read and change subscription, which the view bridge exposes over the calls. The route is purely main-page, so no host case is added. The unit tests failed on the unchanged code (workbench 7 and 2, plugin-api 2) and pass on the implementation (workbench `view-calls` 32 of 32 and `view-events` 6 of 6, plugin-api `view` 30 of 30 and the suite 328 of 328, the affected workbench tests 67 of 67).
+
 - F212.7-13: The start values of a view page: the page sends them with the preparation of a view surface, both hosts check them with the request and inject `window.sokSurface = Object.freeze({surface, params, origin, project, declarations})` beside the theme script before the page loads, and inject them again from the record of the surface when the view is created again. plugins.md states the delivery and records that the delivery of `icon(name)` to a view page is not declared yet. The contract case `view.start-values.first-script` runs in both hosts. The tests failed on the unchanged code (workbench 2, the Go build, the Rust imports) and pass on the implementation (workbench 6, the Go src package, the Rust package suite). The test inventory records the two new test files (92 lanes, 610 implementation files, 792 test files).
+
 - F212.7-12: The exposure of a view surface: a view page registers a status or a dom entry through the call `runtime.native.call {name: "registered", payload: {kind, name}}`, which the main page serves by applying the entry through the exposure registry and relaying it to the host with the `exposureRegister` call; both hosts accept that call beside the surface bridge, with the caller being the page view of the surface or the main page of the window, and the main page only for a surface with a view. The host records the entry and announces it as `exposure-registered`, so a reloaded main page receives the live registrations again. Each view keeps an exposure port that consumes forwarded exposure requests, which reach the view through its `exposure-request` subscription and are answered through `exposureReply` of the surface. The view bridge of plugin-api gains the `exposure.register` and `exposure.reply` helpers. The tests failed on the unchanged code (workbench 3, host Red with the acceptance disabled) and pass on the implementation (view-calls and surface-view 31 of 31, plugin-api 330 of 330, the Go src package, the Rust host suite, `make host-contract-check`).
+
 - F225: The exposure check of plugin-api collects the module sources of a section by its form, so a status-form section no longer crashes the check with `Cannot read properties of undefined (reading 'horizontal')`. The tests crashed on the unchanged check (2) and pass on the implementation (exposure-check 6 of 6, the plugin-api suite 328 of 328).
+
 - F226: The workbench uses the declared full status name of a section for the registry and the display and the in-plugin short name for the snapshot channel and the pull, so a declared section of a view draws instead of failing to match any registration. The fixtures of the declared-section tests take the production forms. 9 tests failed on the unchanged code and pass on the implementation (89 of 89, the workbench suite 719 of 719).
+
 - F212.7-10: The declared UI snapshot transport of a view: each host relays a snapshot of a view as the event `declared-ui.snapshot {surface, plugin, status, seq, value, skipped}` of the window and writes no event of its own for it; the view bridge answers the pull `declared-ui.snapshot.request` with the latest value of the status and acknowledges a snapshot as the view event `declared-ui.snapshot.ack`; the workbench connects declared sections to the view channel, pulls at the load of the main page, at a change of source and at a change of orientation, and writes the skipped count of each snapshot as `page.trace.declared-ui.snapshot.skipped`. A source without a view has no channel, so its section stays cleared. The files list of the workbench package names the page modules that staging missed, and the stage, library-preview and window-sidebar-restoration fixtures take the hybrid composition. The unit tests failed on the stubs (plugin-api 4, the hosts 4, the workbench 8) and pass on the implementation (plugin-api 326 of 326, the Go src package and the Rust documents_test 39 of 39, the workbench suite 719 of 719).
+
 - F224: The record check of plugin-api applies the census exclude of the checked repository, so a committed generated bundle is not read as a record; a violation outside the excluded files stays a finding.
+
 - F212.8-7: The draw time of declared UI values at the limits: the workbench test `declared-ui-draw-time.test.mjs` measures `validateValue` plus `drawValue` of a tree of 5000 nodes within 16 levels and of a list of 1000 items in jsdom and reports the elapsed milliseconds per value in its output line. Over 5 runs the tree median is 501.2 ms and the list median is 116.4 ms at load average 40.99. The bounds (2000 ms and 500 ms) cover construction and binding only, because jsdom builds DOM nodes without layout or paint. The medians do not exceed what the limits of declared-ui.md make reasonable, so the limits stay.
+
 - F218-2.5: `make census-check` enforces the census rule `rs.lock-result` with zero findings, without a pending entry. The rule no longer reports a `read`, `write` or `lock` called on `self` (the socket `read()` calls of sok endpoint.rs), and it now reports a condition wait with arguments that is mapped or unwrapped. F218-2 is complete: every lock result of the Rust host and the sok crate recovers a poisoned lock.
+
 - F218-2.4: The Rust host and the sok writer recover a poisoned lock with `PoisonError::into_inner` at the 87 sites that called `expect` or `unwrap` on the lock result, and at the seven condition waits on the same locks: sidecars.rs 43, performance.rs 9, debug_follow.rs 8, diagnostics.rs 5, log_query.rs, deep_link.rs and host.rs 3 each, endpoint.rs, windows.rs, process_lock_hook.rs, log_policy_watch_hook.rs and the sok event_log.rs 2 each, assets.rs, bindings.rs and exposure.rs 1 each. Each site states its `default:` reason. A poisoned lock no longer panics the thread that runs a sidecar query, a declaration, the close of a service owner, the log notices, the log indexer, the sampler, the deep link queue, the asset report, the test hooks, the modal holds, the subscriber and relay counts, the exit and quit paths or the write observer. The census rule `rs.lock-result` lists 2 results, against 87 before; both are socket `read()` calls that the rule matches by mistake (F218-2.5). Fourteen tests poison the locks and panicked before the change (for example `a_poisoned_state_lock_still_answers_the_sidecar_queries` with `sidecar state: PoisonError`) and pass after it.
+
 - F221: Verified: the full package tests pass locally and the CI run of the repair completed with success.
+
 - F222: The pre-push hook runs `make -C "$(git rev-parse --show-toplevel)" push-check` again, the form the workflow test requires.
+
 - F223: The window-check source audit accepts a timer that records an observation through `report` and does not apply its timer rule to the harness tests, which run on mocked time; the reason is stated in the comment.
+
 - F221: The generated event class tables are regenerated with the catalog, and `make push-check` runs the event-classes test so a stale table fails the gate.
+
 - F212.6a-1-3-2-2: The page-close stall cause is identified: the pthread mutex of `CFRunLoopWakeUp` is the main run loop's `_lock`, held in short repeated stretches by the main thread itself while it runs the WebKit page-close work; a background waiter queues behind it, and the circular wait with the IPC receive queue stretches the stall. The cause is not host code, so no code changes.
+
 - F212: `docs/plans/plugin-processes-handoff.md` lists the remaining work of F212 and of the items beside it, the state of each branch and worktree, the work rules, and the test commands of each item.
+
 - F219: The two restart-limit tests of the Tauri host that read the records (`stops_at_the_fourth_failure_within_the_window` and `surface_open_clears_the_restart_limit` in `packages/host/tauriv2/tests/sidecars_test.rs`) take the file's `SERIAL` mutex. Both attach the process-wide writer of the records in the parent process, and the attach of one test routed the events of the other into its own log, which the full suite showed once as `the opened surface recorded no host.trace.sidecar.restart-reset`. Red: on the unchanged code the order run of the two tests failed 5 of 5 rounds with `the stop recorded no host.sidecar.restart-limit error event`. Green: the order run passes 5 of 5 rounds, and the test passes alone (`make rust-repeat COUNT=1 TEST=surface_open_clears_the_restart_limit`). The full package run stays for the final pass after the F218 checklist completes.
+
 - F218-2.3: The Rust host recovers a poisoned lock with `PoisonError::into_inner` at the 106 sites that mapped it to an error string or an error result: surfaces.rs 27, modals.rs 20, windows.rs 19, exposure.rs 12, sidecars.rs 8, recording.rs 4, composition.rs 3, diagnostics.rs 2, endpoint.rs 2, shapes.rs 2, theme.rs 2, documents.rs, file_place.rs, object_counts.rs, performance.rs and workspace.rs 1 each. Each site states its `default:` reason. A poisoned lock no longer refuses a surface creation or close, a modal record read, a project owner release, a relay request and reply, a sidecar send and running list, a recording end, a state notification, the surface count, the trace switch and the workspace answer. The contracts `modal.state.poisoned-lock-is-reported` and `recording.state.poisoned-lock-is-reported` become `poisoned-lock-is-recovered`, and the `modal state` error line leaves the diagnostics table. The census rule `rs.lock-result` lists 89 results, against 195 before; the 89 are the `expect` and `unwrap` sites of F218-2.4 and two socket `read()` calls that the rule matches by mistake. Ten module groups have a test that poisons the lock and failed on the error result before the change (for example `a_poisoned_surface_lock_still_creates_and_closes_a_surface` with `left: None`, `right: Some(9)`) and pass after it; the remaining sites take a `Window`, an `AppHandle` or a started sidecar or capture, which the test binaries do not construct.
+
 - F218-1: The Rust host installs the panic hook as the first action of the process, so a `host.panic` raised before the writer exists stays in the start buffer and is stored when the writer opens. The thread that ends the process after a panic waits up to 5 s for the writer; without an attached writer in that time, the process ends with status 101 and writes the record with its stack on the standard error. The Go goroutine entrance waits for the writer the same way (docs/spec/hosts.md#process-lifecycle, contract `log.panic.before-writer-is-stored-when-the-writer-opens`).
+
 - F218-2.1: The project removal requests, the notification permission state and the button mask recover a poisoned lock with `PoisonError::into_inner` at every site, each with a `default:` reason. A request is still registered, answered and abandoned after a poisoned lock, and `state()` reads the permission state instead of returning an error. Tests: `project_removal_test.rs` (two) and `notifications_test.rs` (one) failed before the change and pass after it. The census rule `rs.lock-result` (in `packages/plugin-api/census-rules.json`) lists each `lock()`, `read()` and `write()` result that is matched, mapped or unwrapped; it is pending on F218-2.5 with 221 findings, which the remaining groups of F218-2 convert.
+
 - F218-2.2: The Rust host recovers a poisoned lock with `PoisonError::into_inner` at the 26 sites that skipped an operation when the lock was poisoned: the endpoint peer, subscription and writer locks, the exposure relay and registration locks, the surface press and first-commit locks, the window owner and window records, and the sidecar state. Each site states its reason. The census rule `rs.lock-result` lists 195 results, against 221 before. The endpoint, exposure, surface and window locks have unit tests that poison them, and the sidecar state lock has none.
+
 - F218: The Rust host recovers a poisoned lock with `PoisonError::into_inner` at five sites, each with a `default:` reason: the sender of `host.buttons`, the menu language in the exposure and in `set_language`, the notification state, and the button state (`Buttons::report`). The button state no longer logs a poisoned-state error, and the failure table drops `host.buttons`. docs/spec/logging.md states the pattern. The other poisoned-lock sites are tracked as F218-2.
+
 - F212.1-2-2-6: Each host writes the event `host.trace.sidecar.ready` (`sidecar`, `pid`, `ms`) at the level `debug` for the first message line that a sidecar sends after each spawn that the host performs, with `ms` the time from the spawn to that line. The standard input and output sidecars and the persistent services that the host spawns are covered. The event is declared in `docs/spec/events.json` and listed in `docs/spec/logging.md`, and the contract case `sidecars.trace.first-answer-after-spawn-is-recorded` is in `docs/spec/host-contract.md`. Red: `TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded` and `TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded` (Go), and `standard_io_sidecar_first_answer_after_spawn_is_recorded` and `persistent_spawned_service_first_answer_after_spawn_is_recorded` (Rust), failed on the unchanged code with `the first answer after the spawn was not recorded`. Green: the four tests pass.
+
 - F212.8a: A standard input and output sidecar stops its restarts at the fourth failure within a 300 s sliding window (docs/spec/sidecars.md#failure). Each host counts the failures by the time of each failure, writes `error: sidecar <name>: restart limit: 4 failures within 300 s` and records `host.sidecar.restart-limit`. While the stop holds, every request from any surface is refused with the reason `restart limit`. The stop is cleared only when the host creates a surface of a plugin that lists the sidecar in its `dependencies`, and that reset records `host.trace.sidecar.restart-reset`. Red: the refusal test of each host failed on the unchanged code (`send of the open surface s3 after the stop = <nil>`; `send was not refused: ()`). Green: the restart tests and the reset test pass in both hosts. The persistent transport is not covered and stays open as F212.8a-4.
+
 - F217: The placeholder of a tab whose plugin is not loaded shows the reasons `unread` (the install state of the plugins could not be read) and `params` (a stored tab whose params do not match the declaration of the loaded plugin) through the error display path, `showError`, at the place `surface <tab id> placeholder`; the view draw withdraws it through `hideError` when the surface leaves or the failure clears. The reasons `missing`, `disabled`, `reload` and `host` stay plain placeholder text, because they are designed states of a saved layout ([plugins](docs/spec/plugins.md#plugins-that-are-not-loaded)). Red: `packages/workbench/test/plane-placeholder-error.test.mjs` failed on the unchanged code with `AssertionError: the unread placeholder did not show exactly one error for its surface` (actual `[]`), and `packages/workbench/test/plane-placeholder-params.test.mjs` failed with `AssertionError: the mismatched params did not show exactly one error for their surface` (actual `[]`). Green: both tests pass; the owning workbench tests of the plane, error display, layout, tab and surface files pass 114 of 114. `packages/workbench/test/plane-placeholder-reasons.test.mjs` guards the designed reasons and passed on its first run.
+
 - F212.6a-1-3-2-2: No code change, and the cause is not found yet. The sampled main thread waits on the WebKit IPC connection lock `m_incomingMessagesLock` (WebKit main, `Source/WebKit/Shared/IPC/Connection.cpp:1626-1630`); the thread that holds it during a page close is not identified. The item stays open with a retry step: symbolicate the WebKit frames of a stall dump with `atos` against the system WebKit of the dump's OS build, or through the dyld shared cache symbols.
+
 - F212.6a-1-3-2-1: The stall records of a host, `host.stall`, `host.stall.sampled` and `host.stall.dump`, keep the level `warn` and pass every gate through the named exception `passes_every_gate` (`packages/sok/tauriv2/src/event_log.rs`) and `PassesEveryGate` (`packages/sok/wailsv3/src/log_policy.go`), so the default policy stores them. The exception is named beside `log.migrated` in `docs/spec/logging.md` and in `AGENTS.md`, and the producer pre-checks of both hosts consult it too. Red: `the_stall_records_are_stored_under_a_policy_that_turns_lifecycle_off` (Rust) failed on the old gate with `host.stall was refused`, and `TestTheStallRecordsAreStoredUnderAPolicyThatTurnsLifecycleOff` (Go) failed with `host.stall was refused`. Green: both pass 3 of 3 with `make rust-repeat COUNT=3` and `make go-repeat COUNT=3`.
+
 - F212.1-2-2-2: No long task observer is added, because WebKit lists no `longtask` entry type in `PerformanceObserver::supportedEntryTypes`; the page process sample of F212.1-2-2-1 attributes a page stall.
+
 - F212.1-2-2-1: A window-check request that is still pending after 3 s starts the host and page thread samples in the same turn (`within` in `packages/window-check/app.mjs`, `STALL_AFTER` in `stall-sample.mjs`), so a stall that ends before the request limit keeps its stacks; the result goes to the step log. The timer is per pending request because no event reports a pending request. Red: `a request pending past 3 s starts the host and page samples in the same turn` failed on the unchanged code with `AssertionError` at `stall-sample.test.mjs:117`, `actual: []`, `expected: [ 10, 12, 13 ]`. Green: the test passes, and all 119 tests of `packages/window-check` pass.
+
 - F212.1-2-2-4: A window-check session judges only the records written after its start when the stored event offsets do not name a host log file. `sessionEventStart` places each such file at its end when the session starts, so an error of an earlier boot is not reported as an error of the check; the file of the running process still starts at its beginning. Red: the test `with stored offsets, a file that the stored offsets do not name is judged from the end it had at the session start` failed with the earlier boot's error in the actual errors. Green: the test passes, and the 25 tests of `packages/window-check/test/event-log.test.mjs` pass.
+
 - F212.1-2-1-1: The library withdraws the shown error `library project <root>` of a project that leaves the library list, through the shared error display path (`hideError` in `checkFolders`). Adding the same project again with the same missing folder writes the error again. Red: `packages/workbench/test/library-removed-project.test.mjs` failed on the unchanged code with `AssertionError: the error of a project added again is not written`, `1 !== 2`. Green: the test passes 1 of 1, and the library and error display tests of the workbench pass 14 of 14.
+
 - F212.6-2-3: The installed plugins document of `sok` and the host, and the manifest dependency checks of the install and remove commands, use the plugin.json that the installed-state reader read and parsed once, so a plugin.json removed or changed after that read no longer gives a second OS error text or an unreachable parse arm. Rust `read_installed_manifests` and Go `ReadInstalledManifests` return the state with the manifest of each installed plugin by id, and `read_installed` and `ReadInstalled` keep their results. Red: on the unchanged code, the Rust test `plugin_remove_uses_the_manifest_that_the_reader_returned` failed with `<config>/plugins/ext/1.0.0/plugin.json: no such file or directory` where `plugin base is required by ext ^1.0.0` was expected, and the Go test `TestPluginRemoveUsesTheManifestThatTheReaderReturned` failed with the same OS text. Green: both tests pass, and the Rust packages `soksak-sok-tauriv2` and `soksak-host-tauriv2` and the Go installed and plugin tests of both hosts pass.
+
 - F212.6-2-2: Each installed read of `sok` and the host reports an invalid `installed.json`, `package.json` or `plugin.json` as `<file> is not valid JSON` without the parser detail, in both languages. The migration reader of stored files reports the same text, so the text of `read_installed` is reached for `installed.json`; settings.json and projects.json take the same text. The document-level missing-manifest arms of both hosts are removed because `read_installed` reports `<file>: the plugin manifest is missing`, and a plugin.json removed after that read reaches the generic error arm of the host.
+
 - F212.6-2-1: The `read_installed` check of `sok` in both languages reports an invalid `plugin.json` as `<file> is not valid JSON` without the parser detail, which differs between serde_json and encoding/json, and reports a missing `plugin.json` as `<file>: the plugin manifest is missing`. The host contract case `installed.plugin-json.invalid-text` states the text, with Rust and Go tests. Red: `installed_plugins_document_reports_an_invalid_state` failed with `EOF while parsing an object at line 1 column 1` (Rust) and `unexpected EOF` (Go), and the new cases failed with the parser detail. Green: both cases pass in each host, the `soksak-host-tauriv2` package and the Go installed tests pass, and the `sok` packages of both languages pass in full.
+
 - F216: `make go-repeat` resolves the native library input per package with `scripts/go-repeat-inputs.mjs`. Only a package whose build graph names the `soksak-darwin` pkg-config package receives the library define, so a package that does not link the library no longer runs `shasum` on it, and a package that needs a library that is not built fails with its path. Red: `scripts/test/go-repeat-inputs.test.mjs` failed on the unchanged Makefile with the recipe naming the library for `./packages/sok/wailsv3/tests`, and `make go-repeat` printed `shasum: native/darwin/build/libsoksak-darwin.a: No such file or directory`. Green: the three tests pass, and `make go-repeat PACKAGE=./packages/sok/wailsv3/tests COUNT=1 TEST=TestPluginPack` printed `1 of 1 runs pass` with no shasum line.
+
 - F212.6a-1-5: `e2e/normal-shutdown.mjs` reads `endpoint.json` when the endpoint connection of the application ends (`untilShutdown` in `packages/window-check/shutdown-wait.mjs`, on the `ended` event of the client), instead of timing its removal by the folder watch, whose delivery lagged the exit. The terminal service is observed the same way, and no external process observes an exit. The hosts already remove the file before their process ends. Red: the test file failed on the declared stub that resolved without waiting, with `the wait settled before the connection ended`. Green: the three tests pass; the rebuilt Tauri host passes the check with `host.quit` (connection ended after 54 ms) and the rebuilt Wails host with a signal (19 ms).
+
 - F212.6a-1-3-1b-2: A free `process.lock` that is empty is taken over without `host.run.unrecorded-end`, because a starter creates the file before it locks it and an owner writes its record only under the lock. A free file with content is reported as before. The endpoint spec and the host contract describe the rule. Red: `an_empty_lock_file_is_taken_over_without_a_report` failed with `left: Some(UnrecordedEnd { boot: None, pid: None, previous: Some("") })` and `TestAnEmptyLockFileIsTakenOverWithoutAReport` failed with `an empty lock file was reported as an earlier run`. Green: both tests pass 3 of 3, and the lock tests of both hosts pass.
+
 - F212.6a-1-3-1c: The process lock of both hosts is an exclusive advisory lock (`flock`) on the open `process.lock`, held for the life of the process, so two starters that observe the same stale file leave one owner. Red: the race test failed with the second start accepted (Rust and Go). Green: the race and held-lock tests pass 3 of 3 in both languages.
+
 - F212.6a-1-3-1a: The writer of each host records `log.closed {cause, signal?}` through its own path at the first termination signal before quit (`EmitClosed`, `RecordClosed`), at each `ExitRequested` and at each `Exit`, before the final flush. The event passes every gate, and it is declared in `events.json` and listed in `logging.md`. Red: `a_closed_record_is_stored_under_a_policy_that_turns_lifecycle_off` failed with `the record was refused` and `a_termination_signal_records_log_closed_before_quit` failed with `log.closed: none`; the Go tests `TestAClosedRecordIsStoredUnderAPolicyThatTurnsLifecycleOff` and `TestTerminationSignalRecordsLogClosedBeforeQuit` failed with the same results. Green: the Rust and Go tests pass 3 of 3.
+
 - F212.6a-1-3-1b-1: A free `process.lock` is taken over whatever its content, and `host.run.unrecorded-end` carries `boot` and `pid` (null for another form) and `previous`, the content cut to 256 bytes. A held lock with empty or another content is refused with `already owned by a live process`; the flock alone decides ownership. The startup emission is tested through the event writer. Red: the other-form, held-form, empty-content and emission tests failed on the earlier code in both hosts. Green: these tests and the lock tests pass 3 of 3 in both hosts.
+
 - F212.6a-1-3-1b: `process.lock` holds `{"pid","boot"}`. A host that takes over a stale lock stores `host.run.unrecorded-end {boot, pid}` at the level `error` after its event writer starts, naming the run that ended without removing its lock. Red: the stale takeover tests failed with `invalid process lock` in both languages. Green: the lock tests pass 3 of 3 in both languages.
+
 - F212.6a-1-4: A watch of `host.window` that starts after the last watch of the window ended receives the next window value, even when it equals the value sent before. The Tauri host removes the record of the value sent last when the last watch of a window ends (`Service::unwatched`), and `decide_window_notify` decides each value as sent, unchanged, or unwatched. The Wails host keeps no record, so the contract case `status.window.rewatch-notifies` passes there without a change. Both hosts write `host.trace.status.notify {status, window, decision}` (debug), a failed Wails window status read is logged as an error, and the Escape round trip test closes the add menu after a failed round. Red: `exposure::status_test::a_new_watch_receives_the_next_window_value_after_a_stale_record` failed at its third assertion with `left: Unchanged`, `right: Sent(...)` on the decision without the record removal. Green: the test passes 1 of 1 with the removal. The window check is rerun by F212.6a-1.
+
 - F212.6a-1: The Escape round trip check ran on tauriv2 for the first time with the F212.6a-1-2 fix in the tree. Round 1 passed at 0.000 ms; rounds 2 to 5 failed (rounds 2 and 4: the native modal did not report `modal.shown` within 20 s; rounds 3 and 5: the picker did not open within 20 s). The host stayed up during the run and quit through the declared shutdown check. The recurrence is tracked as F212.6a-1-4, and F212.6a-1 stays open until all five rounds measure.
+
 - F212.6a-1: The Escape round trip check passed 5 of 5 rounds on both hosts, with the F212.6a-1-4 fix in the tree. wailsv3 median 0.000 ms (values 1.000, 0.000, 0.000, 0.000, 0.000 ms); tauriv2 median 0.000 ms (values 1.000, 1.000, 0.000, 0.000, 0.000 ms). Both medians are below the 1 ms resolution of the page records, so each bounds the round trip at about 1 ms. Load averages (1, 5, 15 min): wailsv3 17.69 28.37 33.25 at the start and 16.91 28.03 33.10 at the end; tauriv2 16.04 25.62 31.82 at the start and 19.69 25.92 31.81 at the end.
+
 - F212.6a-1-2: The tauriv2 `ready` of a native modal shows the modal, focuses it and sets its visible flag on the main thread before it answers, so a menu opened after a dismissed one shows its picker. A ready request whose id and instance are not those of the open modal is stale: in both hosts it changes nothing, answers ok and writes the event `host.trace.modal.stale-ready`. A failed show answers its error and leaves the modal pending for the next ready request. Red: the Rust test `ready_after_a_reopen_leaves_the_second_modal_visible` failed on a temporary edit that left the visible flag unset (`left: Some(false)`, `right: Some(true)`), and the Go test `TestAStaleModalReadyChangesNothingAndWritesTheTrace` failed on the unchanged code with no stale-ready record. Green: the Rust readiness tests and the Go test pass in three repeated runs. The contract case is in [host contract](docs/spec/host-contract.md#contract-cases).
+
 - F212.6a-1-1: The Escape round trip is recorded with two page trace events. `page.trace.modal.answer {key}` is written when the main page receives an answer of a native modal (`host.js`), because the overlay document has no trace switch; its time starts at the receipt, not at the keydown in the overlay document. `page.trace.picker.close {reason}` is written when the picker closes (`closePicker(reason)` in `plane.js`), with the reasons `replaced`, `settled`, `fullscreen`, `toggle`, `pick`, `dismiss` and `command`. Both are declared in `docs/spec/events.json` and described in [performance trace](docs/spec/performance-trace.md#producers). Red: `packages/workbench/test/modal-answer-trace.test.mjs` and `packages/workbench/test/picker-close-trace.test.mjs` failed on the unchanged code with `actual: []` for the traces. Green: both tests pass and `make events-check` passes.
+
 - F212.6a-2: Escape in a native modal menu answers with the declared command `core.modal.dismiss` instead of `page.modal.answer` with an empty key. The command is declared in `packages/workbench/exposure.json` and registered in `core-exposure.js`; `card.js` answers Escape with its key, and `pickerAnswer` of `picker-layer.js` runs it through the registry. The `Escape` row of `packages/workbench/shortcuts.json` and the spec table name it. Red: `packages/workbench/test/modal-dismiss.test.mjs` failed on the unchanged code with `actual: [ [ '', '' ] ]`, `expected: [ [ 'core.modal.dismiss', '' ] ]`, and with `pickerAnswer is not a function`. Green: the two tests pass, and the shortcut table test passes 7 of 7.
+
 - F212.6a: The workbench shortcut table is declared in `packages/workbench/shortcuts.json` and listed in [keyboard shortcuts](docs/spec/exposure.md#keyboard-shortcuts) with the owner (native menu, workbench or view) and the command of each of its 23 rows. The workbench rename, library and picker keys are workbench rows, and a plugin view's Escape and text input keys are rule rows that name no command. `scripts/test/shortcut-table.test.mjs` checks the table against the application menu table of the host contract and the key comparisons of the workbench key handlers, in both directions. Plan rule 7 cites the table. Red: before the table existed, the test failed with `ENOENT` for `packages/workbench/shortcuts.json`; with the `cmd+k` row removed, it failed with `workbench key handler for k is missing from packages/workbench/shortcuts.json`. Green: the seven tests pass.
+
 - F215: `make rust-clippy-check` depends on `frontend-tauriv2`, so a fresh worktree stages the Tauri frontend before the clippy runs and `make push-check` passes there. Red: in a fresh worktree, `make rust-clippy-check` exited 2 with `couldn't read apps/tauriv2/src/frontend/background.js` and `frontendDist ... this path doesn't exist`. Green: the same state exits 0 with `Rust clippy check passed: 1 workspace, diagnostics and default builds`, and `make push-check` exits 0.
+
 - F212.6-2: the installer library of `sok` in Go and Rust refuses a release whose `plugin.json` `id` differs from the id of its installation record, with `plugin.json id <a> differs from the installed plugin <b>`, before it extracts anything. Reading `plugins/installed.json` fails with the same text when the `plugin.json` in a recorded folder names another id, so the record and the plugin that the host serves name the same plugin. The host contract case `install.plugin-id.mismatch-refused` states it. Red: on the unchanged code, the Go install test failed with `error <nil>, want "plugin.json id other differs from the installed plugin probe"`, the Go read test failed the same way, the Rust install test failed with `install succeeded`, and the Rust read test returned the state without an error. Green: the four tests pass with `make go-repeat` and `make rust-repeat` COUNT=1, and the sok packages pass in full.
+
 - F212.6-1: `pageIdentity(location, read)` in `index.js` gives the plugin id of a page. A `sok://<host>` page has the id of its host, and its `plugin.json` `id` must equal the host (`plugin.json id <id> differs from the page plugin <host>`). A main-origin page takes the id of the `/installed-plugins.json` entry whose `package` is its module name, and a module without an entry fails with the package name. `ownManifest` and the exposure gate of `page.js` use it. `pagePlugin(location)` returns `{host, manifest}` for a sok page and `{package, manifest}` for a staged page. Red: with the earlier behaviour in the new shape (a sok page returns `{id: host}` without reading `plugin.json`, and a staged page returns `{id: package}` without reading `installed-plugins.json`), `page-identity.test.mjs` failed 6 of 11: the sok id case with `Expected values to be strictly deep-equal` and `actual: null` for the manifest; the sok mismatch case with `Missing expected rejection` for `plugin.json id probe-name differs from the page plugin probe-id`; the staged id case with `Expected values to be strictly equal` and `actual: 'probe-name'` for `'probe-id'`; the no-entry case with `Missing expected rejection` for `other-name: no installed plugin has this package`; the entry mismatch case and the host error case with `Missing expected rejection`. Green: the test passes 11 of 11, and the plugin-api test directory passes 295 of 295.
+
 - F212.6-4: A window check fails with an error that names the executable when an application of the required set has no built executable. `open` (`packages/window-check/app.mjs`) reads the set from `requiredApps(env)`: the application that `SOKSAK_APP` names, or every application when `SOKSAK_APP` is unset. An application outside the set is not opened and returns null. The 157 `if (!s) return t.skip(...)` guards of the 44 window check files in `e2e/` are removed, because every application of `APPS` now yields a session or fails. Red: on the unchanged code, `packages/window-check/test/required-apps.test.mjs` failed with `harness.requiredApps is not a function`, `Missing expected rejection` for a missing binary, and `true !== false` for an application outside the set whose executable was read. Green: the six tests of the file pass, `pnpm -F @soksak/window-check test` passes 112 tests, and `make e2e-check` exits 0.
+
 - F212.6-4-1: The window checks drop the 71 `assert.ok(s, "... is not built")` lines of 43 `e2e/` files, which cannot fail because `open` (`packages/window-check/app.mjs`) yields a session for every application of the required set or fails. The `if (!session) return t.skip(...)` guard of `e2e/split-load-memory.test.mjs` is removed for the same reason. The two-host checks of `e2e/hosts.test.mjs` and `e2e/placement.test.mjs` are registered only when `requiresBoth(env)` holds, so they no longer skip when one application is selected. Red: on the unchanged code, `packages/window-check/test/required-apps.test.mjs` failed with `harness.requiresBoth is not a function` for the `requiresBoth` test. Green: the test passes, `pnpm -F @soksak/window-check test` passes 113 tests, and `make e2e-check` exits 0. The removal of the 71 lines has no Red, because a line that cannot fail has no failing input.
+
 - F214-1: `make push-check` runs the comment language test, so a comment in another language fails the push gate.
+
 - F214: The comment language check reads every tracked file of `.githooks` and every tracked file without an extension that starts with a `#!` line, with the hash comment syntax (`scripts/check-comment-language.mjs`). The comment of `.githooks/commit-msg` and the comment of `e2e/check-shell` are English. Red: `hook files and extensionless scripts are checked, and other extensionless files are not` in `scripts/test/comment-language.test.mjs` failed on the unchanged code with `actual: []` for the expected `.githooks/commit-msg:2` and `scripts/run-tool:2`. Green: the nine tests of the file pass, and `make push-check` exits 0.
+
 - F212.5-8: the scheme handler of a darwin document region writes a refused plugin page request (a missing file, an address of another owner, a path with a dot segment) as `error: document view: plugin file not found: <URL>` at the error level, the same level as a refused binary request. Red: `document_plugin_test` showed each refusal as `native.record.info`. Green: the test passes with the error record for each refused address.
+
 - F213: The push gate checks the commits that the pushed refs send, on any branch. The pre-push hook passes the range of each ref from the ref lines git gives it: the local sha against the remote sha, or against `<remote>/main` for a new remote ref, through `scripts/push-range.mjs`. `make push-check` without RANGE uses `origin/main..HEAD`, which a branch without an upstream can resolve; `@{upstream}..HEAD` exited 128 there. `commits-check` accepts several ranges. The lane of the test inventory lists the script and `scripts/test/push-range.test.mjs`. Red: the three tests of `scripts/test/push-range.test.mjs` failed on the unchanged code with `Cannot find module` for `scripts/push-range.mjs`, and `make push-check` on the branch without upstream exited 128. Green: the three tests pass, and `make push-check` exits 0 on the branch without upstream.
+
 - F212.5-7: The native scheme serves `sok://core/<path>` to a view configuration, which `sp_document_create` marks with `isView`. The request goes to the core root resolver that each host registers with the platform (`SetCoreRoot` in Go, `set_core_root` in Rust, `sp_core_root_set_resolver` in native). A served response carries `Access-Control-Allow-Origin: sok://<plugin id>` of the view, a refusal carries no such header, and a document region does not dispatch `core`. Host contract case `document.core-root.native` has a Go and a Rust test with the same name, and `native/darwin/tests/document_core_root_test.m` checks a granted import, a refused path, a region and the header. The injection of `view-start.js` into the view configuration is held by F212.5-7-1. Red: the native test failed on the handler that did not dispatch `core` (`a view imports the granted module of its core root`), the Go tests failed with `found false` and the missing log lines, and the Rust tests failed with `left: None`. Green: the native test, the three Go tests and the three Rust tests pass.
+
 - F212.5-6: The core root resolver of both hosts, `CoreRoot` in Go and `core_root` in Rust, returns the file at a `sok://core` path for a view of a plugin. A core target of the view import map comes from the bundled frontend, and an installed plugin file comes from its folder only when the granted item rule grants it to the requester. Any other path, a requester that is not enabled, and a path that no grant names are not found, and each writes `error: core root: <path> is not granted to <plugin>`. A granted file that is missing is an error. Host contract case `document.core-root.grant` has Go and Rust tests with the same names. The native scheme does not call the resolver yet (F212.5-7). Red: with a stub that refused everything, the Go and Rust tests failed. The hosts read the core targets from `core-root.json` of the bundled frontend, which the staging tool writes from `viewCoreTargets` of `@soksak/plugin-api`; a missing or malformed file is an error. Green: the ten Go tests and each of the ten Rust tests pass.
+
 - F212.5-5: `pagePlugin(location)` in `index.js` finds the plugin of a page from its location. A `sok:` page belongs to the plugin named by its host and reads `/plugin.json` from its own origin, a page under `/modules/<name>/` on the main origin reads that module's `plugin.json`, another page has no plugin, and a sok host that is not a plugin id, or is `core`, throws with the location. `ownManifest` and the exposure gate of `page.js` use it, so a view page no longer throws `is not a plugin page`. Red: with `pagePlugin` returning the old `pagePackage(location.pathname)` result, `page-identity.test.mjs` failed 3 of 5: the sok page case returned `null` where `{ name: 'probe', manifest: '/plugin.json' }` was expected, and the invalid host `Probe_1` and `core` host cases threw nothing. Green: the test passes 5 of 5, and the plugin-api tests pass 286 of 286.
+
 - F212.5-4: `packages/plugin-api/view-start.js` is the injected document-start script of a view page. It posts the ready message `{event: "view.ready", plugin, document}` through the `sok-view` handler at start, keeps each host message whose event source is the window and that carries `sok: 1` in a queue of 256, and exposes one global, `window.sokView`, whose `attach` delivers the queued and later messages in order. A message that fails a check, and a 257th queued message, is reported through the handler as `error: view channel: <reason> for <plugin>` and dropped. `packages/plugin-api/view.js` (`@soksak/plugin-api/view`) `createViewChannel({handler})` sends through the handler and reads host messages through `window.sokView.attach`, and `createViewBridge({handler, report})` runs `createCalls` and `createSnapshotSender` over the channel. `index.js` exports `VIEW_IMPORTS`, the four entries of the view import map. The closure test `view-imports.test.mjs` checks the imports of `index.js` and `view.js`, and that `view-start.js` has no import. Red: `view.test.mjs` failed 15 of 15 with `ENOENT` for `view-start.js`. Green: both files pass 23 of 23.
+
 - F212.5-3: `sok` in Go and Rust computes the granted items of a requester (`GrantedFiles` and `granted_files`, host contract case `install.granted-items`). The result holds the `/modules/<package>/<module>` file of each item that another enabled plugin contributes to a point of the requester, and the `/shared/<plugin id>.<point>/<specifier>.js` file of each shared module of a point that has a granted item of another plugin, whether the requester provides the point or contributes to it. An item is granted when its provider is installed and enabled, the point declares a `version`, and the item's `range` contains that version. An undeclared point, a point without a version, a disabled or missing provider and an out-of-range item grant nothing; a malformed declaration is an error that names it. Red: the Go and Rust tests of the case failed on a stub that returned an empty list, with the assertions recorded in F212.5-3. Green: the same tests pass. The core root that serves these files is connected in F212.5-6.
+
 - F212.5-9: `validateManifest` refuses the plugin id `core` with `plugin.json: plugin id core is reserved for the core root`, and the installation path of a plugin version refuses it in `sok` with `plugin id core is reserved for the core root`, because the core root is the reserved host `core`. The host contract case `install.plugin-id.core-reserved` states it. Red: on the unchanged code, `validate.test.mjs` failed with `Missing expected exception`, the Go `TestPluginIDCoreIsReservedForTheCoreRoot` failed with `error <nil>`, and the Rust `plugin_id_core_is_reserved_for_the_core_root` failed with `Ok("plugins/core/0.2.0")`. Green: `validate.test.mjs` passes 31 of 31, and the Go and Rust tests pass.
+
 - F212.5-2: a native test, `core_root_cors_test`, measures how WebKit treats a module import from a page at `sok://probe` to `sok://core/m.js` on macOS 26.6.2 arm64. The module request carries `Origin: sok://probe`. The import succeeds with `Access-Control-Allow-Origin: sok://probe` and with an import map of a bare specifier under that header, and fails with no such header and with `Access-Control-Allow-Origin: sok://other`. The plan's header rule of the core root is recorded as the measured contract. No production code changed. Result: the test passes 1 of 1 with `make -C native/darwin repeat TEST=core_root_cors_test COUNT=1`.
+
 - F212.5-1: the core root design (view paths, granted items, view import map, view channel with its ready message and bounded queue, fixed CORS origin) is agreed after six adversarial reviews.
+
 - F212.4-5: `sp_document_upload_body` (`document_upload_body.h`) returns the `HTTPBody` of an upload request without a copy, or reads an `HTTPBodyStream` to one chunk past the 16 MiB limit at most, and the binary store answers an upload through it. A read failure answers 400 with the description of the stream error. The `document_binary_test` checks cover the HTTPBody identity, a 1 MiB stream read byte-equal, an oversized stream refused after one chunk past the limit, a failing stream reporting its error, and a request with neither body keeping the 400 text. Red: with a stub that returns nil and sets no error, `document_binary_test` failed 5 of the new assertions. Green: `document_binary_test` passes 43 of 43 with `make -C native/darwin repeat TEST=document_binary_test COUNT=1`, and `document_plugin_test` and `document_view_test` pass with the same command.
+
 - F212.4-4: `sok plugin pack` in both packages refuses a release whose `files` lists a path with a `.binary` segment, with the text of plugin-api `validateReleaseFiles` (`plugin release lists <path>: the .binary path is reserved for the binary store`), and writes no release. The host contract case `cli.pack.binary-path-refused` states it. Red: on the unchanged code, the Go `TestPluginPackRefusesABinaryPathInFilesWithoutWriting` failed with `code 0 stderr ""` and the Rust `plugin_pack_refuses_a_binary_path_in_files_without_writing` failed with `left: (0, "")`. Green: both tests pass 1 of 1 with `make go-repeat` and `make rust-repeat` at COUNT=1, and the existing pack tests of both packages pass.
+
 - F212.4-2: a darwin document region keeps the bytes of its plugin's uploads in a binary store. `POST sok://<plugin>/.binary` stores a body under a host-minted id and answers `{id, length}`; `GET sok://<plugin>/.binary/<id>` serves the bytes and releases the id. The refusals (over 16 MiB per upload, over 64 MiB per page, another origin, an empty body, an unknown id, a method of the wrong kind) answer `{error}` and write the reason to the application log. `sp_document_binary_take` returns and releases an id, `sp_document_binary_count` counts the ids, and closing a region releases its ids. plugin-api `validateReleaseFiles` refuses a `.binary` path in a plugin release. Red: `document_binary_test` failed 18 assertions on the stubs, and `validate.test.mjs` failed with `Missing expected exception`. Green: `document_binary_test` passes 37 of 37 with `make -C native/darwin repeat TEST=document_binary_test COUNT=1`, `document_plugin_test` and `document_view_test` pass, and the plugin-api tests pass 258 of 258.
+
 - F212.4-1: the message script of a darwin document region refuses a page message that is not plain JSON (an ArrayBuffer, a typed array, a Date, a Map, a cycle or a property that JSON drops) with `{error}` naming its type, instead of forwarding `{}`, an index object or a changed value. Red: `document_plugin_test` fails on the buffer, bytes, date and cycle replies. Green: the same test passes.
+
 - F212.3-5: the exposure relay of both hosts writes `host.call.timeout {plugin, command}` (error) when a command forwarded to a surface page passes its time limit, and `host.trace.call.late-reply {plugin, command, delay}` (debug) when a reply arrives after that timeout. Both events are declared in `events.json`, and the host-contract cases `exposure.relay.timeout-writes-call-event` and `exposure.relay.late-reply-writes-call-event` state them. `host.call.peer-lost` moved to F212.3-7. Red: with the emit calls of each host removed, the new tests fail on their assertions: Go `host.call.timeout = []` and `host.trace.call.late-reply = []` (`exposure_test.go`), and Rust `left: []` for `host.call.timeout` and `left: 0` for `host.trace.call.late-reply` (`exposure_test.rs`). Green: the Go relay tests and the Rust `exposure_test` (23 tests) pass, with the buffer, exposure reply and event record tests of both hosts.
+
 - F212.3-2: the plugin-api `createSnapshotSender`, `createSnapshotReceiver` and `pullSnapshots` (`snapshots.js`) push each declared UI snapshot with at most one in transit per status, mark a status dirty during the flight and send its latest value on the acknowledgement, count the overwritten values as skipped and the peer-lost stalls (and the discarded dirty values on surface close) as stalled, and pull each status once on a main page load. `snapshotReporter` in `packages/workbench/plugin-processes.js` adds the counts to `core.plugin.losses`. No event is declared; the host relay declares the two trace events under F212.3-6. Red: `snapshots.test.mjs` failed on the unchanged code with `ERR_MODULE_NOT_FOUND` for `snapshots.js`, and the added test of `plugin-processes.test.mjs` failed with `snapshotReporter is not a function`. Green: 23 snapshot tests, 257 plugin-api tests and 4 plugin-process tests pass, and the exposure, events, docs and parity checks pass.
+
 - F212.3-1: a call reply whose error has no message is refused with `call reply <id> has an error without a message` and keeps its call open, instead of rejecting the call with a coerced text. Red: the test failed on the earlier code; Green: the call layer tests pass 19 of 19.
+
 - F212.3-1: the plugin-api `createCalls` (`calls.js`) runs requests, replies, cancellation, the declared timeout, peer-lost and late replies over a given `send` and `onMessage`; a timeout rejects with -32000 and counts `losses.timeouts`, `surface-closed` counts `losses.peerLost`, a late reply counts `losses.lateReplies`, and `process-ended` and `sidecar-ended` are failures that count no loss. `callReporter` in `packages/workbench/plugin-processes.js` fills the statuses `core.plugin.open-calls` and `core.plugin.losses`. No event is declared, because the host relay that emits them is F212.3-5. Red: `calls.test.mjs` failed on the unchanged code with `ERR_MODULE_NOT_FOUND` for `calls.js`, and the added test of `plugin-processes.test.mjs` failed with `onPluginProcessChange is not a function`. Green: 18 call-layer tests, 233 plugin-api tests and 3 plugin-process tests pass, and the exposure, events, docs and parity checks pass.
+
 - F212.3-3: the workbench declares the statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.views` in `exposure.json`, registers them in `core-exposure.js` with the readers of `plugin-processes.js`, and publishes `[]` for each, which the plugin call and snapshot layers fill. No event is declared yet, because each event is declared with its emitter. Red: `plugin-processes.test.mjs` failed on the unchanged code with `core.plugin.open-calls is not declared in exposure.json` and `Cannot find module` for `plugin-processes.js`. Green: the 2 tests pass, and the exposure, events, docs and parity checks pass.
+
 - F212.3-4: `SPNavigationDelegatePrivate` declares `_webViewWebProcessDidBecomeUnresponsive:` and `_webViewWebProcessDidBecomeResponsive:`, which WebKit calls when the WebContent process of a view stops or resumes answering its responsiveness check; nothing calls them yet. The private native API inventory lists their call condition and the WebKit source lines of tag `WebKit-7625.1.29.18.27`, which is not verified against the SDK build 21624.5.1.11.3 because that build has no public tag. Red: `webview_responsiveness_test` failed on the unchanged header with `FAIL: SPNavigationDelegatePrivate declares _webViewWebProcessDidBecomeUnresponsive:` and the same for the responsive selector. Green: the test passes with 4 of 4 assertions.
+
 - F212.1-2-2-3: the event writer's `log.dropped` carries `queued`, the largest queue depth at the refusals that the record counts, and a placed event (`EmitPlaced`, `emit_placed`) refused by a full queue fails with `the event writer refused <event> because its queue was full` in both writers, while one refused by the policy fails with `because the policy does not store it` and is a gated event, not a loss. A full queue no longer accepts placed events into the slots reserved for requests. Red: `TestAPlacedEventRefusedByThePolicyNamesThePolicy` and the Rust `a_placed_event_refused_by_the_policy_names_the_policy` failed with the queue cause for a policy refusal; `TestRefusedPlacedEventsAreRecordedAsLossBeforeTheNextAcceptedEvent` and the Rust `refused_events_are_recorded_as_loss_before_the_next_accepted_event` failed on a full queue, and the loss record had no `queued`. Green: the four tests pass, and the writer, host, events, docs and parity checks pass. A sidecar catalog that declares `log.dropped` must declare `queued?`; this takes effect with the next release of each sidecar.
+
 - F212.2: the plugin process design (docs/plans/plugin-processes.md) is agreed after seven adversarial reviews with no remaining core objection; each step changes the specifications named in its specification change table.
+
 - F212.1-2-2-5: the window status of an unregistered native surface fails with `unregistered native surface <id>` in both hosts, where `<id>` is the native view address; before, tauriv2 omitted the address. Red: `an_unregistered_native_surface_view_fails_with_its_address` failed with left `unregistered native surface` and right `unregistered native surface 9`. Green: the Rust test passes, and `TestUnregisteredNativeSurfaceViewFailsWithItsAddress` passes in wailsv3.
+
 - F212.1-2-1: the library keeps the last folder result of a project while its re-check is pending, and replaces it only with the answer of the latest check, so a missing folder is reported once per project entry and is not reported again when the project list changes. A folder that appears again hides the error. Red: `a missing project folder is reported once across project list changes, and a folder that appears again hides the error` failed with `the missing folder error is not written once`, the actual list holding 4 entries of `library project /work/missing: 폴더가 없습니다.`; Green: the same test passes 2 of 2 with the library test files and the error display test, 11 of 11, and `make docs-check` passes.
+
 - F212.1-1: the page writes the event `page.trace.surface.mount` (`plugin`, `surface`, `ms`) when the module mount of a plugin surface completes, while the performance trace is on; `ms` is the time from the start of the mount to the end of the module mount, so the DOM mount time of each surface is read from the records. A failed mount writes no event. Red: `a surface mount writes one surface.mount trace` failed with `expected one surface.mount trace, found 0`, and `a trace call of the workbench emits the page trace event` failed with `page.trace.surface.mount is declared and no source emits it`; Green: the surface-modules tests pass 10 of 10 and `make events-check` and `make docs-check` pass.
+
 - F211: core 0.0.20 is released.
+
 - F210: a retired plugin or sidecar is removed from the registry with its revocation entries; appview and the application sidecar are removed.
+
 - F209: a plugin whose every registry version is revoked is not offered: its card and its latest version use only the versions that are not revoked, so an installed plugin offers no revoked update.
+
 - F208: the commands that show a system dialog (`core.library.choose-folder`, `core.file.place`) declare a timeout of 600000 ms, so a person who takes longer than 10 s in the dialog no longer sees a command timeout.
+
 - F192.3-3-6: a folder wait judges the state of the folder at its deadline, so a watch that is active or notifies late at a high load does not fail a wait whose state is reached.
+
 - F207: the js-ts limit of the language test adapters is 30 s, the hang bound of the other languages.
+
 - F206: core 0.0.19 is released after the CI of its commit passed; every declared workspace version is 0.0.19, and the release carries every other entry of this section.
+
 - F205: new commits are authored as `min-0-max <max@blue.tools>`; `.mailmap` maps the former name, and the tao fork is named by the renamed account.
+
 - F204: the Wails modules name the fork by its renamed account `min-0-max/wails`.
 - V5-117-1-3-4-7-1-8: closed by F192.3-3-3, which leaves the launch activation to the system in both hosts.
+
 - F192.3-3-5: an intermittent late file notification in the event log wait is classified as load: the system event service delivered some changes after 2 to 3 s at high load, and the wait misses no change.
+
 - F203: the terminal runtime specification states every exit of the persistent service, including the end when its folder or endpoint is removed or replaced.
+
 - F200.4: `WebviewWindow.EmitEvent` of the Wails fork delivers the event only to the page of the window that emitted it, so a page no longer evaluates the events of the other windows; application events still reach every window. Red: `TestWindowEventIsEvaluatedOnlyInItsWindow` found a window event evaluated in another window; Green: the test passes and the fork package passes 3 of 3 runs. The Wails host pins the fork branch `soksak/window-events`, not yet released.
+
 - F200.3: the diagnostic method `diagnostics.host.events` has the host send host events that the page does not listen to, and `make host-calls EVENTS=N` measures what they leave in the page process. Measured on both debug hosts: 1411 B of WebKit malloc per event in the Wails page and 0 B in the Tauri page.
+
 - F201.4: `sp_document_store_close` ends the data store of a document directory and reports when the WebKit network process has removed its session, and `document_view_test` and `document_plugin_test` end their stores before they remove their folders; before, the network process wrote `Cookies/Cookies.binarycookies` into the removed folder after the check exited. Red: 3 of 3 runs of `document_view_test` under `make temp-audit` left `soksak-document-store-*`; Green: 3 of 3 runs of each check under the audit with no entry left.
+
 - F202: a closed document region is released at once again; since F196.29 the hidden delay block retained the region until the hidden clear delay of 300 seconds passed, and it now holds a token that closing, showing and releasing the region clear. Red: `window_release_test` failed with `the closed window releases its SPDocumentView`; Green: 3 of 3 runs.
+
 - F200.2: `make host-calls MINUTES=M` measures the WebKit malloc that the main page allocates per minute while idle, before and after a collection, with its reclaimable bytes. Measured on both debug hosts with the same project, two terminals and one browser tab: 57 KB (Wails) and -76 KB (Tauri) per minute, and 82 MB footprint with 38 MB WebKit malloc in both after a collection, so the idle page is not the source of the difference of F200.
+
 - F201.3: `make temp-audit COMMAND=<command>` runs a command with a temporary folder of its own and fails naming each `soksak-` entry that the command left there, except the window-check configuration folders `soksak-check-*`. Red: `pnpm test` under the audit left `soksak-stall-config-*` and two `soksak-event-log-*.event-offsets`; Green: the audit tests pass, 5 of 5, and `pnpm test` under the audit leaves no entry.
+
 - F201.2: the stall-sample test removes its configuration folder and the event-log tests remove the offsets file beside each configuration folder. Red: one run of each left its entries; Green: 3 of 3 runs of each with no entry left.
+
 - F201.1: the Objective-C checks and benchmarks create their temporary folders with `temporaryFolder` of `tests/support/temporary_folder.h`, which removes them at exit, also after a failing check calls `exit(1)`, and fails the process when a removal fails; before, 15 checks and 2 benchmarks removed their folders with `error:nil` only at the end. Red: `document_view_test` with a forced failure left `soksak-document-store-<pid>`; Green: the same forced failure left none of the folders that the check removes; the cookie file that the WebKit network process writes after the process exits is F201.4.
+
 - F199.4: the page follows plugin changes only after it initialises its projects, so the starter install of a first run no longer makes the apply flush the tab sessions before they exist; the page subscribes and then reads the plugin state once, so a change made before the subscription is applied, and an event during a running apply runs one more apply that reads the state again; `projects.flush` before initialise fails with an explicit error. Red: the workbench tests failed with `Cannot read properties of null (reading 'flush')`, `the change made before the subscription was not applied` and `the change made during the apply was not applied`; Green: the workbench tests pass, 562 of 562.
+
 - F200.1: the page diagnostic method `diagnostics.page.calls` sends up to 50 host calls `theme` in one request, and `make host-calls` measures the WebKit malloc that the host calls of the page leave in its process before and after a collection. Measured on both debug hosts: about 0.7 KB (Wails) and 1.1 KB (Tauri) per call before the collection and none after it.
 - F198.12, F196.7: the plugin releases browser 0.0.6, editor 0.0.4 and hwp 0.0.2 declare `surface.unload` and require core `>=0.0.18`, and browser 0.0.6 reads the document streams; the registry lists the three. flowmark and shell are not published, and appview is retired. F198 and F196 are complete.
 - F193.5, F196.6, F198.11: core 0.0.18 is released after the CI of its commit passed; its release text states that memory saver is on by default.
+
 - F198.23-1: the Rust check that two hosts share one authenticated service endpoint stops both hosts before its fake service ends, so no host connects again and starts the service in the configuration folder while the folder guard removes it. Red: the unchanged check found `logs` and `services` written after the service ended; Green: 10 of 10 runs of the check and 3 of 3 runs of `soksak-host-tauriv2`.
+
 - F192.3-3-4: the waits of the window checks on a file of a folder read the state once their watch is active and again at each change, through `untilFolderState` of `packages/window-check/folder-wait.mjs` on `@parcel/watcher`, whose subscription resolves when the FSEvents stream has started; `fs.watch` of Node returns before its watch is active, so a change right after a wait started, such as the `endpoint.json` of a relaunched host, could go unreported. Changed: `untilEndpoint`, `untilPolicy`, `untilEventLines`, the two waits of `e2e/normal-shutdown.mjs`, `untilChange` of `scripts/check-app-update.mjs` and the pid file wait of the test-command test. Red: with the watch activation delayed by 300 ms, the three window-check waits timed out; Green: 20 of 20 runs each.
+
 - F192.3-2-5: `make go-repeat` runs `go test -json` and judges the package results, so a support package without test files no longer fails a run whose test package passed. Red: the target failed with `has no test files built with tags ''`; Green: the target tests pass, 5 of 5.
+
 - F192.3-2-4: the Wails host adds the watch of the policy file itself before each read that a notification of the file starts, so a write in place right after the creation of `log-policy.json`, which the kqueue backend of fsnotify does not report because it watches a new file only after it sent the Create, is read and applied. Red: `TestACreatedPolicyFileIsWatchedBeforeItsRead` found the read starting without a watch of the file; Green: it passes, and the policy test passes 20 of 20 on Go and Rust.
+
 - F192.3-2-3: the window check that opens and closes a window still requires the `native.window.occlusion` event with `visible` true, and when another application covers the new window completely, its failure names the covering windows and states that nothing was measured instead of reporting only the timeout. Red: the window-check frontmost test of a covered window failed with the timeout message; Green: 10 of 10.
+
 - F192.3-3-3: neither host activates itself when it finishes launching while another application is active, so a launch that requested no activation, such as the relaunch of `sok app relaunch` through `open -g -n`, leaves the frontmost application unchanged, and Launch Services still brings an application that a person opens to the front. The Wails host requires the Wails fork commit with `MacOptions.DisableActivationOnLaunch` and sets it; the Tauri host sets `activate_ignoring_other_apps(false)`. Red: the Go and Rust launch activation tests failed with `the application activates itself when it finishes launching`; Green: both pass 3 of 3 runs.
+
 - F199.2-2: a session history that a document region refuses at the first show of a tab after a restart is reported with `page.tab.restore.failed`, and the region attaches again without it instead of failing the mount with `unknown tab`.
+
 - F199.2-1: a document region that has loaded nothing returns no session history, so a browser tab on its home page stores no session that the next attach would refuse.
+
 - F192.3-2-2: both hosts store the `page.start` event that the page relays under every log policy, as the logging specification states, so a reload is marked in the event log also when the class `lifecycle` stores only errors.
+
 - F192.3-3-2: the relaunch tests of the Rust `sok` create their folders through the reporting folder guard, so the test crate builds again.
+
 - F192.3-3-1: a window check that relaunches the host waits until every window of the new process reports a ready page before its next request, so the cleanup of the event-log check no longer fails with `the main page is not ready`.
+
 - F192.3-2-1: the event audit of the window checks reads `plugins/installed.json` of format 3, which F188.2 introduced, instead of refusing it as not format 2, so a check that prepares a fixture no longer fails before its first step.
+
 - F199.3: the browsing check of the workbench project switch test removes the project it opened, so the window owns no project afterwards and a later check reads the layout of its own snapshot. Red: with the session-file check after it, `closing a tab left its session file`; Green: 11 of 11.
+
 - F196.20-4: the growth of the plain web view U that system warn pressure kept is the behavior of the engine's plain web view; the document regions R and S returned or did not grow under the same system-wide pressure.
+
 - F196.20-3: the region cost benchmark sends the application events while it waits, so `occlusionState` and the visibility of each page follow the window server instead of the state at the window's creation, and the collection mode prints the order and cover of each window. Over 30 minutes the heap counts stayed flat; R returned its growth at a collection and U kept 20 MB of WebKit malloc after warn pressure (F196.20-4).
+
 - F199.2: a browser tab keeps its back/forward history across a restart: the workbench writes the session of each document region of a tab to `tab-sessions/<tab>.json` at a main-frame navigation commit (one write per tab per second), at unload and at the window save of a quit, and passes it to the attach of the region on restore and on the first show after a restart; a region value over 1 MiB decoded emits `page.tab.session.dropped`; the memory saver keeps no history in memory; the file is removed with the tab-state entry. Red: after a simulated restart the attach had no `interactionState`, and closing a tab left the file; Green.
+
 - F199.1: both hosts read, replace, remove and list the session file `tab-sessions/<tab>.json` of one tab through the workspace kinds `tabSession`, `tabSessionPut` and `tabSessions`, with identical errors and without rewriting another tab or `tab-state.json`; the browser application keeps the same documents in its store. Red: both hosts answered `unknown workspace operation: tabSession`; Green: the Go and Rust tests pass.
+
 - F192.3-3: the diagnostic endpoint method `diagnostics.host.relaunch` quits the application as `host.quit` does and starts the same bundle again with the same arguments through `sok app relaunch`, without activating it, so a window check reads the records that a host stores at its start under the policy the check set; the window-check harness waits for the new `endpoint.json` through a folder watch and reconnects, and the event-log check asserts `host.app.event` `started`. Red: the Go and Rust tests of the relaunch command and the harness test did not build or load; Green: they pass. The window checks were not run.
+
 - F192.5: the test inventory links F192 to `syncBackgroundSessions` and its background session test, so `make parity-check` no longer fails with `F192: completed capability has no feature link`.
+
 - F192.3-2: every window check that reads records below `error` declares the log policy that stores them and the records it reads; `prepareFixture` refuses a declaration whose policy does not store a record that the check reads and waits until the policy file holds the policy, and a wait on the event files fails at once with an error that names the record and the policy instead of waiting until its deadline. Affected checks: `terminal-hidden-tab`, `idle-tab-memory`, `memory-saver` and `input-latency` (which gave the policy as a setting or through `core.settings.set`), `event-log`, `host-records`, `late-reply`, `plugin-outdated`, `settings` (the switch of the trace), `terminal-replay`, `input-oracle`, `input-records`, `operation-chains`, and through the performance trace `registration-lifecycle`, `projects` and the registration timeline of `fresh`. Red: the wait timed out with `no event line matched within 3000 ms` and the preparation accepted the declaration; Green: the tests of `packages/window-check` pass. The window checks were not run.
+
 - F192.3: the window check `e2e/terminal-hidden-tab.test.mjs` passes on the debug Wails and Tauri applications built from main with the terminal plugin 0.0.14, the vt sidecar 0.0.11 and the browser plugin 0.0.5: a terminal shown again after another tab of its card draws the output after Enter, with no background `open` and no headless surface. F192.3-1: the check sets `diagnostics.log` to `trace` in every class, because the default policy stores only errors and the check found no record of the output. Red: both hosts failed with no stored `sidecar.vt.pty_read`; Green.
+
 - F198.23: the Rust tests of `packages/sok/tauriv2` remove their temporary folders through one shared guard, also after a failed assertion, and report a removal failure; a host test uses `tempfile`, and the Go tests of `packages/host/wailsv3` and `packages/sok/wailsv3` report a failed `os.RemoveAll`. Red: a failing assertion left its folder; Green: the same assertion left none.
+
 - F198.23: the Rust tests of `packages/sok/tauriv2` remove their temporary folders through one shared guard, also after a failed assertion, and report a removal failure; the tests of `packages/host/tauriv2` use a guard of their own in place of `tempfile::TempDir`, which ignores a removal error, and the Go tests of `packages/host/wailsv3` and `packages/sok/wailsv3` report a failed `os.RemoveAll`. Red: a failing assertion left its folder; Green: the same assertion left none.
+
 - F198.22: the Rust migrate tests remove their configuration folders through a drop guard, also after a failed assertion, and report a removal failure instead of ignoring it.
+
 - F198.21: `surface.unload` is absent, which leaves the tabs never unloaded (`undeclared`), or `{format, maxBytes}`; `validateManifest` refuses `false` with an error that names the plugin, and the specification no longer calls the declaration required. Red: the validator accepted `unload: false` (`Missing expected exception`); Green: the plugin-api tests pass.
+
 - F198.18: `surface.unload` stays optional; a requirement would add no function, since a surface without it is never unloaded, and would revoke five installable plugin versions.
+
 - F196.20-2: the slow growth of a visible page is the late JavaScript full collection, whose timer limits its CPU by the bytes it expects to reclaim; the engine offers no public interface that collects an idle visible page earlier, and the system memory pressure that F198.6 delivers is its standard release path. No change.
+
 - F198.20: the record `log.migrated` of a stored-data migration passes every gate of the event log, so the default policy, which stores only errors, keeps it and the release step that requires it passes. Red: the Go and Rust migrate tests found `log.gated` and no `log.migrated`; Green: both pass.
+
 - F198.19: the handle of a document region reports `history`, `true` when its attach restored a session history, from the attach reply `{history}` of the workbench, so a restored surface loads its stored address only without a restored history; an attach reply without it rejects the attachment. Red: `history is unknown before the attach replies` (`undefined`), and the workbench attach replied `null` instead of `{ history: true }`; Green: document-region 20 of 20, document-regions 6 of 6.
+
 - F198.17: `validateManifest` accepts a surface without `surface.unload` and validates the declaration when it is present; such a surface is never unloaded (`undeclared`), so the plugin versions published for core 0.0.17, which rejects the field, stay installable on core 0.0.18. The release text states that memory saver is on by default. Red: `plugin probe: surface requires unload unless the plugin declares background` for a surface without the declaration; Green: validate 30 of 30.
+
 - F192.4: the vt sidecar 0.0.11 refuses an `open` without `image` for a surface that has an image and records the drawing mode of a surface, and the terminal plugin 0.0.14 requires it.
+
 - F197.7: the vt sidecar 0.0.11 and the files sidecar 0.0.6 release the default policy that stores only errors (F197.5); the shell sidecar is not published and has no release.
+
 - F198.10-4: the endpoint client keeps its connection when the host refuses an unwatch with 1003 because a reload removed the watch, and rejects that watch with the refusal. Red: the connection failed; Green.
+
 - F198.10-3: the event `page.start` passes every gate of the page, so the start of a reloaded document reaches the event files before the policy of the setting reaches the gate. Red: the gate refused it before a policy; Green.
+
 - F198.10-5: a surface that a place leaves out sends nothing to its sidecar after the place ended its sessions, so the end of the session that its dispose sends no longer leaves a host entry without a project root that every later retain refused. Red: the send left while the place ran; Green.
+
 - F198.10-2: a commit stops the composition of each surface it leaves out before `host.place` runs and resumes it when the place fails, so a layout change no longer sends a placement that the host refuses with `has no composition declaration`. Red: the composition placed while the place ran; Green.
+
 - F198.10: the window check `e2e/memory-saver.test.mjs` installs the fixture plugin `e2e/fixtures/memory-saver/unload-probe`, which declares `surface.unload`, and checks on both hosts the unload by `core.tab.unload` with its document region gone, the restore with the same address and session history, the unload of the hidden candidates one at a time under warn pressure and its stop at normal, and that a kept and a modified tab stay loaded. It passes on both hosts after another check in the same configuration.
+
 - F198.9-2: `diagnostics.objects` counts the elements of open shadow roots in `elements` of the page and of document regions, so it counts the DOM of shown surfaces. Red: a host with an open shadow root of three elements counted as one element; Green.
+
 - F198.9-1-1: the page diagnostic module publishes the parked element count for `diagnostics.objects`, so a release page publishes no diagnostic global. Red: the workbench module published it; Green.
+
 - F198.9-1: `diagnostics.objects` reports in `page` the `parkedElements` of the parked surface hosts of hidden tabs, which are outside the document and were not counted, so a memory check of the running application sees the DOM that hidden tabs keep. Red: the count was missing in the workbench, the native library and both hosts; Green.
+
 - F198.9: `make hidden-tab-memory` measures the JS heap and the DOM nodes that hidden DOM tabs hold and that their unload returns; the unload returns more than 99 percent for editor, rendered document and terminal fixtures, so the specification states that DOM tab plugins declare `surface.unload`.
+
 - F198.15: tests of `scripts/test` and `packages/plugin-api` judge success by events, output lines, order, counts and process state instead of elapsed time; command limits in those tests only bound a hang. Red: recorded runs under load and controlled holds; Green.
+
 - F198.16: a Wails host call whose method returns no value or nil replies `null` instead of `{}`, which the Wails transport writes for a nil result, so a missing `tab-state.json` no longer shows `tab state format missing is not 1`; both hosts reply `null` (`binding.reply.absent-value-is-null`). Red: the entrance returned a nil result; Green.
+
 - F198.14: the pool test of the test runner asserts parallelism by the running counts of its `RUN` lines instead of elapsed time, which failed under load. Red: recorded runs under load; Green.
+
 - F198.8-4: a commit runs `host.place` first and releases the surfaces it left out only after it succeeds, without detaching the regions that the host closed with the place; a failed place keeps the tab mounted and loaded, and closing a tab is released by its commit the same way. Red: the commit released the surfaces before the place; Green.
+
 - F198.7.3: a right click on a tab button opens the tab context menu (`core.tab.menu`), whose item `core.tab.menu-keep` shows the mark `kept` and sets or clears it through `core.tab.keep`; a tab that can never be unloaded has no item. Red: the menu module was missing and a picker item could not carry its own dom name; Green.
+
 - F198.8-5: a tab whose document region refused its restored session history still emits `page.tab.restored` when its mount ends, because the refusal keeps the restore open. Red: the saver had no path that kept it open; Green.
+
 - F198.8-3: a document region that refuses the restored session history of a tab reports the failure and attaches again without it, so the tab keeps its document and loses only the history. Red: the attach failed; Green.
+
 - F198.8-2: the name and `data-tab-state` of a tab button come from one function of the tab reports, `tabButtonData`, which the plane uses and a unit test covers. Red: the function was missing; Green.
+
 - F198.8-1: a commit that fails after a tab is marked unloaded no longer escapes as an unhandled rejection: the attempt ends with `page.tab.unload.failed` and the error display, the tab returns to loaded and a new commit declares its surface again. Red: the tab stayed unloaded with an unhandled rejection; Green.
 - F198.7.1, F198.7.2: the settings window shows the group 메모리 with the switch `memorySaver` and the slider `memorySaverDelay`; the status `core.tab.memory` lists each tab with its state and protections, `core.tab.unload` unloads a hidden tab now, `core.tab.keep` sets or clears the mark `kept`, and a request to the surface of an unloaded tab fails with `tab <id> is unloaded`. Red: the controls, the saver methods and the refusal were missing; Green.
+
 - F198.8: tab buttons carry `data-tab-state` from the memory saver, a shown unloaded tab is `restoring` until its surface mounts, and a failed restore emits `page.tab.restore.failed` and is shown through the error display of the page. A rejected read of the document regions during an unload attempt no longer escapes as an unhandled rejection: the attempt ends with `page.tab.unload.failed` and the error display, and the tab stays loaded. Red: the failure event was missing and the rejection was unhandled; Green: workbench 531 of 531.
+
 - F198.4: the memory saver decides a hidden browser tab by the query of its document regions instead of protecting every hidden tab as `media-unknown`, and a restored tab gets back the session history of each region. Red: the region record was missing and a restore passed no history; Green.
+
 - F198.5: the region query reports `media` as whether the page plays audible media (`_isPlayingAudio`) instead of the reply of `requestMediaPlaybackState`, which answered `playing` for a page whose media element had never played; both hosts take a boolean `media`. Red: an unplayed audio element reported `playing`; Green: 3 of 3 runs.
+
 - F198.13: the cleanup test of `test-command` bounds only the startup of its processes with 10 s instead of 500 ms, which a loaded machine exceeded, and asserts the status before it reads the pid file. Red: 1 failure in 34 runs under load; Green: 40 of 40.
+
 - F198.3: surfaces of a plugin that declares `surface.unload` keep their tab state through `context.tab.state`, report busy work through `context.tab.keep`, and an unload keeps their tab reports except the error. Red: the API was missing and a surface mounted before the store opened lost its state; Green.
+
 - F198.2: the tab state store `tab-state.json` (format 1): both hosts write it per entry, and the workbench coalesces writes, removes entries after the layout write, reconciles orphans and keeps the label cache of tabs that can be unloaded.
+
 - F198.6: one memory pressure source per process observes normal, warn and critical; the back-forward caches clear only on warn and critical, and both hosts send `memory-pressure {level, seq}` to every window in order.
+
 - F198.1: the memory saver is specified (unload and restore of hidden tabs, protections, the tab state store, the settings, the status and commands, the host memory pressure source), and `validateManifest` requires `surface.unload` unless the plugin declares `background`. Red: a surface without it was accepted; Green.
+
 - F196.29: a browser tab that stays hidden for 5 minutes, and every tab under memory pressure, clears its back-forward cache, so the suspended processes of the pages it left end; going back then loads the page again. Each clear is the event `native.document.backforward_cleared`. Red: going back restored the page from the cache; Green: `document_backforward_test`.
+
 - F196.28: the CI cache keeps only the dependency build output (`Swatinem/rust-cache`); the cache of the whole target folder had grown to 8 GB and filled the disk of the runner.
 - F196.14, F196.20-1: a browser tab costs what its page takes, the same in a document region and a plain web view; a visible page grows by the allocation that the JavaScript collector collects late and falls back when the page is drawn again, and WebKit has no standard mechanism that lowers a visible page further.
+
 - F196.27-2: the new process per region document of F196.27-1 is reverted: it cost about 0.5 s and the caches of every same-site navigation to lower a memory reading, and the earlier documents it released are released by the engine on its own about eight minutes later.
+
 - F196.27-1: a document region opens each new main-frame document in a new process, as the main web view does, so a reload or a navigation no longer keeps the earlier documents in the tab process: five reloads keep 6 documents and about 124 MB instead of up to 22 documents and 325 MB. A navigation takes about 1.1 s instead of 0.6 s. Red: the document stayed in process 86315; Green: `document_navigation_test`.
+
 - F196.19-1: `make -C native/darwin benchmark-occlusion` measures that macOS reports a window covered by a titled window only when the cover reaches 28 pt past each shared corner, so a window at the top-left corner of the screen stays visible under a maximized window and WebKit keeps its documents visible; no API or SPI changes that input.
+
 - F197.8: the log policy reaches every document: both hosts send `log-policy` to every window when a policy is applied and answer the action `policy-read`, and each surface or modal document applies the policy to its gate, so with the debug switch on a surface document stores its debug events. Red: a surface document batched only `page.log.gated`; Green.
+
 - F196.26: the package tests pass again: the chain audit fixture records the debug policy, the comments of the debug switch are English, and the surface call tests of both applications set the debug state, since diagnostics are off by default (F197).
+
 - F196.21-1: the boundary check resolves the declared repositories from the main checkout, so `make boundaries` runs in a worktree. Red: `ENOENT` for the plugin under `.claude/worktrees`; Green.
+
 - F196.25: every host test declares a defined contract case attached to it, so `make host-contract-check` passes again (2451 of 2451 tests, every case of both hosts); the CI failure since 2026-10-17 came from the undefined sampler case, undeclared sok policy tests and Tauri declarations separated from their tests by `mod support;`.
+
 - F196.24: both hosts refuse an endpoint socket path over the 103-byte limit of a unix socket address with an error that names the path, its length and the limit, the same text in both hosts. Red: `bind: invalid argument` and `path must be shorter than SUN_LEN`; Green.
+
 - F196.17-1: `make app-usage` attributes the WebKit services of each host through the launchd domain of the host, so two applications started in the same second are told apart. Red: nothing was attributed; Green.
+
 - F196.23: 30 repetitions of `make object-counts` show that the host memory settles (Wails 80 to 89 MB, Tauri 70 to 76 MB) with a flat Go heap.
+
 - F196.12: the final verification with the default settings: both hosts stored only the log writers' own events, every object count stayed at its baseline over five repetitions, and the modal, idle tab, occlusion and window release checks passed on both hosts.
+
 - F196.18-2: the host structure check reads the allowed file differences from the native host specification instead of its own list. Red: a table without row H1 passed; Green.
+
 - F196.18-1: the allowed host differences declare `diagnostics.heap.profile` as a Wails-only method (row E1), and `make host-parity-check` reads that declaration, so the check passes. Red: the declared method was reported; Green.
+
 - F196.22: a host start no longer ends WebKit processes. The record of WebKit children listed processes of other applications that started after the host, and the next start sent `kill -9` to them, which ended the page process of another host (F196.13-1) and the processes of the Tauri host during its checks (F196.10.2-4). launchd ends the services of an exited host within 0.2 s, so the record and the reap are removed in both hosts. Red: `the start ended process 58287 of another application`; Green: `startup.ends-no-process`.
+
 - F196.9.5: `document_pressure_test` prints the footprint categories, the malloc zones and whether the released array is still alive; the memory kept after pressure is live page objects that the engine has not collected, the same in a document region and a plain web view.
+
 - F196.21: the workspace registry resolves the declared plugin and sidecar folders from the main checkout, so `make install-plugins` works in a worktree. Red: a worktree resolved `.claude/worktrees/plugins/browser/`; Green.
+
 - F196.10.4: a page reload of the Tauri host reconnects a persistent sidecar only for the surfaces that sent to it, so the browser surface is no longer a session of the terminal service; `diagnostics.objects` lists the sessions and both hosts list the same ones. Red: `left: ["@scope/sidecar-persistent"], right: []`; Green.
+
 - F196.8.1: both hosts test the surface count and the wire of `diagnostics.objects` through an object counter backend (missing window, unknown window, reply shape).
+
 - F196.16.1: the Tauri surface registration tests move to `src/surfaces_test.rs`, the counterpart of the Wails `src/surfaces_test.go`, so `make hosts-check` passes.
+
 - F196.13: `e2e/idle-tab-memory.test.mjs` requires a browser tab on a blank local page to cost at most 50 MB (document process plus main web view growth, from settled `host.sampler.memory` readings); it measured 18.9 MB on Wails and 19.0 MB on Tauri.
+
 - F196.20: `make -C native/darwin benchmark-region-cost LONG=<minutes>` reads a plain web view and a document region on the same page each minute and prints the growth per minute of each; on https://www.google.com/ both stayed flat from minute 5 to 30, and the visible tabs of both check applications stopped growing after their first 10 minutes. The target passes `URL` only when it is set.
 - F196.18 (Rust): the Rust log indexer sizes its read buffer to the appended bytes, as the Go indexer does. Red: `index_update_allocates_for_the_appended_bytes_only` (`left: 8388608, right: 800`); Green.
+
 - F196.19: `e2e/window-occlusion.test.mjs` covers a window with a project window and requires `occluded: true` and a hidden document; it passes on both hosts. Both hosts report the same occlusion in every measured placement.
+
 - F196.18: the Go log indexer sizes its read buffer to the appended bytes instead of 8 MiB per update; the per-update buffers had raised the Go heap goal to about 20 MB and kept 13 to 16 MB of free heap dirty in the Wails host. A fresh Wails host fell from 73 to 43 MB. Red: `TestLogIndexUpdateAllocatesForTheAppendedBytesOnly` measured 8,647,392 bytes for a 2-line update; Green: under 1 MiB. Diagnostic builds report the Go runtime memory in `diagnostics.objects` and write a heap profile through `diagnostics.heap.profile`.
+
 - F196.17: `make app-usage CONFIG_DIR=<dir>` reports the footprint and CPU share of each process of a running application (host, page, documents, WebKit GPU and network, sidecars) and the totals. Red: the test failed with `ERR_MODULE_NOT_FOUND` before the script existed, and with `no host process has --config-dir` for a data folder launched by its real path or with a doubled slash; Green: 18 of 18 pass.
+
 - F196.9.2: `make -C native/darwin test-pressure` measures the memory a document region and a plain web view return after a page releases about 375 MB and the system raises warn and critical pressure; both return about 24 MB (6%), and the check requires the region to return at least 0.8 of the plain web view. It stays out of `make test` because it raises system-wide pressure, and it refuses to judge above a 1-minute load of 20.
+
 - F196.16.1: both hosts forget a surface registration in the main-thread step that closes its native view, so a read of `host.window` during a close finds the view with its registration or neither. Red: Tauri `window_close_test` (`left: None`), Go `TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView` (got 1, want 0, driven through the close step with the earlier order); Green: both pass.
+
 - F196.16: both hosts register a surface in the same main-thread step that creates its native view, so a read of `host.window` during a surface creation no longer fails with `unregistered native surface` (Tauri) or reads an unnamed view through an unsynchronized map (Wails). Red: `window_close_test` (`left: None`) and `TestSurfaceIsNamedWhenItsNativeViewIsCreated` (named ""); Green: both pass with the host contract case `exposure.host-window.reads-during-surface-creation`.
+
 - F196.10.3: the window background `body::before` of the workbench page is absolute in the body instead of fixed: a fixed background is a composited layer of its own, so the layers over it took window-sized buffers. `make -C native/darwin benchmark-page-layers` measures the variants (a fixed background with the rail adds one window buffer, the same with an absolute background adds none). In both applications with a project of a terminal card and a browser card at 1200×760, the graphics memory of the main web view fell from 70 MB to 20 MB and its footprint from 122 to 168 MB to 74 to 75 MB. The workbench tests pass 483 of 483 and the composition and geometry window checks pass on both hosts.
 - F196.10.2-2, F196.10.2-3: `e2e/modal-release.test.mjs` opens and closes the settings modal four times and requires the native object counts of the window to return; the first child web view of a window registers the input of the main web view for the life of the window (the record `native.webview.input` named it in a run with the policy of every level), so the check opens and closes one modal before its baseline. Every modal registers, ends and releases its input in both hosts; no modal leaks. Green: five runs on both hosts pass after a fresh start of the Wails application. `native.webview.input` records each registration with the web view, the phase and the count (Red: `one registration cycle emits three input records (0)`).
+
 - F196.11: `make trace-share` measured the host process after five repetitions of the operations with the switch 디버그 on and then off: the Wails host 105 MB and 94 MB, the Tauri host 74 MB and 70 MB, so the diagnostics take about 11 MB of the Wails host and 4 MB of the Tauri host; `make object-counts` and `make trace-share` are documented in the example verification.
+
 - F196.10: `make object-counts` ran 20 repetitions of the fixed operations against the debug applications of both hosts with diagnostics on: in the Wails host every count of `diagnostics.objects` stayed at its baseline (3 surfaces, 1 region, 1 document, 2 sidecar sessions, 0 pending replies, 2 subscribers, 256 page elements); in the Tauri host every count stayed constant after the first repetition, with one more sidecar session than its baseline (F196.10.1). The footprint of the page process read right after each reload was 195 to 244 MB and settled at 120 MB 30 seconds later, so the reading right after a reload is the peak of the load.
 - F196.10 (target): `make object-counts` runs `scripts/measure-object-counts.mjs` against a running application, takes the counts of `diagnostics.objects` after two equal readings, repeats opening and closing a terminal tab and a browser tab, splitting and closing a card, applying the plugins and opening and closing a project window N times, and logs the counts and the footprints of the page and document processes per repetition with `grows` for each count. Red: the test failed with `Cannot find module` before the script existed. Green: its 7 tests pass. The `host.window` row of the exposure specification names `process` of each document, which F196.1 added.
+
 - F196.5.2: the Wails termination callback starts its goroutine through `routine.Go`, and the nullish defaults of `document-region.js` and of the log audit state their reason, so the census of the push passes.
+
 - F196.5.1: the Tauri host removes the stream subscriptions of its main web view, which holds the surface page, when the page starts a new document (at its start request) and when its web content process terminates (the termination handler that the framework forwards), so the removal rows of the host contract run on both hosts. Red: the tests did not build without `remove_surface_for_reload` and `Streams::remove_page`. Green: the Tauri host tests pass, with the clippy check.
+
 - F197.3-2: the Rust host tests import only what they use and `documents.rs` collapses its nested `if`, so the clippy check of the push passes.
+
 - F197.3-1: the shared test helpers of every level and the object count tests have the same names in Go and Rust, so the hosts check passes.
+
 - F196.5: both hosts answer `documentSubscribe {document, stream}` with a handle and `documentUnsubscribe`, count the subscriptions of each region and stream, turn the native collection on at the first and off at the last, keep the request log of 200 entries with `dropped` for a new subscription, acknowledge a snapshot to native after delivering it, and remove the subscriptions of a closed region or window (and, in the Wails host, of a surface page that loads a new document or whose process ends, F196.5.1 for the Tauri host); `document-stream` reaches only the subscribing surface, and the document handle of plugin-api has `subscribe(stream, listener)`. Red: the Go and Rust tests did not build without the subscriptions (`undefined: host.NewDocumentStreams`, `unresolved imports soksak_host_tauriv2::documents::StreamEffect`), and plugin-api failed with `region.subscribe is not a function`. Green: the host tests of both languages, plugin-api 211 of 211 and workbench 483 of 483 pass on main.
 - F196.9.3, F196.9.4: `document_processes_test` counts one WebContent process for each document region, about 13 MB each, for four regions of two sites and for four regions of one site, so a region costs one process like a tab; `document_caches_test` navigates a region through 60 pages of 2 MB of document and a 1 MB image and reads the footprint fall from 229440 KB after 10 pages to 171137 KB after 60, so its caches are bounded. Neither needs a change; both run in the native suite.
+
 - F197.3: both hosts and both `sok` builds apply the default policy of errors without a policy file (the `sok` part of the default entered with the commit of F197.6); the tests that read events below `error` give their writer the policy of every level, and their counts and indexes include its `log.policy` line. Red: `log_policy_test.go:117: default class lifecycle is "trace", expected "error"`, `start without a file: the default policy stores a warn event of the class lifecycle` and their Rust twins. Green: the Go and Rust tests of both hosts and both `sok` builds pass.
+
 - F196.9.1: `document_throttle_test` measures a document region shown, hidden and in a covered window: shown it runs 125.3 timer iterations and 59.8 animation frames per second, hidden and covered 1.0 and 0.0, with the document visibility hidden; the document views keep the occlusion detection of WebKit, which the window facts and the surface geometry turn off only for the main web view and attached surface web views. No change is needed; the check runs in the native suite.
+
 - F197.4-1: `observe_test`, `activity_observers_test`, `input_inject_test`, `webview_input_receipts_test`, `process_exit_test` and `quit_request_test` set the policy that stores every level before they read records below `error`. Red: each failed on its records (for example `the registration is one event at the level info` and an index error in `observe_test`). Green: each passes 2 of 2 runs, and the native default suite passes 58 of 58.
+
 - F197.6: both `sok` builds apply `<config-dir>/log-policy.json` once at the start of a run and store a refused file as `sok.record.error` of the place `log policy`, keeping the default policy; `docs/spec/events.json` declares `sok.record.<level>`. Red: `the tool stored no sok.command under a policy file that stores every level: [log.open log.gated]` in Go and Rust, and `no sok.record.error of the place log policy` in Rust. Green: the policy tests of both builds pass, with the event catalog check.
+
 - F196.2: `make -C native/darwin benchmark-document` loads a page that changes a tree of 2000 elements in a document region and prints, for 0, 1000, 5000 and 10000 changes, the physical footprint of its WebContent process and the state reports with their bytes. Before F196.4: 10006 reports and 259175913 bytes for 10000 changes (25910 bytes and one report per change), the footprint between 23904 and 41792 KB. After F196.4, without a subscriber: 6 reports and 1352 bytes for 10000 changes, the footprint between 16192 and 20784 KB. The footprint varies between runs by more than its slope, so one sample per step does not give its growth.
+
 - F196.4: the document script collects the elements and requests of a document region only while the host turns their stream on (`sp_document_stream_on`): the element observer marks the tree changed once until the next snapshot, a snapshot `{seq, nodes, total, truncated}` waits for the acknowledgement of the previous one (`sp_document_stream_ack`), the request stream sends only new entries observed with `buffered: true`, a new document sends `reset`, and `document-state` carries no elements and no requests. Red: `document_view_test` found the lists in the state and 51 state reports for 50 changes of the tree. Green: `make -C native/darwin repeat TEST=document_view_test COUNT=3` passes; a document without a subscriber sends no stream message and reports at most the title for 50 changes.
+
 - F196.8: both hosts answer `diagnostics.objects` with the objects that the host keeps for a window and the elements and documents of its page and document regions; the native function `sp_webview_count_objects` counts them in the page world or the document world. Red: the tests failed to build without the counts (`docs.Count undefined`, `unresolved import soksak_host_tauriv2::object_counts`, `undeclared function sp_webview_count_objects`). Green: `page_objects_test` passes 3 of 3 runs, the Go tests with the diagnostics tag pass 422 of 422 and the Rust object count tests 6 of 6.
+
 - F197.5: the files, shell and vt sidecars apply the default policy of errors before the first policy and without a policy file (files S23, shell S8, vt S64), each with its golden cases copied from core; the correction reaches people through their next releases.
+
 - F196.1.1: the sampler of the performance trace stores `host.sampler.memory` for the page process of every window and the process of every document web view, with the window and the surface, and every reading carries `footprint_kb`, the physical footprint of the process, beside `rss_kb`. Red: `performance_test.go:308: no page sample names window-a` and the Rust test `a page sample names window-a`. Green: the performance tests of both hosts pass, with the event, platform and parity checks.
+
 - F197.2: the log gate of the page stores only `error` until a policy is set and a class that `diagnostics.log` does not name takes `error`; `diagnostics.performance` defaults to false; the 진단 group of the settings window shows the switch 디버그, which runs `core.settings.debug {on}`. Red: `log-gate.test.mjs` failed with `lifecycle warn` (`true !== false`), `settings.test.mjs` with `true !== false` for the trace default and `debugOn is not a function`, and `settings-debug-switch.test.mjs` with `the 진단 row draws no 디버그 switch`. Green: the workbench tests pass 483 of 483 and the exposure check passes.
+
 - F197.4: the native event ring stores only `error` in every class before the first policy; the tests that record events below `error` set the policy that stores every level first. Red: `event_ring_test` failed with `the default policy stores each error of every class and no warn, info, debug or trace event`. Green: `make -C native/darwin repeat TEST=event_ring_test COUNT=2` passes, with `application_log_test`, `image_region_test`, `image_region_hangul_test` and `webview_process_end_test`.
+
 - F196.3: the specification defines the element and request streams of a document region: the `subscribe` and `unsubscribe` calls with their handle, the removal of subscriptions, the element snapshots acknowledged by `stream.ack`, the request entries with a log of 200, the `reset` of a navigation, and the `document-stream` messages; `document-state` no longer lists elements or requests. The terms `stream` and `snapshot` are in the term list. Validation: `make docs-check`; the streams are not implemented yet, and F196.4 and F196.5 hold the implementation.
+
 - F197.1: the default policy stores only `error` in every class and `diagnostics.performance` defaults to false; the switch 디버그 of the settings window (`core.settings.debug {on}`) turns every level of every class and the trace on and off; `fixtures/policy/cases.json` holds the default as `default`, the default policy file holds it, `DEFAULT_POLICY` of `@soksak/log-contract` equals it, and the audit judges a process that recorded no policy by it. Red: the golden test failed on the earlier default file, and `a process that recorded no policy is judged by the default policy, which stores only error` found a chain finding. Green: the log-contract tests pass 136 of 136, and the golden readers of both `sok` builds pass.
+
 - F193.6: the sidecar protocol stays 1 in the 0.0 series: the specification, both hosts, `sok` and plugin-api return to protocol 1, reverting F193.1, F193.2 and F193.3.
+
 - F193.5: every declared workspace version is 0.0.18.
+
 - F193.3: both `sok` builds read the `protocol` of each sidecar version of the index as a positive integer and select only sidecar versions of protocol 2; the specification drops the rule of F193.1 that listed such plugins as incompatible for a core update, whose protocol the index does not carry. Red: the index of a sidecar version of protocol 2 failed with `protocol must be 1` in both builds. Green: `TestInstallationSelectsOnlySidecarVersionsOfProtocolTwo` and `installation_selects_only_sidecar_versions_of_protocol_two` pass with the sok tests of both builds.
+
 - F193.2: both hosts declare a sidecar of another protocol than 2 without failing their construction, never start it, and fail each send to it with `sidecar <name> <version>: protocol <found> is not 2`; the endpoint and the hello of a persistent service carry protocol 2, and `validateSidecar` of plugin-api requires protocol 2. Red: `TestSidecarOfAnotherProtocolIsNotStarted` failed with `send = <nil>`, `a_sidecar_of_another_protocol_is_not_started` failed at the construction, and the plugin-api check failed with `protocol must be 1`. Green: the same tests pass, with the sidecar tests of both hosts, the plugin-api validation tests and the parity check.
+
 - F193.1: the specification makes `protocol` of `sidecar.json` the version of the start arguments and messages of a sidecar, raises it to 2, refuses a sidecar of another protocol at its own start instead of at the start of the application, and selects and lists sidecars by protocol in installation and in the update list.
+
 - F194.10.5: core 0.0.17 is published; its CI run and release workflow end in success.
+
 - F196.1: each web view row of the window facts reports its WebContent process, and both hosts carry it into each entry of `documents` of `host.window` as `process`, so the memory of a browser tab is attributed to its surface; the private API inventory lists the window facts as a call site of `_webProcessIdentifier`. Red: the native window facts check found no `process` in the web view rows. Green: 2 of 2 runs of `make -C native/darwin repeat TEST=window_facts_test`; both hosts build and the host parity check passes.
+
 - F194.10.5: every declared workspace version is 0.0.17, the release without the external application surface; the registry revokes sidecar-app 0.0.1 and the repositories of the embed kit and of the application sidecar are archived.
+
 - F194.10.4: the specification states no connector plugin, `applications.json`, `runtime.applications` or `plugins-progress`, and the plans of the external application surface and of connector plugins are removed; the rule of the native surface specification for frames of an ended sidecar stays.
 - Retired checklist entry `F194.3.4`: the gate at 120 Hz measured the external application surface, which F194.10 retires.
 - Retired checklist entry `F194.5.9`: the connector plugin of the example application belonged to the external application surface, which F194.10 retires.
+
 - F194.10.3: the window checks of the connector plugin and the application gate are removed, the workflows check out neither the application sidecar nor the embed kit and build no test application, and the workspace declaration has no application sidecar. Green: 10 of 10 workflow and registry checks, the window check source rules.
+
 - F194.10.2: the installers of both `sok` packages connect, record and remove no application, the plugin state reports no applications, both hosts send no `plugins-progress`, the events `sok.application.step` and `host.application.step` and the platform operations that only the application connection used are removed, and the host contract drops its 24 connector cases; the host corrections of F194.8.4 to F194.8.6 stay. Green: Go `sok` and host checks, 117 Rust `sok` checks, 408 Rust host checks, clippy, the event class and census checks.
+
 - F194.10.1: `@soksak/plugin-api` has no embed page `mountApplication` and no manifest field `application`, the surface context has no `runtime.applications`, and the workbench has no record of connected applications and no progress line of connecting an application; the files of the external application surface are removed. Green: 208 of 208 plugin-api checks and 481 of 481 workbench checks.
 - Retired checklist entry `F194.9`: capture connector plugins showed an application by copying the frames of its window, with a delay and an input path that do not meet the performance that a surface of this project requires; the proposal is removed, and a connector plugin shows an application only through the embed protocol.
+
 - F160.7-1: closed as not reproduced after 160 repeats, 100 of them under load, and three full runs of the Tauri diagnostics host suite; the watchers of both hosts report the error text or the policy with the source, and both checks name the step of each wait, so a recurrence is located.
+
 - F194.8.3: core 0.0.16 is published with both host builds, and the registry revokes appview 0.0.2.
+
 - F194.8.1-1: the defaults of the compose message, the missing record and the message without an event in the embed page state their reasons. Red: the census check of the push check reported 3 defaults without a stated reason. Green: 13 of 13 census checks and 9 of 9 page checks.
+
 - F194.8.3: every declared workspace version is 0.0.16, the release in which the embed page is `mountApplication` of core and no plugin appview takes part.
 - F194.8.5-1, F194.8.6: both hosts answer a frame of a sidecar that no plugin declares `stale` before the native presentation, so the page receives no error event, and a page reload of the Tauri host reconnects only declared sidecars (`reconnect_targets`), so the start of the page no longer fails after such a removal. A window check removes a connector plugin while its card shows the application. Red: the image checks of both hosts found the native presentation called, and the reload check did not build without `reconnect_targets`; the window check found the error event on the page and a Tauri page that did not start again. Green: the image and sidecar checks of both hosts.
+
 - F194.8.5: the envelope handlers of both hosts take whether a plugin still declares the sending sidecar; a frame that fails while no plugin declares it is answered `stale`, recorded and not recovered, and every answer that cannot reach an ended sidecar is recorded as not sent. A comment that linked a missing anchor of the native surface specification links `#image-regions`. Red: the new checks of both hosts did not build without the predicate. Green: the image and sidecar checks of both hosts.
 - F194.8.1, F194.8.2: `@soksak/plugin-api` exports the embed page `mountApplication(root, context, { application })`, which each connector plugin mounts in its own surface with its own names; the rule that a plugin with `extends` needs a surface returns. The workspace and the workflows no longer name plugin-appview, and the window checks install a connector plugin that mounts the page of core and depends only on the application sidecar (`e2e/connector-fixture.mjs`); the gate check is `e2e/application-gate.test.mjs`, and the cleanup of the fixture closes the cards of the plugin before its removal and restores the registry in a step of its own. Red: the check of the export failed without it. Green: 221 of 221 plugin-api checks; 3 of 3 runs of the connector check on both hosts; the gate passed on both hosts at 16 ms median before the machine was loaded, and at load average 25 to 30 the drag median of 26 to 29 ms is classified as load.
+
 - F194.8.4: a response to a sidecar whose process is not running is the ended error in both hosts (`ErrSidecarEnded`, `ResponseError::Ended`), with the same text, and the `closed` answer of a dropped transfer image to such a sidecar is recorded as `not sent` instead of an error. Red: the new checks of both hosts did not build without the error kind; the connector check logged the error in 2 of 3 runs. Green: the sidecar checks of both hosts, with the buffer and flush checks of the Rust host.
+
 - F194.5.9: held until the example application provides a build with the embed adapter through its own distribution, because a recipe installs an application only through that distribution.
 - F194.6, F194.7.1, F194.7.3, F194.5.7.2, F194.5.8-1: core 0.0.15 is published with both host builds; plugin-appview 0.0.2 (shared embed page, `appview.surface`) and sidecar-app 0.0.1 (A1.10) are published and listed in the registry, whose publish and ci workflows passed.
+
 - F194.7.2: the connector window check builds a plugin named after its application with its own surface, which imports the shared embed page `@soksak/shared/appview.surface/surface.js`, contributes to `appview.surface` and declares the image region of the application sidecar, and opens the card of that plugin without a setting; the workspace registry releases every declared sidecar, because the application sidecar is used only by connector plugins outside the workspace. Red: the registry test found no release for a declared sidecar that no workspace plugin uses, and the check could not resolve the sidecar of the connector. Green: 4 of 4 registry tests; 3 of 3 runs of the check on both hosts (macOS 26, debug builds with F194.7.0).
+
 - F194.7.0: `validateManifest` accepts `extends` without `surface` when every point declares `modules`, and a plugin with only `extends`; the specification states the shared-module point. Red: the new check of a module-only provider was refused with `extends requires a surface`. Green: 213 of 213 plugin-api checks.
+
 - F194.6: every declared workspace version is 0.0.15, the release of connector plugins.
+
 - F194.5.8: the window check `e2e/connector.test.mjs` packs a connector plugin of the test application of the embed kit into its own registry and serves the release of the application over https with the certificate of the check registry; with the application present the install connects it where it is, and without it the release recipe installs it into the configuration folder, and each time an appview card with `application:embed-test-app` starts it from the recorded path. It found F194.5.6.1-2 and sidecar-app A1.10. Green (macOS 26, debug builds with F194.5.6.1-2 and sidecar-app A1.10): 3 of 3 runs on both hosts.
+
 - F194.5.6.1-2: both installers connect the application of each installed or updated connector plugin, also when its folder was extracted by an earlier install whose connection failed. Red: the new check of both `sok` packages found no application after the second install. Green: 4 of 4 connector checks in each language with the plugin and ownership checks.
+
 - F194.3.1-2: the window-check workflow checks out the embed kit, builds its test application and sets `SOKSAK_EMBED_TEST_APP`, which the appview gate of `pnpm verify` requires. Red: the new workflow check reported that `window-checks.yml` does not set `SOKSAK_EMBED_TEST_APP`. Green: 6 of 6 workflow checks.
+
 - F194.5.7.1: `pluginsState` of both hosts reports `applications`, the record of `plugins/applications.json`, and a surface context has `runtime.applications` (`read`, `on`), which the page sets from the plugin state through `applications.js`. Red: the state checks of both `sok` packages and both hosts lacked `applications`, the context check of plugin-api had no `runtime.applications`, and the surface check could not read it. Green: those checks.
+
 - F194.5.6.3: during a plugin operation both hosts send each step of connecting the application of a connector plugin to every window as `plugins-progress`; the page records it on the running operation as `step` of `core.plugins` and the card of the plugin shows "<plugin> <action> 진행 중 · <application> <step>". Red: the host checks did not compile without the progress sink, the operation check had no `progress`, and the card showed only "db install 진행 중". Green: the plugin checks of both hosts, the operation and library checks.
+
 - F194.5.10-1: the Rust check of a package that brew does not have skips where brew is not the manager of the platform or is not on the search path. Red: CI on linux failed it with the error of a missing brew. Green: 6 of 6 recipe checks locally; CI of the push confirms linux.
+
 - F194.5.10: an application is identified by the application identifier of its platform and installed through its distribution or the standard package manager of the platform: the manifest accepts `bundle` only on darwin and the new `appid` only on windows and linux, and the package manager of each platform (`brew`, `winget`, `flatpak`); both `sok` implementations try `appid` through a new platform operation and refuse the manager of another platform, and `appid`, `winget` and `flatpak` return `not implemented on <os>`. The brew checks skip where brew is not the manager of the platform or is not on the search path. Red: the manifest accepted brew on linux, and both `sok` implementations refused `appid` as an unknown entry and the manager as "not brew". Green: the manifest checks, 5 and 6 connector checks in each language.
+
 - F194.5.6.1-1: each Go and Rust twin check of the application declares one of the twenty `application.*` contract cases that the host contract now lists, and the package checks assert `brew is not on the search path` on a machine without brew. Red: CI of the push of F194.5.6.1 failed `make host-contract-check` (`declares no contract case`) and the Go package checks on linux. Green: the checks pass locally in both languages; CI of the next push confirms.
+
 - F194.5.6.2: each step of connecting an application (`locate`, `recipe`, `record`) reaches an observer that the install functions of both `sok` packages take; the command line stores it as `sok.application.step` in the event file of its run and both hosts as `host.application.step`, with the method, the result and the microseconds. Red: the observation checks did not build or compile with an observer argument. Green: 3 of 3 connector checks in each language, with the plugin and ownership checks.
+
 - F194.5.6.1: the installer of both `sok` packages connects the application of each connector plugin that an installation extracts before `installed.json` is written: a locate entry that finds it records it as located, otherwise the recipe installs it and the executable it gives is recorded as installed, a platform without an entry fails with `application <id> does not support <platform>` and changes nothing, and removing the plugin removes its application. Every field of the declaration that the connection reads is refused by name when it is missing, PATH is required, and the file name of a release without unpack is the last segment of its address or an error. Red: the connector checks found no record and an accepted foreign platform. Green: 2 of 2 in each language, with the plugin tests (14 of 14 in Rust and the Go suite).
+
 - F194.5.3-1: the Fetcher that trusts the TLS server of a Go check moves from `tests/fetch_test.go` into `tests/tls_support_test.go`, the counterpart of the shared Rust module of F194.5.3. Red: `make hosts-check` failed with `packages/sok/tauriv2/tests/tls_support_test: no counterpart in packages/sok/wailsv3`. Green: it passes, and the Go checks pass.
+
 - F194.5.5: both `sok` packages keep `plugins/applications.json` (format 1): `ReadApplications`/`read_applications` reads it and refuses another form with the file and what it found, `RecordApplication`/`record_application` writes one application in one step, and `RemoveApplication`/`remove_application` deletes the folder and entry of an installed application and only the entry of a located one. Red: the record checks did not build or compile without the functions. Green: 3 of 3 in each language.
+
 - F194.5.4: both `sok` packages run the package and source recipes. A package recipe declares `cask`, the installer asks the brew of the machine with `brew info --json=v2` whether it has the package as that kind before it installs with `brew install [--cask]`, and afterwards the locate entries give the place of the application instead of a guess from the manager. A source recipe clones the https repository with git at its ref into the folder of the application and runs each build command there; a command that is neither on the search path nor in the clone, or that fails, names itself with its output and leaves no folder. The source recipe has no `output`, because `program` names the built executable. The checks use the real brew (read only) and the real git, whose https address `url.<base>.insteadOf` points at a repository of the check; installing a package changes the machine and runs only in the installation check of F194.5.8. The fixture application of the application checks is named sketcher, because the earlier name was a plugin id that `make boundaries` refuses in core. Red: the recipe checks did not build or compile without the functions. Green: 5 of 5 in each language.
+
 - F194.5.3: both `sok` packages install the release recipe of an application (`InstallApplicationRelease`, `install_application_release`): an https address read with the release limit of the fetcher, the SHA-256 compared, and a zip extracted by the bundle extraction of the platform, a tar.gz with its folders, files and symbolic links that stay inside the folder, or one executable; a failed step names itself and leaves no folder. The Rust platform gains `symlink`, and the TLS server of the Rust checks moves into `tests/tls_support_test.rs` for the fetch and release checks. Red: the tests did not build or compile without the function. Green: 5 of 5 in each language.
+
 - F194.5.2: both `sok` packages locate an installed application (`LocateApplication`, `application::locate`): each locate entry is tried in order — a bundle identifier through the metadata index of darwin (`mdfind`, with `program` taken from the folder that holds the bundle), a name on the search path that the installer passes from `PATH`, or an absolute path of an executable file — and the first that finds the application gives its executable and method; linux and windows refuse a bundle entry with `not implemented on <os>`. Red: the Go tests did not build and the Rust tests did not compile without the function. Green: 4 of 4 in each language.
+
 - F194.5.1: the plugin specification has the field `application` of a connector plugin, which needs no surface and may depend on the plugin that shows the application, and the installation specification states how the installer examines the machine, connects an installed application or runs its recipe (`release`, `package`, `source`), records `plugins/applications.json` and removes only an installed application; `validateManifest` checks the field. Red: `test/application.test.mjs` failed 3 of 3. Green: 3 of 3, and the package tests 211 of 211.
+
 - F192.2-1: the class tables of both `sok` packages are generated again from `docs/spec/events.json` and list `page.background.session`. Red: `scripts/test/event-classes.test.mjs` failed with `packages/sok/wailsv3/src/event_classes.go differs from docs/spec/events.json`. Green: 3 of 3.
+
 - F194.3.1-1: `ci.yml` and `window-checks.yml` check out the application plugin and the application sidecar, and `scripts/test/workspace-registry.test.mjs` requires a checkout of every repository that the workspace registry declares. Input: CI of the push of the application surface failed `make boundaries` because it had no checkout of `plugins/appview`. Red: the test failed with `ci.yml checks out no repository into plugins/appview, sidecars/app`. Green: 3 of 3.
 - Retired checklist entry `F192.1.1`: an entry of the external application surface was recorded under this identifier, which names the item of one owner of the sidecar session of a surface; the entry is F194.1.1, with its state.
 - Retired checklist entry `F192.1.2`: an entry of the external application surface was recorded under this identifier, which names the item of one owner of the sidecar session of a surface; the entry is F194.1.2, with its state.
@@ -2087,419 +2637,806 @@
 - Retired checklist entry `F192.4.6`: an entry of the external application surface was recorded under this identifier, which names the item of one owner of the sidecar session of a surface; the entry is F194.4.6, with its state.
 - Retired checklist entry `F192.4.7`: an entry of the external application surface was recorded under this identifier, which names the item of one owner of the sidecar session of a surface; the entry is F194.4.7, with its state.
 - F192.1, F192.2: a background session opens only for a tab whose surface is not mounted and ends with its listener when the tab is shown or its surface mounts, so a terminal hidden behind another tab of its card no longer receives a second `open` without `image` that left its output undrawn; each decision is the event `page.background.session`.
+
 - F194.4: side 2 is complete: the example application runs in an appview card through its patched renderer and the adapter crate, with the change to the application confined to its window platform selection, and it met the gate on its timeline drag and while it played. F194.3.4 waits for a display at 120 Hz and a refresh rate in the image configure of core.
+
 - F194.4.5: the window check `appview-gate` presses the control that `SOKSAK_EMBED_PLAY` names in a full-screen appview card, counts about three seconds of playback in presentations, and measures the gaps between the frames that the host accepted. The example application playing its test clip passed three times on wailsv3 (macOS arm64, debug build): 334 to 337 frames, gap median 18.0 to 18.1 ms, p99 22.9 to 25.1 ms, no refused or skipped frame; the playhead advanced to 7 seconds in the capture after the run.
+
 - F194.4.7: the gate check shows the appview card full screen, passes the arguments of `SOKSAK_EMBED_TEST_ARGS` and drags from the shares `SOKSAK_EMBED_DRAG_X` and `SOKSAK_EMBED_DRAG_Y` of the region. With the example application on a project with a test clip (`--project`), the drag along its timeline ruler moves the playhead and the preview, and the gate passed three times on wailsv3 (macOS arm64, debug build): delay median 17.8 to 22.2 ms, p90 29.0 to 30.1 ms, frame gap p99 25.5 to 27.4 ms, 97 to 100 of 100 moves measured, no refused frame. The test application passed the same check full screen: delay median 10.8 ms, p90 12.7 ms.
+
 - F194.4.6: the window check `appview-gate` maximizes and restores the window with an appview card that runs the example application. Red: before A1.9 of the sidecar and E1.6 of the adapter it logged a size error for each frame of the earlier size. Green: no error, and each step presented in 93 to 335 ms on wailsv3. The drag gate on the start screen of the application measured 12 of 100 moves, because that screen does not change under a drag (F194.4.7).
 - F194.4.1–F194.4.4: the example application is forked locally; its patched Skia renderer renders into a texture that its owner sets, an adapter crate renders the window on the shared device into the IOSurfaces of the embed ring and takes its input from the sidecar, and the window platform selection selects the adapter when `SOKSAK_EMBED_SOCKET` is set, without a change to editing code. The application started with the socket said hello and sent a 1280 by 800 frame in 7 seconds.
+
 - F194.3.3: the gate of side 1 passed on both hosts at 60 Hz, three runs each, with the debug builds of this branch on macOS (arm64) under a load average of 13 to 15. Wails: delay median 12.2 to 13.8 ms, p90 14.7 to 15.2 ms, frame gap p99 22.0 to 24.1 ms. Tauri: delay median 3.3 to 16.4 ms, p90 17.6 to 20.2 ms, frame gap p99 20.7 to 24.0 ms. No frame was refused or skipped, core was not changed, and the page sent each input to the sidecar about 1 ms after the native injection.
+
 - F194.3.2-1: the gate check presses, drags once per presentation and releases instead of a hover move with activation, which `e2e-check` refuses; the commit of F194.3.2 passed the check through a pipe that hid its failure. Three runs on wailsv3 under a load average of 13 to 14 passed: delay median 12.2 to 13.8 ms, p90 14.7 to 15.2 ms, frame gap p99 22.0 to 24.1 ms, no refused or skipped frame.
+
 - F194.3.2: the gate check `e2e/appview-gate.test.mjs` opens an appview card that runs the test application, moves the native pointer 100 times, one move per presentation, and computes from the native, host, page and sidecar records the delay from each move to the answer of the host for the first frame that shows it and the gaps between accepted frames. Its first runs found P2.3 and A1.8.
+
 - F194.3.1: the workspace registry declares the application plugin `appview` and the application sidecar, so a check configuration installs them for the gate of side 1.
+
 - F194.2.6: the application plugin shows a program that is a web address in a document region and starts no sidecar.
 - F194.2.4, F194.2.5: the application plugin starts as a local repository, and its page shows the application of its setting in one image region supplied by the application sidecar and passes the input of the card to it.
 - F194.2.2, F194.2.3: the application sidecar starts and stops the application of a surface, relays configure, frames, host answers and page input, and reports an application that ends by itself as an error that names its exit.
+
 - F194.2.1: the application sidecar starts as a local repository at version 0.0.1 with the standard input and output transport, its checks, checklist and changelog.
+
 - F194.1.7: the test application of the embed kit draws a moving bar and a pointer mark every frame and records each input and present with its time.
+
 - F194.1.6: the client of the embed kit connects an application to the socket of its sidecar, takes configure and input, and sends frames.
+
 - F194.1.5: the embed kit shares frames on darwin through global IOSurfaces with a 16-byte nonce, the form that the host accepts for an image region.
+
 - F194.1.4: the buffer ring of the embed kit lets the application draw only into a free buffer and frees a buffer when a later frame is consumed.
+
 - F194.1.3: the protocol module of the embed kit reads and writes every message as one line and refuses a line that breaks the document with an error that names it.
 - F194.1.1, F194.1.2: the embed kit starts as a local repository with its checks, checklist and changelog, and its protocol document defines every message, the framing and the token of a shared buffer for each system.
 - F161.56, F161.59, F161.62: closed as not reproduced on the current builds, with the records that show a recurrence in place.
+
 - F161.27: closed as not reproduced after three repeat runs of the outside resize check on both applications.
+
 - F187: a contract comment is above its test again, and the loss tests no longer depend on the speed of the writer.
+
 - F182: the input records check takes the clock anchor of the page that wrote page.call.
+
 - F160.20.2: the log volume budget is set from the window check runs of a minute or more.
+
 - F191: core 0.0.14 is released with the stored data migration; the release workflow runs the migration step on a release-built host and publishes both bundles.
+
 - F190: a writing sok plugin command owns the configuration directory for its write, so it refuses beside a running host and cannot race another command.
+
 - F188.5: projects.json carries its form in a format member beside the projects member, migrated from the bare array at the first read.
+
 - F188.4: settings.json carries its form in a format member that the workspace layer migrates, hides from the snapshot and preserves on write.
+
 - F189: the release runs a release-built host once on the stored data of the earlier release; the chain, the format mentions and the step are checked mechanically.
+
 - F188.2: the migration engine of both command lines applies the definition 2→3 of plugins/installed.json, and the shared reader entry migrates before it reads.
+
 - F186: the activation of the application records the application that was frontmost before it.
+
 - F183: every declared workspace version is 0.0.13, the release with the corrections since 0.0.12.
+
 - F184: every page and plugin event names the page that wrote it, and a reload that times out names the host calls it waited for.
+
 - F185: the native platform tests of the Tauri host run one at a time and read an emptied ring.
+
 - F181: the debug view shows the progress of 모두 저장, the host writes the archive on its own thread, a second save while one writes is refused, and every dropped modal reply is recorded.
+
 - F180: every script reads its command line with parseArgs of node:util and refuses an unknown or repeated option.
+
 - F160.19.3: `make host-allocations` reads its options with parseArgs and refuses an unknown option.
+
 - F179.1: the page batcher test uses the mock timers of node:test, and the batcher has no timer argument.
+
 - F176.3: the native test reaches an unanswered key through the declared function `sp_region_set_input_context`.
+
 - F177.2: the defaults of the policy timeline of the chain check state their reasons.
+
 - F179: the counts of refused events leave each second and at a flush instead of with each batch, in both hosts, the page and the native library.
+
 - F160.20.1: the run audit judges the volume budget only over a run of a minute or more.
+
 - F160.7.6: the input latency check measures the gate of every class at info and the bytes per minute of each event file.
+
 - F178: the Tauri event writer writes its batch at each interval while events keep arriving, as the Go writer does.
+
 - F177.1: a gated chain hop is judged by every declared level and every policy in force during the chain.
+
 - F177: the log audit asks a chain only for the hops that the policy in force stores.
+
 - F160.19.2: `make host-allocations` measures the live allocations of a host process each minute; a run of 10 minutes on both hosts shows no growth.
+
 - F160.21: the Go and Rust writer emits are measured again and recorded with the load.
+
 - F176.2: the test inventory links F175 and F176 to their tests.
+
 - F160.20: the run audit measures the volume of each log class and fails a class above its budget in the catalog.
+
 - F176.1: the events check passes again after the marker above the literal emit of an input failure is removed.
+
 - F176: a key over marked text that the input method does not answer is reported as an error, every input error carries the identifier of its key, and a chain ends at such an error.
+
 - F175: a run audit judges only the findings on lines inside the span of the run; F161.4 is classified.
+
 - F174: a window check without stored log offsets judges only the errors of the running process, not the history of earlier processes.
+
 - F160.18: the input latency with the trace on and off is recorded; F174 records the update fixture that the Tauri check application found.
+
 - F160.17: the numbers of the native, Go and Rust benchmarks are recorded with the load of their run.
+
 - F173: the input source wait registers through the observer entrance, the deep link parse states its cases, and `make push-check` runs the census and fallback tests.
+
 - F172: both hosts hold a deep link that arrives before the first window is ready and run it when the first window is ready, in arrival order; a link that arrives later runs at once. The queue tests of both hosts pass.
+
 - F161.57.7: the preedit cursor checks wait until the service has drawn the preedit, which the terminal plugin exposes in `terminal.cursor`; the activation IME checks pass on both applications.
+
 - F112: both hosts parse `soksak://<owner>/<command>?<params>` and run it as the declared command `<owner>.<command>` of the key window, or the first window; the parser unit tests of both hosts pass. The application-level check of a link opened from outside the application is not yet run.
+
 - F161.57.2: the hwp activation check selects the input source after the editor holds the focus; F161.57.7 records the intermittent preedit cursor measurement.
+
 - F161.57.2: the hwp check types its keys with the selected input source, by the wait of F161.57.5.
+
 - F171: a stall of the Wails main thread under load is located in the synchronous LaunchServices call of AppKit; F161.27 gets a tracked check of the terminal after an outside resize.
 - F135, F160.24: closed; the typing test of the document region passes and the log query has every item complete.
 - F162, F124: the blank document and the debug view items are complete under the verification rule; the save panel was not observed in the activation tier.
+
 - F161.29: the surface menu of a plugin is complete with the terminal menu released.
 - F162.4, F141, F123, F161.57.3: core 0.0.12, the hwp plugin 0.0.1 and the terminal correction are released, and the preedit cursor check passes on both applications.
+
 - F161.57.5: `diagnostics.input.source` answers a selection after the text input context of the key view reports the selected source.
 - F161.55.5, F161.55: the padding drag check passes on both applications with the frame wait; F161.57.3 is located in the drawn frame of the Tauri application.
+
 - F161.57.5: the forced selection of the text input context of F161.57.4 is reverted, because keys typed during the switch were lost.
+
 - F161.57.4: the selection of an input source makes the text input context of the key view hold it before it answers, so the first key reaches the selected input method.
+
 - F161.55.5: the terminal pixel helpers of the window checks wait until the image region presents the frame that a screen read names, and the specification names the `frame` of the screen event and of `terminal.screen.read`.
+
 - F164.3: the stall watch of the Wails host starts through `routine.Go`.
+
 - F168.1: the class table generator writes the let chain of edition 2024.
+
 - F170: `make push-check` runs the commit, structure, format and clippy checks of CI, and the pre-push hook runs it.
 - F149.2, F150.8.3, F161.57.1: the activation run passed the Korean syllable and the terminal keyboard on both applications; F161.57.3 and F161.57.4 record the two new failures of that run.
+
 - F169: `.node-version` declares Node 26.11.1.
+
 - F166.7: the layout of the hosts allows the kqueue watch of the Tauri host as the difference H10.
+
 - F164.2: the stall sample of the Tauri host is `stall_sample.rs`, the counterpart of the Wails host.
+
 - F168: the Rust packages build with edition 2024; the test of the default configuration folder no longer changes the environment of its process.
+
 - F162.4: every declared workspace version is 0.0.12.
+
 - F160.23: the record items of the sidecars and plugins that record nothing are in each repository's checklist, and the IDs per repository are listed in the F160.23 line; no repository needed a new item, because each already held the items of its missing records.
+
 - F166.3.2: the workbench keeps its own reading of versions, because the page loads only ES modules and semver is published only as CommonJS; the module states why.
+
 - F166.3.1: the Go and Rust packages of `sok` read the versions through `github.com/Masterminds/semver/v3` and the crate `semver`, and refuse the forms that the specification does not list, including the forms that the libraries accept by default.
 - F114, F161.49: closed.
 - F160.12, F160.14, F160.16, F154.3, F154: closed by their unit Red and Green under the verification rule of the agent guidance; the runs that they waited for are not run.
+
 - F166: the 17 items that waited only for a run in the applications are complete by the unit Red and Green of their parent items under the verification rule of the agent guidance, and the 13 parent items whose items are all complete are closed; their window checks stay tracked and were not run.
+
 - F167: the term list names the image region and rejects picture region, and every record uses image region.
+
 - F161.55.5: `host.window` reports the generation, raster and sequence of the presented frame of each image region, and `presented` is null while no frame of the current raster is presented.
+
 - F166.6: the LZ4 decoder of the window checks stays own code, because lz4js 0.2.0 accepts truncated input and invalid match references without an error; the reason is stated at the decoder.
+
 - F166.4: the Tauri host computes the IHDR CRC of a clipboard PNG with crc32fast 1.5.1 instead of its own CRC-32 loop; the refusal of a bad IHDR CRC is unchanged.
+
 - F166.5: `readPng` of the window checks keeps its own decoder and states why: pngjs reads a short image stream without an error.
+
 - F166.2: the checklist lists the functions of core that a maintained library provides (semantic versions, the PNG CRC-32, the PNG and LZ4 decoders of the window checks) and states why the remaining own functions stay.
+
 - F166.1: the Wails host watches the policy file through fsnotify; the kqueue code of its platform layer is removed, and the Tauri host states why it keeps its own.
+
 - F164.1: the stall sample of the Wails host builds only for macOS, so the sources compile for Windows.
+
 - F161.37: the first raster of a reopened terminal surface is answered to that surface, by the matching of S49 of the terminal sidecar (unreleased until its release 0.0.9).
+
 - F161.55.4: the pasteboard cleanup of a window check names a write of another process between its restore and its comparison by the change counts.
+
 - F166: the agent guidance requires a maintained library of the ecosystem for a function that it provides.
+
 - F165: the answer table of image envelopes in the sidecar specification shows the generation and the raster that every error answer carries.
+
 - F164: both hosts record a stall of their main thread of 1 s or more, the stacks of their threads and the end of the stall, without a window check.
+
 - F161.61: each test file also reports in the TAP form on the standard error, so a file killed at its limit keeps the errors of the tests that failed before.
+
 - F161.60: the audit of a run judges the errors from its first start mark to its last end mark, so the errors of earlier runs in the same configuration folder no longer fail it.
+
 - F161.52.1: the Tauri host names a new surface in the same main-thread step that creates its native surface, so a `host.window` reading during a creation no longer fails with `unregistered native surface`.
+
 - F161.54: both hosts end the connection of a sidecar on a line that its process did not finish, instead of failing its surfaces with `invalid message`.
+
 - F161.53: verify V7b compares the applied surface with the declared rectangle fitted inward to the device pixels, so a display of one device pixel per point no longer shows a verify error for half a point.
+
 - F161.52: the Tauri host keeps the name of a removed surface until its native surface is closed, so a `host.window` reading during the removal no longer fails with `unregistered native surface`.
+
 - F161.51: the example verification states that a new check configuration gets the workspace plugins with `make install-plugins` before its application starts, and that the harness replaces the project list, not the registry.
+
 - F163: a first run that cannot read the registry, such as one without a network, starts the window without the starter pack, states why, and installs the pack at the next start.
+
 - F160.31: the host writer and the tool writer are one implementation in the tool packages; the writer cases of the hosts stay in the host packages as the cases of the host contract.
+
 - F162.5: `soksak-exposure` accepts a command of core that a surface module runs through `runtime.command` and reports a name that core does not declare.
+
 - F162.3: a surface module runs a command of core through `context.runtime.command(name, params)`, so a plugin of documents reaches `core.file.place`.
 - R3.5.3: plugin-editor, plugin-hwp, plugin-flowmark, plugin-shell and sidecar-shell run `soksak-records` in `make test`, and the three plugins with a workflow run `soksak-commits` in CI.
 - R3.5.2: plugin-browser, plugin-files, plugin-terminal, sidecar-files, sidecar-vt and the registry run `soksak-records` in `make test` and `soksak-commits` in CI with `@soksak/plugin-api` of the core release 0.0.11.
+
 - F150.8.4: core 0.0.11 is released: the release workflow published the Wails and Tauri bundles of the tag `v0.0.11`, and the registry lists them.
+
 - F161.47: the job `test` of CI passed on two pushes with the cache and the build limit of 600 s.
+
 - F161.37.2: both hosts answer a transfer image of a surface that no window owns with `closed`, so the terminal sidecar releases the frame and a reopened surface of the same id receives the answer to its own frame.
+
 - F161.50: the Tauri host removes a surface that a surface sync removes from the surface registry before it closes its handle, so a window close no longer closes the same handle a second time and crashes the application.
+
 - F161.49: the recovery check of the terminal service declares the errors that its kill causes when it meets a frame or a write in flight.
+
 - F150.8.4: every declared workspace version is 0.0.11, the version that carries the event contract of F150 and F160, the replay of F160.35, the repairs of F161, F143 and the save place of F162.1.
+
 - F161.48: the Hangul test names its syllables by code point in its comments, the extension probes declare the release version, and F102 links its window check, so the repository checks pass again.
+
 - F161.47: a build of the host contract check may take 600 s, because a cold build of the Tauri host tests takes more than 300 s on the CI runner, and the CI workflow keeps the cargo and Go caches between runs.
+
 - F135: the exposure specification states that a document region, like a terminal, takes typed characters only in the key window of the active application once the application has been active, which is why the native test that forbids activation still types into it.
+
 - F160.6.5.1: both hosts report the size of the line that the writer of a sidecar is writing, and the fixtures of the buffer bounds fill the write queue only after the writer blocks on the pipe, so their cases no longer depend on when the writer thread starts.
+
 - F102.1.6: a window check installs a contributor probe and its provider probe from a registry of its own and requires that the contributed item connects and that the provider page uses it on both applications.
+
 - F102.1.8: the workspace registry writes only the sidecar dependencies of a plugin into its entry and accepts a dependency on a declared plugin.
+
 - F161.46: a window check takes its start position and the existing recordings before the checks of the endpoint, so a check that ends at a stale build reports only that error.
+
 - F161.45: the settings modal keeps a negative scroll position that the native modal reports during an overscroll, as the debug view does since F146, and refuses only a value that is not a number.
+
 - F143: with the Korean input method selected, the image region keeps the syllable before the newest insert revisable until the next insert or the end of the composition, because the input method can append the next syllable before it revises that one, which sent the unrevised syllable to the PTY.
+
 - F161.44: the procedure of the examples records 627 test files of the inventory.
+
 - F161.43: the test of the chain search requires the first matching start in the order of the log, as `chainOf` takes it since F161.15.
+
 - F161.42: the test of the catalog requires the chain `window` without `page.call`, as the specification states since F161.26.
+
 - F161.41: the tests of the applications assert the batches of a page without the statement of the clock anchor, which has its own test in the workbench.
+
 - F161.40: the handler of a right click calls `closest` on the target of the event directly, because a `contextmenu` event always targets an element.
+
 - F161.39: the generated class tables of Go, Rust and the page hold `host.sidecar.write_wait`, which F161.37.1 added to the catalog.
+
 - F162.1: `core.file.place {name}` and the host call `filePlace` ask through the save panel of the window where to save a new document and answer the chosen file relative to the project root; both hosts refuse a name that is not a file name and a place outside the project.
+
 - F161.27.1: a window check balances unequal terminal cards five times and requires that every terminal presents a raster of its new size.
+
 - F161.29.1: a plugin declares the context menu of its surface in `surface.menu` of `plugin.json`, and a right click on such a surface runs `core.surface.menu`, which opens the items at the pointer and runs the chosen command on that surface; elsewhere the page menu stays.
+
 - F161.24: while a card is fullscreen, its add, split and close tools are disabled and their commands are refused with an error that names the fullscreen card, so the layout changes only after the arrangement is restored.
+
 - F161.28: the tab list button (≡) stands at the start of every card header, and the head reserves its width at every level instead of showing it only when the tabs fold.
+
 - F161.25: a tab of a card is at most 200 points wide; a longer name is cut with an ellipsis and the tooltip of the tab shows the whole name.
+
 - F161.38: the test of the project switch mocks the page event queue that `projects.js` imports since F161.13, so its cases load and run again.
+
 - F161.4.1: the alter case of the replay check declares the event `sok.replay.divergence` of its own session, which it causes on purpose, so the audit of a run no longer counts it as an undeclared error.
+
 - F161.37.1: both hosts store `host.sidecar.write_wait` when a line for a sidecar waited a second or more in the write queue or its write took 10 ms or more, so the log tells a line that the host wrote late from a read of the sidecar that did not wake.
+
 - F161.32: the studio of an hwp file that stayed at `phase: starting` on the Wails host is classified as a start of the hwp plugin that posted its first request before the editor listened (H13 of the hwp repository), not as the persistent document store; the message contract of core is unchanged.
+
 - F161.34: the allocation check of the activity observers counts the allocations of the thread that posts the notifications, because the text input analytics of the system allocate once on a queue of their own after a text view becomes the first responder, and those blocks fell into the first measured run.
+
 - F161.14: the first batch of a page states the resolution of its clock beside the round trip of its anchor as `page.log.clock` (`resolution_us`), because the readings of `performance.now()` advance in steps, so a time of the page differs from the clock of the host by half the round trip plus that step.
+
 - F161.23: the wrapped-line checks of a resize judge the screen of the new width only and read the rows after the cursor settles, because the screen message of the previous width also shows the input once.
+
 - F161.26: the close of a window starts its operation before the page drains its event queue and passes the identifiers to the host call, and the chain `window` asks `page.window.operation` and `host.binding.call`, because the closing call ends the page before it can record the call and the host refuses a batch of a window that is gone.
+
 - F161.18: the divider drag check matches the record form of the transcript lines (`info page page: host ...`), which the one display path gives them, and runs with the trace on so a surface that presents nothing leaves its frame records.
+
 - F161.31: `readEvents` of the window-check harness merges the events of every process with a concatenation, so a day of checks reads any number of new events; the spread of one call overflowed the stack.
+
 - F161.33: the report of an input region records its dropped member as a boolean, as the catalog declares it; the disjunction of C is an int, which serialized a number.
+
 - F161.36: a page reports the stored performance switch to the host at its start in both directions, so a switch that a page which ended left on returns to the stored state; the contract named only the report of a stored true, and the host kept recording trace rows while the setting said off.
+
 - F161.13: the page drains its event queue before the host call that closes its window, so the first event of the chain of the close reaches the writer of the host before the page can end.
+
 - F161.20: `pluginChangeApplied` of `e2e/fixture.mjs` waits for the page that a plugin change reloads, and the plugin operations of the chain and registry checks and their cleanups wait for it.
+
 - F161.21: the settings check lists the enabled installed plugins of its configuration instead of a fixed list.
+
 - F161.19: the input records check reads the plugin events of the terminal as rows of the layer `plugin` and allows the bound of the page clock anchor in orders across the clocks of the page and of the host.
+
 - F161.12: the Tauri host terminates the WebContent process of a window by the handle of its main webview outside `with_webview` when it quits, which deadlocked with a thread that emitted an event.
+
 - F160.28.3: the first batch of a page states the round trip of its clock anchor as `page.log.clock`, the bound within which its events are ordered among those of the host.
+
 - F160.8.3: the sidecar ports of the page pass the correlation identifiers of a send to the host call `sidecarSend`, so the request of a key carries the identifier of the key.
+
 - F160.34.7: `replay.inputs` of `sidecar.json` names the event of each kind of replay input, and `sok debug replay` of both tools checks the inputs of each segment with the rules of a session before it starts the replay executable.
+
 - F160.25.6: `e2e/terminal-replay.test.mjs` replays a session with output, a scroll, a selection, a theme change, a resize and input with every hash equal, and reports a changed stored output as a divergence of the layer `sidecar`.
+
 - F160.34.6: the readers of the policy file of both tools run every golden case of `packages/log-contract/fixtures/policy/cases.json`, and the Go reader names a null level as a level that must be text.
+
 - F160.35.4: `e2e/terminal-replay.test.mjs` replays a terminal session of each application with `sok debug replay` of its bundle and checks that every sidecar and page hash is equal, and that a screen message changed on the way (`terminal.screen.alter` of the terminal plugin) is a divergence of the layer `plugin`.
+
 - F160.36: the writer of the host gives a plugin event the class that the catalog of its plugin declares; both hosts read the catalogs of the enabled installed plugins at start and after each plugin change and record a catalog they cannot use as `error host plugin catalog` ([plugin catalogs](docs/spec/logging.md#plugin-catalogs)). Every plugin event was stored `undeclared` without a class before.
+
 - F160.35.7: the import map of the pages maps `@soksak/plugin-api/screen-hash`, so a plugin page that hashes a screen message loads; without it the terminal surface failed to mount in both applications.
+
 - F160.35.6: `sok debug replay` of both tools compares the page frame records in the layer `plugin`, where the plugin of the page writes them through `runtime.log`, and names that layer in a divergence; it read the layer `page`, which holds no frame record, so a replay compared no page frame.
+
 - F160.35.5: the [screen message](docs/spec/persistent-services.md#screen-message) carries `segment`, the `boot` of the event file of the sidecar run that drew the screen; `screenFromMessage` refuses a message without a non-empty `segment` (fixture message `segment missing`), the page stores it as `segment` of its frame record, and `sok debug replay` of both tools refuses a page frame record without `fields.segment` in a session with one segment too (contract case `cli.debug.replay-segment-errors`).
+
 - F160.35.3: [Screen message](docs/spec/persistent-services.md#screen-message) states that a page checks each cursor member that is present (`shape` as `Block` or `block`, `blinking` and `focused` as booleans) and keeps the previous value of one that is absent, and that the reply of `terminal.screen.read` is the rows of the cells.
+
 - F160.35.1: [persistent services](docs/spec/persistent-services.md#screen-message) defines the `screen` message from a sidecar to the page (`sequence` of the matching frame record, `rows`, `cols`, `cursor`, and per cell `grapheme`, `width`, resolved `fg` and `bg`, `attributes`), and [replay](docs/spec/replay.md#view-state) states that the page hash is the hash of the grid that the page received, so a difference from the sidecar hash finds a loss or change in the relay of the host and the page while a defect of the raster stays outside the comparison; `screenFromMessage` of `@soksak/plugin-api/screen-hash` validates a message and returns the screen that `screenHash` takes, and `packages/log-contract/fixtures/replay/screen-message.json` holds a message with the hash of each screen vector and the messages that are refused. Red: `screenFromMessage` was not exported and the specification did not name the fixture. Tested with `node --test packages/log-contract/test/*.test.mjs packages/plugin-api/test/*.test.mjs` on macOS; the sidecar and the plugin adopt the message in F160.35.2 and F160.35.3.
+
 - F160.25.8: [replay](docs/spec/replay.md#segments) defines a replay segment (the events of one run of the sidecar, whose `sequence` restarts at 1), and `sok debug replay` of both tools starts the replay executable once for each segment, compares each segment with its own stored hashes, names the segment (`segment`) in a divergence and in `sok.replay.divergence`, holds the event lines of one segment at a time (`held_lines`) and refuses a page frame record without or with an unknown `fields.segment` in a session with several segments; the term `replay segment` is declared
+
 - F160.25.7: `sok sidecar release` of both tools refuses a package whose `sidecar.json` declares a `replay.executable` that `files` does not list, with an error that names the file, and a `replay` without an executable (contract case `cli.release.requires-the-replay-executable`)
+
 - F160.3.2.1: both hosts flush the native observers before the last flush of the writer at shutdown, so the tail of a counted source is written (`FlushNativeObservers`, `flush_native_observers`; contract cases `log.native.platform-flushes-the-observers`, `log.native.shutdown-*`), and a document view no longer stores `native.observe.failed` for a notification that AppKit registered on the view: `sp_observe_key_path` takes a context and the view passes the notifications of other contexts to its superclass
+
 - F160.9.3: the fixture that a window check starts from changes the common settings as the actor `diagnostics.fixture`, so the window checks no longer fail in `fresh` with a settings change without an actor; the fixture lives in `diagnostic-fixture.js` and has a test.
+
 - F160.31: the tests of the shared writer options, of the order of the reply ledger and of the panic of a routine declare their contract cases (`cli.log.writer-options.*`, `buffers.sidecar-replies.*`), and the panic test of the tool starts itself as its child instead of a second test function, so `make host-contract-check` passes with 592 cases.
+
 - F160.24.12: the indexer of the event files reports nothing for a file that rotation or retention removed after the notice of a write, and makes a failed update of a file that is there once more before it reports; the expected number of tests of the appearance check of the native library is 6.
+
 - F160.7: the Go host tests end the event writer that they start before their folder is removed, so no writer writes into a removed folder and the test package of the host runs in 48 s instead of 150 s or more; the bound of the panic hook test is 1500 ms, below the two-second wait of a hook that waits for a stalled writer and above the 606 ms measured under load.
+
 - F160.16: the test of the declarations in `marks.jsonl` no longer depends on the run identifier that the runner puts in the environment of a test process; a session outside a run keeps its declarations in the session.
+
 - F160.34.4: [replay](docs/spec/replay.md#golden-vectors) names the golden vectors of the screen hash, the screens it refuses and the sessions of the replay inputs, and `packages/log-contract/test/replay-vectors-named.test.mjs` requires that the document and its translation name each of them.
+
 - F160.34.3: [replay](docs/spec/replay.md#view-state) defines the selection, the scroll of the viewport and the theme as replay inputs, with the rules of their fields, their order, the cursor of the viewport and the class, and records the decision with the objections of an adversarial review (exclusion from the hash and state fields in the frame record were rejected). The hash definition and its magic are unchanged; the cursor outside the viewport keeps its column. `@soksak/log-contract` exports `replayInputProblem`, `replaySessionProblem` and `REPLAY_INPUT_KINDS`, with golden cases and three vectors. Validated with the tests of `packages/log-contract`; the replay executables follow under F160.34.7.
+
 - F160.34.2: [logging](docs/spec/logging.md#policy-file) states the exact schema of `log-policy.json` (the members `schema` and `classes`, the six values of a class, the default, the location beside the log folder for a sidecar, the refusals with their text, the watch through file-system events and the event `log.policy`), `packages/log-contract/fixtures/policy` holds the golden cases, and `@soksak/log-contract` exports `parsePolicy`, `policyAllows` and `policyIsBeingWritten` and the fixtures for the tests of the sidecars. Validated with `packages/log-contract/test/policy.test.mjs`; the readers of the Go package `sok` and the Rust crate `soksak_sok` run the cases under F160.34.6.
+
 - F160.34.1: the census declaration of a repository (`--census`) accepts `emitters`, the writer methods of a language with the positions of the arguments that hold the level, the event name and the fields, so `soksak-events --catalog` finds the emit sites of a Rust sidecar writer (`emit`, `emit_for`, `record_error`, `record_info`) and the census counts them as events of their function. Validated with `packages/plugin-api/test/events-check.test.mjs`; the observation in the sidecar repository is F160.34.5.
+
 - F160.33.4: `scripts/audit-run.mjs` and `scripts/check-events.mjs --logs` compose the catalog of this repository for each configuration folder with the catalogs that the `sidecar.json` of each sidecar in `plugins/installed.json` names in `events` (`installedSidecarCatalogs`, `catalogOf`), and read the event files of any role instead of the five names that were listed. Validated with `scripts/test/audit-run.test.mjs` and `scripts/test/check-events.test.mjs`; the observation in a running application is F160.33.5.
 - F160.33.2, F160.33.3: a sidecar catalog names its sidecar (`sidecar`) and extends a chain with `extends` (`{chain, after, events}`); `composeCatalogs` (`packages/log-contract`) joins it with the catalog of this repository and refuses a catalog that names no sidecar, owns another layer, declares a foreign event or contradicts a shared `log.*` event, and the audit asks for the extension events only for the cids of the `host.sidecar.request` that names the sidecar (`chain input of <cid> lacks <event> after host.sidecar.request of <sidecar>`). The lifecycle events of the layer `sidecar` pass as declared. Validation: `node --test packages/log-contract/test/audit.test.mjs` (24 tests; the new tests failed first because `composeCatalogs` did not exist).
+
 - F160.33.1: both hosts start a sidecar of standard input and output with `--log-dir <config-dir>/logs`, so a sidecar that adopted the event contract leaves its event file; the contract case `sidecars.start.passes-log-directory` and a test in each host (a fake sidecar records its arguments; the argument list was empty before) pass in the Go host (`go test -tags diagnostics ./tests -run Sidecar`) and the Tauri host (`cargo test --test sidecars_test`, 41 tests) on macOS.
 
 - F160.7: the event line carries `class` (the class the catalog declares; an undeclared name is stored without it and marked `undeclared`), the writers of both hosts and both tools split the levels into `<role>-<boot>.jsonl` (`error`, `warn`, `info`) and `<role>-<boot>.debug.jsonl` (`debug`, `trace`) with one `seq` across both and a loss counter per channel in `log.dropped`, and rotation closes a file into the generation `<file>.<n>` without removing any. The producer gate `enabled(class, level)` (Go, Rust, page, native library) follows `<config-dir>/log-policy.json`, which the host writes from the setting `diagnostics.log` and every process of the host watches through file-system events; a closed gate builds no field and the exact counts leave as `log.gated`, `page.log.gated` and `native.log.gated`, and a policy change is `log.policy`. The retention by run bounds `logs/` at 6 GiB, keeps the current run and a run with a `.keep` file, and stores `log.pruned`. The query matches `class` and reads both channels end to end (F160.24.10). Validation: the owning tests of the Go host, the Rust host, both tools, the workbench, the native library and the scripts on macOS; the application observations, the sidecars (F150.6.2), the division of `debug` into more levels and the measurement under a quiet machine remain open (F160.7.6).
+
 - F160.32.4: the context of a state module has `runtime` with `trace` and `log` (calls, checks and gates of the surface context; the events carry the plugin id and no `surface`), so `runtime.log` no longer throws in a state module. Red: the state module of `a state module is mounted for the shown project, answers its commands, stores data, and is disposed on switch` called `context.runtime.log.info`, the mount failed with `Cannot read properties of undefined (reading 'log')`, and the test failed with the actual `undefined` where `1` mounted module was expected. Green: the test and `an event of a state module has the plugin in its name and no surface in its fields` pass, with the other 449 workbench tests.
+
 - F160.32.2: a plugin builds the fields of an event only while the event is stored: `context.runtime.log.enabled(level)` and `context.runtime.trace.enabled()` tell the gates, and a function in place of `fields` runs only when the level is stored or the trace is on (the name and the `cids` are checked first, and the returned object is checked like `fields`). The gate of the log is `eventEnabled` in `page-log.js` (every level with a host, none on a page without one; the selection by class arrives with the log policy of F160.7) and the gate of the trace is `traceEnabled` in `performance.js`. A runtime that offers `log` or `trace` without its gate query is refused. Red: `a plugin asks whether a level is stored and builds the fields of an event only then` failed with `TypeError: context.runtime.log.enabled is not a function`; `a plugin trace builds its fields only while the trace is on` failed with `TypeError: context.runtime.trace.enabled is not a function`; `a runtime that stores events or traces without the query of its gate is refused` failed with `Missing expected exception`. Green: the three tests and `plugin-records.test.mjs` pass.
+
 - F160.32.1: a plugin event carries `cids` to the page writer: `context.runtime.log.<level>(event, fields, {cids})` accepts an array of non-empty strings without a quote, a backslash or a control character (the rule of the page writer and the host), throws a `TypeError` for another value or another key before anything is stored, and passes the list through `emitEvent` into the batch. The recording functions of the runtime moved from `surface.js` into `createPluginRuntime` (`plugin-runtime.js`), which the workbench feeds with `pluginRecords` (`plugin-records.js`). Red: `a plugin event carries the cids of its chain to the page writer` failed with the actual `[undefined, undefined, undefined]` where `[["p1.1", "p1.2"], undefined, undefined]` was expected. Green: the test and `plugin-records.test.mjs` pass, with the 447 other workbench tests.
+
 - F160.32.5: `soksak-events` recognises `runtime.log.<level>(event, fields)` and `runtime.log[level]` called with the same arguments as entrances of plugin events: the name without `plugin.<plugin>.` resolves to the one catalog entry `plugin.<plugin>.<event>` (reported as `plugin.*.<event>` when undeclared), the level comes from the member, and the fields come from an object literal or a builder `() => ({…})`. `emitEvent(` still works, and the emitter modules of the plugin branches become optional. Red: `runtime.log entrances …` failed on its first assertion with `events.json: plugin.fixture.input.key is declared and no source emits it`. Green: the test passes with the other 19 tests of `events-check.test.mjs`.
+
 - F160.32.3: `soksak-events --census <file> --catalog <file>` (`catalogReport(root, catalog, census)`) reads only the sources that the census `exclude` leaves in, so a vendored file with a lexer error no longer stops the catalog check. Red: `the census exclude removes a vendored file before the catalog check parses it` failed with exit status 1 and `ui/vendor/bundle.js:1: a string that starts here does not end`. Green: the test passes with the other 18 tests of `events-check.test.mjs`.
+
 - F160.31: the hosts and the command line tool start one event writer per language, which lives in the tool packages (`packages/sok/wailsv3/src/event_log.go`, `packages/sok/tauriv2/src/event_log.rs`) with the bounds of the fields of an event (`event_bounds.go`, `event_bounds.rs`): the layer, role, clock, thread entrance, rotation and a pull for a source that cannot call into the writer are options. The tool starts it with `StartToolEventLog` and `start_tool_event_log`; the host files keep the layer, the clock, the native ring pull and the start in the logs folder. The second implementation of the tool is removed. A file that exists is refused in the hosts as in the tool, `EmitCids` refuses a level outside the contract, and `Close` of the Go host reports a refused stop request. Validated with `event_log_options_test.go` and `event_log_options_test.rs` and the existing writer tests of the tools and the hosts.
+
 - F160.26: `docs/operations/examples.md` states the examined event sources for the idle time of the input (listen-only event tap, HID manager, global monitors, IO registry and power management notifications, `CGEventSourceSecondsSinceLastEventType`) and why each cannot serve the `--when-idle` gate without a permission that an unattended run cannot grant, so the gate keeps its read of `HIDIdleTime` every 5 s with that reason in `whenIdle`. The sources were examined from their interface contracts and were not run.
+
 - F160.19.1: the first responder of a window is stored only when its integer identity changes, so an update without a change allocates no more than a notification without an observer; `emit()` (`activity_observers.m`) and `storeRecord()` (`application_log.m`) release the string they allocate in the manually counted sources, and the test record decoder releases its strings. Validated with `activity_observers_allocation_test`, which counts the allocations of the process through the malloc logger. The 10-minute measurement has not been run (F160.19.2).
+
 - F160.9.2: the window check `e2e/operation-chains.test.mjs` performs the plugin, project, window, settings and update operations of both applications and requires every event that `docs/spec/events.json` declares for each chain, found through `log.query` and the notices of `host.log`; its search `e2e/chains.mjs` is covered by `e2e/test/chains.test.mjs`. The check has not been run.
+
 - F160.24.9.1: the event-file query returns the rows around one row (`around` with `earlier` and `later`, at most 500 each, the line text bounded like a page, each row marked `context`) in the Go and the Rust implementation; `sok debug query --around <cursor> --earlier <n> --later <n>` prints them with the context rows indented by two spaces, and the endpoint method `log.query` and the host call `logQuery` answer them. Six golden cases were added to `packages/log-contract/fixtures/query/cases.json`. Validated with the golden, refusal and byte-bound tests of both `sok` implementations and the endpoint tests of both hosts.
+
 - F160.24.9.2: each row of the debug timeline has a button (`core.debug.timeline.context`) that brings the 5 rows before and the 5 rows after it into the held rows; the rows that were not held are indented by two spaces and counted in `context` of the status of `core.debug`. Validated with `debug-timeline-ui.test.mjs`.
+
 - F160.24.11.3: the debug view answers each notice of the host with a query from the `tail` at once and has no interval of its own (`FOLLOW_INTERVAL_MS` is removed): the host bounds the rate of the notices and the record of the view's own query does not announce a change, so following ends instead of looping. Validated with `debug-timeline-ui.test.mjs`.
+
 - F160.24.11.2: both hosts publish the notice of a change of the event log after the index covers the lines, from the indexer and from every query that updates an index, at most once per 250 ms with the folded announcements counted (`coalesced`), as the host status `host.log` of the endpoint (`{path, size, notices, coalesced}`) and the host event `debug-log-changed`; the writer no longer feeds the notice. Validated with the `debug.follow.*` cases in Go and Rust.
+
 - F160.24.11.1: the update of an event-file index reports `announcing`, the lines it indexed after the earlier update except the records of calls that only read the log (`host.binding.call` of `logQuery`, `host.endpoint.call` of `log.query`), and `size`, the size of the file it covers, in the Go and the Rust implementation; the index bytes are unchanged. Validated with `TestLogIndexCountsTheLinesThatAnnounceAChange` and `index_counts_the_lines_that_announce_a_change`.
+
 - F160.25.3: `sok debug replay <session> [--until <sequence>]` in both tools reads the events of a session through the query, runs the replay executable that the installed sidecar of their role declares (the layer `sidecar` events on its standard input, one `{"sequence", "hash"}` line per frame record on its standard output), compares every stored sidecar and page hash in the order of sequence and, at the first difference, writes `sok: replay divergence: session <session> sequence <n> layer <sidecar|page> expected <hash> found <hash>`, stores the event `sok.replay.divergence` (level `error`) and ends with status 1. The contract cases are `cli.debug.replay-equal`, `-until`, `-divergence` and `-errors`. Red (unchanged tools): Go `tests/replay_test.go` and Rust `tests/replay_test.rs` failed with `sok: unknown command: debug replay` (status 2, want 0 and `replay session s1: 2 sidecar frames and 2 page frames equal`) and, for `--until`, `unknown option --until` in Rust. Green: 4 of 4 tests in each tool with a replay executable of the tests (a shell script that counts the input bytes), which cover an altered input, an altered hash of the sidecar, an altered drawn hash and a page frame without a sidecar frame with the right layer, and eight refused sessions; `go test ./...`, `cargo test -p soksak-sok-tauriv2`, `cargo clippy -D warnings`, `make events-check parity-check exposure-check census-check` and `node scripts/check-fallbacks.mjs` pass. The recorded parity counts of [examples](docs/operations/examples.md) follow the new files. Verified on: macOS, 2026-10-11, working tree of this item; the full host contract run belongs to the end of the checklist.
+
 - F160.25.2: a `sidecar.json` of a sidecar that produces screens declares `replay` (`role`, the role of its event files, and `executable`, the path of its replay executable inside the package), which `validateSidecar` checks. Red: `packages/plugin-api/test/validate.test.mjs` failed with `sidecar.json: unknown field replay`; Green: 28 of 28 there.
+
 - F160.25.1: [replay](docs/spec/replay.md) defines the records for a replay of a terminal session (replay inputs with `sequence` and the complete `hex` of each occurrence, `frame` records of the layers `sidecar` and `page` with `sequence`, `rows`, `cols` and `hash`), the screen hash (SHA-256 of canonical bytes: cells with grapheme, width, colors and attributes, and the cursor), the replay executable and the command. `@soksak/plugin-api/screen-hash` computes `screenBytes` and `screenHash`, and `packages/log-contract/fixtures/replay/screen-hash.json` holds four golden vectors (computed by an independent implementation) and seven refused screens with their error text. Red: `packages/plugin-api/test/screen-hash.test.mjs` failed with `Cannot find module .../packages/plugin-api/screen-hash.js`; Green: 4 of 4 there and 12 of 12 in `packages/log-contract/test/screen-hash.test.mjs`.
+
 - F160.24: one query over the event files of the configuration directory (`log.query`, `sok debug query`) answers by channel, level, class, layer, event, surface, session, `cids`, run, text and time through a segment index with Bloom filters beside each file; the debug view pages through it. A log of 1,000,000 events (169 MB) builds its index in 3 to 5 s and answers the first page in 12 to 38 ms. The page `scanned` count of the log files is named `logs`.
+
 - F160.10.3: the ledger of the requests that wait for a sidecar reply cuts its order back to the waiting requests, so answered requests no longer grow it without a bound, and stores `host.buffer.dropped` for each request it forgets at the bound of 4,096.
+
 - F160.9: the operations of the page that change the application are chains joined by a correlation identifier: the page assigns `p<time origin>.<n>` when a plugin install, update, remove, enable or disable, a project open or removal, a window open or close, a change of the settings (with its `actor` and `keys`) or an application update starts, stores the first event of the chain (`page.plugin.operation`, `page.project.operation`, `page.window.operation`, `page.settings.change`, `page.update.operation`) and passes the identifier with the host call (`host.call(name, arg, {cids})`; the fourth argument of `Bindings.Call`, the key `cids` of a Tauri command), so `page.call` and `host.binding.call` carry it. The catalog declares the five chains and `auditLogs` verifies them; both hosts refuse an identifier that a line cannot hold. `set` of the settings refuses a change without an actor. Verified by the owning tests of the page, both runtimes, both hosts, the audit and the catalog; the window check that performs each operation is F160.9.2.
+
 - F160.10: the entrances of calls state their result in one form: `ok`, `micros` and, for a failure, `error` as `<code>: <text>` (`page.call`, `page.command`, `host.endpoint.call`, `host.binding.call`, and the new `host.sidecar.reply`), with the internal code of the entrance for a failure that has none; the catalog marks them `"result": true` and `auditLog` checks the form. The host stores `host.sidecar.reply` for a message of a sidecar that names the `cids` of requests or states an `error`, and for the requests that wait when the sidecar fails. The terminal, files and shell sidecars must write the `cids` of the request line in their reply lines (F160.10.1). Verified by the owning tests of the audit, the page and both hosts; not observed in a running application (F160.10.2).
+
 - F160.15: both hosts store the path of a stall dump as the event `host.stall.dump` (`path`; the new diagnostic method `diagnostics.stall.dump`, which the window-check library sends after it sampled the threads of a host that does not answer) and announce each crash report of the application once as `host.crash.found` (`path`, `pid`, `time`) at the next start. The report `<executable name>-<date>.ips` is looked up in the folder that the platform names (`sp_diagnostic_reports_directory` in `native/darwin`, the platform operation `DiagnosticReportsDirectory` / `diagnostic_reports_directory`), the newest 64 are read, and `logs/crash-found.txt` lists the announced paths. The Wails host gives the logger of the framework the level `warn`, so the standard error no longer holds a line `[AssetFileServerFS] Handling request` for every requested file (the Tauri host writes no such line), and `docs/operations/examples.md` no longer describes `application.log`. Verified by the owning tests of the native library, both hosts and the window-check library with test-controlled fixtures; not observed in a running application (F160.15.2).
+
 - F160.24.7: the tracked tests `TestLogQueryAnswersAMillionEventsWithinTheLimit` (Go) and `query_answers_a_million_events_within_the_limit` (Rust) build a log of 1,000,000 events and its index and time the first page and a query of each kind against stated limits (index 30 s, first page 500 ms, one cid, event name or short range 1 s, a filter that fills a page 5 s, text 10 s); the measured times are in the checklist.
+
 - F160.24.6: the debug view pages through the host call `logQuery` and never reads an event file: the timeline opens with the newest page of 500 rows, the button 이전 행 (`core.debug.timeline.older`) puts the page before the oldest row in front, the filter members (`channel`, `level`, `class`, `layer`, `text`, `event`, `event_prefix`, `surface`, `session`, `cid`, `run`, `from`, `to`) ask for the newest page again, and following asks for the rows after the `tail` of the earlier answer page by page. The view holds at most 2000 rows and counts the oldest rows that following leaves out (`omitted`). The whole-file reader, the setting `context`, the status members `sources`, `limited`, `total`, `shown`, `lines` and `drawn`, and the golden fixtures `packages/log-contract/fixtures/timeline` are removed (the context rows return in F160.24.9). Validated with the workbench tests; the window checks `e2e/modal.test.mjs` are changed to the new status and not run.
+
 - F160.24.5: both hosts bring the index of an event file up to date after the writer wrote a batch (a goroutine or thread that the write notice wakes; the notices that arrive meanwhile become one more update), move the index files with the generations of a rotation (an index that cannot be brought up to date does not stop the rotation and is reported), store the event `host.log.index_rebuilt` for an index built from the whole file and show a failed update once for each distinct text as an `error` record of the place `log index`. The endpoint method `log.query` (every build, no `window`) and the host call `logQuery` answer the query; the host call `debugReadRange` and its tests are removed, and `logQuery` is not recorded as a page call. Validated on macOS with the Go and Rust tests of the hosts.
+
 - F160.24.3: the Rust `sok` crate has the same index and query (`log_index.rs`, `log_query.rs`; the crate `memchr` finds line feeds and text) and `sok debug query` in place of `sok debug timeline`; it writes the same index bytes as the Go implementation for the same file (the digests of the golden fixtures agree), gives the same pages, cursors and error text, and the platform interface has `lock_file`, `unlock_file` and `same_file`. The test profile of the workspace optimizes the crate `soksak-sok-tauriv2`, `serde_json` and `memchr`, so the tests of 1,000,000 events measure the optimization level that ships. Validated on macOS with the Rust tests of `soksak-sok-tauriv2`.
+
 - F160.24.2: the Go `sok` package reads the event files through an index beside each file (`<name>.idx`: segments of 4,096 lines, five Bloom filters of event, surface, session, run and `cids`, two state blocks with a checksum; built from the whole file when it is missing or is not the file that was indexed, otherwise brought up to date from the partial segment on) and answers one page of a query over the channels `other`, `debug` and `all` (`ParseLogQuery`, `QueryLogs`), ordered by `ts_us`, `role`, `boot` and `seq` with a cursor, a `tail` for following and the count of the segments that it read. `sok debug query` replaces `sok debug timeline`: it prints the text lines of one page and writes `more: --after <cursor>` when a row follows; the whole-file reader and the setting `--context` are removed, and the layer `sok` and the member `class` of a line are accepted. The platform interface has `LockFile` and `UnlockFile` (`flock`) for the update of one index by several processes. The golden fixtures `packages/log-contract/fixtures/query` hold the event files, the SHA-256 of the index of each, and 25 queries with their pages and lines. Validated on macOS with the Go tests of `packages/sok/wailsv3`; the Rust implementation, the hosts and the debug view follow in F160.24.3 to F160.24.6.
+
 - F160.6.4: the Tauri test `presentation_wait_timeout_returns_its_failure_and_writes_no_log_line` ignores the events `native.observe.registered` that the native observers store at start, so it still asserts that the wait writes no event of its own.
+
 - F160.2: three defaults of `routine.rs` and `events-check.js` that `scripts/check-fallbacks.mjs` listed without a stated reason carry a `default:` reason.
+
 - F160.6.4: the remaining buffers are bounded and every cut or refusal is stored. The page cuts the fields of an event at 65,536 bytes while it serializes them, cuts the text and the place of a record at 8,192 and 1,024 bytes, and bounds its queue by 4,194,304 bytes besides 4,096 events (`page.log.dropped` has `bytes`); the host serializes the fields of an event only up to 1,048,576 bytes and states the bytes written when it stopped in `truncated`, cuts the text and the place of its records and bounds its start buffer by 4,194,304 bytes; both hosts bound the subscription changes of one topic that wait for the page by 256 and answer a refused change with the error `-32000`, and the Wails host bounds the output queue of an endpoint connection by 256 frames and 16,777,216 bytes. Each refusal is `host.buffer.dropped`.
+
 - F160.5.2: both hosts store every host call of a page as the event `host.binding.call` (`name`, `args`, `micros`, `ok`, `truncated`, `error?`) without the performance trace. The Wails page calls the one bound method `Bindings.Call` of the new service `Bindings` with the name of the method and the array of its arguments, which runs the exported method of `Host` by name (the service name in `apps/wailsv3/runtime/index.js` and in the host specification changes from `Host` to `Bindings`), and the calls of native web view documents are recorded in `invokeNative`; the Tauri host defines every command inside the macro `bindings!`, which records each command and generates the registration, and `sidecars_outdated` returns a `Result` like the other commands. The parity check reads the commands of the `bindings!` block.
+
 - F160.27: the census rule `rs.ok-discard` is enforced with zero findings. 14 discarded results state a `default:` reason; the overlay state and the recording state report a poisoned lock as `host.record.error` instead of an absent value, and both hosts report a line of the `ps` listing of the WebKit processes that begins with no process number (the Tauri host also reads the lines whose process number `ps` pads with spaces, which it skipped before).
+
 - F160.30: both `sok` tools write their own event file `logs/sok-<boot>.jsonl` in the configuration directory that the command targets (layer `sok`, schema 2): `log.open`, `sok.command` (command word, arguments and error text cut to 1024 bytes, microseconds, `ok`, exit status; the level `debug`, and `warn` for a status other than 0) and `sok.panic` (the goroutine or thread, the text and the stack at the panic). A panic of the command, or of a goroutine or thread, is stored and ends the tool with the new exit status 4. Every goroutine starts through `Go` and every thread through `spawn_named`, which replace the exemption `^packages/sok/` as the census entrances of `go.go-statement`, `go.recover` and `rs.thread-spawn`. The platform interface of both tools gains `MonotonicNanos`; the Go tool requires `golang.org/x/sys`. The catalog declares the layer `sok` and the two events, the audit reads `sok-` files, and `events-check` reads the emit sites of the tool. The tests are `packages/sok/wailsv3/tests/event_log_test.go` and `packages/sok/tauriv2/tests/event_log_test.rs`. F160.31 registers the shared writer of the hosts and the tool.
+
 - F160.29.1: the workflow `.github/workflows/window-checks.yml` builds both applications and runs `pnpm verify:windows --when-idle 45`, then `node scripts/audit-run.mjs` on the newest run folder, on a self-hosted runner with the labels `self-hosted`, `macOS` and `soksak-desktop`, and keeps the run folder and the logs of the check configurations for a failed job; [examples](docs/operations/examples.md#continuous-integration) declares the labels and what the runner provides, and `scripts/test/workflows.test.mjs` checks the labels and the step order. No job has run yet (F160.29.2).
+
 - F160.8.1: an image region assigns the correlation identifier `<boot>.<n>` to a key when it arrives and stores `native.input.key_down`, `native.input.callback` and `native.input.report` with it, in place of the free-form records of the place `input method` and `input report`; the report to the page carries `cids`, the host records `host.input.relay` for a region event with identifiers and `host.sidecar.request` for a request to a sidecar with identifiers, the event `page.call` of `sidecarSend` carries the identifiers of the request, the catalog declares the chain `input` (`native.input.key_down`, `host.input.relay`, `page.call`, `host.sidecar.request`), and the audit refuses an event declared with `cids: "required"` that has none. The terminal plugin and the terminal sidecar carry the identifiers on in their own checklists; the observation in the running applications is F160.8.2.
+
 - F160.28.1: every line of the event files has `mono_ns` (schema 2). The page converted `Date.now() * 1000`, so its `ts_us` ended in three zeros and it had no monotonic clock; it now reads `performance.now()` for each event, asks the host for its clocks (`{action: "clock"}` of the host call `log`, five requests, the shortest round trip anchors the page) and stores the `ts_us` and `mono_ns` of the host at the reading. The host and the native library read one monotonic clock (`sp_mono_ns`, `clock_gettime_nsec_np(CLOCK_UPTIME_RAW)`; the platform operations `MonotonicNanos` and `SetEventBoot`), the native ring record carries both clocks and the correlation identifiers (`sp_event_cids`, `sp_cid_new`, `sp_event_set_boot`), and the writers of both hosts, the audit (`packages/log-contract`), the catalog and the readers (`sok debug timeline`, the timeline of the debug view) use schema 2 and reject a file of schema 1 with its name. The sidecar repositories adopt schema 2 in their own checklists; the measurement of one key in the running applications is F160.28.2.
+
 - F160.3.1: every observer, monitor, key-value observer, run loop observer, dispatch source, Apple event handler and delegate of the native library registers through the one entrance `native/darwin/src/observe.m`, which stores `native.observe.registered` and `native.observe.failed` and counts every delivery exactly (`native.observe.delivered` per delivery, or `native.observe.counted` at most once per second for the sources at the rate of a frame or a device); the 25 registrations, the delegate and the 13 error returns that the census listed now go through the entrance, store an event or state a reason, and the native failure paths of the window controls, window facts, file drop, surface, clipboard, link, appearance, input source and dock menu store `error` records; a process that misses its wait stores `native.process.exit_timeout`. The census enforces `m.registration`, `m.delegate` and `m.error-return` with no finding, and counts a call of `sp_log_error` or `sp_log_info` as an event of its function. Not observed: the events in a running application (F160.3.2).
 - F160.6.1 to F160.6.3: every bounded buffer states its bound and counts its loss. The pending replies and closes of a sidecar hold at most 1,024 messages and 4,194,304 bytes and the relay remembers 256 expired requests; a refusal is the event `host.buffer.dropped` (`buffer`, `count`, `bytes`, `reason`), a refused reply is also an error to its caller, and a refused close is not awaited. `page.call` arguments (1,024 bytes) and the text of `console` (8,192 bytes, `truncated` field) are cut while they are serialized by `packages/workbench/bounded-json.js`. Both writers store an event whose fields are over 1,048,576 bytes as `{"head": ...}` with `truncated` set to the original size, and `packages/log-contract` accepts that line. F160.6.4 (the page queue, the start buffer and the record text, bounded in bytes) remains open.
+
 - F160.5.1: both hosts store every request of an endpoint client as the event `host.endpoint.call` (`name`, `args` cut to 1024 bytes, `micros`, `ok`, `truncated`, and `error` as `<code>: <message>` for a failed request at the level `warn`) whether or not the performance trace is on; the trace-only record `host.trace.endpoint` is removed. The tests are `packages/host/wailsv3/tests/endpoint_record_test.go` and `packages/host/tauriv2/tests/endpoint_record_test.rs`. F160.5.2 (the host side record of the bindings) remains open.
+
 - F160.16: the audit of a run judges each test by the log: it writes `judgment.json` in the run folder with a row for each test and application (the range of lines, the `error` events of the range with their declaration, the expected events found and missing), and a test that declared an event with the new `expectEvent` and whose range holds none fails with the missing name at its end mark in `marks.jsonl`. The window-check library appends `expect_event` for `expectEvent`. Verified by the owning tests; no window check declares an expected event yet, and the ranges in the logs of the applications are not yet observed.
+
 - F160.14: `node scripts/audit-run.mjs <run folder>` audits the event files of every layer (`host-`, `vt-`, `files-`, `shell-`, their generations and debug files) of the configuration folders that `marks.jsonl` names, and `pnpm verify:windows` and the new `pnpm verify:activation` run it at their end, also after a failed test; it reports a gap of `seq` across generations and the debug file, a chain over the files of the folder, an undeclared event and every `error` event that no `expectError` of the test declares, as `<file>:<line>: <message>` with the exit status 1. The window-check library records `config` in each mark and appends `expect_error` for `expectError`. `node scripts/check-events.mjs --logs` audits the files of every layer too. Verified by the owning tests; a run of the window checks in the applications is not yet observed, and the continuous integration runs the tests of the audit because it runs no window check.
 
 - F160.2: the census (`packages/plugin-api/census-rules.json`, 10 rules for JavaScript, Go, Rust and Objective-C) lists each source of occurrences that has neither an event in its function nor a reason marker, and the command `soksak-events` of `@soksak/plugin-api` applies it to any repository, with the catalog check of F160.1 (`--catalog`); `make census-check` and `scripts/test/census.test.mjs` run it here. The reason marker has one form, `(default|silent): <reason>`; `scripts/check-fallbacks.mjs` and the census reject `기본값:` and every other form with the file and line. Five rules are enforced with no finding (`js.empty-catch`, `js.swallowing-catch`, `go.recover`, `rs.unwrap-or`, `rs.dropped-send`); five wait for an entrance item and are printed by each run with their findings: `go.go-statement` 37 (F160.4), `m.registration` 25, `m.delegate` 1 and `m.error-return` 13 (F160.3), `rs.ok-discard` 18 (F160.27). Two empty catches got a `silent:` reason, and the parsers of the test mark of both hosts no longer coerce a missing `kind` or `result` (the `unwrap_or` of the Rust parser and the ignored second results of the Go parser). Tests: `packages/plugin-api/test/events-check.test.mjs` 17 of 17, `scripts/test/census.test.mjs`, `scripts/test/fallbacks.test.mjs`, `scripts/test/check-events.test.mjs`.
+
 - F160.4.1: every goroutine of the Go host starts through `routine.Go(name, fn)` and every thread of the Rust host through `spawn_named(name, body)`; a panic stores the event `host.panic` (`name`, `text`, `stack`) and ends the process with status 2 (Go) or 101 (Rust). The Rust panic hook no longer waits up to 2 s for the writer on the panicking thread: it stores the event, and a thread of its own waits for the writer and ends the process. The contract case `log.panic.writes-an-error-line` is replaced by `log.panic.records-an-event` (both hosts) and `log.panic.does-not-wait-for-the-writer` (Tauri). Verified by the owning tests of both hosts; the rule that finds a bare `go` statement (F160.4.2) and an observation in the running applications are open.
+
 - F160.12: the diagnostic method `diagnostics.test.mark` of both hosts stores the events `host.test.start` and `host.test.end` (`name`, `run`, `result`) and replies the position `{boot, seq}` of the line after a flush; the window-check library marks the start of each check and its end (`pass` or `fail`) when `SOKSAK_RUN_ID` is set and appends each position to `marks.jsonl` in `SOKSAK_RUN_FOLDER`, which the test runner now sets beside the run identifier. Verified by the owning tests of both hosts, the window-check library and the runner; the markers in the logs of a window-check run are not yet observed.
 - F160.11, F160.13: the test runner gives each run an identifier (`SOKSAK_RUN_ID`), stores the output of every test in `target/test-runs/<run>/` as it arrives and keeps `manifest.json` with the status, start and end of each test; `node scripts/test-runs.mjs prune` removes only the runs without a failure or with every failure classified.
+
 - F160.1: `make events-check` reads the emit sites of the Go, Rust, JavaScript and Objective-C sources and fails on an emitted name that `docs/spec/events.json` does not declare, on a declared event without an emit site, and on a level or a field of a literal site that the declaration does not allow; a name that a site builds is listed by a comment `events: <names>` or `events: forwarded`. The catalog declares `page.log.dropped` and `sidecar.record.<level>`, gives `log.rotated.removed` the type `string|null`, lists the levels and optional fields that the sites use, and the audit of the logs accepts optional fields and types with `|`. The kind `reopened` of `host.app.event` is removed from both hosts, and the callback `inputSourceChanged` of an image region no longer records the change that `native.input.source_changed` records.
+
 - F161.3: the window check `e2e/card-sidebar-space.test.mjs` sets the sidebars of the terminal card back to `inherit` in its cleanup, so no choice of a removed set remains in the layout, and it passes on both applications.
+
 - F161.2: the window checks `e2e/browser.test.mjs` and `e2e/hosts.test.mjs` match the transcript lines in the form the host records (`info page page: host <call> …`), and they pass on both applications.
+
 - F161.1: the window check `e2e/sidecar-recovery.test.mjs` declares the restart of the killed terminal service that the host logs, and it passes on both applications in 5.0 s.
+
 - F160: the checklist registers every result of the audit of the records (the sources of core, of the sidecars and plugins, and the mapping of test results to the logs), F160.1 to F160.23, and F161 for the failures of the full run of the window checks.
+
 - F154.4.3: `pnpm verify:windows --when-idle <seconds>` starts each window-check file only after the person gave no input for that long, so the checks neither take the focus of the person nor fail on the input of the person; the runner names a waiting test with `WAIT`.
+
 - F156: the debug view places the native modal again when an image loads, so the modal has the height of the card with the image.
+
 - F157: the timeline of the debug view draws the newest 1000 lines and states how many it leaves out, spaces the updates that follow a growing file by 500 ms, and reads a file without a line as no row, in the view and in `sok debug timeline`; the page no longer stops answering on large event files.
+
 - F154.3: the full run of `make host-contract-check` (1586 tests in 480 s) found one Tauri test that waited 120 s for a message that the service never sends, so it passed only at the limit of the runner; the wait is removed and the test takes 0.3 s. The contract cases of `sok debug timeline` and the scope of the notification case are written in the table.
+
 - F145.15.4: the window check `e2e/event-log.test.mjs` observes on both applications that the trace stores the placed surface with its geometry, the memory of the sidecar process and the start of each page document after a reload.
+
 - F111.4: the hwp window check is split into `e2e/hwp.test.mjs` (opening, drawing and the keyboard focus while the application is inactive) and `e2e/activation/hwp.test.mjs` (typing, selecting and saving in the active key window), with the shared steps in `e2e/hwp-support.mjs`; the Tauri host does not pass the active check reliably (F111.4).
+
 - F155: the Tauri host ends with its message and the status 1 when a startup step fails, and stores the failure in the event log, instead of aborting the process and showing the crash dialog of the system.
+
 - F104.6.3: the comment language check reaches the comments after a string with a backslash before a line feed and after a regular expression literal, and the repository test runs in `pnpm test`; 16 comment lines in `scripts` are in English.
+
 - F104.5: the comments of `packages/sok`, `packages/plugin-api`, `packages/window-check`, `packages/client`, `packages/mcp`, `packages/soksak` and `packages/log-contract` (1,070 lines) are English, including 6 lines of `packages/plugin-api/records-check.js` that `scripts/check-comment-language.mjs` does not list; only comment lines changed and the owning tests pass.
+
 - F104.2.1: the comments of `packages/host/wailsv3` (1,798 lines in 85 files) are English; `scripts/check-comment-language.mjs` reports no line there, the code of every file is the same without its comments, and `go vet` and the compilation of `tests` succeed on macOS.
+
 - F104.2.2: the comments of `packages/host/tauriv2` (2,066 lines in 88 files) are English; `scripts/check-comment-language.mjs` reports no line there, the code of every file is the same without its comments, `cargo fmt --all --check` and `cargo check -p soksak-host-tauriv2 --tests` pass, and nine wrong or obsolete comments are corrected.
 - F104.5.1, F104.6.1: the comments of `apps`, `e2e` (except `e2e/hwp.test.mjs`), `scripts` and the Makefile are English; `scripts/check-comment-language.mjs` lists no comment line of these files, and only comment lines changed.
 - R5.4: `plugins/installed.json` holds no `package`; `sok`, both hosts and the staging of the workbench read the `name` of an installed plugin from the `package.json` in its recorded `path`, and the Go and Rust readers refuse a plugin that holds `package` with `<file>: plugins/installed.json <id>: unknown field package`; the output of `sok plugin install` no longer has `package`.
+
 - F104.4: the comments of `native/darwin` (`src`, `tests` and `Makefile`, 1,327 lines in 95 files) are English; `scripts/check-comment-language.mjs` reports no line there, the code of every file is the same without its comments, and `make -C native/darwin all` and the build of the native test executables succeed. Three wrong comments are corrected (`applyInsets`, `sp_region_facts` and the comment of `appearance.h`).
+
 - F104.3: the comments of `packages/workbench` are written in English; `scripts/check-comment-language.mjs` reports no line of the folder, and no code, string or identifier changed.
+
 - F154.4.3: `pnpm verify:windows` runs each window-check file as a process of its own through the test runner, one at a time, with `RUN`, `PASS`, `FAIL` and `TIME` lines, the file in flight every 10 s and a limit of 600 s for a file.
+
 - F154.4.2: `make -C native/darwin test` runs the native tests one at a time through the test runner with `RUN`, `PASS`, `FAIL` and `TIME` lines, a line every 10 s for the test in flight and a limit of 120 s for each test; `NATIVE_TEST_ONLY=<text>` scopes a run.
+
 - F154.4.1: `pnpm test` runs each Node test file of the workspace as a process of its own through the test runner with `RUN`, `PASS`, `FAIL` and `TIME` lines, the files in flight, the slowest files and a limit of 120 s for each file; `--only <text>` scopes a run.
+
 - F107: a stored link to a set that only a removed plugin declared no longer fails the load of the settings; `validateSidebars` keeps the link of a plugin that is not loaded, and a link of a loaded plugin to a missing set still fails.
+
 - F140: the window check in `e2e/files.test.mjs` observes that the failure to open a file is shown in the message row of the file tree (status `files.open` of the files plugin) and not in the error display of the main document.
+
 - F142: the window check `e2e/terminal-fullscreen-fit.test.mjs` measures that a terminal has the rows, columns and region geometry of its card in the presentation that ends the full screen; the symptom did not reproduce on either application.
+
 - F147: the window checks in `e2e/browser.test.mjs` measure that a document of a browser card receives each change of the color scheme in the same presentation that applies the setting, in a visible card and in a card hidden by the full screen of another card; the symptom did not reproduce on either application.
+
 - F145.14: both hosts store the events `host.project.removal_allowed` (a removal that the end of a window allows), `host.workspace.settings` (the keys of each settings change) and `host.notification.event` (each state, posted and activated event of the notification center), write each failure of the notification center as an `error` record of the place `notification`, and report a failed `ps` query of the WebKit children as an `error` record of the place `webkit children` instead of treating it as a process that does not exist; the Tauri host reports a `kill` that fails.
+
 - F145.13: both hosts start the detached `sok app update` before the final flush of the event log, give it the standard error of the host (`logs/host-<boot>.stderr`; the Wails host gave it none, so a failure message was lost) and store the event `host.update.start` (`pid`, `command`); the error of a start that fails is now stored. The failure of every other `sok` command remains its exit status and its message on the standard error.
+
 - F145.18: `make failures-check` (part of `make docs-check`, `scripts/check-failure-table.mjs`) reads the place of every error record that a host or the native library writes at a literal place and fails when the failure table of the diagnostics, in English or Korean, lacks it; the table gained the rows of the roughly one hundred places it omitted (events a host cannot deliver to a window, the endpoint, shutdown, windows, surfaces, documents, images, modals, sidecars, the WebKit children, screen capture and the input method).
+
 - F145.17: the trace of the browser, editor, hwp, shell and files plugins is tracked in the checklists of their own repositories (P17, E14, H12, P4, P20), against the entrance `context.runtime.log` of the plugin API; no core code changed.
+
 - F145.16: the event file of the files and shell sidecars is tracked in the checklists of their own repositories (S18 and S4), against the event contract, the field `cids` of the request envelope and the member `events` of `sidecar.json`; no core code changed.
+
 - F145.15.3: the first module of the main page emits the event `page.start` with `time_origin` and `url`, so a reload is a marked boundary in the timeline.
+
 - F145.15.2: both hosts store the surface lifecycle of the trace as `host.trace.surface` with the phases `created`, `placed` (with `x`, `y`, `w`, `h` and `visible`) and `destroyed`; they stored `destroyed` alone.
+
 - F145.15.1: both hosts keep a process registry of the sidecar processes they started or connected to and store a `host.sampler.memory` event for the host and for each registered process (`role`, `name`, `pid`, `rss_kb`, or `error`), and `host.trace.process` when a process is named; the sampler read the host process alone.
+
 - F150.8.1: the window check `e2e/input-oracle.test.mjs` compares the bytes that the sidecar logs as written to the PTY for Tab, Escape, Backspace, Enter and Control+A with the bytes that an independent receiver process in the terminal read; they are the same on both applications.
+
 - F150.8.2: the latency of the whole input path was measured with the performance trace off, on and off again (`e2e/input-latency.test.mjs`); the medians are 23 to 25 ms on Wails and 26 to 38 ms on Tauri.
+
 - F151.6: `sok debug timeline` prints the rows of the host event files of the configuration directory that pass the filter (`--level`, `--layer`, `--text`, `--event`, `--surface`, `--session`, `--cid`, `--from`, `--to`, `--context`) as the text lines of the debug view without a running application; the Go and the Rust implementations print the same lines, which the golden files `packages/log-contract/fixtures/timeline` and the debug view test check. Unit and observation: both implementations print identical output for the event files of both check applications.
+
 - F150.6.3: the member `events` of `sidecar.json` and of `plugin.json` is the path inside the package of the file with the event catalog of the package; the validators accept it and refuse a path outside the package.
+
 - F150.3.7: the process of the host holds the switch of the performance trace; no file `performance`, no file `logs/performance.ndjson` and no flag in a service directory exists any more. The markers are the events `host.trace.on` and `host.trace.off`, the sampler ends when the trace turns off (a sampler thread that outlived the switch wrote into the start buffer of another check and made it fail once in two runs), and both hosts start a persistent service with `--log-dir <config-dir>/logs`, which the vt sidecar requires.
+
 - F151.2.3: the calls `overlayUpdate` and `overlayPlace` are not recorded as `page.call`: they draw and place a native modal (class `frame`), and a debug timeline that follows the event file draws for every row it appends, so recorded draws fed it without end.
+
 - F151.2.3: the debug timeline reads each host event file with `debugReadRange` in ranges (up to `ROW_LIMIT` rows, `limited` in the status names a file cut there), follows the host event `debug-log-changed` by appending the lines that grew in time order while keeping the filter and the row selection, and `core.debug.timeline.follow {on}` stops and resumes following (resuming first reads what grew); the status `core.debug` reports `following`, `appended` and `limited` instead of `truncated`, the timeline no longer reads the end of a file with `debugRead`, and `debugReadRange` calls are not recorded as `page.call` events. The window check is in `e2e/modal.test.mjs` and was not run.
 - F151.2.1, F151.2.2: the host call `debugReadRange({path, offset})` of both hosts returns the whole lines of a file under `logs/` from an offset with the offset after them, and the host announces the host event `debug-log-changed {path, size}` to every window after its event writer wrote a batch (the writer calls an observer, and the notices that arrive while a window is told become one).
+
 - F139: the status `core.picker` reports `columns`, the x of the icon and of the name of each heading and item relative to the picker, measured when the picker opens, because the main document hides the picker while the native view draws it and its elements have no box then.
+
 - F151.4.2: a row of the debug timeline can be selected and unselected (`core.debug.timeline.select {row, selected}`, a button before each row), `core.debug.timeline.save` saves the text lines of the selected rows in timeline order through `debugSaveText` as `soksak-timeline-<time>.txt` (a cancelled save panel is not an error, an empty selection is refused with an error), the warning that the file can hold typed text stands beside the save button, and `core.debug` reports `selected` and `warning` and the operation `save-rows`. Unit-verified; the window check `e2e/modal.test.mjs` and the save panel were not run in a running application.
+
 - F151.4.1: the host call `debugSaveText({name, text})` of both hosts saves text that the page built where the person chooses; it refuses a name that is not a file name and text that is empty or over 16 MiB, shows the same save panel and answers `{saved}`.
+
 - F139: the exposure declares the DOM names `core.picker.group-icon`, `core.picker.group-name`, `core.picker.item-icon` and `core.picker.item-name` and the `groups` (`id`, `name`, `depth`) of the status `core.picker`; `e2e/space-apps.test.mjs` asserts that the icon x and the name x of each item equal those of its heading. The check environment cannot produce an item of a plugin that is not loaded. Not run on a host.
+
 - F150.7.4: `docs/spec/events.json` is the catalog of the events of the layers `native`, `host` and `page`; `make events-check` requires that a source names each declared event, `node scripts/check-events.mjs --logs <config-dir>…` audits the host event files that the window checks left (declared events, required fields of their type), and a catalog name with a placeholder declares a family. The audit found that `native.window.occlusion` stored `visible` as a number; it is a boolean.
+
 - F151.5: `debug-state.js` is listed in the files of the workbench package, and a state file whose `page` member is an array (as the host writes it) is shown as a tree.
+
 - F150.6.1: a page request to a sidecar can carry the correlation identifiers of the inputs it continues: `send(surface, body, cids)` of the sidecar port, the host call `sidecarSend` of both runtimes and both hosts pass `cids`, and the request line has the field `cids` between `root` and `body` only when the list is not empty.
+
 - F151.5: the debug view shows a state file `logs/state-<time>.json` as a tree of keys and values (`core.debug.state`, the 상태 button of a state file row) and compares it with another state file by listing the paths whose values differ (`core.debug.state.compare`); a file that is not a state is refused with its name and what was found, and `core.debug` reports `state`. The raw `.stderr` and `.crash` files are listed and shown as text. Not observed in a running application.
+
 - F150.7.3: an image region records each query of the input method that it answers (`markedRange`, `selectedRange`, `hasMarkedText`, `firstRectForCharacterRange`, `characterIndexForPoint`) as the event `native.input.query` at the level `debug` with the arguments, the answer and the focus.
+
 - F150.7.2: the native library records each change of the first responder of a window as the event `native.window.first_responder` with the window number and the classes before and after; a window is compared at each update with its first responder at the earlier update, because observing the window with key-value observing crashed the Wails host at the first window show.
+
 - F150.7.1: the native library records the notifications of the application (activation, hiding), of its windows (key, main, miniaturization, occlusion) and of the input source as the events `native.app.*`, `native.window.*` and `native.input.source_changed` in the ring, and both hosts install the observers through the platform operation `ObserveActivity` when they start their writer.
+
 - F139: the icon slot of a heading and of an item in the grouped picker (space apps) has one width (`--picker-icon`), one left padding (`--picker-pad`), one gap (`--picker-gap`) and one indent per depth (`--picker-indent`), all declared on `.picker`, and an item carries the `--depth` of its heading, so at one depth the icons stand in one column and the names start at one x (the heading was 12 px and 6 px off before); an item of a plugin that is not loaded keeps its icon slot. `test/picker-columns.test.mjs` computes the columns from `app.css` and the drawn markup (Red: the item icon at 16 px against 8 px of the heading). Not measured in a running application.
+
 - F151.3: the timeline of the debug view filters by event name (`event`), `surface`, `session`, correlation identifier (`cid`) and an inclusive UTC time range (`from`, `to`) besides level, layer and text, and shows `context` rows before and after each row that passes, marked with `data-context`; an invalid value is refused with the member and the found value, and `core.debug` reports the members and `lines` (the shown lines with the context rows). Not observed in a running application.
+
 - F150.5.3.2: every application event that a host registers is the event `host.app.event` with the `kind` (`started`, `activated`, `deactivated`, `reopened`, `exit_requested`, `exit`) at the level `info`; the Wails host stores `started`, `activated`, `deactivated`, `exit_requested` and `exit`, the Tauri host `started`, `exit_requested` and `exit`.
+
 - F150.5.2: every host call of the runtime `page` object of a surface document is the event `page.call` (the same fields and levels as the main page, built by one `callEvent`), queued on a batcher of the document so that the calls of one turn travel in one host call `log`; the `report` of the document is queued behind the same batcher, and the runtime of Tauri names its commands and arguments by the same call names and arguments as the runtime of Wails. A failed relay is written to the console of the document.
+
 - F154.3: `make host-contract-check` builds the packages of both hosts and runs every test as a process of its own through the runner, in parallel, with a limit of 120 s for a test; the old output parsers are removed, and `--run` and `--only` run a part of the check without the contract audit.
+
 - F154.2: `scripts/test-discovery.mjs` builds the Go packages (`go test -c`) and the Rust packages (`cargo test --no-run`) through the runner and lists their tests, so each test runs as a process of its own in the working directory of its package; a package that does not build is a failure that names it, and a Rust test that is `#[ignore]` is a skip.
+
 - F154.1: `scripts/test-runner.mjs` runs a list of tests as separate processes in a bounded pool; each test has its own limit (at most 600 s), and the output names the start (`RUN`), the end (`PASS`, `FAIL`, `TIME`) and the elapsed time of each test, the tests in flight with their running time at an interval, the slowest tests and the totals.
+
 - F150.5.3.1: every window event that a host registers is the event `host.window.event` with the `window` and the `kind` (`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`) in the event log; the three kinds that arrive in streams are at the level `debug`. Observed in both applications: a new window that opens and closes stores `closed`.
+
 - F150.5.5.2: both hosts store the connection to a persistent service as the event `host.sidecar.connect` (`name`, `pid`, `spawned`) and its end as `host.sidecar.disconnect` (`name`, `pid`, `stopping`, `violation`) at the level `info`.
+
 - F150.5.5.1: both hosts store the start of a sidecar process of standard input and output as the event `host.sidecar.start` (`name`, `pid`) and its end as `host.sidecar.exit` (`name`, `pid`, `status`, `stopping`), in the event log at the level `info`; `EmitHost` and `emit_host` are the entrance for events of the host that are not records.
+
 - F150.5.4: every `command.run` request of the page is the event `page.command` with the fields `name`, `micros`, `ok` and `error` (level `debug`, `warn` for a failed command), whether or not the performance trace is on.
+
 - F150.5.1: every host call of the main page is the event `page.call` (level `debug`, `warn` for a refused call) with the fields `name`, `args` (cut at 1024 characters), `micros`, `ok` and `error`, recorded by the wrapper that both runtimes put around `host.call`; the calls `log` and `performance` are not recorded.
+
 - F150.4.3: the context of a surface has `context.closing`, an `AbortSignal` that the workbench aborts when the removal of the surface starts, before it detaches the regions of the module's compositions and before `dispose`; the input that reached a detached region about a second after a fixture reset (`terminal input failed: image view is detached`) came from the plugin handling sidecar cursor events between the detach and `dispose`. A module that does not read the signal still gets the rejection of a detached region.
+
 - F150.4.2: a plugin stores an event of the event log through `context.runtime.log.<level>(event, fields)` (levels `error`, `warn`, `info`, `debug`, `trace`; the name of the event is `plugin.<plugin>.<event>` and the fields carry the surface), queued on the batcher of the page; the host call `log` accepts the prefixes `page.` and `plugin.` and stores the layer that the prefix names; the page stores what it writes to its console as the events `page.console.<method>` with the field `text` (`console.error` and `console.warn` at the level `warn`, so a console does not fail a window check), and the failure of the relay is written to the console as it was before the capture and does not become an event again. The check of the committed checklist (`scripts/test/checklist.test.mjs`, a limit of 3 s) took 4.2 s once at a load average of 16 and 0.8 to 1.3 s alone in three runs; it is classified as load.
+
 - F150.4.1: the records of the page (`report`, `log`, the start errors and the failures of the ordered calls) are the events `page.record.<level>` with the fields `where` and `text`, queued without waiting and relayed in a batch of the host call `log` (`emitAndWait` ends a wait when the batch that carries the event was relayed); the host call `report`, `PageRecord` and `PageEntry` are removed from both hosts and both runtimes, the `log` relay returns the lines of the page records of a batch and the host shows them in the transcript of the window, and the `report` of the runtime page of a surface document is a batch of one event.
+
 - F150.3.6: a record of the Rust host travels as a structured `Entry` (`level`, `layer`, `place`, `text`) like the `Entry` of the Go host, is stored with `Entry::log` and shown as its line with `Entry::line`; the parse of a line back into a record (`log_entry`) and the timestamped lines of both hosts (`record_line`, `RecordLine`) are removed, and `presentation_outcome` returns the `Entry` of the outcome.
+
 - F150.3.5.2: the observations of the trace of both hosts (`PerformanceObserve`, `performance::observe`, the sampler) are stored as the events `host.trace.<event>` and `host.sampler.<event>` of level `debug` in the event log, with the name of the event not repeated in the fields, instead of lines of `performance.ndjson`; an observation without an event name is reported as the error `performance trace`. The markers `trace_on` and `trace_off` stay in the trace file until the file is removed.
+
 - F150.3.5.1: the trace of the page emits the events `page.trace.<event>` (level `debug`, the wall clock of the page in `ts_us`, no second timestamp) through the batcher and the host call `log` instead of one `performance` call for each event; the `performance` call accepts `on` and `off` only, and disabling waits until the accepted events are relayed. The window checks that read the trace of the page read the event log (`traceRows`, `currentEventOffsets`); the page batcher is listed in the files of `packages/workbench`. Input latency with the trace on (debug builds): Tauri median 21.3 ms against 19.2 ms off, Wails 18.6 against 18.1 ms.
+
 - F150.3.4: both hosts write the raw standard error to `logs/host-<boot>.stderr` (the start time in seconds and the process identifier, shared with `logs/host-<boot>.jsonl`) in place of `logs/application.log`, which no run writes any more; the run record `info host run: <identifier> pid <pid>` is an event; `StartApplicationLog` and `start_application_log` are `StartStandardError` and `start_standard_error`; the panic hook waits until the writer stored its record; the window-check harness no longer reads an application log (`application-log.mjs` is removed), and `e2e/application-log.test.mjs` is `e2e/host-records.test.mjs`. The fatal lines of the native library stay text lines on the stderr file.
+
 - F150.3.3: the native library stores `sp_log_error` and `sp_log_info` as the events `native.record.error` and `native.record.info` with the fields `where` and `text` in the ring of the process instead of writing lines to the standard error, so a quote, a control character and a line feed stay in the text; the tests of the native library read the records through `tests/support/records` as lines of the text form; `e2e/input-records.test.mjs` reads the native records from the event log in both applications, where the host writer pulled them from the ring. The fatal signal and uncaught exception lines stay on the standard error until F150.3.4.
+
 - F150.3.2: the error and information records of both hosts (`LogError`, `LogInfo`, `log_error`, `log_info`) and the records that the page sends through `report` are the events `<layer>.record.<level>` with the fields `where` and `text` in the event log in place of lines of the application log; a start buffer of 1024 records holds the records written before the writer exists and the writer counts the records it refused in a `log.dropped`; the panic hook and the fatal paths wait until the writer stored their record; the diagnostic method `diagnostics.log.flush` waits until the records are in the event log; the window-check harness prints a record event as the line `<level> <layer> <where>: <text>`, so the patterns of `expectError` stay valid, and the window checks that read host records read the event log. The window check of the rejected plugin manifest declares the timeout error of the reload that it causes.
+
 - F150.3.1: the window-check harness reads the events of level `error` in every `logs/host-<boot>.jsonl` of the application (`readEventErrors`, offsets in `<config-dir>.event-offsets`) in addition to the application log, prints them as `application error: error <layer> <event>: <fields>` and fails the check when an error event is not declared with `expectError`; a line that is not an event, a file shorter than its read offset and a folder without a host event log are errors that name the file.
+
 - F150.2.6.4: benchmarks measure one pull and one loss read of an empty native ring across cgo and FFI (debug builds): cgo mean 35 ns and p99 125 ns for the pull, FFI mean 17 ns and p99 42 ns (the timer step is about 42 ns), so the boundary costs nothing against the batch interval of 100 ms; `make benchmark-go` and `make benchmark-rust` run them.
 - F150.2.6.2, F150.2.6.3: both host writers pull the native ring through the platform operation `PullNativeEvents` and `TakeNativeEventLoss` (cgo on Go, FFI on Rust; the Windows platforms return `not implemented on windows`) at their batch interval and when they flush, store a pulled record in the layer `native` with the time the library gave, count the events that the ring refused in a `log.dropped` with the reason `the native ring was full`, and refuse a record with a name outside `native.`, an undefined level, fields that are not a JSON object or a length that does not fit, report it on the standard error and count it in a `log.dropped` with the reason `a native record was refused`; a platform that cannot pull the ring fails the start of the host.
+
 - F150.2.6.1: the native library has a ring of the process: `sp_event(level, name, fields_json)` stores the wall clock in microseconds, the level, the name (1 to 255 bytes) and the fields from any thread, `sp_event_drain` returns the records in order, `sp_event_take_loss` returns the count of events that a missing or empty or longer name, a level outside the enumeration, missing fields or a full 4 MiB ring refused.
+
 - F150.2.5: both host writers rotate their file: a file is closed before the line that would take it past `rotate_bytes` (100 MB in the hosts), the newest `generations` files (5) are kept as `.1` to `.5`, the oldest is removed, and the new file starts with `log.open` and `log.rotated` `{bytes, kept, removed}` while `seq` continues; a writer without a positive bound or generation count refuses to start, and a failed rotation step is reported while the writer keeps the file it has.
+
 - F150.2.4.5: a window check measures the time from an `Enter` injected through the native input to the prompt that the shell prints after the key reached the PTY, with the performance trace off, on and off again (12 keys each). Debug builds, a machine at low load: Wails median 20.3 ms off, 19.5 ms on, 17.5 ms off again; Tauri median 20.3 ms off, 23.1 ms on, 19.7 ms off again, so the trace costs about 3 ms per key on Tauri and none that exceeds the spread on Wails. The numbers are the baseline for the move of the input path to the event writer.
+
 - F150.2.4.4: both hosts start the event writer after the application log (`logs/host-<boot>.jsonl`, mode 0600, `log.open` first), flush it at shutdown and answer the page call `log` with the relay of a batch; the runtime of both applications names the call. Observed in the debug builds of both applications after a restart: the file of the process holds `log.open` with the process identifier and consecutive `seq`, and the application log gained no error.
+
 - F150.2.4.3: both hosts validate a batch of page events as a whole before they write any event (`LogCommand`, `log_command`) and store every event in the layer `page` with the time the page gave it; an event whose name does not start with `page.`, a level outside the contract, a `ts_us` that is not a positive integer and `fields` that are not an object reject the batch with an error that names `events[<index>]`, and nothing of that batch is written.
+
 - F150.2.4.2: the writers of both hosts take events that another layer of the process relays (`EmitRelayed`, `emit_relayed`) with the `layer` and `ts_us` they carry; an event name that does not start with its layer, a layer outside the contract and fields that are not JSON are refused with an error, and the writer still assigns `seq`; `make benchmark-rust` and `make benchmark-go` run the benchmarks.
+
 - F150.2.4.1: the page has an event batcher (`log-batch.js`): `emit` queues an event without waiting, the events of one turn travel to the host in one `batch` call, one call is in flight at a time so the host receives them in order, a full queue refuses events and the next batch starts with `page.log.dropped` that counts them, and a failed call is reported as `page event batch of <n> events failed: <reason>`.
 - F150.2.2, F150.2.3: both hosts have an event writer (`event_log.rs`, `event_log.go`): `emit` pushes a serialized event into a queue bounded by count and bytes without waiting and returns false when it has no room, one writer thread assigns `seq`, writes the first line `log.open`, writes batches every 100 ms and an `error` at once, stores a `log.dropped` after the range of every refused event, and `flush` waits until the accepted events are on disk; the folder has mode 0700 and the file mode 0600; six contract cases `log.writer.*` run on both hosts; `make benchmark-rust` and `make benchmark-go` measure the writer.
+
 - F151.1: the debug view has a 타임라인 button (`core.debug.timeline`) that merges the events of `logs/host-<boot>.jsonl` into rows sorted by time then `seq`, each as one text line, with a level, a layer and a text filter (`core.debug.timeline.filter`); a file that breaks the event structure is refused with its name, line and the value found, and `core.debug` reports `timeline`.
+
 - F150.2.1: the native library has an event ring (`event_ring.h`): a bounded lock-free ring that many producer threads push variable-length events into without a lock, an allocation or a system call, and that one consumer drains; a full ring or an event larger than half of it returns false and counts the lost events and bytes. `make -C native/darwin benchmark` measures a push (about 80 to 100 ns on the calling thread) against the present text record (about 1.1 microseconds, with a worst case in the tens to hundreds of microseconds).
+
 - F150.1: `docs/spec/logging.md` states the event contract (structure, classes and policy, writers, files, catalog, privacy, limits); `@soksak/log-contract` audits a log against a catalog (declared events and fields, consecutive `seq` with gaps explained by `log.dropped`, declared chains) and holds the golden catalog and golden lines; the terms `event`, `event class` and `correlation identifier` are defined.
+
 - F149.1: a window check types Enter through the native input of the endpoint on both hosts and requires the records of every layer of the input path, in time order, in the application log and the performance trace.
+
 - F153: the record of an injected key names the class of the first responder that receives it and whether the window is the key window, and every state of the input document records whether the application is active and whether the window is the key window.
+
 - F145.12: both hosts write `error host endpoint timeout: <method>: <message>` for each endpoint request that ends with the timeout error 1005, before the client receives the error, so the waiting that timed out is named in the application log.
+
 - F152: a failed send of the main page to a sidecar no longer blocks the sends after it and is written as `error page sidecar <name>: send failed: <reason>`; `orderedSidecar` refuses a missing failure handler.
+
 - F145.11: both hosts write each line of the diagnostic transcript of a window (a rendered modal, a drag, a navigation callback) to the application log as `info host transcript <window>: <line>`, and the Wails host writes the errors that the transcript carried alone (`host.window`, `rewatch`) as error records.
+
 - F145.10.2: the delegate of the native web views of the Wails host (surfaces and modals) writes the end of their WebContent process as `error native surface webview: web content process terminated: <address>` through `sp_webview_log_process_end`; the Tauri host already wrote the end of every web view.
+
 - F145.10.1: the native library writes the failures of a document view: a failed navigation with its reason and address, a refused address, a plugin file that is not found, a message without data, and the end of its WebContent process as an error; the document keeps the failure for the page that owns the region.
+
 - F145.9: both hosts write `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>` for a sidecar message that no window owns, and the Wails host writes `close <surface>: outbox full, buffered` for a closed notice that waits for a full queue, as the Tauri host did.
+
 - F145.8: both hosts write each frame of an image region that they refuse (`info host image frame: ... refused: notAttached|stale ...`, `error host image frame: ... refused: unsupported ...`) with the frame and the current state of the region, and an image field that is not an envelope as `error host image frame: ... malformed image envelope: <image>`.
+
 - F145.7: the page API (`page.js` of the plugin API) writes the errors, the modules that do not load and the unhandled rejections of the document of a surface or a modal as `error page surface <id>: <text>` (`document` without a surface id), once for the same text, instead of the console that nothing reads.
+
 - F145.6: the runtime `page` of both hosts has `report({level, where, text})`, which writes a record of the page layer from the document of a surface, and a failed send of a page to a sidecar is written as `error page sidecar <name>: send failed: <reason>` instead of the console of the surface document.
+
 - F145.5: the page writes `info page drop: received <payload>` for each file drop, `info page drop: command <name> accepted <n> file(s) on surface <id>` when a command accepts it, and `error page drop: <reason>` when the drop is invalid, no surface is under it, the plugin declares no drop command or the command fails; `core.drop` still keeps only the last drop.
+
 - F145.4: the native library writes `info native input inject` for each pointer and key input that the endpoint injects, with its arguments, its result and the reason of a refusal (no window, no open press, an inactive window, a pressed button that AppKit reports, an unknown key name, a receipt that did not arrive).
+
 - F145.3: the native library records the end of each wait for a webview input receipt: a timeout with its type and limit, a refused send, a registration that ends the wait, a receipt that matches no wait or arrives from another frame, and a missing WebKit pointer API.
+
 - F145.2: the native library records every input that a region drops with its reason: a `noop:` command (`"dropped":"noop"`), an insert or marked text that is not text (`"dropped":"not text"`) and a report to a closed region (`info native input report dropped`).
+
 - F145.1: both hosts write `info host endpoint: connection closed: <reason>` before the socket of an endpoint connection closes: the peer, a frame over the limit, a frame that is not a JSON-RPC 2.0 request (with its body), an undeclared method, the close of the endpoint, and in the Wails host a full output queue, a failed write and a reply that cannot be encoded.
+
 - F148: core 0.0.10 is released (tag `v0.0.10`, both bundles) and listed in the registry; every declared workspace version is 0.0.10, the version that carries the text records of F138, the records of the input path of F144 and the correction of F146.
+
 - F138.4: the window check reads the text records of the application log (`parseRecord`, `withoutTime`): `readErrors` returns the records of level `error` as `error <layer> <where>: <text>` and the lines that have no form (the output of the operating system and the runtime) separately, and the checks of `e2e/` compare records instead of the earlier lines. F138 is complete.
+
 - F138.3: the page reports a record `{level, where, text}` through the host call `report` (`recordOf` in `report-record.js` splits a line `<where>: <text>` at its first `: `), both hosts check it and write `<time> <level> page <where>: <text>`, the start error handler writes the place `start`, and the native library writes its capture observations as records `info native capture: <text>`.
+
 - F146: the debug view keeps a negative scroll position that the native modal reports while its content is pulled past its start, instead of throwing `debug scroll position is invalid`; a value that is not a number is still refused.
+
 - F144.6: a log file and the performance trace rotate at 100 MB and keep the five earlier generations (`.1` to `.5`) in both hosts, instead of 10 MB and one generation, so the records cover a long session.
+
 - F144.4: both hosts write each request to a sidecar (`sidecar.send`), each message from a sidecar (`sidecar.receive`) and each event of a native region (`region`) as trace events of the layer `host` with their whole bodies, with the same names and fields.
+
 - F144.3: the terminal plugin 0.0.10 and the terminal service 0.0.8 record the whole input path (see F144.5 and the plugin repositories).
+
 - F144.2: the native library records every callback of the input method (`keyDown`, `insertText`, `setMarkedText`, `unmarkText`, `doCommandBySelector`, the commits, the preedit, the focus and the input source change) as `info native input method` with its arguments, the typed text and the state of the input document before and after, every report to the page as `info native input report`, and the failures with the whole state; `sp_log_info` and the time of a record (`clock_gettime` and integer arithmetic, so the fatal handler writes it too) are new, and the records of the library have the form `<time> <level> native <where>: <text>`.
+
 - F144.1: the rule that a record holds no typed text is removed from [diagnostics](docs/spec/diagnostics.md); a record of the input path holds everything that the layer saw, and the specification lists the records of each layer.
+
 - F138.2: both hosts write every record in the form `<time> <level> <layer> <where>: <text>`: `LogError`/`log_error` write level `error`, the new `LogInfo`/`log_info` write the observations (the late replies, the webkit children, the sidecar queue and replacement, the invalidated image frames) with the same wording on both hosts, the run starts with `info host run: <identifier> pid <pid>`, a line feed in a text is written as `\n`, and each line of the standard error of a sidecar of standard input and output is a record of level `info`, layer `sidecar` and the name of the sidecar. The page and the native library write the earlier form until F138.3.
+
 - F138.1: the specification states one form for every text record, `<time> <level> <layer> <where>: <text>` with the levels `error` and `info` and the layers `page`, `host`, `native` and `sidecar`, one record on one line, the helpers of each writer, the wrapping of the standard error of a sidecar and the form that a persistent service writes; the failure table uses it. The hosts, the native library and the page write the earlier form until F138.2 and F138.3.
+
 - F117.8.5: the public registry index lists core 0.0.9, the terminal plugin 0.0.7 and the sidecar vt 0.0.7, and its workflows build `sok` from the core tag `v0.0.9`.
+
 - F117.8.4: every declared workspace version is 0.0.9, the version that carries F117, F121 and F122.
+
 - F117.8.3: the release workflow names the files of a core release `soksak-<version>-darwin-arm64-wailsv3.zip` and `soksak-<version>-darwin-arm64-tauriv2.zip`, the names that the core releases of the registry use, and the install guide names them.
+
 - F121.8: `make app-update-check HOST=wailsv3|tauriv2` copies the built debug bundle, serves a core release of a newer version, starts the copy with a disposable configuration directory, runs `core.app.update`, and checks that `sok app update` replaced the bundle and restarted the application on both hosts; it ends the applications it started and fails when one remains.
+
 - F117.7.4: the update list of the plugin page starts with the core release and its release link, which F121.6 implements; the control 업데이트 N counts it.
+
 - F137: the type `OpenApplication` names the opener of `replace_app` in the Rust `sok`, so `cargo clippy` passes, and the tests of `sok` that stage and replace an application bundle end at once with the message `not implemented on <os>` of a platform that does not implement those operations (`requireBundles` in Go, `bundles_supported` in Rust), because only macOS implements them.
+
 - F121.7: the core update row of the plugin page lists each installed plugin whose `engines.soksak` does not contain the candidate with the newest non-revoked version of that plugin that does, or the note that none does; the status `core.app` carries them as `incompatible`, and the workbench reads the version ranges of the specification with `satisfies` in `version-range.js`.
+
 - F121.6: the plugin page lists the core update first in its update list as `core: <running> → <available>` with the release page of the version, the action 업데이트 and the step or error of the operation; the status `core.app` and the commands `core.app.update` and `core.app.release` are declared, the window reads the candidate when it starts, becomes active, changes its registry and opens the plugin page, and the control 업데이트 N counts the core update. A window check on both hosts serves a registry index with a newer core release, which the operation refuses at the download.
+
 - F121.5: both hosts answer the host call `appUpdateApply`: it copies `sok` of the running bundle to `updates/` of the configuration directory, prepares `sok app update` for a new session, and quits as `host.quit` does; the exit detaches the sidecars (`Detach` in Go, `detach` in Rust), so a persistent service loses its connection but receives no `close-owner` and no `shutdown` and its sessions stay, and the command starts after the quit is answered. A quit that a modified tab cancels drops the pending update.
+
 - F121.4: `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` (Go and Rust) waits for the end of the process with the kernel notification, replaces the bundle through a copy beside it, starts the application again with the arguments after `--`, and starts the earlier bundle again when the new one cannot start; the platform interface of `sok` gains `WaitProcessEnd`, `CopyBundle` and `OpenApplication`.
+
 - F121.3: both hosts answer the host calls `appUpdateState` (the running core and the candidate of the registry index) and `appUpdateStage`, which downloads the release of the candidate, checks its `sha256`, extracts the zip under `updates/` of the configuration directory, checks the version of the bundle and returns its path; a version that is not the candidate is refused. The platform interface of `sok` gains `ExtractBundle` and `BundleVersion`.
+
 - F121.2: the registry repository holds the core releases in `core.json`; `add-version.mjs core` writes a version with the release URL of the core repository, `validate.mjs` checks that URL, and the published index lists `core` without a version. The registry repository records this as its item G17.
+
 - F121.1: `sok registry build` (Go and Rust) reads `core.json` of the registry folder, checks the `sha256` of every core release and writes `core` of the index; the index check accepts `core` with `<platform>-<host>` keys and `core` of `revoked`, refuses a malformed one, and an index without `core` lists no core release.
+
 - F121: the specification states the application update: the registry index lists the core releases in `core` and withdraws a version in `revoked.core`, the host calls `appUpdateState`, `appUpdateStage` and `appUpdateApply` prepare and start the update, and `sok app update --wait <pid> --bundle <path> --target <path>` replaces the bundle after the application quits; the checklist item is split into F121.1 to F121.7.
+
 - F125: the public registry index is published with `release` and `releases`, so `scripts/check-registry-manifests.mjs` reads it with the current core (7 of 7 plugin versions failed before) and a core release can be checked; applications of core 0.0.8 cannot read it and are installed again. The registry repository records this as its item G16.
+
 - F124.3.4: measured on both hosts that `core.debug.save` opens the save panel and that the native input of a check cannot press its buttons; `e2e/person/debug-save.test.mjs` and `pnpm -F @soksak/e2e verify:person` let a person press Save and Cancel while the check verifies the saved file and the answer.
+
 - F113.2: with the application active and its window the key window, a document region takes typed text on both hosts (`e2e/activation/document-typing.test.mjs`); the check that failed ran while the application was inactive and is removed from `e2e/browser.test.mjs`. F135 records that a plain AppKit window takes text while inactive and the hosts do not.
+
 - F117.5.5: `e2e/plugin-outdated.test.mjs` observes in both hosts that the plugin page shows a persistent service of another version as outdated and that its action replaces the service; AGENTS.md lets a window check write a file of its own disposable configuration directory when no declared entry produces the state it observes.
+
 - F133: both hosts close the owner of a persistent service once for its connection, so a stop that begins while the replacement of an outdated service closes the owner no longer sends a second `close-owner`; the Rust host no longer answers the close of a surface twice and the Go host no longer panics with `close of closed channel`. F134 records a CI failure of a time-dependent test that did not recur.
+
 - F117.6: the terminal plugin repository registers the item P23, which starts the new shell of a replaced terminal service in the last working directory of the terminal.
+
 - F102.6: when a window keeps a modified tab, both hosts answer each pending quit request of the operating system (the Dock, a logout, another program) with `userCanceledErr` through the new platform operation `CancelQuitRequests` (`sp_quit_request_cancel`), so the sender learns that the application stays.
+
 - F132: the Tauri host no longer answers a path with a file extension that names no file with the start document, which the framework falls back to; the framework answers its asset error, status 500, and the Wails server answers 404. `e2e/page-asset.test.mjs` asserts a status of 400 or more on both running hosts.
+
 - F127.3: the diagnostic request `diagnostics.page.request {window, path}` makes the page request a file of its application, and `e2e/page-asset.test.mjs` observes in both running hosts that a missing path writes `error: page asset: <path>: not found` once. The observation showed that the Tauri host also reported the framework lookups `<path>.html` and `<path>/index.html` of a missing path; it no longer reports them. F132 records that the Tauri host answers such a path with the start document.
+
 - F117.7.3: each time a window becomes the key window, both hosts send it the event `window-active` and the page reads the plugin state again, so a newer version in the remote registry, which sends no change event, appears when the person returns to the window. The page does not use the DOM `focus` event, which the Tauri webview does not send when the host focuses the window.
+
 - F117.7.2: every window shows the control 업데이트 N first in its bar while the registry lists a plugin update; it runs the new command `core.plugins.show-updates`, which shows the plugin page at the update list. The update list and the outdated service rows take a whole row of the card grid.
+
 - F117.7.1: the plugin screen lists the plugins that the registry lists in a newer version above the cards, as `<id>: <installed> → <latest>`, with the action 모두 업데이트 bound to the new command `core.plugins.update-all`, which updates them in id order and stops at the first failure.
+
 - F122.5: removing a project that another window shows asks that window: `windows.askRemoveProject` sends the new host call `projectRemoveAsk`, the host sends `project-remove-request` to the window that shows the project, that window asks for each modified tab and answers with `projectRemoveAnswer`, and the removal waits for the answer; a kept tab keeps the project in the registry and `core.project.close` answers `closed: false`. A window that ends while it is asked allows the removal. `core.project.close`, `core.library.remove` and `core.space.close` declare `timeout` 600000 because they wait for a person.
+
 - F131: recorded three single errors of the window-close checks that did not recur in six runs; the records that show their cause are in place.
+
 - F122.4: `core.project.close` asks for each modified tab of the window that shows the project with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기 before it removes the project, and answers `{closed}`; keeping a tab keeps the project.
+
 - F122.3: `core.space.close` asks for each modified tab of the active space with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기 before it removes the space, and answers `{closed}`; keeping a tab keeps the space. The last space does not close and answers `closed: false`.
+
 - F122.2: a quit that a kept modified tab cancels ends the quit state of both hosts: the page reports the new host call `windowCloseKept`, the host clears its quit state (`Quit` in `quit.go` and `quit.rs`), and `host.window` reports it as `quitting`. Closing the last window afterwards does not quit the application, and the end of a WebContent process is an error line again.
+
 - F122.1: closing a window or quitting the application asks for each modified tab of the window with 저장하고 닫기, 저장하지 않고 닫기 and 닫지 않기, as closing a tab does; a kept tab keeps the window open and the projects unsaved. `e2e/window-close.test.mjs` observes the question and both answers in both hosts.
+
 - F130: both hosts keep the newest 20 `logs/state-<time>.json` files and remove the older ones after the debug view records a state, so the logs folder does not grow with each opening.
+
 - F120: the `hello` that the Tauri host sends to a persistent service carries the configuration directory of the application as `client`, as the Wails host does; the terminal runtime specification defines `client`.
+
 - F117.5.6: the host starts the installed service of a replaced persistent sidecar only after the process of the old service has ended, waiting for it with the kernel notification of the end of a process in every build; a process that does not end within the stop timeout fails the replacement with an error line and the sidecar stays outdated.
+
 - F124.3.7: the debug view lists the newest file first, opens the text of a file at its end, where the newest lines are, and keeps the bar with the 목록 button at the top of the scrolling pane; `core.debug` reports `scroll`.
+
 - F128.1: a WebContent process that the host ends while it quits is not reported and the Tauri host does not load the page again, which kept the application from ending.
+
 - F117.5.4: the plugin page shows each outdated persistent service above the plugin cards with `<running> → <installed>` and the action 터미널 <sessions>개를 끝내고 적용, which runs the new command `core.plugins.replace {sidecar}`; `core.plugins` reports `outdated`, and both hosts answer `sidecarsOutdated` and send `sidecars-changed`.
+
 - F117.5.3: both hosts replace a persistent service whose `hello` version differs from the installed version when its last session closes and on the host call `sidecarsReplace({sidecar})`: `close-owner`, `shutdown`, the reconnection that starts the installed service, the connection notice of each surface, `host.sidecars` without the sidecar in `outdated`, and `sidecar <name>: service <running> replaced by <installed>` in the application log.
+
 - F128.4: a fatal signal or an uncaught exception of the Tauri host is written as one `error: fatal: …` line to the application log before the process ends; the native library installs the handlers and calls a handler that was installed before.
+
 - F128.3: a panic of the Tauri host is written as `error: panic: <file>:<line>: <message>` to the application log before the default panic message.
+
 - F128.1: when the WebContent process of a window ends, both hosts write `error: page process: <window>: terminated` once and load the page again; the Tauri host did not load it again before, and the window stayed without a page.
+
 - F128.2: the host writes a lost connection to a persistent service as `error: sidecar <name>: connection lost; restarted` (or `restart failed: <reason>`), as an error line and not as an observation.
+
 - F129: the preparation of a window check restores the settings that it changed, including `diagnostics.performance`, when the check ends, so a person who uses the check application afterwards still has the performance trace.
+
 - F124.3.6: every file of the debug view has 보기 and 저장 in the same columns, and a PNG file (a capture) shows as an image; `debugRead` answers `kind` `text` with `text` or `kind` `image` with the `data:image/png;base64,` address `image`, and refuses a PNG file larger than 16 MB and a `.png` file without the PNG signature. The optional file `/wails/custom.js` of the Wails runtime is not reported as a missing page file.
+
 - F127.2: both hosts write `error: page asset: <path>: not found` once for each page file that they cannot serve; a path without a file extension is a document route and is not reported.
+
 - F124.3.5: the debug view shows the content of a text file of `logs/` with a 보기 button and a 목록 button that returns to the list; a file larger than 256 KB shows its last 256 KB from a character boundary and says that the beginning is left out. The host call `debugRead` refuses a path outside `logs/` and a file that is not text, and `core.debug` reports `viewing`.
+
 - F124.3.3: Help > Debug (디버그) in both hosts opens the debug view, which records `logs/state-<time>.json`, lists the files of `logs/` with their size and time and saves one file or all of them through the save panel; the page declares `core.debug`, `core.debug.open`, `core.debug.close`, `core.debug.save` and `core.debug.save-all`, and `core.screen` reports `modal` `debug` while the view is open.
+
 - F126: an error that stops the main page from starting (a module that fails to load, to parse or throws while it evaluates) is written to the application log as `error: page start: <text> @ <file>:<line>` by a handler that the first module of the start document installs and the page removes after its first screen; a test requires that `package.json` `files` lists every file that the start document and the page modules import.
+
 - F127.1: `docs/spec/diagnostics.md` states the files of `logs/`, the three forms of record (error line, event, state file), the rules, and the record of each failure point; the term list has application log, performance trace, state file and debug view.
+
 - F124.3.2: both hosts answer the host calls `debugFiles`, `debugRecord`, `debugSave` and `debugSaveAll`: they list every file of `<config-dir>/logs/`, write `logs/state-<time>.json` with the host, the versions of core, macOS and the installed plugins and the status of every window, with a still capture of each window in a diagnostic build, save one file of `logs/` through the save panel and refuse any other path, and save the folder as one gzip-compressed tar file. Four contract cases run in Go and Rust.
+
 - F124.2: a surface writes its own events to the performance trace with `context.runtime.trace(event, fields)`, named with its plugin and surface, so a plugin records the steps of an input in `<config-dir>/logs/performance.ndjson` with the events of the host and the sidecars.
+
 - F124.2: both hosts write still captures and recordings to `<config-dir>/logs/captures/`, so every diagnostic file of an application is in `<config-dir>/logs/`, which `hosts.md` names as the one folder to hand over.
 - F124, F124.1: while the release version is 0.0.x, `make wailsv3-build-release tauriv2-build-release` build both hosts, `sok` and the page with diagnostics, `scripts/check-release.mjs` requires the diagnostic methods and the page diagnostic module in such a release, and `diagnostics.performance` defaults to true. The `.dev` identifier comes from the new `dev` build flag (Go tag, Cargo feature), which only debug builds set, so a diagnostic release keeps `app.soksak.<host>` and the configuration folder of the installed application.
+
 - F123: both hosts write each answer to an image frame, consumed or refused with its reason, as an `image.frame` event of the performance trace, so a terminal whose frames stop showing tells whether the service sent frames and whether the host presented them.
+
 - F123: the core part of the `image.frame` trace event is covered by `TestFrameAnswerEventRecordsConsumedAndRefusedAnswers` (Go) and `frame_answer_event_records_consumed_and_refused_answers` (Rust), each with a consumed and a refused answer, under the contract `trace.image-frame-answer-is-recorded`; `FrameAnswerEvent` and `frame_answer_event` build the event fields that both emission sites use.
+
 - F117.5.2: both hosts read `version` from the `hello` reply of a persistent service and report a service of another version than `installed.json` records, or of no version, in `host.sidecars` `outdated` with its running and installed versions and its open surfaces.
+
 - F117.4: after each plugin operation both hosts declare the installed sidecars again before they send `plugins-changed`: a standard input and output sidecar whose folder changed or that no plugin names any longer is stopped by the stop rules, so the next send starts the installed executable. The Tauri host identifies the process of a reader by its pid, because a replacement can start a process of the same name before the reader of the stopped one ends.
+
 - F119.1: the first termination signal makes the Tauri host run its normal quit, as `host.quit` does, instead of ending the process at once, so the windows save, the sidecars stop and the terminal service ends; the Tauri host kills the WebContent process of each window that closes during the quit. `e2e/normal-shutdown.mjs` sends SIGTERM with `SOKSAK_SHUTDOWN_BY=signal` and requires the terminal service to end with `SOKSAK_SHUTDOWN_TERMINAL=1`.
+
 - F117.3: a window applies a plugin operation by reloading its page after it asks about each modified tab (저장하고 적용, 저장하지 않고 적용, 적용하지 않기); a kept page shows its changed plugins as `reload` with 적용 (`core.plugins.apply`), and the card shows no restart message. `exposure.json` declares `core.plugins.apply`, the `reload` state and the `updates` field of `core.plugins`, which F117.2 reported without declaring it.
+
 - F117.2: a plugin card shows 업데이트 only when the registry lists a version newer than the installed one, and `core.plugins` reports `updates`.
+
 - F117.1: the specifications state that a plugin operation applies at once: the host replaces changed standard input and output sidecars, each window reloads its page after the questions of modified tabs, the card state `restart` becomes `reload`, `core.plugins` reports `updates`, and a terminal service of another version is reported as `outdated` in `host.sidecars` and replaced when its sessions end or through `core.plugins.replace`. The implementation is pending in F117.2 to F117.5.
+
 - F119: both hosts count the pending closes of a surface, so a surface that is closed again before the sidecar answered no longer fails the sidecar with "unexpected close answer"; that failure had ended the terminal service connection during a quit before the owner close, and the service outlived the application.
+
 - F118: a window check writes each request and status wait it starts as `step <app> +<seconds> s <step>`, so a check that its test time limit ends names the step that ran.
+
 - F115: `document_press_test` checks that the first press on a document region reaches its page.
+
 - F116: closing a tab whose module has not finished mounting removes the surface at once instead of waiting for the mount.
 - R5.3.4, R5.3.5: the plugin and sidecar repositories call plugins, sidecars and releases so.
 - R5.2.1: the term check no longer rejects "package folder" and "package name", which name real npm packages.
@@ -2510,158 +3447,282 @@
 - R5.3.3: specifications, comments and errors of core call the name field of a `package.json` the `name` of `package.json`, and `sok` reports `expected a package.json name`.
 - R5.3.2: `sok plugin pack` and `sok sidecar release` print the written file as `release`, and the identifiers and contract cases of `sok` say release.
 - R5.3.1: the specifications and comments of core call plugins plugins, sidecars sidecars and their `.tgz` files releases; `sok` errors and identifiers follow.
+
 - F111.7.6: the contract case `page.start.sok-core-owner` covers the Tauri start document address.
+
 - F111.7.5: the Tauri start document handler states why a request without a host answers not found.
 - R5.1: `AGENTS.md` names each concept with one term, and `packages/plugin-api/terms.json` lists the terms and their rejected synonyms.
+
 - F113.1: `document_typing_test` checks that a document region takes typed text in an inactive application.
+
 - F111.7.4: the comments that the `sok` change touched are written in English.
+
 - F111.7.3: the Tauri application starts its window from `sok://core/start.json`, so the `soksak` scheme is free for deep links.
+
 - F111.7.2: document regions load plugin documents at `sok://<plugin>/<path>` instead of `soksak-package://<plugin>/<path>`.
+
 - F111.7.1: the specification addresses application documents inside webviews at `sok://<owner>/<path>`, keeps the `soksak` scheme for deep links, and calls a document of a plugin a plugin document.
+
 - F111.5: the window synchronization carries the plugin of each surface, so a hybrid surface such as a browser card mounts instead of failing with `changed its composition declaration`.
+
 - F111.6: the runtime of both applications passes `documentPost` to the host, so a page posts messages to a package document instead of failing with `unknown host call: documentPost`.
 - R4: `AGENTS.md` sizes a checklist item to one unit of function and requires a changelog entry and a commit for each completed item.
+
 - F110: the window check `e2e/hwp.test.mjs` opens an `.hwp` file in the hwp plugin, edits it with a native key and saves it on both hosts; the workspace registry includes the hwp plugin.
+
 - F109: the files sidecar specifies `readBytes` and `writeBytes` for binary files up to 32 MiB.
+
 - F108: every declared version is 0.0.8, and core 0.0.8 is released.
+
 - F102.1.7: hosts serve the shared modules of extension points at `/shared/<plugin id>.<point>/<specifier>.js`, so the Tauri webview loads them as JavaScript.
+
 - F102.11: core commands no longer wait without end for a tab whose surface composition is `dom`.
+
 - F102.8: the window check `e2e/editor.test.mjs` opens a file from the tree in the editor plugin and checks saving, the tab error, reloading and the close question on both hosts; the workspace registry includes the editor plugin.
+
 - F103: stored layouts and settings are read only in their current form; an earlier form fails with an error that names `projects.json` or the settings file, and the conversions are removed.
+
 - F106: every declared version is 0.0.7, and core 0.0.7 is released.
+
 - F102.10: a surface shows the error of a failed operation in its card status row with `tab.error(text)` and removes it with `tab.error(null)`; `core.grid` reports `error` for each tab.
+
 - F105: both application bundles declare the macOS minimum 14.4, the Tauri application is built for it, and `make release-check` checks `LSMinimumSystemVersion` and the minimum macOS version of each executable against `MACOS_MINIMUM`.
+
 - F102.9: every declared version is 0.0.6, and `make release-check` checks that the new core accepts the manifest of every plugin version of the registry that admits it; core 0.0.6 is released.
 - F102.1.3, F102.1.4: `sok` installs the plugin dependencies of a plugin, refuses to remove or disable a required plugin, keeps dependent ranges on update, and `sok registry build` checks plugin dependencies; hosts leave plugin packages out of their sidecars, and serve `/shared/` for extension points (F102.1.5).
+
 - F102.5: a surface reports unsaved changes with `tab.modified`, and closing a modified tab or its card asks whether to save, discard or keep it.
+
 - F102.4: `core.file.open` opens a file of the project in the plugin whose `surface.opens` declares its extension, or in the plugin that declares `*`.
+
 - F102.3: a plugin declares the parameters of its tabs in `surface.params`; `core.card.add-tab` stores checked `params` with the tab and the surface context gives them as `tab.params`.
+
 - F104.1: comments are written in English, and the comment language check reports comment lines that hold Hangul.
+
 - F102.1.5: the workbench resolves contributions to extension points when a page loads, reports them in `core.contributions` and on the plugin cards, gives a provider surface `contributions(point)`, and the page import map maps `@soksak/shared/` to the shared modules of extension points; manifests leave the packages of installed plugins out of their sidecars.
+
 - F102.1.2: plugin manifests declare extension points in `extends` and contributions in `contributes`, and `dependencies` may name plugin packages.
+
 - F102.1.1: version ranges accept `>=x.y.z` without an upper bound in `sok`, plugin manifests and `soksak-engines`, and plugin manifests accept the sidecar range `*`.
 - Retired checklist entry `R3.1`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
 - Retired checklist entry `R3.3`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
 - Retired checklist entry `R3.4`: a checklist entry holds project work, and this entry held a work-process rule or its application, which AGENTS.md holds.
 - R3.5.1: `@soksak/plugin-api` provides the record and commit form checks as the `soksak-records` and `soksak-commits` commands.
+
 - F101.3: Korean input-method composition at a zsh prompt of a terminal service started without locale variables passes the activation-tier checks on both hosts.
 - R3.2: `make records-check` reports record lines that are not facts about the repository, and `make commits-check`, the commit-msg hook and CI check the commit form `type(scope): Subject (#ID)` without footers.
+
 - F101.2: the terminal service 0.0.6 and the terminal plugin 0.0.6, whose shells run in a UTF-8 locale, are in the public registry.
+
 - F101.1: a terminal shell runs in a UTF-8 locale when the terminal service has no `LANG`, `LC_ALL` or `LC_CTYPE`.
+
 - F100.2: the release workflows of the plugin and sidecar repositories build `sok` from a declared core release instead of the core tag of their own name.
+
 - F100.1: the plugin specification states that a plugin or sidecar version has no relation to a core version, and that its release workflow declares the core release that builds `sok`.
+
 - F99: soksak 0.0.5 is released with F95, F95.1 and F97; the terminal plugin 0.0.5 and the terminal service 0.0.5, which carries F98, are in the public registry.
+
 - F99.1: every declared version is 0.0.5. The parity audit lists the release records F96 and F99 without a feature link.
+
 - F98: the terminal service closes the surface actors before the owner sessions on `close-owner`, so quitting with a terminal open writes no `close owner` error (sidecar-vt S23).
+
 - F95.1: a native test keeps the window's cursor rectangles off through window changes, and the image region no longer overrides `resetCursorRects`.
+
 - F95: the window turns off cursor rectangles, so the arrow rectangle of the Tauri content view no longer replaces the text pointer over terminal text.
+
 - F97: the success line of `soksak-engines` prints the declared range.
+
 - F96: soksak 0.0.4 is released, and the browser, files and terminal plugins 0.0.4, which declare `engines.soksak` `*`, are in the public registry.
+
 - F96.2: every declared workspace version is 0.0.4.
+
 - F96.1: the installers and `soksak-engines` accept the range `*`, which is `>=0.0.0` without an upper bound.
+
 - F94: the real wheel check makes its terminal card fullscreen, so the terminal is wide enough for its history lines.
+
 - F73.2: `real/focus` splits its card with `side: "bottom"` instead of the earlier `axis`, and both real-input checks pass with `s.record`.
+
 - F73.2: the real-input checks `real/focus` and `real/tui-drag` start their recordings with `s.record`, which sends one stop and keeps its error.
 - The documentation audit accepts the `[-]` checklist state when the item records its attempts after `Not reproduced:` (`재현되지 않음:` in the Korean checklist), and rejects an item that leaves `[-]`.
+
 - F92: the page draws a prepared layout in the next task instead of the next animation frame, so the rendering update that the host's presentation wait starts carries the draw; on a 60 Hz display a drag shows a new layout every frame again (transactions 16.7 ms apart instead of 33.4 ms).
 - F92 (measurement): the layout trace of a recording records `requested`, when the page asks the host to wait for the presentation of its drawn DOM, and the drag check prints the start interval and the stages of the layout transactions.
+
 - F93: `make go-repeat` takes `TAGS` and fails when no test file was built, and `make rust-repeat` and `make rust-tests-alone` take `FEATURES`, so tests behind the `diagnostics` tag or feature can be repeated.
+
 - F73.1: window checks start recordings with `s.record`, which sends one stop and keeps its error; the session cleanup stops an unstopped recording and removes its folder.
+
 - F90: the layout view writes each layout on the device pixel grid its commit reported, so a ratio that changes before the draw no longer moves cards off the rects the host placed; the V7c failure text names the drawn card, its style, the plane and the device pixel ratio.
+
 - F91: the workbench gives no focus to a surface whose removal started while the focus waited for presentation, so closing a tab right after a card focus no longer logs `image view is detached`.
+
 - F89: the page's `W` verification row judges the centring of the window buttons within one device pixel, so it passes on a display at scale 1.
+
 - F88: the native title bar test judges the centring of the window buttons within one device pixel, so it passes on a display at backing scale 1.
+
 - F46.1: a refused native pointer error of the window checks names its phase, button, position and window, and the cleanup prints each open press it ended with the time it waited for the buttons to be released.
+
 - F83: a window check fails when it leaves a recording folder under the captures folder, and the harness removes that folder; the settings modal check and the drag capture now remove their recordings in the session cleanup.
+
 - F82: the Wails host no longer logs its own close of a persistent service connection as a read error when it quits.
+
 - F84: a fullscreen card shows a space apps button at the front of its header; it lists every tab of the space grouped by card in the order of the slicing tree, each heading with a map of the cards, and picking a tab moves fullscreen to its card.
 - F86, F87: a rejected installed plugin manifest stops the page start with the error shown and logged, naming the plugin, its version and package, instead of a blank window whose logo stood under the window buttons.
+
 - F85: clicking another tab of a fullscreen card switches the tab and keeps fullscreen; only a tab drag returns the card to its normal size.
+
 - F81: a narrow card header shows the tab list button, the current tab's title and a tool menu button `⋯`, which lists the sidebar buttons and the enabled tools and runs their commands (`core.card.tools`).
+
 - F80: the card auto-arrange button after the project library button runs `core.layout.balance`, which keeps the arrangement and gives every card a fair share: the cards of the fullest row along each axis come out the same size (`Soksak.balance()`).
+
 - F79: both hosts report a relayed request that times out as `the document did not reply within <ms> ms` and a late reply with its delay (`exposure reply <id> arrived <ms> ms after it was sent; its request timed out after <ms> ms`).
 - Validation: the fifteenth full window run of 2026-10-05 is invalid because the disk filled (`ENOSPC`) after 5 minutes. The sixteenth (macOS 26.6.2 arm64, load average up to 218 on 11 processors) passed 338 of 344 checks: the alignment timing on both hosts (89.5 ms and 124.4 ms against 33.3 ms) and a divider recording of 20 of 21 frames on Tauri are load; the Wails document stall of F69 failed the font family check, and F77 and F78 record the zsh redraw and the files bookmark failures on Tauri.
+
 - F70: the Wails host uses the fork `min-median-max/wails` (`soksak/http-error-log`), whose HTTP transport no longer logs an error that it returns to the page, so a failed binding call is written once.
 - Validation: the core release v0.0.3, published again from 4a51f38d, installs the starter pack from the public registry on its first run and starts its terminal without a restart on both hosts (macOS 26.6.2 arm64).
+
 - F75: a plugin that the first run installs starts its sidecars without a restart; both hosts declare the sidecars of a successful install, update or enable at once.
+
 - F74: `make hosts-check` no longer compiles the Tauri host for Windows, which needed llvm-mingw and failed every GitHub CI run of core; `windows-build-check` still vets the Wails host for Windows.
 - Validation: the fourteenth full window run of 2026-10-05 (c2f21e69, apps eb707869, macOS 26.6.2 arm64) passed 338 of 344 checks. Load failures at load average 93 to 118 on 11 processors: `native content, cards, and the sidebar rail stay aligned` on both hosts (worst 245.0ms and 160.4ms against 33.3ms) and the Tauri maximise settling (225ms against 150ms). The Tauri page stall of F69 failed `the application log file holds the lines the page reports` and, through its undeclared `exposure reply does not match a pending request`, `a page reload loses no host reply`; the Tauri recording stop of F73 failed `a new window shows its complete first screen from its first frame`.
+
 - F69: a stalled request also records the page's WebContent processes, including a request that the host ends because the page did not reply.
+
 - F72: `pnpm -F @soksak/e2e run verify:shutdown` runs the quit lifecycle check, and two window check probes that nothing ran are removed.
+
 - F25.1: the window check harness is the package `@soksak/window-check`; the application executables are declared by `SOKSAK_BINARY_WAILSV3` and `SOKSAK_BINARY_TAURIV2`, which core's `e2e/setup.mjs` takes from the cargo target directory.
 - Validation: the thirteenth full window run of 2026-10-05 (eb707869, macOS 26.6.2 arm64) passed 334 of 344 checks. A person used Safari during the run, which caused the Wails pointer refusal, the failed activation and the changed frontmost baseline. Load failures at load average 58 to 93 on 11 processors: recording gaps of 109 to 242ms, the alignment timing (161.7ms against 33.3ms) and 20 of 21 divider frames. The remaining failure is F71.
+
 - F69: a window check request that does not answer within its limit records the host's threads at that moment with `sample` and names the file in its error.
+
 - F43: the switch to the library shows the library screen in the prepared draw that empties the plane, at the animation frame before the observation round, and the diagnostic recorder reports the stack of each `body` dataset write inside a callback slot.
+
 - F64: both hosts read a stopping sidecar's output to its end and accept its answers to the closes that the stop removed, so the sidecar no longer ends with SIGPIPE; a nonzero end during a stop is written as `exit status <code>` or `signal <number>` in both hosts.
+
 - F68: both hosts serialize the writes of the WebKit child record, so overlapping page loads no longer fail its rename.
+
 - F52: `make hosts-check` also compiles the Tauri host for Windows with the Windows C compiler of llvm-mingw, which the Makefile variable `LLVM_MINGW` locates.
+
 - F67: `@soksak/plugin-api` exports `drawList(list, entries, { key, create, update })`, which updates a list of controls in place, so plugin sections no longer rebuild lists whose entries did not change.
+
 - F66.2: the settings and menu dialog documents update their content in place: nodes of the same kind and command stay in the document and only changed attributes, text and values are set, so an update between a press and its release no longer loses the click.
+
 - F66.1: the library keeps unchanged project and plugin cards and their controls in the document across renders and moves only an element that is out of order, so a render between a press and its release no longer loses the click.
 - Validation: the eleventh full window run of 2026-10-05 (core a3498ed4, terminal service b9b46c4, terminal plugin dfd2858, macOS 26.6.2 arm64) passed 339 of 344 checks. `native content, cards, and the sidebar rail stay aligned` failed on both hosts with 64.8ms (Wails) and 44.1ms (Tauri) against a worst-frame limit of 33.3ms at load average 27 to 42 on 11 processors, which is load; the other failures are F43, F64 and F65.
+
 - F65: a draw of a card header moves a sidebar fold control only when its order is wrong (`drawSideToggles` in `packages/workbench/plane.js`). It moved every shown control except the one directly before the card tools with `insertBefore`, which takes the control out of the document first, and WebKit sends no `click` for a press whose node left the document; the eleventh full window run recorded on Wails a header click that did not open a folded left sidebar because the draw of the preceding fold ran between the press and the release. The rule is stated in the exposure specification. Validation: `a draw keeps the pressed card header fold control in the document` (`packages/workbench/test/plane-side-toggles.test.mjs`) failed with the removed controls `["top", "left"]` before the change and passes after it; the 301 workbench tests pass.
+
 - F62: the Wails persistent transport harness closes the connection that echoed an `open` request instead of the first two connections it accepted, so each host loses its first connection and receives a connection event also when one host's revived connection reaches the service before the other host's first connection. `TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck` gained the subtest `second opens after the first reconnected`, which failed with `no connection event; the test stalled` before the change. The host code and the Tauri harness are unchanged. Validated on macOS 26.6.2 arm64 with the Wails host test package.
+
 - F63: after a refused cleanup probe (`kill(-pgid, 0)` answering EPERM) the command supervisor reads the group's members from the process table (`ps -A -o pid=,pgid=,stat=`), records them in the `verify` cleanup observation, and counts the group as cleaned when no listed member runs; a running member keeps the EPERM failure. macOS answers EPERM for a group whose members have all exited and wait as zombies for their parent, which here was launchd for a descendant whose parent had already exited, and `forwards CLI SIGTERM to command cancellation and cleanup` failed once that way under load. The supervisor tests judge an ended descendant by its process state, because `kill(pid, 0)` succeeds for a zombie. The new test `counts a process group that holds only zombies as gone after a denied probe` failed before the change and passes after it.
+
 - F59: both hosts create owner-only files and directories only through platform operations; Darwin implements them in `platform/darwin/private_files.*` with modes 0700 and 0600, and Windows returns `<operation> is not implemented on windows`. Go gained `CreatePrivateDirectories`, `AppendPrivateFile`, `CreatePrivateFile`, `WritePrivateFile`, `SecureServiceDirectory` and `PrivateDirectory`, and Rust gained `create_private_file`, which creates a file that must not exist, and `write_private_file`, which replaces the contents of a file. The Go log, configuration, settings, process lock, clipboard, service, performance and diagnostic sites no longer set `os` permission modes, which compile on Windows without giving owner-only access. The Tauri process lock had the umask mode 0644 and now has mode 0600, as in Wails; the Tauri services, clipboard, settings, endpoint record and performance logs directories, the performance switch, service flags and output, the WebKit child record and the diagnostic fixture settings are now owner-only, as in Wails. New contract cases `platform.private.creates-owner-only-directories`, `platform.private.appends-owner-only-file`, `platform.private.creates-new-owner-only-file`, `platform.private.writes-owner-only-file`, `performance.trace.owner-only-files`, `webkit-children.record.owner-only` and `endpoint.process.lock-mode-0600`; the last three failed on Tauri before the change. Validated on macOS 26.6.2 arm64 with both host suites and `make windows-build-check`.
+
 - F43: the page draws the DOM of a prepared layout in the callback of the next animation frame after its native preparation answers (`drawPrepared` and `animationFrame(work)` in `packages/workbench/layout-queue.js`); it drew in the microtask checkpoint that resolved the preparation, which can be the checkpoint of a ResizeObserver callback, and the tenth full window run recorded the switch to the library clearing the plane inside an observation round of the files tree observer, which WebKit reported as `ResizeObserver loop completed with undelivered notifications.` A layout epoch change before that frame cancels the draw. [Native surfaces](docs/spec/native-surfaces.md) states the rule. The new workbench test `a prepared draw runs at the next animation frame when its preparation is answered inside an observation round` failed before the change and passes after it.
+
 - F60: when a surface is removed, the workbench detaches the regions of its module's compositions before it calls the module's `dispose` (`disposeModule` in `packages/workbench/surface-modules.js`). The terminal and shell modules end their sidecar session in `dispose` before they detach their region, and the supplier releases its transfer images when the session ends, so a frame that it had sent before was presented on a region that was still attached and failed with `error: image present: … reason=notFound`, as in the tenth full window run on Tauri; such a frame is now answered `stale` for a detached region. Both hosts already handled the case the same way, so no host changed. [Plugins](docs/spec/plugins.md#surface-ownership) states the order. Red: `removing a surface detaches its regions before the module ends its sidecar session` failed with the order `session close`, `imageDetach view`; Green: it and the 297 workbench tests pass.
 - Validation: the tenth full window run of 2026-10-05 (7eca547a, macOS 26.6.2 arm64) passed 336 of 344 checks. Load failures at load average 50 to 69 on 11 processors: `native content, cards, and the sidebar rail stay aligned` on both hosts (worst 121.7ms against 33.3ms), `shaking the vertical boundary exposes no unrendered area` on both hosts (recording gaps of 117ms and 113ms) and `multiple terminals keep fixed cells during a divider drag` on Tauri (20 of 21 frames). The other three failures are F43, F60 and F61.
+
 - F58: the error display and layout wiring of the main page moved from the inline script of `packages/workbench/index.html` into `packages/workbench/page-layout.js` (`createErrorDisplay`, `reportUncaught`, `createPageLayout`), which takes the document, host surfaces, plane and compositor as arguments; `index.html` imports it, and the workbench stages it. `presentation-failure-lines.test.mjs` and `layout-failure-lines.test.mjs` rebuilt a copy of that wiring and now import the module, so they verify the page's code; their assertions are unchanged. Behavior is unchanged.
+
 - F54: on a platform without the window resize operation, such as Windows, the Tauri application writes the error and exits with status 1 before any window opens, as the Wails application does; it logged the failure and went on to fail later in plugin setup. [Hosts](docs/spec/hosts.md#windows-state) now states that both hosts end with `window resize animation is not implemented on windows`; it named the termination-request error.
+
 - F53: the Tauri host starts a persistent service in a new session, as the Wails host did, through the platform operation `new_session` (`NewSession` in Go), which calls `setsid` in the child on macOS; the service no longer receives the signals of the application's process group or terminal. The new contract case `sidecars-transport.persistent.starts-in-new-session` failed on Tauri before the change and passes on both hosts.
+
 - F52: `make windows-build-check` vets the Wails host source for `windows/arm64` in the default and diagnostics builds, and `make hosts-check` runs it; on main the Windows build failed on the undefined helpers `missing` and `unreachableError` and on `syscall.SysProcAttr.Setsid` in `sidecars.go`. Every Windows operation outside directory identity returns `<operation> is not implemented on windows` with the same name on both hosts, starting a persistent service in a new session is the platform operation `NewSession`, and the Rust logs are created through the platform operations `create_private_directories` and `append_private_file`. The Go `ConfigureMainWindow`, `PreferredLanguage`, `MainWindow` and `ServiceProcessExists` return errors that their callers report, and a system language that cannot be read fails startup on both hosts instead of selecting the default language in Rust. Both hosts treat a refused signal check (EPERM) of a service pid as an existing process. `make windows-build-check-rust` checks the Tauri host for `aarch64-pc-windows-gnullvm` and fails with the name of the missing Windows C compiler `aarch64-w64-mingw32-clang` when that compiler is not installed.
+
 - F57: one layout failure writes one line, the layout queue's `error: page: surface presentation failed: <text>`, also when a project switch started from the interface or a gesture scheduled that layout. `layouts.run` rejected to its caller after `failed` had shown the failure, so the rejection of a project tab's `core.project.activate` and of every gesture layout that no command waited for reached the document's `unhandledrejection` handler, and the activations of `projects.js` dispatched it as an `error` event, each writing `error: page: <text>` again. `layouts.run` now answers a failed layout with `{ status: "failed" }`, and the project switch waits through `layouts.wait()`. New workbench tests `a layout failure of a project switch started from the interface writes one page error line` and `a layout failure that no command waits for writes one page error line` failed before the change and pass after it.
+
 - F56: one image presentation timeout writes one line, the page display `error: page: surface presentation failed: <text>`, on both hosts. The Tauri presentation wait wrote `error: image presentation timeout: …` although the preparation or presentation request that waited answers with the failure, and the page wrote the same failure again as `host presentSurfaces failed while advancing the layout queue: …` and `exposure settled failed: …`; the layout transaction order now continues after a failed step without a line, and the layout queue's `wait()` answers `false` for a failed newest layout, so the settled wait of a core command ends without reading slots. New contract case `images.wait.timeout-writes-no-log-line`; the window check `a presentation that fails while the terminal service is stopped` declares only the page line.
+
 - F41: the window check `late-reply.test.mjs` (`a surface reply that arrives after its surface closed is discarded as an observation`) sends `core.surface.hit` to a new browser tab whose replies the page holds, closes the tab while the reply is held, and requires that the request ends with 1003, that the application log holds the observation `exposure reply <id> of removed surface "<surface>" arrived after its request ended` for that tab, and that no `error: ` line was written. The reply is late without a timer through the new diagnostic methods `diagnostics.surface.hold` and `diagnostics.surface.held` ([endpoint](docs/spec/endpoint.md)): both hosts forward them to the main page, whose diagnostic module (`packages/workbench/surface-reply-hold.js`, staged only with `--diagnostics`) holds every exposure reply of the surface until the host sends `exposure-registered` with `closed` for it, then sends the held replies and, after the host has answered them, writes `held exposure replies of surface "<surface>" were sent after the surface closed (<count>)`, which the check waits for in its transcript. `e2e/application-log.mjs` gains `readLines`, which `readErrors` now uses, and `e2e/late-reply.mjs` judges the lines. Red: `surface-reply-hold.test.mjs` and the e2e unit tests `application-log.test.mjs` and `late-reply.test.mjs` failed because `surface-reply-hold.js`, `readLines` and `late-reply.mjs` did not exist, and `an installed reply gate decides when a surface exposure reply is sent` failed with `gateSurfaceReplies is not a function`; Green: the same tests, `pnpm -F @soksak/workbench test`, `pnpm -F @soksak/e2e test` and the structural checks pass. The window check has not run yet.
+
 - F55: a window-check run refuses itself once, before its first check, when the application that is frontmost before the checks is a tested host, and names that application by pid, name and bundle identifier and the tested hosts by pid. `e2e/session.mjs` runs `sessionBaseline` of `e2e/frontmost.mjs` as the node:test global setup of `verify`, `verify:activation`, `verify:real`, `verify:terminal-sidebar-current` and `repeat`. Before, the run took the tested host as the baseline and every check failed separately; the eighth window run of 2026-10-05 failed 161 checks that way. The unit test `a session whose frontmost application before the checks is a tested host is refused` failed before the change and passes after it.
 - Validation: the ninth full window run of 2026-10-05 (36fb65d2, macOS 26.6.2 arm64) passed 339 of 342 checks on both hosts. `native content, cards, and the sidebar rail stay aligned` failed on both hosts with 58.5ms (Wails) and 52.9ms (Tauri) against a worst-frame limit of 33.3ms at load average 51 on 11 processors, which is load; `a presentation that fails while the terminal service is stopped` failed on Tauri with the host error line of F56. The eighth run of the same build measured nothing because the Wails check application was the frontmost baseline (F55).
+
 - F35.2: the window check `titlebar-recording.test.mjs` records the window while the frame factor steps from 1 to 3 and back to 1, and while the main window reloads after another window changed the common `textSize`, and fails on any recorded frame whose window button centre differs from the first-row centre by more than 0.5px, on a frame that cannot be measured, and on a displayed row that the recording missed. Both centres are measured from the frame pixels (`e2e/titlebar-measurement.mjs`); its unit tests reject a synthetic frame with the buttons 6px off the row centre.
+
 - F35.1: on a reload, each host sets the start title bar inside a layout transaction of the window that commits with the new page's first presentation (`surfaceLayoutStartPage`), so the previous page, which stays on screen until then, is never shown with the title bar of the new page; a window that is not visible yet takes the height at once. The native check `window_titlebar_reload_test` records a reload in a new WebContent process and fails on a frame whose window buttons are not centred in the row of the page it shows.
+
 - F50: `core.tab.close` answers after the tab close has disposed the surface and its draw has removed the slot; the handler did not return the close, so the command answered during the disposal and a following command's settled wait read the disposed surface's slot and logged `exposure settled failed: surface … is not mounted`. The settled wait of a core command now waits for the newest layout through `wait()` of the layout queue, which waits again while a newer layout was scheduled; it awaited the layout of its start once, and a layout that a newer one replaces ends without a draw. [Exposure](docs/spec/exposure.md#registration) states the rule. New workbench tests `core.tab.close answers after the tab close and its draw`, `the wait for the drawn layout continues through a layout that a newer layout replaces` and `the wait for the drawn layout fails with the failure of the newest layout` failed before the change and pass after it.
+
 - F35.1: before it answers a page's start document, each host sets the window title bar to the first-row height of the common `textSize`, so the first draw of a window at a frame factor other than 1 no longer shows its row under the 40pt title bar of window creation; `textSize` is common-only in both hosts and the page. A switch to the library is a prepared layout that writes the current frame factor, because the switch cancels a prepared draw that may have been the one writing a new factor. A preparation that fails after it set the title bar sets the earlier height again before it cancels.
+
 - F35.1: the window title bar height joins the layout transaction. Each surface preparation (`syncSurfaces`) carries `titlebar`, the first-row height of the draw that follows it, and both hosts set the title bar after they begin the window's transaction and before they place the surfaces, so the row and the window buttons change in the same presented frame; the preparation answers the window's `chrome`, and verification W compares the row with the `chrome` of the last presented preparation. A frame factor change is now drawn by a prepared layout that writes the factor into the document; before, the setting wrote it at once and the page requested the title bar after the draw with `windowTitlebar`, which is removed with `packages/workbench/titlebar.js`. In full screen the hosts leave the title bar unchanged instead of failing, and the page prepares its row again when a `windowControls` answer shows a title bar that differs from it.
+
 - F35.1: the native check `window_titlebar_layout_test` records a window while it sets the title bar height inside an open layout transaction and fails when a recorded frame shows the window buttons at the new place before `surfaceLayoutCommit` or not after it; on macOS 26.6.2 the buttons moved only with the commit.
+
 - F46: both hosts declare the status `host.buttons` `{mask}`, the `NSEvent.pressedMouseButtons` mask that the 1007 refusal reads; `native/darwin` reads it at every mouse button press and release that AppKit delivers to the application or, through a global event monitor, to another application, and the hosts notify watchers when it changes. The window-check harness ends a press that a check left open by waiting through `status.watch` until `host.buttons` reports mask 0 and then requiring the release to be delivered; before, it sent the release again while a person still held the button, the release was refused again, and every later pointer check of that host failed with 1008.
+
 - F48: the Tauri `host.windows` reads the close state, title and focus of every window in one main-thread step; it read the close state on the endpoint thread and queried each window in separate main-thread round trips, so a close that the main thread processed in between failed the list with `runtime error: failed to receive message from webview`. The new contract case `exposure.windows.listed-in-one-main-thread-step` reproduced the failure with a close queued on a test main thread before the change and passes after it; the Wails list needs no change.
+
 - F49: removing a project from the registry, by its project tab or by `core.library.remove` in another window, ends it in the window that shows it as closing its tab does: that window reads the removal from the registry change notification, disposes the surface modules of the project's tabs before it ends their sidecar sessions, and opens its first remaining project or shows the library as a window without a project. The window kept the removed project's surface modules and terminal sessions and did not open its next project tab.
+
 - F51: each host request that uses the native window reads it in the main-thread step that passes it to native code. The Tauri `host.window`, `host.window.fullscreen`, `host.window.move`, `host.hit`, `input.pointer`, `input.key`, surface press watch and surface layout steps read the NSWindow in one main-thread step and used it in a later one; tauri-runtime-wry closes the NSWindow and tao releases it in the main-thread pass that accepts a close, before `Destroyed`, so a close in between passed a closed and possibly freed window to native code. The Wails host read the window in the step that uses it but passed the nil of a destroyed window to native code. On both hosts a window that closed before that step now fails the request with 1003 `window "<name>" does not exist` and reaches no native code, and a `host.window` change of it notifies nothing; the Tauri surface press after `input.pointer` no longer hit-tests AppKit views on the endpoint thread, and the Tauri unknown-window message quotes the name as Wails does. The new contract case `window-close.native-window.used-in-reading-step` failed before the change on both hosts and passes after it.
+
 - F47: the hosts write every failure as an error line `error: <where>: <text>`, the form of the page, through `LogError` (Go), `log_error` (Rust) and the native `sp_log_error`, with the same text on both hosts at a shared site, so a window check sees host failures; Wails framework errors take the same path. A host line without `error: ` is an observation that states the expected state, such as `<result> arrived after its request ended`; a late result that carries a failure is now written as an error. The workbench wrote `exposure settled failed: …`, `exposure: …` and the layout queue failure without `error: ` and now writes them as error lines. The native surface settle line wrote a literal `\n` and joined the next log line to it.
+
 - F35: the page sets the window title bar to the height of its first row through the new `windowTitlebar` host call, so AppKit centres the window buttons in the row at every frame text factor; the hosts set the height with AppKit's `-[NSWindow setTitlebarHeight:]` instead of an empty unified compact toolbar, which fixed the title bar at 40pt, and the row no longer reads its height back from the window, which kept it from shrinking. Both hosts reject a height outside 32 through 200 points with the same text, and a request in full screen. `window_controls_test` measures the title bar and the centring at 40 to 108pt after a title change and a resize; `titlebar.test.mjs` checks that the page requests each row height once.
+
 - F37: a synthetic `input.pointer` press or release that AppKit refuses with a nonzero `NSEvent.pressedMouseButtons` mask returns 1007 with the mask and the frontmost application's bundle identifier and pid, measured in the same main run-loop turn as the refusal, in the same text on both hosts; the message before named neither.
+
 - F43: after a ResizeObserver loop error, the diagnostic recorder reports the DOM changes of the error frame by callback slot: the changes still undelivered at the first callback, the changes of each callback and its microtask checkpoint with the code that created its observer, and the changes after the round until the next animation frame; before, one line held every change from the first callback to the next animation frame.
+
 - F45: every error that the page shows goes through one display path that logs it, and only that path's elements take the error color; a source test checks both. The path found six application error banner messages that were shown without a log line.
+
 - F39: document and image regions report the failures that no caller receives, such as a placement that fails while observing and an image event without handlers, through the surface page's report instead of the console, which the applications do not record; `observeRegionInsets` starts observing at an animation frame.
+
 - F40: the settings dialog no longer receives the native paint clip of the main document, which cut the native surface holes of the main page into the dialog scrim and made the two hosts send different dialog styles depending on the frame of the last commit.
+
 - F42: the page logs every error it shows when it shows it: the card surface status, the library error, the plugin status error, a failed plugin operation, a missing project folder and a library preview error now write `error: <where>: <text>`, so a window check judges an error that the next draw removes.
+
 - F38: a window without a focused card, such as the library before a space opens, has the frame as its text size scope; the text size commands failed there with `text size card undefined is not in the layout`.
+
 - F36: the space row, the left project column and the first row take their frame-factored size in whole pixels, so the plane stays on the device pixel grid and the host seats native surfaces where the page declares them; at factor 1.1 they differed by half a pixel. A failed V7b names the surface and both rectangles.
+
 - F33: the draw of a layout transaction draws the card sidebars with the presentation that the transaction predicted the native surface seats with; a sidebar size command that arrived before the draw made the DOM and the native surface differ by one drag step. A failed placement verification (V7a, V7c) names the surface, both rectangles and the predicted and drawn sidebar bands.
+
 - F34: the page verification R measures the lines only when the plane shows the size of the painted cards; it compared the plane with the grid, which takes a new size before its draw, and reported the lines of a replaced layout as extending beyond the plane.
+
 - F31: a window check judges every error that the application logged during it. The page reports a failure as a line starting with `error: ` and an observation through `log`; the harness reads the error lines that the application wrote since the previous check, prints each as `application error:` and fails the check unless the check declared it with `expectError`. Before, a check read `core.page.error` once after the reloads of its cleanup had removed the error from the document. The browser example writes a failure of `surfaces.report` to the console instead of dropping it. A full window run (338 tests, 319 passed) logged the page errors F32 to F35.
+
 - F30: the sidecar tests of a slow and of a stubborn sidecar use a program that does not read its standard input; `cat` read the pipe and `cat &` could end at once, so both tests depended on the speed of the machine and the shell, and they failed in the GitHub run of the core CI. Go and Rust repeat targets pass 5/5 on macOS 26.
+
 - F29: the build environment check accepts a pnpm executable outside an npm package, as `pnpm/action-setup` installs it on GitHub runners; `pnpm --version` measures the version that runs, and the core CI had failed at `make preflight` with `pnpmExecutable=unknown` in every GitHub run. `scripts/test/check-build-environment.sh` reproduced the failure before the change and passes after it.
+
 - F26: a plugin declares its sidecars and their version ranges as the `dependencies` of its `plugin.json`; `plugin.json` `sidecars` and `package.json` `soksak.sidecars` are removed, and `sok plugin pack` refuses a `package.json` with `soksak`. `@soksak/plugin-api`, the workbench, both hosts, `sok plugin pack`, `sok registry build` and `make registry` read the new field; the registry index and `installed.json` keep their `sidecars` ranges. The plugin-api, workbench, host, `sok` and workspace registry tests reproduce the new contract (Red before the change: `unknown field dependencies`, no installed sidecar declarations, undefined `ManifestSidecars` and `manifest_sidecars`), and root `pnpm test`, `make boundaries`, `make exposure-check`, `make hosts-check` and `make docs-check` pass on macOS 26 (darwin-arm64).
+
 - F28: a window check whose pasteboard differs afterwards names the item, the type and the length and digest of each side.
+
 - F27: the window check of the OSC 9 notification policy fits the bundled applications: it names an undecided notification authorization and checks that the tab policy adds no system notification.
+
 - F24: the window check of a failed terminal presentation waits for the next terminals to present instead of failing while they have not presented yet.
 - R2-4-3: `docs/spec/registry.md` specifies the public registry: committed entry files, pull requests by entry owners, an automatic check and merge, and publication of the index on merge.
 - R2-9: the applications and `sok` no longer move the 0.0.2 configuration folders or convert `installed.json` format 1; a file of another format fails with its name.
 - R2-7-3: `docs/plans/linux-host.md` proposes the Linux host: the framework facts, the Linux mechanism of each host operation group and private API, the vt frame transport, the decisions D1–D8 and the order of implementation.
 - R2-7-2: the files sidecar watches directories on Linux with inotify (sidecar-files S8).
 - R2-7-1: `sok` runs on Linux with the configuration directory under `$XDG_CONFIG_HOME` or `~/.config`; `sok path` reports that Linux has no path entry folder, and the CI workflow runs the `sok` tests on Linux.
+
 - F23: the Go `sok` writes extracted files at mode 0755 or 0644 whatever the process umask is; under the umask 077 it wrote a sidecar executable at mode 0700.
+
 - F14: both applications answer the operating system's quit request (Dock, logout, restart, another program) without an error after their saves; the Wails application answered it with a cancellation, which also stops a logout, and the Tauri application ended without waiting for page saves.
+
 - F21: both hosts accept a persistent service's answer to a close sent before the quit, so the quit still sends `shutdown` and the terminal service ends with the application.
 - R2-5-1: core has a CI workflow and a release workflow; a tag publishes the two applications as zip files with the installation guide `docs/operations/install.md`.
+
 - F22: the repeat tool's tests remove `NO_COLOR` from the environment they pass, so an environment with `NO_COLOR` no longer puts a node warning into the output they match.
 - R2-6-2: the command `core.plugins.registry` sets the registry index, and a window check installs over https from a test-owned TLS registry and refuses a wrong hash, a revoked version and an unreachable registry.
 - R2-6-1: a diagnostic build accepts `--registry-ca PATH`, so a window check can serve a local TLS registry; a release build rejects the argument.
+
 - F20: both applications reject an undeclared argument, a flag without a value and a repeated flag with the same text and status 2; the Tauri application no longer ignores them.
+
 - F15: both hosts report a malformed `process.lock` with the same text, `<path>: invalid process lock`.
 - F18, F19: a terminal accepts pointer points in the band where the native region is smaller than its view, and a failed mouse operation answers with its own result, so the page no longer reports `unexpected mouse inputId`.
 - R2-4-1: both hosts and `sok` read registry indexes and archives over https with fixed redirect, time and size limits, and the first run sets the default registry of `environment.json` with `pluginsUseRegistry`.
+
 - F17: the startup-timeout tests of both hosts no longer depend on when the silent service starts.
 - R2-2-2: the plugin and sidecar repositories declare version 0.0.3, and `@soksak/plugin-api` provides `soksak-engines`, which fails when a plugin's `engines.soksak` is not `^<version>` of the plugin API it builds against.
+
 - F16: `soksak-exposure` and `soksak-engines` run their check when a plugin repository starts them through the linked package; before, they ended without checking.
 - R2-2-1: every core declaration is 0.0.3, and the version check also covers the application `Info.plist` versions and the native pkg-config version.
 - R2-8: both release applications are `soksak.app` with the bundle identifiers `app.soksak.wails` and `app.soksak.tauri`; development builds use `.dev` identifiers; the first release start moves the former `com.soksak.*` configuration folder once, and `plugins/installed.json` format 2 records installed folders relative to the configuration directory, converting a format 1 file once (R2-8-1).
@@ -3365,39 +4426,59 @@
 - V5-81: the terminal draws its background, text, cursor, and selection in the theme's surface colors (`--surface`, `--surface-fg`, `--edge`) and repaints on a theme or mode change; the sidecar rejects a theme without valid colors. The browser empty state paints the card color instead of the window background.
 - V5-79: a new terminal or shell in a project starts in the project's root instead of the home directory; a split still starts where the source surface was, and a window without a project keeps the home directory. Surface contexts carry `project.root`, and the shell sidecar's `open` accepts `directory`.
 - V5-78: bookmarking from the file tree works from any tree of the project: the selection is the files state's `files.selection` (`files.select`), shown in every tree. Every tree drops a folder removed from `files.tree`, and `files.tree` no longer reads empty during a refresh.
+
 - F13: complete the plugin sidebar sections and plugin-oriented settings window on rebuilt Wails and Tauri hosts. All nine browser, files, and shell sections expose their declared state; the manifest-based settings pages, sidebar set operations, compatibility window checks, and browser empty state pass on both hosts.
+
 - F13-5-2: a click on the inset sidebar divider folds or unfolds at once; the double click and the host `pointerTiming` call are removed, and the folded divider shows a 2-point line.
 - F13-2-6 (files): the file tree header uses card-header icon buttons (star, rotate-cw) through the new section context `icon(name)`; the tree has no extra padding, its header text and row chevrons line up with the section header's chevron, and rows use the sidebar's 12-point text and 20-point row height.
 - F13-2-6 (core): a section row may declare `fill: true`; in `list` layout open fill sections share the sidebar height the other sections leave and scroll their body, and the file tree declares it.
+
 - F13-1-1: each sidebar's selected tab and folded sections are saved with the space (`sidebars` in the space layout) and shown again after a reload or a restart. The `sidebar-sections.js` part landed in d5e71587.
 - V5-76-1: the browser example opens a project without a page error. Without a host, surfaces that need sidecars or native regions show a placeholder instead of failing, the compositor receives the page's own placements, and `report` writes to the console. `make browser-example-check` opens a project in headless Chrome and fails on any console error.
+
 - F13-3-5: the setting `railWidth` is removed; a new rail column starts at `sidebarWidth`. A settings file that still contains `railWidth` fails to load with "unknown setting railWidth"; remove that key from the file. The minimum, maximum, and starting width share the range 60–800 and read 최소 폭, 최대 폭, 처음 폭. Window checks restore the common settings they change.
+
 - F13-5-2: the inset sidebar folds from its divider: a drag resizes, a single click folds or unfolds after the system double-click interval that the host now reports (`pointerTiming`), and a double click unfolds at `sidebarWidth` instead of the minimum. A folded sidebar keeps only its divider; the fold button, the inset status line, and the `sidebarFoldedWidth` setting are removed (the key was also removed from the check apps' settings.json). Tabs-layout tabs no longer wrap, and section names no longer move when a section folds. Validated on rebuilt Wails and Tauri hosts; the posted double click awaits the real-input tier.
+
 - F13-2-5: 파일 트리 draws the project folder with `@pierre/trees` (bundled with its license texts): file-type icons, selection, a 4-point scrollbar, colors bound to the theme tokens, folders listed when opened, disk changes reconciled per folder, and git status decorations from the new `git` operation of the files sidecar (`files.git`). ☆ bookmarks the selected file. Validated on rebuilt Wails and Tauri hosts (`e2e/files.test.mjs`) and in dark and light captures.
+
 - F13-2-4: the file tree follows the disk. The files sidecar watches the project folder and the expanded directories (kqueue on macOS) and reports changes, and the files state lists them again, so a file created or removed outside the application appears or leaves without 새로 고침.
 - V5-77: an inset sidebar without a stored width opens at 190 points (`sidebarWidth`); the minimum stays 120, and a double click on the grip still sets it.
 - V5-75: 사이드바 위치 (`rail`) defaults to `inset`, the sidebar inside the card, and its control lists 카드 안 first. A settings file that stores another value keeps it.
 - V5-76: `environment.json` accepts `sidecars: false` for a runtime that cannot run sidecars, and validation rejects a plugin whose state module uses sidecars there. The browser example declares it and no longer lists the files plugin, so opening a project there no longer reports "requires exactly one declared sidecar".
+
 - F13-2-3: the files plugin draws the project folder in 파일 트리 and its bookmarks in 북마크. A plugin can declare a `state` module, which the workbench mounts once for the shown project; it registers the plugin's statuses and commands in the application document, uses its sidecar with the project folder as `root`, and stores declared per-project `data` in `projects.json` under `plugins`. The new files sidecar lists directories inside the project folder. The tree updates after a folder toggle or `files.refresh`. Validated on rebuilt Wails and Tauri hosts (`e2e/files.test.mjs`).
+
 - F13-5-1: sidebar section headers, the tab strip, and the status line use the card border rule so their outline is as crisp as the design; headers take the card header height and the status line the card footer height, so their rules line up with the neighbouring cards; the fold chevron is the core chevron-down stroke icon. A window check measures the rule contrast against the header background in a capture.
+
 - F13-5: sidebars follow the sidebar design: no set title or place chip, 26-point section header bars that fold to the header, a 26-point status line at the end of every sidebar, empty lists in the muted UI font, and one rule between an inset sidebar and its card, with colors from theme tokens. New dom names `core.sidebar` and `core.sidebar.status`. Validated on rebuilt Wails and Tauri hosts with captures in dark and light modes.
 - V5-74: a browser tab and the 탭 section show the document title, or the address when the page has no title.
+
 - F13-2-2: the browser DOM section lists the document's elements and the 네트워크 section lists the requests its Performance API recorded (`browser.elements`, `browser.requests`), which a content-world script of the shared document view reports; `make exposure-check` accepts core names in section modules.
+
 - F13-2-1: the browser 히스토리 section lists the session history of the document region and loads an entry on a click (`browser.history`, `browser.history.go`, document `go` action `entry`), and the 탭 section lists the browser tabs of the card and selects one on a click through `core.grid` and `core.tab.select`; sections may follow core statuses and bind core commands.
+
 - F13-3-4: the settings window no longer repeats a control per plugin or section. 일반 holds 사이드바 위치, the left and right sidebar switches and sets, and the widths. 플러그인 is a searchable list of manifest names and descriptions (`description` is now required in `plugin.json`); a row opens the plugin page with its settings, sections, and left, right, and rail choices, and 목록 returns. A plugin's left or right choice (a set, 사용 안 함, or 일반 따름) takes precedence over the general choice while its card is focused. 사이드바 lists sets; the editor has the name, the layout, and section rows, each a select box grouped by plugin with ▲ ▼ −, plus +, through `core.settings.sets.row`, which rejects a repeated section. `core.settings.link` takes a set id, `off`, or `inherit`.
 - V5-73: the browser home address is the plugin setting `홈 주소` (`browser.home`, empty by default) on the browser plugin page; a new browser card opens it, or starts with the empty state when it is empty. The manifest `home` key and the surface context `metadata` are removed, and plugin settings gain the `address` type.
 - V5-70-2: document regions keep their site data in `document-data` inside the application's configuration directory instead of the application's WebKit container, so each `--config-dir`, including a disposable check directory, has its own cookies and caches.
 - F13-2 (shell): sidebar sections draw real content. A section module receives `context.status(name, fn)`, which follows a status of its plugin on the card's tab (or the default surface) and reports a failed watch, read, or release as a page error, and `context.bind(element, name, params)`, which connects a control to its plugin's command under the dom name `core.sidebar.section.control`. `core.sidebars` reports each section's `text` and `controls`. The shell exposes `shell.history` (nonblank lines written through `shell.write`) and `shell.jobs` (pending `shell.run` commands); 실행 기록 lists the lines and writes one again on a click, cwd shows `shell.cwd`, and 작업 lists pending runs with a 중단 control. Validated on rebuilt Wails and Tauri hosts (`e2e/sidebar.test.mjs`). The browser and files sections still draw placeholders (F13-2-1 to F13-2-3).
+
 - F13-3-1: stored sidebar `sets` and `links` pass the plugin-api `validateSidebars` and `checkSidebarReferences`, the same functions that check `environment.json`; a set naming an unregistered section or a link to a missing set or plugin fails the settings load with an error, and a change fails with -32602. Sidebars no longer skip unregistered sections.
+
 - F13-3-2: a sidebar section's mount failure after release and its dispose failure are reported as page errors instead of being ignored.
+
 - F13-3-3: every plugin setting declares a Korean `label` and, where needed, a `description`; the settings window shows them on the plugin page.
 - V5-70-1: the Google appearance check no longer requires a light Google page. Measurement showed Google drawing its own stored dark page while the region received the light color scheme; document regions keep site data across runs. The check now requires the light color scheme in the region and an unchanged Google page across host themes, and reports the measured state when it fails.
 - V5-72: the surface context offers the core icons as `icon(name)`, and the browser back, forward, and reload buttons draw the Lucide chevrons and rotate arrow at the size, color, stroke, and hover of the card header buttons instead of the characters ‹ › ↻.
+
 - F13-3: the settings window has the sections 일반, 플러그인, and 사이드바. 합성 is removed together with the compositor commit delay and placement offset (`latency`, `skew`), `diagnostics.knob`, and `core.layout.reset`. A settings file that still contains `latency` or `skew` fails to load with "common settings: unknown setting latency" (or the same for a project file); remove those keys from the file. 플러그인 lists the environment plugins and shows each plugin's declared settings, its rail and right sidebar sets, and its sections; 일반 shows no plugin or sidebar setting. 사이드바 holds 사이드바 위치, the left and right sidebars, the widths, and the set list with create, edit (title, `list` or `tabs` layout, sections), and delete through `core.settings.sets.*`. The inset sidebar minimum, maximum, default, and folded widths and the new rail width are the settings `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth`, `sidebarFoldedWidth`, and `railWidth`.
+
 - F13-1: every sidebar (left, right, rail, and inset) mounts the `module` of each section of its set with `{card, surface}`. A set's `layout` `list` stacks every section under a fold header (`core.sidebar.section.fold`); `tabs` mounts only the selected section (`core.sidebar.section.select`); fold and selection are kept per sidebar, and `core.sidebars` reports them. Section rows require `module`, sets require `layout`, and staging rejects a section module that the package does not publish. The nine sections draw a placeholder list until F13-2. Validated on rebuilt Wails and Tauri hosts (`e2e/sidebar.test.mjs` 4/4, `e2e/audit.test.mjs` 2/2).
 - V5-71: the browser address field shows the loaded address after a navigation that did not come from typing, also while it keeps focus after Enter; text being typed stays until a navigation command runs or the field loses focus. The new status `browser.address.text` reports the field text and focus.
 - V5-70: document regions send the Safari user agent of the same WebKit (`Version/<major>.<minor> Safari/605.1.15` from the system Safari, through `applicationNameForUserAgent`), so sites that select pages by browser name no longer send the reduced page; Google Search now receives its current page instead of the basic page with gray buttons. `document_view_test` checks the request header and `navigator.userAgent` (Red before: the bare WebKit user agent). Local `prefers-color-scheme` pages already followed the application mode in captured pixels on both hosts.
+
 - F13-4: a browser card without an address hides its document region and shows the empty state `browser.empty` ("주소를 입력하세요") in its place; a click on it focuses the address field through `browser.address.select`, and the first load shows the region again. Before, the visible empty WKWebView took native focus on a click and drew white. Validated on rebuilt Wails and Tauri hosts (`e2e/browser.test.mjs` 14/14, `e2e/audit.test.mjs` 2/2).
+
 - F13-0: a double click on the inset sidebar grip sets the minimum width 120 (the grip no longer prevents the default pointer action, which suppressed `dblclick`), a sidebar without a stored width opens at 120, and the real-input tool sends the click count so a posted double click is a real one.
 - V5-69-2: the settings window and menus call card and sidebar places "위치", and the group descriptions say what each group changes.
 - V5-69-1: the inset sidebar's fold button folds the sidebar, the grip lies over the border with no gap beside the surface, and dragging does not select sidebar text.
@@ -3407,10 +4488,12 @@
 - V5-68: the title bar shows the soksak logo in the colors of the dark and light modes, and both applications use the soksak icon in the Dock.
 - V5-67: `host.window` reports whether other windows cover the whole window, and drag measurements refuse to run while they do.
 - V5-65, V5-66: the Wails settings webview again matches the window content, and a Wails window that opens hidden behind other windows registers its main webview and loads its project.
+
 - F8: Korean input-method behavior (preedit, editing, Escape, exactly-once commits, and caret placement) is verified with the real input method on both hosts; Escape during a composition has its own native check.
 - V5-60: terminal wheel scrolling over a long history passes its real-input limits on both hosts, and the user accepted its speed.
 - V5-51-4-1, V5-51-4, V5-51: pressing a system notification of a terminal out of view selects its tab on both hosts; the Tauri endpoint declares `diagnostics.notifications`.
 - V5-51-4-1 (partial): the applications run from macOS application bundles, and a tab notice is also posted as a system notification whose activation selects its tab; `core.notifications` reports the permission, the last failure, and the accepted notifications.
+
 - F8-6-2: a divider drag shows each step's layout within 34 ms (two 60 Hz frames) instead of 50 ms, checked on both hosts.
 - F8-6-2 (partial): `diagnostics.drag` reports the begin, app DOM presentation, and commit times of each native layout transaction, and the drag alignment check reports them for its slowest frame.
 - V5-6-5: files dragged from another application onto a window reach the terminal under the drop point as quoted paths through a native file drop view and the surface's declared drop command, instead of being consumed by Wails or Tauri.
@@ -3459,11 +4542,14 @@
 - V5-36: the Tauri release executable is stripped (14.8 MB to 10.3 MB, smaller than the 12.8 MB Wails executable), and the release check finds capture code by its class name.
 - V5-17-1: a placement preparation keeps surfaces whose future slot is measured visible, so a press where the screen still shows a surface reaches it instead of the page.
 - V5-35: the graceful sidecar stop tests of both hosts require the stop to return before its deadline instead of a separate 250 ms bound.
+
 - F8-13: a wide glyph narrower than its two cells is centred in them; frame and window checks measure the ink margins.
 - V5-6-6: the terminal protocol inventory check compares the OSC report in the specification with the engine inventory selector by selector and requires each named test to exist.
+
 - F8-6-3: the drag delay check passes within the full default run on both hosts at a load average below 10.
 - V5-33: a surface that leaves the layout during its mount reads the text size factor it was mounted with instead of failing, so later commands no longer fail with `surface … is not in the layout`.
 - V5-22: the host parity check compares the settled layout at the end of the drag, recorded apart from the settings modal it opens afterwards.
+
 - F8-19: measured the first-terminal cost of a new terminal service on both hosts and stated in the specification that the default font load before the endpoint is accepted.
 - V5-24: the package test command check bounds `pnpm test` only against a hang and reports its duration; the time was `pnpm` start under load, not compilation.
 - V5-31: the supervisor SIGTERM test reads a pid file that is written atomically and waits for a positive pid. New target `make node-repeat`.
@@ -3481,19 +4567,28 @@
 - V5-23: the activation-tier keyboard checks pass on rebuilt Wails and Tauri, 5 of 5 tracked repeats.
 - V5-27: the terminal sidecar maps a selection point in the region padding past the last whole column or row to the nearest cell; `host.window` reports the system pointer location, and activation-tier checks keep their window beside the pointer. Validated on rebuilt Wails and Tauri with the padding window check, all activation checks, and 5 of 5 tracked repeats of the keyboard checks.
 - V5-23 (progress): the terminal image region reports a character key that the input method left unanswered outside the key window of the active application as an error instead of dropping it; the native keyboard check moved to the activation tier as `e2e/activation/terminal-keyboard.test.mjs` with a check of that error. Validated once on rebuilt Wails and Tauri; tracked repeats are pending V5-27.
+
 - F12-4: Cards and the frame declare CSS `zoom` only when their factor is not 1, which restores every drag frame on Tauri.
+
 - F8-6-4: Fast drag checks require every layout held for two 60Hz frames to appear in the recording, since a shorter one may be replaced before it is presented.
+
 - F12-3: A browser document's page zoom is its card's effective text size factor, set through the new host document operation `documentZoom`.
+
 - F12-2: A terminal card's font size is 13 points times its effective text size factor. The sidecar `font` operation takes `size`, and `terminal.session` reports `fontSize`.
+
 - F12-1: Command `=`, `-`, and `0` in the View menu enlarge, reduce, and restore the text of the last pressed card, or of the frame and every card after a frame press. The frame factor is the common setting `textSize`, and card factors are saved with the layout.
 - V5-21: The Wails application menu no longer zooms or reloads the whole webview; its View menu has only full screen, like the Tauri menu. Both hosts report the application menu as `host.menu`.
 - V5-18: Both hosts fix a surface's root at its first sidecar request and send it with later requests and the closed notice, so a terminal session opened under an earlier project root is closed. Registered F8-6-3, F8-6-4, V5-22, V5-23, V5-24, V5-25.
 - V5-20: The Tauri `host.window` reader releases the modal webview mutex before it waits for the main thread, which removes a deadlock with modal placement.
 - V5-17: A surface hidden during a placement returns the keyboard focus to its owner when it is shown again, so one click focuses a browser document. `host.window` reports the first responder. Registered V5-17-1.
+
 - F8-22: The terminal module accepts the sidecar acknowledgements of `selection.start`, `selection.update`, and `paste` instead of recording them as unsupported events.
+
 - F8-21-1: A synthetic pointer press or release while `NSEvent.pressedMouseButtons` is nonzero returns 1007 instead of reaching the document as a move, and a release completes after the document receives `pointerup`. Registered V5-19.
+
 - F8-21: A terminal drag over blank cells no longer reports `invalidParams: selection is empty`. The sidecar clears a selection without text and answers `selection.end` with `copied: false`; `terminal.session` reports `selecting` and `selectionReleases`.
 - V5-12: `native content, cards, and the sidebar rail stay aligned` passes on both hosts after the F8-6 corrections.
+
 - F8-6: Divider drags follow the pointer. The layout queue keeps only the newest waiting layout and reports replaced layouts in the application log; the rail outline follows the painted cards through `SoksakView.painted`; the app DOM webview renders at the display rate. The alignment check measures the drag delay, limited to 50ms.
 - V5-6: each re-verified terminal, clipboard, protocol, and browser-appearance claim maps to named tests that pass on the current builds; weak or missing coverage is registered as V5-6-1 to V5-6-6.
 - V5-15-1: the unused surface frame hold is removed; no current case moves a surface, and the specification states that the host holds no surface frame against outside changes.
@@ -3502,8 +4597,11 @@
 - V5-15: the inspector activation check dispatches events while it waits, so the application becomes active, and uses a surface tall enough for WebKit to attach the inspector; private WebKit declarations moved to the private header. It passes 3 runs in a row.
 - V5-14-1: the saved layout check writes the registry through a temporary file and a rename, so the running application no longer reads a partial `projects.json`; the project checks pass 8 runs in a row on both hosts.
 - V5-16: the terminal process check failures after activation runs came from sessions of force-ended application instances that the terminal service keeps, not from the activation checks; the procedure now states to stop that service after forcing an application to end.
+
 - F8-9-1: the plain `NSView` input client of F8-9 caused a stall and an `EXC_BAD_ACCESS` crash in Tauri, so the `NSTextView` client is restored; every inherited edit is off, Services cannot use the input document, and tests assert each edit is off. The same reproduction cycle passes 10 times with the restored client.
+
 - F8-9: the input client of the terminal image region is a plain `NSView` with its own input document instead of an `NSTextView`, so it inherits no text editing that the terminal does not declare. The simpler client was chosen after both produced `ddd한글 ` on the same Korean sequence, and the activation-tier Korean and Japanese checks pass on both hosts.
+
 - F8-7: the activation-tier window check `marked-text.test.mjs` verifies that marked text of the Japanese input method (`日本`) is written to the PTY exactly once on both hosts when the composition ends.
 - V5-4: every native test links a shared exit hook, so a test that has not declared activation fails when its process is active at exit. The activation that the hook found in `webview_geometry_test` (an event pump that also dispatched the OS activation event) is corrected.
 - V5-10: both Rust workspaces are formatted with `rustfmt`, and `make rust-format-check`, which `make native-test` runs, fails on unformatted Rust code. The terminal protocol inventory check now reads the formatted CSI rows.
@@ -3511,10 +4609,15 @@
 - V5-11: `host.hit` no longer defines the unreachable `surface` kind; points of DOM surfaces and image regions are `page`. The branches are removed from both hosts and the window check follows; it passes on both hosts.
 - V5-14: the saved layout check no longer assumes that the shell card has two tabs; it requires every tab except the dropped first one to remain. It passes on both hosts.
 - V5-13: the projects specification states that a common-only setting requested in the project scope is rejected with -32602, and the window check that still required the earlier -32000 follows it; it passes on both hosts.
+
 - F8-6-1: `host.window.presented` and command settling wait for the web content process to commit its rendering (`_doAfterNextPresentationUpdate:`) before they report the display time; previously they reported a time before the last DOM change was drawn, so drag recordings missed the final return. Both drag e2e cases pass 3 runs in a row on both hosts.
+
 - F8-17: terminal session errors are tracked by source and cleared only by a valid event of the kind that resolves them. Unrelated `state`, `session`, and `theme` events no longer clear errors, so the card indicator and `terminal.session.error` stay together. Verified by 10 Red unit tests and an e2e case on both debug applications.
+
 - F11-4: `make release-check` reports a malformed staged `sidecar.json` with its file and error; it previously skipped the file silently and left its executable unscanned.
+
 - F11-2: plugins declare check-only entries in `diagnostics.json` with their module, and only diagnostic builds stage them; the terminal `terminal.compose.update` and `terminal.ime.trace` moved there, and `make release-check` fails when release staging holds a plugin diagnostic declaration or module. Both release applications return 1001 for `terminal.ime.trace`, and the new e2e case passes on both debug applications.
+
 - F2-1: `e2e/normal-shutdown.mjs` waits for the process exit through an exit notification (`caffeinate -w`); the previous observer checked the exit only when a file event arrived and timed out when Wails removed `endpoint.json` before exiting. Both rebuilt hosts passed 10 runs each.
 - G4-2: both hosts write `endpoint.json` only after their first window is registered, so a request for that window right after the file appears is answered; checked 5 times on each rebuilt application; `make native-test` passes with all 207 cases on both hosts.
 - G2-3-19: the host tests for flush order, image refusal from another sidecar, the non-canonical configuration directory, and PNG persistence assert their declared behavior and fail when it is removed; `make native-test` passes with all 206 cases on both hosts.
@@ -3540,31 +4643,44 @@
 - G2-3-5: the Wails exposure relay is the exported `Relay[T]` with the structure of the Tauri relay, and Wails tests cover the exposure list and relay contract cases; `make host-contract-check` reports 188 of 205 cases for Wails.
 - G2-3-3: Wails endpoint tests cover the twelve endpoint contract cases that only the Tauri host tested; `make host-contract-check` reports 177 of 205 cases for Wails.
 - V1-1: the Korean changelog now translates every entry in the same order, both changelogs have one unreleased section, and `make docs-check` compares their sections, entry counts, task identifiers, and code spans.
+
 - F8-20: during a Hangul composition the image region gives special keys to the input method first, so Backspace edits `한` to `하`; a key the input method does not handle is reported as the key after the composition is committed. Checked with the native activation test and on both rebuilt hosts.
+
 - F8-16-1: while the macOS Korean input method is selected, the image region commits text that contains no Hangul letter at once, so Space and digits after a syllable typed on a physical keyboard reach the PTY without a later key. The `handleTSMEvent:completionHandler:` override from F8-16 is removed. Checked with the native activation test and `e2e/activation/ime.test.mjs` on both rebuilt hosts.
 - V5-8: `sp_input_key` builds named keys from their key codes, so injected Backspace, Enter, and arrows reach the input method as hardware keys do; the terminal keyboard window check selects the ABC layout it types with. The physical Space showed that F8-16 did not correct the user's case, now F8-16-1 (P0). Registered V5-9.
+
 - F8-5: the activation IME check records `terminal.ime.trace` and verifies preedit order, cursor coverage, exactly-once commits of `ddd한글 한 ` in the native callbacks and the terminal input queue, and a second command in the same session on both rebuilt hosts. Registered F8-20 (Backspace during composition).
 - G2-3: host tests declare the host contract cases they execute, and `make host-contract-check` runs both hosts' tests and fails on a case without a passing test in either host. The current output lists 63 gaps and two tests without host code, registered as G2-3-1 to G2-3-19.
+
 - F8-18-1: the vt-core comment on the initial terminal font states the system fixed-pitch font.
 - V5-7: vt-core `serve_contract` tests acknowledge every image they receive and the EOF timing test loads the font before its timer, so every vt-core test passes alone. New target `make rust-tests-alone PACKAGE=<package>` runs each Rust test alone. Registered F8-18-1 (stale font comment) and F8-19 (first CoreText call takes about 2 s in a new process).
+
 - F8-16: the image region commits text that arrives outside an input method event, such as Space after a Hangul syllable, together with the text before it, so the space reaches the PTY without a later key. The region's input context marks `-[NSTextInputContext handleTSMEvent:completionHandler:]` (listed in the private native API inventory). Checked with the native activation test and `e2e/activation/ime.test.mjs` on both rebuilt hosts. Registered F8-16-1 (a digit after a syllable stays preedit), G4-2 (a request right after `endpoint.json` appears failed on Tauri), and V5-7 (vt-core tests that depend on test order).
 - G4-1: the evidence recorder streams the worktree patch into its digest, so a multi-megabyte binary change no longer fails `pnpm test` with `ENOBUFS`.
+
 - F8-18: the terminal no longer bundles a font. `font.family` is a `;`-separated priority list (default `D2Coding;Menlo`); the first installed family is used, missing families are logged instead of reported as errors, and the system fixed-pitch font is used when none is installed. `terminal.session` reports `font` and `fontSystem`. Checked on both rebuilt hosts.
+
 - F8-14: the terminal defaults to the bundled monospace Hangul font D2Coding (OFL 1.1) and follows a new `font.family` string setting; core settings support `string` values. The sidecar `font` operation recalculates metrics and rejects missing families explicitly, and the page keeps a font error until a font is applied. Checked on both rebuilt hosts. Registered F12 (font zoom), F8-16 (text that ends a Hangul composition waits for the next key), and F8-17 (error lifetime).
 - G1.4-4: the parity audit compares the current inventory count with the current-state sentence in the operations document instead of the completed G1.4 entry, which keeps its original evidence.
 - V5-3: every declared workspace version is 0.0.1; `scripts/check-versions.mjs` enforces it in `pnpm test`, and the two vt-alacritty manifests moved from 0.0.0. Registered V5-6 to re-verify completed terminal, clipboard, protocol, and browser-appearance claims on current builds.
+
 - F8-15: a wide preedit glyph is no longer clipped; its continuation cell has width 0 like the engine spacer, so its background no longer covers the right half. Frame and host checks measure the right-half ink.
+
 - F11-3: added `diagnostics.capture.still` to both hosts and `soksak capture`, backed by `sp_capture_still` in native/darwin, for a still window image taken without focus. It replaces the ad hoc PNG writer used during F8-11 and was checked on both rebuilt applications.
+
 - F8-11: rebuilt Tauri and Wails draw a one-cell cursor after ASCII text and a two-cell cursor over a wide Hangul preedit, measured from window captures in the activation-tier check. Registered F8-13 (gap after wide glyphs) and F11-3 (still window capture for observation).
+
 - F8-12: `terminal.cursor` and the input-method caret now follow the cursor carried by every `screen` event, and an incomplete cursor is reported as an error. Rebuilt Tauri and Wails report column 13 and focus after typing `ddd한`.
 - F8-11 progress: the vt-core frame renderer draws the cursor across the width of the character under it, including wide preedit text; a new frame test covers wide preedit, wide committed text, and narrow preedit. Registered F8-12: `terminal.cursor` and the input-method caret ignore the cursor carried by `screen` events.
 - F8-10 and F8-3: both hosts expose `diagnostics.input.source`, and the activation-tier window check `e2e/activation/ime.test.mjs` types ABC `ddd`, switches to Korean 2-Set, and types `한글`, Space, and Enter. It passes on rebuilt Tauri and Wails with the screen rows `sh-3.2$ ddd한글` and `sh: ddd한글: command not found`, and fails on a Wails build of the pre-fix image region. The false Korean case left the default window checks, `make e2e-check` allows `activate: true` only in `e2e/activation/`, and terminal screen helpers moved to `e2e/terminal-screen.mjs`. Registered F8-11 for the preedit cursor width.
 - F8-10 progress: the shared Darwin image region keeps input-method text in its document so the Korean input method can edit earlier inserts, commits only text the input method no longer edits, and commits the rest before special keys, commands, focus loss, input-source changes, and close. The activation-tier test now commits `ddd한글 ` and then Enter exactly once. Registered G1.4-4 because adding a test file forced editing completed G1.4 evidence.
+
 - F8-8: input-method behavior is verified only in activation-tier checks with an AppKit text-view control; the injector route reaches the Korean input method only in an active key window. `image_region_ime_test` now reproduces the user's `ddd한글` defect as F8-10 Red: the image region commits `dddㅎㅏㄴ글 ` while the control produces `ddd한글 `.
 - F8-8 progress: added the activation-tier `image_region_ime_test`. Through the endpoint injector route in an active key window, neither the image region nor an AppKit `NSTextView` control composed `나`; each run logged an IMK mach-port error at the first key. The route is therefore not input-method evidence; a run outside the tool shell remains to be measured.
 - V5-2: `document_view_test` activated the application inside the no-activation `make test` suite; a later test process ran active and `webview_geometry_test` intermittently timed out. The OS event-queue case now runs only as `document_view_test --activation` under `make test-activation`, the default run asserts that it did not activate, and geometry failures report step, window, activation, and scroll samples. Added `make -C native/darwin repeat` and `repeat-suite`. Ten consecutive suites and all required gates pass; the moved activation case was not run.
 - F8-7 progress: measured that `-[NSTextView unmarkText]` commits marked text through one `insert`; removed the image-region override that reported a second empty `compose` after that commit. TEST 8 now decodes the events and verifies one commit, no later preedit event, and no event without marked text; a terminal plugin regression verifies one PTY write for the reported sequence. Package, boundary, exposure, and documentation checks pass; `make native-test` fails intermittently in `webview_geometry_test` (V5-2).
 - F8-5 progress: an empty native `compose` callback previously synthesized a PTY commit from the previous marked text. A Red regression reproduces `compose("한글") → compose("")` writing `한글` without an `insert` callback. The handler now treats empty composition as clear/cancel; only `insert` commits. Terminal runtime specifications and the bilingual F8-5 record now state this contract. Native input, candidate pixels, and rebuilt-host real-IME behavior remain unverified.
+
 - F8-4: Corrected the ambiguous native Ctrl-character failure path. Supported physical ANSI Ctrl keys are mapped; unmapped native Ctrl keys now produce an explicit native error with key code and character scalar rather than forwarding an unusable `Char`. VT-core errors also identify the rejected character. The native and VT-core regressions, `pnpm test`, full `make native-test`, boundary/exposure/docs checks, and both host builds pass. The screenshot's exact key and live UI result remain unverified; actual host IME validation stays open under F8/F8-3.
 - F8-3 Red: the real-IME E2E used `input.pointer` with `activate: true`, which the endpoint contract defines as taking the user's keyboard focus. Add a source-audit regression and remove the activation option; run the IME test only against an already active host.
 - F8-3 progress: `check-e2e.mjs` rejects explicit application activation; injected Red/Green and its focused source-audit suite pass. Removed `activate: true` from the Korean IME scenario. Runtime IME remains unverified because no app is running and the current source is ABC.
@@ -3823,45 +4939,62 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
 - F8 remains open: the rebuilt Tauri probe confirmed the Korean 2-set input source, but macOS rejected the required System Events key injection with permission error 1002; no real `terminal.compose` event was observed, and no synthetic event was counted as IME evidence.
 - F8 native activation Green: explicit activation no longer waits for hidden WebViews that cannot receive input. The focused `native/darwin/build/input_activate_test` passes the new hidden-WebView case and all other activation cases; the full `make test-activation` lane still reports its existing inspector-attachment failure separately. The host IME commit criterion remains open because a rebuilt Wails probe showed visible `나` preedit followed by raw `ㄱㅏ` in the PTY.
 - F8 protocol Green: focus and compose acknowledgements now contain only `ack`; the focused `native_input_ack_is_not_reported_as_an_unsolicited_event` contract test passes 1/1, so normal acknowledgements no longer populate the terminal's unsupported-event list. The host IME commit criterion remains open.
+
 - F239-42: The workbench starts one per-window declared UI snapshot ingress before its first draw. The ingress validates and acknowledges each push once, then routes it to matching plugin, source and status recipients. It acknowledges and discards events with no mounted recipient, and gates surface placement and plugin-host startup on listener readiness. The combined workbench owning tests pass 48/48 after rebase; docs, boundaries, exposure and event checks pass. The F42 parity link passes; four remaining parity issues cover the F266 link, inventory counts and an unclaimed Wails test. Native stale-provider callbacks remain tracked by F239-43, so this change does not claim reload-safe application behavior.
+
 - F239-42-1: The ingress observes listener-registration readiness immediately. The rejection is observed immediately to prevent early unhandled rejection, while startup consumers still receive the original rejected promise. Red: an unchanged owning test failed when a delayed registration refusal became an unhandled rejection during the first event-loop turn. Green: the same test observes no early unhandled rejection and confirms that awaiting readiness still rejects with the registration error.
+
 - F239-42-2: The ingress ACK consumer test depended on fixture setup in a prior test and waited indefinitely when run by name. Give the test its own listener state and a 3-second timeout. Red: the name-filtered run timed out after 3 seconds. Green: the same name-filtered run and the combined workbench owning tests pass.
 
 - F238-c-27-1: Publish producer-side ordered view bridge examples for request/reply, event delivery, and unsupported-page refusal in `packages/plugin-api/contract/view-bridge.json`; the core view test `packages/plugin-api/test/view.test.mjs` runs these cases against `view.js`.
+
 - F238-c-27-2: Extend the view bridge cases in `packages/plugin-api/contract/view-bridge.json` to assert ordered theme event delivery and refusal of a malformed host message through the injected script; `packages/plugin-api/test/view.test.mjs` runs them.
+
 - F238-c-27-3: Include `contract/view-bridge.json` in the plugin-api package file list. Its owning regression passes 1/1, and `npm pack --dry-run --json` confirms the contract is packaged; no package was published.
+
 - F238-c-27-4: The owning view test now refuses empty or incomplete contract case sets, unexpected action sequences, and shortened unsupported-page refusal text; it compares the runtime refusal message exactly. Focused view tests pass 47/47.
+
 - F238-c-27-5: Add ordered producer cases for Flowmark tab state, named sidecar send/subscriptions and events, and the view log-level gate/log calls. Focused producer cases pass 10/10 against `createViewBridge`; the dependency pin remains unchanged.
+
 - F238-c-27-6: Correct the sidecar-send producer command literal and assert exact open-call count transitions and zero pending calls across the ordered cases. The focused producer gate passes 10/10.
+
 - F238-c-27-7: Publish `sok: 1` in every host-event input and pass the wire envelope unchanged; reject contract copies that omit the marker. The focused producer gate passes 10/10.
+
 - F238-c-27-8: Reject unknown host-event names and sidecar subscription kinds, require both subscription kinds, and make route runners fail on unrecognized steps. The focused producer gate passes 10/10.
+
 - F212.16-12: Add the required sidecar display name to the plugin-api
   host-operations test fixture. Red: the package suite rejected the
   fixture without `displayName`. Green: the owning test passes 5/5.
+
 - F212.16-11: Update the refusal assertion for the canonical `soksak://`
   view origin. Red: the focused test expected `sok://`. Green: the plugin-api
   package test passes 809/809.
+
 - F239-40-1: Align the zero-HelloTimeout Go test with `processPersistent`.
   Red: the Wails host test package did not
   compile because the test supplied a removed fourth argument. Green: the
   focused owning test passes 1/1 and retains its refusal assertion.
+
 - F239-40: Attribute plugin-host `view.error` records to their channel.
   Red: Go and Rust owning tests lost the plugin id for a generic script error.
   Green: both hosts prefix the actual plugin once, preserve an existing matching
   prefix, and keep queue-overflow handling. Focused Go tests pass 3/3; Rust
   queue, attribution, and empty-reason tests each pass 1/1. Event and docs checks
   pass. The original JavaScript error remains unknown.
+
 - F239-46-4: A view surface now installs listeners before composition creation
   and defers its command layer until an accepted native source registration
   provides a current generation. The owning mount test reproduces the
   missing-generation failure, checks source-ended before process-ended and
   rejects a late old end after replacement; the surface-view tests pass 22/22.
+
 - F239-37-6: Expose declared status-line roots through
   `core.sidebar.section.status-line` with a `{sidebar, section, key}` address.
   The separate name resolves exact static text geometry without assigning a
   command or control role. The owning declared-ui and section-address tests
   pass 92/92; exposure and documentation checks pass. The F37 window check
   still needs a runtime run with its original first-visible-node row target.
+
 - F212.10-hwp-2: Wait for the visible HWP surface to register its document status
   before reading it. Red: after focused native Enter, both hosts exposed the HWP
   surface before `hwp.document` was registered, and the test's immediate status
@@ -3877,6 +5010,7 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   completed. Record the passing eight-mode shutdown acceptance, completed
   source-generation work, and the remaining rebuilt-host Files checks. This
   checklist update changes no behavior and claims no Files runtime pass.
+
 - F262-10: Keep native shown-project state unchanged while `projectOpen`
   reserves ownership. Workbench prepares project data and settings before
   `projectShown` commits and publishes the project; each data call captures
@@ -3901,12 +5035,15 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   endpoints were absent after normal shutdown. Earlier P44/P45 errors remain
   historical and their exact cause is not retroactively assigned. No IME input
   was sent.
+
 - F239-28: Run the browser cohort status check on either host. Wails and Tauri both passed the tracked check on Wails executable SHA-256 `a35be5bb29d85e8bf49c15c5b79982abf41c91857c46762325c0f1c383c4ae24` and Tauri executable SHA-256 `bd3a685f42637b3c90e31e553379643ffc619a1576ef35582a162c4cb75666ce` with candidate index SHA-256 `148aa2ad65c13a9e2b357fc3e8f9ef03ce4794aab3a63da785b81c71e5aaa4f6`; each run verified the installed plugin and sidecar versions, ready surfaces, and zero application errors. Both hosts and sidecars exited and left no endpoints or locks. The preserved earlier cohort failures remain historical evidence; this validation does not claim a public release.
+
 - F239-47-29: Accept zero-based native input trace sequence numbers while keeping
   native-before-terminal ordering and rejecting negative, fractional and unsafe
   values. The focused consumer cases pass 2/2 after reproducing the rejection of
   sequence zero. P87 runtime input remains incomplete because that rejection
   stopped each host after its first terminal key; no visual acceptance is claimed.
+
 - F212.10: Record plugin-owned view migration completion separately from
   measurements and publication. Browser P27.3, editor E24, terminal P49 and HWP
   H22 complete their functional migrations with owner Red/Green evidence.

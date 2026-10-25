@@ -200,6 +200,7 @@ type channelPlatform struct {
 	postedOnUI    []bool
 	messageOnSet  string
 	messageOnLoad string
+	beforeUITask  func()
 	afterPost     func()
 	rejectPost    bool
 	// tasks is the number of UI-thread tasks running now, which runUITask counts.
@@ -216,6 +217,10 @@ type uiFake interface {
 func (p *channelPlatform) runUITask(task func()) {
 	p.tasks++
 	defer func() { p.tasks-- }()
+	if before := p.beforeUITask; before != nil {
+		p.beforeUITask = nil
+		before()
+	}
 	task()
 }
 
@@ -626,6 +631,67 @@ func TestStaleViewReplyRecordsDiscardWithoutPosting(t *testing.T) {
 		"disposition": "discarded", "reason": "view-generation-not-current",
 	}) {
 		t.Fatalf("stale reply dispatch record missing")
+	}
+}
+
+// contract: view.call.reply
+func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
+	isolateTraceRecords(t)
+	s, fake := newViewChannelSurfaces(t)
+	s.name = "main"
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	const id = uint64(994)
+	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":994,"command":"probe.run","params":null}}`); err != nil {
+		t.Fatalf("view call: %v", err)
+	}
+	generation := viewGeneration(s, "probe-surface")
+	before := len(fake.posted)
+	var callsAtProcessEnd []openViewCall
+	fake.beforeUITask = func() {
+		callsAtProcessEnd = s.documents.endViewCalls("probe-surface")
+		if _, err := s.documents.Remove(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
+			t.Fatalf("retire old view: %v", err)
+		}
+		s.documents.registerView("probe-surface", "probe", generation+1, unsafe.Pointer(new(int)))
+	}
+	err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: generation, ID: id, Result: json.RawMessage(`null`)})
+	if err != nil {
+		t.Fatalf("reply to retired view: %v", err)
+	}
+	if len(fake.posted) != before {
+		t.Fatalf("stale reply posted %d messages, want no native post", len(fake.posted)-before)
+	}
+	if !reflect.DeepEqual(callsAtProcessEnd, []openViewCall{{plugin: "probe", command: "probe.run", id: id}}) {
+		t.Fatalf("open calls available to process-ended settlement: %+v, want the unanswered view call", callsAtProcessEnd)
+	}
+	if !hasViewReplyDispatch(t, id, map[string]any{
+		"window": "main", "page": "page-1", "surface": "probe-surface",
+		"generation": float64(generation), "id": float64(id), "outcome": "result",
+		"disposition": "discarded", "reason": "view-generation-not-current",
+	}) {
+		t.Fatalf("stale reply dispatch record missing")
+	}
+}
+
+// contract: view.call.reply
+func TestViewReplyPostRefusalLeavesCallOpenForProcessEnd(t *testing.T) {
+	s, fake := newViewChannelSurfaces(t)
+	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1"}}`); err != nil {
+		t.Fatalf("ready message: %v", err)
+	}
+	const id = uint64(995)
+	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":995,"command":"probe.run","params":null}}`); err != nil {
+		t.Fatalf("view call: %v", err)
+	}
+	fake.rejectPost = true
+	err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)})
+	if err == nil || err.Error() != "probe-surface: the view document refused the message" {
+		t.Fatalf("refused view reply error: %v", err)
+	}
+	if calls := s.documents.endViewCalls("probe-surface"); !reflect.DeepEqual(calls, []openViewCall{{plugin: "probe", command: "probe.run", id: id}}) {
+		t.Fatalf("open calls after refused post: %+v, want the unanswered view call", calls)
 	}
 }
 

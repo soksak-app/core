@@ -1969,7 +1969,6 @@ func (s *Surfaces) replyView(req ViewReplyRequest) error {
 		})
 		return nil
 	}
-	s.documents.answerViewCall(req.Surface, req.Generation, req.ID)
 	ready, stale, err := s.sendToViewGeneration(req.Surface, &req.Generation, message)
 	if err != nil {
 		return err
@@ -1989,6 +1988,7 @@ func (s *Surfaces) replyView(req ViewReplyRequest) error {
 		return fmt.Errorf("%s has no ready document", req.Surface)
 	}
 	EmitHost(LevelDebug, "host.view.reply.dispatch", fields)
+	s.documents.answerViewCall(req.Surface, req.Generation, req.ID)
 	s.viewRecords().recordEnd(req.Surface)
 	return nil
 }

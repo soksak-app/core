@@ -123,7 +123,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri host", "rust", ["packages/host/tauriv2/src/**/*.rs", "packages/host/tauriv2/build.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/images_test.rs", "packages/host/tauriv2/src/images_relay_test.rs", "packages/host/tauriv2/src/object_counts_test.rs", "packages/host/tauriv2/src/composition_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/webview_overlay_test.rs", "packages/host/tauriv2/src/platform/darwin/document_test.rs", "packages/host/tauriv2/src/sidecar_reply_test.rs", "packages/host/tauriv2/src/surfaces_test.rs", "packages/host/tauriv2/src/modals_readiness_test.rs", "packages/host/tauriv2/src/exposure_status_test.rs", "packages/host/tauriv2/src/notifications_test.rs", "packages/host/tauriv2/src/project_removal_test.rs", "packages/host/tauriv2/src/endpoint_lock_test.rs", "packages/host/tauriv2/src/windows_records_test.rs", "packages/host/tauriv2/src/sidecars_lock_test.rs", "packages/host/tauriv2/src/image_detach_test.rs", "packages/host/tauriv2/src/start_test.rs", "packages/host/tauriv2/src/performance_lock_test.rs", "packages/host/tauriv2/src/workspace_lock_test.rs", "packages/host/tauriv2/src/view_lifecycle_test.rs", "packages/host/tauriv2/src/view_origin_test.rs", "packages/host/tauriv2/src/view_responsiveness_test.rs", "packages/host/tauriv2/src/view_theme_test.rs", "packages/host/tauriv2/src/view_start_test.rs", "packages/host/tauriv2/src/view_call_peer_test.rs", "packages/host/tauriv2/src/document_binary_take_test.rs", "packages/host/tauriv2/src/presentation_wait_test.rs", "packages/host/tauriv2/src/view_join_test.rs", "packages/host/tauriv2/benches/**/*.rs", "packages/host/tauriv2/tests/fixtures/**/*.json", "packages/host/tauriv2/src/diagnostics_lock_test.rs", "packages/host/tauriv2/src/diagnostics_input_reference_test.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/src/platform/darwin/input_reference_test.rs", "packages/host/tauriv2/src/log_policy_watch_hook_lock_test.rs", "packages/host/tauriv2/src/process_lock_hook_lock_test.rs", "packages/host/tauriv2/src/assets_lock_test.rs", "packages/host/tauriv2/src/deep_link_lock_test.rs", "packages/host/tauriv2/src/log_query_lock_test.rs", "packages/host/tauriv2/src/debug_follow_lock_test.rs", "packages/host/tauriv2/src/plugin_host_test.rs", "packages/host/tauriv2/src/plugin_host_channel_test.rs", "packages/host/tauriv2/src/source_origins_test.rs", "packages/host/tauriv2/src/plugin_host_sidecar_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/plugin_host_sidecar_test.go", "packages/host/wailsv3/src/plugins_starter_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Wails host", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go", "packages/host/wailsv3/tests/fixtures/**/*.json", "packages/host/wailsv3/src/projects_test.go", "packages/host/wailsv3/src/images_relay_test.go", "packages/host/wailsv3/src/image_detach_test.go", "packages/host/wailsv3/src/start_test.go", "packages/host/wailsv3/src/diagnostics_test.go", "packages/host/wailsv3/src/diagnostics_input_reference_test.go", "packages/host/wailsv3/src/diagnostics_clock_test.go", "packages/host/wailsv3/src/composition_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/webview_overlay_test.go", "packages/host/wailsv3/src/platform/darwin/document_test.go", "packages/host/wailsv3/src/platform/darwin/input_reference_test.go", "packages/host/wailsv3/src/exposure_status_test.go", "packages/host/wailsv3/src/modals_readiness_test.go", "packages/host/wailsv3/src/object_counts_test.go", "packages/host/wailsv3/src/view_lifecycle_test.go", "packages/host/wailsv3/src/view_responsiveness_test.go", "packages/host/wailsv3/src/view_theme_test.go", "packages/host/wailsv3/src/view_start_test.go", "packages/host/wailsv3/src/view_call_peer_test.go", "packages/host/wailsv3/src/view_call_record_test.go", "packages/host/wailsv3/src/view_error_test.go", "packages/host/wailsv3/src/document_binary_take_test.go", "packages/host/wailsv3/src/presentation_wait_test.go", "packages/host/wailsv3/src/view_join_test.go", "packages/host/wailsv3/src/sidecar_reply_test.go", "packages/host/wailsv3/src/surfaces_test.go", "packages/host/wailsv3/src/view_origin_test.go", "packages/host/wailsv3/src/plugin_host_test.go", "packages/host/wailsv3/src/plugin_host_channel_test.go", "packages/host/wailsv3/src/source_origins_test.go", "packages/host/wailsv3/src/plugin_host_sidecar_test.go", "packages/host/wailsv3/src/plugins_starter_test.go", "packages/host/wailsv3/src/images_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails command line", "go", ["packages/sok/wailsv3/src/**/*.go"], ["packages/sok/wailsv3/tests/**/*.go", "packages/sok/wailsv3/src/diagnostics_test.go", "packages/sok/wailsv3/src/dev_test.go", "packages/sok/wailsv3/src/debug_test.go", "packages/sok/wailsv3/src/migrate_format_test.go", "packages/sok/wailsv3/src/event_log_loss_test.go"]),
   lane("Tauri command line", "rust", ["packages/sok/tauriv2/src/**/*.rs"], ["packages/sok/tauriv2/tests/**/*.rs", "packages/sok/tauriv2/src/event_log_lock_test.rs", "packages/sok/tauriv2/src/debug_test.rs", "packages/sok/tauriv2/src/migrate_format_test.rs", "packages/sok/tauriv2/src/event_log_loss_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
@@ -2712,6 +2712,21 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/view_origin_test.rs", id: "a_retired_queue_overflow_does_not_fail_the_current_view" },
     ],
     expected: "Current view callbacks reach dispatch; callbacks from a retired view are canceled, and explicit producer, malformed-message, and transport errors retain their recorded reasons without reaching the replacement view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-48-3-15",
+    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) replyView(" }],
+    tests: [
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyRecordsTheNativePostResultAfterPosting" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestStaleViewReplyRecordsDiscardWithoutPosting" },
+      { file: "packages/host/wailsv3/src/surfaces_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
+      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost" },
+      { file: "packages/host/wailsv3/src/view_call_peer_test.go", id: "TestViewProcessEndWritesPeerLostForEachOpenViewCall" },
+    ],
+    expected: "Wails settles a view call only after posting its reply to the same current generation; stale, refused, or unready replies leave the call available for process-ended settlement.",
     levels: ["unit"],
   },
   {
@@ -5453,6 +5468,43 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for a button released between its press and release" },
     ],
     expected: "A high-level native click waits for the host to report no pressed buttons before its down and up phases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-5",
+    implementation: [{ file: "packages/host/wailsv3/src/documents.go", symbol: "func (s *Surfaces) ViewMessage" }],
+    tests: [
+      { file: "packages/host/wailsv3/src/view_call_record_test.go", id: "TestViewCallAndReplyAreRecordedAtDebugWithTheirIdentifier" },
+      { file: "packages/host/wailsv3/src/view_error_test.go", id: "TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView" },
+    ],
+    expected: "Wails view call, reply and view.error records use the current declared-view generation and are observed through ViewMessage.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-6",
+    implementation: [
+      { file: "packages/host/wailsv3/src/projects.go", symbol: "func (h *Host) ProjectShown(" },
+      { file: "packages/host/wailsv3/src/projects.go", symbol: "type ProjectShown struct" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownDecodesStandardArguments" },
+      { file: "packages/host/wailsv3/src/projects_test.go", id: "TestProjectShownPostsTheCommittedProjectAndNull" },
+      { file: "packages/host/wailsv3/tests/arguments_test.go", id: "TestEveryBindingDecodesItsArgumentsFirst" },
+    ],
+    expected: "Wails ProjectShown arguments use the standard host decoder, keep explicit null projects, and ignore undeclared fields.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-47-40-7",
+    implementation: [
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "pub(crate) struct ProjectShown" },
+      { file: "packages/host/tauriv2/src/windows.rs", symbol: "struct ShownProject" },
+    ],
+    tests: [
+      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "project_shown_ignores_unknown_outer_fields" },
+      { file: "packages/host/tauriv2/tests/project_data_order/project_data_order_test.rs", id: "shown_project_ignores_unknown_nested_fields" },
+    ],
+    expected: "Tauri ProjectShown and ShownProject ignore undeclared fields as required by the shared host-call contract.",
     levels: ["unit"],
   },
   {

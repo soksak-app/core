@@ -204,6 +204,61 @@ test("host structure audit reads the allowed file differences from the table row
   assert.deepEqual(auditHostPairs(["hosts/wails/src/host.go", "hosts/tauri/src/host.rs", "hosts/tauri/src/extra.rs"], pairs, hostsSpec), ["hosts/tauri/src/extra: no counterpart in hosts/wails"]);
 });
 
+test("host structure audit permits only Tauri channel adapter tests in H15", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/wailsv3/src/host.go",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/host/tauriv2/tests/declared_source_stream/bindings_test.rs",
+    "packages/host/tauriv2/tests/declared_source_stream/stream_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H15"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/tauriv2/tests/declared_source_stream/unlisted_test.rs",
+  ], pairs, hostsSpec), [
+    "packages/host/tauriv2/tests/declared_source_stream/unlisted_test: no counterpart in packages/host/wailsv3",
+  ]);
+});
+
+test("host structure audit maps only the Go view-record test package paths in H16", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/wailsv3/src/host.go",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/host/wailsv3/src/view_call_record_test.go",
+    "packages/host/wailsv3/src/view_error_test.go",
+    "packages/host/tauriv2/tests/view_call_record_test.rs",
+    "packages/host/tauriv2/tests/view_error_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H16"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/wailsv3/src/unlisted_view_test.go",
+  ], pairs, hostsSpec), [
+    "packages/host/wailsv3/src/unlisted_view_test: no counterpart in packages/host/tauriv2",
+  ]);
+});
+
+test("host structure audit permits only the Rust view-generation child module in H17", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/wailsv3/src/host.go",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/host/tauriv2/tests/declared_source_origins/view_generation_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H17"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/tauriv2/tests/declared_source_origins/unlisted_test.rs",
+  ], pairs, hostsSpec), [
+    "packages/host/tauriv2/tests/declared_source_origins/unlisted_test: no counterpart in packages/host/wailsv3",
+  ]);
+});
+
 test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {
   const source = `
 #[tauri::command]

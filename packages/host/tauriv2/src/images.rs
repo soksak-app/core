@@ -717,23 +717,25 @@ impl Images {
     }
 
     /// Records that the frame of the current raster was copied to the native display storage.
-    fn mark_presented(&self, key: &Key, generation: u64, raster: u64, sequence: i32) {
+    fn mark_presented(&self, key: &Key, generation: u64, raster: u64, sequence: i32) -> bool {
         let mut inner = self.lock();
         let Some(state) = inner.states.get_mut(key) else {
-            return;
+            return false;
         };
         if state.generation != generation
             || state.raster != raster
             || state.last_sequence != sequence
         {
-            return;
+            return false;
         }
         if state.presented_raster != raster || state.presented_sequence != sequence {
             state.presented_raster = raster;
             state.presented_sequence = sequence;
             state.presentation_error = None;
             self.changed();
+            return true;
         }
+        false
     }
 
     fn mark_presentation_failed(
@@ -1372,6 +1374,7 @@ where
         send_response,
         |_| Ok(()),
         || true,
+        || {},
     )
 }
 
@@ -1381,7 +1384,7 @@ where
 /// the sending sidecar: the failure of a frame of a sidecar that no plugin declares is the end of its process, so the
 /// frame is invalidated without recovery (docs/spec/native-surfaces.md#image-regions).
 #[allow(clippy::too_many_arguments)]
-pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared>(
+pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared, Presented>(
     body_str: &str,
     sender: &str,
     surface: &str,
@@ -1390,12 +1393,14 @@ pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared>(
     send_response: SendResponse,
     recover: Recover,
     declared: Declared,
+    presented: Presented,
 ) -> bool
 where
     OnMain: Fn(Box<dyn Fn() -> Result<(), String> + Send>) -> Result<(), String>,
     SendResponse: Fn(&str, serde_json::Value) -> Result<(), crate::sidecars::ResponseError>,
     Recover: Fn(&str) -> Result<(), String>,
     Declared: Fn() -> bool,
+    Presented: Fn(),
 {
     let decision = decide(body_str, sender, surface, images);
 
@@ -1532,7 +1537,9 @@ where
 
                     let response = match reason {
                         None => {
-                            images.mark_presented(&key, generation, raster, sequence);
+                            if images.mark_presented(&key, generation, raster, sequence) {
+                                presented();
+                            }
                             after_present(Ok(()), &name, generation, raster, sequence)
                         }
                         Some(reason) => {

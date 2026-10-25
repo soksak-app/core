@@ -458,19 +458,21 @@ func (i *Images) FrameStatus(key ImageKey, generation, raster uint64, sequence i
 }
 
 // MarkPresented records that the frame of the current raster was copied to the native display storage.
-func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence int) {
+func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence int) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	state := i.states[key]
 	if state == nil || state.Generation != generation || state.Raster != raster || state.LastSequence != sequence {
-		return
+		return false
 	}
 	if state.PresentedRaster != raster || state.PresentedSequence != sequence {
 		state.PresentedRaster = raster
 		state.PresentedSequence = sequence
 		state.PresentationError = ""
 		i.changedLocked()
+		return true
 	}
+	return false
 }
 
 // PresentedFrame is the identity of the frame that an image region presents: the generation, the raster and the sequence of the frame.
@@ -856,9 +858,9 @@ func logAnswerError(where string, err error) {
 	}
 }
 
-// HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, the recovery after a presentation failure and whether a plugin still declares the sending sidecar.
+// HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, the recovery after a presentation failure, whether a plugin still declares the sending sidecar, and the callback for a newly presented frame.
 func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
-	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool) bool {
+	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool, presented func()) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
 
 	switch d := decision.(type) {
@@ -925,7 +927,9 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)
 			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))
 		} else {
-			images.MarkPresented(key, d.Generation, d.Raster, d.Sequence)
+			if images.MarkPresented(key, d.Generation, d.Raster, d.Sequence) {
+				presented()
+			}
 			response := AfterPresent(true, "", d.Name, d.Generation, d.Raster, d.Sequence)
 			logAnswerError("image response "+d.Name, sendResponse(d.Name, response))
 		}

@@ -911,13 +911,11 @@ pub(crate) struct OpenProject {
 
 /// The project that a page has selected after loading its project data context.
 #[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(crate) struct ProjectShown {
     project: Option<ShownProject>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ShownProject {
     id: String,
     root: String,

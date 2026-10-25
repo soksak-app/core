@@ -156,7 +156,7 @@ func (h *Host) ProjectOpen(ctx context.Context, reqJSON json.RawMessage) (Projec
 }
 
 type ProjectShown struct {
-	Project json.RawMessage `json:"project"`
+	Project json.RawMessage `json:"project,omitempty"`
 }
 
 type ShownProject struct {
@@ -167,12 +167,12 @@ type ShownProject struct {
 
 // ProjectShown commits the project displayed by a page after its project data is ready.
 func (h *Host) ProjectShown(ctx context.Context, reqJSON json.RawMessage) error {
-	var req ProjectShown
-	if err := json.Unmarshal(reqJSON, &req); err != nil {
-		return fmt.Errorf("request is invalid: %w", err)
+	req, err := argument[ProjectShown]("request", reqJSON)
+	if err != nil {
+		return err
 	}
 	if len(req.Project) == 0 {
-		return fmt.Errorf("request project is missing")
+		return fmt.Errorf("argument request.project is missing")
 	}
 	current, err := h.surface(ctx)
 	if err != nil {
@@ -188,9 +188,9 @@ func (h *Host) ProjectShown(ctx context.Context, reqJSON json.RawMessage) error 
 		current.postProjectToPluginHosts()
 		return nil
 	}
-	var project ShownProject
-	if err := json.Unmarshal(req.Project, &project); err != nil {
-		return fmt.Errorf("request project is invalid: %w", err)
+	project, err := argument[ShownProject]("request.project", req.Project)
+	if err != nil {
+		return err
 	}
 	if !validProjectID(project.ID) {
 		return fmt.Errorf("invalid project id")
