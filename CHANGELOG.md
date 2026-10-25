@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-166: Add actual asynchronous frame-writer enqueue, start and completion ticks to the existing callback artifact. Keep writer facts on the serial writer and merge a queue snapshot by frame filename; absent stages stay null. Metadata Red/Green and callback lifecycle owners pass, and both diagnostic hosts build. The focused Tauri recording has 159 frames and a maximum 25.3965 ms gap; writer queue wait stays below 0.159 ms and writer work below 4.669 ms. Drag latency still exceeds its limits, so no drag fix or cause of earlier capture gaps is claimed.
+
 - F239-165: Preserve the latest accepted frame as the image-wait completion requirement. Controlled owners cover an earlier frame completing and a later frame arriving before the waiter wakes; both hosts must remain pending. Reject an entry-fixed sequence because settled consumers could finish with the latest frame unpresented. Two concurrency owners, two existing raster/visibility owners and the current-frame notification owner pass. The initial failed expectation is not a product Red; this audit does not resolve drag latency.
 
 - F239-164: Run Tauri image presentation through the existing native UI queue outside the framework event lock. Wait for the native result before answering the sidecar and preserve enqueue and presentation failures. A controlled lock-boundary owner fails before correction and passes afterward; three queue/result owners and all 31 image-envelope owners pass. Both diagnostic hosts build. The focused Tauri drag error-log audit passes, but its 34.193 ms capture gap exceeds the unchanged 33 ms criterion, so drag acceptance remains open.

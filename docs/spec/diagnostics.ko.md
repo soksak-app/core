@@ -4,6 +4,8 @@
 
 사용자 컴퓨터에서 한 번 나타난 결함은 결함이 나타나기 전에 애플리케이션이 써 둔 기록으로만 원인을 찾는다. 이 문서는 어떤 기록이 있는지, 누가 쓰는지, 형태가 어떤지, 각 실패가 어디에 기록을 남기는지를 정하는 한 곳이다. [host](hosts.ko.md#애플리케이션-로그), [performance trace](performance-trace.ko.md), [debug view](debug.ko.md)는 자기 부분의 세부를 정하고 파일 표와 규칙은 여기를 가리킨다.
 
+동일한 callback artifact는 `writerEnqueuedTime`, `writerStartTime`, `writerCompleteTime`을 10진수 문자열의 raw Mach tick으로 기록하며 실행하지 않은 writer 단계는 null로 기록한다. Enqueue 시각은 sample callback에 속하고 writer 시작과 완료 시각은 serial frame writer에 속하며 압축 및 file write, close, rename 시도를 감싼다. 완료 시각은 쓰기 성공 또는 durable storage를 보장하지 않는다. 최종 artifact는 serial queue snapshot 뒤에 기존 frame 파일명으로 writer 소유 측정을 연결하며 writer thread에서 callback dictionary를 변경하지 않는다. Writer 측정은 기존 recording별 frame 제한을 따르고 다음 recording 전에 callback trace와 함께 비운다.
+
 ## 폴더
 
 애플리케이션의 모든 진단 파일은 `<config-dir>/logs/` 아래에 있다. 결함을 만난 사람은 이 폴더를 넘기고, [debug view](debug.ko.md)가 이 폴더를 나열하고 저장한다. 진단 파일을 담는 다른 폴더는 없다. `process.lock` 같은 운영 파일은 기록이 아니므로 `logs/` 밖에 둔다.

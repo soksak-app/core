@@ -193,3 +193,5 @@ Wails v3.0.0-beta.19는 비공개 WebKit 호출(웹뷰 투명화, `backgroundCol
 준비된 Tauri surface-frame 읽기는 하나의 framework main-thread callback을 공유한다. Callback은 등록된 native frame을 읽고 placement trace data만 기록하며 presentation commit은 계속 Tao event lock 밖의 native main queue에서 실행한다. 이 일괄 처리는 native 또는 private API를 추가하지 않는다.
 
 Tauri sidecar 이미지 표시도 같은 native queue를 사용한다. Native 이미지 표시가 Core Animation transaction을 commit하므로 sidecar worker는 Tao event callback으로 이를 실행하지 않는다. 이미지 응답은 native 결과를 기다리며 enqueue 실패는 frame 실패로 유지한다. 제어된 이미지 owner는 event가 잠금을 해제한 뒤 redraw가 framework 잠금을 얻는지 검증한다.
+
+Capture writer timing은 sample callback의 enqueue 및 serial writer의 시작과 완료에서 공개 `mach_absolute_time`을 사용한다. Callback trace는 enqueue tick을 소유하고 writer는 frame별 불변 시작/완료 행을 소유한다. Finalization은 writer queue에서 해당 행을 복사하고 dictionary의 동시 변경 없이 frame 파일명으로 연결한다. 이 diagnostic 측정은 private API 또는 표시 보장을 추가하지 않는다.

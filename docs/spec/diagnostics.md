@@ -4,6 +4,8 @@
 
 A defect that appears once on a user's machine is located only from records that the application wrote before the defect appeared. This document is the one place that states which records exist, who writes them, their form, and where each failure leaves its record. [Hosts](hosts.md#application-log), the [performance trace](performance-trace.md) and the [debug view](debug.md) state the details of their own parts and refer here for the table of files and the rules.
 
+The same callback artifact records `writerEnqueuedTime`, `writerStartTime`, and `writerCompleteTime` as raw Mach ticks encoded as decimal strings, or null when that writer stage did not run. Enqueue time belongs to the sample callback; writer start and completion belong to the serial frame writer and bracket compression and the file write, close and rename attempt. Completion is not a successful-write assertion or a durable-storage guarantee. The final artifact joins writer-owned measurements by the existing frame filename after a serial-queue snapshot; it does not mutate callback dictionaries from the writer thread. Writer measurements have the existing per-recording frame bound and are cleared with the callback trace before the next recording.
+
 ## Folder
 
 Every diagnostic file of an application is under `<config-dir>/logs/`. A person who meets a defect hands over this folder, and the [debug view](debug.md) lists and saves it. No other folder holds a diagnostic file. Operating files such as `process.lock` are not records and stay outside `logs/`.

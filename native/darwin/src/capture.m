@@ -233,6 +233,8 @@ static SPCaptureAttempt *captureAttemptForStream(SCStream *stream) {
 @interface SPCapture : NSObject <SCStreamOutput, SCStreamDelegate>
 @property (nonatomic, copy) NSString* directory;
 @property (nonatomic, retain) NSMutableArray<NSDictionary *> *callbackStatusTrace;
+// The frame writer owns these immutable rows until finalization copies them on that serial queue.
+@property (nonatomic, retain) NSMutableDictionary<NSString *, NSDictionary *> *frameWriterTimes;
 @property (nonatomic, retain) NSMutableArray<NSDictionary *> *displayLinkObservations;
 @property (nonatomic, retain) CADisplayLink *displayLink;
 @property (nonatomic, retain) NSWindow *displayWindow;
@@ -403,6 +405,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     self = [super init];
     if (self) {
         _callbackStatusTrace = [[NSMutableArray alloc] init];
+        _frameWriterTimes = [[NSMutableDictionary alloc] init];
         _displayLinkObservations = [[NSMutableArray alloc] init];
         _displayLinkState = [@"unavailable" copy];
         _displayLinkReason = [@"no display-link observation was recorded" copy];
@@ -413,6 +416,7 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
 - (void)dealloc {
     [self stopDisplayLinkObservation];
     [_callbackStatusTrace release];
+    [_frameWriterTimes release];
     [_displayLinkObservations release];
     [_displayLink release];
     [_displayWindow release];
@@ -707,6 +711,9 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         @"frameIdentityDecodeStartTime": [NSNull null],
         @"frameIdentityDecodeCompleteTime": [NSNull null],
         @"writeCompleteTime": [NSNull null],
+        @"writerEnqueuedTime": [NSNull null],
+        @"writerStartTime": [NSNull null],
+        @"writerCompleteTime": [NSNull null],
         @"frame": [NSNull null],
     }]];
     return YES;
@@ -987,56 +994,66 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     self.queued = number;
     NSString* path = [self.directory stringByAppendingPathComponent:[NSString stringWithFormat:@"frame-%04d.bgra", number]];
     callbackRecord[@"frame"] = path.lastPathComponent;
+    callbackRecord[@"writerEnqueuedTime"] = [NSString stringWithFormat:@"%llu", (unsigned long long)mach_absolute_time()];
     dispatch_async(captureWriter, ^{
-        CFTimeInterval began = CACurrentMediaTime();
-        // Preserves the header and compresses all pixels and row padding losslessly.
-        size_t pixels = stride * height;
-        size_t capacity = pixels + pixels / 255 + 16;
-        uint8_t *encoded = capacity <= UINT32_MAX ? malloc(80 + capacity) : NULL;
-        size_t compressed = 0;
-        if (encoded != NULL) {
-            memcpy(encoded, copy, sizeof(head) + sizeof(info));
-            memcpy(encoded + 68, "LZ4B", 4);
-            compressed = compression_encode_buffer(encoded + 80, capacity,
-                copy + sizeof(head) + sizeof(info), pixels, NULL, COMPRESSION_LZ4_RAW);
-            uint32_t count = (uint32_t)compressed;
-            uint32_t checksum = (uint32_t)crc32(0, copy + sizeof(head) + sizeof(info), (uInt)pixels);
-            memcpy(encoded + 72, &count, sizeof count);
-            memcpy(encoded + 76, &checksum, sizeof checksum);
-        }
-        free(copy);
-        if (encoded == NULL || compressed == 0) {
-            setCaptureError([NSString stringWithFormat:@"frame %d could not be losslessly compressed (capacity %zu)", number, capacity]);
+        uint64_t writerStarted = mach_absolute_time();
+        @try {
+            CFTimeInterval began = CACurrentMediaTime();
+            // Preserves the header and compresses all pixels and row padding losslessly.
+            size_t pixels = stride * height;
+            size_t capacity = pixels + pixels / 255 + 16;
+            uint8_t *encoded = capacity <= UINT32_MAX ? malloc(80 + capacity) : NULL;
+            size_t compressed = 0;
+            if (encoded != NULL) {
+                memcpy(encoded, copy, sizeof(head) + sizeof(info));
+                memcpy(encoded + 68, "LZ4B", 4);
+                compressed = compression_encode_buffer(encoded + 80, capacity,
+                    copy + sizeof(head) + sizeof(info), pixels, NULL, COMPRESSION_LZ4_RAW);
+                uint32_t count = (uint32_t)compressed;
+                uint32_t checksum = (uint32_t)crc32(0, copy + sizeof(head) + sizeof(info), (uInt)pixels);
+                memcpy(encoded + 72, &count, sizeof count);
+                memcpy(encoded + 76, &checksum, sizeof checksum);
+            }
+            free(copy);
+            if (encoded == NULL || compressed == 0) {
+                setCaptureError([NSString stringWithFormat:@"frame %d could not be losslessly compressed (capacity %zu)", number, capacity]);
+                free(encoded);
+                dispatch_semaphore_signal(capturePending);
+                return;
+            }
+            NSString* pending = [path stringByAppendingString:@".partial"];
+            FILE *file = fopen(pending.UTF8String, "wb");
+            if (file == NULL) {
+                // A path that could not be opened is not owned by this write, so it is not deleted.
+                reportCaptureFileFailure(number, @"open", pending, errno);
+            } else {
+                bool whole = fwrite(encoded, 80 + compressed, 1, file) == 1;
+                if (!whole) reportCaptureFileFailure(number, @"write", pending, errno);
+                // Closes also after a write failure. Each of the two failures preserves its original system error.
+                bool closed = fclose(file) == 0;
+                if (!closed) reportCaptureFileFailure(number, @"close", pending, errno);
+                bool committed = false;
+                if (whole && closed) {
+                    committed = rename(pending.UTF8String, path.UTF8String) == 0;
+                    if (!committed) reportCaptureFileFailure(number, @"commit", path, errno);
+                }
+                if (committed) {
+                    self.written++;
+                    if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
+                } else if (unlink(pending.UTF8String) != 0) {
+                    reportCaptureFileFailure(number, @"remove", pending, errno);
+                }
+            }
             free(encoded);
+            self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);
             dispatch_semaphore_signal(capturePending);
-            return;
+        } @finally {
+            uint64_t writerCompleted = mach_absolute_time();
+            self.frameWriterTimes[path.lastPathComponent] = @{
+                @"writerStartTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writerStarted],
+                @"writerCompleteTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writerCompleted],
+            };
         }
-        NSString* pending = [path stringByAppendingString:@".partial"];
-        FILE *file = fopen(pending.UTF8String, "wb");
-        if (file == NULL) {
-            // A path that could not be opened is not owned by this write, so it is not deleted.
-            reportCaptureFileFailure(number, @"open", pending, errno);
-        } else {
-            bool whole = fwrite(encoded, 80 + compressed, 1, file) == 1;
-            if (!whole) reportCaptureFileFailure(number, @"write", pending, errno);
-            // Closes also after a write failure. Each of the two failures preserves its original system error.
-            bool closed = fclose(file) == 0;
-            if (!closed) reportCaptureFileFailure(number, @"close", pending, errno);
-            bool committed = false;
-            if (whole && closed) {
-                committed = rename(pending.UTF8String, path.UTF8String) == 0;
-                if (!committed) reportCaptureFileFailure(number, @"commit", path, errno);
-            }
-            if (committed) {
-                self.written++;
-                if (self.written == captureBefore + 1) dispatch_semaphore_signal(captureFirstFrame);
-            } else if (unlink(pending.UTF8String) != 0) {
-                reportCaptureFileFailure(number, @"remove", pending, errno);
-            }
-        }
-        free(encoded);
-        self.slowestWrite = MAX(self.slowestWrite, CACurrentMediaTime() - began);
-        dispatch_semaphore_signal(capturePending);
     });
 }
 
@@ -1179,9 +1196,19 @@ static NSString *const kCaptureCallbackStatusFile = @"callback-status.jsonl";
 static NSString *const kCaptureDisplayLinkFile = @"display-link.json";
 
 static bool writeCaptureCallbackStatusTrace(SPCapture *sink) {
+    __block NSDictionary *writerTimes = nil;
+    if (captureWriter) {
+        dispatch_sync(captureWriter, ^{ writerTimes = [sink.frameWriterTimes copy]; });
+    } else {
+        writerTimes = [sink.frameWriterTimes copy];
+    }
+    [writerTimes autorelease];
     NSMutableData *contents = [NSMutableData data];
     NSUInteger recordNumber = 0;
-    for (NSDictionary *record in sink.callbackStatusTrace) {
+    for (NSDictionary *callback in sink.callbackStatusTrace) {
+        NSMutableDictionary *record = [[callback mutableCopy] autorelease];
+        NSDictionary *writer = writerTimes[record[@"frame"]];
+        if (writer) [record addEntriesFromDictionary:writer];
         recordNumber++;
         NSError *error = nil;
         NSData *line = nil;
@@ -1492,6 +1519,7 @@ bool sp_capture_start(const char* directory, bool frameIdentity, char **errorOut
     captureSink.complete = 0;
     captureSink.callbackStatusTraceOverflowed = NO;
     [captureSink.callbackStatusTrace removeAllObjects];
+    [captureSink.frameWriterTimes removeAllObjects];
     captureSink.slowestWrite = 0;
     captureSink.lastShown = 0;
     captureSink.longestGap = 0;

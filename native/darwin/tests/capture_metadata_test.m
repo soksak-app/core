@@ -478,6 +478,11 @@ int main(void) { @autoreleasepool {
     error = record(sample(NO, complete(nil)), &used);
     check([error containsString:@"has no image buffer"],
         [NSString stringWithFormat:@"a complete frame without an image buffer rejects the recording (%@)", error]);
+    NSDictionary *unwrittenCallback = used.callbackStatusTrace.lastObject;
+    check(unwrittenCallback[@"writerEnqueuedTime"] == [NSNull null]
+        && unwrittenCallback[@"writerStartTime"] == [NSNull null]
+        && unwrittenCallback[@"writerCompleteTime"] == [NSNull null],
+        @"a rejected sample reports absent asynchronous writer stages as null");
 
     beginSequence(&used);
     NSMutableDictionary *measuredMetadata = [complete(nil) mutableCopy];
@@ -533,6 +538,14 @@ int main(void) { @autoreleasepool {
         [directory stringByAppendingPathComponent:kCaptureCallbackStatusFile] encoding:NSUTF8StringEncoding error:nil];
     NSDictionary *measuredJSON = [NSJSONSerialization JSONObjectWithData:
         [measuredTraceText dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    uint64_t writerEnqueued = [measuredJSON[@"writerEnqueuedTime"] longLongValue];
+    uint64_t writerStarted = [measuredJSON[@"writerStartTime"] longLongValue];
+    uint64_t writerCompleted = [measuredJSON[@"writerCompleteTime"] longLongValue];
+    check([measuredJSON[@"writerEnqueuedTime"] isKindOfClass:[NSString class]]
+        && [measuredJSON[@"writerStartTime"] isKindOfClass:[NSString class]]
+        && [measuredJSON[@"writerCompleteTime"] isKindOfClass:[NSString class]]
+        && writerEnqueued > 0 && writerStarted >= writerEnqueued && writerCompleted >= writerStarted,
+        @"the frame artifact preserves actual enqueue and asynchronous writer bounds as ordered raw ticks");
     check([measuredJSON[@"callbackTime"] isEqual:@"100"]
         && [measuredJSON[@"writeStartTime"] isEqual:@"200"]
         && [measuredJSON[@"imageMatchStartTime"] isEqual:@"210"]
