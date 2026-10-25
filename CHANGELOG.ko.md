@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-162: Supplier screen-only frame 기록을 raster draw와 별도로 분류하고
+  누락되거나 유효하지 않은 숫자 raster duration을 거부한다. Host flush가
+  supplier writer도 비운다고 가정하지 않고 log-file 알림으로 기다리며 대상
+  surface와 gesture 시각 구간으로 읽기를 제한한다. Owner 네 case가 통과하고
+  양 host에서 draw 비용 보고 이후 실제 drag-latency 판정에 도달한다. Log
+  감사와 이번 cadence는 통과하지만 양 host의 latency는 여전히 기준을 넘는다.
+  F212.12-3은 열어 두고 supplier deadline 문제는 S86로 추적한다.
+
 - F239-161: 현재 Tauri view envelope를 한 번 decode하고 반복 decoding 없이
   reply, call, snapshot 또는 readiness handler를 선택한다. 기존 wire 검증,
   dispatch 우선순위, payload 및 오류 처리를 유지한다. 두 번째 decode를 거부하는

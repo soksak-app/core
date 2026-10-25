@@ -6137,6 +6137,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-162",
+    implementation: [{ file: "e2e/supplier-draw.mjs", symbol: "export function supplierDrawDurations(" }],
+    tests: [{ file: "e2e/test/supplier-draw.test.mjs", id: "supplier draw durations classify screen records without a raster" }],
+    expected: "Supplier draw measurements classify screen-only records, reject invalid raster metrics and await stored records through log notifications.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-161",
     implementation: [{ file: "packages/host/tauriv2/src/documents.rs", symbol: "fn dispatch_with_decoder(" }],
     tests: [

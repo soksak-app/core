@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-162: Classify supplier screen-only frame records separately from
+  raster draws and reject missing or invalid numeric raster durations.
+  Wait on log-file notifications instead of assuming the host flush also
+  flushed supplier writers; restrict readings to the measured surface and
+  gesture interval. Four owner cases pass, and both hosts now report draw
+  costs and reach the actual drag-latency judgment. The log audit passes
+  and cadence passes in this run, but both hosts still exceed latency
+  limits. Keep F212.12-3 open and track the supplier deadline issue as S86.
+
 - F239-161: Decode a current Tauri view envelope once and select its
   reply, call, snapshot or readiness handler without repeated decoding.
   Keep existing wire validation, dispatch precedence, payloads and error

@@ -4,8 +4,9 @@ import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";
 
 import { APPS, drag, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
-import { allRows, tailOf } from "./chains.mjs";
+import { fresh, reading } from "./fixture.mjs";
+import { currentEventOffsets, readEvents, untilEventLines } from "@soksak/window-check/event-log.mjs";
+import { supplierDrawDurations } from "./supplier-draw.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { outside, terminalMarks, whitePixels } from "./outside.mjs";
 import { alignment, alignmentDelta } from "./alignment.mjs";
@@ -115,19 +116,24 @@ function assertNoWhiteSurfaceBleed(run, message, marks) {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: native content, cards, and the sidebar rail stay aligned`, async (t) => {
     const s = await open(t, app);
-    await fresh(s, { log: { frame: "debug" }, reads: ["sidecar.vt.frame"] });
+    const terminal = await fresh(s, { log: { frame: "debug" }, reads: ["sidecar.vt.frame"] });
     // The right override of the terminal ties the fixed sidebar and the rail to the terminal card.
     await keepCommonSettings(s);
     await s.run("core.settings.link", { place: "window-right", plugin: "terminal", set: "set-install", scope: "common" });
     await s.until("core.rail", (rail) => rail.groups.length === 1, "the terminal override drew no rail");
     const marks = await terminalMarks(s, { measured: true });
-    const since = await tailOf(s);
+    const offsets = currentEventOffsets(app.configDir);
     const run = await drag(t, s, PLAN, { capture: true });
     await s.flushLog();
-    const supplierFrames = await allRows(s, { channel: "all", event: "sidecar.vt.frame", since });
-    const draw = supplierFrames.map(({ event }) => event.fields.draw_us / 1000).sort((a, b) => a - b);
-    assert.ok(draw.length > 0 && draw.every((value) => Number.isFinite(value) && value >= 0),
-      "the drag has no valid supplier frame draw durations");
+    let supplierFrames = [];
+    await untilEventLines(app.configDir, offsets, () => {
+      supplierFrames = readEvents(app.configDir, offsets).events.filter((event) =>
+        event.event === "sidecar.vt.frame" && event.surface === terminal.surface
+        && event.mono_ns / 1e6 >= run.ticks[0] && event.mono_ns / 1e6 <= run.displayed);
+      return supplierFrames.some(({ fields }) => ["draw_us", "image", "raster"].some((name) => Object.hasOwn(fields, name)));
+    }, 10000, reading(app, ["sidecar.vt.frame"]));
+    const { draw, nonDraw } = supplierDrawDurations(supplierFrames);
+    t.diagnostic(`supplier frame records without a raster draw: ${nonDraw}`);
     t.diagnostic(`supplier frame draw (ms): count ${draw.length}, median ${draw[Math.floor(draw.length / 2)].toFixed(3)}, ` +
       `p90 ${draw[Math.floor(draw.length * .9)].toFixed(3)}, max ${draw.at(-1).toFixed(3)}`);
     // The transaction period is reported before the delay judgment. Even if the judgment fails, that period stays in the output (F92).
