@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F239-132: capture stop 또는 layout trace finalization이 실패해도 직접
+  capture directory를 보존한다. 두 host는 capture start가 이미 반환한
+  경로를 남기고 원래 오류를 반환하며, 성공한 녹화는 계속 요청자가
+  소유한다. Tauri와 Wails의 finish-stop/layout-trace owner test가 각각
+  1/1 통과한다. Application과 window test는 실행하지 않았다.
+
 - F239-130: Capture timeout summary에 요청한 absolute stop 시간, 계산한 Mach
   target, 등록 tick, 최신 accepted sample 사실을 기록한다. `capture_callback_test`
   Red assertion이 1/1 통과했다. Rebuilt host 비교는 남아 있다. Capture timing과

@@ -852,30 +852,32 @@ fn capture_start(window: &Window, display: bool, frame_identity: bool) -> Result
 fn capture_stop(window: &Window, after: f64) -> Result<Value, Failure> {
     let recorder = PlatformCapture(recorder()?.0, after);
     let (directory, count, frame_identity) = RECORDING.finish(&recorder).map_err(internal)?;
-    let finished = (|| -> Result<Value, Failure> {
+    finish_capture_stop(&directory, count, frame_identity, || {
         let platform = recorder.0;
         let layouts = on_main(window, move || platform.layout_trace_stop()).map_err(internal)?;
         let limited = recorder.0.capture_limited().map_err(internal)?;
         let gap = recorder.0.capture_longest_gap().map_err(internal)?;
-        Ok(crate::recording::stop_payload(
-            &directory,
+        Ok((layouts, limited, gap))
+    })
+}
+
+fn finish_capture_stop(
+    directory: &Path,
+    count: i32,
+    frame_identity: bool,
+    finalize: impl FnOnce() -> Result<(Vec<[f64; 5]>, bool, f64), Failure>,
+) -> Result<Value, Failure> {
+    match finalize() {
+        Ok((layouts, limited, gap)) => Ok(crate::recording::stop_payload(
+            directory,
             count,
             limited,
             gap,
             &layouts,
             frame_identity,
-        ))
-    })();
-    if let Err(error) = finished {
-        if let Err(cleanup) = std::fs::remove_dir_all(&directory) {
-            return Err(internal(format!(
-                "{}; capture directory cleanup: {cleanup}",
-                error.message
-            )));
-        }
-        return Err(error);
+        )),
+        Err(error) => Err(error),
     }
-    finished
 }
 
 /// The modal content replies that were held for one window.
@@ -1038,3 +1040,7 @@ mod capture_start_options_test {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "diagnostics_capture_stop_test.rs"]
+mod capture_stop_test;

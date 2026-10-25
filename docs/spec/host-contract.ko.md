@@ -452,6 +452,8 @@ fn invalid_json_closes_connection() {
 | `surfaces.reload.reconnects-only-declared-sidecars` | page를 다시 불러오면 이전 page의 각 surface에 대해 plugin이 선언한 image region의 사이드카와 그 surface가 보낸 적이 있는 실행 중인 persistent 사이드카를 다시 연결하고, 어떤 plugin도 선언하지 않는 사이드카는 건너뛴다. 그 surface는 plugin 제거와 함께 끝났다. | tauriv2 only: Wails host는 page를 다시 불러올 때 reconnect를 보내지 않는다 |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수를 보고하며, 두 번째 마침은 실패한다. | both |
+| `recording.finish.stop-failure-preserves-folder` | capture stop이 실패하면 finish는 stop 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | both |
+| `recording.finish.layout-trace-failure-preserves-folder` | capture stop 뒤 layout trace finalization이 실패하면 finish는 해당 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | both |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
 | `recording.start.failed-start-removes-folder` | 캡처 시작에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
 | `recording.start.no-first-frame-stops-and-removes` | 첫 프레임이 없는 녹화는 중지되고 폴더가 제거된다. | both |

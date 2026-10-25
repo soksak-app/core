@@ -449,6 +449,8 @@ Items:
 | `surfaces.reload.reconnects-only-declared-sidecars` | A page reload reconnects, for each surface of the previous page, the sidecars of its image regions and the running persistent sidecars to which the surface has sent, that a plugin declares, and skips a sidecar that no plugin declares, whose surface ended with the removal of its plugin. | tauriv2 only: the Wails host sends no reconnect on a page reload |
 | `images.present.failure-line-names-the-current-frame` | Another presentation failure answers its reason (`presentFailed` for an unknown detail) and logs the error line `error host image present: ... reason=<detail> current <frame state>`. | both |
 | `recording.finish.keeps-folder-and-reports-frames` | Finishing a recording keeps its folder, reports its frame count, and a second finish fails. | both |
+| `recording.finish.stop-failure-preserves-folder` | When capture stop fails, finishing returns the stop error and preserves the frame folder already returned by start. | both |
+| `recording.finish.layout-trace-failure-preserves-folder` | When layout trace finalization fails after capture stop, finishing returns that error and preserves the frame folder already returned by start. | both |
 | `recording.start.failed-open-removes-folder` | A recording whose capture fails to open removes its folder and leaves nothing running. | both |
 | `recording.start.failed-start-removes-folder` | A recording whose capture fails to start removes its folder and leaves nothing running. | both |
 | `recording.start.no-first-frame-stops-and-removes` | A recording without a first frame is stopped and its folder removed. | both |

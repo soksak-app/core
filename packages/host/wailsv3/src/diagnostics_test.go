@@ -4,9 +4,29 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
+
+// contract: recording.finish.layout-trace-failure-preserves-folder
+func TestCaptureStopLayoutFailurePreservesStartedFolder(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "frames")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := finishCaptureStop(fakeCaptureStatus{}, directory, 1, false, func() ([][5]float64, error) {
+		return nil, errors.New("layout trace stop failed")
+	})
+	if err == nil || err.Error() != "layout trace stop failed" {
+		t.Fatalf("finishCaptureStop error = %v", err)
+	}
+	if info, statErr := os.Stat(directory); statErr != nil || !info.IsDir() {
+		t.Fatalf("failed capture directory was not preserved: stat=%v info=%v", statErr, info)
+	}
+}
 
 // contract: diagnostics.capture-start.preserves-display-option-parsing
 func TestCaptureStartOptionsPreserveDisplayParsing(t *testing.T) {
@@ -73,6 +93,7 @@ type fakeCaptureStatus struct {
 
 type captureStartProbe struct {
 	frameIdentity bool
+	failStop      bool
 }
 
 func (*captureStartProbe) Open(CaptureTarget) error { return nil }
@@ -81,7 +102,12 @@ func (c *captureStartProbe) Start(_ string, frameIdentity bool) error {
 	return nil
 }
 func (*captureStartProbe) Wait() (bool, error) { return true, nil }
-func (*captureStartProbe) Stop() (int, error)  { return 1, nil }
+func (c *captureStartProbe) Stop() (int, error) {
+	if c.failStop {
+		return 0, errors.New("stop failed")
+	}
+	return 1, nil
+}
 
 // contract: diagnostics.capture-start.forwards-frame-identity
 func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
@@ -106,6 +132,27 @@ func TestRecordingFinishPreservesFrameIdentityOption(t *testing.T) {
 	finishedDirectory, _, frameIdentity, err := recording.Finish(fake)
 	if err != nil || finishedDirectory != directory || !frameIdentity {
 		t.Fatalf("finish directory=%q frameIdentity=%v error=%v", finishedDirectory, frameIdentity, err)
+	}
+}
+
+// contract: recording.finish.stop-failure-preserves-folder
+func TestRecordingFinishStopFailurePreservesFolder(t *testing.T) {
+	fake := &captureStartProbe{failStop: true}
+	var recording Recording
+	directory := filepath.Join(t.TempDir(), "frames")
+	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, false); err != nil {
+		t.Fatal(err)
+	}
+
+	finishedDirectory, _, _, err := recording.Finish(fake)
+	if finishedDirectory != directory || err == nil || err.Error() != "stop failed" {
+		t.Fatalf("finish directory=%q error=%v", finishedDirectory, err)
+	}
+	if info, statErr := os.Stat(directory); statErr != nil || !info.IsDir() {
+		t.Fatalf("failed capture directory was not preserved: stat=%v info=%v", statErr, info)
+	}
+	if recording.Running() != "" {
+		t.Fatalf("recording still running at %q", recording.Running())
 	}
 }
 

@@ -99,6 +99,25 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
     assert!(recording.finish(&fake).is_err());
 }
 
+// contract: recording.finish.stop-failure-preserves-folder
+#[test]
+fn a_stop_failure_keeps_the_folder_returned_by_start() {
+    let parent = folder::Folder::new();
+    let folder = parent.path().join("frames");
+    let recording = Recording::new();
+    let fake = Fake {
+        fail_stop: true,
+        ..Fake::default()
+    };
+    recording
+        .start(&fake, WINDOW, &folder, false, &make)
+        .unwrap();
+
+    assert_eq!(recording.finish(&fake).unwrap_err(), "stop failed");
+    assert!(folder.is_dir(), "failed recording evidence was removed");
+    assert_eq!(recording.running(), None);
+}
+
 // contract: recording.start.failed-open-removes-folder
 #[test]
 fn a_failed_open_removes_the_folder() {

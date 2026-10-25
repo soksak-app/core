@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-132: Preserve direct capture directories when capture stop or layout
+  trace finalization fails. Both hosts return the original error and keep the
+  path already returned by capture start; successful recordings remain
+  requester-owned. Tauri and Wails finish-stop/layout-trace owner tests pass
+  1/1 each. No application or window test was run.
+
 - F239-130: Add the requested absolute stop time, computed Mach target,
   registration tick and latest accepted sample facts to capture timeout
   summaries. The `capture_callback_test` Red assertion now passes 1/1; the

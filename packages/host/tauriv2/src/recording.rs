@@ -199,14 +199,7 @@ impl Recording {
         let directory = directory.ok_or_else(|| "no capture is running".to_string())?;
         let count = match capture.stop() {
             Ok(count) => count,
-            Err(error) => {
-                return match std::fs::remove_dir_all(&directory) {
-                    Ok(()) => Err(error),
-                    Err(cleanup_error) => Err(format!(
-                        "{error}; capture directory cleanup failed: {cleanup_error}"
-                    )),
-                };
-            }
+            Err(error) => return Err(error),
         };
         Ok((directory, count, frame_identity))
     }

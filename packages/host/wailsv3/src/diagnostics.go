@@ -556,12 +556,19 @@ func diagnosticCaptureStop(e *Endpoint, _ *endpointConn, params json.RawMessage)
 	if err != nil {
 		return nil, err
 	}
-	var records [][5]float64
-	application.InvokeSync(func() { records, err = capture.LayoutTraceStop() })
+	return finishCaptureStop(captureStatusAdapter{capture}, directory, count, frameIdentity, func() ([][5]float64, error) {
+		var records [][5]float64
+		application.InvokeSync(func() { records, err = capture.LayoutTraceStop() })
+		return records, err
+	})
+}
+
+func finishCaptureStop(c captureStatus, directory string, count int, frameIdentity bool, layoutTrace func() ([][5]float64, error)) (any, error) {
+	records, err := layoutTrace()
 	if err != nil {
-		return nil, errors.Join(err, os.RemoveAll(directory))
+		return nil, err
 	}
-	return captureStopPayload(captureStatusAdapter{capture}, directory, count, records, frameIdentity), nil
+	return captureStopPayload(c, directory, count, records, frameIdentity), nil
 }
 
 type captureStatusAdapter struct{ platformCapture }

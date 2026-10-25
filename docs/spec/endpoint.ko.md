@@ -122,7 +122,7 @@ host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가
 
 composition의 hit testing이 child view보다 native surface input을 먼저 전달하므로 control은 composition 위에 속한다. 반환하는 frame은 현재 view에서 측정하므로 resize 후 click 좌표가 오래된 값으로 남지 않는다. notification으로 기다려 input-method 응답이 endpoint 요청 시점에 의존하지 않게 한다. owning check는 document를 바꾸지 않는 marked text commit도 포함한다.
 
-직접 capture.start/stop 녹화의 layouts는 시작 이후의 트랜잭션별 `{ticket, begun, requested, presented, committed}` 배열이며 시각은 프레임과 같은 ms 시계다. `requested`는 페이지가 그린 DOM의 표시를 기다리도록 host에 요청한 시각이고, `presented`는 그 표시가 확인된 시각이다. 일어나지 않은 단계는 null이며 트랜잭션이 없으면 빈 배열이다. diagnostics.drag는 기존 응답에 자신의 타임라인을 반환한다. 추적 종료 오류가 발생하면 요청자가 받지 못하는 프레임 폴더를 정리하고 오류를 보존한다.
+직접 capture.start/stop 녹화의 layouts는 시작 이후의 트랜잭션별 `{ticket, begun, requested, presented, committed}` 배열이며 시각은 프레임과 같은 ms 시계다. `requested`는 페이지가 그린 DOM의 표시를 기다리도록 host에 요청한 시각이고, `presented`는 그 표시가 확인된 시각이다. 일어나지 않은 단계는 null이며 트랜잭션이 없으면 빈 배열이다. diagnostics.drag는 기존 응답에 자신의 타임라인을 반환한다. 직접 capture.start는 capture.stop 전에 frame directory를 반환한다. 따라서 capture stop 또는 layout trace stop이 실패하면 요청자가 실패한 녹화를 보존할 수 있도록 directory를 남기고 오류를 반환한다. 성공한 녹화는 요청자가 소유하며 검사가 끝난 뒤 directory를 제거한다.
 
 녹화 콜백은 대기 중인 디스크 쓰기를 기다리지 않는다. 64프레임 쓰기 대기 용량이 소진되면 명시적 오류로 녹화를 거부하며 부분 캡처를 성공으로 반환하지 않는다. 종료는 녹화 오류를 보존하고 종료 오류를 추가한다. 600프레임 버스트 상한은 보고하는 유한한 결과로 유지한다. 상태가 없는 프레임과, 이미지·표시 시각·콘텐츠 사각형·콘텐츠 배율·장치 배율 중 하나가 없는 완성 프레임은 그 프레임 번호와 빠진 항목을 밝힌 오류로 녹화를 거부한다. idle 프레임은 이미지가 없으며 개수만 센다.
 
