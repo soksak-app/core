@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-173: Reference focus 복원 후 빈 terminal prompt가 변하지 않아도 새 status notification이 일관된 read와 일치하면 수락한다. Key별 변경 요구와 frame 제한은 유지한다. 변경 없는 prompt 소유 검사는 수정 전 실패하고 수정 후 document 소유 검사 43개가 통과한다.
+
 - F239-47-6: 보존된 visual artifact로 input acceptance 기록을 바로잡는다. 양쪽 check-shell host의 document, glyph 및 underline 10단계 전체가 측정되며 missing source state와 conflict/unjoined frame은 0개다. Owning 및 runtime 증거로 opt-in consumer, decoder 교체 및 reference-checkpoint 단위를 완료한다. 해당 두 실행의 유일한 오류는 cadence gap 33.872625 ms와 43.406708 ms이며 변경 없는 연속 recording 33 ms 실패와 별도 zsh follow-up을 유지한다.
 
 - F239-77: 현재 SDK audit과 설치 catalog의 정확한 일치로 owner catalog migration 기록 일곱 개를 완료한다. 검사는 source 90개와 pending rule 0개, event 116개를 다룬다. Reload/editor, Files 및 소유 census/catalog contract의 로컬 개발 acceptance를 구분해 기록하고 terminal visual 및 capture 요구는 열린 상태로 유지한다. 예전 설치 SDK 기본 명령과 public publication을 통과로 보고하지 않는다.

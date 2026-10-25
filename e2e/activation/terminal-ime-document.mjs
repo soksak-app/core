@@ -122,8 +122,8 @@ export function terminalComposeMatchesPreedit(compose, cursor) {
   return sameTerminalComposition(current, compositionFields(cursor.preedit, "cursor.preedit"));
 }
 
-/** Checks one fresh status update against the known pre-key state and the current coherent reads. */
-export function terminalObserverStatusesMatch(currentEvents, baseline, current) {
+/** Checks fresh notifications against coherent reads; only focus restoration permits an unchanged state. */
+export function terminalObserverStatusesMatch(currentEvents, baseline, current, requireChange = true) {
   assert.ok(Array.isArray(currentEvents), "terminal observer events must be an array");
   assertScreenCursor(baseline.screen, baseline.cursor, "terminal baseline");
   assertScreenCursor(current.screen, current.cursor, "terminal current screen");
@@ -141,7 +141,7 @@ export function terminalObserverStatusesMatch(currentEvents, baseline, current) 
   const compositionChanged = !sameTerminalComposition(baselineState, currentState);
   const rowsChanged = JSON.stringify(baseline.screen.rows) !== JSON.stringify(current.screen.rows);
 
-  if (currentEvents.length === 0 || (!compositionChanged && !rowsChanged)) return false;
+  if (currentEvents.length === 0 || (requireChange && !compositionChanged && !rowsChanged)) return false;
   if (!baseline.cursor.focused || !current.cursor.focused) return false;
   if (!terminalComposeMatchesPreedit(current.compose, current.cursor)) return false;
   if (latestComposeEvent && !sameTerminalComposition(
@@ -517,7 +517,7 @@ export function terminalInputBaselineAfterReference(previous, prompt, snapshot, 
   assert.equal(sameTerminalComposition(terminalCompositionState(snapshot.compose, snapshot.cursor),
     terminalCompositionState(current.compose, current.cursor)), true,
   "terminal composition changed while refreshing the post-reference baseline");
-  assert.equal(terminalObserverStatusesMatch(events, previous, current), true,
+  assert.equal(terminalObserverStatusesMatch(events, previous, current, false), true,
     "post-reference baseline is missing a matching status update");
   assert.equal(current.cursor.focused, true, "post-reference baseline requires a focused cursor");
   assert.equal(terminalComposeMatchesPreedit(current.compose, current.cursor), true,

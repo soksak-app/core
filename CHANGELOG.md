@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-173: Accept an unchanged empty terminal prompt after reference focus restoration when fresh status notifications match the coherent reads. Keep per-key change requirements and frame limits unchanged. The unchanged-prompt owner fails before correction and all 43 document owners pass after it.
+
 - F239-47-6: Correct the input acceptance record from the preserved visual artifacts. Both check-shell hosts measure all ten document, glyph and underline stages, with zero missing source states or conflicting/unjoined frames. Close the opt-in consumer, decoder replacement and reference-checkpoint units with their owning and runtime evidence. The only errors in those two runs are cadence gaps of 33.872625 ms and 43.406708 ms; retain the unchanged 33 ms continuous-recording failure and the separate zsh follow-up.
 
 - F239-77: Complete seven owner catalog migration records using current SDK audits and exact installed-catalog matching. The checks cover 90 sources with zero pending rules and 116 events. Record the separate local development acceptance of reload/editor, Files, and owning census/catalog contracts; keep terminal visual and capture requirements open. Older installed SDK defaults and public publication are not reported as passing.

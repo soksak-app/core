@@ -11,6 +11,8 @@
 Source audit은 일치하는 현재 SDK의 공개 명령을 사용한다. 예전 설치 SDK reader는 schema 3을 거절하며 그 기본 명령을 통과로 보고하지 않는다. 이는 로컬 개발 결과다. Publication과 과거 failure-closure task는 각자의 checklist 상태를 유지한다.
 
 
+- [o] F239-173 — P0, F239-152 연결: Reference focus 복원 후 빈 prompt가 변하지 않은 경우에도 일치하는 새 status 증거가 있을 때만 baseline을 수락한다. 현재 양쪽 host 검사가 terminal 입력 전에 이 유효한 baseline을 거부한다. Key별 변경 요구와 capture 제한은 유지한다. Red: 변경 없는 prompt 소유 검사가 missing-status assertion으로 실패한다. Green: document 소유 검사 43개가 통과하며 key별 변경 없는 상태와 누락 notification은 계속 거부한다.
+
 - [o] F239-172 — P1: Parity audit의 누락된 capability-to-test 연결과 현재 inventory 수치를 복원한다. Red: 구조 감사가 F239-163부터 F239-170 및 F239-81의 연결 9개 누락과 두 operations 번역본의 test 수 1028 대신 발견된 1034를 보고한다. 각 구현 기호와 owning assertion을 확인해 9개 mapping 및 이 audit 단위를 추가하고 discovery나 기준을 바꾸지 않고 양쪽 현재 inventory 수치를 갱신한다. Green: parity는 누락 연결 없이 102 track, 710 implementation file, 1034 test file을 보고하며 집중 feature-link, completed-capability, count-drift owner 3개가 통과한다. 이는 구조 증거이며 application 동작을 다시 실행하거나 입증하지 않는다.
 
 - [o] F239-171 — P0, F212.12-3 연결: Sidecar status notification과 persistent retention contract를 보존한다. 네 owning 단위가 Wails UI-registry 의존성을 제거하고 immutable close 전이 순서를 보존하며 declaration 및 disconnect 변경을 발행하고 양쪽 host의 stop, retain 및 owner 재사용 session count를 알린다. 각 단위는 통제된 Red/Green과 영향받는 owner 검사를 기록한다. Terminal window consumer는 persistent retain에 관련 없는 surface별 closed envelope 대신 기존 project flush barrier를 사용하며 집중 two-host acceptance는 F239-171-2에 기록한다. VT local diagnostic 전달은 S88-2-1에 기록한다. 이 항목은 명시한 notification 및 retention 단위를 주장하며 capture latency, IME visual acceptance나 full suite를 주장하지 않는다.

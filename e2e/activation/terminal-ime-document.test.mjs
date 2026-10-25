@@ -986,3 +986,20 @@ test("requires coherent base screen presentation without equating a later overla
     stateEvents: [...stateEvents.slice(0, 2), { name: "terminal.screen", value: { rows } }] }),
   /raw cell rows array/);
 });
+
+
+test("post-reference baseline accepts an unchanged prompt with fresh focus evidence", { timeout: 1500 }, () => {
+  const empty = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const rows = [[...Array.from("% ", (ch) => cell(ch)), cell(" ")]];
+  const frame = { generation: 2, raster: 3, sequence: 4 };
+  const cursor = { row: 0, col: 2, focused: true, preedit: null, frame, render: { frame } };
+  const baseline = { compose: empty, cursor, screen: { ...screen(rows), frame } };
+  const snapshot = { ...baseline, currentCompose: empty, currentCursor: cursor };
+  const prompt = { row: 0, col: 0, text: "% " };
+  const events = [{ name: "terminal.cursor", value: cursor }];
+  assert.deepEqual(terminalInputBaselineAfterReference(baseline, prompt, snapshot, events).baseline, baseline);
+  assert.equal(terminalObserverStatusesMatch(events, baseline, baseline), false,
+    "per-key acceptance still requires a state change");
+  assert.throws(() => terminalInputBaselineAfterReference(baseline, prompt, snapshot, []),
+    /missing a matching status update/);
+});
