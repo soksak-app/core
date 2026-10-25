@@ -78,11 +78,87 @@ static NSString *activationFrontmost;
 typedef BOOL (^ActivateFrontmost)(pid_t);
 typedef BOOL (^WaitForActivationNotification)(BOOL (^)(void));
 
+static void storeActivationResult(sp_activate_result result, NSString *frontmost) {
+    NSString *snapshot = [frontmost retain];
+    [activationFrontmost release];
+    activationResult = result;
+    activationFrontmost = snapshot;
+    activationDone = YES;
+}
+
+static void clearActivationFrontmost(void) {
+    [activationFrontmost release];
+    activationFrontmost = nil;
+}
+
+@interface TestActivationDescription : NSString {
+    BOOL *_deallocated;
+}
+- (instancetype)initWithDeallocatedFlag:(BOOL *)deallocated;
+@end
+
+@implementation TestActivationDescription
+- (instancetype)initWithDeallocatedFlag:(BOOL *)deallocated {
+    self = [super init];
+    if (self) _deallocated = deallocated;
+    return self;
+}
+- (NSUInteger)length { return 1; }
+- (unichar)characterAtIndex:(NSUInteger)index {
+    if (index != 0) [NSException raise:NSRangeException format:@"index out of range"];
+    return 'x';
+}
+- (void)dealloc {
+    if (_deallocated) *_deallocated = YES;
+    [super dealloc];
+}
+@end
+
+typedef NSString *(*ActivationDescriptionFactory)(const char *);
+static ActivationDescriptionFactory activationDescriptionFactory;
+static BOOL *activationDescriptionDeallocated;
+
+static NSString *defaultActivationDescription(const char *frontmost) {
+    return [NSString stringWithUTF8String:frontmost];
+}
+
+static NSString *shortLivedActivationDescription(const char *frontmost) {
+    if (!frontmost || strcmp(frontmost, "frontmost.test") != 0) return nil;
+    return [[[TestActivationDescription alloc] initWithDeallocatedFlag:activationDescriptionDeallocated] autorelease];
+}
+
 static void activationReported(void *context, sp_activate_result result, const char *frontmost) {
     (void)context;
-    activationResult = result;
-    activationFrontmost = frontmost ? [NSString stringWithUTF8String:frontmost] : nil;
-    activationDone = YES;
+    ActivationDescriptionFactory factory = activationDescriptionFactory ?: defaultActivationDescription;
+    storeActivationResult(result, frontmost ? factory(frontmost) : nil);
+}
+
+static void activationDescriptionLifetimeTest(void) {
+    BOOL deallocated = NO;
+    activationDone = NO;
+    activationResult = SP_ACTIVATE_PENDING;
+    clearActivationFrontmost();
+    activationDescriptionDeallocated = &deallocated;
+    ActivationDescriptionFactory previousFactory = activationDescriptionFactory;
+    activationDescriptionFactory = shortLivedActivationDescription;
+    @autoreleasepool {
+        activationReported(NULL, SP_ACTIVATE_REFUSED, "frontmost.test");
+    }
+    activationDescriptionFactory = previousFactory;
+    activationDescriptionDeallocated = NULL;
+    check(activationDone && activationResult == SP_ACTIVATE_REFUSED,
+        @"the activation callback records the refusal result");
+    BOOL retained = !deallocated;
+    check(retained, @"the saved frontmost description survives the callback autorelease pool");
+    if (retained) {
+        clearActivationFrontmost();
+        check(deallocated, @"the saved frontmost description is released by its owner");
+    } else {
+        // The unchanged implementation leaves a dangling pointer after the inner pool drains.
+        activationFrontmost = nil;
+    }
+    activationDone = NO;
+    activationResult = SP_ACTIVATE_PENDING;
 }
 
 static BOOL activateAndObserveFrontmostPID(pid_t targetPID, NSNotificationCenter *center,
@@ -131,6 +207,7 @@ static BOOL restoreFrontmost(NSRunningApplication *previous, BOOL activationAtte
 }
 
 static int frontmostRestoreTest(void) {
+    activationDescriptionLifetimeTest();
     __block NSUInteger waits = 0;
     __block NSUInteger activationRequests = 0;
     NSNotificationCenter *center = [[[NSNotificationCenter alloc] init] autorelease];
@@ -274,6 +351,7 @@ int main(int argc, char **argv) { @autoreleasepool {
             fprintf(stderr, "FAIL: the application did not become active with the window key (activation %d, active %d, window key %d, frontmost %s)\n",
                 activationResult, (int)NSApp.isActive, (int)window.isKeyWindow, activationFrontmost.UTF8String ?: "unknown");
             restoreFrontmost(previous, activation);
+            clearActivationFrontmost();
             return 1;
         }
     }
@@ -306,5 +384,6 @@ int main(int argc, char **argv) { @autoreleasepool {
     [window close];
     [window release];
     restoreFrontmost(previous, activation);
+    clearActivationFrontmost();
     return failures ? 1 : 0;
 }}

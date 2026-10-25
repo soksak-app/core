@@ -12,6 +12,8 @@
   controls. The preserved shutdown audit was not rerun, so this change does not
   claim a new runtime acceptance.
 
+- F239-94: Retain the frontmost application description from the activation callback under MRC and release the previous snapshot. Red: a controlled owner callback test observed deallocation when its inner autorelease pool drained; the F84 activation run then crashed in failure reporting after `SP_ACTIVATE_REFUSED`. Green: the same non-activation owner target passes 17 assertions; the targeted activation retry reports refusal without crashing and restores the captured frontmost PID. This does not resolve the activation refusal. `make docs-check` passes.
+
 - F239-89: Keep an image region focused through the release paired with an
   in-region click-through press. The F84 trace reported focus loss on mouseup
   after the page focus command. The unchanged owning activation test reproduced

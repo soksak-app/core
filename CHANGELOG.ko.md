@@ -11,6 +11,8 @@
   focused owning route test 2개가 통과한다. 보존된 shutdown audit는 재실행하지
   않았으므로 새로운 runtime acceptance를 주장하지 않는다.
 
+- F239-94: MRC 환경에서 activation callback의 frontmost application 설명을 retain하고 이전 snapshot을 release한다. Red: 제어된 owner callback test는 inner autorelease pool 종료 때 설명이 해제되는 것을 확인했고, F84 activation run은 `SP_ACTIVATE_REFUSED` 뒤 failure 보고 중 crash했다. Green: 같은 비활성 owner target이 assertion 17개를 통과하며, targeted activation 재시도는 crash 없이 거부 결과를 보고하고 저장한 frontmost PID를 복원한다. Activation 거부 자체는 해결되지 않았다. `make docs-check`가 통과한다.
+
 - F239-89: Region 내부 click-through press와 짝이 되는 release까지 image-region
   focus를 유지한다. F84 trace는 page focus command 뒤 mouseup에서 focus loss를
   기록했다. 변경 전 owning activation test에서 같은 실패가 재현됐다. 수정 후 같은
