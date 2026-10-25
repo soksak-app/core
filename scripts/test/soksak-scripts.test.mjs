@@ -242,6 +242,23 @@ test("host structure audit maps only the Go view-record test package paths in H1
   ]);
 });
 
+test("host structure audit permits only the Rust view-generation child module in H17", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/wailsv3/src/host.go",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/host/tauriv2/tests/declared_source_origins/view_generation_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H17"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/tauriv2/tests/declared_source_origins/unlisted_test.rs",
+  ], pairs, hostsSpec), [
+    "packages/host/tauriv2/tests/declared_source_origins/unlisted_test: no counterpart in packages/host/wailsv3",
+  ]);
+});
+
 test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {
   const source = `
 #[tauri::command]

@@ -5,6 +5,7 @@
 ## 미배포
 
 - F239-48-3-14: `ProjectShown` unknown-field test 두 개를 기존 Tauri project-data-order child module로 옮긴다. Assertion은 그대로 유지한다. 정확한 lib test는 각각 1/1 통과하고 paired-host audit에서 기존 source test 경로가 사라져 관련 없는 finding 네 개만 남는다. Parity inventory는 lane 101개, 구현 파일 703개, test 파일 1004개로 통과한다. Host 동작은 바뀌지 않았다.
+- F239-48-3-16: Rust view-generation test의 정확한 배치 차이를 H17에 기록한다. 공통 generation 및 reply assertion은 Wails owner test에서 계속 검사하고 Rust test는 `documents.rs`의 private child다. Focused checker는 1/1 통과하며 선언된 경로만 허용하고 미등록 sibling은 거부한다. Host audit에는 private-files OS 경로 세 개만 남는다. Host 동작은 변경하지 않았다.
 - F239-48-3-15: Wails view call은 응답이 현재 view generation에 게시된 뒤에만
   종료한다. Red: test-controlled 교체와 native post 거부 후 정상 process-ended
   처리가 받을 call이 남지 않았다. Green: `make go-repeat`의 집중 7-test owner
