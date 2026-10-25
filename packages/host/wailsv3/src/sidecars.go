@@ -168,9 +168,11 @@ type Sidecars struct {
 	// closing holds, for each sidecar, the surfaces whose closed was sent and not answered, with the number of those
 	// closes. A surface closed again before the answer receives one answer per close.
 	closing map[string]map[string]int
-	// ClosingChanged is called outside the lock after closing changed. The host announces host.sidecars.
-	ClosingChanged func()
-	owners         map[string]SidecarOwner
+	// ClosingChanged enqueues an immutable status under the state lock in mutation order.
+	// It must not block or read sidecar state. ClosingInvalidated refreshes UI outside the lock.
+	ClosingChanged     func(SidecarStatus)
+	ClosingInvalidated func()
+	owners             map[string]SidecarOwner
 	// roots are the project directories at the time a surface first sent. A sidecar finds a session by root and surface,
 	// so even after the project of the window changed, the requests and closes of an already open surface are sent with this root.
 	roots   map[string]string
@@ -435,9 +437,12 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 			processes = append(processes, process)
 		}
 	}
-	c.mu.Unlock()
 	if forgot {
 		c.closingChanged()
+	}
+	c.mu.Unlock()
+	if forgot {
+		c.closingInvalidated()
 	}
 	c.stopProcesses(processes, false)
 	return nil
@@ -578,7 +583,7 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 	var outdatedChanged bool
 	defer func() {
 		if outdatedChanged {
-			c.closingChanged()
+			c.closingInvalidated()
 		}
 	}()
 	// A refusal by the restart limit is reported to the owner after the unlock: as the failure event of a standard input and output sidecar,
@@ -598,7 +603,12 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 		}
 	}()
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer func() {
+		if outdatedChanged {
+			c.closingChanged()
+		}
+		c.mu.Unlock()
+	}()
 	if c.stopped {
 		return fmt.Errorf("sidecars are stopped")
 	}
@@ -763,16 +773,21 @@ func (c *Sidecars) queueResponse(process *sidecar, name, surface, image string, 
 
 // Close notifies all running sidecars of the removed surface.
 func (c *Sidecars) Close(surface string) {
-	if c.closeSurface(surface) {
-		c.closingChanged()
-	}
-	c.replaceIdle()
+	c.closeObserved(surface, false, func() {})
 }
 
 // NativeViewRemoved closes stdio sessions of a removed native view while keeping a persistent session whose surface remains in its layout.
 func (c *Sidecars) NativeViewRemoved(surface string) {
-	if c.closeSurfaceMode(surface, true) {
-		c.closingChanged()
+	c.closeObserved(surface, true, func() {})
+}
+
+// closeObserved exposes the queued-close boundary for controlled answer interleavings.
+// queued runs without the state lock, after the close is queued and before idle replacement.
+func (c *Sidecars) closeObserved(surface string, nativeView bool, queued func()) {
+	changed := c.closeSurfaceMode(surface, nativeView)
+	queued()
+	if changed {
+		c.closingInvalidated()
 	}
 	c.replaceIdle()
 }
@@ -784,8 +799,14 @@ func (c *Sidecars) closeSurface(surface string) bool {
 }
 
 func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
+	addressed := false
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	defer func() {
+		if addressed {
+			c.closingChanged()
+		}
+		c.mu.Unlock()
+	}()
 	if _, ok := c.owners[surface]; !ok {
 		return false
 	}
@@ -804,7 +825,6 @@ func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
 	}
 	line = append(line, '\n')
 
-	addressed := false
 	for _, process := range c.running {
 		if !process.surfaces[surface] {
 			continue
@@ -850,6 +870,10 @@ func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
 func (c *Sidecars) Closing() []ClosingSurface {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.closingLocked()
+}
+
+func (c *Sidecars) closingLocked() []ClosingSurface {
 	list := []ClosingSurface{}
 	for sidecar, surfaces := range c.closing {
 		for surface := range surfaces {
@@ -870,9 +894,33 @@ func (c *Sidecars) Closing() []ClosingSurface {
 func (c *Sidecars) Outdated() []OutdatedSidecar {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.outdatedLocked()
+}
+
+// SidecarStatus is one atomic value of the application-wide host.sidecars status.
+type SidecarStatus struct {
+	Closing  []ClosingSurface  `json:"closing"`
+	Outdated []OutdatedSidecar `json:"outdated"`
+}
+
+// Status returns closing and outdated from the same state-lock observation.
+func (c *Sidecars) Status() SidecarStatus {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.statusLocked()
+}
+
+func (c *Sidecars) statusLocked() SidecarStatus {
+	return SidecarStatus{Closing: c.closingLocked(), Outdated: c.outdatedLocked()}
+}
+
+func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
 	list := []OutdatedSidecar{}
 	for name, process := range c.running {
-		if !c.outdated(process) {
+		installed := c.versions[name]
+		if !process.persistent || (process.version != nil && *process.version == installed) {
 			continue
 		}
 		sessions := 0
@@ -881,10 +929,12 @@ func (c *Sidecars) Outdated() []OutdatedSidecar {
 				sessions++
 			}
 		}
-		c.declarations.RLock()
-		installed := c.versions[name]
-		c.declarations.RUnlock()
-		list = append(list, OutdatedSidecar{Sidecar: name, Running: process.version, Installed: installed, Sessions: sessions})
+		var running *string
+		if process.version != nil {
+			version := *process.version
+			running = &version
+		}
+		list = append(list, OutdatedSidecar{Sidecar: name, Running: running, Installed: installed, Sessions: sessions})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Sidecar < list[j].Sidecar })
 	return list
@@ -959,10 +1009,17 @@ func (c *Sidecars) replaceIdle() {
 	}
 }
 
-// closingChanged announces that closing changed. Call it outside the lock.
+// closingInvalidated refreshes sidecar UI outside the state lock.
+func (c *Sidecars) closingInvalidated() {
+	if c.ClosingInvalidated != nil {
+		c.ClosingInvalidated()
+	}
+}
+
+// closingChanged enqueues the current immutable status. Call with c.mu held.
 func (c *Sidecars) closingChanged() {
 	if c.ClosingChanged != nil {
-		c.ClosingChanged()
+		c.ClosingChanged(c.statusLocked())
 	}
 }
 
@@ -979,6 +1036,9 @@ func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, 
 		delete(c.closing, name)
 	}
 	stopped := !pending && take(process.stopClosing, surface)
+	if pending {
+		c.closingChanged()
+	}
 	c.mu.Unlock()
 	if !pending && !stopped {
 		return "unexpected close answer for " + surface
@@ -987,7 +1047,7 @@ func (c *Sidecars) closeAnswered(process *sidecar, surface string, closed bool, 
 		LogError("sidecar "+name, fmt.Sprintf("close %s: %s", surface, *failure))
 	}
 	if pending {
-		c.closingChanged()
+		c.closingInvalidated()
 	}
 	return ""
 }
@@ -1063,10 +1123,13 @@ func (c *Sidecars) stop(detach bool) {
 		processes = append(processes, process)
 		forgot = c.detach(name, process) || forgot
 	}
+	if forgot {
+		c.closingChanged()
+	}
 	c.mu.Unlock()
 	c.failImageDetaches("", "the host stopped before the image detach acknowledgement arrived")
 	if forgot {
-		c.closingChanged()
+		c.closingInvalidated()
 	}
 	c.stopProcesses(processes, detach)
 }
@@ -1831,9 +1894,12 @@ func (c *Sidecars) read(process *sidecar, stdout io.ReadCloser) {
 			}
 		}
 	}
-	c.mu.Unlock()
 	if forgot {
 		c.closingChanged()
+	}
+	c.mu.Unlock()
+	if forgot {
+		c.closingInvalidated()
 	}
 	if !failed {
 		// It is stopping. A violation is written to the log and no failure event is sent. Stop decides the report of the exit.
@@ -1994,9 +2060,12 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		// This is a connection that the stop removed from the running list. The service finishes the closes that were not answered by itself.
 		forgot = c.forgetClosing(process.name)
 	}
-	c.mu.Unlock()
 	if forgot {
 		c.closingChanged()
+	}
+	c.mu.Unlock()
+	if forgot {
+		c.closingInvalidated()
 	}
 	for _, waiter := range waiters {
 		waiter <- errors.New("persistent service disconnected before close-owner ack")
@@ -2224,7 +2293,10 @@ func (c *Sidecars) revivePersistent(name, loss string) {
 		}
 		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, replaced.installed))
 		c.notifyConnection(name, nil)
+		c.mu.Lock()
 		c.closingChanged()
+		c.mu.Unlock()
+		c.closingInvalidated()
 	case announced:
 		// When another path (a send) already restarted it, that call also sent the notification.
 		LogError("sidecar "+name, "connection lost; restarted ("+loss+")")

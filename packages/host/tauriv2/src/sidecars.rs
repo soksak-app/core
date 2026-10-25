@@ -180,6 +180,63 @@ pub struct ClosingSurface {
 /// A notification that is called outside the lock after closing changed.
 type ClosingChanged = Arc<dyn Fn() + Send + Sync>;
 
+type StatusChanged<O> = Arc<dyn Fn(&State<O>) + Send + Sync>;
+
+/// One atomic value of the application-wide host.sidecars status.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SidecarStatus {
+    pub closing: Vec<ClosingSurface>,
+    pub outdated: Vec<OutdatedSidecar>,
+}
+
+fn publish_status<O>(state: &State<O>) {
+    if let Some(changed) = &state.status_changed {
+        changed(state);
+    }
+}
+
+fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
+    let declarations = core
+        .declarations
+        .read()
+        // default: the declarations remain readable after poison; the panic hook reports the cause.
+        .unwrap_or_else(PoisonError::into_inner);
+    let closing = state
+        .closing
+        .iter()
+        .flat_map(|(sidecar, surfaces)| {
+            surfaces.keys().map(move |surface| ClosingSurface {
+                sidecar: sidecar.clone(),
+                surface: surface.clone(),
+            })
+        })
+        .collect();
+    let mut outdated: Vec<_> = state
+        .running
+        .iter()
+        .filter_map(|(name, process)| {
+            let connection = process.persistent.as_ref()?;
+            // default: an undeclared sidecar has no installed version.
+            let installed = declarations.versions.get(name).cloned().unwrap_or_default();
+            if connection.version.as_ref() == Some(&installed) {
+                return None;
+            }
+            Some(OutdatedSidecar {
+                sidecar: name.clone(),
+                running: connection.version.clone(),
+                installed,
+                sessions: process
+                    .surfaces
+                    .iter()
+                    .filter(|surface| state.owners.contains_key(*surface))
+                    .count(),
+            })
+        })
+        .collect();
+    outdated.sort_by(|left, right| left.sidecar.cmp(&right.sidecar));
+    SidecarStatus { closing, outdated }
+}
+
 /// Handles line when it is an answer to closed. It returns Ok(false) when it is not an answer, Ok(true) when it was
 /// handled, and the reason when the protocol was violated. The reason why it could not close is written to the log.
 fn close_answer<O: Owner>(
@@ -217,6 +274,9 @@ fn close_answer<O: Owner>(
         {
             state.closing.remove(sidecar);
         }
+        if pending {
+            publish_status(&state);
+        }
         (pending, stopped, state.closing_changed.clone())
     };
     if !pending && !stopped {
@@ -251,8 +311,8 @@ fn take(counts: &mut std::collections::BTreeMap<String, usize>, key: &str) -> bo
 
 /// Moves the surfaces and the unanswered closes of the standard input and output sidecar name that stops into
 /// stopping, by which its reader judges the output while it stops. The caller removes it from the running list.
-/// Returns the closing notification when closing changed.
-fn detach_stdio<O>(state: &mut State<O>, name: &str) -> Option<ClosingChanged> {
+/// Returns whether closing changed.
+fn detach_stdio<O>(state: &mut State<O>, name: &str) -> bool {
     let surfaces = state.running[name].surfaces.iter().cloned().collect();
     let closing = state
         .closing
@@ -425,8 +485,16 @@ fn send_close_owner_and_shutdown(
     }
 }
 
-fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> Option<ClosingChanged> {
-    state.closing.remove(sidecar)?;
+fn forget_closing<O>(state: &mut State<O>, sidecar: &str) -> bool {
+    state.closing.remove(sidecar).is_some()
+}
+
+// Publishes after the complete mutation, independently of UI subscription.
+fn closing_notification<O>(state: &State<O>, changed: bool) -> Option<ClosingChanged> {
+    if !changed {
+        return None;
+    }
+    publish_status(state);
     state.closing_changed.clone()
 }
 
@@ -844,6 +912,8 @@ struct State<O> {
     closing: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>>,
     /// A notification that is called outside the lock after closing changed. The host announces host.sidecars.
     closing_changed: Option<ClosingChanged>,
+    /// Enqueues an immutable status while the state lock orders mutations.
+    status_changed: Option<StatusChanged<O>>,
     owners: HashMap<String, O>,
     // The project directory at the time a surface is first sent. A sidecar finds a session by root and surface, so even
     // after the project of the window changed, requests and closes of an already opened surface are sent with this
@@ -1075,6 +1145,7 @@ impl<O: Owner> Sidecars<O> {
                     starting: HashSet::new(),
                     closing: std::collections::BTreeMap::new(),
                     closing_changed: None,
+                    status_changed: None,
                     owners: HashMap::new(),
                     roots: HashMap::new(),
                     persistent_surfaces: HashSet::new(),
@@ -1125,7 +1196,7 @@ impl<O: Owner> Sidecars<O> {
                     // call amends; the panic hook records the panic.
                     .unwrap_or_else(PoisonError::into_inner);
             }
-            let mut closing_changed = None;
+            let mut closing_changed = false;
             let mut processes = Vec::new();
             for name in &changed {
                 if !state
@@ -1135,10 +1206,11 @@ impl<O: Owner> Sidecars<O> {
                 {
                     continue;
                 }
-                closing_changed = detach_stdio(&mut state, name).or(closing_changed);
+                closing_changed |= detach_stdio(&mut state, name);
                 let process = state.running.remove(name).expect("checked above");
                 processes.push((name.clone(), process));
             }
+            let closing_changed = closing_notification(&state, closing_changed);
             (processes, closing_changed)
         };
         if let Some(changed) = closing_changed {
@@ -1547,6 +1619,9 @@ impl<O: Owner> Sidecars<O> {
                 );
             }
         }
+        if outdated_changed {
+            publish_status(&state);
+        }
         let changed = state.closing_changed.clone();
         drop(state);
         // The request is recorded once it is queued for the sidecar, so a request that was refused is not recorded.
@@ -1633,6 +1708,17 @@ impl<O: Owner> Sidecars<O> {
         owner: &O,
         selected: &dyn Fn(&str) -> bool,
         native_view: bool,
+    ) -> Result<(), String> {
+        self.close_owned_observed(owner, selected, native_view, || {})
+    }
+
+    /// Exposes the queued-close boundary for controlled answer interleavings.
+    fn close_owned_observed(
+        &self,
+        owner: &O,
+        selected: &dyn Fn(&str) -> bool,
+        native_view: bool,
+        queued: impl FnOnce(),
     ) -> Result<(), String> {
         let mut state = self
             .core
@@ -1749,8 +1835,12 @@ impl<O: Owner> Sidecars<O> {
                 }
             }
         }
+        if closed_any {
+            publish_status(&state);
+        }
         let changed = state.closing_changed.clone();
         drop(state);
+        queued();
         if let (true, Some(changed)) = (closed_any, changed) {
             changed();
         }
@@ -1761,33 +1851,33 @@ impl<O: Owner> Sidecars<O> {
     /// The persistent sidecars whose running service has another version than the installed one, sorted by sidecar
     /// (host.sidecars, docs/spec/persistent-services.md#updates).
     pub fn outdated(&self) -> Vec<OutdatedSidecar> {
+        self.status().outdated
+    }
+
+    /// Returns closing and outdated from one state and declaration observation.
+    pub fn status(&self) -> SidecarStatus {
         let state = self
             .core
             .state
             .lock()
-            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
-            // panic hook records the panic.
+            // default: the state remains readable after poison; the panic hook reports the cause.
             .unwrap_or_else(PoisonError::into_inner);
-        let mut list: Vec<OutdatedSidecar> = state
-            .running
-            .iter()
-            .filter(|(name, process)| is_outdated(&self.core, name, process))
-            .map(|(name, process)| OutdatedSidecar {
-                sidecar: name.clone(),
-                running: process
-                    .persistent
-                    .as_ref()
-                    .and_then(|connection| connection.version.clone()),
-                installed: self.core.version(name),
-                sessions: process
-                    .surfaces
-                    .iter()
-                    .filter(|surface| state.owners.contains_key(*surface))
-                    .count(),
-            })
-            .collect();
-        list.sort_by(|left, right| left.sidecar.cmp(&right.sidecar));
-        list
+        status_locked(&self.core, &state)
+    }
+
+    /// Installs an ordered status consumer. It must only enqueue and must not read sidecar state.
+    pub fn on_status_changed(&self, changed: impl Fn(SidecarStatus) + Send + Sync + 'static) {
+        let core = Arc::downgrade(&self.core);
+        self.core
+            .state
+            .lock()
+            // default: installing a consumer preserves the recovered state; the panic hook reports the cause.
+            .unwrap_or_else(PoisonError::into_inner)
+            .status_changed = Some(Arc::new(move |state| {
+            if let Some(core) = core.upgrade() {
+                changed(status_locked(&core, state));
+            }
+        }));
     }
 
     /// Replaces the persistent service of the sidecar `name`, whose `hello` version differs from the installed
@@ -2064,7 +2154,9 @@ impl<O: Owner> Sidecars<O> {
                         .roots
                         .iter()
                         .filter(|&(surface, _)| !listed.contains(surface.as_str()))
-                        .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root})),
+                        .map(
+                            |(surface, root)| serde_json::json!({"surface": surface, "root": root}),
+                        ),
                 );
                 let process = state
                     .running
@@ -2235,11 +2327,13 @@ impl<O: Owner> Sidecars<O> {
                 .filter(|(_, process)| process.persistent.is_none())
                 .map(|(name, _)| name.clone())
                 .collect();
-            let mut changed = None;
+            let mut changed = false;
             for name in stdio {
-                changed = detach_stdio(&mut state, &name).or(changed);
+                changed |= detach_stdio(&mut state, &name);
             }
-            (state.running.drain().collect(), changed)
+            let processes = state.running.drain().collect();
+            let changed = closing_notification(&state, changed);
+            (processes, changed)
         };
         if let Some(changed) = changed {
             changed();
@@ -3149,12 +3243,14 @@ impl<O: Owner> Core<O> {
                             .collect();
                     }
                     state.unannounced_loss.insert(sidecar.clone());
-                    changed = forget_closing(&mut state, &sidecar);
+                    let removed = forget_closing(&mut state, &sidecar);
+                    changed = closing_notification(&state, removed);
                     was_current = true;
                 } else if state.stopped {
                     // This connection was removed from the running list by stop. A close that was not answered is
                     // finished by the service itself.
-                    changed = forget_closing(&mut state, &sidecar);
+                    let removed = forget_closing(&mut state, &sidecar);
+                    changed = closing_notification(&state, removed);
                 }
             }
             if let Some(changed) = changed {
@@ -3355,14 +3451,15 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
                 &format!("sidecar {name}"),
                 format!("service {running} replaced by {}", replaced.installed),
             );
-            let changed = core
+            let state = core
                 .state
                 .lock()
                 // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read;
                 // the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .closing_changed
-                .clone();
+                .unwrap_or_else(PoisonError::into_inner);
+            publish_status(&state);
+            let changed = state.closing_changed.clone();
+            drop(state);
             if let Some(changed) = changed {
                 changed();
             }
@@ -3844,6 +3941,7 @@ fn fail<O: Owner>(
                     .map(|owner| (surface.clone(), owner.clone()))
             })
             .collect();
+        let changed = closing_notification(&state, changed);
         (process, owned, changed, stop)
     };
     if let Some(changed) = changed {

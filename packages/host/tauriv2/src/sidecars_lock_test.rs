@@ -252,3 +252,156 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         "a closed owner was closed again"
     );
 }
+
+// contract: sidecars.close.answer-ends-closing
+#[test]
+fn fast_close_answer_preserves_both_closing_transitions() {
+    let folder = crate::test_folder::Folder::new();
+    let sidecars = Arc::new(Sidecars::<TestOwner>::new(&[], folder.path().to_path_buf()).unwrap());
+    let owner = TestOwner("probe-window".into());
+    let (outbox, _receiver) = sync_channel(2);
+    {
+        let mut state = sidecars.core.state.lock().unwrap();
+        state.running.insert(
+            "fixture-standard".into(),
+            super::Process {
+                child: None,
+                outbox,
+                writing: Arc::new(AtomicUsize::new(0)),
+                persistent: None,
+                surfaces: ["tab-standard".into()].into(),
+                closed_surfaces: Default::default(),
+            },
+        );
+        state.owners.insert("tab-standard".into(), owner.clone());
+        state
+            .roots
+            .insert("tab-standard".into(), "/fixture/root".into());
+    }
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| {
+        collected.lock().unwrap().push(value.closing);
+    });
+    sidecars
+        .close_owned_observed(&owner, &|_| true, false, || {
+            assert_eq!(
+                close_answer(
+                    &sidecars.core.state,
+                    "fixture-standard",
+                    br#"{"surface":"tab-standard","closed":true}"#
+                ),
+                Ok(true)
+            );
+        })
+        .unwrap();
+    assert_eq!(
+        *snapshots.lock().unwrap(),
+        vec![
+            vec![super::ClosingSurface {
+                sidecar: "fixture-standard".into(),
+                surface: "tab-standard".into(),
+            }],
+            vec![]
+        ]
+    );
+}
+
+// contract: sidecars.close.answer-ends-closing
+#[test]
+fn status_only_consumer_receives_stop_closing_removal() {
+    let folder = crate::test_folder::Folder::new();
+    let sidecars = Sidecars::<TestOwner>::new(&[], folder.path().to_path_buf()).unwrap();
+    let (outbox, _receiver) = sync_channel(2);
+    {
+        let mut state = sidecars.core.state.lock().unwrap();
+        state.running.insert(
+            "fixture-standard".into(),
+            super::Process {
+                child: None,
+                outbox,
+                writing: Arc::new(AtomicUsize::new(0)),
+                persistent: None,
+                surfaces: ["tab-standard".into()].into(),
+                closed_surfaces: Default::default(),
+            },
+        );
+        state.closing.insert(
+            "fixture-standard".into(),
+            [("tab-standard".into(), 1)].into(),
+        );
+    }
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value.closing));
+    sidecars.stop();
+    assert_eq!(
+        *snapshots.lock().unwrap(),
+        vec![Vec::<super::ClosingSurface>::new()]
+    );
+}
+
+// contract: sidecars.close.answer-ends-closing
+#[test]
+fn detach_notification_contains_the_complete_final_status() {
+    let folder = crate::test_folder::Folder::new();
+    let sidecars = Sidecars::<TestOwner>::new(&[], folder.path().to_path_buf()).unwrap();
+    let (outbox, _receiver) = sync_channel(2);
+    let (persistent_outbox, _persistent_receiver) = sync_channel(2);
+    sidecars
+        .core
+        .declarations
+        .write()
+        .unwrap()
+        .versions
+        .insert("fixture-service".into(), "new".into());
+    {
+        let mut state = sidecars.core.state.lock().unwrap();
+        state.running.insert(
+            "fixture-standard".into(),
+            super::Process {
+                child: None,
+                outbox,
+                writing: Arc::new(AtomicUsize::new(0)),
+                persistent: None,
+                surfaces: ["tab-standard".into()].into(),
+                closed_surfaces: Default::default(),
+            },
+        );
+        state.running.insert(
+            "fixture-service".into(),
+            super::Process {
+                child: None,
+                outbox: persistent_outbox,
+                writing: Arc::new(AtomicUsize::new(0)),
+                persistent: Some(super::PersistentConnection {
+                    version: Some("old".into()),
+                    close_waiters: Default::default(),
+                    retain_waiters: Default::default(),
+                    shutdown_waiters: Default::default(),
+                    owner_closed: Default::default(),
+                    connected: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                    service_pid: 0,
+                }),
+                surfaces: Default::default(),
+                closed_surfaces: Default::default(),
+            },
+        );
+        state.closing.insert(
+            "fixture-standard".into(),
+            [("tab-standard".into(), 1)].into(),
+        );
+    }
+    assert_eq!(sidecars.status().outdated.len(), 1);
+    let snapshots = Arc::new(Mutex::new(Vec::new()));
+    let collected = snapshots.clone();
+    sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
+    sidecars.detach();
+    assert_eq!(
+        *snapshots.lock().unwrap(),
+        vec![super::SidecarStatus {
+            closing: vec![],
+            outdated: vec![]
+        }]
+    );
+}

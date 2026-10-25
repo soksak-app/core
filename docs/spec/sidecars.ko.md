@@ -44,7 +44,7 @@
 | 방향 | 메시지 |
 | --- | --- |
 | 호스트 → 사이드카 | 페이지 요청은 `{"surface": id, "root": 경로, "cids": [id, …], "body": 값}`. `cids`는 요청이 입력을 이어받을 때만 있고 그 입력들의 상관 식별자 목록이다([logging](logging.ko.md#event)). 요청을 기록하는 사이드카는 이를 자기 event에 옮긴다. `root`는 호스트가 그 표면을 처음 보낼 때 소유 창의 프로젝트 디렉터리다. 사이드카는 root와 표면으로 세션을 찾을 수 있으므로, 창의 프로젝트가 바뀐 뒤에도 그 표면의 이후 요청은 이 root를 유지한다 |
-| 호스트 → 사이드카 | 논리 표면이 모든 프로젝트 레이아웃에서 제거되거나 그 창이 닫히면 표면의 root를 담은 `{"surface": id, "root": 경로, "closed": true}`를 그 표면에 요청을 보낸 사이드카 프로세스에만 보낸다. 받은 적이 없는 사이드카는 알림을 받지 않는다. 프로젝트 레이아웃이 표면을 보유한 채 native view만 제거하면 stdio 세션은 닫지만 영속 서비스 세션은 유지한다 |
+| 호스트 → 사이드카 | Persistent `retain` reconciliation 밖에서 논리 표면이 모든 프로젝트 레이아웃에서 제거되거나 그 창이 닫히면 표면의 root를 담은 `{"surface": id, "root": 경로, "closed": true}`를 그 표면에 요청을 보낸 사이드카 프로세스에만 보낸다. 받은 적이 없는 사이드카는 알림을 받지 않는다. 프로젝트 레이아웃이 표면을 보유한 채 native view만 제거하면 stdio 세션은 닫지만 영속 서비스 세션은 유지한다 |
 | 사이드카 → 호스트 | `{"surface": id, "cids": [id, …], "body": 값}`. `cids`는 선택이며 메시지가 답하는 요청들의 상관 식별자 목록이다. `error` member를 가진 객체인 body는 실패한 요청을 밝힌다. host는 이런 메시지를 event `host.sidecar.reply`로 저장한다([결과 형식](logging.ko.md#결과-형식)) |
 | 사이드카 → 호스트 | 닫힌 표면의 세션, 프로세스, 감시 같은 자원을 놓은 뒤 `{"surface": id, "closed": true}`, 놓지 못했으면 `{"surface": id, "closed": true, "error": 문장}` |
 
@@ -52,9 +52,13 @@
 
 호스트는 사이드카 프로세스마다 요청을 보낸 모든 표면을 그 프로세스가 끝날 때까지 기억한다. 그런 표면 중 소유 창이 없어진 표면의 메시지는 버린다. 호스트가 표면을 제거하고 `closed`를 보낸 뒤, 사이드카가 `closed`에 답하기 전에 보낸 것이다. 같은 표면의 후속 요청은 그 답을 받기 전에 보낼 수 있다. Host는 close 답 전에 이미 buffer에 있던 줄을 포함해 표준 출력 메시지를 현재 surface owner에 전달한다. Wire에는 surface와 선택적 request `cids`가 있으며 별도의 session generation은 없다. sidecar 출력 끝의 line feed 없는 줄은 쓰다가 끝난 process가 남긴 것으로 메시지가 아니다. 출력은 연결처럼 거기서 끝나고 host는 그 줄의 크기를 기록한다. 실행 중인 사이드카가 보낸 폐기 전송 그림에는 `closed`로 답한다([그림 소비](native-surfaces.ko.md#그림-영역)). 호스트가 표준 입출력 사이드카를 중지하기 시작한 뒤 받은 전송 그림은 응답 없이 취소한다. 호스트는 취소를 기록하고 사이드카 process가 끝나기를 기다린다. process 종료가 사이드카 소유 전송 그림 자원을 해제한다. 애플리케이션 연결이 끊겨도 실행을 유지하는 지속 service는 `close-owner`가 끝날 때까지 연결을 유지하고, `shutdown`을 보내 transport를 닫기 전에 폐기 전송 그림에 `closed`로 답한다.
 
+Persistent layout reconciliation은 `retain`으로 누락된 session을 닫고 `retained`를 기다리며([persistent services](persistent-services.ko.md#종료와-복구)) surface별 `closed` envelope를 요구하지 않는다. `host.sidecars.closing`은 전송한 surface별 `closed` envelope 중 answer를 기다리는 것만 추적한다.
+
 사이드카는 받은 모든 `closed`에 답한다. 닫힌 뒤 다시 보내고 답이 오기 전에 다시 닫힌 표면은 보낸 `closed`마다 답을 기다리는 닫기를 하나씩 가지며, 답 하나가 그중 하나를 마친다. 호스트는 `closed`를 보낸 때부터 응답까지 그 표면을 애플리케이션 상태 `host.sidecars`에 사이드카와 표면 순으로 정렬한 `{closing: [{sidecar, surface}]}`로 두고, 목록이 바뀌면 감시하는 연결에 알린다. `error`가 있는 응답은 호스트 로그에 `sidecar <name>: close <surface>: <error>`로 쓴다. 그 표면에는 받을 소유 창이 없다. 사이드카 프로세스가 끝나거나 지속 연결이 끊기면 호스트는 그 사이드카의 표면을 목록에서 뺀다. 그 세션은 프로세스와 함께 끝났거나 service가 기록된 닫기를 스스로 마치기 때문이다. 호스트가 사이드카를 멈출 때는 표준 입출력 사이드카의 표면을 목록에서 뺀다. 그 프로세스는 끝나기 때문이다. 그 사이드카는 끝나면서도 그 닫기에 답한다. 호스트는 각 답을 받아들이고, `error`가 있는 답은 위와 같이 로그에 쓰며, 그 답을 실패로 다루지 않는다. 지속 service는 호스트가 중지 전에 보낸 닫기에 close-owner 응답보다 먼저 답하므로, 호스트는 각 답이 오거나 연결이 끝날 때까지 그 표면을 두며 그 답은 실패가 아니다. 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지는 [실패](#실패)다. 지속 transport는 애플리케이션 프로세스를 넘어 세션을 유지하므로 service가 이 애플리케이션 프로세스가 아직 보내지 않은 표면에 보낼 수 있다. 그래서 지속 transport는 소유 창이 없는 표면의 메시지를 버린다.
 
 사이드카 요청 body의 동작 선택자는 기존 전송 세부사항이다. 플러그인 manifest는 그 wire 표기를 복사하지 않고 읽기 쉬운 `background.operation` 이름을 선언하며, 워크벤치가 하나의 전송 경계에서 해당 사이드카 요청으로 보낸다. 동작 누락과 사이드카 오류는 실패이며 대체하거나 버리지 않는다.
+
+Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` 값을 enqueue한다. 따라서 빠른 answer가 pending-close 전이를 없애거나 notification 순서를 뒤집을 수 없다. Status read는 하나의 state 및 declaration snapshot에서 closing과 outdated service를 관측한다. Notification consumer는 전달받은 값만 enqueue하며 sidecar state를 읽거나 window registry를 잠그지 않는다. Window UI invalidation은 sidecar state lock 밖에서 실행한다. Lock 안에서 값을 만들고 나중에 발행하는 방식은 mutation 순서를 보존하지 못하며 지연된 UI task에서 state를 다시 읽는 방식은 일시적인 값을 보존하지 못한다.
 
 사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. plugin host가 작업을 부를 수 있게 하는 사이드카는 `hostReadOperations`에 읽기 전용 작업을 나열하며, plugin 매니페스트는 그 가운데 것만 `hostOperations`에 쓸 수 있다([plugins](plugins.ko.md#pluginjson)). 나열이 없는 사이드카는 plugin host에 작업을 허용하지 않는다. 메인 페이지는 선언된 형식으로 각 host 요청을 검사하고, 그 밖의 작업을 사이드카에 닿기 전에 거절한다([plugin host](plugin-host.ko.md#channel)). `@soksak/plugin-api`는 이 선언을 `validateSidecar`와 `checkHostOperations`로 검사한다.
 

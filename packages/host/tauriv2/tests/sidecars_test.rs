@@ -1358,11 +1358,10 @@ fn closing_sidecars(
     )];
     let sidecars = std::sync::Arc::new(create(&files, directory.path()).unwrap());
     let (snapshot, snapshots) = channel();
-    let observed = std::sync::Arc::downgrade(&sidecars);
-    sidecars.on_closing_changed(move || {
-        if let Some(sidecars) = observed.upgrade() {
-            let _ = snapshot.send(sidecars.closing());
-        }
+    sidecars.on_status_changed(move |value| {
+        snapshot
+            .send(value.closing)
+            .expect("closing snapshot receiver ended");
     });
     (sidecars, snapshots, directory)
 }

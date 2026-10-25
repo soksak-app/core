@@ -185,6 +185,7 @@ func Run(assets fs.FS, options Options) error {
 	}
 	host.sidecars = sidecars
 	sidecars.ClosingChanged = host.sidecarsChanged
+	sidecars.ClosingInvalidated = host.notifySidecars
 	bindings, err := NewBindings(host)
 	if err != nil {
 		return fmt.Errorf("host calls: %w", err)

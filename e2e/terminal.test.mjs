@@ -321,25 +321,18 @@ for (const app of Object.values(APPS)) {
     const before = terminalProcessSnapshot(app.configDir);
     assert.equal(before.shells.length, 3, "three open terminal sessions must own three PTY children");
 
-    const surfaces = terminals.map((terminal) => terminal.surface);
-    const closing = await s.collect("host.sidecars");
     await closeTerminalTabs(s);
+    // Layout settlement does not await project persistence. Flush awaits tab
+    // cleanup and the persistent service's authoritative retain response.
+    await s.run("core.projects.flush");
     await s.until(
       "core.surfaces",
       (current) => current.every((surface) => surface.plugin !== "terminal"),
       "terminal surfaces did not close",
     );
-    // The service answers closed only after it has reclaimed the shell, and the host keeps the surface in host.sidecars until it receives the answer
-    // (docs/spec/sidecars.md#messages).
-    await s.until("host.sidecars", (state) => !state.closing.some((entry) => surfaces.includes(entry.surface)),
-      "the terminal service did not answer the closes");
-    // Shows that the wait actually waited for the close answer. Each terminal surface was in host.sidecars while closing.
-    const listed = new Set((await closing.stop()).flatMap((state) => state.closing.map((entry) => entry.surface)));
-    assert.deepEqual(surfaces.filter((surface) => !listed.has(surface)), [],
-      `terminal surfaces never awaited a close answer: ${JSON.stringify([...listed])}`);
     const after = terminalProcessSnapshot(app.configDir);
     assert.equal(after.service, before.service, "closing tabs must not recreate the shared terminal service");
-    assert.deepEqual(after.shells, [], "normal terminal close must reap every PTY child before the close answer");
+    assert.deepEqual(after.shells, [], "completed layout retention must reap every PTY child");
   });
 
   test(`${app.name}: padding settings inset the terminal grid and show the terminal background`, { timeout: 120000 }, async (t) => {

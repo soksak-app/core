@@ -197,6 +197,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-171-2",
+    implementation: [
+      { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) closingChanged()" },
+      { file: "packages/host/tauriv2/src/sidecars.rs", symbol: "fn publish_status<O>" },
+    ],
+    tests: [
+      { file: "packages/host/wailsv3/src/sidecars_session_retention_test.go", id: "TestFastCloseAnswerPreservesBothClosingTransitions" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "fast_close_answer_preserves_both_closing_transitions" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "status_only_consumer_receives_stop_closing_removal" },
+      { file: "packages/host/tauriv2/src/sidecars_lock_test.rs", id: "detach_notification_contains_the_complete_final_status" },
+    ],
+    expected: "Fast close answers preserve pending and answered status transitions in order, and removal notifications contain the complete final status without requiring UI subscribers.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-100",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "- (NSArray<NSString *> *)finishAtTimeout" },

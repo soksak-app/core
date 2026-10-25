@@ -1003,7 +1003,7 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 // closingSnapshots is a channel that receives the value of closing every time closing changes.
 func closingSnapshots(sidecars *host.Sidecars) chan []host.ClosingSurface {
 	snapshots := make(chan []host.ClosingSurface, 64)
-	sidecars.ClosingChanged = func() { snapshots <- sidecars.Closing() }
+	sidecars.ClosingChanged = func(value host.SidecarStatus) { snapshots <- value.Closing }
 	return snapshots
 }
 

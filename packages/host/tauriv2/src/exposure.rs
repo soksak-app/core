@@ -1326,50 +1326,29 @@ pub(crate) fn host_status(window: &Window, name: &str) -> Result<Value, String> 
 
 fn sidecars_status(app: &AppHandle) -> Value {
     let sidecars = app.state::<crate::sidecars::WindowSidecars>();
-    json!({ "closing": sidecars.closing(), "outdated": sidecars.outdated() })
+    json!(sidecars.status())
 }
 
-/// Called when host.sidecars changed. Sends the new value to each watching window. The window list locks the window
-/// registry, so it is read on a separate thread.
+/// Enqueues an immutable application-wide sidecar status without reading the window registry.
+pub(crate) fn sidecars_status_changed(app: &AppHandle, value: crate::sidecars::SidecarStatus) {
+    let Some(notifier) = app
+        .state::<Exposure>()
+        .endpoint
+        .get()
+        .map(Endpoint::notifier)
+    else {
+        return;
+    };
+    match raw(&json!(value)) {
+        Ok(text) => notifier.notify_watchers("host.sidecars", &text),
+        Err(error) => log_error("host.sidecars change", error.message),
+    }
+}
+
+/// Refreshes window UI outside the sidecar state lock.
 pub(crate) fn sidecars_changed(app: &AppHandle) {
     let app = app.clone();
-    crate::routine::spawn_named("sidecars-changed", move || {
-        windows::notify_sidecars(&app);
-        let Some(notifier) = app
-            .state::<Exposure>()
-            .endpoint
-            .get()
-            .map(Endpoint::notifier)
-        else {
-            return;
-        };
-        let value = sidecars_status(&app);
-        let list = match windows::list(&app) {
-            Ok(list) => list,
-            Err(error) => {
-                log_error("host.sidecars", error);
-                return;
-            }
-        };
-        let Some(entries) = list.as_array().cloned() else {
-            log_error(
-                "host.sidecars",
-                format!("the window list is not an array: {list}"),
-            );
-            return;
-        };
-        for entry in entries {
-            let Some(window) = entry["window"].as_str() else {
-                continue;
-            };
-            if notifier.watched(window, "host.sidecars") {
-                match raw(&value) {
-                    Ok(text) => notifier.changed(window, "host.sidecars", None, &text),
-                    Err(error) => log_error("host.sidecars change", error.message),
-                }
-            }
-        }
-    });
+    crate::routine::spawn_named("sidecars-changed", move || windows::notify_sidecars(&app));
 }
 
 /// Called when the host.window value of a window may have changed. If a connection watches it, the value is calculated

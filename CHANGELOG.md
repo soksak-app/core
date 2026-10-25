@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-171-2: Preserve immutable sidecar status transitions in mutation order on both hosts and read closing and outdated services atomically. Controlled fast-answer and subscriber-independent removal owners pass after Red; mixed detach verifies the complete final state. Correct the terminal retention consumer to await the declared project flush instead of requiring unrelated per-surface close envelopes. Both rebuilt hosts pass actual shell reaping and shared-service identity checks, application log audits and normal shutdown. Separate parity metadata and outdated-only notification findings remain open.
+
 - F239-171-1: Enqueue Wails sidecar status notifications before window-registry UI invalidation using the existing application-wide watcher path. The controlled actual-host owner changes from missing notification to passing while the registry lock is held. Producer snapshot ordering and two-host terminal close acceptance remain open.
 
 - F239-170: Detect unsafe Rust condition waits across nested argument calls and closure blocks using the existing balanced scanner. Keep strings, comments, recovered guards and empty process waits correctly classified. Three Red cases become Green; all 33 checker owners, core event checks and the current VT full census pass without exemptions.

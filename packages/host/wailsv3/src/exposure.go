@@ -1595,23 +1595,18 @@ func (s *Surfaces) presented() (float64, error) {
 // windowsChanged sends the window list to the connections that watch host.windows. The value is the result of windows.list, and
 // it is called when a window opens or closes or when a title, a project, or the key state changes.
 // sidecarsState is the current value of host.sidecars.
-func (b hostBackend) sidecarsState() map[string]any {
-	closing := []ClosingSurface{}
-	outdated := []OutdatedSidecar{}
+func (b hostBackend) sidecarsState() SidecarStatus {
 	if b.h.sidecars != nil {
-		closing = b.h.sidecars.Closing()
-		outdated = b.h.sidecars.Outdated()
+		return b.h.sidecars.Status()
 	}
-	return map[string]any{"closing": closing, "outdated": outdated}
+	return SidecarStatus{Closing: []ClosingSurface{}, Outdated: []OutdatedSidecar{}}
 }
 
-// sidecarsChanged sends the new value to the connections that watch host.sidecars.
-func (h *Host) sidecarsChanged() {
+// sidecarsChanged enqueues an immutable status without acquiring the window registry.
+func (h *Host) sidecarsChanged(value SidecarStatus) {
 	if h.endpoint != nil {
-		value := (hostBackend{h}).sidecarsState()
 		h.endpoint.NotifyWatchers("host.sidecars", value)
 	}
-	h.notifySidecars()
 }
 
 func (h *Host) windowsChanged() {

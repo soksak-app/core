@@ -101,7 +101,7 @@ func TestSidecarStatusNotificationDoesNotWaitForWindowRegistry(t *testing.T) {
 	h.mu.Lock()
 	done := make(chan struct{})
 	go func() {
-		h.sidecarsChanged()
+		h.sidecarsChanged(c.Status())
 		close(done)
 	}()
 	t.Cleanup(func() {

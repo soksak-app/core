@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-171-2: 양쪽 host에서 immutable sidecar status 전이를 mutation 순서대로 보존하고 closing과 outdated service를 원자적으로 읽는다. 통제된 fast-answer 및 subscriber 독립 제거 owner는 Red 이후 통과하며 mixed detach가 완전한 최종 상태를 검증한다. Terminal retention consumer는 관련 없는 surface별 close envelope 대신 기존 project flush를 기다리도록 수정한다. 다시 build한 양쪽 host에서 실제 shell 회수와 shared-service identity 검사, application log audit, 정상 종료가 통과한다. 별도 parity metadata와 outdated-only notification 항목은 열린 상태다.
+
 - F239-171-1: 기존 application-wide watcher 경로로 Wails sidecar status notification을 window-registry UI invalidation 전에 enqueue한다. Registry lock을 제어하는 실제 host owner가 notification 누락에서 통과로 바뀐다. Producer snapshot 순서와 two-host terminal close acceptance는 열린 상태다.
 
 - F239-170: 기존 balanced scanner로 중첩 인자 call과 closure block의 안전하지 않은 Rust condition wait를 탐지한다. string, comment, 회수한 guard와 빈 process wait를 올바르게 분류한다. Red case 세 개가 Green이 되고 예외 없이 checker owner 33개, core event 검사와 현재 VT full census가 통과한다.
