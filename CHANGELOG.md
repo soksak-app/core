@@ -8,6 +8,16 @@
   the duplicate ID in the canonical table. Green: it parses both real tables,
   confirms unique IDs and matching case sets, and passes 1/1.
 
+- F239-100: Identify the visible webview that remains pending after native
+  activation. The activity-state waiter reports exact unresolved members and
+  distinguishes timeout before and after callback registration. The view-focus
+  test drains its process event ring so the timeout record appears in runner
+  output. Red: the count-based waiter miscounted duplicate callbacks and the
+  test artifact omitted emitted error records. Green: the owner tests pass
+  70/70 assertions and the same activation check reports the loaded plugin
+  view at registration index 0. Activation still returns pending; F212.12-2-1-2
+  remains active to resolve that callback.
+
 - F239-47-8: Complete the native activation input-source restoration
   verification. The tracked repeat passes three focused runs with an
   explicit ABC baseline; each run confirms Korean adoption in both input

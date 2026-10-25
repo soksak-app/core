@@ -196,6 +196,23 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const FEATURE_LINKS = [
   {
+    id: "F239-100",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "- (NSArray<NSString *> *)finishAtTimeout" },
+      { file: "native/darwin/src/input_inject.m", symbol: "NSString *sp_input_activity_timeout_message" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "duplicate completion for one webview does not complete another pending webview" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "timeout identifies only the unresolved webview" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "a timed out wait registers no WebKit activity callbacks when its queued block runs late" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "timeout before callback registration reports its exact stage" },
+      { file: "native/darwin/tests/input_inject_test.m", id: "registered timeout reports only actual unresolved identifiers" },
+      { file: "native/darwin/tests/view_focus_test.m", id: "the test output preserves the native activation error record (%@)" },
+    ],
+    expected: "Activation waits identify only unresolved visible webviews, report whether callback registration started, reject late enrollment after timeout, and preserve emitted errors in the owner test output without retaining webviews.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-85",
     implementation: [
       { file: "packages/host/wailsv3/src/sidecars.go", symbol: "func (c *Sidecars) NativeViewRemoved" },

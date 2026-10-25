@@ -9,6 +9,15 @@
   Green: 두 실제 table을 parse해 중복 ID가 없고 case 집합이 일치함을 확인하며
   1/1 통과한다.
 
+- F239-100: native activation 뒤 대기 중인 visible webview를 식별한다.
+  Activity-state waiter는 미완료 member를 정확히 보고하고 callback
+  registration 전후 timeout을 구분한다. View-focus test는 process event ring을
+  drain해 timeout 기록을 runner output에 보존한다. Red: count 기반 waiter는
+  중복 callback을 잘못 계산했고 test artifact는 발생한 오류 기록을 출력하지
+  않았다. Green: owner test 70/70 assertion이 통과하고 같은 activation check가
+  로드된 plugin view의 등록 index 0을 보고한다. Activation은 계속 pending을
+  반환한다. 해당 callback을 해결할 F212.12-2-1-2는 계속 진행한다.
+
 - F239-47-8: Native activation input-source 복원 검증을 완료한다. 추적 repeat은 명시적인
   ABC baseline으로 focused 실행 세 번을 통과한다. 각 실행에서 두 input context의 Korean
   adoption, 종료 전 ABC 복원, 종료 후 독립 조회에서 ABC와 원래 전면 application 복원을

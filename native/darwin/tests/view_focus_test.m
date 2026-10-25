@@ -9,11 +9,36 @@
 #import "private/webkit.h"
 #import "webview_geometry.h"
 #import "input_inject.h"
+#import "application_log.h"
+#import "support/records.h"
 
 // Declared by the activation checks of make test-activation (tests/support/no_activation.m).
 void sp_test_declare_activation(void);
 
 static int failures = 0;
+static void check(BOOL condition, NSString *message);
+
+static NSString *inputActivityErrorReport(NSArray<NSDictionary *> *events) {
+    NSMutableArray<NSString *> *lines = [NSMutableArray array];
+    for (NSDictionary *event in events) {
+        NSDictionary *fields = event[@"fields"];
+        if (![event[@"name"] isEqual:@"native.record.error"] || ![fields[@"where"] isEqual:@"input inject"]
+            || ![fields[@"text"] isKindOfClass:NSString.class]) continue;
+        [lines addObject:[NSString stringWithFormat:@"DIAGNOSTIC: %@: %@", fields[@"where"], fields[@"text"]]];
+    }
+    return [lines componentsJoinedByString:@"\n"];
+}
+
+static int activityErrorReportTest(void) {
+    NSArray<NSDictionary *> *events = capturedEvents(^{
+        sp_log_error("input inject", "webview activity-state registration pending at timeout");
+    });
+    NSString *report = inputActivityErrorReport(events);
+    BOOL reported = [report isEqualToString:@"DIAGNOSTIC: input inject: webview activity-state registration pending at timeout"];
+    check(reported, [NSString stringWithFormat:@"the test output preserves the native activation error record (%@)", report]);
+    if (report.length > 0) fprintf(stderr, "%s\n", report.UTF8String);
+    return failures ? 1 : 0;
+}
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
@@ -311,6 +336,7 @@ static NSEvent *mouseEvent(NSWindow *window, NSEventType type, NSPoint point, NS
 
 int main(int argc, char **argv) { @autoreleasepool {
     if (argc == 2 && strcmp(argv[1], "--frontmost-restore-test") == 0) return frontmostRestoreTest();
+    if (argc == 2 && strcmp(argv[1], "--activity-error-report-test") == 0) return activityErrorReportTest();
     BOOL activation = argc == 2 && strcmp(argv[1], "--activation") == 0;
     if (activation) sp_test_declare_activation();
     NSRunningApplication *previous = NSWorkspace.sharedWorkspace.frontmostApplication;
@@ -370,8 +396,13 @@ int main(int argc, char **argv) { @autoreleasepool {
         activationDone = NO;
         activationResult = SP_ACTIVATE_PENDING;
         activationFrontmost = nil;
-        sp_input_activate(window, 5, activationReported, NULL);
-        if (!waitFor(^BOOL { return activationDone; }) || activationResult != SP_ACTIVATE_DONE
+        NSArray<NSDictionary *> *events = capturedEvents(^{
+            sp_input_activate(window, 5, activationReported, NULL);
+            (void)waitFor(^BOOL { return activationDone; });
+        });
+        NSString *report = inputActivityErrorReport(events);
+        if (report.length > 0) fprintf(stderr, "%s\n", report.UTF8String);
+        if (!activationDone || activationResult != SP_ACTIVATE_DONE
             || !window.isKeyWindow || !NSApp.isActive) {
             fprintf(stderr, "FAIL: the application did not become active with the window key (activation %d, active %d, window key %d, frontmost %s)\n",
                 activationResult, (int)NSApp.isActive, (int)window.isKeyWindow, activationFrontmost.UTF8String ?: "unknown");

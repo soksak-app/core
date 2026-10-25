@@ -3,6 +3,7 @@
 // The window is an ordinary NSWindow and does not imitate the key window state. This is the same condition as a real application window.
 #import <Cocoa/Cocoa.h>
 #import "input_inject.h"
+#import "input_activity_wait.h"
 #import "support/records.h"
 #import "event_ring.h"
 #import "private/webkit.h"
@@ -34,6 +35,105 @@ static NSRect awayFromPointer(NSSize size) {
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
+}
+
+static SPInputActivityWait *activityWait(NSArray<NSString *> *identifiers, NSUInteger *completionCount) {
+    return [[[SPInputActivityWait alloc] initWithIdentifiers:identifiers completion:^{
+        (*completionCount)++;
+    }] autorelease];
+}
+
+static void checkActivityWaitAggregation(void) {
+    NSArray<NSString *> *identifiers = @[
+        @"role=main view=main-view registrationIndex=0",
+        @"view=document-view registrationIndex=1",
+    ];
+    NSMutableArray *callbacks = [NSMutableArray array];
+    __block NSUInteger completionCount = 0;
+    SPInputActivityWait *normal = activityWait(identifiers, &completionCount);
+    [normal startWithRegistration:^(NSUInteger index, NSString *identifier, sp_input_activity_member_completion completion) {
+        (void)identifier;
+        while (callbacks.count <= index) [callbacks addObject:[NSNull null]];
+        callbacks[index] = [[completion copy] autorelease];
+    }];
+    ((sp_input_activity_member_completion)callbacks[0])();
+    check(completionCount == 0, @"activity wait remains pending until every registered webview completes");
+    ((sp_input_activity_member_completion)callbacks[1])();
+    check(completionCount == 1, @"activity wait completes once after every member completes");
+
+    callbacks = [NSMutableArray array];
+    completionCount = 0;
+    SPInputActivityWait *duplicate = activityWait(identifiers, &completionCount);
+    [duplicate startWithRegistration:^(NSUInteger index, NSString *identifier, sp_input_activity_member_completion completion) {
+        (void)identifier;
+        while (callbacks.count <= index) [callbacks addObject:[NSNull null]];
+        callbacks[index] = [[completion copy] autorelease];
+    }];
+    ((sp_input_activity_member_completion)callbacks[0])();
+    ((sp_input_activity_member_completion)callbacks[0])();
+    check(completionCount == 0,
+        @"duplicate completion for one webview does not complete another pending webview");
+    ((sp_input_activity_member_completion)callbacks[1])();
+    check(completionCount == 1, @"each distinct webview contributes one aggregate completion");
+
+    callbacks = [NSMutableArray array];
+    completionCount = 0;
+    SPInputActivityWait *timeout = activityWait(identifiers, &completionCount);
+    [timeout startWithRegistration:^(NSUInteger index, NSString *identifier, sp_input_activity_member_completion completion) {
+        (void)identifier;
+        while (callbacks.count <= index) [callbacks addObject:[NSNull null]];
+        callbacks[index] = [[completion copy] autorelease];
+    }];
+    ((sp_input_activity_member_completion)callbacks[0])();
+    NSArray<NSString *> *unresolved = [timeout finishAtTimeout];
+    check([unresolved isEqual:@[identifiers[1]]],
+        [NSString stringWithFormat:@"timeout identifies only the unresolved webview (%@)", unresolved]);
+    ((sp_input_activity_member_completion)callbacks[1])();
+    check(completionCount == 0 && [timeout unresolvedIdentifiers].count == 0,
+        @"a late webview completion cannot finish a timed out aggregate");
+}
+
+static void checkActivityWaitDelayedRegistration(void) {
+    NSArray<NSString *> *identifiers = @[@"role=main view=main-view registrationIndex=0"];
+    __block NSUInteger completionCount = 0;
+    __block SPInputActivityWait *installed = nil;
+    __block NSUInteger registrationCount = 0;
+    @autoreleasepool {
+        SPInputActivityWait *wait = [[SPInputActivityWait alloc]
+            initWithIdentifiers:identifiers completion:^{ completionCount++; }];
+        NSArray<NSString *> *timedOut = [wait finishAtTimeout];
+        BOOL adopted = [wait installIfActivationPending:NO store:^(SPInputActivityWait *value) {
+            installed = [value retain];
+        }];
+        check([timedOut isEqual:identifiers], @"timeout captures the member before delayed registration");
+        check(!adopted && installed == nil,
+            @"a completed activation does not retain a wait installed by a delayed main-queue block");
+        [wait startWithRegistration:^(NSUInteger index, NSString *identifier,
+            sp_input_activity_member_completion completion) {
+            (void)index;
+            (void)identifier;
+            (void)completion;
+            registrationCount++;
+        }];
+        check(registrationCount == 0,
+            @"a timed out wait registers no WebKit activity callbacks when its queued block runs late");
+        [wait release];
+    }
+    [installed release];
+    check(completionCount == 0, @"a delayed registration cannot invoke completion after timeout");
+}
+
+static void checkActivityWaitRegistrationTimeout(void) {
+    NSString *beforeActivation = sp_input_activity_timeout_message(NO, NO, nil);
+    check(beforeActivation == nil, @"a timeout before app and key activation does not report a webview-stage error");
+    NSString *registrationPending = sp_input_activity_timeout_message(YES, NO, nil);
+    check([registrationPending isEqualToString:@"webview activity-state registration pending at timeout"],
+        [NSString stringWithFormat:@"timeout before callback registration reports its exact stage (%@)", registrationPending]);
+    NSString *unresolved = sp_input_activity_timeout_message(YES, YES,
+        @[@"view=document registrationIndex=1"]);
+    check([unresolved containsString:@"view=document registrationIndex=1"]
+        && ![unresolved containsString:@"registrationIndex=0"],
+        [NSString stringWithFormat:@"registered timeout reports only actual unresolved identifiers (%@)", unresolved]);
 }
 
 /// Whether one line of records holds every part.
@@ -277,6 +377,9 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    checkActivityWaitAggregation();
+    checkActivityWaitDelayedRegistration();
+    checkActivityWaitRegistrationTimeout();
     checkPointerTargetAcrossViews();
     NSWindow *window = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(400, 300))
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];

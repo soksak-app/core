@@ -14,11 +14,13 @@
 #import <Cocoa/Cocoa.h>
 #import <objc/runtime.h>
 #import "input_inject.h"
+#import "input_activity_wait.h"
 #import "input_press_context.h"
 #import "observe.h"
 #import "application_log.h"
 #import "webview_input.h"
 #import "webview_geometry.h"
+#import "window_facts.h"
 #import "private/coregraphics.h"
 #import "private/webkit.h"
 
@@ -389,26 +391,121 @@ static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *fo
     for (NSView *child in view.subviews) collectVisibleWebViews(child, found, visible);
 }
 
+@implementation SPInputActivityWait {
+    NSArray<NSString *> *_identifiers;
+    sp_input_activity_wait_completion _completion;
+    NSMutableIndexSet *_completedMembers;
+    BOOL _finished;
+}
+
+- (instancetype)initWithIdentifiers:(NSArray<NSString *> *)identifiers completion:(sp_input_activity_wait_completion)completion {
+    self = [super init];
+    if (!self) return nil;
+    _identifiers = [identifiers copy];
+    _completion = [completion copy];
+    _completedMembers = [[NSMutableIndexSet alloc] init];
+    return self;
+}
+
+- (BOOL)installIfActivationPending:(BOOL)pending store:(void (^)(SPInputActivityWait *))store {
+    if (!pending) {
+        [self finishAtTimeout];
+        return NO;
+    }
+    store(self);
+    return YES;
+}
+
+- (void)startWithRegistration:(sp_input_activity_register_member)registration {
+    NSCAssert(NSThread.isMainThread, @"webview activity waits belong to the main thread");
+    if (_finished) return;
+    for (NSUInteger index = 0; index < _identifiers.count; index++) {
+        if (_finished) return;
+        registration(index, _identifiers[index], ^{
+            if (_finished) return;
+            if ([_completedMembers containsIndex:index]) return;
+            [_completedMembers addIndex:index];
+            if (_completedMembers.count == _identifiers.count) {
+                _finished = YES;
+                sp_input_activity_wait_completion completion = [_completion copy];
+                [_completion release];
+                _completion = nil;
+                if (completion) completion();
+                [completion release];
+            }
+        });
+    }
+}
+
+- (NSArray<NSString *> *)unresolvedIdentifiers {
+    if (_finished) return @[];
+    NSMutableArray<NSString *> *unresolved = [NSMutableArray array];
+    for (NSUInteger index = 0; index < _identifiers.count; index++) {
+        if (![_completedMembers containsIndex:index]) [unresolved addObject:_identifiers[index]];
+    }
+    return unresolved;
+}
+
+- (NSArray<NSString *> *)finishAtTimeout {
+    if (_finished) return @[];
+    NSArray<NSString *> *unresolved = [[self unresolvedIdentifiers] copy];
+    _finished = YES;
+    [_completion release];
+    _completion = nil;
+    return [unresolved autorelease];
+}
+
+- (void)dealloc {
+    [_identifiers release];
+    [_completion release];
+    [_completedMembers release];
+    [super dealloc];
+}
+
+@end
+
+NSString *sp_input_activity_timeout_message(BOOL activationReady, BOOL registrationStarted,
+    NSArray<NSString *> *unresolvedIdentifiers) {
+    if (!activationReady) return nil;
+    if (!registrationStarted) return @"webview activity-state registration pending at timeout";
+    if (unresolvedIdentifiers.count == 0) return nil;
+    return [NSString stringWithFormat:@"webview activity state timed out; unresolved members: %@",
+        [unresolvedIdentifiers componentsJoinedByString:@", "]];
+}
+
 // Calls done after every web view in the window has sent its activity state to the web process. When WebKit receives
 // the key window notification, it schedules the activity state transmission, and _doAfterActivityStateUpdate: is called
 // after the scheduled transmission finishes (immediately when none is scheduled). The registration is made in the next
 // main queue turn so that it runs after every other observer of the notification has run.
-static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll, void (^done)(void)) {
+static NSArray<NSString *> *activityWaitIdentifiers(NSWindow *window, NSArray<WKWebView *> *views) {
+    void *main = sp_window_main_webview(window);
+    NSMutableArray<NSString *> *identifiers = [NSMutableArray arrayWithCapacity:views.count];
+    [views enumerateObjectsUsingBlock:^(WKWebView *view, NSUInteger index, BOOL *stop) {
+        (void)stop;
+        NSString *identity = (__bridge void *)view == main
+            ? @"role=main"
+            : [NSString stringWithFormat:@"view=%p", view];
+        [identifiers addObject:[NSString stringWithFormat:@"%@ registrationIndex=%lu",
+            identity, (unsigned long)index]];
+    }];
+    return identifiers;
+}
+
+static void afterWebViewsActive(NSWindow *window, WKWebView *target, BOOL waitForAll,
+    void (^done)(void), void (^waitCreated)(SPInputActivityWait *)) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (target) {
-            [target _doAfterActivityStateUpdate:done];
-            return;
-        }
-        if (!waitForAll) { done(); return; }
         NSMutableArray<WKWebView *> *views = [NSMutableArray array];
-        collectVisibleWebViews(window.contentView.superview ?: window.contentView, views, YES);
-        __block NSUInteger pending = views.count;
-        if (pending == 0) { done(); return; }
-        for (WKWebView *view in views) {
-            [view _doAfterActivityStateUpdate:^{
-                if (--pending == 0) done();
-            }];
-        }
+        if (target) [views addObject:target];
+        else if (waitForAll) collectVisibleWebViews(window.contentView.superview ?: window.contentView, views, YES);
+        if (views.count == 0) { if (waitCreated) waitCreated(nil); done(); return; }
+        SPInputActivityWait *activityWait = [[[SPInputActivityWait alloc]
+            initWithIdentifiers:activityWaitIdentifiers(window, views) completion:done] autorelease];
+        if (waitCreated) waitCreated(activityWait);
+        [activityWait startWithRegistration:^(NSUInteger index, NSString *identifier,
+            sp_input_activity_member_completion completion) {
+            (void)identifier;
+            [views[index] _doAfterActivityStateUpdate:completion];
+        }];
     });
 }
 
@@ -426,6 +523,7 @@ static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll,
     __block bool waiting = true;
     __block id keyObserver = nil;
     __block id appObserver = nil;
+    __block SPInputActivityWait *activityWait = nil;
     void (^stopWaiting)(void) = ^{
         if (!waiting) return;
         waiting = false;
@@ -436,6 +534,8 @@ static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll,
         if (finished) return;
         finished = true;
         stopWaiting();
+        [activityWait release];
+        activityWait = nil;
         report(done, context, result);
     };
     // Checks that the window is still active after the web view sent its activity state. Another application or window can take focus in between.
@@ -446,18 +546,33 @@ static void activateWindow(NSWindow *window, WKWebView *target, BOOL waitForAll,
     void (^check)(void) = ^{
         if (!waiting || !NSApp.isActive || !window.isKeyWindow) return;
         stopWaiting();
-        afterWebViewsActive(window, target, waitForAll, applied);
+        afterWebViewsActive(window, target, waitForAll, applied, ^(SPInputActivityWait *wait) {
+            [wait installIfActivationPending:!finished store:^(SPInputActivityWait *installed) {
+                [activityWait release];
+                activityWait = [installed retain];
+            }];
+        });
     };
     // The system can refuse an activation request (cooperative activation in macOS 14), and the user can move focus to
     // another application right after activation. The timeout applies to the whole of activation and web view state transmission, so the stage at which it stopped is always reported.
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(timeoutSeconds * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
-            if (!waiting) finish(SP_ACTIVATE_PENDING);
-            else finish(NSApp.isActive ? SP_ACTIVATE_NOT_KEY : SP_ACTIVATE_REFUSED);
+            if (finished) return;
+            if (!waiting) {
+                NSArray<NSString *> *unresolved = [activityWait finishAtTimeout];
+                NSString *timeoutMessage = sp_input_activity_timeout_message(YES, activityWait != nil, unresolved);
+                if (timeoutMessage) sp_log_error("input inject", timeoutMessage.UTF8String);
+                finish(SP_ACTIVATE_PENDING);
+            } else finish(NSApp.isActive ? SP_ACTIVATE_NOT_KEY : SP_ACTIVATE_REFUSED);
         });
     if (NSApp.isActive && window.isKeyWindow) {
         waiting = false;
-        afterWebViewsActive(window, target, waitForAll, applied);
+        afterWebViewsActive(window, target, waitForAll, applied, ^(SPInputActivityWait *wait) {
+            [wait installIfActivationPending:!finished store:^(SPInputActivityWait *installed) {
+                [activityWait release];
+                activityWait = [installed retain];
+            }];
+        });
         return;
     }
     keyObserver = sp_observe_notification("input_inject.key_window", SP_OBSERVE_RECORD, NSWindowDidBecomeKeyNotification, window, nil,
