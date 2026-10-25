@@ -16,7 +16,7 @@ import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
 import { auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-hosts.mjs";
 import { auditPlatformSource } from "../check-platforms.mjs";
-import { auditE2ESource } from "../check-e2e.mjs";
+import { auditActivationUnboundNames, auditE2ESource } from "../check-e2e.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -303,6 +303,10 @@ test("window-source audit rejects forbidden control paths", { timeout: 5000 }, a
   const result = await run(node, [join(root, "scripts/check-e2e.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Window check sources use only the endpoint/);
+});
+
+test("activation fixture audit rejects unresolved identifiers", { timeout: 5000 }, () => {
+  assert.deepEqual(auditActivationUnboundNames(), []);
 });
 
 test("window-source audit accepts a Promise reject forwarded through a local timeout helper", { timeout: 1000 }, () => {

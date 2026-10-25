@@ -3,6 +3,7 @@
 [English](features.md)
 
 - [o] F239-83 — P1: 플랫폼 범위 감사는 Windows 전용 F54와 F239-48-4 runtime 검사, 그리고 남은 Windows/Linux 구현인 R2-7만 제외한다. Windows runtime 환경은 없고 Linux host application은 구현되지 않았다. 기존 Windows cross-compilation과 완료된 R2-7-1/2/3 검사는 기록된 범위로 유지하며 공통 macOS 요구사항은 바꾸지 않는다. Windows/Linux runtime 동작은 검증하지 않았다.
+- [o] F239-86 — P0: 선언된 TypeScript compiler로 activation window check의 unresolved identifier를 검사한다. F84에서 `applyTerminalInput`이 baseline `try` 안에서만 선언한 `promptPrefix`를 사용해 실패했고, visual measurement에는 선언되지 않은 `frameCallbacks`와 `missingStates` 대신 잘못 쓴 `missingSourceStates`가 있었다. Red: 변경 전 fixture audit가 prompt/frame 이름을 찾았고(`/tmp/F239-86-owner-red.log`, SHA-256 `dad47f124ba9df12aec825de53ff182ad6c5d7af726f48a1e7b30c51007949a6`), 확장한 TS2304/TS18004/TS2552 owner check는 수정 전 `missingSourceStates` 두 곳도 찾았다(`/tmp/F239-86-owner-red-current.log`, SHA-256 `861c3c2f08b8f62ef5e3c2351b679d28e9992ba83c13e823b1bffa5cd35f1825`). Green: prompt 값을 test closure에 두고, 검증된 callback-status row에서 frame callback을 구성하며, visual record에 선언된 `missingStates` 값을 사용한 뒤 같은 audit가 1/1 통과한다(`/tmp/F239-86-owner-green-final.log`, SHA-256 `70d4f868d0f26eb09d7be5d90869741f9349f83252ecd03587fb7220fd480fb8`). `make e2e-check`와 focused `node --check`도 통과한다. Audit는 activation fixture의 TS2304/TS18004/TS2552만 보고하며 일반 type error 검사는 아니다. Application 실행과 bundle build는 포함하지 않았다.
 
 검증 결과는 명시한 구현에만 적용한다. 테스트 통과는 배포 완료를 의미하지 않는다.
 

@@ -500,11 +500,12 @@ for (const app of Object.values(APPS)) {
     };
     let knownState;
     let prompt;
+    let promptPrefix;
     try {
       assert.equal(terminalComposeMatchesPreedit(baselineCompose, baselineCursor), true,
         "the pre-key terminal composition baseline must be coherent");
       knownState = { compose: baselineCompose, cursor: baselineCursor, screen: baselineScreen };
-      const promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
+      promptPrefix = terminalLineBeforeCursor(baselineScreen, baselineCursor, "empty terminal prompt");
       assert.ok(promptPrefix.length > 0, "the empty terminal prompt has no visible prefix");
       prompt = { row: baselineCursor.row, col: 0, text: promptPrefix };
       manifest.prompt = prompt;
@@ -865,6 +866,8 @@ for (const app of Object.values(APPS)) {
     assert.notEqual(callbackText.trim(), "", `${app.name}: capture callback trace is empty`);
     writeFileSync(join(artifactDir, "capture-callback-status.jsonl"), callbackText);
     const callbackStatus = callbackText.trim().split("\n").map((line) => JSON.parse(line));
+    const frameCallbacks = callbackStatus.flatMap((callback, index) =>
+      callback.frame === null ? [] : [{ callback, index }]);
     assert.ok(callbackStatus.length <= 4096, `${app.name}: recording callback trace exceeded its declared capacity`);
     callbackStatus.forEach((item, index) => {
       assert.equal(item.sequence, index + 1, `${app.name}: capture callback sequence has a gap`);
@@ -926,7 +929,7 @@ for (const app of Object.values(APPS)) {
         targetStages: visualStages.map(({ key, frame, cells, glyphs, semantic }) =>
           ({ key, frame, cells, glyphs, semantic })),
         retainedSourceCount: sources.length,
-        missingSourceStates,
+        missingSourceStates: missingStates,
         sourceStatusRejections: frameStatus?.rejections ?? [],
         callbackStatus: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       });
@@ -937,7 +940,7 @@ for (const app of Object.values(APPS)) {
         startedMachAbsoluteNs, endedMachAbsoluteNs }) =>
         ({ key, frame, cells, glyphs, semantic, clockDomain, startedMachAbsoluteNs, endedMachAbsoluteNs })),
       retainedSourceCount: sources.length,
-      missingSourceStates,
+      missingSourceStates: missingStates,
       sourceStatusRejections: frameStatus.rejections,
       sampleCount: frameCallbacks.length,
       imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),

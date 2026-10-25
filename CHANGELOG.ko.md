@@ -3,6 +3,15 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+- F239-86: 선언된 TypeScript compiler로 activation fixture의 unresolved identifier를
+  검사한다. F84에서 `applyTerminalInput`이 block scope의 `promptPrefix`를 사용해
+  실패했고 visual measurement에는 선언되지 않은 `frameCallbacks`와 `missingStates`를
+  잘못 표기한 `missingSourceStates`가 있었다. 검사는 TS2304/TS18004/TS2552를 보고한다.
+  변경 전 fixture Red는 prompt/frame 이름을 찾았고 확장한 owner check는 잘못된
+  field 두 곳도 찾았다. Prompt를 test closure에 두고, 검증된 callback-status row에서
+  frame callback을 만들며 선언된 `missingStates` 값을 사용한 뒤 같은 owner test가
+  통과한다. `make e2e-check`와 focused `node --check`도 통과한다. Application 실행과
+  bundle build는 하지 않았다.
 
 - F239-87: Activation receipt를 실제 key action에 맞춰 계산한다. F84 Tauri
   trace에는 `k` key-down 8개, Backspace 1개, Space 1개가 있었지만 non-empty

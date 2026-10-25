@@ -3,6 +3,16 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+- F239-86: Check activation fixtures for unresolved identifiers with the
+  declared TypeScript compiler. F84 failed at `applyTerminalInput` because
+  `promptPrefix` was block-scoped; visual measurement also referenced
+  undeclared `frameCallbacks` and misspelled `missingStates`. The check reports
+  TS2304, TS18004 and TS2552. The unchanged fixture Red identified the prompt
+  and frame names; the expanded owner check found both misspelled fields. The
+  same owner test passes after keeping the prompt in the test closure, deriving
+  frame callbacks from validated callback-status rows, and using the declared
+  `missingStates` value. `make e2e-check` and focused `node --check` pass. No
+  app run or bundle build was done.
 
 - F239-87: Match activation receipts to the physical key action. The F84 Tauri
   trace contained eight `k` key-downs, one Backspace, and one Space, but the

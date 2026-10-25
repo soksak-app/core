@@ -11,12 +11,18 @@
 //
 //   node scripts/check-e2e.mjs
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parse } from "acorn";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const DIRS = [join(ROOT, "e2e"), join(ROOT, "packages", "window-check")];
+const TYPESCRIPT_PACKAGE = createRequire(join(ROOT, "packages", "soksak", "package.json"))
+  .resolve("typescript/package.json");
+const TYPESCRIPT_TSC = join(resolve(TYPESCRIPT_PACKAGE, ".."), "bin", "tsc");
+const ACTIVATION_ROOT = join(ROOT, "e2e", "activation");
 
 const RULES = [
   { what: "eval", pattern: /\beval(Async)?\b/ },
@@ -202,6 +208,39 @@ function* sources(dir) {
   }
 }
 
+export function auditActivationUnboundNames(paths = [...sources(ACTIVATION_ROOT)]) {
+  // Activation fixtures can send OS input; catch lexical name mistakes without
+  // imposing the unrelated type and import diagnostics of a JavaScript project.
+  const sourceNames = new Map(paths.map((path) => [resolve(ROOT, relative(ROOT, path)), relative(ROOT, path)]));
+  if (sourceNames.size === 0) throw new Error("TypeScript unbound-name check received no activation sources");
+  const result = spawnSync(process.execPath, [TYPESCRIPT_TSC,
+    "--allowJs", "--checkJs", "--noEmit", "--noResolve", "--target", "ESNext",
+    "--module", "NodeNext", "--moduleResolution", "NodeNext", "--skipLibCheck", "--pretty", "false",
+    ...[...sourceNames.keys()].map((path) => relative(ROOT, path))], { cwd: ROOT, encoding: "utf8" });
+  if (result.error) throw result.error;
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  if (result.signal || result.status === null) {
+    throw new Error(`TypeScript unbound-name check did not finish: ${result.signal ?? output.trim()}`);
+  }
+  const diagnostics = [];
+  for (const line of output.split(/\r?\n/)) {
+    const match = /^(.*)\((\d+),(\d+)\): error TS(2304|18004|2552): (.*)$/.exec(line);
+    if (!match) continue;
+    const name = sourceNames.get(resolve(ROOT, match[1]));
+    if (name) diagnostics.push(`${name}:${match[2]}: ${match[5]}`);
+  }
+  if (result.status !== 0) {
+    const unexpected = output.split(/\r?\n/).find((line) => line.trim()
+      && !/^(?:.*\(\d+,\d+\): )?error TS\d+:/.test(line)
+      && !/^ {2}\S/.test(line)
+      && !/^Found \d+ errors? in \d+ files?\.?$/.test(line));
+    if (unexpected) {
+      throw new Error(`TypeScript unbound-name check could not analyze activation sources: ${unexpected}`);
+    }
+  }
+  return diagnostics;
+}
+
 export function auditE2ESource(text, file) {
   const errors = [];
   text.split("\n").forEach((line, index) => {
@@ -237,6 +276,7 @@ const errors = [];
 for (const path of DIRS.flatMap((dir) => [...sources(dir)])) {
   errors.push(...auditE2ESource(readFileSync(path, "utf8"), relative(ROOT, path)));
 }
+errors.push(...auditActivationUnboundNames());
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   if (errors.length) {
