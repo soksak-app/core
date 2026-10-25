@@ -21,12 +21,35 @@ static void check(BOOL condition, NSString *message) {
 }
 
 // Runs the main run loop until done returns YES or 10 seconds pass, and returns the result of done.
-static BOOL waitFor(BOOL (^done)(void)) {
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10];
+static BOOL waitForWithin(BOOL (^done)(void), NSTimeInterval timeoutSeconds) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeoutSeconds];
     while (!done() && deadline.timeIntervalSinceNow > 0) {
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.01] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (event) [NSApp sendEvent:event];
     }
     return done();
+}
+
+static BOOL waitFor(BOOL (^done)(void)) {
+    return waitForWithin(done, 10);
+}
+
+static void applicationEventPumpTest(void) {
+    const NSInteger subtype = 23995;
+    __block BOOL delivered = NO;
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskApplicationDefined
+        handler:^NSEvent *(NSEvent *event) {
+            if (event.subtype == subtype) delivered = YES;
+            return event;
+        }];
+    NSEvent *event = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint
+        modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:0 context:nil
+        subtype:(short)subtype data1:1 data2:0];
+    [NSApp postEvent:event atStart:NO];
+    BOOL processed = waitForWithin(^BOOL { return delivered; }, 0.1);
+    [NSEvent removeMonitor:monitor];
+    check(processed, @"waitFor dispatches a queued AppKit application event");
 }
 
 static NSDictionary *latest;
@@ -207,6 +230,8 @@ static BOOL restoreFrontmost(NSRunningApplication *previous, BOOL activationAtte
 }
 
 static int frontmostRestoreTest(void) {
+    [NSApplication sharedApplication];
+    applicationEventPumpTest();
     activationDescriptionLifetimeTest();
     __block NSUInteger waits = 0;
     __block NSUInteger activationRequests = 0;

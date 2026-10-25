@@ -19,6 +19,9 @@
 
 - F239-94: MRC 환경에서 activation callback의 frontmost application 설명을 retain하고 이전 snapshot을 release한다. Red: 제어된 owner callback test는 inner autorelease pool 종료 때 설명이 해제되는 것을 확인했고, F84 activation run은 `SP_ACTIVATE_REFUSED` 뒤 failure 보고 중 crash했다. Green: 같은 비활성 owner target이 assertion 17개를 통과하며, targeted activation 재시도는 crash 없이 거부 결과를 보고하고 저장한 frontmost PID를 복원한다. Activation 거부 자체는 해결되지 않았다. `make docs-check`가 통과한다.
 
+- F239-95: view-focus check가 activation을 기다리는 동안 AppKit event를 pump한다. 기존 `waitFor`는 `NSRunLoop`를 실행하면서 대기 중인 `NSEvent`를 dequeue하고 전달하지 않았다. Red: 제어된 application-defined event가 `waitFor` 안에서 전달되지 않아 정확한 owner target의 해당 assertion만 실패했다 (0.500s). Green: 같은 target이 AppKit event queue로 event를 전달하고 assertion 18개와 함께 1/1 (0.391s) 통과한다. Targeted activation 실행 1회는 application 활성화와 key window에 도달했지만, 보이는 web view가 5초 제한 시간 안에 activity-state update를 완료하지 않아 `SP_ACTIVATE_PENDING`을 반환했다. 저장된 frontmost PID 935는 복원됐다. AppKit event pump는 수정했으며 activation 수용 기준은 web view activity-state 완료 단계에서 계속 열린 상태다.
+
+
 - F239-89: Region 내부 click-through press와 짝이 되는 release까지 image-region
   focus를 유지한다. F84 trace는 page focus command 뒤 mouseup에서 focus loss를
   기록했다. 변경 전 owning activation test에서 같은 실패가 재현됐다. 수정 후 같은

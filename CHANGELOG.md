@@ -21,6 +21,9 @@
 
 - F239-94: Retain the frontmost application description from the activation callback under MRC and release the previous snapshot. Red: a controlled owner callback test observed deallocation when its inner autorelease pool drained; the F84 activation run then crashed in failure reporting after `SP_ACTIVATE_REFUSED`. Green: the same non-activation owner target passes 17 assertions; the targeted activation retry reports refusal without crashing and restores the captured frontmost PID. This does not resolve the activation refusal. `make docs-check` passes.
 
+- F239-95: Pump AppKit events while the view-focus check waits for activation. The previous `waitFor` used `NSRunLoop` without dequeuing and sending queued `NSEvent` instances. Red: the controlled app-defined event was not dispatched inside `waitFor`; the exact owner target failed only that assertion (0.500 s). Green: the same target dispatches the event and passes 18 assertions (1/1, 0.391 s) using AppKit’s event queue. One targeted activation run then reached active application and key window, but returned `SP_ACTIVATE_PENDING` because the visible web view did not complete its activity-state update within the 5-second timeout; the captured frontmost PID 935 was restored. AppKit event pumping is corrected; the activation acceptance remains open at web view activity-state completion.
+
+
 - F239-89: Keep an image region focused through the release paired with an
   in-region click-through press. The F84 trace reported focus loss on mouseup
   after the page focus command. The unchanged owning activation test reproduced
