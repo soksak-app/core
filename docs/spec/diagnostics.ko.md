@@ -21,7 +21,7 @@
 | `<executable-name>.log` | 상주 service. host가 service의 standard error로 연다 | service가 쓰는 같은 형식의 글 기록 | host가 service를 시작할 때 100 MB이면 `<name>.1`로 이름을 바꾸고 이전 세대 다섯 개를 남긴다 |
 | `heap-<pid>-<ms>.pprof` | 진단 build의 Wails host가 `diagnostics.heap.profile`에 쓴다 | Go runtime의 heap profile(`runtime/pprof`) | 없음. 요청마다 파일 하나 |
 | `state-<time>.json` | debug view가 열릴 때 두 host | JSON 문서 하나 | 없음. 열 때마다 파일 하나 |
-| `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일. Image-source matching을 요청하면 상한이 있는 source raster 파일과 manifest도 기록한다 | 요청한 쪽이 지운다 |
+| `captures/…` | 진단 빌드의 두 host | PNG와 frame 파일, `callback-status.jsonl`, `display-link.json`. Image-source matching을 요청하면 상한이 있는 source raster 파일과 manifest도 기록한다 | 요청한 쪽이 지운다 |
 
 `<time>`은 UTC 시각 `YYYYMMDDTHHMMSSZ`다. 응답 정지 sample은 애플리케이션이 아니라 창 검사 harness가 쓴다. 응답하지 않는 host는 자신을 sample할 수 없기 때문이며, harness는 이어서 `diagnostics.stall.dump`를 보내 host가 파일 경로를 event로 저장하게 한다.
 
