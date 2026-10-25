@@ -6073,6 +6073,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-152",
+    implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputBaselineAfterReference(" }],
+    tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "the first terminal key compares against the prompt redrawn after reference focus" }],
+    expected: "The terminal observer validates and uses the post-reference prompt baseline while retaining strict per-key checks.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-98-4",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
     tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],

@@ -31,6 +31,7 @@ import {
   terminalInputReceiptMatches,
   initialCursorFrameMatchesScreen,
   observeTerminalBaseline,
+  terminalInputBaselineAfterReference,
   readTerminalObservationSnapshot,
   terminalObserverStatusesMatch,
   terminalLineBeforeCursor,
@@ -537,6 +538,7 @@ for (const app of Object.values(APPS)) {
       stateEventWaiters.clear();
       await stateObserver.stop();
     });
+    let inputPhaseEventOffset;
     let initialScreenEvent;
     let initialComposeEvent;
     let initialCursorEvent;
@@ -568,6 +570,7 @@ for (const app of Object.values(APPS)) {
         cursor: initialCursorEvent.value,
         baselineRowsMatched: true,
       });
+      inputPhaseEventOffset = observedStateEvents.length;
     } catch (error) {
       recordInitialObservationFailure(error);
       throw error;
@@ -715,10 +718,27 @@ for (const app of Object.values(APPS)) {
       compose: await s.get("terminal.compose", surface),
       cursor: await s.get("terminal.cursor", surface),
     };
-    persist("terminal-ready.json", terminalReady);
     assert.equal(terminalReady.host.active, true, "the terminal host is not the active application before key input");
     assert.equal(terminalReady.host.key, true, "the terminal host window is not key before key input");
     assert.equal(terminalReady.host.responder?.surface, surface, "the terminal is not the native responder before key input");
+    const readySnapshot = await readTerminalObservationSnapshot({
+      readCompose: () => s.get("terminal.compose", surface),
+      readCursor: () => s.get("terminal.cursor", surface),
+      readScreen: () => presentedScreen(s, surface),
+      readHost: () => s.get("host.window"),
+    });
+    const refreshedBaseline = terminalInputBaselineAfterReference(knownState, prompt, readySnapshot,
+      terminalStageEvents(observedStateEvents, inputPhaseEventOffset));
+    knownState = refreshedBaseline.baseline;
+    prompt = refreshedBaseline.prompt;
+    promptPrefix = prompt.text;
+    const readyRegion = readySnapshot.host.regions.find((region) => region.surface === surface && region.name === "view");
+    assertTerminalStageCoherent({ screen: refreshedBaseline.baseline.screen, region: readyRegion,
+      compose: refreshedBaseline.baseline.compose, cursor: refreshedBaseline.baseline.cursor,
+      stateEvents: terminalStageEvents(observedStateEvents, inputPhaseEventOffset) },
+    "post-reference terminal baseline");
+    persist("terminal-ready.json", { ...terminalReady, baseline: refreshedBaseline.baseline,
+      prompt: refreshedBaseline.prompt, stateEvents: terminalStageEvents(observedStateEvents, inputPhaseEventOffset) });
 
     const applyTerminalInput = (referenceState, observation, entries, index) => {
       const actual = visibleInputBeforeCursor(observation.screen, observation.cursor, prompt,

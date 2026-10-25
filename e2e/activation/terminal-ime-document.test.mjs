@@ -6,6 +6,7 @@ import {
   sameTerminalComposition,
   terminalComposeMatchesPreedit,
   terminalLineBeforeCursor,
+  terminalInputBaselineAfterReference,
   terminalCompositionState,
   assertInputTraceDelivery,
   inputTraceTransactions,
@@ -381,6 +382,102 @@ test("a fresh screen event can accompany a coherent composition reread", () => {
 
   assert.equal(terminalObserverStatusesMatch([{ name: "terminal.screen", value: currentScreen.rows }], baseline,
     { compose, cursor, screen: currentScreen }), true);
+});
+
+test("the first terminal key compares against the prompt redrawn after reference focus", () => {
+  const empty = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const initialRows = [[...Array.from("zle-check% ", (ch) => cell(ch)), ...Array.from({ length: 100 }, () => cell(" "))]];
+  const baseline = {
+    compose: empty,
+    cursor: { row: 0, col: 11, focused: true, preedit: null },
+    screen: { ...screen(initialRows), frame: { generation: 2, raster: 3, sequence: 4 } },
+  };
+  const redrawnRows = [initialRows[0], [...Array.from("zle-check% ", (ch) => cell(ch)),
+    ...Array.from({ length: 100 }, () => cell(" "))]];
+  const transitionCursor = { row: 1, col: 11, focused: true, preedit: null,
+    frame: { generation: 2, raster: 3, sequence: 6 }, render: null };
+  const transition = {
+    compose: empty,
+    cursor: transitionCursor,
+    screen: { ...screen(redrawnRows), frame: { ...transitionCursor.frame } },
+  };
+  const phaseEvents = [
+    { name: "terminal.screen", value: redrawnRows },
+    { name: "terminal.cursor", value: transitionCursor },
+  ];
+  const refreshed = terminalInputBaselineAfterReference(baseline, { row: 0, col: 0, text: "zle-check% " }, {
+    compose: empty,
+    cursor: transitionCursor,
+    screen: transition.screen,
+    currentCompose: empty,
+    currentCursor: transitionCursor,
+  }, phaseEvents);
+  assert.equal(refreshed.prompt.row, 1, "the refreshed prompt anchor follows the current cursor row");
+
+  const compose = { text: "ㅏ", markedRange: null, selectedRange: { location: 1, length: 0 },
+    replacementRange: null, attributed: false };
+  const cursor = { row: 1, col: 11, focused: true, preedit: { ...compose },
+    frame: { generation: 2, raster: 3, sequence: 7 } };
+  const current = {
+    compose,
+    cursor,
+    screen: { ...transition.screen, frame: { generation: 2, raster: 3, sequence: 6 } },
+  };
+  const keyEvents = [
+    { name: "terminal.compose", value: compose },
+    { name: "terminal.cursor", value: cursor },
+  ];
+
+  assert.equal(terminalObserverStatusesMatch(keyEvents, baseline, current), false,
+    "a stale pre-reference screen baseline must not accept changed rows without a screen event");
+  assert.equal(terminalObserverStatusesMatch(keyEvents, refreshed.baseline, current), true,
+    "the first-key status comparison starts from the accepted post-reference baseline");
+  assert.equal(visibleInputBeforeCursor(current.screen, current.cursor, refreshed.prompt,
+    current.compose.text), "ㅏ");
+});
+
+test("post-reference baseline accepts a later cursor overlay on the same base rows", () => {
+  const empty = { text: "", markedRange: null, selectedRange: null, replacementRange: null, attributed: false };
+  const promptText = "zle-check% ";
+  const baselineRows = [[...Array.from(promptText, (ch) => cell(ch)), ...Array.from({ length: 100 }, () => cell(" "))]];
+  const baseline = {
+    compose: empty,
+    cursor: { row: 0, col: 11, focused: true, preedit: null },
+    screen: { ...screen(baselineRows), frame: { generation: 2, raster: 3, sequence: 4 } },
+  };
+  const currentRows = [baselineRows[0], [...Array.from(promptText, (ch) => cell(ch)),
+    ...Array.from({ length: 100 }, () => cell(" "))]];
+  const frame = { generation: 2, raster: 3, sequence: 7 };
+  const cursor = { row: 1, col: 11, focused: true, preedit: null, frame, render: { frame } };
+  const screenFrame = { generation: 2, raster: 3, sequence: 6 };
+  const snapshot = {
+    compose: empty,
+    cursor,
+    screen: { ...screen(currentRows), frame: screenFrame },
+    currentCompose: empty,
+    currentCursor: cursor,
+  };
+  const events = [
+    { name: "terminal.screen", value: currentRows },
+    { name: "terminal.cursor", value: cursor },
+  ];
+  const prompt = { row: 0, col: 0, text: promptText };
+
+  const refreshed = terminalInputBaselineAfterReference(baseline, prompt, snapshot, events);
+  assert.equal(refreshed.prompt.row, 1);
+  assert.equal(refreshed.baseline.screen.frame.sequence, 6);
+  assert.equal(refreshed.baseline.cursor.frame.sequence, 7);
+
+  const wrongRender = { ...cursor, render: { frame: { ...frame, sequence: 8 } } };
+  assert.throws(() => terminalInputBaselineAfterReference(baseline, prompt, {
+    ...snapshot, cursor: wrongRender, currentCursor: wrongRender,
+  }, events), /cursor overlay is not coherent with the accepted base screen/,
+  "render metadata from another overlay frame must not establish the baseline");
+  const earlierCursor = { ...cursor, frame: { ...frame, sequence: 5 }, render: { frame: { ...frame, sequence: 5 } } };
+  assert.throws(() => terminalInputBaselineAfterReference(baseline, prompt, {
+    ...snapshot, cursor: earlierCursor, currentCursor: earlierCursor,
+  }, events), /cursor overlay is not coherent with the accepted base screen/,
+  "the base screen must not follow its cursor overlay");
 });
 
 test("per-key IME receipts read current native transactions and VT input requests", () => {

@@ -63,6 +63,18 @@ export function initialCursorFrameMatchesScreen(cursor, screen) {
     renderFrame.raster === cursorFrame.raster && renderFrame.sequence === cursorFrame.sequence;
 }
 
+function cursorOverlayMatchesBaseScreen(cursor, screen) {
+  const screenFrame = screen?.frame;
+  const cursorFrame = cursor?.frame;
+  if (!validFrameIdentity(screenFrame) || !validFrameIdentity(cursorFrame) ||
+      cursorFrame.generation !== screenFrame.generation || cursorFrame.raster !== screenFrame.raster ||
+      screenFrame.sequence > cursorFrame.sequence) return false;
+  if (cursor.render === null) return true;
+  const renderFrame = cursor.render?.frame;
+  return validFrameIdentity(renderFrame) && renderFrame.generation === cursorFrame.generation &&
+    renderFrame.raster === cursorFrame.raster && renderFrame.sequence === cursorFrame.sequence;
+}
+
 export function sameTerminalComposition(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -491,6 +503,38 @@ export function terminalLineBeforeCursor(screen, cursor, label = "terminal scree
   const cells = screen.rows[cursor.row];
   assert.ok(Array.isArray(cells), `${label}: terminal cursor row ${cursor.row} is missing`);
   return appendCellRange(cells, 0, cursor.col, label);
+}
+
+/** Accepts the terminal's current empty-prompt baseline after a focus-changing phase. */
+export function terminalInputBaselineAfterReference(previous, prompt, snapshot, events) {
+  assert.ok(snapshot && typeof snapshot === "object", "terminal post-reference snapshot is required");
+  assert.ok(Array.isArray(events), "terminal post-reference status events are required");
+  const current = {
+    compose: snapshot.currentCompose,
+    cursor: snapshot.currentCursor,
+    screen: snapshot.screen,
+  };
+  assert.equal(sameTerminalComposition(terminalCompositionState(snapshot.compose, snapshot.cursor),
+    terminalCompositionState(current.compose, current.cursor)), true,
+  "terminal composition changed while refreshing the post-reference baseline");
+  assert.equal(terminalObserverStatusesMatch(events, previous, current), true,
+    "post-reference baseline is missing a matching status update");
+  assert.equal(current.cursor.focused, true, "post-reference baseline requires a focused cursor");
+  assert.equal(terminalComposeMatchesPreedit(current.compose, current.cursor), true,
+    "post-reference baseline compose and cursor preedit differ");
+  assert.equal(current.compose.text, "", "post-reference baseline requires an empty composition");
+  assert.equal(current.compose.markedRange, null, "post-reference baseline requires no marked range");
+  assert.equal(cursorOverlayMatchesBaseScreen(current.cursor, current.screen), true,
+    "post-reference cursor overlay is not coherent with the accepted base screen");
+  assert.ok(prompt && Number.isInteger(prompt.col) && prompt.col >= 0 && typeof prompt.text === "string" &&
+    prompt.text.length > 0, "post-reference prompt anchor is invalid");
+  assert.equal(terminalLineBeforeCursor(current.screen, current.cursor, "post-reference terminal baseline"),
+    prompt.text, "the unchanged empty prompt is not on the current cursor row");
+
+  return {
+    baseline: current,
+    prompt: { ...prompt, row: current.cursor.row },
+  };
 }
 
 export function visibleInputFromRows(rows, cursor, prompt, preedit, label = "terminal input") {

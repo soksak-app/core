@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-152: 같은 창 reference가 닫히고 terminal focus가 돌아온 뒤 terminal IME
+  observer baseline을 갱신한다. Key 입력 전에 presentation된 screen, 일치하는
+  status evidence, 안정된 빈 composition, generation/raster가 일치하고 base-screen sequence가 cursor보다 늦지 않으며 render frame이 cursor와 일치하는 overlay와
+  현재 cursor row의 기존 prompt를 검증한다. 원래 baseline 선택을 사용하는
+  제어 fixture는 row 0에서 row 1로 prompt가 이동할 때 실패했고 갱신 뒤 통과한다.
+  `terminal-ime-document.test.mjs`는 42/42 통과한다. Application이나 IME 입력은
+  실행하지 않았다.
+
 - F239-151: `host.window.presented` 같은 창 AppKit reference의 각 key와 document
   확인 뒤, 다음 key를 보내기 전에 기다린다. 이 대기는 reference 입력 사이에
   application window가 presentation update를 거치게 하지만 AppKit text view의 paint나

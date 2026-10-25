@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-152: Refresh the terminal IME observer baseline after the same-window
+  reference closes and terminal focus returns. Require a presented screen,
+  matching status evidence, stable empty composition, same-generation/raster cursor overlay whose base-screen sequence is no later and whose
+  render frame matches the cursor frame, and the unchanged prompt on the current cursor row before keying.
+  The controlled row-0-to-row-1 fixture failed with the original baseline
+  choice and passes after the refresh. `terminal-ime-document.test.mjs` passes
+  42/42. No application or IME input was run.
+
 - F239-151: Wait for `host.window.presented` after each same-window AppKit
   reference key and document check before sending the next key. This gives the
   application window a presentation update between reference inputs without
