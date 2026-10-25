@@ -289,10 +289,13 @@ export function assertInputTraceDelivery(entries) {
 
 function transactionMatchesKey(transaction, key) {
   if (key === "k") {
-    const keyAction = transaction.actions.some((action) =>
+    const actions = transaction.actions;
+    if (actions.some((action) => action.type === "command" ||
+      (action.type === "key" && !(action.key === "Char" && action.text === key)))) return false;
+    const keyAction = actions.some((action) =>
       (action.type === "key" && action.key === "Char" && action.text === key) ||
-      (action.type === "insert" && action.text.length > 0));
-    return keyAction || (transaction.actions.length === 0 && transaction.preedit.text.length > 0);
+      (action.type === "insert" && action.text.trim().length > 0));
+    return keyAction || (actions.length === 0 && transaction.preedit.text.length > 0);
   }
   if (key === "Backspace") {
     return transaction.actions.some((action) => (action.type === "key" && action.key === key) ||

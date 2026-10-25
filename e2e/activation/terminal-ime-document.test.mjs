@@ -321,6 +321,39 @@ test("per-key IME receipts read current native transactions and VT input request
   assert.throws(() => terminalInputReceiptMatches([], "Enter"), /no receipt rule for key/);
 });
 
+test("physical key receipt counts exclude Backspace commits and Space insertion", { timeout: 5000 }, () => {
+  const marked = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: false };
+  const empty = { text: "", markedRange: null,
+    selectedRange: { location: 0, length: 0 }, replacementRange: null, attributed: false };
+  const entries = [];
+  let sequence = 0;
+  let cid = 0;
+  const addTransaction = (actions, preedit) => {
+    const inputCid = `f84-replay-${++cid}`;
+    entries.push({ kind: "native-input", sequence: sequence++, cids: [inputCid],
+      input: { actions, preedit, errors: [] } });
+    entries.push({ kind: "terminal-input", sequence: sequence++, cids: [inputCid],
+      input: { operation: "input", actions, preedit } });
+  };
+  addTransaction([], marked);
+  for (let index = 0; index < 7; index++) {
+    addTransaction([{ type: "insert", text: "ㅏ", replacementRange: null, attributed: false }], marked);
+  }
+  addTransaction([
+    { type: "insert", text: "ㅏ", replacementRange: null, attributed: false },
+    { type: "command", selector: "deleteBackward:" },
+  ], empty);
+  addTransaction([{ type: "insert", text: " ", replacementRange: null, attributed: false }], empty);
+
+  const { native } = assertInputTraceDelivery(entries);
+  const receipts = (key) => native.filter((transaction) => terminalInputReceiptMatches(
+    entries.filter((entry) => entry.cids[0] === transaction.cids[0]), key));
+  assert.equal(receipts("k").length, 8, "Backspace and Space transaction inserts must not count as k presses");
+  assert.equal(receipts("Backspace").length, 1);
+  assert.equal(receipts("Space").length, 1);
+});
+
 test("native input transaction actions acknowledge a committed character key", () => {
   const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
     selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
