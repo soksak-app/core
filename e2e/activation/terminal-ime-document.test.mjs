@@ -141,7 +141,7 @@ test("terminal observation reads status pairs concurrently around the screen sam
 
   assert.deepEqual(beforeStarted, ["before.compose", "before.cursor"]);
   assert.deepEqual(afterScreenStarted, ["before.compose", "before.cursor", "screen"]);
-  assert.deepEqual(afterStarted, ["before.compose", "before.cursor", "screen", "after.compose", "after.cursor", "host"]);
+  assert.deepEqual(afterStarted, ["before.compose", "before.cursor", "screen", "after.compose", "after.cursor"]);
   assert.deepEqual(snapshot, { compose: "compose-before", cursor: "cursor-before", screen: "screen",
     currentCompose: "compose-after", currentCursor: "cursor-after", host: "host-after" });
 });
@@ -161,7 +161,6 @@ test("terminal observation reports every failed read in each concurrent phase", 
 
   const afterComposeError = new Error("current compose unavailable");
   const afterCursorError = new Error("current cursor unavailable");
-  const hostError = new Error("host status unavailable");
   let composeReads = 0;
   let cursorReads = 0;
   await assert.rejects(readTerminalObservationSnapshot({
@@ -174,11 +173,10 @@ test("terminal observation reports every failed read in each concurrent phase", 
       throw afterCursorError;
     },
     readScreen() { return "screen"; },
-    readHost() { throw hostError; },
-  }), (error) => error instanceof AggregateError && error.errors.length === 3 &&
+    readHost() { assert.fail("host presentation must not be read after failed terminal reads"); },
+  }), (error) => error instanceof AggregateError && error.errors.length === 2 &&
     error.errors.some((entry) => entry.message === "terminal.compose read failed" && entry.cause === afterComposeError) &&
-    error.errors.some((entry) => entry.message === "terminal.cursor read failed" && entry.cause === afterCursorError) &&
-    error.errors.some((entry) => entry.message === "host.window read failed" && entry.cause === hostError));
+    error.errors.some((entry) => entry.message === "terminal.cursor read failed" && entry.cause === afterCursorError));
 });
 
 function deferred() {
@@ -1002,4 +1000,16 @@ test("post-reference baseline accepts an unchanged prompt with fresh focus evide
     "per-key acceptance still requires a state change");
   assert.throws(() => terminalInputBaselineAfterReference(baseline, prompt, snapshot, []),
     /missing a matching status update/);
+});
+
+
+test("terminal observation reports a failed presentation read after successful status reads", { timeout: 1500 }, async () => {
+  const hostError = new Error("presentation checkpoint unavailable");
+  await assert.rejects(readTerminalObservationSnapshot({
+    readCompose: async () => "compose",
+    readCursor: async () => "cursor",
+    readScreen: async () => "screen",
+    readHost: async () => { throw hostError; },
+  }), (error) => error instanceof AggregateError && error.errors.length === 1 &&
+    error.errors[0].message === "host.window read failed" && error.errors[0].cause === hostError);
 });

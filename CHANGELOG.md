@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-177: Read the current terminal compose/cursor pair before the host presentation state, and await the declared presentation checkpoint before that host read. Preserve all errors within each independent read phase and reject a failed presentation read. Two ordering/error owners fail before correction; all 44 terminal-document owners pass after correction.
+
 - F239-176: Run stall sampling and launchd discovery through asynchronous Node child-process APIs with a ten-second limit per process. Keep endpoint reads and test deadlines responsive, start host/page samples together, and preserve every process result. The event-loop reproduction fails before correction; all 14 stall-sample owners pass afterward.
 
 - F239-175: Separate IME functional visual acceptance from capture-gap measurements. Preserve complete-gesture, identity, document, glyph and underline requirements. ScreenCaptureKit does not guarantee its requested update interval, so a sample-gap target alone does not establish an input defect. All 25 visual and replay owner cases pass; integrated acceptance remains open for the recorded snapshot and capture-stop failures.

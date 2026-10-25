@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-177: 현재 terminal compose/cursor 쌍을 host 표시 상태보다 먼저 읽고 host read 전에 선언된 presentation checkpoint를 기다린다. 각 독립 read phase의 오류를 모두 보존하고 표시 상태 read 실패를 거부한다. 순서/오류 소유 검사 두 개가 수정 전 실패하고 수정 후 terminal-document 소유 검사 44개가 통과한다.
+
 - F239-176: Stall sampling과 launchd 조회를 process별 10초 제한의 비동기 Node child-process API로 실행한다. Endpoint read 및 test deadline의 응답을 유지하고 host/page sample을 함께 시작하며 각 process 결과를 보존한다. Event-loop 재현 검사가 수정 전 실패하고 수정 후 stall-sample 소유 검사 14개가 통과한다.
 
 - F239-175: IME 기능 visual acceptance와 capture gap 측정을 분리한다. 전체 gesture, identity, document, glyph 및 underline 요구는 유지한다. ScreenCaptureKit이 요청된 update 간격을 보장하지 않으므로 sample gap 목표만으로 입력 결함을 판정하지 않는다. Visual 및 replay 소유 검사 25개가 통과하며 기록된 snapshot 및 capture stop 실패의 통합 acceptance는 미완료로 유지한다.

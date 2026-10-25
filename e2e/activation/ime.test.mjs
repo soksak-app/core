@@ -400,7 +400,7 @@ for (const app of Object.values(APPS)) {
             readCompose: () => s.get("terminal.compose", surface),
             readCursor: () => s.get("terminal.cursor", surface),
             readScreen: () => presentedScreen(s, surface),
-            readHost: () => s.get("host.window"),
+            readHost: async () => { await s.presented(); return s.get("host.window"); },
           });
         const region = host.regions.find((item) => item.surface === surface && item.name === "view");
         const currentEvents = terminalStageEvents(observedStateEvents, eventOffset);
@@ -725,7 +725,7 @@ for (const app of Object.values(APPS)) {
       readCompose: () => s.get("terminal.compose", surface),
       readCursor: () => s.get("terminal.cursor", surface),
       readScreen: () => presentedScreen(s, surface),
-      readHost: () => s.get("host.window"),
+      readHost: async () => { await s.presented(); return s.get("host.window"); },
     });
     const refreshedBaseline = terminalInputBaselineAfterReference(knownState, prompt, readySnapshot,
       terminalStageEvents(observedStateEvents, inputPhaseEventOffset));

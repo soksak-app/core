@@ -355,11 +355,13 @@ export async function readTerminalObservationSnapshot({ readCompose, readCursor,
     { name: "terminal.cursor", read: readCursor },
   ], "before-screen");
   const screen = await readScreen();
-  const [currentCompose, currentCursor, host] = await readObservationBatch([
+  const [currentCompose, currentCursor] = await readObservationBatch([
     { name: "terminal.compose", read: readCompose },
     { name: "terminal.cursor", read: readCursor },
-    { name: "host.window", read: readHost },
   ], "after-screen");
+  const [host] = await readObservationBatch([
+    { name: "host.window", read: readHost },
+  ], "presentation");
   return { compose, cursor, screen, currentCompose, currentCursor, host };
 }
 
