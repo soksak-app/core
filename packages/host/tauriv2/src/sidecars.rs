@@ -4003,6 +4003,7 @@ impl Owner for Window {
                 crate::composition::refresh_image_rasters(&window)
             },
             || tauri::Manager::state::<WindowSidecars>(self).declared(sidecar_name),
+            || crate::exposure::window_changed(&window),
         )
     }
 }

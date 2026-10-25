@@ -343,7 +343,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 			return nil
 		},
 		noRecovery(t),
-		func() bool { return true },
+		func() bool { return true }, func() {},
 	) {
 		t.Fatal("current frame was not handled")
 	}
@@ -509,7 +509,7 @@ func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.
 			return nil
 		},
 		noRecovery(t),
-		func() bool { return true },
+		func() bool { return true }, func() {},
 	)
 
 	if got := response["image"].(map[string]interface{})["error"]; got != "stale" {
@@ -899,7 +899,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 			}
 			return nil
 		},
-		func() bool { return true },
+		func() bool { return true }, func() { t.Fatal("failed presentation notified the window") },
 	)
 
 	if !handled {
@@ -1008,7 +1008,7 @@ func TestFrameDetachedBeforeMainThreadPresentationIsReportedAsStale(t *testing.T
 			return nil
 		},
 		noRecovery(t),
-		func() bool { return true },
+		func() bool { return true }, func() { t.Fatal("retired frame notified the window") },
 	)
 	if image, _ := response["image"].(map[string]interface{}); image == nil || image["error"] != "stale" {
 		t.Fatalf("detached frame answered %v, want stale", response)
@@ -1033,7 +1033,7 @@ func TestMissingNativeSurfaceRequestsAFreshRasterConfiguration(t *testing.T) {
 			recovered = next
 			return err
 		},
-		func() bool { return true },
+		func() bool { return true }, func() { t.Fatal("failed presentation notified the window") },
 	)
 	if recovered == nil || recovered.Raster != first.Raster {
 		t.Fatalf("recovery configuration %+v, want raster %d again", recovered, first.Raster)
@@ -1236,7 +1236,7 @@ func TestImageFrameNonceCauseIsRecorded(t *testing.T) {
 		token := envelope["image"].(map[string]any)["token"].(map[string]any)
 		token["nonce"] = tc.nonce
 		body, _ := json.Marshal(envelope)
-		host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true })
+		host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
 		want := " error host image frame: surface=tab-1 name=view sender=sidecar-a " + frame + " sequence=" + strconv.Itoa(tc.sequence) + " " + tc.want
 		if log := written(); !strings.Contains(log, want) {
 			t.Fatalf("the log has no %q:\n%s", want, log)
@@ -1258,7 +1258,7 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 	recoverFrame := func(string) error { return nil }
 
 	// A sidecar that does not own the region.
-	host.HandleEnvelope(configuredEnvelope(t, configured, 1), "sidecar-b", key.Surface, images, onMain, send, recoverFrame, func() bool { return true })
+	host.HandleEnvelope(configuredEnvelope(t, configured, 1), "sidecar-b", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
 	// A format that the host does not present.
 	var unsupported map[string]any
 	if err := json.Unmarshal(configuredEnvelope(t, configured, 2), &unsupported); err != nil {
@@ -1266,9 +1266,9 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 	}
 	unsupported["image"].(map[string]any)["format"] = "rgba8"
 	body, _ := json.Marshal(unsupported)
-	host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true })
+	host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
 	// An image field that is not an envelope is not handled as an image, and the record shows it.
-	if host.HandleEnvelope([]byte(`{"image":{"name":5}}`), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }) {
+	if host.HandleEnvelope([]byte(`{"image":{"name":5}}`), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {}) {
 		t.Fatal("a malformed envelope was handled as an image")
 	}
 
@@ -1373,7 +1373,7 @@ func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
 			t.Errorf("recovery of %q was requested for a sidecar that no plugin declares", reason)
 			return nil
 		},
-		func() bool { return false },
+		func() bool { return false }, func() { t.Fatal("undeclared frame notified the window") },
 	)
 	if presented {
 		t.Fatal("a frame of a sidecar that no plugin declares reached the native presentation")

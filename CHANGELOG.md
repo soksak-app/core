@@ -36,11 +36,22 @@
   generation 7 on Wails and generation 8 on Tauri (raster 1, sequence 2).
   Both runtime audits passed with no error-level records, but the test failed
   on each host; the direct reads mean the watch result does not prove the
-  image was absent. The owner follow-up verifies publication after successful
-  presentation and no publication for refused or retired frames. The focused
-  tests took 22.888 s on Wails and 22.599 s on Tauri. Both runs ended host and
-  sidecar processes, removed endpoints, and restored the same frontmost baseline.
-  Runtime acceptance remains open.
+  image was absent. Red: unchanged Wails and Tauri image-handler owner tests
+  observed no notification after successful presentation. Green: Wails owner
+  tests pass 2/2, verifying the notification follows the current presented
+  identity and is absent after failure or retirement; Tauri owner tests pass
+  1/1 each for the same cases. The Tauri image integration test target compiles.
+  The external Wails test package cannot compile because existing
+  `view_call_record_test.go` and `view_error_test.go` refer to `RegisterView`,
+  which the current host does not provide; the focused source owner checks pass.
+  `make docs-check` passes 112 files, 422 failure records and 1823 record checks;
+  `git diff --check` passes. `make parity-check` could not start in the isolated
+  worktree because `acorn` is not installed there. The current inventory and
+  Wails owner-test mapping are updated for 1000 test files and await the main
+  checkout's parity check.
+  The window tests took 22.888 s on Wails and 22.599 s on Tauri. Both runs ended
+  host and sidecar processes, removed endpoints, and restored the same frontmost
+  baseline. Two-host runtime acceptance remains open.
 - F212.10-core-5-6-1: Move the sidecar headless-to-image wait after the
   declared `core.tab.select` reveal and wait for `core.surfaces` to expose
   `status terminal.session` before reading the retained session. The previous

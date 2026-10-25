@@ -33,10 +33,19 @@
   `status.get host.window`는 Wails generation 7, Tauri generation 8의
   presented region을 반환했다(raster 1, sequence 2). 양 host runtime audit은
   error-level 기록 없이 통과했지만 test는 각 host에서 실패했다. 직접 read가
-  성공했으므로 watch 결과만으로 image 부재를 입증하지 않는다. Owner follow-up은
-  성공 presentation 이후 게시와 거부 또는 폐기 frame의 미게시를 확인한다.
-  Focused test는 Wails 22.888초, Tauri 22.599초 걸렸다. 두 run 모두 host와
-  sidecar process를 종료하고 endpoint를 제거했으며 같은 frontmost baseline을 복원했다.
+  성공했으므로 watch 결과만으로 image 부재를 입증하지 않는다. Red: 변경 전
+  Wails와 Tauri image-handler owner test는 성공 presentation 뒤 notification이
+  없어 실패했다. Green: Wails owner test 2/2가 새 presented identity 뒤 notification과
+  실패/폐기 시 무알림을 확인한다. Tauri owner test도 같은 경우에 각각 1/1 통과한다.
+  Tauri image integration test target은 compile된다. Wails external test package는
+  현재 host에 없는 `RegisterView`를 참조하는 기존 `view_call_record_test.go`와
+  `view_error_test.go` 때문에 compile할 수 없다. Focused source owner test는 통과한다.
+  `make docs-check`는 문서 112개, failure record 422개, record check 1823개로 통과하고
+  `git diff --check`도 통과한다. Isolated worktree에 `acorn`이 없어 `make parity-check`는
+  시작하지 못했다. 현재 inventory와 Wails owner-test 연결을 test file 1000개에 맞춰
+  갱신했으며 main checkout의 parity check를 기다린다.
+  Window test는 Wails 22.888초, Tauri 22.599초 걸렸다. 두 run 모두 host와 sidecar
+  process를 종료하고 endpoint를 제거했으며 같은 frontmost baseline을 복원했다.
   macOS 26.6.2 arm64에서 Wails와 Tauri 0.0.21, Terminal 0.0.21, VT 0.0.17,
   Files 0.0.8, browser/editor 0.0.7, HWP 0.0.5로 실행했다. Runtime acceptance는
   아직 열려 있다.
