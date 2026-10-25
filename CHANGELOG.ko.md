@@ -188,18 +188,17 @@
   non-eviction drop, retirement, geometry, raw matcher 검사를 포함해 1/1,
   1.605초에 통과한다.
 
-- F239-104: 각 callback-status record에 image matching과 선택적 frame-identity
-  decoding의 raw Mach 시작/완료 경계를 기록한다. 실행되지 않은 단계는 명시적
-  `null`, tick은 10진 문자열로 저장하고 callback timebase를 유지한다. Red:
-  변경 전 producer에서 owner assertion 3개가 실패했다. 통합 source timing
-  fixture는 source를 발급했지만 tag artifact를 기록하지 않아 예상 ROI가 없고
-  `unknown-geometry`가 올바른 결과인 점도 드러냈다. Fixture는 explicit ROI에
-  issued QR artifact를 기록하되 sample은 tag 없이 유지한다. Green:
-  `make -C native/darwin repeat TEST=capture_metadata_test COUNT=1`이 F103 source에서
-  1/1, 2.288초에 통과한다. 제어된 bound는 callback 300, writer 310, image match
-  320–330, identity decode 340–350, callback complete 360이며 `no-code` row와
-  capture error 없음도 확인한다. 앞선 runner-only 실행은 stale binary 설정 오류다.
-  33 ms limit과 비동기 writer 동작은 그대로이며 runtime 측정은 대기 중이다.
+- F239-104: Image matching 및 identity enqueue의 raw Mach 경계는 callback-status
+  artifact에 기록하고 실제 Vision decode 경계는 별도의 decoded-frame row에
+  기록한다. F136이 Vision을 ScreenCaptureKit callback 밖으로 옮겼으므로 callback
+  decode 경계는 `null`이다. Red: 변경 전 producer에서 timing field assertion 세
+  개가 실패했고, 통합 source fixture에는 예상 ROI에 필요한 issued tag artifact가
+  없었다. Fixture 수정 뒤 owner test는 F103 source에서 2.288초에 1/1 통과했다.
+  현재 F136/F138 결합 source에서도 같은 `capture_metadata_test`가 1.302초에 1/1
+  통과하며 callback enqueue tick, 비동기 row decode tick, callback decode field의
+  null 및 capture error 없는 no-code 결과를 검사한다. 33 ms cadence limit은
+  유지하며 두 실행 모두 full-recording cadence나 이전 callback gap의 Vision 원인을
+  증명하지 않는다.
 
 - F239-105: `sidecars.retain.keeps-session-first-sent-during-start`의 중복 plugin-only host-contract 행을 제거하고 실제 English 및 Korean table의 case ID
   유일성을 검사한다. Red: owner test가 canonical table의 중복 ID에서 실패했다.

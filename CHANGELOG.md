@@ -208,19 +208,18 @@
   `capture_frame_identity_capture_test` repeat target passes 1/1 in 1.605 seconds,
   including non-eviction-drop, retirement, geometry and raw-matcher controls.
 
-- F239-104: Record raw Mach bounds for image matching and optional frame-identity
-  decoding in each callback-status record. Preserve decimal-string ticks, explicit
-  nulls for stages that did not run, and the callback timebase. Red: three owner
-  assertions failed against the unchanged producer. The combined-source timing
-  fixture also exposed that it issued a source but did not record a tag artifact,
-  so no expected ROI existed and `unknown-geometry` was correct. The fixture now
-  records an issued QR artifact in an explicit ROI while keeping the sample
-  untagged. Green: `make -C native/darwin repeat TEST=capture_metadata_test COUNT=1`
-  passes 1/1 in 2.288 seconds on F103 source; controlled bounds are callback 300,
-  writer 310, image match 320–330, identity decode 340–350 and callback complete
-  360, with a `no-code` row and no capture error. A prior runner-only attempt used
-  a stale binary and remains setup failure. The 33 ms limit and asynchronous
-  writer behavior are unchanged; runtime measurement remains pending.
+- F239-104: Record raw Mach bounds for image matching and identity enqueue in the
+  callback-status artifact, and record actual Vision decode bounds in separate
+  decoded-frame rows. F136 moved Vision off the ScreenCaptureKit callback, so
+  callback decode bounds remain null. Red: the unchanged producer failed three
+  timing-field assertions; a combined-source fixture also lacked the issued tag
+  artifact required for its expected ROI. After correcting the fixture, the
+  owner test passed 1/1 in 2.288 seconds on F103 source. The current combined
+  F136/F138 source passes the same `capture_metadata_test` 1/1 in 1.302 seconds,
+  verifying callback enqueue ticks, asynchronous row decode ticks, null callback
+  decode fields and a no-code result without capture error. The 33 ms cadence
+  limit remains unchanged; neither run establishes full-recording cadence or
+  attributes the earlier callback gap to Vision.
 
 - F239-105: Remove the duplicate plugin-only row for `sidecars.retain.keeps-session-first-sent-during-start` and test the checked-in English and Korean tables for unique case IDs. Red: the owner test failed on
   the duplicate ID in the canonical table. Green: it parses both real tables,
