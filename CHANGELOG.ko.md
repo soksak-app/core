@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-48-3-12: 정확한 view-record test 배치 차이를 기록한다. Go test는 private fixture state에 접근하기 위해 `package host`가 필요하고 Rust 대응 test는 public `ViewChannels` API를 사용해 private module 배치가 필요하지 않다. 양쪽 logging assertion을 유지한다. Focused owner assertion은 1/1 통과하며 네 경로만 허용하고 미등록 sibling은 거부한다. Host audit은 finding 9개에서 5개로 줄었고 `make parity-check`, `make docs-check`가 통과했다. Host 동작은 바뀌지 않았다.
+
 - F239-48-3-11: Tauri source-channel adapter의 정확한 test 경로를 기록한다. Framework가 `Channel<DeclaredSourceEvent>`를 주입하며 Wails에는 typed-channel 대응이 없다. 공통 순서와 수명주기는 Wails owner test에서 계속 검사하고 두 host suite 모두 live framework IPC 전달을 증명하지 않는다. Focused assertion은 1/1 통과하며 두 경로만 허용하고 미등록 sibling은 거부한다. Paired-host audit은 finding 10개에서 8개로 줄었고, 나머지는 열려 있다. `make docs-check`가 통과했다.
 
 - F239-48-3-10: Darwin의 timeout 및 종료된 PID 동작과 Linux/Windows의 명시적

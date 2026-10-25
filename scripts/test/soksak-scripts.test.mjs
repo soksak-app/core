@@ -222,6 +222,26 @@ test("host structure audit permits only Tauri channel adapter tests in H15", { t
   ]);
 });
 
+test("host structure audit maps only the Go view-record test package paths in H16", { timeout: 1000 }, async () => {
+  const hostsSpec = await readFile(join(root, "docs/spec/hosts.md"), "utf8");
+  const tracked = [
+    "packages/host/wailsv3/src/host.go",
+    "packages/host/tauriv2/src/host.rs",
+    "packages/host/wailsv3/src/view_call_record_test.go",
+    "packages/host/wailsv3/src/view_error_test.go",
+    "packages/host/tauriv2/tests/view_call_record_test.rs",
+    "packages/host/tauriv2/tests/view_error_test.rs",
+  ];
+  const pairs = [{ left: "packages/host/wailsv3", right: "packages/host/tauriv2", rows: ["H16"] }];
+  assert.deepEqual(auditHostPairs(tracked, pairs, hostsSpec), []);
+  assert.deepEqual(auditHostPairs([
+    ...tracked,
+    "packages/host/wailsv3/src/unlisted_view_test.go",
+  ], pairs, hostsSpec), [
+    "packages/host/wailsv3/src/unlisted_view_test: no counterpart in packages/host/tauriv2",
+  ]);
+});
+
 test("command argument audit rejects a Tauri command argument that the framework decodes", { timeout: 1000 }, () => {
   const source = `
 #[tauri::command]
