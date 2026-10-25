@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets, readEvents } from "@soksak/window-check/event-log.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { fresh } from "./fixture.mjs";
 
@@ -20,7 +21,7 @@ function snapshot(directory, prefix = "") {
 for (const app of Object.values(APPS)) {
   test(`${app.name}: consecutive captures preserve finalized recordings`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
-    await fresh(s);
+    await fresh(s, { log: { lifecycle: "debug" }, reads: ["native.capture.lifecycle"] });
     const original = (await s.get("core.settings")).values.textSize;
     const completed = [];
     s.cleanup(async () => {
@@ -31,12 +32,26 @@ for (const app of Object.values(APPS)) {
       const started = performance.now();
       console.info(`running ${app.name}: capture lifecycle ${cycle + 1}`);
       assert.equal((await s.get("host.window")).active, false);
+      const offsets = currentEventOffsets(app.configDir);
       const recording = await s.record();
       const textSize = cycle % 2 === 0 ? (original === 1 ? 1.1 : 1) : original;
       await s.run("core.settings.set", { patch: { textSize }, scope: "common" });
       await s.until("core.text", (value) => value.frame === textSize, "text size did not reach the requested state");
       const { displayed } = await s.presented();
       const stopped = await recording.stop({ after: displayed });
+      await s.flushLog();
+      const lifecycle = readEvents(app.configDir, offsets).events
+        .filter(event => event.event === "native.capture.lifecycle").map(event => event.fields);
+      const requests = lifecycle.filter(fields => fields.phase === "start-request");
+      assert.equal(requests.length, 1, `capture attempt requests: ${JSON.stringify(lifecycle)}`);
+      const session = requests[0].session;
+      assert.equal(typeof session, "string");
+      assert.ok(session.length > 0, "capture attempt session is empty");
+      for (const phase of ["start-completion", "first-sample"])
+        assert.equal(lifecycle.filter(fields => fields.session === session && fields.phase === phase).length, 1,
+          `capture ${session} lacks one ${phase}: ${JSON.stringify(lifecycle)}`);
+      assert.equal(lifecycle.filter(fields => fields.phase === "failed").length, 0,
+        `capture lifecycle failed: ${JSON.stringify(lifecycle)}`);
       assert.equal(stopped.frames, recording.frames);
       const count = frames(recording.frames).length;
       assert.ok(count > 0, "the recording contains no frames");

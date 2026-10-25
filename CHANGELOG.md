@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-78: Enable lifecycle debug in the consecutive-capture check and require one correlated start request, start completion and first sample per recording, with no failed lifecycle event. Both macOS arm64 hosts pass three recordings each, the error audit and normal shutdown; the controlled native callback owner passes 1/1. Preserve the original intermittent startup-delay investigation as active.
+
 - F212.12-3-1: Reject growing right raster insets, measure every post-drag content edge and require convergence by the second captured frame. Run functional geometry and movement checks independently of timing targets; preserve cadence and latency values, invalid-data failures and executable benchmark limits. All 14 owning measurement cases and all six two-host window cases pass, including white-frame, document-fill, error-audit and shutdown checks. Close F212.12-3 and F212.7c for functional acceptance; retain measured performance failures under F212.14. Align the IME cadence wording with F239-175.
 
 - F239-172-1: Restore ten completed input/capture correction links and four renamed behavior-test references in the parity audit. Match the current sixteen-job admission and functional visual-proof contracts. The audit fails before correction and passes afterward with unchanged inventory counts; no additional application run is used as evidence for this metadata correction.
