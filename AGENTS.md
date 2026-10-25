@@ -61,6 +61,8 @@ This workspace contains the headless layout library `soksak`, the workbench fron
 
 ## Verification
 
+- Start long operations with a short yield and retain their live process or session handle. Do not block coordination with foreground waits or retry loops. Report the current step and inspect the same live handle before deciding whether an operation ended; a slow merge requires a process and error audit, not unattended waiting.
+
 - During the active five-group development phase, complete implementation in all five groups before running manual per-item acceptance, suites, or repeated builds. Tests and verification plans may be prepared while implementation proceeds, but run the integrated verification pass only once after all five groups are complete. Keep normal commit hooks enabled. Record implementation-ready separately from verification-complete; do not claim verification complete before the final pass. This phase rule takes precedence over per-item test execution requirements for these five groups.
 - An item is complete when a unit test at the owning module reproduced its defect or its missing behavior and failed (Red), the change made the same test pass (Green), and the specification, the checklist, the changelog, the memory of the agent and this guidance state the result. A behavior that no unit test can reach gets the declared interface that lets a unit test reach it. Command replies and inferred behavior are not results.
 - Run `make docs-check` for every change and review the documents against the code; structural checks do not verify meaning.
