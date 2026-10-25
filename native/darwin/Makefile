@@ -100,7 +100,7 @@ ifeq ($(DIAGNOSTIC),1)
 CFLAGS     += -DSOKSAK_DIAGNOSTIC
 endif
 
-.PHONY: all test test-capture-frame-identity test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
+.PHONY: all test test-capture-frame-identity test-capture-stop-intake test-activation test-view-focus-restore test-activation-backspace repeat-activation-backspace build-ime-activation-target test-ime-cli test-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost repeat repeat-suite clean pkgconfig-current
 
 all: $(LIBRARY) $(PKGCONFIG)
 
@@ -200,6 +200,8 @@ $(BUILD)/capture_lifecycle_test: tests/capture_test.m src/capture.m
 
 $(BUILD)/capture_callback_test: src/capture.m
 
+$(BUILD)/capture_stop_intake_test: src/capture.m
+
 $(BUILD)/capture_cleanup_test: src/capture.m
 
 $(BUILD)/capture_preparation_test: src/capture.m
@@ -297,6 +299,7 @@ NATIVE_TESTS = observe_test \
   capture_lifecycle_test \
   capture_cycles_test \
   capture_stop_late_test \
+  capture_stop_intake_test \
   capture_callback_test \
   capture_cleanup_test \
   capture_preparation_test \
@@ -325,6 +328,9 @@ test: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))
 
 test-capture-frame-identity: $(BUILD)/capture_frame_identity_test
 	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_frame_identity_test
+
+test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
+	@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) capture_stop_intake_test
 
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test

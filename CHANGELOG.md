@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+- F239-150: Seal ScreenCaptureKit sample intake on the sample-queue fence
+  after the stop-boundary wait and before waiting for start completion or
+  requesting stream stop. Preserve callbacks queued before the fence and
+  attribute later callbacks to their attempt without changing the recording.
+  The focused native owner passes 1/1; the unchanged stop order failed all
+  three intake assertions. Existing timeout, error, and artifact-drain behavior
+  is retained. The stop-timeout/late-completion isolation owner also passes
+  1/1 in 6.499 s.
+
 - F239-148: Append decoded frame identity rows in sample order on the existing serial identity lane. Retire each admitted job only after the JSONL append completes, independently of the shared raw/source artifact writer. Keep the eight-job and 64 MiB limits unchanged. Red: the matcher owner failed its blocked-writer row-commit assertion (`/tmp/F239-148-image-match-red.log`). Green: the same owner passed 1/1 in 0.873 s; it observed all eight ordered rows while the artifact writer remained blocked, then verified all eight rows drained after release (`/tmp/F239-148-image-match-green-final.log`). `make docs-check` passes (`/tmp/F239-148-docs-check-final.log`).
 
 - F239-149: Return the existing canonical `code-outside-expected-roi` helper reason when a detected QR crosses the expected ROI boundary. The matcher already maps it to `cropped`, while valid payloads absent from the issued set remain `unissued`. Red: `capture_frame_identity_test` reported the synonymous `cropped-code-in-expected-roi` at all four measured clipped edges (`/tmp/F239-149-capture-frame-identity-helper-red-01.log`). Green: the same owner passes 1/1 in 0.444 s (`/tmp/F239-149-capture-frame-identity-helper-green-01.log`).

@@ -1671,6 +1671,9 @@ int sp_capture_stop(double after) {
     dispatch_sync(captureQueue, ^{
         captureCaughtUp = NULL;
         captureStopAfter = 0;
+        // The boundary has been observed (or timed out). Seal intake at this sample-queue fence before
+        // waiting for start completion or asking ScreenCaptureKit to stop the stream.
+        closeCaptureSampleIntake(stream);
     });
     dispatch_release(caughtUp);
     // A stop request before the start finishes is rejected, so the stop happens after the start completes.
@@ -1692,9 +1695,6 @@ int sp_capture_stop(double after) {
     if (dispatch_semaphore_wait(stopped, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC)) != 0) {
         setCaptureError(@"capture stop did not complete within 5000ms");
     }
-    // Close sample intake on the sample queue after earlier callbacks finish. Later callbacks retain their
-    // attempt diagnostics but cannot reach the shared sink while artifacts are finalized.
-    dispatch_sync(captureQueue, ^{ closeCaptureSampleIntake(stream); });
     // Source manifest finalization closes source intake and drains the shared writer queue.
     finalizeCaptureArtifacts(captureSink);
     @synchronized([SPCapture class]) { captureStream = nil; }

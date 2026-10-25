@@ -4,6 +4,14 @@
 
 ## 미배포
 
+- F239-150: Stop-boundary wait 뒤, start completion 대기 또는 stream stop
+  요청 전에 sample queue fence에서 ScreenCaptureKit sample intake를 닫는다.
+  Fence 전에 queue에 들어온 callback은 처리하고 이후 callback은 원래 attempt에
+  귀속하되 recording은 변경하지 않는다. Focused native owner가 1/1 통과했고
+  변경 전 stop 순서는 intake assertion 세 개에서 실패했다. 기존 timeout, 오류,
+  artifact drain 동작은 유지한다. Stop timeout/late completion 격리 owner도
+  6.499초에 1/1 통과했다.
+
 - F239-148: Decoded frame identity row를 기존 serial identity lane에서 sample 순서대로 append한다. JSONL append가 끝난 뒤 admitted job을 해제해 공유 raw/source artifact writer와 독립적으로 처리한다. 8-job 및 64 MiB limit은 유지한다. Red: matcher owner는 blocked-writer row-commit assertion에서 실패했다(`/tmp/F239-148-image-match-red.log`). Green: 같은 owner가 0.873초에 1/1 통과했고 artifact writer가 멈춘 동안 순서가 맞는 row 8개를 확인한 뒤 writer 해제 후 8개 모두 drain됨을 검증했다(`/tmp/F239-148-image-match-green-final.log`). `make docs-check`도 통과했다(`/tmp/F239-148-docs-check-final.log`).
 
 - F239-149: Expected ROI 경계를 넘는 QR이 감지되면 기존 canonical helper reason `code-outside-expected-roi`를 반환한다. Matcher는 이미 이를 `cropped`로 매핑하며 issued set에 없는 valid payload는 계속 `unissued`다. Red: `capture_frame_identity_test`는 측정된 네 clipped edge에서 동의어 `cropped-code-in-expected-roi`를 보고했다(`/tmp/F239-149-capture-frame-identity-helper-red-01.log`). Green: 같은 owner가 0.444초에 1/1 통과한다(`/tmp/F239-149-capture-frame-identity-helper-green-01.log`).
