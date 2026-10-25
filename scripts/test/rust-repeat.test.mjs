@@ -11,6 +11,37 @@ import { cargoTargetArgs, runRustTests } from '../rust-tests.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 
+for (const stage of ['compiler', 'metadata']) {
+  test(`Rust owner CLI reports captured Cargo ${stage} failure output`, (t) => {
+    const { directory, targetLog } = targetCargo(t);
+    const detail = stage === 'compiler'
+      ? `${JSON.stringify({ reason: 'compiler-message', message: {
+        rendered: 'error[E0308]: mismatched fixture types\n --> fixture.rs:1:1\n',
+      } })}\n`
+      : 'fixture metadata error detail\n';
+    const artifact = `${JSON.stringify({ reason: 'compiler-artifact', profile: { test: true },
+      target: { name: 'fixture' }, executable: join(directory, 'library-test') })}\n`;
+    writeFileSync(join(directory, 'cargo'), `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if ((args.includes('--message-format=json') && ${stage === 'compiler'}) || args[0] === 'metadata') {
+  process.stdout.write(${JSON.stringify(detail)});
+  process.stderr.write('fixture Cargo failed\\n');
+  process.exit(101);
+}
+if (args.includes('--message-format=json')) process.stdout.write(${JSON.stringify(artifact)});
+`);
+    const result = spawnSync(process.execPath, ['scripts/rust-tests.mjs',
+      '--manifest', join(directory, 'Cargo.toml'), '--package', 'fixture', '--test-target', 'lib'], {
+      cwd: root, env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+      encoding: 'utf8', timeout: 10000,
+    });
+    assert.notEqual(result.status, 0, 'a failed discovery must fail the check');
+    assert.ok((result.stdout + result.stderr).includes(detail),
+      `captured Cargo diagnostic is missing: ${result.stdout}${result.stderr}`);
+    assert.equal(existsSync(targetLog), false, 'failed discovery must not start a test executable');
+  });
+}
+
 // The fake cargo builds nothing and reports one test executable of the package `fixture` in the JSON form of `--no-run`, and its
 // manifest in `cargo metadata`. The executable lists two tests (`--list`) and runs the test named by `--exact`. The test named
 // beta hangs for 8 seconds, so only a kill at its limit ends it sooner. The library of the package has one documentation test,

@@ -35,7 +35,15 @@ export function testExecutables(messages) {
 }
 
 function cargo(args, { cwd } = {}) {
-  return execFileSync('cargo', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+  try {
+    return execFileSync('cargo', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+  } catch (error) {
+    if (typeof error.stdout === 'string' && error.stdout.length > 0) {
+      process.stderr.write(error.stdout);
+      if (!error.stdout.endsWith('\n')) process.stderr.write('\n');
+    }
+    throw error;
+  }
 }
 
 /** The Cargo selector for an explicitly requested test target. */

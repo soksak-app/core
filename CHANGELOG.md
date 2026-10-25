@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-169: Report captured Cargo stdout when Rust owner compilation or metadata discovery fails. Both missing-diagnostic Red cases pass after preserving compiler JSON and plain metadata detail while retaining failure and starting no tests. All 14 runner owners pass with selection, features, doctests, deployment settings and timeouts unchanged.
+
 - F212.12-3: Correlate 104 exact supplier image waits with host receipt and answer records using the local diagnostic candidate. Most measured delay precedes the host receipt trace; the internal supplier/transport/host-entry split remains unresolved. Both application log audits pass, while both recordings still exceed the unchanged 33 ms capture bound.
 
 - F239-81: Verify capture stream isolation on both diagnostic hosts with three consecutive inactive recordings each. Finalized frame counts match files, and later recordings leave earlier artifacts byte-identical. All four native callback, metadata, cleanup and late-stop owners pass; both-host error-log audit passes. Capture cadence and drag latency remain separate open items.
