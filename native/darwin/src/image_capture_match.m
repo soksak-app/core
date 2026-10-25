@@ -1286,7 +1286,6 @@ void sp_image_capture_match_identity_session_end(void) {
 }
 
 bool sp_image_capture_match_identity_session_active(void) {
-    initializeHistory();
     return atomic_load(&identitySessionEnabled) && atomic_load(&historyEnabled);
 }
 

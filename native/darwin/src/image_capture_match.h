@@ -89,7 +89,7 @@ bool sp_image_capture_match_identity_copy_payloads(const uint8_t region_token[16
     char **error);
 // Clears the secure capture nonce, region derivations, and every issued payload.
 void sp_image_capture_match_identity_session_end(void);
-// Returns whether identity issuance is available. A failed identity session is not active for presentation tagging.
+// Atomically checks whether identity issuance is available without initializing history; failed sessions cannot tag.
 bool sp_image_capture_match_identity_session_active(void);
 // Records the first tag construction or queue-admission failure for this session. Repeated failures keep the first reason.
 bool sp_image_capture_match_identity_session_fail(const char *reason, char **error);

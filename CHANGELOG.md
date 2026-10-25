@@ -81,8 +81,9 @@
   Green: `capture_frame_identity_capture_test` passes 1/1 in 0.542 s; focused
   Wails stop/recording tests pass 2/2 and Tauri exact recording tests pass 2/2.
   Vision API errors and artifact writes fail capture finalization. Unknown
-  identities are never inferred from time or sequence. This evidence does not
-  establish physical scanout or terminal IME acceptance.
+  identities are never inferred from time or sequence. The default-off session
+  probe uses atomic state and does not initialize matcher history. This evidence
+  does not establish physical scanout or terminal IME acceptance.
 
 - F239-48-3-13: Align the current structural inventory with the three added private-file owner tests: 101 lanes, 703 implementation files, and 1007 test files. Match the translated host-audit record to the integrated H17 result with no unmatched paths.
 

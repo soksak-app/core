@@ -3,6 +3,14 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+
+- F239-47-40-4-2-1-2: 현재 `SCStream`이 없는 identity startup 실패 뒤 live
+  image-region layer를 복원한다. Queued cleanup은 stream이 current이거나 stream과
+  identity session이 모두 없을 때 복원하고 새 pre-stream session의 tag는 보존한다.
+  Red: `capture_test`는 startup cleanup이 nil stream에서 반환해 두 layer를 tagged
+  상태로 남기면서 실패했다. Green: `capture_test`, `image_region_test`,
+  `capture_cleanup_test`가 각각 1/1 통과하고 replacement pre-stream session 보존을
+  확인한다.
 - F239-47-40-4-2-1-1: 현재 failure를 보고한 정확한 `SCStream`에 queued capture-error
   복원을 fence하고 다음 tagged presentation 전에 해당 identity session을 실패 처리한다.
   Main-thread callback 동안 stream을 retain해 pointer 재사용이 이전 cleanup을 새 녹화에
@@ -66,8 +74,9 @@
   실패했다(11개). Green: `capture_frame_identity_capture_test` 0.542초 1/1,
   Wails stop/recording focused test 2/2, Tauri exact recording test 2/2 통과.
   Vision API 오류와 artifact 기록 실패는 capture finalization을 실패시킨다.
-  시간이나 sequence로 unknown identity를 추정하지 않는다. 이 결과는 물리적
-  scanout이나 terminal IME acceptance를 입증하지 않는다.
+  시간이나 sequence로 unknown identity를 추정하지 않는다. Default-off session
+  확인은 atomic state만 읽고 matcher history를 초기화하지 않는다. 이 결과는
+  물리적 scanout이나 terminal IME acceptance를 입증하지 않는다.
 
 - F239-48-3-13: 추가한 private-file owner test 세 개를 현재 구조 목록에 반영해 lane 101개, 구현 파일 703개, 테스트 파일 1007개로 맞춘다. 번역의 host-audit 기록을 H17 통합 뒤 unmatched 경로가 없는 결과와 맞춘다.
 
