@@ -18,6 +18,16 @@
   1건이 포함된다. Darwin owner test는 통과한다. macOS에서는 Linux test 파일이
   build constraint에 제외되므로 Linux package test는 실행하지 않았다.
 
+- F239-101: 설정된 platform 및 build-tag 실행별로 `go list`를 사용해 Wails
+  host-contract declaration inventory를 만든다. 현재 platform이 선택한 Go
+  internal/external test file을 포함하고 실패하거나 비어 있는 package
+  inventory를 거부하며 각 listing에 제한 시간을 둔다. Red: owner fixture가
+  recursive package 누락, 쉼표가 든 filename 분할, 빈 package 성공 및 무제한
+  listing을 확인했다. Green: owner suite가 21/21 통과하고 macOS Darwin 선택,
+  Windows/Linux 전용 source 제외, diagnostics/dev tag 선택을 확인한다. 최종
+  static audit에는 F239-93에서 추적하는 declaration 불일치 121건이 남았고
+  F85 신규 finding은 없다. Full host-contract suite는 실행하지 않았다.
+
 - F239-98: IME consumer를 opt-in frame identity에 연결한다.
   Recording은 capture setup 전에 cursor와 일치하는 renderer metadata 및 glyph list를
   요구하고 `frameIdentity:true`를 요청하며 완전한 decoder manifest와 발급된

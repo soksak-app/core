@@ -22,6 +22,17 @@
   test passes. The Linux package test was not run on macOS because its build
   constraints exclude all files.
 
+- F239-101: Derive the Wails host-contract declaration inventory with `go list`
+  for each configured platform and build-tag run. Include internal and external
+  Go test files selected for the current platform, reject failed or empty
+  package inventories, and bound each listing operation. Red: owner fixtures
+  exposed omitted recursive packages, comma-split filenames, empty package
+  success, and an unbounded listing. Green: the owner suite passes 21/21 and
+  confirms Darwin selection, Windows/Linux exclusion on macOS, and diagnostics
+  and dev tag selection. The final static audit reports 121 declaration
+  mismatches still tracked under F239-93 and no new F85 findings; the full
+  host-contract suite was not run.
+
 - F239-98: Connect the IME consumer to opt-in frame identities. The recording
   requires exact cursor-frame renderer metadata and a glyph list before
   capture setup, requests `frameIdentity:true`, validates the complete decoder

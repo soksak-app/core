@@ -19,7 +19,7 @@ func TestEndpointClosesOnInvalidJSON(t *testing.T) {
 fn invalid_json_closes_connection() {
 ```
 
-테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로의 모든 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
+테스트 함수 하나는 쉼표로 나눈 여러 사례를 선언할 수 있다. 여덟 개 선언 경로에서 선택된 테스트 함수는 사례를 하나 이상 선언한다: `packages/host/wailsv3/tests/`, `packages/host/wailsv3/src/*_test.go`, `packages/sok/wailsv3/tests/`, `packages/sok/wailsv3/src/*_test.go`, `packages/host/tauriv2/tests/`, `packages/host/tauriv2/src/`, `packages/sok/tauriv2/tests/`, `packages/sok/tauriv2/src/`. 테스트는 단언이 사례의 결과를 확인할 때만 그 사례를 선언한다. Go 선언 inventory는 현재 `GOOS`와 `GOARCH`에서 host-contract의 각 설정에 대해 `go list`가 선택한 `_test.go` 파일의 합집합이다. 모든 설정에서 제외된 파일은 이 platform의 host-contract inventory에 포함하지 않는다. 공유 계약 텍스트는 어느 패키지도 소유하지 않는 `docs/spec/cases`에 있다(manifest 사례표와 log-contract fixture). 테스트는 거기서 읽고, `make boundaries`는 핵심 패키지의 테스트가 다른 핵심 패키지의 경로를 읽는 것을 거부한다.
 
 ## 검사
 

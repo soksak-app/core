@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { auditDeclarations, auditHostContract, parseContractCases, groupResults, parseDeclarations, uncoveredCases } from '../check-host-contract.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, groupResults, goTestSourceFilesForRun, parseDeclarations, uncoveredCases } from '../check-host-contract.mjs';
 
 const SPEC = `# Hosts
 
@@ -208,4 +211,101 @@ test('the static audit reports each case of a host scope that no test declares',
   const missing = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
   const partial = auditDeclarations(cases, [staticHost('wailsv3', 'go', parseDeclarations('package tests\n', 'go', 'w_test.go')), staticHost('tauriv2', 'rust', missing)]);
   assert.deepEqual(uncoveredCases(cases, partial.declared), ['wailsv3 declares no test for contract case area.shared', 'wailsv3 declares no test for contract case area.wails-only']);
+});
+
+
+test('the macOS static inventory excludes Windows-only Go tests', () => {
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const files = goTestSourceFilesForRun({
+    cwd: root,
+    patterns: ['./packages/sok/wailsv3/...'],
+    id: 'macOS Wails sok source inventory',
+  });
+  assert.ok(files.includes('packages/sok/wailsv3/tests/platform/darwin/private_files_test.go'));
+  assert.ok(!files.includes('packages/sok/wailsv3/tests/platform/linux/process_wait_test.go'));
+  assert.ok(!files.includes('packages/sok/wailsv3/tests/platform/windows/private_files_test.go'));
+  assert.ok(!files.includes('packages/sok/wailsv3/tests/platform/windows/process_wait_test.go'));
+});
+
+test('Go test source inventory follows target and tag selection and reports list errors', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'host-contract-go-inventory-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'go.mod'), 'module fixture.local/contract\n\ngo 1.23.0\n');
+  writeFileSync(join(root, 'fixture.go'), 'package fixture\n');
+  writeFileSync(join(root, 'external_test.go'), 'package fixture_test\nimport ("testing"; fixture "fixture.local/contract")\nfunc TestExternal(t *testing.T) { _ = fixture.Exported }\n');
+  writeFileSync(join(root, 'fixture.go'), 'package fixture\n\nconst Exported = true\n');
+  const files = {
+    common_test: 'package fixture\nimport "testing"\nfunc TestCommon(t *testing.T) {}\n',
+    darwin_test: '//go:build darwin\n\npackage fixture\nimport "testing"\nfunc TestDarwin(t *testing.T) {}\n',
+    linux_test: '//go:build linux\n\npackage fixture\nimport "testing"\nfunc TestLinux(t *testing.T) {}\n',
+    windows_test: '//go:build windows\n\npackage fixture\nimport "testing"\nfunc TestWindows(t *testing.T) {}\n',
+    diagnostics_test: '//go:build diagnostics\n\npackage fixture\nimport "testing"\nfunc TestDiagnostics(t *testing.T) {}\n',
+    dev_test: '//go:build dev\n\npackage fixture\nimport "testing"\nfunc TestDev(t *testing.T) {}\n',
+  };
+  for (const [name, contents] of Object.entries(files)) writeFileSync(join(root, `${name}.go`), contents);
+  const list = (goos, tags, patterns = ['./...']) => goTestSourceFilesForRun({
+    cwd: root,
+    patterns,
+    tags,
+    id: `fixture-${goos}-${tags || 'default'}`,
+    env: { ...process.env, GOOS: goos, GOARCH: 'amd64', GO111MODULE: 'on', GOWORK: 'off' },
+  });
+  const common = ['common_test.go', 'external_test.go'];
+  assert.deepEqual(list('darwin'), ['common_test.go', 'darwin_test.go', 'external_test.go']);
+  assert.deepEqual(list('windows'), ['common_test.go', 'external_test.go', 'windows_test.go']);
+  assert.deepEqual(list('linux'), ['common_test.go', 'external_test.go', 'linux_test.go']);
+  assert.deepEqual(list('darwin', 'diagnostics'), ['common_test.go', 'darwin_test.go', 'diagnostics_test.go', 'external_test.go']);
+  assert.deepEqual(list('windows', 'diagnostics dev'), ['common_test.go', 'dev_test.go', 'diagnostics_test.go', 'external_test.go', 'windows_test.go']);
+  assert.throws(() => list('darwin', undefined, ['./missing-package']), /go list test-source inventory failed.*fixture-darwin-default/);
+});
+
+test('Go recursive inventory includes nested packages and preserves commas in test filenames', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'host-contract-go-recursive-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'go.mod'), 'module fixture.local/recursive\n\ngo 1.23.0\n');
+  writeFileSync(join(root, 'fixture.go'), 'package fixture\n');
+  writeFileSync(join(root, 'common_test.go'), 'package fixture\nimport "testing"\nfunc TestCommon(t *testing.T) {}\n');
+  writeFileSync(join(root, 'comma,name_test.go'), 'package fixture\nimport "testing"\nfunc TestComma(t *testing.T) {}\n');
+  mkdirSync(join(root, 'child'));
+  writeFileSync(join(root, 'child', 'child.go'), 'package child\n');
+  writeFileSync(join(root, 'child', 'child_test.go'), 'package child\nimport "testing"\nfunc TestChild(t *testing.T) {}\n');
+  const files = goTestSourceFilesForRun({
+    cwd: root,
+    patterns: ['./...'],
+    env: { ...process.env, GOOS: 'darwin', GOARCH: 'arm64', GO111MODULE: 'on', GOWORK: 'off' },
+  });
+  assert.deepEqual(files, ['child/child_test.go', 'comma,name_test.go', 'common_test.go']);
+});
+
+test('Go source inventory rejects a successful list command with no packages', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'host-contract-go-empty-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'go.mod'), 'module fixture.local/empty\n\ngo 1.23.0\n');
+  mkdirSync(join(root, 'testdata'));
+  writeFileSync(join(root, 'testdata', 'ignored.go'), 'package ignored\n');
+  assert.throws(() => goTestSourceFilesForRun({
+    cwd: root,
+    patterns: ['./...'],
+    env: { ...process.env, GOOS: 'darwin', GOARCH: 'arm64', GO111MODULE: 'on', GOWORK: 'off' },
+  }), /go list test-source inventory failed.*found no packages/);
+});
+
+test('Go source inventory reports and bounds a stuck go list process', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'host-contract-go-timeout-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  const fakeGo = join(bin, 'go');
+  writeFileSync(fakeGo, '#!/bin/sh\nexec /bin/sleep 1\n');
+  chmodSync(fakeGo, 0o755);
+  const output = [];
+  assert.throws(() => goTestSourceFilesForRun({
+    cwd: root,
+    patterns: ['./...'],
+    timeoutMs: 25,
+    write: (line) => output.push(line),
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOOS: 'darwin', GOARCH: 'arm64' },
+  }), /go list test-source inventory failed.*timed out/);
+  assert.match(output[0], /^RUN  go list test-source inventory/);
+  assert.match(output[1], /^FAIL go list test-source inventory.*after \d+\.\d+s:/);
 });

@@ -4,7 +4,8 @@
 // `// contract: <id>[, <id>]` right above it. The check actually runs the tests of both hosts in the default configuration and the diagnostics
 // configuration and judges from the results whether the declared tests ran and passed. It does not use file names or counts.
 import { parseArgs } from 'node:util';
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, posix, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -54,6 +55,7 @@ const ALLOWED_ATTRIBUTES = [
   /^#\[cfg\(not\(feature\s*=\s*"[^"]+"\)\)\]$/,
 ];
 const TEST_ATTRIBUTE = /^#\[(?:tokio::)?test\b/;
+const GO_LIST_TIMEOUT_MS = 120_000;
 
 /** The directory of a file of the repository, as the owner of its declarations (`.` for the root). */
 export function ownerOfFile(file) {
@@ -254,8 +256,106 @@ function sources(directory, extension) {
   return result.sort();
 }
 
+/** Parses the concatenated top-level JSON records emitted by `go list -json`. */
+function goListJsonRecords(output, id) {
+  const starts = [...output.matchAll(/^\{/gm)].map((match) => match.index);
+  const records = [];
+  if (starts.length > 0 && output.slice(0, starts[0]).trim()) {
+    throw new Error(`go list returned malformed JSON for ${id}: unexpected data before the first package`);
+  }
+  for (let index = 0; index < starts.length; index += 1) {
+    const text = output.slice(starts[index], starts[index + 1]).trim();
+    try {
+      records.push(JSON.parse(text));
+    } catch (error) {
+      throw new Error(`go list returned malformed JSON for ${id}: ${error.message}`);
+    }
+  }
+  if (records.length === 0 && output.trim()) throw new Error(`go list returned malformed JSON for ${id}: no package records`);
+  return records;
+}
+
+/** The Go test sources selected by one host-contract run configuration on the current target. */
+export function goTestSourceFilesForRun({ cwd, patterns, tags, env = process.env, id = 'Go host-contract run', timeoutMs = GO_LIST_TIMEOUT_MS, write = (line) => process.stdout.write(`${line}\n`) }) {
+  const args = ['list', '-test', '-json'];
+  if (tags) args.push('-tags', tags);
+  args.push(...patterns);
+  const started = process.hrtime.bigint();
+  const target = `${env.GOOS ?? 'current GOOS'}/${env.GOARCH ?? 'current GOARCH'}`;
+  const config = tags || 'default';
+  write(`RUN  go list test-source inventory ${id} (${target}, tags ${config}; limit ${timeoutMs / 1000}s)`);
+  const elapsed = () => (Number(process.hrtime.bigint() - started) / 1e9).toFixed(3);
+  const fail = (message) => {
+    const detail = `go list test-source inventory failed for ${id} (${target}, tags ${config}) after ${elapsed()}s: ${message}`;
+    write(`FAIL ${detail}`);
+    throw new Error(detail);
+  };
+  const result = spawnSync('go', args, {
+    cwd,
+    env,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: timeoutMs,
+  });
+  if (result.error?.code === 'ETIMEDOUT') fail(`timed out after ${timeoutMs / 1000}s`);
+  if (result.error || result.status !== 0) {
+    fail(result.error?.message || result.stderr?.trim() || `exit status ${result.status}`);
+  }
+
+  let packages;
+  try {
+    packages = goListJsonRecords(result.stdout, id);
+  } catch (error) {
+    fail(error.message);
+  }
+  if (packages.length === 0) fail('found no packages');
+  const canonicalCwd = realpathSync(cwd);
+  const roots = patterns.map((pattern) => {
+    const recursive = pattern.endsWith('/...');
+    const directory = pattern === './...' ? '.' : pattern.replace(/^\.\//, '').replace(/\/\.\.\.$/, '');
+    return { directory, recursive };
+  });
+  const files = new Set();
+  for (const item of packages) {
+    if (typeof item.Dir !== 'string' || !Array.isArray(item.TestGoFiles ?? []) || !Array.isArray(item.XTestGoFiles ?? [])) {
+      fail(`returned a malformed package record: ${JSON.stringify(item)}`);
+    }
+    const directory = relative(canonicalCwd, item.Dir).split('\\').join('/') || '.';
+    if (directory === '..' || directory.startsWith('../') || directory.startsWith('/')) {
+      fail(`returned package directory outside ${canonicalCwd}: ${item.Dir}`);
+    }
+    const inPattern = roots.some(({ directory: root, recursive }) => directory === root
+      || (recursive && (root === '.' || directory.startsWith(`${root}/`))));
+    if (!inPattern) continue;
+    const fileNames = [...(item.TestGoFiles ?? []), ...(item.XTestGoFiles ?? [])];
+    if (fileNames.some((fileName) => typeof fileName !== 'string')) {
+      fail(`returned a non-string test filename for ${item.Dir}`);
+    }
+    for (const fileName of fileNames) {
+      files.add(directory === '.' ? fileName : `${directory}/${fileName}`);
+    }
+  }
+  if (files.size === 0) fail('selected no test source files');
+  write(`PASS go list test-source inventory ${id}: ${files.size} files in ${elapsed()}s`);
+  return [...files].sort();
+}
+
+/** The union of Go contract declarations selected by every runtime configuration. */
+function goTestSourceInventory(runs) {
+  const files = new Set();
+  const errors = [];
+  for (const run of runs) {
+    try {
+      for (const file of goTestSourceFilesForRun({ cwd: ROOT, ...run })) files.add(file);
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
+  return { files: [...files].sort(), errors };
+}
+
 const HOST_SOURCES = {
-  wailsv3: { language: 'go', files: () => [...sources('packages/host/wailsv3/tests', '_test.go'), ...sources('packages/host/wailsv3/src', '_test.go'), ...sources('packages/sok/wailsv3/tests', '_test.go'), ...sources('packages/sok/wailsv3/src', '_test.go')] },
+  wailsv3: { language: 'go', files: () => goTestSourceInventory(GO_RUNS('')) },
   tauriv2: { language: 'rust', files: () => [...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'), ...sources('packages/sok/tauriv2/tests', '.rs'), ...sources('packages/sok/tauriv2/src', '.rs')] },
 };
 
@@ -280,10 +380,12 @@ const RUST_RUNS = [
 
 /** The declarations of the test sources of one host, read without running them. */
 function parseHostSources(name) {
-  const { language, files } = HOST_SOURCES[name];
+  const { language, files: sourceInventory } = HOST_SOURCES[name];
   const tests = [];
-  const errors = [];
-  for (const file of files()) {
+  const inventory = sourceInventory();
+  const files = Array.isArray(inventory) ? inventory : inventory.files;
+  const errors = Array.isArray(inventory) ? [] : [...inventory.errors];
+  for (const file of files) {
     const parsed = parseDeclarations(readFileSync(join(ROOT, file), 'utf8'), language, file, language === 'rust' ? crateOwnerOf(file) : ownerOfFile(file));
     tests.push(...parsed.tests);
     errors.push(...parsed.errors);
