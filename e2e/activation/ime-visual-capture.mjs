@@ -360,20 +360,22 @@ export function capturesByInputStage(frameCallbacks, decodedFrames, stages) {
   return grouped;
 }
 
-/** Persists every visual result before rejecting incomplete proof so the caller retains failure evidence. */
-export function persistThenRequireVisualProof(measurements, record, persist, label = "rendered", cadence = null) {
+/** Requires cadence evidence, persists visual results, then rejects incomplete proof or cadence. */
+export function persistThenRequireVisualProof(measurements, record, persist, label = "rendered") {
+  const cadence = record?.cadence;
+  assert.ok(cadence && typeof cadence === "object" && !Array.isArray(cadence),
+    `${label}: cadence evidence is required`);
+  assert.ok(Number.isFinite(cadence.longestFrameGap) && cadence.longestFrameGap >= 0 &&
+    Array.isArray(cadence.frameGaps) && cadence.frameGaps.length > 0,
+  `${label}: capture cadence evidence is invalid`);
   persist(record);
   const failures = [];
   if (!measurements.every((result) => result.result === "measured")) {
     failures.push(new Error(`${label}: rendered glyph/underline proof is incomplete: ${JSON.stringify(measurements)}`));
   }
-  if (cadence !== null) {
-    assert.ok(Number.isFinite(cadence.longestFrameGap) && cadence.longestFrameGap >= 0,
-      `${label}: longest capture frame gap is invalid`);
-    if (cadence.longestFrameGap > MAXIMUM_IME_FRAME_GAP_MS) {
-      failures.push(new Error(`${label}: capture has a ${cadence.longestFrameGap}ms frame gap; ` +
-        `maximum is ${MAXIMUM_IME_FRAME_GAP_MS}ms`));
-    }
+  if (cadence.longestFrameGap > MAXIMUM_IME_FRAME_GAP_MS) {
+    failures.push(new Error(`${label}: capture has a ${cadence.longestFrameGap}ms frame gap; ` +
+      `maximum is ${MAXIMUM_IME_FRAME_GAP_MS}ms`));
   }
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) throw new AggregateError(failures,

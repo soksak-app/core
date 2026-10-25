@@ -42,6 +42,14 @@
   (`/tmp/F239-98-1-cadence-green-02.log`). The 33 ms bound is unchanged.
   Two-host visual acceptance remains pending under F239-98.
 
+- F239-98-1-1: Require cadence evidence in the persisted visual record. The
+  helper previously defaulted omitted cadence to `null`, bypassing the 33 ms
+  gate. Red: the owner test observed no rejection when cadence was omitted
+  (`/tmp/F239-98-1-1-missing-cadence-red-01.log`). Green: the same test confirms
+  missing-evidence rejection, acceptance at 33 ms, persistence before an
+  over-limit failure and combined visual/cadence reporting; the helper passes
+  18/18 (`/tmp/F239-98-1-1-cadence-green-01.log`).
+
 
 
 - F239-90: Answer a transfer image after its window owner is retired. The

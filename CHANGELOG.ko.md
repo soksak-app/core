@@ -37,6 +37,13 @@
   검증하며 helper가 18/18 통과한다(`/tmp/F239-98-1-cadence-green-02.log`).
   33 ms 기준은 바뀌지 않았다. 두 host visual acceptance는 F239-98에서 계속 추적한다.
 
+- F239-98-1-1: 저장하는 visual record에 cadence evidence를 필수로 포함한다.
+  기존 helper는 생략된 cadence를 `null`로 처리해 33 ms gate를 우회할 수 있었다.
+  Red: cadence 없이 helper를 호출해도 거부하지 않았다
+  (`/tmp/F239-98-1-1-missing-cadence-red-01.log`). Green: 같은 test가 누락 거부,
+  33 ms 경계 통과, 제한 초과 전 record 저장, visual/cadence 동시 실패 보고를 확인하며
+  helper 18/18이 통과한다(`/tmp/F239-98-1-1-cadence-green-01.log`).
+
 
 
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar

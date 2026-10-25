@@ -989,8 +989,7 @@ for (const app of Object.values(APPS)) {
       visualMeasurements,
     };
     persistThenRequireVisualProof(visualMeasurements, visualRecord,
-      (record) => persist("visual-measurements.json", record), app.name,
-      { longestFrameGap, frameGaps });
+      (record) => persist("visual-measurements.json", record), app.name);
     assert.equal(visualStages.length, 10, `${app.name}: visual calculator omitted an input stage`);
     persist("recording.json", { ...recording, frames: preservedCaptureDir, sourceFrames: capture.frames,
       frameFiles: framePaths.map((path) => basename(path)), frameGaps, longestFrameGap, frameCount: decoded.length,

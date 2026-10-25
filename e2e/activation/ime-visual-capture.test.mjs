@@ -442,19 +442,27 @@ testWithTimeout("error and no-proof measurements are persisted before the caller
     { key: "missing-candidate", result: "no-proof", reason: "no-capture-roi-candidate" },
     { key: "malformed-render", result: "error", errors: [{ error: "renderer frame differs" }] },
   ];
-  assert.throws(() => persistThenRequireVisualProof(measurements, { visualMeasurements: measurements },
+  const cadence = { longestFrameGap: 16, maximumFrameGap: 33,
+    frameGaps: [{ from: "frame-0001.bgra", to: "frame-0002.bgra", milliseconds: 16 }] };
+  assert.throws(() => persistThenRequireVisualProof(measurements, { visualMeasurements: measurements, cadence },
     (record) => written.push(record)), /rendered glyph\/underline proof is incomplete/);
-  assert.deepEqual(written, [{ visualMeasurements: measurements }]);
+  assert.deepEqual(written, [{ visualMeasurements: measurements, cadence }]);
 });
 
 testWithTimeout("visual results are persisted before cadence failure and both failures are reported", () => {
+  let missingCadencePersisted = false;
+  assert.throws(() => persistThenRequireVisualProof([{ key: "k-1", result: "measured" }],
+    { visualMeasurements: [{ key: "k-1", result: "measured" }] },
+    () => { missingCadencePersisted = true; }, "Tauri"), /cadence evidence is required/);
+  assert.equal(missingCadencePersisted, false);
+
   const atLimit = { longestFrameGap: 33, maximumFrameGap: 33,
     frameGaps: [{ from: "frame-0001.bgra", to: "frame-0002.bgra", milliseconds: 33 }] };
   const completeMeasurements = [{ key: "k-1", result: "measured" }];
   const atLimitPersisted = [];
   assert.doesNotThrow(() => persistThenRequireVisualProof(completeMeasurements,
     { visualMeasurements: completeMeasurements, cadence: atLimit },
-    (record) => atLimitPersisted.push(record), "Tauri", atLimit));
+    (record) => atLimitPersisted.push(record), "Tauri"));
   assert.deepEqual(atLimitPersisted, [{ visualMeasurements: completeMeasurements, cadence: atLimit }]);
 
   const cadence = { longestFrameGap: 34, maximumFrameGap: 33,
@@ -462,14 +470,14 @@ testWithTimeout("visual results are persisted before cadence failure and both fa
   const visualMeasurements = [{ key: "k-1", result: "measured" }];
   const persisted = [];
   assert.throws(() => persistThenRequireVisualProof(visualMeasurements,
-    { visualMeasurements, cadence }, (record) => persisted.push(record), "Tauri", cadence),
+    { visualMeasurements, cadence }, (record) => persisted.push(record), "Tauri"),
   /34ms frame gap/);
   assert.deepEqual(persisted, [{ visualMeasurements, cadence }]);
 
   const failedMeasurements = [{ key: "k-1", result: "no-proof", reason: "no-capture-roi-candidate" }];
   const failuresPersisted = [];
   assert.throws(() => persistThenRequireVisualProof(failedMeasurements,
-    { visualMeasurements: failedMeasurements, cadence }, (record) => failuresPersisted.push(record), "Tauri", cadence),
+    { visualMeasurements: failedMeasurements, cadence }, (record) => failuresPersisted.push(record), "Tauri"),
   (error) => error instanceof AggregateError && error.errors.length === 2 &&
     error.errors.some((failure) => /proof is incomplete/.test(failure.message)) &&
     error.errors.some((failure) => /34ms frame gap/.test(failure.message)));
