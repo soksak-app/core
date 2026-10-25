@@ -355,16 +355,32 @@ void sp_input_pointer_then(void *handle, double x, double y, int phase, int butt
     // handling of WebKit, so the click that a release creates is also processed before the next request.
     __block sp_input_result result = SP_INPUT_REJECTED;
     __block SPHeld held = {0, nil, "the press or release was not sent"};
-    webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
-        result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
-        return result == SP_INPUT_DELIVERED;
-    }, ^(BOOL received) {
-        sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
-            result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
-        logPointer(x, y, phase, button, deltaX, deltaY, final,
-            final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why);
-        heldDone(done, context, final, held);
-    });
+    double originX = 0, originY = 0;
+    BOOL hasPressContext = NO;
+    if (phase == 1) {
+        NSPoint pressPoint = windowPoint(window, x, y);
+        originX = pressPoint.x;
+        originY = pressPoint.y;
+        hasPressContext = YES;
+    } else if (phase == 3) {
+        hasPressContext = sp_input_press_origin_point(window, button, &originX, &originY, NULL);
+    }
+    sp_input_press_context pressContext = {0};
+    if (hasPressContext) sp_input_press_context_push(&pressContext, window, originX, originY);
+    @try {
+        webviewInputSendThen(target, phase == 3 ? @"pointerup" : @"pointerdown", timeoutSeconds, ^BOOL {
+            result = pointerInput(handle, x, y, phase, button, deltaX, deltaY, &held);
+            return result == SP_INPUT_DELIVERED;
+        }, ^(BOOL received) {
+            sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
+                result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
+            logPointer(x, y, phase, button, deltaX, deltaY, final,
+                final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release within the limit" : held.why);
+            heldDone(done, context, final, held);
+        });
+    } @finally {
+        if (hasPressContext) sp_input_press_context_pop(&pressContext);
+    }
 }
 
 static void collectVisibleWebViews(NSView *view, NSMutableArray<WKWebView *> *found, BOOL ancestorVisible) {

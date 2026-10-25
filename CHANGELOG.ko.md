@@ -67,6 +67,15 @@
   전역 `sp_log_error` 호출 수를 세지 않아 성공 receipt 경로만 검증한다. Log에 baseline
   process identity가 없어 이전 app 복원도 입증하지 않는다. 이는 제어된 AppKit event
   검사이며 live HID acceptance가 아니다.
+- F239-97: Receipt-backed pointer input에서 click-through focus를 유지한다.
+  Logical surface에서 실제 host webview를 찾아 page release receipt를 기다린다.
+  Pointer press와 release의 동기 responder preflight 동안 hit point 또는 저장된
+  press origin을 context로 전달한 뒤 비동기 receipt 처리 전에 복원한다. Red:
+  등록된 logical surface에서 page focus callback 뒤 phase-three preflight 중 focus를
+  잃었고, 반복 phase-one click도 callback 전에 focus false를 발생시켰다. Green:
+  `image_region_test --activation`이 macOS 26.6.2 (25G83), arm64에서 233개
+  assertion을 통과했다. 실행은 원래 frontmost process를 복원하고 확인했다. 이
+  native owner 검사는 host runtime acceptance를 입증하지 않는다.
 
 
 - F239-91: macOS IME document helper가 현재 순서가 있는 native input

@@ -74,6 +74,16 @@
   press-origin state is retired. The fixture does not count global
   `sp_log_error` calls, so it verifies the successful receipt path only. Its log
   omits baseline process identity and does not establish prior-app restoration.
+- F239-97: Preserve click-through focus in receipt-backed pointer input.
+  Resolve a logical surface to its actual host webview before waiting for the
+  page release receipt. Scope the hit point or stored press origin around the
+  synchronous responder preflight for pointer press and release, then restore
+  the context before asynchronous receipt handling. Red: a registered logical
+  surface lost focus during phase-three preflight after its page focus callback;
+  a repeated phase-one click also pulsed focus false before the callback. Green:
+  `image_region_test --activation` passes 233 assertions on macOS 26.6.2
+  (25G83), arm64. The run restores and verifies the original frontmost process.
+  This native owner check does not establish host runtime acceptance.
   This is controlled AppKit event coverage, not live HID acceptance.
 
 

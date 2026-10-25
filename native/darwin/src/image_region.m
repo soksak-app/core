@@ -276,10 +276,16 @@ static void spEnsurePressOriginMonitor(void) {
                 if (!sp_input_press_origin_point(window, button, &x, &y, &token)) return event;
                 SPImageRegion *region = spRegionAtWindowPoint(window, NSMakePoint(x, y));
                 if (region && region.webSurface) {
-                    webviewInputReceiveThenDrain((WKWebView *)region.webSurface, @"pointerup", 1.0, ^(BOOL received) {
-                        if (!received) sp_log_error("image region", "the paired pointer release was not received before press-origin cleanup");
+                    WKWebView *webView = surfaceWebView(region.webSurface);
+                    if (!webView) {
+                        sp_log_error("image region", "the press-origin surface has no page webview for release receipt");
                         sp_input_press_origin_clear(window, button, token);
-                    });
+                    } else {
+                        webviewInputReceiveThenDrain(webView, @"pointerup", 1.0, ^(BOOL received) {
+                            if (!received) sp_log_error("image region", "the paired pointer release was not received before press-origin cleanup");
+                            sp_input_press_origin_clear(window, button, token);
+                        });
+                    }
                 } else {
                     dispatch_async(dispatch_get_main_queue(), ^{
                         sp_input_press_origin_clear(window, button, token);

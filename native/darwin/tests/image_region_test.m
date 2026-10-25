@@ -9,8 +9,10 @@
 #import "capture_frame_identity.h"
 #import "input_inject.h"
 #import "input_press_context.h"
+#import "observe.h"
 #import "support/records.h"
 #import "webview_geometry.h"
+#import "webview_input.h"
 
 /// An input context that takes every key and answers nothing, as the input method does for a key outside the key window
 /// of the active application after the application was active once.
@@ -27,6 +29,33 @@
 static int failures = 0;
 static NSUInteger countedSurfaceObserverRegistrations = 0;
 static IMP originalAddObserverImplementation = NULL;
+
+typedef struct { BOOL done; sp_input_result result; } SPInputResultWait;
+
+static void inputResultWaitDone(void *context, sp_input_result result, const sp_input_held *held) {
+    (void)held;
+    SPInputResultWait *wait = context;
+    wait->result = result;
+    wait->done = YES;
+}
+
+static BOOL waitForInputResult(SPInputResultWait *wait, NSTimeInterval timeout) {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeout];
+    while (!wait->done && deadline.timeIntervalSinceNow > 0) {
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+            beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+    }
+    return wait->done;
+}
+
+static BOOL dispatchQueuedEvent(NSEvent *event, NSEventMask mask) {
+    [NSApp postEvent:event atStart:NO];
+    NSEvent *dequeued = [NSApp nextEventMatchingMask:mask
+        untilDate:[NSDate dateWithTimeIntervalSinceNow:1.0] inMode:NSDefaultRunLoopMode dequeue:YES];
+    if (!dequeued) return NO;
+    [NSApp sendEvent:dequeued];
+    return NSApp.currentEvent == dequeued;
+}
 
 static BOOL jsonBooleanMatches(id value, BOOL expected) {
     return [value isKindOfClass:NSNumber.class]
@@ -78,6 +107,29 @@ static NSMutableArray *eventsB16 = nil;
     (void)message;
     self.count++;
     sp_region_focus(self.region);
+}
+@end
+
+@interface InputPageLoadHandler : NSObject <WKNavigationDelegate>
+@property BOOL finished;
+@property(retain) NSError *error;
+@end
+
+@implementation InputPageLoadHandler
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    (void)webView;
+    (void)navigation;
+    self.finished = YES;
+}
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    (void)webView;
+    (void)navigation;
+    self.error = error;
+    self.finished = YES;
+}
+- (void)dealloc {
+    [_error release];
+    [super dealloc];
 }
 @end
 
@@ -201,7 +253,8 @@ int main(int argc, char **argv) { @autoreleasepool {
     WKWebView *surface = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 500, 400)] autorelease];
     [window.contentView addSubview:surface];
     [window orderBack:nil];
-    check(sp_surface_create(main) != NULL,
+    void *logicalSurface = sp_surface_create(main);
+    check(logicalSurface != NULL,
         @"the main webview creates the composition before a surface webview is attached");
     webviewAttachSurface(surface, main);
     webviewSetFrame(surface, 0, 0, 500, 400);
@@ -1607,6 +1660,208 @@ int main(int argc, char **argv) { @autoreleasepool {
     // command returns it to the region. If the resign of that round trip were reported to the ?1004 child, the child would cancel a drag
     // in progress, so a resign while the press point is inside the region is not a focus change.
     if (activation) {
+        check(webviewInputRegister(surface),
+            @"press focus: logical page registers the production pointer receipt path before navigation");
+        check(webviewIgnorePageFocus(surface),
+            @"press focus: logical page disables automatic focus transfer before navigation");
+        InputPageLoadHandler *inputPageLoad97 = [[[InputPageLoadHandler alloc] init] autorelease];
+        surface.navigationDelegate = inputPageLoad97;
+        [surface loadHTMLString:@"<!doctype html><html><body style='margin:0;width:500px;height:400px'></body></html>" baseURL:nil];
+        NSDate *inputPageDeadline97 = [NSDate dateWithTimeIntervalSinceNow:5.0];
+        while (!inputPageLoad97.finished && inputPageDeadline97.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(inputPageLoad97.finished && inputPageLoad97.error == nil,
+            [NSString stringWithFormat:@"press focus: the registered logical page finishes loading (%@)", inputPageLoad97.error]);
+        surface.navigationDelegate = nil;
+        check(sp_surface_place_view(logicalSurface, surface),
+            @"press focus: the view webview is placed in its logical surface host");
+        webviewSetFrame(logicalSurface, 0, 0, 500, 400);
+        webviewSetSurfaceHidden(logicalSurface, false);
+
+        // This region receives the production logical surface handle, not its child WKWebView.
+        void *logicalRegion97 = sp_region_create(logicalSurface, "logical-release", testEvent, NULL);
+        sp_region_place(logicalRegion97, 100, 150, 100, 50, true);
+        sp_region_focus(logicalRegion97);
+        check(window.firstResponder == (NSResponder *)logicalRegion97,
+            @"press focus: logical-surface region starts as the window first responder");
+        [NSApp activateIgnoringOtherApps:YES];
+        [window makeKeyAndOrderFront:nil];
+        NSView *logicalRegionView97 = (NSView *)logicalRegion97;
+        NSRect logicalFrame97 = [logicalRegionView97 convertRect:logicalRegionView97.bounds toView:nil];
+        NSPoint logicalPoint97 = NSMakePoint(NSMidX(logicalFrame97), NSMidY(logicalFrame97));
+
+        WKUserContentController *focusController97 = surface.configuration.userContentController;
+        PointerFocusMessageHandler *focusHandler97 = [[[PointerFocusMessageHandler alloc] init] autorelease];
+        focusHandler97.region = logicalRegion97;
+        [focusController97 addScriptMessageHandler:focusHandler97 name:@"f97Focus"];
+        __block BOOL listenerReady97 = NO;
+        [surface evaluateJavaScript:@"window.__f97Focus = () => webkit.messageHandlers.f97Focus.postMessage('focus'); document.addEventListener('pointerdown', window.__f97Focus, true)"
+            completionHandler:^(id result, NSError *error) {
+                (void)result;
+                check(error == nil, [NSString stringWithFormat:@"press focus: logical page installs its focus callback (%@)", error]);
+                listenerReady97 = YES;
+            }];
+        NSDate *listenerDeadline97 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (!listenerReady97 && listenerDeadline97.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(listenerReady97, @"press focus: logical page focus callback is ready");
+        // The posted AppKit path receives a same-region page focus command between the physical down and up. Keep
+        // the release over the region for one click and outside it for the next. The observer counter is process-wide,
+        // so verify a positive delivery delta and the exact stored origin without attributing every delivery in the
+        // interval to this gesture.
+        for (NSUInteger control97 = 0; control97 < 2; control97++) {
+            sp_region_focus(logicalRegion97);
+            [collectedEvents removeAllObjects];
+            focusHandler97.count = 0;
+            NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:logicalPoint97
+                modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+                context:nil eventNumber:(NSInteger)(98 + control97) clickCount:1 pressure:1];
+            NSPoint releasePoint = control97 == 0 ? logicalPoint97 : NSMakePoint(NSMaxX(logicalFrame97) + 40, logicalPoint97.y);
+            NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:releasePoint
+                modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+                context:nil eventNumber:(NSInteger)(98 + control97) clickCount:1 pressure:0];
+            uint64_t staleLogicalToken97 = 0;
+            if (sp_input_press_origin_point(window, 0, NULL, NULL, &staleLogicalToken97)) {
+                sp_input_press_origin_clear(window, 0, staleLogicalToken97);
+            }
+            unsigned long long logicalMonitorBefore97 = sp_observe_count("image_region.press_origin");
+            [NSApp postEvent:down atStart:NO];
+            NSDate *pageCommandDeadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
+            while (focusHandler97.count == 0 && pageCommandDeadline.timeIntervalSinceNow > 0) {
+                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                    untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+                if (pending) [NSApp sendEvent:pending];
+            }
+            check(focusHandler97.count == 1,
+                [NSString stringWithFormat:@"press focus: logical AppKit down reaches the page command once (release case %lu)",
+                    (unsigned long)control97]);
+            double logicalOriginX97 = 0, logicalOriginY97 = 0;
+            BOOL logicalOrigin97 = sp_input_press_origin_point(window, 0, &logicalOriginX97, &logicalOriginY97, NULL);
+            unsigned long long logicalMonitorAfterDown97 = sp_observe_count("image_region.press_origin");
+            NSPoint logicalOriginInRegion97 = [logicalRegionView97 convertPoint:NSMakePoint(logicalOriginX97, logicalOriginY97)
+                fromView:nil];
+            check(logicalMonitorAfterDown97 > logicalMonitorBefore97 && logicalOrigin97
+                && NSPointInRect(logicalOriginInRegion97, logicalRegionView97.bounds),
+                [NSString stringWithFormat:@"press focus: queued AppKit down is observed and records an origin inside its region before the page focus callback (monitor %llu to %llu; origin %@ at %.2f,%.2f)",
+                    logicalMonitorBefore97, logicalMonitorAfterDown97, logicalOrigin97 ? @"present" : @"absent",
+                    logicalOriginX97, logicalOriginY97]);
+            sp_region_focus(logicalRegion97);
+            [NSApp postEvent:up atStart:NO];
+            NSDate *physicalReleaseDeadline = [NSDate dateWithTimeIntervalSinceNow:0.4];
+            while (physicalReleaseDeadline.timeIntervalSinceNow > 0) {
+                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                    untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+                if (pending) [NSApp sendEvent:pending];
+            }
+            BOOL lostLogicalFocus = NO;
+            for (NSString *eventStr in collectedEvents) {
+                if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                    && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) lostLogicalFocus = YES;
+            }
+            check(!lostLogicalFocus && window.firstResponder == (NSResponder *)logicalRegion97,
+                [NSString stringWithFormat:@"press focus: logical page focus command survives phase three, release case %lu (events %@, responder %@)",
+                    (unsigned long)control97, collectedEvents, NSStringFromClass(window.firstResponder.class)]);
+        }
+
+        NSString *logicalReleaseRecords97 = capturedRecords(^{
+            NSEvent *down = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:logicalPoint97
+                modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+                context:nil eventNumber:97 clickCount:1 pressure:1];
+            NSEvent *up = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:logicalPoint97
+                modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+                context:nil eventNumber:97 clickCount:1 pressure:0];
+            [NSApp postEvent:down atStart:NO];
+            [NSApp postEvent:up atStart:NO];
+            NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:1.5];
+            while (deadline.timeIntervalSinceNow > 0) {
+                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
+                    untilDate:[NSDate dateWithTimeIntervalSinceNow:0.02] inMode:NSDefaultRunLoopMode dequeue:YES];
+                if (pending) [NSApp sendEvent:pending];
+            }
+        });
+        check(![logicalReleaseRecords97 containsString:@"_doAfterProcessingAllPendingMouseEvents: is unavailable"]
+            && ![logicalReleaseRecords97 containsString:@"paired pointer release was not received"],
+            [NSString stringWithFormat:@"press focus: logical-surface release resolves and drains its page webview (%@)",
+                logicalReleaseRecords97]);
+
+        // Exercise the production receipt path: the phase-three pre-drain runs before its pointer callback and must
+        // preserve the press origin while it restores the page responder.
+        [collectedEvents removeAllObjects];
+        focusHandler97.count = 0;
+        sp_region_focus(logicalRegion97);
+        uint64_t staleInputOrigin97 = 0;
+        if (sp_input_press_origin_point(window, 0, NULL, NULL, &staleInputOrigin97))
+            sp_input_press_origin_clear(window, 0, staleInputOrigin97);
+        NSEvent *beforeRepeatClick97 = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil subtype:0 data1:0 data2:0];
+        check(dispatchQueuedEvent(beforeRepeatClick97, NSEventMaskApplicationDefined)
+            && NSApp.currentEvent.type == NSEventTypeApplicationDefined
+            && !sp_input_press_origin_point(window, 0, NULL, NULL, NULL),
+            @"press focus: a repeated click starts focused with no stale mouse context or press origin");
+        NSPoint logicalContentPoint97 = [window.contentView convertPoint:logicalPoint97 fromView:nil];
+        double logicalInputY97 = window.contentView.isFlipped ? logicalContentPoint97.y :
+            NSHeight(window.contentView.bounds) - logicalContentPoint97.y;
+        SPInputResultWait logicalDown97 = {NO, SP_INPUT_REJECTED};
+        sp_input_pointer_then(window, logicalContentPoint97.x, logicalInputY97, 1, 0, 0, 0, 2,
+            inputResultWaitDone, &logicalDown97);
+        check(waitForInputResult(&logicalDown97, 2) && logicalDown97.result == SP_INPUT_DELIVERED,
+            @"press focus: the production receipt path delivers phase one");
+        NSDate *logicalCallbackDeadline97 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (focusHandler97.count == 0 && logicalCallbackDeadline97.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(focusHandler97.count == 1,
+            @"press focus: the production phase-one pointerdown runs the page focus callback");
+        check(window.firstResponder == (NSResponder *)logicalRegion97,
+            @"press focus: the production page callback leaves the logical region focused before phase three");
+        BOOL repeatDownLostFocus97 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) repeatDownLostFocus97 = YES;
+        }
+        check(!repeatDownLostFocus97,
+            [NSString stringWithFormat:@"press focus: repeated production phase one does not pulse focus false before its page callback (%@)",
+                collectedEvents]);
+        NSEvent *pressGap97 = [NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil subtype:0 data1:0 data2:0];
+        [NSApp postEvent:pressGap97 atStart:NO];
+        NSEvent *dequeuedGap97 = [NSApp nextEventMatchingMask:NSEventMaskApplicationDefined
+            untilDate:[NSDate dateWithTimeIntervalSinceNow:0.2] inMode:NSDefaultRunLoopMode dequeue:YES];
+        if (dequeuedGap97) [NSApp sendEvent:dequeuedGap97];
+        check(NSApp.currentEvent.type == NSEventTypeApplicationDefined
+            && sp_input_press_origin_point(window, 0, NULL, NULL, NULL),
+            @"press focus: an asynchronous AppKit turn retains the press origin without a mouse event context");
+        [collectedEvents removeAllObjects];
+        SPInputResultWait logicalUp97 = {NO, SP_INPUT_REJECTED};
+        sp_input_pointer_then(window, logicalContentPoint97.x, logicalInputY97, 3, 0, 0, 0, 2,
+            inputResultWaitDone, &logicalUp97);
+        BOOL logicalUpDone97 = waitForInputResult(&logicalUp97, 2);
+        BOOL logicalUpLostFocus97 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) logicalUpLostFocus97 = YES;
+        }
+        NSDate *logicalResponderDeadline97 = [NSDate dateWithTimeIntervalSinceNow:1.0];
+        while (window.firstResponder != (NSResponder *)logicalRegion97 && logicalResponderDeadline97.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(logicalUpDone97 && logicalUp97.result == SP_INPUT_DELIVERED && !logicalUpLostFocus97
+            && window.firstResponder == (NSResponder *)logicalRegion97,
+            [NSString stringWithFormat:@"press focus: production receipt phase three preserves logical region focus after its queued responder restoration (%@, %@)",
+                collectedEvents, NSStringFromClass(window.firstResponder.class)]);
+        [surface evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f97Focus, true); delete window.__f97Focus"
+            completionHandler:^(id result, NSError *error) { (void)result; (void)error; }];
+        [focusController97 removeScriptMessageHandlerForName:@"f97Focus"];
+        webviewInputUnregister(surface);
+        sp_region_close(logicalRegion97);
+
         void *region15 = sp_region_create(surface, "test15", testEvent, NULL);
         sp_region_place(region15, 100, 150, 100, 50, true);
         sp_region_focus(region15);
@@ -1627,14 +1882,19 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSEvent *up15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:inside15
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:1 clickCount:1 pressure:0];
-        [NSApp postEvent:down15 atStart:NO];
-        [NSApp postEvent:up15 atStart:NO];
-        NSDate *drain15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
-        while ([drain15 timeIntervalSinceNow] > 0) {
-            NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
-                inMode:NSDefaultRunLoopMode dequeue:YES];
-            if (pending) [NSApp sendEvent:pending];
-        }
+        NSString *logicalSurfaceRecords15 = capturedRecords(^{
+            [NSApp postEvent:down15 atStart:NO];
+            [NSApp postEvent:up15 atStart:NO];
+            NSDate *drain15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+            while ([drain15 timeIntervalSinceNow] > 0) {
+                NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]
+                    inMode:NSDefaultRunLoopMode dequeue:YES];
+                if (pending) [NSApp sendEvent:pending];
+            }
+        });
+        check(![logicalSurfaceRecords15 containsString:@"_doAfterProcessingAllPendingMouseEvents: is unavailable"],
+            [NSString stringWithFormat:@"press focus: logical surface release resolves its page webview before draining (%@)",
+                logicalSurfaceRecords15]);
 
         BOOL reportedLoss15 = NO;
         for (NSString *eventStr in collectedEvents) {
@@ -1673,6 +1933,49 @@ int main(int argc, char **argv) { @autoreleasepool {
             [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
         }
         check(focusListenerReady15, @"press focus: the page focus command listener is ready");
+
+        // Direct pointer injection returns before the page's command callback. Preserve the logical press across that
+        // asynchronous callback and check the responder both before and after the matching release.
+        [collectedEvents removeAllObjects];
+        focusHandler15.count = 0;
+        NSPoint directContentPoint15 = [window.contentView convertPoint:inside15 fromView:nil];
+        double directY15 = window.contentView.isFlipped ? directContentPoint15.y
+            : NSHeight(window.contentView.bounds) - directContentPoint15.y;
+        check(sp_input_pointer(window, directContentPoint15.x, directY15, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
+            @"press focus: direct pointer phase one is delivered");
+        NSDate *directCommandDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (focusHandler15.count == 0 && directCommandDeadline15.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(focusHandler15.count == 1,
+            [NSString stringWithFormat:@"press focus: the direct press reaches its asynchronous page command once (got %lu)",
+                (unsigned long)focusHandler15.count]);
+        BOOL directLossBeforeRelease15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) directLossBeforeRelease15 = YES;
+        }
+        check(!directLossBeforeRelease15 && window.firstResponder == (NSResponder *)region15,
+            [NSString stringWithFormat:@"press focus: the asynchronous page command retains region focus before phase three (events %@, responder %@)",
+                collectedEvents, NSStringFromClass(window.firstResponder.class)]);
+        check(sp_input_pointer(window, directContentPoint15.x, directY15, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+            @"press focus: direct pointer phase three is delivered");
+        NSDate *directReleaseDeadline15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while (directReleaseDeadline15.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        BOOL directLossAfterRelease15 = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) directLossAfterRelease15 = YES;
+        }
+        check(!directLossAfterRelease15 && window.firstResponder == (NSResponder *)region15,
+            [NSString stringWithFormat:@"press focus: direct pointer release keeps the region focused (events %@, responder %@)",
+                collectedEvents, NSStringFromClass(window.firstResponder.class)]);
+
+        focusHandler15.count = 0;
         [NSApp postEvent:downRoundTrip15 atStart:NO];
         NSDate *commandDeadline15 = [NSDate dateWithTimeIntervalSinceNow:2.0];
         while (focusHandler15.count == 0 && commandDeadline15.timeIntervalSinceNow > 0) {
@@ -1730,9 +2033,23 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSEvent *upCommand15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:inside15
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:17 clickCount:1 pressure:0];
-        [NSApp sendEvent:downCommand15];
+        uint64_t staleCommandToken15 = 0;
+        if (sp_input_press_origin_point(window, 0, NULL, NULL, &staleCommandToken15))
+            sp_input_press_origin_clear(window, 0, staleCommandToken15);
+        unsigned long long monitorBeforeCommand15 = sp_observe_count("image_region.press_origin");
+        BOOL commandDownQueued15 = dispatchQueuedEvent(downCommand15, NSEventMaskLeftMouseDown);
+        double commandOriginX15 = 0, commandOriginY15 = 0;
+        BOOL commandOrigin15 = sp_input_press_origin_point(window, 0, &commandOriginX15, &commandOriginY15, NULL);
+        unsigned long long monitorAfterCommandDown15 = sp_observe_count("image_region.press_origin");
+        check(commandDownQueued15 && monitorAfterCommandDown15 == monitorBeforeCommand15 + 1
+            && commandOrigin15 && commandOriginX15 == inside15.x && commandOriginY15 == inside15.y,
+            @"press focus: queued physical press records its exact origin once");
         sp_region_focus(region15);
-        [NSApp sendEvent:upCommand15];
+        BOOL commandUpQueued15 = dispatchQueuedEvent(upCommand15, NSEventMaskLeftMouseUp);
+        commandOriginX15 = commandOriginY15 = 0;
+        commandOrigin15 = sp_input_press_origin_point(window, 0, &commandOriginX15, &commandOriginY15, NULL);
+        check(commandUpQueued15,
+            @"press focus: queued physical release is dispatched through NSApplication");
         NSDate *drainCommand15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
         while (drainCommand15.timeIntervalSinceNow > 0) {
             NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
@@ -1755,9 +2072,23 @@ int main(int argc, char **argv) { @autoreleasepool {
         NSEvent *upOutsideRelease15 = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:outside15
             modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
             context:nil eventNumber:16 clickCount:1 pressure:0];
-        [NSApp sendEvent:downOutsideRelease15];
+        uint64_t staleOutsideToken15 = 0;
+        if (sp_input_press_origin_point(window, 0, NULL, NULL, &staleOutsideToken15))
+            sp_input_press_origin_clear(window, 0, staleOutsideToken15);
+        unsigned long long monitorBeforeOutside15 = sp_observe_count("image_region.press_origin");
+        BOOL outsideDownQueued15 = dispatchQueuedEvent(downOutsideRelease15, NSEventMaskLeftMouseDown);
+        double outsideOriginX15 = 0, outsideOriginY15 = 0;
+        BOOL outsideOrigin15 = sp_input_press_origin_point(window, 0, &outsideOriginX15, &outsideOriginY15, NULL);
+        unsigned long long monitorAfterOutsideDown15 = sp_observe_count("image_region.press_origin");
+        check(outsideDownQueued15 && monitorAfterOutsideDown15 == monitorBeforeOutside15 + 1
+            && outsideOrigin15 && outsideOriginX15 == inside15.x && outsideOriginY15 == inside15.y,
+            @"press focus: queued outside-release gesture records its inside press origin once");
         sp_region_focus(region15);
-        [NSApp sendEvent:upOutsideRelease15];
+        BOOL outsideUpQueued15 = dispatchQueuedEvent(upOutsideRelease15, NSEventMaskLeftMouseUp);
+        outsideOriginX15 = outsideOriginY15 = 0;
+        outsideOrigin15 = sp_input_press_origin_point(window, 0, &outsideOriginX15, &outsideOriginY15, NULL);
+        check(outsideUpQueued15,
+            @"press focus: queued release outside the region is dispatched through NSApplication");
         NSDate *drainOutsideRelease15 = [NSDate dateWithTimeIntervalSinceNow:0.3];
         while ([drainOutsideRelease15 timeIntervalSinceNow] > 0) {
             NSEvent *pending = [NSApp nextEventMatchingMask:NSEventMaskAny
@@ -1983,6 +2314,73 @@ int main(int argc, char **argv) { @autoreleasepool {
             [NSString stringWithFormat:@"direct pointer focus: release coordinates outside do not replace the press origin (events %@ records %@)",
                 collectedEvents, outsideReleaseRecords17]);
         sp_region_close(region17);
+    }
+
+    // Run the asynchronous direct-input contract last so its neutral current-event control does not affect the
+    // separate physical AppKit event checks above.
+    if (activation) {
+        void *logicalRegion = sp_region_create(logicalSurface, "logical-direct-focus", testEvent, NULL);
+        sp_region_place(logicalRegion, 100, 150, 100, 50, true);
+        sp_region_focus(logicalRegion);
+        [NSApp sendEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint
+            modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber
+            context:nil subtype:0 data1:0 data2:0]];
+
+        WKUserContentController *controller = surface.configuration.userContentController;
+        PointerFocusMessageHandler *handler = [[[PointerFocusMessageHandler alloc] init] autorelease];
+        handler.region = logicalRegion;
+        [controller addScriptMessageHandler:handler name:@"f97DirectFocus"];
+        __block BOOL listenerReady = NO;
+        [surface evaluateJavaScript:@"window.__f97DirectFocus = () => webkit.messageHandlers.f97DirectFocus.postMessage('focus'); document.addEventListener('pointerdown', window.__f97DirectFocus, true)"
+            completionHandler:^(id result, NSError *error) {
+                (void)result;
+                check(error == nil, [NSString stringWithFormat:@"press focus: direct logical page listener loads (%@)", error]);
+                listenerReady = YES;
+            }];
+        NSDate *listenerDeadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (!listenerReady && listenerDeadline.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(listenerReady, @"press focus: direct logical page listener is ready");
+        NSRect frame = [((NSView *)logicalRegion) convertRect:[((NSView *)logicalRegion) bounds] toView:nil];
+        NSPoint point = [window.contentView convertPoint:NSMakePoint(NSMidX(frame), NSMidY(frame)) fromView:nil];
+        double y = window.contentView.isFlipped ? point.y : NSHeight(window.contentView.bounds) - point.y;
+        [collectedEvents removeAllObjects];
+        check(sp_input_pointer(window, point.x, y, 1, 0, 0, 0) == SP_INPUT_DELIVERED,
+            @"press focus: logical direct phase one is delivered");
+        NSDate *commandDeadline = [NSDate dateWithTimeIntervalSinceNow:2.0];
+        while (handler.count == 0 && commandDeadline.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        check(handler.count == 1,
+            [NSString stringWithFormat:@"press focus: asynchronous page focus callback runs before phase three (got %lu)",
+                (unsigned long)handler.count]);
+        BOOL lost = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) lost = YES;
+        }
+        check(!lost && window.firstResponder == (NSResponder *)logicalRegion,
+            [NSString stringWithFormat:@"press focus: asynchronous page command preserves logical focus before phase three (events %@)",
+                collectedEvents]);
+        check(sp_input_pointer(window, point.x, y, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
+            @"press focus: logical direct phase three is delivered");
+        NSDate *releaseDeadline = [NSDate dateWithTimeIntervalSinceNow:0.3];
+        while (releaseDeadline.timeIntervalSinceNow > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.02]];
+        }
+        lost = NO;
+        for (NSString *eventStr in collectedEvents) {
+            if ([eventStr rangeOfString:@"\"type\":\"focus\""].location != NSNotFound
+                && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) lost = YES;
+        }
+        check(!lost && window.firstResponder == (NSResponder *)logicalRegion,
+            [NSString stringWithFormat:@"press focus: logical direct release retains the region responder (events %@)",
+                collectedEvents]);
+        [surface evaluateJavaScript:@"document.removeEventListener('pointerdown', window.__f97DirectFocus, true); delete window.__f97DirectFocus"
+            completionHandler:^(id result, NSError *error) { (void)result; (void)error; }];
+        [controller removeScriptMessageHandlerForName:@"f97DirectFocus"];
+        sp_region_close(logicalRegion);
     }
 
     [window close];
