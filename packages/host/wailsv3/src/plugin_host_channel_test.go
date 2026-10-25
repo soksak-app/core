@@ -801,7 +801,7 @@ func TestPluginHostChannelPostsTheProjectChangeAsAnEvent(t *testing.T) {
 	}
 }
 
-// contract: plugin-host.project.ready-catch-up
+// contract: plugin-host.project.post
 // A project change while the host document is unready is sent after the document reports ready.
 func TestPluginHostReadyReceivesTheProjectCurrentlyShown(t *testing.T) {
 	fake := &channelPlatform{}
@@ -876,6 +876,7 @@ func TestPluginHostReplyDoesNotCloseACallOfAReplacementGeneration(t *testing.T) 
 	}
 }
 
+// contract: plugin-host.source-generation
 func TestPluginHostCommandsRefuseGenerationsAboveTheJavaScriptSafeIntegerLimit(t *testing.T) {
 	fake := &channelPlatform{}
 	s, _ := channelSurfaces(t, fake, true)

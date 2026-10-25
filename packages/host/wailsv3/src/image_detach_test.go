@@ -228,7 +228,6 @@ func (o *imageDetachMessageOwner) ProjectRoot() string { return "/fixture/root" 
 
 func (o *imageDetachMessageOwner) Emit(name string, _ ...any) { o.events = append(o.events, name) }
 
-// contract: sidecar.image-detach-acknowledgement
 // contract: images.detach.ack-consumed
 func TestImageDetachAcknowledgementIsConsumedByTheHost(t *testing.T) {
 	owner := &imageDetachMessageOwner{}

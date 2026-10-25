@@ -88,6 +88,7 @@ const ECHO: &str = "@fixture/sidecar-echo";
 /// The upper limit that ends a stalled check. Success is decided by the received event and not by this time.
 const STALL: Duration = Duration::from_secs(120);
 
+// contract: sidecars.display-name.is-not-injected-into-child-environment
 #[test]
 fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
     let executable_directory = folder::Folder::new();
@@ -122,6 +123,7 @@ fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
     sidecars.stop();
 }
 
+// contract: sidecars.display-name.requires-canonical-component
 #[test]
 fn sidecar_declaration_requires_one_display_name_component() {
     for display_name in [

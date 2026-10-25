@@ -995,6 +995,7 @@ mod input_reference_test;
 mod capture_start_options_test {
     use super::*;
 
+    // contract: diagnostics.capture-start.preserves-display-option-parsing
     #[test]
     fn capture_start_options_preserve_display_parsing() {
         for (json, expected) in [
@@ -1022,6 +1023,8 @@ mod capture_start_options_test {
         );
     }
 
+    // contract: diagnostics.capture-start.frame-identity-is-strict-boolean
+    // contract: diagnostics.capture-start.parses-frame-identity-option
     #[test]
     fn capture_start_options_parse_frame_identity_and_reject_non_booleans() {
         for (value, expected) in [(Value::Bool(false), false), (Value::Bool(true), true)] {

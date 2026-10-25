@@ -407,7 +407,7 @@ fn undeclared_method_closes_connection() {
     endpoint.stop();
 }
 
-// contract: endpoint.diagnostics.clock, endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal
+// contract: endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal
 #[cfg(feature = "diagnostics")]
 #[test]
 fn diagnostics_clock_returns_monotonic_nanoseconds() {

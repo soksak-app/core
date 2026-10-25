@@ -5,6 +5,7 @@ use tauri::{
     webview::{InvokeRequest, WebviewWindowBuilder},
 };
 
+// contract: plugin-host.starter.rejects-invalid-request
 #[test]
 fn plugins_starter_rejects_an_invalid_request_through_the_registered_handler() {
     let config = tempfile::tempdir().unwrap();

@@ -135,6 +135,7 @@ func scriptSidecarsWithManifest(t *testing.T, script, manifest string) (*host.Si
 	return sidecars, directory
 }
 
+// contract: sidecars.display-name.is-not-injected-into-child-environment
 func TestSidecarProcessDoesNotReceiveItsDisplayNameFromTheHost(t *testing.T) {
 	t.Setenv("SOKSAK_SIDECAR_DISPLAY_NAME", "inherited-value")
 	sidecars, directory := scriptSidecarsWithManifest(t, `#!/bin/sh
@@ -432,7 +433,7 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	sidecars.Stop()
 }
 
-// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory
+// contract: sidecars.declaration.rejects-executable-escaping-package, sidecars.declaration.rejects-absolute-executable, sidecars.declaration.rejects-unsupported-protocol, sidecars.declaration.rejects-unknown-transport, sidecars.declaration.persistent-requires-config-directory, sidecars.display-name.requires-canonical-component
 func TestInvalidSidecarDeclarationsFail(t *testing.T) {
 	cases := map[string]struct {
 		sidecar string

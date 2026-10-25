@@ -105,7 +105,7 @@ fn malformed_project_shown_arguments_are_rejected_before_committing_project_stat
     assert!(data.root.lock().unwrap().is_empty());
 }
 
-// contract: projects.open-does-not-publish-before-page-selection
+// contract: project.open-ready-shown-order
 #[test]
 fn opening_an_existing_project_keeps_the_committed_project_until_page_selection() {
     let data = WindowData::default();
@@ -140,7 +140,8 @@ fn opening_an_existing_project_keeps_the_committed_project_until_page_selection(
     );
 }
 
-// contract: projects.open-reports-staged-owner-until-shown
+// contract: project.open.staged-until-shown
+// contract: project.open.registers-owner-without-commit
 #[test]
 fn a_pending_owner_stays_staged_across_open_until_project_shown_commits_it() {
     let data = WindowData::default();
@@ -196,7 +197,8 @@ fn a_pending_owner_stays_staged_across_open_until_project_shown_commits_it() {
     ));
 }
 
-// contract: plugin-host.project.ready-catch-up
+// contract: project.open-ready-shown-order
+// contract: project.shown-commits-after-page-ready
 #[test]
 fn an_unready_host_catches_up_old_project_until_the_page_commits_the_new_project() {
     let data = WindowData::default();
@@ -247,7 +249,7 @@ fn an_unready_host_catches_up_old_project_until_the_page_commits_the_new_project
     );
 }
 
-// contract: plugin-host.project.ready-catch-up
+// contract: project.open.prepare-before-show
 #[test]
 fn reopening_the_shown_id_keeps_its_committed_root_for_ready_catch_up() {
     let data = WindowData::default();
@@ -342,7 +344,7 @@ fn a_root_mismatch_does_not_mutate_committed_or_staged_project_state() {
     assert!(!posted.load(Ordering::SeqCst));
 }
 
-// contract: projects.shown-null-clears-committed-project
+// contract: project.shown-commits-after-page-ready
 #[test]
 fn showing_no_project_clears_committed_state_and_preserves_other_staged_owners() {
     let data = WindowData::default();
@@ -404,7 +406,7 @@ fn releasing_a_pending_project_removes_its_owner_reservation() {
     );
 }
 
-// contract: projects.open-failure-precedes-owner-reservation
+// contract: projects.open.geometry-failure-closes-before-reservation
 #[test]
 fn a_new_window_is_closed_when_geometry_setup_fails_before_reservation() {
     let data = WindowData::default();
@@ -491,7 +493,7 @@ fn a_new_window_is_closed_when_geometry_setup_fails_before_reservation() {
     assert!(!closed.load(Ordering::SeqCst));
 }
 
-// contract: projects.shown-ignores-unknown-fields
+// contract: project.shown.ignores-unknown-fields
 #[test]
 fn project_shown_ignores_unknown_outer_fields() {
     let decoded = serde_json::from_value::<ProjectShown>(json!({
@@ -505,7 +507,7 @@ fn project_shown_ignores_unknown_outer_fields() {
     );
 }
 
-// contract: projects.shown-ignores-unknown-fields
+// contract: project.shown.ignores-unknown-fields
 #[test]
 fn shown_project_ignores_unknown_nested_fields() {
     let decoded = serde_json::from_value::<ProjectShown>(json!({

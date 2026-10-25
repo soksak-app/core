@@ -89,7 +89,7 @@ func diagnosticsClockCall(t *testing.T, conn net.Conn, id int) uint64 {
 	return value
 }
 
-// contract: endpoint.diagnostics.clock, endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal, endpoint.diagnostics-clock.absent-without-diagnostics
+// contract: endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal, endpoint.diagnostics-clock.absent-without-diagnostics
 func TestDiagnosticClockMatchesBuildConfiguration(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

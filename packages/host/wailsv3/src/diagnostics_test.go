@@ -121,7 +121,7 @@ func TestRecordingStartForwardsFrameIdentity(t *testing.T) {
 	}
 }
 
-// contract: recording.finish.preserves-frame-identity-option
+// contract: recording.finish.keeps-folder-and-reports-frames
 func TestRecordingFinishPreservesFrameIdentityOption(t *testing.T) {
 	fake := &captureStartProbe{}
 	var recording Recording
@@ -175,6 +175,7 @@ func TestCaptureStopPayloadNamesCallbackStatusArtifact(t *testing.T) {
 	}
 }
 
+// contract: diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact
 func TestCaptureStopPayloadNamesOptInFrameIdentityArtifact(t *testing.T) {
 	payload := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil, true)
 	identity, ok := payload["frameIdentity"].(map[string]any)

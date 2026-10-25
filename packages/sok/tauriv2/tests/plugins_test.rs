@@ -436,6 +436,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     );
 }
 
+// contract: cli.plugin.state-reads-and-rejects-starter-job
 #[test]
 fn plugins_state_reads_and_rejects_invalid_starter_job() {
     let config = Folder::new("plugins");
@@ -464,6 +465,7 @@ fn plugins_state_reads_and_rejects_invalid_starter_job() {
     }
 }
 
+// contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
 #[test]
 fn starter_job_transitions_are_durable_and_bound_to_the_snapshot() {
     use soksak_sok::plugins::{StarterJobRequest, write_starter_job};

@@ -165,6 +165,7 @@ func sidecarTree(t *testing.T, version string) string {
 	return dir
 }
 
+// contract: cli.release.requires-display-name
 func TestSidecarReleaseRejectsAMissingDisplayName(t *testing.T) {
 	out := t.TempDir()
 	root := sidecarTree(t, "0.1.0")

@@ -1,5 +1,6 @@
 use super::image_event_payload;
 
+// contract: images.relay.preserves-compose-marked-range
 #[test]
 fn the_image_event_relay_preserves_the_compose_marked_range() {
     let event = serde_json::json!({

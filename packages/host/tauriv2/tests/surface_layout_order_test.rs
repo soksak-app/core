@@ -52,6 +52,7 @@ fn a_refused_window_overlay_leaves_no_begun_layout() {
 }
 
 // contract: surfaces.sync.failure-leaves-no-begun-layout
+// contract: view.placement.geometry-failure-is-reported
 #[test]
 fn a_failed_surface_step_cancels_the_begun_layout() {
     let (result, calls) = run(Ok(()), Err("surface failed".into()));

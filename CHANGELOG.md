@@ -4,6 +4,20 @@
 
 ## Unreleased
 
+- F239-93-4: Map Tauri CLI assertions to their exact contract cases across the configured compiler-selected targets. The current static audit has no declaration gaps.
+
+- F239-93-3-5: Map the remaining Wails CLI plugin and release assertions to exact contract cases without changing their behavior. The current declaration audit passes.
+
+- F239-93-3-4: Map the twelve Wails CLI process-wait assertions to their exact contract cases. Keep the child-process fixture outside test-case discovery and retain its verified ended-process behavior.
+
+- F239-93-3: Complete the Wails CLI declaration mappings while preserving the recorded Windows exclusion. The current static audit has no unmapped cases.
+
+- F239-93-2: Map Tauri host assertions to their exact declared contract cases using compiler-selected targets. Preserve sidecar owner, origin and source-generation checks; the current static audit has no gaps.
+
+- F239-93-1: Map Wails host assertions to their exact declared contract cases and retain the required binding and reply-boundary assertions. The current static audit has no declaration gaps.
+
+- F239-93: Reconcile the host-contract declaration inventory. The initial static census contained 121 mismatches; the current compiler-selected audit passes 933 unique cases without declaration gaps. Preserve explicit platform exclusions and separately recorded owner-body results.
+
 - F239-142: Align the committed canonical record translations and remove
   duplicate checklist rows while preserving identifiers and completed states.
   Retain the complete paired feature and changelog contents so translated

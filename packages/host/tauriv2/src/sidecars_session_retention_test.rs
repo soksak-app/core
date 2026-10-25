@@ -1,8 +1,8 @@
 use serde_json::value::RawValue;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{TryRecvError, sync_channel};
+use std::sync::{Arc, Mutex};
 
 use super::{
     Failure, ImageEnvelopeDecision, Message, Outgoing, Owner, Process, ResponseError,
@@ -25,7 +25,6 @@ impl Owner for TestOwner {
 
     fn deliver_failure(&self, _failure: Failure) {}
 }
-
 // contract: sidecars.native-view-removal.closes-stdio-session
 #[test]
 fn native_view_removal_still_closes_a_standard_io_session() {

@@ -37,7 +37,7 @@ func runProcessWait(t *testing.T, wait func(int, time.Duration) (bool, error), a
 	return code, stdout.String(), stderr.String()
 }
 
-// contract: cli.process-wait.delegates-to-platform-and-prints-pid
+// contract: cli.process-wait.registered-platform-receives-request
 func TestProcessWaitUsesThePlatformAndPrintsTheObservedPid(t *testing.T) {
 	called := false
 	code, stdout, stderr := runProcessWait(t, func(pid int, timeout time.Duration) (bool, error) {

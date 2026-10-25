@@ -4,6 +4,20 @@
 
 ## 미배포
 
+- F239-93-4: 설정된 compiler-selected target 전체에서 Tauri CLI assertion을 정확한 contract case에 연결한다. 현재 static audit에 선언 누락이 없다.
+
+- F239-93-3-5: 남은 Wails CLI plugin 및 release assertion의 동작을 바꾸지 않고 정확한 contract case에 연결한다. 현재 선언 audit이 통과한다.
+
+- F239-93-3-4: Wails CLI process-wait assertion 12개를 정확한 contract case에 연결한다. Child-process fixture를 test-case discovery에서 분리하고 검증된 ended-process 동작을 유지한다.
+
+- F239-93-3: 기록된 Windows 제외를 유지하며 Wails CLI 선언 연결을 완료한다. 현재 static audit에 연결되지 않은 case가 없다.
+
+- F239-93-2: Compiler-selected target으로 Tauri host assertion을 정확한 선언 contract case에 연결한다. Sidecar owner, origin, source-generation 검사는 유지하며 현재 static audit에 누락이 없다.
+
+- F239-93-1: Wails host assertion을 정확한 선언 contract case에 연결하고 필수 binding 및 reply-boundary assertion을 유지한다. 현재 static audit에 선언 누락이 없다.
+
+- F239-93: Host-contract 선언 inventory를 정리한다. 초기 static census의 불일치는 121개이며 현재 compiler-selected audit은 고유 case 933개를 선언 누락 없이 통과한다. 명시적 platform 제외와 별도로 기록된 owner-body 결과는 유지한다.
+
 - F239-142: 식별자와 완료 상태를 유지하며 커밋된 canonical record 번역을
   맞추고 중복 checklist 행을 제거한다. Feature 및 changelog 쌍의 전체 내용을
   보존해 번역된 entry가 같은 순서와 저장소 사실을 유지하게 한다.

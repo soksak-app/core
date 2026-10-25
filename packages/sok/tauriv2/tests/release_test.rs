@@ -229,6 +229,7 @@ fn sidecar_tree(version: &str) -> Folder {
     dir
 }
 
+// contract: cli.release.requires-display-name
 #[test]
 fn sidecar_release_rejects_a_missing_display_name() {
     let tree = sidecar_tree("0.1.0");

@@ -84,7 +84,7 @@ fn a_retired_view_error_keeps_its_producer_reason() {
     );
 }
 
-// contract: view.origin.retired-queue-overflow-does-not-fail-current-view
+// contract: view.channel.overflow-closes
 #[test]
 fn a_retired_queue_overflow_does_not_fail_the_current_view() {
     let channels = ViewChannels::default();
@@ -104,7 +104,7 @@ fn a_retired_queue_overflow_does_not_fail_the_current_view() {
     );
 }
 
-// contract: view.call.reply
+// contract: view.call.reply-generation-scoped-cleanup
 #[test]
 fn a_late_view_reply_cannot_remove_a_replacement_calls_record() {
     let channels = ViewChannels::default();
@@ -142,7 +142,7 @@ fn a_late_view_reply_cannot_remove_a_replacement_calls_record() {
     );
 }
 
-// contract: view.origin.retired-malformed-message-is-reported
+// contract: view.origin.retired-channel-errors-are-reported
 #[test]
 fn a_retired_malformed_message_keeps_its_channel_error() {
     let channels = ViewChannels::default();
@@ -170,7 +170,7 @@ fn a_retired_malformed_message_keeps_its_channel_error() {
     );
 }
 
-// contract: view.origin.retired-transport-error-is-reported
+// contract: view.origin.retired-channel-errors-are-reported
 #[test]
 fn a_retired_transport_error_keeps_its_channel_error() {
     let channels = ViewChannels::default();

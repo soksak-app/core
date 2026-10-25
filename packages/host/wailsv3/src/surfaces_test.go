@@ -675,6 +675,31 @@ func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
 	}
 }
 
+// contract: view.call.reply-generation-scoped-cleanup
+func TestLateOldGenerationReplyKeepsReplacementSameIDCall(t *testing.T) {
+	s, _ := newViewChannelSurfaces(t)
+	old, ok := s.documents.view("probe-surface")
+	if !ok {
+		t.Fatal("the initial view has no channel")
+	}
+	const id = uint64(996)
+	if !s.documents.trackViewCall("probe-surface", old.generation, id, "old.run") {
+		t.Fatal("the old generation call was not tracked")
+	}
+	newGeneration := old.generation + 1
+	s.documents.registerView("probe-surface", old.plugin, newGeneration, unsafe.Pointer(new(int)))
+	if !s.documents.trackViewCall("probe-surface", newGeneration, id, "replacement.run") {
+		t.Fatal("the replacement generation call was not tracked")
+	}
+
+	s.documents.answerViewCall("probe-surface", old.generation, id)
+	calls := s.documents.endViewCalls("probe-surface")
+	want := []openViewCall{{plugin: old.plugin, command: "replacement.run", id: id}}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("open calls after the old reply: %+v, want the replacement same-ID call %+v", calls, want)
+	}
+}
+
 // contract: view.call.reply
 func TestViewReplyPostRefusalLeavesCallOpenForProcessEnd(t *testing.T) {
 	s, fake := newViewChannelSurfaces(t)

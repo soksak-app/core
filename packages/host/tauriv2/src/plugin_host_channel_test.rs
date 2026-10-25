@@ -10,6 +10,7 @@ use crate::plugin_host_channel::{
     plugin_host_queue_full, reply_message, request_message,
 };
 
+// contract: plugin-host.source-registration-precedes-provider-messages
 #[test]
 fn a_plugin_host_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
     let origins = crate::source_origins::DeclaredSourceOrigins::default();
@@ -315,7 +316,7 @@ fn a_snapshot_of_the_page_goes_to_the_main_page_without_a_surface() {
     }
 }
 
-// contract: plugin-host.channel.source-generation
+// contract: plugin-host.channel.snapshot
 #[test]
 fn a_plugin_host_snapshot_carries_its_native_source_generation() {
     let channels = PluginHostChannels::default();
@@ -338,7 +339,7 @@ fn a_plugin_host_snapshot_carries_its_native_source_generation() {
     );
 }
 
-// contract: plugin-host.channel.source-generation
+// contract: plugin-host.declared-ui.source-generation
 #[test]
 fn an_old_ack_generation_does_not_post_to_a_replacement_host() {
     let posts = std::cell::Cell::new(0);
@@ -367,7 +368,7 @@ fn an_old_ack_generation_does_not_post_to_a_replacement_host() {
     assert_eq!(posts.get(), 1, "current ACK was not posted exactly once");
 }
 
-// contract: plugin-host.channel.source-generation
+// contract: plugin-host.declared-ui.source-generation
 #[test]
 fn a_stale_pull_returns_an_explicit_source_cancellation() {
     assert_eq!(
@@ -736,7 +737,7 @@ fn plugin_host_commands_reject_generations_above_the_javascript_safe_integer_lim
     assert!(reply_message(&at_limit).is_ok());
 }
 
-// contract: plugin-host.source-generation
+// contract: plugin-host.channel.reply-generation-scoped-cleanup
 #[test]
 fn a_late_plugin_host_reply_cannot_remove_a_replacement_calls_record() {
     let channels = host_channels(true);
@@ -1121,7 +1122,7 @@ fn a_project_change_posts_the_project_event_to_each_host_with_a_ready_document()
     );
 }
 
-// contract: plugin-host.project.ready-catch-up
+// contract: plugin-host.project.post
 // A ready host receives the project currently shown, including null after an unready interval.
 #[test]
 fn a_ready_host_project_message_contains_the_current_project_or_null() {
@@ -1138,7 +1139,7 @@ fn a_ready_host_project_message_contains_the_current_project_or_null() {
     );
 }
 
-// contract: plugin-host.project.ready-catch-up
+// contract: plugin-host.project.post
 // A ready message sends the theme before the project currently shown by the window.
 #[test]
 fn a_ready_host_receives_theme_then_the_current_null_project() {

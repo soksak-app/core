@@ -1,5 +1,6 @@
 use super::command_names;
 
+// contract: plugin-host.declared-source-stream.command-is-registered
 #[test]
 fn the_main_page_ordered_source_event_channel_is_a_registered_command() {
     assert!(

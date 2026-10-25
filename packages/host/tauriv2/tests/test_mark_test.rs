@@ -93,6 +93,7 @@ fn a_test_mark_is_an_event_and_the_reply_names_its_position() {
     assert_test_marks_under_lifecycle_policy("error");
 }
 
+// contract: diagnostics.test-mark.needs-the-event-log
 #[test]
 fn a_test_mark_is_stored_when_lifecycle_is_off() {
     assert_test_marks_under_lifecycle_policy("off");

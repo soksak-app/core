@@ -14,10 +14,11 @@ import (
 	"github.com/soksak-app/core/packages/sok/wailsv3/tests/support"
 )
 
-func TestProcessWaitChild(t *testing.T) {
+func TestMain(m *testing.M) {
 	if os.Getenv("SOKSAK_PROCESS_WAIT_CHILD") == "1" {
 		os.Exit(0)
 	}
+	os.Exit(m.Run())
 }
 
 // contract: cli.process-wait.timeout-is-an-error
@@ -35,7 +36,7 @@ func TestProcessWaitReportsAnAlreadyEndedPID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(executable, "-test.run=^TestProcessWaitChild$")
+	child := exec.Command(executable)
 	child.Env = append(os.Environ(), "SOKSAK_PROCESS_WAIT_CHILD=1")
 	if output, err := child.CombinedOutput(); err != nil {
 		t.Fatalf("run child: %v: %s", err, output)

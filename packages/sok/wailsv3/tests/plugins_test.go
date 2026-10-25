@@ -336,6 +336,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	}
 }
 
+// contract: cli.plugin.state-reads-and-rejects-starter-job
 func TestPluginsStateReadsAndRejectsInvalidStarterJob(t *testing.T) {
 	config := t.TempDir()
 	path := filepath.Join(config, "plugins", "starter.json")
@@ -365,6 +366,7 @@ func TestPluginsStateReadsAndRejectsInvalidStarterJob(t *testing.T) {
 	}
 }
 
+// contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
 func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	config := t.TempDir()
 	index := pluginVersionsFor(t, sok.CoreVersion, "0.2.0")

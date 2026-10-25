@@ -30,7 +30,7 @@ func projectOpenFixtureReady(t *testing.T, ready bool) (*Host, *Surfaces, *chann
 	return host, surfaces, fake, windowContext
 }
 
-// contract: project.open.prepare-before-show
+// contract: project.open.registers-owner-without-commit
 func TestProjectOpenRegistersOwnershipWithoutCommittingOrPosting(t *testing.T) {
 	host, surfaces, fake, ctx := projectOpenFixture(t)
 	fake.posted = nil
@@ -109,7 +109,7 @@ func TestProjectOpenKeepsPendingReservationStagedUntilShown(t *testing.T) {
 	}
 }
 
-// contract: project.shown-commits-after-page-ready
+// contract: project.shown-commits-after-page-ready, projects.shown.requires-project-field
 func TestProjectShownPostsTheCommittedProjectAndNull(t *testing.T) {
 	host, surfaces, fake, ctx := projectOpenFixture(t)
 	fake.posted = nil
@@ -147,7 +147,7 @@ func TestProjectShownPostsTheCommittedProjectAndNull(t *testing.T) {
 	}
 }
 
-// contract: project.shown-decodes-standard-arguments
+// contract: host-calls.decode.messages
 func TestProjectShownDecodesStandardArguments(t *testing.T) {
 	host, _, _, ctx := projectOpenFixture(t)
 	cases := []struct {
@@ -169,7 +169,7 @@ func TestProjectShownDecodesStandardArguments(t *testing.T) {
 	}
 }
 
-// contract: project.shown-ready-catch-up
+// contract: plugin-host.project.post
 func TestProjectShownIsCaughtUpWhenPluginHostBecomesReady(t *testing.T) {
 	host, surfaces, fake, ctx := projectOpenFixtureReady(t, false)
 	root := t.TempDir()
@@ -444,5 +444,17 @@ func TestProjectShownIgnoresUnknownOuterAndNestedFields(t *testing.T) {
 	}
 	if surfaces.shown != "prj-one" || surfaces.root != root.Root || surfaces.title != "One"+titleSuffix {
 		t.Fatalf("recognized project fields were not committed: shown=%q root=%q title=%q", surfaces.shown, surfaces.root, surfaces.title)
+	}
+}
+
+// contract: projects.shown-command-is-registered
+func TestProjectShownIsExposedThroughTheBindingEntrance(t *testing.T) {
+	bindings, err := NewBindings(&Host{})
+	if err != nil {
+		t.Fatalf("create host bindings: %v", err)
+	}
+	_, err = bindings.Call(context.Background(), "ProjectShown", []json.RawMessage{json.RawMessage(`true`)}, nil)
+	if err == nil || err.Error() != "argument request must be an object, not a boolean" {
+		t.Fatalf("ProjectShown binding error = %v", err)
 	}
 }

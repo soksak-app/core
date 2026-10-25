@@ -18,6 +18,7 @@ fn test_channel(target: Arc<Mutex<Vec<DeclaredSourceEvent>>>) -> Channel<Declare
     })
 }
 
+// contract: plugin-host.declared-source-stream.follows-channel-call-order
 #[test]
 fn source_events_are_sent_to_the_current_channel_in_call_order() {
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -64,6 +65,7 @@ fn source_events_are_sent_to_the_current_channel_in_call_order() {
     );
 }
 
+// contract: plugin-host.declared-source-stream.channel-registers-and-retires
 #[test]
 fn a_new_main_page_channel_retires_the_previous_channel() {
     let old_events = Arc::new(Mutex::new(Vec::new()));
@@ -97,6 +99,8 @@ fn a_new_main_page_channel_retires_the_previous_channel() {
     );
 }
 
+// contract: plugin-host.declared-source-stream.channel-registers-and-retires
+// contract: plugin-host.declared-source-stream.requires-current-channel
 #[test]
 fn a_page_reload_retires_the_channel_until_the_replacement_is_installed() {
     let old_events = Arc::new(Mutex::new(Vec::new()));
@@ -129,6 +133,7 @@ fn a_page_reload_retires_the_channel_until_the_replacement_is_installed() {
     );
 }
 
+// contract: plugin-host.declared-source-stream.requires-current-channel
 #[test]
 fn source_events_before_channel_registration_fail_explicitly() {
     let stream = DeclaredSourceEventStream::default();
@@ -139,6 +144,7 @@ fn source_events_before_channel_registration_fail_explicitly() {
     );
 }
 
+// contract: plugin-host.declared-source-stream.send-failure-is-returned
 #[test]
 fn channel_send_failures_are_returned_to_the_source_handler() {
     let stream = DeclaredSourceEventStream::default();
@@ -154,6 +160,7 @@ fn channel_send_failures_are_returned_to_the_source_handler() {
     );
 }
 
+// contract: plugin-host.declared-source-stream.rejects-unlisted-events
 #[test]
 fn events_outside_the_source_allowlist_are_rejected() {
     let stream = DeclaredSourceEventStream::default();
@@ -164,6 +171,7 @@ fn events_outside_the_source_allowlist_are_rejected() {
     );
 }
 
+// contract: view.responsiveness.relay
 #[test]
 fn view_responsiveness_uses_the_ordered_source_channel() {
     let events = Arc::new(Mutex::new(Vec::new()));

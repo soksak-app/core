@@ -1,6 +1,7 @@
 use super::{ViewChannels, tag_view_generation};
 use serde_json::json;
 
+// contract: view.source-registration-precedes-provider-messages
 #[test]
 fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
     let origins = crate::source_origins::DeclaredSourceOrigins::default();
@@ -41,6 +42,7 @@ fn a_view_lifecycle_snapshot_and_status_call_share_the_issued_generation() {
     assert_eq!(status_registration["generation"], generation);
 }
 
+// contract: view.source-generation
 #[test]
 fn a_stale_view_ack_is_not_posted_and_a_stale_pull_is_cancelled() {
     let origins = crate::source_origins::DeclaredSourceOrigins::default();
@@ -133,6 +135,7 @@ fn a_view_reply_dispatch_record_follows_the_native_post_result() {
     assert!(answered, "a posted reply did not finish its call");
 }
 
+// contract: view.call.reply
 #[test]
 fn a_stale_view_reply_is_recorded_as_discarded_without_answering_the_call() {
     use crate::documents::{ViewReply, dispatch_view_reply};
@@ -176,6 +179,7 @@ fn a_stale_view_reply_is_recorded_as_discarded_without_answering_the_call() {
     );
 }
 
+// contract: view.call.reply
 #[test]
 fn a_failed_view_reply_post_returns_without_a_dispatch_record() {
     use crate::documents::{ViewReply, dispatch_view_reply};

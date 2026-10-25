@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+// contract: plugin-host.starter.rejects-invalid-request
 func TestPluginsStarterIsExposedThroughTheBindingEntrance(t *testing.T) {
 	bindings, err := NewBindings(&Host{plugins: &Plugins{}})
 	if err != nil {

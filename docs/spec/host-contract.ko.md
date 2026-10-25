@@ -125,6 +125,11 @@ fn invalid_json_closes_connection() {
 | `diagnostics.capture-stop.payload-reports-unbounded` | 한도에 도달하지 않은 녹화의 중지 페이로드는 limited false를 보고한다. | both |
 | `diagnostics.capture-stop.payload-reports-layout-timeline` | 녹화 중지 페이로드는 기록된 layout transaction이 없어도 항상 `layouts` 배열을 보고한다. | both |
 | `diagnostics.capture-stop.payload-preserves-layout-stages` | 각 `layouts` 항목은 기록된 ticket, begun, requested, presented, committed 값을 유지한다. | both |
+| `diagnostics.capture-stop.payload-names-opt-in-frame-identity-artifact` | `frameIdentity: true`로 녹화를 시작하면 중지 페이로드는 상태가 `complete`이고 manifest 경로를 가진 `frameIdentity`를 보고한다. | both |
+| `diagnostics.capture-start.preserves-display-option-parsing` | 선택적 `frameIdentity` 매개변수를 추가해도 기존 `display` 옵션 파싱은 바뀌지 않는다. | both |
+| `diagnostics.capture-start.parses-frame-identity-option` | `diagnostics.capture.start`는 선택적 boolean `frameIdentity`를 받고 그 값을 recording capture에 전달한다. | both |
+| `diagnostics.capture-start.frame-identity-is-strict-boolean` | JSON boolean이 아닌 `frameIdentity` 값은 `frameIdentity must be a boolean` 오류로 거부된다. | both |
+| `diagnostics.capture-start.forwards-frame-identity` | recording 시작은 요청된 `frameIdentity` 값을 native capture 시작에 전달한다. | both |
 | `diagnostics.native-objects.payload-names-counts` | `diagnostics.native.objects` 응답은 라이브러리의 살아 있는 객체 수를 `windowCompositions`, `surfaceHosts`, `inputRegistrations` 정수로만 담는다. | both |
 | `diagnostics.native-window-color-space.reports-appkit-profile` | `diagnostics.native.window-color-space`는 선택한 window를 한 번 읽어 `name`과 `iccSHA256`만 반환한다. `name`은 AppKit color space의 localized name이고 hash는 ICC profile byte의 lowercase SHA-256이며 ICC profile을 사용할 수 없으면 null이다. Window에 backing color space가 없으면 두 값 모두 null이다. 이 method는 diagnostic build에서만 선언되고 window를 변경하지 않는다. 비활성 window check는 OS가 선택한 profile을 고정하지 않고 응답 형식을 정확히 확인하며, 존재하지 않는 window에 error 1003을 요구하고, query 전후의 안정된 `host.window` facts를 비교한다. | both |
 | `diagnostics.native-objects.equal-validates` | `diagnostics.native.objects`는 `equal`을 정확히 `windowCompositions`, `surfaceHosts`, `inputRegistrations`를 음이 아닌 정수로 담은 객체로만 받고, 다른 값은 `equal must be an object of windowCompositions, surfaceHosts and inputRegistrations, each a non-negative integer`로 거부한다. `equal`에 이르지 않은 수는 `window object counts did not reach <equal> within 10s; they are <counts>`로 실패하며, 각 수는 `windowCompositions N, surfaceHosts N, inputRegistrations N`으로 쓴다. | both |
@@ -223,11 +228,23 @@ fn invalid_json_closes_connection() {
 | `plugin-host.project.post` | window가 보여 주는 project가 바뀌면 준비된 document가 있는 각 plugin host에 {id, root} 또는 null인 event project를 보낸다. 유효한 ready message마다 현재 theme 뒤에 window가 보여 주는 project를 null을 포함해 보낸다. | both |
 | `view.restart.limit` | process가 끝했거나 message queue가 넘친 view는 300초 안에 네 번째 failure까지 닫히고 다시 만들어지며, surface마다 sliding window로 센다: 새 failure보다 300초 이전인 failure은 세지 않는다. 네 번째 failure가 restart를 멈추고, 멈춘 surface는 view를 만들지 않으며, surface를 제거하면 그 failure 기록을 지운다. | both |
 | `view.responsiveness.relay` | view의 `_webViewWebProcessDidBecomeUnresponsive:` 알림은 `host.trace.view.unresponsive {plugin, surface}`를 쓰고 `view-responsiveness {surface, plugin, generation, responsive: false}`를 메인 page에 보내며, `_webViewWebProcessDidBecomeResponsive:` 알림은 `host.trace.view.responsive {plugin, surface}`를 쓰고 같은 generation의 `responsive: true`를 보낸다. Callback은 이를 만든 view의 generation을 캡처하고, workbench는 해당 generation이 current일 때만 notice를 적용하며 오래된 notice는 `page.view.event.cancel`로 기록한다. 두 알림 모두 view의 call을 끝내지 않는다. | both |
-| `view.process-end-precedes-replacement-registration` | 실패한 view의 process-ended event는 대체 view가 source-registration event를 보내기 전에 전달된다. | both |
 | `view.process.events` | view를 만들면 `host.trace.view.process-request {plugin, surface}`를 쓰고, 그 view의 첫 ready message는 `host.trace.view.process-ready {plugin, surface}`를 쓴다. | both |
 | `view.restart.restores-state` | 프로세스가 끝난 뒤 호스트가 다시 만든 view는 기록의 surface를 가지므로, 새 view의 view 호출은 그 surface를 담은 `view-call`로 전달되고, workbench가 surface별로 보관하는 그 surface의 탭 상태는 끝나기 전과 같이 읽힌다. | both |
 | `view.restart.limit-shows-error` | 300초 안의 네 번째 view surface 실패는 `view-stopped {surface, plugin, reason}` event를 창의 메인 page에 한 번 보내며, reason은 `the view failed 4 times within 300 seconds and is created again when its tab is reopened`이고, application log에 `error: view channel: <surface>: <reason>`을 쓴다. | both |
 | `view.channel.overflow-closes` | 이유가 `queue full for <plugin>`인 `view.error` message는 그 surface의 view를 닫고 그 surface의 실패 하나로 센다. 이미 닫힌 view의 message는 아무것도 닫지 않는다. | both |
+| `view.origin.current-callback-is-dispatched` | 현재 view origin의 callback은 view dispatch 경로에 도달한다. | both |
+| `view.origin.retired-callback-is-cancelled` | 종료된 view origin의 callback은 dispatch 전에 취소되고 교체 view에는 도달하지 않는다. | both |
+| `view.origin.retired-producer-error-is-preserved` | 종료된 view origin의 producer 오류는 원래 이유와 view 식별자를 보존해 기록하며 현재 channel에는 들어가지 않는다. | both |
+| `view.origin.retired-channel-errors-are-reported` | 종료된 view origin에서 발생한 잘못된 JSON과 transport 오류는 원래 이유를 보존한 channel 오류로 보고된다. | both |
+| `view.origin.retired-malformed-envelope-is-reported` | 종료된 view origin의 잘못된 message envelope는 원래 이유를 보존한 channel 오류로 보고된다. | both |
+| `view.call.reply-generation-scoped-cleanup` | 이전 view generation의 늦은 reply는 같은 call id를 가진 교체 generation의 pending-call 기록을 제거하지 않는다. | both |
+| `sidecars.stop.stdin-eof-cancels-late-image` | stdio sidecar의 입력이 닫힌 뒤 이를 중지하면 늦은 image transfer를 닫힌 surface에 전달하지 않고 취소한다. | both |
+| `view.source-generation` | View request, reply, event 직렬화는 JavaScript safe integer 한도를 넘는 generation을 거부한다. 이전 generation의 request와 event는 게시 없이 취소하고, 이전 acknowledgement는 게시하지 않으며 이전 pull은 취소한다. 최대 safe generation은 허용된다. | both |
+| `view.source-registration-precedes-provider-messages` | View source-registration event는 첫 declared UI snapshot과 status-watch 등록보다 먼저 전달되며, 세 메시지는 같은 source generation을 가진다. | both |
+| `source-origin.generation.javascript-safe-integer-limit` | Source-origin allocator는 JavaScript safe integer 한도를 넘는 generation 발급을 거부하며 floor나 등록된 source 상태를 바꾸지 않는다. | both |
+| `source-origin.atomic-snapshot-keeps-floor-and-only-current-sources` | declared source-origin snapshot은 현재 source identity만 포함하며 source를 retire하거나 교체한 뒤에도 generation floor를 유지한다. | both |
+| `plugin-host.startup.refuses-exhausted-source-generation-before-provider` | Source-generation 발급이 소진되면 plugin-host 시작은 provider를 만들기 전에 오류로 끝나며 source snapshot은 바뀌지 않는다. | both |
+| `view.process-end-precedes-replacement-registration` | 실패한 view의 process-ended event는 대체 view가 source-registration event를 보내기 전에 전달된다. | both |
 | `view.call.forward` | 멤버 `cids`(식별자 목록)를 가진 call 요청은 event에 멤버 `cids`를 싣는다. 한 줄에 담을 수 없는 목록은 애플리케이션 로그에 쓰고 어떤 page에도 전달하지 않는다.  view가 `sok-view`로 보낸 call 요청 `{sok: 1, id, command, params}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, command, params}` event가 된다. `id`가 정수가 아니거나 `command`가 비어 있는 요청은 application log에 쓰고 어떤 page에도 전달하지 않는다. | both |
 | `view.call.cancel` | view가 `sok-view`로 보낸 cancel `{sok: 1, id, cancel: true}`은 view의 surface와 plugin을 담은 `view-call {surface, plugin, id, cancel: true}` event가 된다. `id`가 정수가 아니거나, `cancel`이 `true`가 아니거나, `command`를 담은 cancel은 application log에 쓰고 어떤 page에도 전달하지 않는다. | both |
 | `view.call.reply-null-result` | 메인 page의 `viewReply {page, surface, generation, id, result: null}`는 `{sok: 1, id, result: null}`로 ready document에 post된다. 값이 없는 명령은 null result로 답하며, host는 그 null을 result로 보존한다. | both |
@@ -241,6 +258,8 @@ fn invalid_json_closes_connection() {
 | `view.process-ended.forgets-regions` | view의 process가 끝나면 호스트는 그 표면의 영역을 닫은 뒤 window event `view-process-ended {surface}`를 보내므로, 페이지는 새 view가 영역을 다시 붙일 때까지 그 표면의 영역을 잊는다. | both |
 | `view.create-loads-page` | view surface는 첫 sync에서 view 구성(`isView` 설정)으로 web view를 folder와 plugin을 surface의 것으로 하여 만들고, `soksak://<plugin>/<page>`를 load한다. | both |
 | `view.composition.page-and-regions` | 호스트는 surface의 합성 선언을 검증한다. `page`가 plugin의 하나의 `.html` 파일이고 `regions`와 `overlays`가 선택적인 `view` 합성은 받아들이고, `page`가 없는 `view`, plugin 밖의 `page`, 접미사가 `.html`이 아니거나 `.binary` 폴더 안의 `page`, `surface.module`과 `hybrid` 합성은 거절한다. | both |
+| `view.placement.requires-current-page-declaration` | 현재 page가 composition declaration을 등록하지 않은 view의 sync request는 `surface "<id>" has no composition declaration in the current page`로 거부한다. 현재 page의 일치하는 declaration은 허용하고 다른 declaration은 거부한다. | both |
+| `view.placement.retires-declarations-on-page-reload` | Page를 reload하면 이전 page의 view composition 및 plugin declaration을 지워 이후 sync request의 권한으로 사용할 수 없게 한다. | both |
 | `view.composition.dom-removed` | 제거된 `dom` 합성 kind는 `plugin <plugin> surface composition: kind dom is removed; the composition takes kind view`로, 제거된 `hybrid` kind는 `kind hybrid is removed; the composition takes kind view`로 거절된다. | both |
 | `view.overlays.reach-native-in-declared-order` | view surface의 DOM overlay는 배치가 어떤 순서로 도착하든 선언된 순서대로, 선언한 overlay마다 하나씩 자신의 insets와 표시 여부를 가지고 native surface에 전달된다. | both |
 | `view.overlays.native-mask-values` | view surface의 native overlay mask는 native 호출 순서대로 overlay마다 다섯 값을 받는다. left, top, right, bottom insets와, 보이는 overlay는 1, 숨긴 overlay는 0인 표시 flag다. | both |
@@ -377,6 +396,8 @@ fn invalid_json_closes_connection() {
 | `sidecars.trace.relay-records-every-message-with-its-body` | performance trace가 켜진 동안 host가 sidecar로 보내는 각 요청은 event log의 event `host.trace.sidecar.send`, 받는 각 메시지는 `host.trace.sidecar.receive`이며, field에 `sidecar`, `surface`, 본문 전체를 담는다. | both |
 | `sidecars.trace.first-answer-after-spawn-is-recorded` | host가 spawn한 sidecar마다 event `host.trace.sidecar.ready`(level `debug`)를 남기며, 필드 `sidecar`, `pid`, `ms`를 담는다. `ms`는 spawn부터 그 프로세스가 보낸 첫 메시지 줄까지의 밀리초다. spawn마다 한 번 남기며, 다른 host가 시작한 프로세스는 아무것도 남기지 않는다. | both |
 | `sidecars.lifetime.start-and-exit-events` | 호스트가 시작하는 표준 입출력 사이드카 프로세스마다 `name`과 `pid`를 가진 event `host.sidecar.start`가 있고, 그 종료는 `name`, `pid`, `status`(`exit status <code>` 또는 `signal <number>`), 호스트가 멈추는 중이었는지 알려 주는 `stopping`을 가진 event `host.sidecar.exit`다. | both |
+| `sidecars.display-name.requires-canonical-component` | 사이드카 선언에는 `displayName`이 필요하며 `soksak://sidecar/<lowercase-id>` 형식의 component 하나여야 한다. 누락, 문자열이 아닌 값, 잘못된 scheme 또는 role, 추가 path component, 대문자 id는 거부된다. | both |
+| `sidecars.display-name.is-not-injected-into-child-environment` | 호스트는 자식 프로세스에 이미 있는 `SOKSAK_SIDECAR_DISPLAY_NAME` 값을 선언의 `displayName`으로 덮어쓰지 않는다. | both |
 | `sidecars-transport.persistent.connection-events` | host가 영구 service에 연결할 때마다 `name`, service `pid`, `spawned`를 가진 event `host.sidecar.connect`가 있고, 그 끝은 `name`, `pid`, `stopping`, 위반 문구 `violation`(service가 연결을 닫았으면 빈 문자열)을 가진 event `host.sidecar.disconnect`다. | both |
 | `windows.events.window-event-is-recorded` | 창 event는 `window`와 `kind`(`resize`, `move`, `scale_factor_changed`, `show`, `hide`, `occlusion_changed`, `focus`, `lost_focus`, `close_requested`, `closed`, `web_process_ended`, `navigation_committed`)를 가진 event `host.window.event`이며, `resize`, `move`, `scale_factor_changed`는 level `debug`, 나머지는 `info`다. 목록에 없는 kind는 표준 오류에 보고하고 아무것도 저장하지 않는다. | both |
 | `application.events.app-event-is-recorded` | 애플리케이션 event는 `kind`(`started`, `activated`, `deactivated`, `exit_requested`, `exit`)를 가진 event `host.app.event`이며 level은 `info`다. 목록에 없는 kind는 표준 오류에 보고하고 아무것도 저장하지 않는다. | both |
@@ -400,6 +421,7 @@ fn invalid_json_closes_connection() {
 | `log.service.standard-error-goes-to-service-log` | 호스트가 시작한 영속 서비스는 표준 오류를 `logs/<실행 파일 이름>.log`에 쓴다. | both |
 | `log.service.open-failure-fails-start` | 서비스 로그를 열 수 없으면 `sidecar <name>: service log: <error>`로 시작을 실패시키고 서비스를 시작하지 않는다. | both |
 | `images.detach.ack-consumed` | 유효한 `image.detached` 응답은 root, `image` 내부, acknowledgement object 내부의 무관한 더 깊은 JSON member가 `Value` materialization 깊이를 초과해도 host가 소비하며 page에 전달하지 않는다. | both |
+| `images.relay.preserves-compose-marked-range` | image event를 전달할 때 compose `markedRange`와 소유 surface 및 region을 보존한다. | both |
 | `images.detach.ack-exact-owner` | request, supplier, surface, image name, generation이 일치하는 응답만 detach를 완료한다. 불일치 응답은 대기를 끝내지 않는다. | both |
 | `images.detach.refusal-fails-start` | supplier 거부는 명시적 이유와 함께 page 시작을 실패시키며 정확한 detach 대상을 다음 시작 시도까지 보존한다. | both |
 | `images.detach.timeout-retains-target` | 응답이 선언된 제한 시간 안에 오지 않으면 page 시작이 실패하며 정확한 detach 대상을 재시도용으로 보존한다. | both |
@@ -452,7 +474,7 @@ fn invalid_json_closes_connection() {
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | both |
 | `surfaces.reload.reconnects-only-declared-sidecars` | page를 다시 불러오면 이전 page의 각 surface에 대해 plugin이 선언한 image region의 사이드카와 그 surface가 보낸 적이 있는 실행 중인 persistent 사이드카를 다시 연결하고, 어떤 plugin도 선언하지 않는 사이드카는 건너뛴다. 그 surface는 plugin 제거와 함께 끝났다. | tauriv2 only: Wails host는 page를 다시 불러올 때 reconnect를 보내지 않는다 |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | both |
-| `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수를 보고하며, 두 번째 마침은 실패한다. | both |
+| `recording.finish.keeps-folder-and-reports-frames` | 녹화를 마치면 폴더를 유지하고 프레임 수와 시작 때 받은 `frameIdentity` 옵션을 보고하며, 두 번째 마침은 실패한다. | both |
 | `recording.finish.stop-failure-preserves-folder` | capture stop이 실패하면 finish는 stop 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | both |
 | `recording.finish.layout-trace-failure-preserves-folder` | capture stop 뒤 layout trace finalization이 실패하면 finish는 해당 오류를 반환하고 start가 이미 반환한 frame 폴더를 보존한다. | both |
 | `recording.start.failed-open-removes-folder` | 캡처 열기에 실패한 녹화는 폴더를 제거하고 실행 중인 것을 남기지 않는다. | both |
@@ -486,6 +508,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.protocol.dropped-message-is-recorded` | 소유 창이 없어 버려지는 사이드카 메시지는 `info host sidecar <name>: message for surface <surface> dropped: no window owns the surface: <body>`를 쓴다. | both |
 | `sidecars.protocol.answer-to-ended-sidecar-is-recorded` | process가 실행 중이 아닌 sidecar로의 응답은 끝난 오류(`sidecar <name> is not running`)이고, 그런 sidecar에 대한 버려진 transfer image의 `closed` 답은 오류 대신 `not sent`로 기록된다. sidecar의 frame은 process와 함께 끝나기 때문이다. | both |
 | `sidecars.image.closed-surface-is-answered` | 소유 창이 없는 표면의 전송 그림은 버리고 그 그림의 값으로 `{"surface":<surface>,"body":{"image":{"error":"closed","name","generation","raster","sequence"}}}`를 답한다. | both |
+| `sidecars.image.retired-owner-dispositions` | 표면 owner가 retire된 뒤 해당 owner에 이미 전달된 유효한 전송 그림은 closed로 답한다. Non-image message와 malformed image message는 소비하고 응답하지 않는다. | both |
 | `sidecars.image.stop-answers-late-persistent-image-before-shutdown` | 호스트가 중지 중일 때 persistent service는 소유자가 없는 표면의 전송 그림을 보낼 수 있다. 호스트는 아직 열린 service 연결로 `shutdown`을 보내기 전에 응답하여 service가 transport를 닫기 전에 그림을 해제하게 한다. | both |
 | `sidecars.read.unfinished-line-ends-the-connection` | process가 줄을 쓰다 끝나서 line feed 없는 줄로 끝나는 sidecar 출력은 연결을 끝낸다. 그 줄은 메시지가 아니고, host는 `info host sidecar <name>: the output ended in a line of <n> bytes without a line break, which is not a message`를 쓰며, sidecar의 어떤 surface도 `invalid message`로 실패하지 않는다. | both |
 | `sidecars.send.rejects-undeclared-sidecar` | 어떤 플러그인도 선언하지 않은 사이드카로 보내면 "not declared"로 실패한다. | both |
@@ -700,7 +723,17 @@ fn invalid_json_closes_connection() {
 | `quit.request.begins-the-quit-state` | quit 요청은 준비된 창이 있든 없든 quit을 실행하기 전에 종료 상태를 시작하므로, 그 종료 중의 page process 종료는 오류 줄을 쓰지 않는다. | both |
 | `project-removal.ask.waits-for-the-owner-answer` | 프로젝트의 제거 요청은 그 프로젝트를 보이는 창의 답으로 이행한다. 요청이 대기 중인 프로젝트에 대한 두 번째 요청, 요청 없는 답, 올바르지 않은 project id는 오류로 실패하고, 요청을 받은 창이 끝나면 제거해도 된다고 답한 것으로 본다. | both |
 | `project-removal.abandon.records-each-allowed-removal` | 제거에 대한 질문을 받은 창이 끝나면 제거를 허용하고, 그 요청마다 `window`와 `project`를 가진 event `host.project.removal_allowed`를 저장한다. 다른 창의 요청에는 저장하지 않는다. | both |
+| `project.open-ready-shown-order` | project를 열 때 page가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | both |
+| `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 page가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | both |
+| `project.open.registers-owner-without-commit` | 새 project를 열 때 owner는 등록하지만 page가 표시된 project를 알릴 때까지 기존 commit 상태를 유지하고 project를 게시하지 않는다. | both |
+| `project.open.staged-until-shown` | project owner는 project를 여는 동안 staged 상태로 남고, page가 표시된 project를 알린 뒤에만 commit된다. | both |
+| `projects.open.geometry-failure-closes-before-reservation` | 새 project window의 geometry 설정이 실패하면 host는 owner reservation을 추가하기 전에 그 window를 닫고 다른 project 상태는 유지한다. | tauriv2 only: Tauri window geometry operation은 오류 결과를 반환한다 |
+| `project.shown-commits-after-page-ready` | Page가 선택한 project를 알린 뒤 host가 해당 project를 commit한다. 게시되는 값은 commit된 상태를 반영하며, project 없음 선택은 그 상태를 지운다. | both |
 | `projects.shown.requires-project-field` | Project-shown 요청에는 `project` member가 필요하다. 명시적 `null`은 표시 project를 지우며, member를 생략하면 상태 변경 전에 거부한다. | both |
+| `projects.shown-validates-before-commit` | Staged project와 root가 일치하지 않는 project-shown 요청은 commit된 상태나 staged 상태를 바꾸지 않고 거부된다. | both |
+| `projects.release-rolls-back-staged-owner` | Pending project를 release하면 다른 owner의 reservation이나 commit된 project는 바꾸지 않고 해당 owner reservation을 제거한다. | both |
+| `projects.shown-command-is-registered` | Main page는 등록된 project-shown command로 선택한 project를 commit할 수 있다. | both |
+| `project.shown.ignores-unknown-fields` | project-shown 입력에는 `project` member가 필요하며 값은 `null`일 수 있고, member 생략은 거부된다. 알 수 없는 바깥쪽 및 중첩 field는 무시하고 인식하는 project data를 commit하며 명시적 `null`은 commit된 project를 지운다. | both |
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | both |
 | `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | both |
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails 또는 tauri>`를 쓴다. | both |
@@ -720,6 +753,7 @@ fn invalid_json_closes_connection() {
 | `cli.pack.view-page-listed` | `sok plugin pack`은 view composition의 `page`가 `files`가 나열한 경로 밖에 있으면 종료 상태 1로 실패하고 release를 쓰지 않으며, `plugin.json: view page <path> must be listed in files`라는 text로 그 page를 밝힌다. `files`의 폴더가 그 page를 덮으면 pack한다. | both |
 | `cli.release.writes-release-and-sums` | `sok sidecar release`는 `<file name>-<version>-<platform>.tar.gz`를 쓰고 release마다 `SHA256SUMS` 한 줄을 이름 순서로 유지하며, 같은 이름은 바꾼다. 알 수 없는 `--platform`은 종료 상태 2, 나열하지 않은 실행 파일은 1, 형식이 틀린 `SHA256SUMS`는 release를 쓰지 않고 1이다. | both |
 | `cli.release.requires-the-replay-executable` | `sidecar.json`이 `replay`를 선언한 package에서 `replay.executable`이 없거나 `files`가 나열하지 않으면 `sok sidecar release`는 release를 쓰지 않고 그 파일 이름을 담은 오류로 1로 끝나며, 나열한 package는 release된다. | both |
+| `cli.release.requires-display-name` | `sidecar.json`에 `displayName`이 없으면 `sok sidecar release`는 release를 쓰지 않고 `sok: sidecar.json: displayName is required`를 보고하며 exit 1로 끝난다. | both |
 | `cli.registry.writes-checked-index` | `sok registry build`는 registry 파일을 읽고 모든 release hash와 plugin release의 `package.json`, `plugin.json`을 검사한 뒤, 선언한 필드 순서와 두 칸 들여쓰기로 `index.json`을 쓰고 `index`, `packs`, `plugins`, `sidecars`를 출력한다. 두 구현은 같은 텍스트를 쓴다. | both |
 | `cli.registry.rejects-without-writing` | 형식이 틀린 hash, hash가 다른 release, 항목과 다른 `package.json`, 항목과 다른 파일 이름, 없는 `revoked.json`, 알 수 없는 plugin을 지정한 pack은 종료 상태 1이며 `index.json`을 남기지 않는다. | both |
 | `cli.registry.checks-plugin-dependencies` | `sok registry build`는 나열된 plugin을 지정하는 `plugin.json`의 dependency를 받아들이고 version의 `sidecars`에는 sidecar dependency만 쓴다. 나열된 plugin도 나열된 sidecar도 지정하지 않는 dependency와 나열된 어느 version도 채우지 않는 plugin dependency는 그 문구와 함께 종료 상태 1이며 `index.json`을 남기지 않는다. | both |
@@ -749,8 +783,19 @@ fn invalid_json_closes_connection() {
 | `cli.plugin.installed-refuses-package` | Plugin이 `package`를 담은 `installed.json`을 읽으면 `<file>: plugins/installed.json <id>: unknown field package`로 실패한다. | both |
 | `cli.plugin.update-remove-enable-list` | `sok plugin update`는 설치되지 않은 plugin이면 실패하고, `enabled`를 유지하며 `previous`를 기록해 가장 새 version을 설치하고, 쓰는 version과 `previous`만 남긴다. `disable`과 `enable`은 `enabled`를 정하고, `list`는 `installed.json`을 출력하며, `remove`는 `null`을 출력하고 plugin과 sidecar 폴더를 지우며 되풀이하면 실패한다. | both |
 | `cli.plugin.state-reads-registry-and-installed` | Installer library는 `{registry, index, installed}`를 보고한다. `plugins/registry.json`이 없으면 registry와 index가 `null`이고, 있으면 index URL과 검사한 index이며, 읽지 못한 index는 그 읽기 오류를 `index`로, 잘못된 `installed.json`은 오류를 보고한다. | both |
+| `cli.plugin.state-reads-and-rejects-starter-job` | plugin state는 starter job이 있으면 보고하고, 잘못된 starter-job data는 `starter.json`을 명시하는 오류로 거부한다. | both |
+| `cli.plugin.starter-job-transitions-are-bound-to-snapshot` | 기록된 registry snapshot의 모든 plugin이 설치될 때까지 starter job은 pending으로 남는다. snapshot이 바뀌면 job을 완료하거나 변경할 수 없고, pending 및 completed 상태는 재시작 후에도 유지된다. | both |
+| `plugin-host.starter.rejects-invalid-request` | 등록된 plugin-host starter command는 `state` 형식이 잘못된 요청을 command argument 오류로 거부한다. | both |
 | `cli.plugin.action-runs-the-command` | Installer library는 `install`, `update`, `remove`, `enable`, `disable`을 같은 `sok plugin` 명령의 결과로 실행하고, 다른 action은 `unknown plugin action`으로 거부한다. | both |
 | `cli.file.errors-name-the-path-and-the-reason` | 실패한 파일 작업은 `<경로>: <이유>`로 보고하며, 이유는 소문자로 시작하는 운영체제 오류 문구다. 없는 registry index는 `<경로>: no such file or directory`, 읽을 수 없는 `installed.json`은 `<경로>: permission denied`를 보고한다 | both |
+| `cli.process-wait.rejects-invalid-pid-and-timeout` | process-wait 인수가 누락, 잘못됨, 중복되거나 알 수 없는 경우 exit 2로 끝나고 표준 출력을 쓰지 않으며 잘못된 인수를 명시하고 process-wait operation을 호출하지 않는다. | both |
+| `cli.process-wait.requires-an-action` | 하위 command가 없는 `sok process`는 exit 2로 끝나며 process command에 action이 필요하다고 보고한다. | both |
+| `cli.process-wait.option-is-command-scoped` | `--timeout-ms` 옵션은 `sok process wait`에서 허용되고 다른 command의 파싱에는 영향을 주지 않는다. | both |
+| `cli.process-wait.repeated-help-is-idempotent` | help flag를 반복해도 같은 process-wait 사용법을 성공적으로 출력한다. | both |
+| `cli.process-wait.timeout-is-an-error` | 요청한 timeout이 끝날 때까지 process가 남아 있으면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 PID와 timeout을 보고한다. | both |
+| `cli.process-wait.reports-pid-absent` | PID가 이미 없으면 `sok process wait`는 exit 0으로 끝나고 `{pid, ended: true}`를 출력한다. | both |
+| `cli.process-wait.platform-error-is-reported` | 운영체제의 process-wait operation이 실패하면 `sok process wait`는 exit 1로 끝나고 표준 출력을 쓰지 않으며 platform 오류를 보고한다. | both |
+| `cli.process-wait.registered-platform-receives-request` | 등록된 Wails process-wait 구현은 요청한 PID와 timeout을 받고 command는 그 결과를 직렬화한다. | wailsv3 only: Go CLI는 변경 가능한 platform 등록 API를 제공한다 |
 | `cli.debug.query-golden-lines` | `sok debug query`가 모든 사례에서 `docs/spec/cases/log-contract/query`의 golden page의 글 줄을 debug 화면과 같은 줄로 출력하고, 행이 page 뒤에 더 있으면 표준 오류에 `more: --after <cursor>`를 쓴다. | both |
 | `cli.debug.query-errors` | `sok debug query`는 event 파일이 event 구조를 어기면 파일과 줄 번호를 담은 오류로, `logs/` 폴더가 없으면 폴더를 담은 오류로 실패한다. | both |
 | `cli.debug.query-flag-values` | `sok debug query`는 잘못된 flag 값을 질의의 오류 문구를 가진 사용법 오류로 거부하고, 명령에 없는 flag를 거부한다. | both |
@@ -923,7 +968,18 @@ fn invalid_json_closes_connection() {
 | `plugin-host.channel.reply` | host 페이지의 reply `{reply: id, result}` 또는 `{reply: id, error: {code, message}}`는 surface 없이 event `plugin-host-reply {plugin, id, result}` 또는 `plugin-host-reply {plugin, id, error}`로 main page에 간다. result와 error를 둘 다 가지거나 둘 다 가지지 않은 reply, 정수 code나 message가 없는 error, 정수가 아닌 id는 거부되고 어느 페이지에도 중계되지 않는다. | both |
 | `plugin-host.channel.call-served-set` | host는 host 페이지의 call request를 등록 call(`page.exposure.register`, `runtime.command.register`) 또는 exposure 요청 구독(`runtime.native.on`) 또는 그 응답(`runtime.native.call`) 또는 sidecar call(`runtime.sidecar.send`, `runtime.sidecar.on`, `runtime.sidecar.onFailure`) 또는 프로젝트 데이터 call(`runtime.data.get`, `runtime.data.set`) 또는 오류 call(`runtime.error`) 또는 명령 call(`runtime.command`) 또는 로그 call(`runtime.log`)일 때만 `plugin-host-call {plugin, id, command, params}`로 보내고 main page가 답할 때까지 열린 상태로 둔다. cancel은 `plugin-host-call {plugin, id, cancel: true}`로 간다. 다른 빈 문자열이 아닌 command의 call에는 host가 `{sok: 1, id, error: {code: -32000, message: "plugin host call <name> is not served"}}`로 답하고 어느 페이지에도 보내지 않는다. 정수 id가 없는 call, 빈 command의 call, command를 naming하는 cancel은 거부된다. | both |
 | `plugin-host.call.refuses-unlisted-commands` | host 페이지의 channel은 Tauri와 Wails 명령 표의 명령 중 플러그인 허용 목록(`exposureReply`와 view의 영역 호출) 밖의 모든 call을 `plugin host call <name> is not served`로 거부하고 어느 페이지에도 보내지 않는다. | both |
-| `plugin-host.channel.snapshot` | host 페이지의 declared UI snapshot은 surface 없이 window event `declared-ui-snapshot {plugin, status, seq, skipped, value}`로 main page에 간다. window event 이름은 `declared-ui-snapshot`이다. Tauri는 event 이름에 영숫자, `-`, `/`, `:`, `_`만 받기 때문이다(message 이름은 `declared-ui.snapshot`으로 그대로 둔다). 다른 plugin의 snapshot, status가 없거나 1부터의 seq가 없거나 skipped 수가 없거나 value가 없는 snapshot은 거부되고 어느 페이지에도 중계되지 않는다. | both |
+| `plugin-host.channel.snapshot` | Host 페이지의 declared UI snapshot은 surface 없이 window event `declared-ui-snapshot {plugin, generation, status, seq, skipped, value}`로 main page에 간다. window event 이름은 `declared-ui-snapshot`이다. Tauri는 event 이름에 영숫자, `-`, `/`, `:`, `_`만 받기 때문이다(message 이름은 `declared-ui.snapshot`으로 그대로 둔다). 다른 plugin의 snapshot, status가 없거나 1부터의 seq가 없거나 skipped 수가 없거나 value가 없는 snapshot은 거부되고 어느 페이지에도 중계되지 않는다. | both |
+| `plugin-host.source-registration-precedes-provider-messages` | Plugin-host source-registration event는 첫 declared UI snapshot과 status-watch 등록보다 먼저 전달되며, 세 메시지는 같은 source generation을 가진다. | both |
+| `plugin-host.declared-ui.source-generation` | Declared UI acknowledgement와 pull은 현재 plugin-host source generation에서만 적용한다. 오래된 acknowledgement는 게시하지 않고, 오래된 pull은 명시적으로 취소하며, 현재 generation의 작업은 계속 처리한다. | both |
+| `plugin-host.declared-source-stream.channel-registers-and-retires` | Tauri main-page command는 현재 declared-source event channel을 등록하고 교체 또는 page reload 시 이전 channel을 retire한다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` lifecycle API를 사용한다 |
+| `plugin-host.declared-source-stream.command-is-registered` | Ordered declared-source event channel을 등록하는 main-page command는 webview에 노출된다. | tauriv2 only: Tauri는 주입된 `Channel`을 전달하는 command를 등록한다 |
+| `plugin-host.declared-source-stream.requires-current-channel` | channel 등록 전이나 page 교체 중에 보낸 declared-source event는 명시적 오류로 실패한다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` lifecycle API를 사용한다 |
+| `plugin-host.declared-source-stream.follows-channel-call-order` | declared-source event는 source handler가 호출한 순서대로 현재 Tauri channel에 전송된다. | tauriv2 only: host는 Tauri가 주입하는 `Channel` transport를 사용한다 |
+| `plugin-host.declared-source-stream.send-failure-is-returned` | Tauri channel로 declared-source event를 보내지 못하면 source handler에 오류를 반환한다. | tauriv2 only: Tauri `Channel` send operation은 결과를 반환한다 |
+| `plugin-host.declared-source-stream.rejects-unlisted-events` | declared-source channel은 allowlist 밖의 event 이름을 거부한다. | tauriv2 only: host가 Tauri channel allowlist를 소유한다 |
+| `view.placement.geometry-failure-is-reported` | Tauri native geometry operation이 반환한 placement 실패를 호출자에게 전달한다. | tauriv2 only: Tauri platform geometry method는 결과를 반환한다 |
+| `plugin-host.source-generation` | Plugin-host request, reply, event 직렬화는 JavaScript safe integer 한도를 넘는 generation을 거부하고 최대 safe integer를 허용한다. | both |
+| `plugin-host.channel.reply-generation-scoped-cleanup` | 이전 plugin-host generation의 reply는 같은 call id를 가진 교체 generation의 열린 call 기록을 지울 수 없다. | both |
 | `plugin-host.channel.stale-instance-message` | 각 message callback은 그것을 설치한 plugin host의 local instance에 묶인다. Callback, host 생성, dispose는 main thread에서 직렬화된다. Instance를 처분한 뒤 늦게 도착한 callback은 같은 plugin의 새 host가 있고 native handle을 재사용하더라도 dispatch 전에 취소되며 performance tracing 중에는 `host.trace.plugin-host.message-stale {plugin}`을 기록한다. 이전 provider가 명시한 error는 해당 plugin context로 기록하고 대체 host를 닫거나 재시작하지 않는다. Tauri는 window record가 이미 제거된 뒤에도 이를 보존한다. 생성 중 도착한 callback을 포함해 현재 instance의 message는 정상 처리한다. | both |
 | `plugin-host.channel.late-error-preserved` | Tauri host에 늦은 provider callback의 window record가 없을 때도 명시적 provider 오류를 callback이 캡처한 plugin id로 기록한다. 일반 late snapshot 또는 call은 새 오류 없이 취소한다. | tauriv2 only: provider callback 경로가 Tauri 전용이다 |
 | `plugin-host.channel.ready-theme` | host 페이지의 ready message `view.ready {plugin, document}`는 그 document를 ready document로 기록하고, 생성 뒤 첫 ready message는 `host.trace.plugin-host.process-ready`를 쓴다. host는 각 ready message 뒤와 각 later theme 변경 때 ready document가 있는 host에 theme을 보낸다. host 페이지의 새 navigation(문서 상태의 `navigations` 값 상승)은 ready document를 지운다. 다른 plugin의 ready message, document 없는 ready message, 알 수 없는 event는 거부된다. | both |

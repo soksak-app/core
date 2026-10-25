@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// contract: images.relay.preserves-compose-marked-range
 func TestImageChangedPreservesComposeMarkedRangeOnOwningSurface(t *testing.T) {
 	surfaces := NewSurfaces(nil, nil)
 	surfaces.views["probe-surface"] = &nativeWebview{}

@@ -147,6 +147,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     );
 }
 
+// contract: cli.plugin.starter-job-transitions-are-bound-to-snapshot
 #[test]
 fn plugins_starter_persists_pending_and_completed_job() {
     let config = folder::Folder::new();
@@ -171,6 +172,13 @@ fn plugins_starter_persists_pending_and_completed_job() {
             .state,
         "pending"
     );
+    drop(plugins);
+    let (plugins, _) = new_plugins(config.path());
+    assert_eq!(
+        plugins.state().unwrap().starter.unwrap().state,
+        "pending",
+        "the pending starter job survives manager recreation"
+    );
     plugins.run(request("install", json!("probe"))).unwrap();
     assert_eq!(
         plugins
@@ -179,7 +187,13 @@ fn plugins_starter_persists_pending_and_completed_job() {
             .state,
         "complete"
     );
-    assert_eq!(plugins.state().unwrap().starter.unwrap().state, "complete");
+    drop(plugins);
+    let (plugins, _) = new_plugins(config.path());
+    assert_eq!(
+        plugins.state().unwrap().starter.unwrap().state,
+        "complete",
+        "the completed starter job survives manager recreation"
+    );
     plugins.run(request("remove", json!("probe"))).unwrap();
     assert_eq!(plugins.state().unwrap().starter.unwrap().state, "complete");
 }
