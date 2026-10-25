@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,9 +10,9 @@ import test from "node:test";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 
-function makePreparationMakefile(temporary) {
+function makePreparationMakefile(temporary, application = "tauriv2") {
   const makefile = join(temporary, "bundle-preparation.mk");
-  writeFileSync(makefile, `include ${join(ROOT, "Makefile")}\n.PHONY: bundle-preparation-test\nbundle-preparation-test:\n\t@$(call bundle-info,$(BUNDLE),tauriv2)\n`);
+  writeFileSync(makefile, `include ${join(ROOT, "Makefile")}\n.PHONY: bundle-preparation-test\nbundle-preparation-test:\n\t@$(call bundle-info,$(BUNDLE),${application})\n`);
   return makefile;
 }
 
@@ -54,6 +54,24 @@ test("bundle preparation refuses a running bundle executable before removing Con
     rmSync(temporary, { recursive: true, force: true });
   }
 });
+
+for (const application of ["wailsv3", "tauriv2"]) {
+  test(`${application}: bundle preparation includes the ZXing license`, { timeout: 10000, skip: process.platform !== "darwin" }, () => {
+    const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-license-"));
+    const bundle = join(temporary, `soksak-${application}.app`);
+    try {
+      const result = runPreparation(makePreparationMakefile(temporary, application), bundle);
+      assert.equal(result.status, 0, `preparation failed: ${result.stderr}`);
+      const license = join(bundle, "Contents", "Resources", "ThirdPartyLicenses", "ZXing-LICENSE.txt");
+      assert.ok(existsSync(license), "the bundle omits the statically linked ZXing license");
+      assert.equal(readFileSync(license, "utf8"),
+        readFileSync(join(ROOT, "native", "darwin", "THIRD_PARTY_LICENSES", "ZXing-LICENSE.txt"), "utf8"),
+        "the bundle license differs from the pinned dependency license");
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+}
 
 test("bundle preparation recreates Contents when no process uses the bundle", { timeout: 10000, skip: process.platform !== "darwin" }, () => {
   const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-idle-"));

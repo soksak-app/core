@@ -56,6 +56,9 @@ function prepareBundle(bundle, application) {
   mkdirSync(join(contents, "Resources"), { recursive: true });
   copyFileSync(join(ROOT, "apps", application, "platform", "darwin", "Info.plist"), join(contents, "Info.plist"));
   copyFileSync(join(ROOT, "apps", application, "platform", "darwin", "AppIcon.icns"), join(contents, "Resources", "AppIcon.icns"));
+  const licenses = join(contents, "Resources", "ThirdPartyLicenses");
+  mkdirSync(licenses, { recursive: true });
+  copyFileSync(join(ROOT, "native", "darwin", "THIRD_PARTY_LICENSES", "ZXing-LICENSE.txt"), join(licenses, "ZXing-LICENSE.txt"));
 }
 
 function main(args) {

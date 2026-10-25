@@ -29,8 +29,8 @@ static bool blockFirstIdentityDecode(void) {
 static bool failIdentityDecode(void) { return false; }
 
 static bool throwIdentityDecode(void) {
-    @throw [NSException exceptionWithName:@"F239143InjectedVisionException"
-        reason:@"controlled Vision decode exception" userInfo:nil];
+    @throw [NSException exceptionWithName:@"F239146InjectedDecoderException"
+        reason:@"controlled QR decoder exception" userInfo:nil];
 }
 
 static void frameIdentitySessionChecks(void) {
@@ -42,12 +42,12 @@ static void frameIdentitySessionChecks(void) {
         @"an active diagnostic capture starts an identity session");
     free(error); error = NULL;
     check(sp_image_capture_match_identity_prepare_decoder(&error) && error == NULL,
-        @"capture identity readiness performs a real QR encode and Vision decode before sample intake");
+        @"capture identity readiness performs a real QR encode and local decoder decode before sample intake");
     free(error); error = NULL;
     sp_capture_frame_identity_test_set_decode_hook(failIdentityDecode);
     BOOL readinessRejected = !sp_image_capture_match_identity_prepare_decoder(&error)
-        && error != NULL && strstr(error, "Vision readiness failed") != NULL;
-    check(readinessRejected, @"a failed Vision readiness decode prevents capture startup with an explicit error");
+        && error != NULL && strstr(error, "QR decoder readiness failed") != NULL;
+    check(readinessRejected, @"a failed QR decoder readiness decode prevents capture startup with an explicit error");
     free(error); error = NULL;
     sp_capture_frame_identity_test_set_decode_hook(NULL);
 
@@ -282,7 +282,7 @@ static void frameIdentityCropByteBoundChecks(void) {
         frameWidth, frameHeight, frameStride, colorSpace, CGRectMake(0, 0, frameWidth, frameHeight),
         CGRectMake(0, 0, frameWidth, frameHeight), 1, 1, 1, 1, &error);
     check(!admitted && error != NULL && strstr(error, "pending capacity") != NULL,
-        @"compact ROI bytes above the shared 64 MiB pending budget fail explicitly before Vision admission");
+        @"compact ROI bytes above the shared 64 MiB pending budget fail explicitly before decoder admission");
     free(error);
     sp_image_capture_match_end();
     CGColorSpaceRelease(colorSpace);
@@ -349,7 +349,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     });
     long gateWait = dispatch_semaphore_wait(identityDecodeGateEntered,
         dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
-    check(gateWait == 0, @"the first sample reaches the controlled Vision decode boundary");
+    check(gateWait == 0, @"the first sample reaches the controlled QR decoder boundary");
     dispatch_async(sampleQueue, ^{
         secondEnqueued = sp_image_capture_match_identity_enqueue_frame(taggedPixels.bytes, width, height,
             stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
@@ -368,14 +368,14 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     long writerProgressWait = dispatch_semaphore_wait(writerProgress,
         dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
     check(writerProgressWait == 0,
-        @"the capture artifact writer remains available while Vision decode is blocked");
+        @"the capture artifact writer remains available while QR decoding is blocked");
     dispatch_release(writerProgress);
     check(secondWait == 0 && secondEnqueued && secondError == NULL,
-        @"the later sample callback returns while the earlier Vision decode remains blocked");
+        @"the later sample callback returns while the earlier QR decode remains blocked");
     long secondDecodeBeforeRelease = dispatch_semaphore_wait(identityDecodeSecondEntered,
         dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
     check(secondDecodeBeforeRelease == 0,
-        @"the second Vision decode starts before the blocked first decode is released");
+        @"the second QR decode starts before the blocked first decode is released");
     BOOL acceptedThroughLimit = YES;
     for (uint64_t frame = 3; frame <= 8; frame++) {
         char *enqueueError = NULL;
@@ -461,7 +461,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     check(orderedFrames, @"all admitted frames drain in sample order before session state is released, despite later overflow");
     check(firstSnapshotMatched,
         @"the first frame decodes its intake-time ROI after the caller mutates the source sample");
-    check(measuredEveryDecode, @"every Vision result owns ordered enqueue, start, and completion ticks for its display time");
+    check(measuredEveryDecode, @"every decoder result owns ordered enqueue, start, and completion ticks for its display time");
     check(sp_image_capture_match_identity_session_begin(&error) && error == NULL,
         @"a new identity session starts only after the previous decoder drained");
     free(error); error = NULL;
@@ -495,7 +495,7 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         height, stride, colorSpace, CGRectMake(0, 0, 128, 128), CGRectMake(0, 0, 128, 128), 1, 2,
         10, 10000, &error);
     check(exceptionEnqueued && error == NULL,
-        @"the controlled Vision exception is admitted as an asynchronous decode job");
+        @"the controlled decoder exception is admitted as an asynchronous decode job");
     free(error); error = NULL;
     BOOL exceptionManifestAccepted = sp_image_capture_match_write_manifest(directory);
     NSString *identityManifestPath = [[NSString stringWithUTF8String:directory]
@@ -504,11 +504,11 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
     NSDictionary *identityManifest = identityManifestData
         ? [NSJSONSerialization JSONObjectWithData:identityManifestData options:0 error:nil] : nil;
     NSString *identityFailure = identityManifest[@"identityFailure"];
-    check(!exceptionManifestAccepted && [identityFailure containsString:@"F239143InjectedVisionException"],
-        [NSString stringWithFormat:@"an asynchronous Vision exception is reported and fails manifest finalization after decoder drain (failure=%@)",
+    check(!exceptionManifestAccepted && [identityFailure containsString:@"F239146InjectedDecoderException"],
+        [NSString stringWithFormat:@"an asynchronous QR decoder exception is reported and fails manifest finalization after decoder drain (failure=%@)",
             identityFailure ?: @"missing"]);
     check(!sp_image_capture_match_identity_session_active(),
-        @"an asynchronous Vision exception permanently disables identity intake for the session");
+        @"an asynchronous QR decoder exception permanently disables identity intake for the session");
     sp_capture_frame_identity_test_set_decode_hook(NULL);
     if (exceptionImage) CGImageRelease(exceptionImage);
     [exceptionPixels release]; [exceptionNonce release]; [exceptionPayload release];

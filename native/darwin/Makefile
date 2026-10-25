@@ -80,7 +80,15 @@ PROCESS_IDENTITY_LIBRARY := $(CURDIR)/process-identity/lib/libsoksak-process-ide
 OBJECTS    := $(SOURCES:src/%.m=$(BUILD)/%.o)
 LIBRARY    := $(BUILD)/libsoksak-darwin.a
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
-FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework Vision -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz
+FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework ScreenCaptureKit -framework CoreMedia -framework CoreVideo -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz -lc++
+ZXING_COMMIT := 287c85df6f961c8efbfb5ffd736cd9457b8b890e
+ZXING_URL := https://codeload.github.com/zxing-cpp/zxing-cpp/tar.gz/$(ZXING_COMMIT)
+ZXING_SHA256 := 97d952c661b1f79d21aacc2ec544ef05c4d1465f55692cc49622ea6a8166ca7b
+ZXING_RELEASE_FILE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT).tar.gz
+ZXING_SOURCE := $(BUILD)/zxing-cpp-$(ZXING_COMMIT)
+ZXING_BUILD := $(BUILD)/zxing-cpp-build
+ZXING_INSTALL := $(BUILD)/zxing-cpp-install
+ZXING_LIBRARY := $(ZXING_INSTALL)/lib/libZXing.a
 # The newest API the sources use is from macOS 14.4 (getCurrentProcessShareableContentWithCompletionHandler in
 # capture.m).
 # The same minimum version is also put in Cflags and Libs of the .pc so that the builds that use it compile and link
@@ -96,12 +104,35 @@ endif
 
 all: $(LIBRARY) $(PKGCONFIG)
 
-$(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile | $(BUILD)
-	@clang $(CFLAGS) -c $< -o $@
+$(BUILD)/%.o: src/%.m $(wildcard src/*.h src/private/*.h) Makefile $(ZXING_LIBRARY) | $(BUILD)
+	@clang $(CFLAGS) -I$(ZXING_INSTALL)/include -c $< -o $@
 
-$(LIBRARY): $(OBJECTS)
+$(ZXING_RELEASE_FILE): | $(BUILD)
+	@set -eu; curl -L --fail --show-error $(ZXING_URL) -o $@.part; \
+	  printf '%s  %s\n' '$(ZXING_SHA256)' '$@.part' | shasum -a 256 -c -; \
+	  mv $@.part $@
+
+$(ZXING_SOURCE)/LICENSE: $(ZXING_RELEASE_FILE) | $(BUILD)
+	@mkdir -p $(ZXING_SOURCE)
+	@tar -xzf $(ZXING_RELEASE_FILE) --strip-components=1 -C $(ZXING_SOURCE)
+	@test -f $@
+
+$(ZXING_LIBRARY): $(ZXING_SOURCE)/LICENSE
+	@cmake -S $(ZXING_SOURCE)/core -B $(ZXING_BUILD) \
+	  -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=14.4 \
+	  -DCMAKE_INSTALL_PREFIX=$(ZXING_INSTALL) -DBUILD_SHARED_LIBS=OFF \
+	  -DZXING_READERS=ON -DZXING_WRITERS=OFF -DZXING_C_API=ON \
+	  -DZXING_ENABLE_1D=OFF -DZXING_ENABLE_AZTEC=OFF -DZXING_ENABLE_DATAMATRIX=OFF \
+	  -DZXING_ENABLE_MAXICODE=OFF -DZXING_ENABLE_PDF417=OFF -DZXING_ENABLE_QRCODE=ON
+	@cmake --build $(ZXING_BUILD) --config Release --target ZXing -j 4
+	@cmake --install $(ZXING_BUILD) --config Release
+	@mkdir -p $(ZXING_INSTALL)/share/licenses/ZXing
+	@cp $(CURDIR)/THIRD_PARTY_LICENSES/ZXing-LICENSE.txt $(ZXING_INSTALL)/share/licenses/ZXing/LICENSE
+	@test -f $(ZXING_LIBRARY)
+
+$(LIBRARY): $(OBJECTS) $(ZXING_LIBRARY)
 	@rm -f $@
-	@ar rcs $@ $^
+	@libtool -static -o $@ $(OBJECTS) $(ZXING_LIBRARY)
 
 # The file content depends on the current location, so every build compares it. pkgconfig-current marks that this
 # comparison is required.

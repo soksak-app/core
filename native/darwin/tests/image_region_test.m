@@ -90,6 +90,21 @@ static BOOL imageBytesEqual(CGImageRef first, CGImageRef second) {
     return equal;
 }
 
+static NSData *imageBGRABytes(CGImageRef image) {
+    size_t width = image ? CGImageGetWidth(image) : 0;
+    size_t height = image ? CGImageGetHeight(image) : 0;
+    if (!width || !height || width > SIZE_MAX / 4 || height > SIZE_MAX / (width * 4)) return nil;
+    size_t rowBytes = width * 4;
+    NSMutableData *bytes = [NSMutableData dataWithLength:rowBytes * height];
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = colorSpace ? CGBitmapContextCreate(bytes.mutableBytes, width, height, 8,
+        rowBytes, colorSpace, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst) : NULL;
+    if (context) CGContextDrawImage(context, CGRectMake(0, 0, width, height), image);
+    if (context) CGContextRelease(context);
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    return context ? bytes : nil;
+}
+
 // Collects events in JSON form
 static NSMutableArray *collectedEvents = nil;
 // Separate collectors used to tell apart the focus change between two regions (A->B check of V5-114).
@@ -392,11 +407,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         free(identityError); identityError = NULL;
         SPCaptureFrameIdentity taggedIdentity = {0};
         NSString *unknownReason = nil, *decodeError = nil;
-        bool decodedTag = taggedSnapshot && sp_capture_frame_identity_decode(taggedSnapshot, tagROI, issuedPayloads,
+        NSData *taggedPixels = imageBGRABytes(taggedSnapshot);
+        bool decodedTag = taggedSnapshot && taggedPixels && sp_capture_frame_identity_decode(taggedPixels.bytes,
+            taggedPixels.length, CGImageGetWidth(taggedSnapshot), CGImageGetHeight(taggedSnapshot),
+            CGImageGetWidth(taggedSnapshot) * 4, tagROI, issuedPayloads,
             &taggedIdentity, &unknownReason, &decodeError);
         check(decodedTag && taggedIdentity.generation == 91 && taggedIdentity.raster == 10
             && taggedIdentity.sequence == 1 && unknownReason == nil && decodeError == nil,
-            @"TEST 1A: Vision decodes the exact identity embedded in the presented layer inside its reserved ROI");
+            @"TEST 1A: the local QR decoder decodes the exact identity embedded in the presented layer inside its reserved ROI");
         [issuedPayloads release]; [unknownReason release]; [decodeError release];
         if (rawSnapshot && taggedSnapshot) {
             CFDataRef rawBytes = CGDataProviderCopyData(CGImageGetDataProvider(rawSnapshot));

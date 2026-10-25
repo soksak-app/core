@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-146: Replace the QR frame-identity decoder with pinned ZXing-C++ v3.1.1 after preserved recordings reached the existing eight-job Vision backlog limit. Verify the source release SHA-256, build the QR-only static C API into the existing macOS static library, and stage the Apache-2.0 license in both app bundles. Preserve exact payload, ROI, ambiguity, error, artifact ordering, resource bounds, and raw-frame behavior. Five focused native owners pass, the pkg-config owner passes, and bundle preparation verifies the license in both hosts. Both host builds and full-recording cadence acceptance remain pending.
+
 - F239-147: Make every other installed plugin declaration in the application
   update fixture compatible with the synthetic core candidate before testing
   the browser-only incompatibility. Missing installed declarations now fail

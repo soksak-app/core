@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-146: 보존된 recording이 기존 8-job Vision backlog 상한에 도달한 뒤 frame-identity QR decoder를 고정된 ZXing-C++ v3.1.1로 교체한다. Source release SHA-256을 확인하고 QR 전용 C API를 기존 macOS static library에 빌드하며 두 app bundle에 Apache-2.0 license를 포함한다. Exact payload, ROI, ambiguity, error, artifact ordering, resource bound 및 raw-frame 동작을 유지한다. Focused native owner 5개와 pkg-config owner가 통과했고 bundle preparation은 두 host 모두에서 license를 확인했다. 두 host build와 full-recording cadence acceptance는 남아 있다.
+
 - F239-147: Browser만 호환되지 않는 core 후보가 되도록 application-update
   fixture에서 나머지 설치 plugin 선언의 engine range를 candidate와 호환되게
   한다. 설치 선언이 없으면 fixture setup을 명시적으로 실패시킨다. Update

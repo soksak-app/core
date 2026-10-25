@@ -1,7 +1,7 @@
 #import "capture_frame_identity.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <CoreImage/CoreImage.h>
-#import <Vision/Vision.h>
+#import <ZXing/ZXingC.h>
 #include <limits.h>
 #include <math.h>
 #include <errno.h>
@@ -64,6 +64,12 @@ static bool validROI(CGRect roi, size_t width, size_t height) {
     return roi.origin.x >= 0 && roi.origin.y >= 0 && CGRectGetMaxX(roi) <= width && CGRectGetMaxY(roi) <= height
         && floor(roi.origin.x) == roi.origin.x && floor(roi.origin.y) == roi.origin.y
         && floor(roi.size.width) == roi.size.width && floor(roi.size.height) == roi.size.height;
+}
+
+static bool validDecodeRaster(const uint8_t *bgra, size_t byte_length, size_t width, size_t height,
+    size_t row_bytes) {
+    return validRaster(bgra, width, height, row_bytes) && row_bytes <= INT_MAX
+        && row_bytes >= width * 4 && byte_length >= row_bytes * height && byte_length <= INT_MAX;
 }
 
 static NSString *unknown(NSString *reason) { return [reason copy]; }
@@ -200,63 +206,126 @@ bool sp_capture_frame_identity_encode(const uint8_t *bgra, size_t width, size_t 
     return true;
 }
 
-bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSString *> *issued_payloads,
+bool sp_capture_frame_identity_decode(const uint8_t *bgra, size_t byte_length, size_t width, size_t height,
+    size_t row_bytes, CGRect roi, NSSet<NSString *> *issued_payloads,
     SPCaptureFrameIdentity *identity, NSString **unknown_reason, NSString **error) {
     if (identity) memset(identity, 0, sizeof(*identity));
     if (unknown_reason) *unknown_reason = nil;
     if (error) *error = nil;
-    if (!image || !issued_payloads || !identity || !unknown_reason || !error
-        || !validROI(roi, CGImageGetWidth(image), CGImageGetHeight(image))) {
+    if (!issued_payloads || !identity || !unknown_reason || !error
+        || !validDecodeRaster(bgra, byte_length, width, height, row_bytes)
+        || !validROI(roi, width, height) || roi.size.width > INT_MAX || roi.size.height > INT_MAX) {
         if (error) *error = [@"frame identity decode arguments are invalid" copy];
         return false;
     }
-    VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image options:@{}];
-    VNDetectBarcodesRequest *request = [[VNDetectBarcodesRequest alloc] init];
-    request.symbologies = @[ VNBarcodeSymbologyQR ];
-    CGRect visionROI = CGRectMake(roi.origin.x / CGImageGetWidth(image),
-        (CGImageGetHeight(image) - CGRectGetMaxY(roi)) / CGImageGetHeight(image),
-        roi.size.width / CGImageGetWidth(image), roi.size.height / CGImageGetHeight(image));
-    request.regionOfInterest = visionROI;
-    NSError *visionError = nil;
-    BOOL performed = NO;
-    NSArray<VNBarcodeObservation *> *codes = nil;
+    size_t roiX = (size_t)roi.origin.x, roiY = (size_t)roi.origin.y;
+    size_t roiWidth = (size_t)roi.size.width, roiHeight = (size_t)roi.size.height;
+    ZXing_ImageView *imageView = NULL;
+    ZXing_ReaderOptions *options = NULL;
+    ZXing_Barcodes *barcodes = NULL;
+    char *decoderError = NULL;
+    uint8_t *payloadBytes = NULL;
+    int payloadLength = 0;
+    NSString *payload = nil;
+    BOOL result = false;
     @try {
+        do {
+        imageView = ZXing_ImageView_new_checked(bgra, (int)byte_length, (int)width, (int)height,
+            ZXing_ImageFormat_BGRA, (int)row_bytes, 4);
+        if (!imageView) {
+            decoderError = ZXing_LastErrorMsg();
+            *error = [[NSString alloc] initWithFormat:@"ZXing image view creation failed: %@",
+                decoderError ? [NSString stringWithUTF8String:decoderError] : @"unknown error"];
+            break;
+        }
+        options = ZXing_ReaderOptions_new();
+        if (!options) {
+            *error = [@"ZXing reader options allocation failed" copy];
+            break;
+        }
+        ZXing_BarcodeFormat formats[] = { ZXing_BarcodeFormat_QRCode };
+        ZXing_ReaderOptions_setFormats(options, formats, 1);
+        ZXing_ReaderOptions_setMaxNumberOfSymbols(options, 0);
+        ZXing_ReaderOptions_setTryHarder(options, true);
+        ZXing_ReaderOptions_setTryRotate(options, true);
+        ZXing_ReaderOptions_setTryInvert(options, true);
+        ZXing_ReaderOptions_setTryDownscale(options, true);
+        ZXing_ReaderOptions_setReturnErrors(options, true);
 #ifdef SOKSAK_DIAGNOSTIC
     if (captureFrameIdentityDecodeTestHook && !captureFrameIdentityDecodeTestHook()) {
-        *error = [@"Vision QR decode test failure" copy];
-        return false;
+        *error = [@"QR decoder test failure" copy];
+        break;
     }
 #endif
-    performed = [handler performRequests:@[ request ] error:&visionError];
-    codes = [[request.results copy] autorelease];
-    } @finally {
-        [request release];
-        [handler release];
-    }
-    if (!performed) {
-        *error = [[NSString alloc] initWithFormat:@"Vision QR decode failed: %@", visionError.localizedDescription ?: @"unknown error"];
-        return false;
-    }
-    if (codes.count == 0) { *unknown_reason = unknown(@"no-code-in-expected-roi"); return false; }
-    if (codes.count > 1) { *unknown_reason = unknown(@"ambiguous-code-count"); return false; }
-    VNBarcodeObservation *code = codes.firstObject;
-    CGRect lowerLeftBox = VNImageRectForNormalizedRectUsingRegionOfInterest(code.boundingBox,
-        CGImageGetWidth(image), CGImageGetHeight(image), visionROI);
-    CGRect box = CGRectMake(lowerLeftBox.origin.x,
-        CGImageGetHeight(image) - CGRectGetMaxY(lowerLeftBox), lowerLeftBox.size.width, lowerLeftBox.size.height);
-    if (!CGRectContainsRect(roi, box)) { *unknown_reason = unknown(@"code-outside-expected-roi"); return false; }
-    NSString *value = code.payloadStringValue;
-    if (!value) { *unknown_reason = unknown(@"payload-unreadable"); return false; }
-    if (![issued_payloads containsObject:value]) { *unknown_reason = unknown(@"payload-unissued"); return false; }
+        barcodes = ZXing_ReadBarcodes(imageView, options);
+        if (!barcodes) {
+            decoderError = ZXing_LastErrorMsg();
+            *error = [[NSString alloc] initWithFormat:@"ZXing QR decode failed: %@",
+                decoderError ? [NSString stringWithUTF8String:decoderError] : @"unknown error"];
+            break;
+        }
+        int codeCount = ZXing_Barcodes_size(barcodes);
+        const ZXing_Barcode *code = NULL;
+        int insideCount = 0, intersectingCount = 0;
+        for (int index = 0; index < codeCount; index++) {
+            const ZXing_Barcode *candidate = ZXing_Barcodes_at(barcodes, index);
+            if (!candidate || ZXing_Barcode_format(candidate) != ZXing_BarcodeFormat_QRCode) continue;
+            ZXing_Position candidatePosition = ZXing_Barcode_position(candidate);
+            ZXing_PointI candidateCorners[] = { candidatePosition.topLeft, candidatePosition.topRight,
+                candidatePosition.bottomRight, candidatePosition.bottomLeft };
+            BOOL contained = YES;
+            int minX = INT_MAX, minY = INT_MAX, maxX = INT_MIN, maxY = INT_MIN;
+            for (size_t corner = 0; corner < sizeof(candidateCorners) / sizeof(candidateCorners[0]); corner++) {
+                int x = candidateCorners[corner].x, y = candidateCorners[corner].y;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+                if (x < (int)roiX || y < (int)roiY
+                    || x > (int)(roiX + roiWidth) || y > (int)(roiY + roiHeight)) contained = NO;
+            }
+            if (contained) {
+                insideCount++;
+                code = candidate;
+            } else if (maxX > (int)roiX && minX < (int)(roiX + roiWidth)
+                && maxY > (int)roiY && minY < (int)(roiY + roiHeight)) {
+                intersectingCount++;
+            }
+        }
+        if (insideCount > 1 || (insideCount && intersectingCount)) {
+            *unknown_reason = unknown(@"ambiguous-code-count");
+            break;
+        }
+        if (!insideCount) {
+            *unknown_reason = unknown(intersectingCount ? @"cropped-code-in-expected-roi" : @"no-code-in-expected-roi");
+            break;
+        }
+        if (!ZXing_Barcode_isValid(code)) {
+            *unknown_reason = unknown(@"payload-unreadable");
+            break;
+        }
+        payloadBytes = ZXing_Barcode_bytes(code, &payloadLength);
+        if (!payloadBytes || payloadLength <= 0) { *unknown_reason = unknown(@"payload-unreadable"); break; }
+        if (memchr(payloadBytes, '\0', (size_t)payloadLength)) {
+            *unknown_reason = unknown(@"payload-malformed");
+            break;
+        }
+        payload = [[NSString alloc] initWithBytes:payloadBytes length:(NSUInteger)payloadLength
+            encoding:NSUTF8StringEncoding];
+        if (!payload) { *unknown_reason = unknown(@"payload-unreadable"); break; }
+        if (![issued_payloads containsObject:payload]) { *unknown_reason = unknown(@"payload-unissued"); break; }
+        NSString *value = payload;
     NSArray<NSString *> *fields = [value componentsSeparatedByString:@":"];
     if (fields.count != 7 || ![fields[0] isEqualToString:@"soksak-frame-id"] || ![fields[1] isEqualToString:@"v1"]
-        || !validNonce(fields[2])) { *unknown_reason = unknown(@"payload-malformed"); return false; }
+        || !validNonce(fields[2])) { *unknown_reason = unknown(@"payload-malformed"); break; }
     uint64_t values[3] = { 0 };
     for (NSUInteger index = 0; index < 3; index++) {
         if (!sp_capture_frame_identity_parse_canonical_uint64(fields[index + 3], &values[index])) {
-            *unknown_reason = unknown(@"payload-malformed"); return false;
+            *unknown_reason = unknown(@"payload-malformed");
+            break;
         }
     }
+    if (*unknown_reason) break;
     NSString *prefix = [NSString stringWithFormat:@"%@:%@:%@:%@:%@:%@", fields[0], fields[1], fields[2],
         fields[3], fields[4], fields[5]];
     NSData *data = [prefix dataUsingEncoding:NSUTF8StringEncoding];
@@ -264,9 +333,24 @@ bool sp_capture_frame_identity_decode(CGImageRef image, CGRect roi, NSSet<NSStri
     CC_SHA256(data.bytes, (CC_LONG)data.length, digest);
     NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
     for (NSUInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) [hex appendFormat:@"%02x", digest[index]];
-    if (![fields[6] isEqualToString:hex]) {
-        *unknown_reason = unknown(@"payload-checksum-invalid"); return false;
-    }
+    if (![fields[6] isEqualToString:hex]) { *unknown_reason = unknown(@"payload-checksum-invalid"); break; }
     identity->generation = values[0]; identity->raster = values[1]; identity->sequence = values[2];
-    return true;
+    result = true;
+        } while (0);
+    } @catch (NSException *exception) { // silent: report decoder-boundary exceptions through the explicit API error output.
+        [*unknown_reason release];
+        *unknown_reason = nil;
+        [*error release];
+        *error = [[NSString alloc] initWithFormat:@"QR decoder raised %@: %@", exception.name,
+            exception.reason ?: @"no reason"];
+        result = false;
+    } @finally {
+        if (payloadBytes) ZXing_free(payloadBytes);
+        [payload release];
+        if (barcodes) ZXing_Barcodes_delete(barcodes);
+        if (options) ZXing_ReaderOptions_delete(options);
+        if (imageView) ZXing_ImageView_delete(imageView);
+        if (decoderError) ZXing_free(decoderError);
+    }
+    return result;
 }

@@ -117,7 +117,7 @@ static size_t identityDecodedFrameCount;
 static size_t identityDecodedRecordCount;
 static size_t identityDecodedWriteFailures;
 static dispatch_queue_t identityDecodeQueue;
-static NSOperationQueue *identityVisionQueue;
+static NSOperationQueue *identityDecodeWorkerQueue;
 static NSUInteger identityDecodePendingJobs;
 static size_t identityDecodePendingBytes;
 static BOOL identityDecodeAccepting;
@@ -131,7 +131,6 @@ static BOOL identityDecodeAccepting;
 @property BOOL coverageMarker;
 @property BOOL retentionMarker;
 @property size_t cropBytes;
-@property(assign) CGColorSpaceRef colorSpace;
 @property(retain) NSArray<NSDictionary *> *decodedRecords;
 @property(retain) NSString *decodeFailure;
 @end
@@ -306,8 +305,8 @@ void sp_image_capture_match_end(void) {
     artifactWriterQueue = NULL;
     if (identityDecodeQueue) dispatch_release(identityDecodeQueue);
     identityDecodeQueue = NULL;
-    [identityVisionQueue release];
-    identityVisionQueue = nil;
+    [identityDecodeWorkerQueue release];
+    identityDecodeWorkerQueue = nil;
     identityDecodePendingJobs = 0;
     identityDecodePendingBytes = 0;
     [historyLock unlock];
@@ -1047,8 +1046,6 @@ static void addIdentityArtifactPairLocked(NSDictionary *record,
 static void decodeIdentityJob(SPIdentityDecodeJob *job) {
     NSMutableArray<NSDictionary *> *records = nil;
     NSString *decodeFailure = nil;
-    CGDataProviderRef activeProvider = NULL;
-    CGImageRef activeImage = NULL;
     NSString *activeUnknownReason = nil;
     NSString *activeDecodeError = nil;
     @try {
@@ -1063,7 +1060,7 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
             sp_image_capture_identity identity = {0};
             BOOL hasIdentity = NO;
             uint64_t decodeStarted = 0, decodeComplete = 0;
-            BOOL visionRan = NO;
+            BOOL decoderRan = NO;
             if (!mapped) {
                 reason = @"unknown-geometry";
             } else if ([group[@"duplicate"] boolValue]) {
@@ -1071,23 +1068,18 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
             } else {
                 NSData *pixels = group[@"pixels"];
                 size_t width = (size_t)CGRectGetWidth(roi), height = (size_t)CGRectGetHeight(roi);
-                activeProvider = pixels ? CGDataProviderCreateWithCFData((CFDataRef)pixels) : NULL;
-                activeImage = activeProvider && job.colorSpace
-                    ? CGImageCreate(width, height, 8, 32, width * 4, job.colorSpace, kCGBitmapByteOrder32Little
-                        | kCGImageAlphaPremultipliedFirst, activeProvider, NULL, false, kCGRenderingIntentDefault) : NULL;
-                if (activeProvider) { CGDataProviderRelease(activeProvider); activeProvider = NULL; }
-                if (!activeImage) {
-                    decodeFailure = [@"frame identity compact ROI image creation failed" copy];
+                if (!pixels || !width || width > SIZE_MAX / 4 || height > SIZE_MAX / (width * 4)
+                    || pixels.length != width * height * 4) {
+                    decodeFailure = [@"frame identity compact ROI byte dimensions are invalid" copy];
                     break;
                 }
                 SPCaptureFrameIdentity decoded = {};
                 decodeStarted = mach_absolute_time();
-                visionRan = YES;
-                BOOL decodedOK = sp_capture_frame_identity_decode(activeImage,
-                    CGRectMake(0, 0, width, height), group[@"payloads"], &decoded,
+                decoderRan = YES;
+                BOOL decodedOK = sp_capture_frame_identity_decode(pixels.bytes, pixels.length,
+                    width, height, width * 4, CGRectMake(0, 0, width, height), group[@"payloads"], &decoded,
                     &activeUnknownReason, &activeDecodeError);
                 decodeComplete = mach_absolute_time();
-                CGImageRelease(activeImage); activeImage = NULL;
                 if (activeDecodeError) {
                     decodeFailure = [activeDecodeError copy];
                     [activeUnknownReason release]; activeUnknownReason = nil;
@@ -1112,11 +1104,11 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
             }
             NSMutableDictionary *record = [identityDecodeRecord(job.frame, job.displayTime, region, roi,
                 status, reason, identity, hasIdentity) mutableCopy];
-            record[@"decodeEnqueuedTime"] = visionRan
+            record[@"decodeEnqueuedTime"] = decoderRan
                 ? [NSString stringWithFormat:@"%llu", (unsigned long long)job.enqueuedTime] : (id)NSNull.null;
-            record[@"decodeStartTime"] = visionRan
+            record[@"decodeStartTime"] = decoderRan
                 ? [NSString stringWithFormat:@"%llu", (unsigned long long)decodeStarted] : (id)NSNull.null;
-            record[@"decodeCompleteTime"] = visionRan
+            record[@"decodeCompleteTime"] = decoderRan
                 ? [NSString stringWithFormat:@"%llu", (unsigned long long)decodeComplete] : (id)NSNull.null;
             [records addObject:record];
             [record release];
@@ -1150,7 +1142,7 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
     } @catch (NSException *exception) { // silent: retain the exception as the explicit session failure reported by ordered commit.
         [decodeFailure release];
         decodeFailure = [[NSString alloc] initWithFormat:
-            @"frame identity Vision decode raised %@: %@", exception.name,
+            @"frame identity QR decoder raised %@: %@", exception.name,
             exception.reason ?: @"no reason"];
         job.decodedRecords = nil;
         job.decodeFailure = decodeFailure;
@@ -1158,15 +1150,9 @@ static void decodeIdentityJob(SPIdentityDecodeJob *job) {
         decodeFailure = nil;
     } @finally {
         [decodeFailure release];
-        if (activeProvider) CGDataProviderRelease(activeProvider);
-        if (activeImage) CGImageRelease(activeImage);
         [activeUnknownReason release];
         [activeDecodeError release];
         job.groups = nil;
-        if (job.colorSpace) {
-            CGColorSpaceRelease(job.colorSpace);
-            job.colorSpace = NULL;
-        }
         initializeHistory();
         [historyLock lock];
         if (identityDecodePendingBytes < job.cropBytes) {
@@ -1219,7 +1205,7 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
     BOOL hadHistoryDrops = NO, onlyHistoryEvictions = NO, coverageComplete = YES;
     [historyLock lock];
     if (!identitySessionActive || identitySessionFailure || !identityDecodeAccepting
-        || !identityDecodeQueue || !identityVisionQueue) {
+        || !identityDecodeQueue || !identityDecodeWorkerQueue) {
         sessionFailure = [identitySessionFailure copy];
         [historyLock unlock];
         BOOL failed = identityFailure(error, sessionFailure.UTF8String ?: "frame identity decoder is not accepting samples");
@@ -1355,7 +1341,6 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
     job.coverageMarker = coverageMarker;
     job.retentionMarker = retentionMarker;
     job.cropBytes = cropBytes;
-    job.colorSpace = CGColorSpaceRetain(color_space);
     BOOL jobLimitExceeded = identityDecodePendingJobs >= kIdentityDecodePendingJobLimit;
     BOOL byteLimitExceeded = cropBytes > kImageCaptureArtifactPendingLimit
         || artifactPendingBytes > kImageCaptureArtifactPendingLimit - cropBytes
@@ -1363,8 +1348,6 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
     if (!identityDecodeAccepting || jobLimitExceeded || byteLimitExceeded) {
         if (!identityDecodeAccepting) {
             [historyLock unlock];
-            CGColorSpaceRelease(job.colorSpace);
-            job.colorSpace = NULL;
             [job release];
             return identityFailure(error, "frame identity decoder intake is closed");
         }
@@ -1374,8 +1357,6 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
         if (!identitySessionFailure) identitySessionFailure = [capacityError copy];
         atomic_store(&identitySessionEnabled, false);
         [historyLock unlock];
-        CGColorSpaceRelease(job.colorSpace);
-        job.colorSpace = NULL;
         [job release];
         return identityFailure(error, capacityError.UTF8String);
     }
@@ -1386,13 +1367,11 @@ bool sp_image_capture_match_identity_enqueue_frame(const uint8_t *pixels, size_t
         identityDecodePendingJobs--;
         identityDecodePendingBytes -= cropBytes;
         [historyLock unlock];
-        CGColorSpaceRelease(job.colorSpace);
-        job.colorSpace = NULL;
         [job release];
         return identityEnqueueFailure(error, "frame identity decoder operation allocation failed");
     }
     [operation addExecutionBlock:^{ @autoreleasepool { decodeIdentityJob(job); } }];
-    [identityVisionQueue addOperation:operation];
+    [identityDecodeWorkerQueue addOperation:operation];
     dispatch_async(identityDecodeQueue, ^{
         @autoreleasepool { commitIdentityDecodeJob(job, operation); }
     });
@@ -1635,13 +1614,13 @@ bool sp_image_capture_match_identity_session_begin(char **error) {
     identitySessionActive = true;
     identitySessionStarted = true;
     identityDecodeQueue = dispatch_queue_create("sp.capture.identity-decoder", DISPATCH_QUEUE_SERIAL);
-    identityVisionQueue = [[NSOperationQueue alloc] init];
-    [identityVisionQueue setMaxConcurrentOperationCount:2];
-    if (!identityDecodeQueue || !identityVisionQueue) {
+    identityDecodeWorkerQueue = [[NSOperationQueue alloc] init];
+    [identityDecodeWorkerQueue setMaxConcurrentOperationCount:2];
+    if (!identityDecodeQueue || !identityDecodeWorkerQueue) {
         if (identityDecodeQueue) dispatch_release(identityDecodeQueue);
         identityDecodeQueue = NULL;
-        [identityVisionQueue release];
-        identityVisionQueue = nil;
+        [identityDecodeWorkerQueue release];
+        identityDecodeWorkerQueue = nil;
         clearIdentitySessionLocked();
         [historyLock unlock];
         return identityFailure(error, "frame identity decoder queues could not be created");
@@ -1681,13 +1660,14 @@ bool sp_image_capture_match_identity_prepare_decoder(char **error) {
         &image, &taggedPixels, &encodedPayload, &encodeError);
     SPCaptureFrameIdentity decoded = {};
     NSString *unknownReason = nil, *decodeError = nil;
-    BOOL ready = encoded && sp_capture_frame_identity_decode(image, roi, [NSSet setWithObject:payload],
+    BOOL ready = encoded && sp_capture_frame_identity_decode(taggedPixels.bytes, taggedPixels.length,
+        width, height, stride, roi, [NSSet setWithObject:payload],
         &decoded, &unknownReason, &decodeError)
         && decoded.generation == expected.generation && decoded.raster == expected.raster
         && decoded.sequence == (uint64_t)expected.sequence;
     if (!ready) {
-        NSString *reason = decodeError ?: encodeError ?: unknownReason ?: @"Vision readiness decode returned a different identity";
-        identityFailure(error, [[NSString stringWithFormat:@"frame identity Vision readiness failed: %@", reason] UTF8String]);
+        NSString *reason = decodeError ?: encodeError ?: unknownReason ?: @"QR decoder readiness returned a different identity";
+        identityFailure(error, [[NSString stringWithFormat:@"frame identity QR decoder readiness failed: %@", reason] UTF8String]);
     }
     if (image) CGImageRelease(image);
     if (colorSpace) CGColorSpaceRelease(colorSpace);
@@ -1855,8 +1835,8 @@ void sp_image_capture_match_identity_session_end(void) {
     clearIdentitySessionLocked();
     if (identityDecodeQueue) dispatch_release(identityDecodeQueue);
     identityDecodeQueue = NULL;
-    [identityVisionQueue release];
-    identityVisionQueue = nil;
+    [identityDecodeWorkerQueue release];
+    identityDecodeWorkerQueue = nil;
     identityDecodePendingJobs = 0;
     identityDecodePendingBytes = 0;
     [historyLock unlock];
