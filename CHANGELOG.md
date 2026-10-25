@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F262-11: Give the project persistence and placeholder cases explicit per-test time limits and complete the entire owning projects file on both macOS arm64 hosts. All 14 cases pass with clean application run-log audit, restored shared baseline and normal shutdown. Close F262-11 and parent F262 from this aggregate runtime acceptance; no unrelated full suite or release is included.
+
 - F212.12-1-15: Complete the aggregate view-display defect item from the five verified child results. The retained view run covers subscription reply and surface close, owning tests cover null decoding and sidecar-loss facts, and F239-157 supplies both-host real project-window close with clean error audits. No additional behavior change or repeated check is used for this aggregate closure.
 
 - F239-182: Preserve pre-request and post-refusal frontmost PID observations with the original baseline activation error. Retain both errors when the follow-up observation fails; never accept a refused activation because a later read finds the baseline. Three owner assertions fail before correction and all 14 frontmost owners pass afterward. The focused Wails cycle-02 runtime passes, but does not reproduce or explain the earlier refusal.

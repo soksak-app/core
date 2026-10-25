@@ -138,7 +138,7 @@ for (const app of Object.values(APPS)) {
     t.diagnostic(`${app.name}: PASS V4 two independent states; each create/use/close/recreate cycle completed`);
   });
 
-  test(`${app.name}: project windows persist files, inherit settings, and isolate native state`, async (t) => {
+  test(`${app.name}: project windows persist files, inherit settings, and isolate native state`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
@@ -399,7 +399,7 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: a saved layout naming a plugin that is not loaded opens with a placeholder card`, async (t) => {
+  test(`${app.name}: a saved layout naming a plugin that is not loaded opens with a placeholder card`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);

@@ -698,6 +698,42 @@ const FEATURE_LINKS = [
     levels: ["unit", "application"],
   },
   {
+    id: "F262",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(" },
+      { file: "e2e/projects.test.mjs", symbol: "timeout: 120000" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "two independent project states repeat create-use-close-recreate in one instance" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/projects.test.mjs", id: "a saved project window mounts its active view on first open and reopen" },
+      { file: "e2e/projects.test.mjs", id: "a saved layout naming a plugin that is not loaded opens with a placeholder card" },
+      { file: "e2e/projects.test.mjs", id: "the first project opened from the library replies and replaces the library in the same window" },
+      { file: "e2e/projects.test.mjs", id: "a window that holds no open project reports no project" },
+      { file: "e2e/projects.test.mjs", id: "a covered window keeps its document visible and completes presentation commands" },
+    ],
+    expected: "Both hosts complete all project recreation, persistence, settings, view reopen, placeholder, first-open, no-project and covered-presentation cases with clean error auditing and shutdown.",
+    levels: ["application"],
+  },
+  {
+    id: "F262-11",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function forgetTabsLeft(" },
+      { file: "e2e/projects.test.mjs", symbol: "timeout: 120000" },
+    ],
+    tests: [
+      { file: "e2e/projects.test.mjs", id: "two independent project states repeat create-use-close-recreate in one instance" },
+      { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
+      { file: "e2e/projects.test.mjs", id: "a saved project window mounts its active view on first open and reopen" },
+      { file: "e2e/projects.test.mjs", id: "a saved layout naming a plugin that is not loaded opens with a placeholder card" },
+      { file: "e2e/projects.test.mjs", id: "the first project opened from the library replies and replaces the library in the same window" },
+      { file: "e2e/projects.test.mjs", id: "a window that holds no open project reports no project" },
+      { file: "e2e/projects.test.mjs", id: "a covered window keeps its document visible and completes presentation commands" },
+    ],
+    expected: "Both hosts complete all project recreation, persistence, settings, view reopen, placeholder, first-open, no-project and covered-presentation cases with clean error auditing and shutdown.",
+    levels: ["application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
