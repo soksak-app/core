@@ -123,7 +123,9 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 		if err := json.Unmarshal([]byte(tc.surface), &surface); err != nil {
 			t.Fatalf("%s: surface fixture: %v", tc.name, err)
 		}
-		_, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: []Surface{surface}}, map[string]SurfaceComposition{}, map[string]string{})
+		held := map[string]SurfaceComposition{surface.ID: surface.Composition}
+		plugins := map[string]string{surface.ID: surface.Plugin}
+		_, err := CheckSyncRequest(SyncRequest{Titlebar: 40, Surfaces: []Surface{surface}}, held, plugins)
 		if tc.want == "" {
 			if err != nil {
 				t.Fatalf("%s: %v, want accepted", tc.name, err)

@@ -32,16 +32,18 @@ func TestValidateRectRejectsNegativeAndNonFiniteSizes(t *testing.T) {
 func TestSyncRequestCheckRejectsAnInvalidSurfaceRectangle(t *testing.T) {
 	dom := host.SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []host.SurfaceRegion{{Name: "page", Kind: "document", Input: "native"}}, Overlays: []string{}}
 	valid := host.Surface{ID: "tab-1", Visible: true, Plugin: "page", Composition: dom, Start: viewStart(), Rect: host.Rect{W: 10, H: 10}}
-	if _, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid}}, map[string]host.SurfaceComposition{}, map[string]string{}); err != nil {
+	held := map[string]host.SurfaceComposition{"tab-1": dom}
+	plugins := map[string]string{"tab-1": "page"}
+	if _, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid}}, held, plugins); err != nil {
 		t.Fatalf("a valid sync request was refused: %v", err)
 	}
 	negative := host.Surface{ID: "tab-2", Visible: true, Plugin: "page", Composition: dom, Start: viewStart(), Rect: host.Rect{W: -1, H: 10}}
-	_, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid, negative}}, map[string]host.SurfaceComposition{}, map[string]string{})
+	_, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{valid, negative}}, held, plugins)
 	if want := `surface "tab-2" geometry must not have a negative size`; err == nil || err.Error() != want {
 		t.Fatalf("the sync check returned %v before the layout began, want %q", err, want)
 	}
 	nonFinite := host.Surface{ID: "tab-3", Visible: true, Plugin: "page", Composition: dom, Start: viewStart(), Rect: host.Rect{X: math.Inf(1), W: 10, H: 10}}
-	_, err = host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{nonFinite}}, map[string]host.SurfaceComposition{}, map[string]string{})
+	_, err = host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{nonFinite}}, held, plugins)
 	if want := `surface "tab-3" geometry must contain finite numbers`; err == nil || err.Error() != want {
 		t.Fatalf("the sync check returned %v before the layout began, want %q", err, want)
 	}

@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F239-120: Prepare the Go view-sync fixtures with the current page's declared
+  composition and plugin so the origin and rectangle assertions reach their
+  intended validation. The preserved host-contract run exposed both fixture
+  failures before the intended assertions. The two Go owner tests and two
+  matching Rust geometry tests pass individually (1/1 each). The Go origin and
+  rectangle tests also pass in diagnostics builds (1/1 each; see the F239-120
+  feature record). Production behavior is unchanged.
+
 - F239-114: Complete the fallback audit after its JavaScript, TypeScript,
   Rust and Objective-C corrections are committed. The fallback owner passes
   10/10 and the enabled-rule census owner passes 1/1; independent runtime

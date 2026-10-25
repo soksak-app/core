@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-120: origin과 rectangle assertion이 의도한 검증에 도달하도록 Go
+  view-sync fixture에 현재 페이지의 선언된 composition과 plugin을 준비한다.
+  보존된 host-contract 실행은 두 fixture가 의도한 assertion 전에 실패함을
+  보였다. Go owner test 두 개와 대응하는 Rust geometry test 두 개가 각각 1/1
+  통과했다. Go origin 및 rectangle test도 diagnostics 구성에서 각각 1/1
+  통과했다(F239-120 feature record 참조). Production 동작은 바뀌지 않았다.
+
 - F239-114: JavaScript, TypeScript, Rust, Objective-C 수정 커밋 이후
   fallback audit을 완료한다. Fallback owner는 10/10, enabled-rule census
   owner는 1/1 통과하며 별도 runtime acceptance는 열린 상태로 유지한다.
