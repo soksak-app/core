@@ -1,5 +1,6 @@
-// The one entrance of the native library for observers and delegates (observe.h).
+// The one entrance of the native library for observers, timers and delegates (observe.h).
 #import "observe.h"
+#import <math.h>
 #import <os/lock.h>
 #import <stdatomic.h>
 #import <time.h>
@@ -318,6 +319,26 @@ bool sp_observe_apple_event(const char *source, sp_observe_mode mode, id handler
     if (!recordRegistration(source, mode, "apple_event", target)) return false;
     [[NSAppleEventManager sharedAppleEventManager] setEventHandler:handler andSelector:selector forEventClass:eventClass andEventID:eventID];
     return true;
+}
+
+NSTimer *sp_observe_timer(const char *source, sp_observe_mode mode, NSTimeInterval interval, BOOL repeats, NSString *target,
+    void (^handler)(NSTimer *)) {
+    if (!NSThread.isMainThread) {
+        fail(source, "timer", @"registration requires the main thread");
+        return nil;
+    }
+    if (!handler || !target.length || !isfinite(interval) || interval <= 0) {
+        fail(source, "timer", @"the handler, target and positive finite interval are required");
+        return nil;
+    }
+    source_record *record = recordRegistration(source, mode, "timer", target);
+    if (!record) return nil;
+    NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:repeats block:^(NSTimer *created) {
+        deliver(record);
+        handler(created);
+    }];
+    if (!timer) fail(source, "timer", @"the system refused the timer");
+    return timer;
 }
 
 bool sp_observe_delegate(const char *source, sp_observe_mode mode, id owner, id delegate) {

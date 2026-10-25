@@ -3900,3 +3900,10 @@
   소유 저장소의 Red/Green 근거와 함께 완료됐다. P27.4, E25, P49.2, H23 측정은
   남아 있다. P29/P31, E26-1, P68-1, H29-1 publication gate도 별도 추적한다.
   Plugin source 변경은 없다.
+- F239-69: input-reference timeout을 `sp_observe_timer`로 등록해 timeout
+  handler보다 먼저 native observer event에 등록과 전달 count를 기록한다.
+  Owning `input_reference_test`는 직접 `NSTimer` 등록에서 누락을 재현했고 수정
+  후 1/1 통과한다. 기존 5초 timeout과 단일 reply assertion은 유지한다. Timer
+  entrance는 main thread 바깥 호출과 잘못된 인자를 명시적인 failure event로
+  거부한다. `make docs-check`, `make events-check`가 통과한다. `make census-check`는 이 등록을 더 이상
+  보고하지 않지만 이 항목 범위 밖 finding 30개를 계속 보고한다. IME 입력은 보내지 않았다.

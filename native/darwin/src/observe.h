@@ -1,5 +1,5 @@
 // The one entrance of the native library for every observer, monitor, key-value observer, run loop observer, dispatch source, Apple
-// event handler and delegate (docs/spec/logging.md#automatic-entrances). A registration is made only through these functions:
+// event handler, timer and delegate (docs/spec/logging.md#automatic-entrances). A registration is made only through these functions:
 // each records the registration as the event `native.observe.registered` (or `native.observe.failed` at the level error when the
 // platform refuses it) and counts every delivery by the name of its source, so a new registration is covered without a record at its
 // call site. `make census-check` rejects the registration API outside observe.m.
@@ -69,6 +69,12 @@ CFRunLoopObserverRef sp_observe_run_loop(const char *source, sp_observe_mode mod
 // Installs `handler` for the Apple event of the class and the id. The selector calls sp_observe_delivered(source). Returns false after
 // the event `native.observe.failed` when an argument is missing. Main thread only.
 bool sp_observe_apple_event(const char *source, sp_observe_mode mode, id handler, SEL selector, AEEventClass eventClass, AEEventID eventID);
+
+// Schedules a timer on the main run loop. Its target identifies the timer purpose; the handler runs after its delivery is counted.
+// Returns the timer, or nil after `native.observe.failed`, if the call is off the main thread, an argument is invalid, or the handler
+// is missing.
+NSTimer *sp_observe_timer(const char *source, sp_observe_mode mode, NSTimeInterval interval, BOOL repeats, NSString *target,
+    void (^handler)(NSTimer *));
 
 // Sets the delegate of `owner` (an object with a `delegate` property). A method of the delegate calls sp_observe_delivered(source).
 // Returns false after the event `native.observe.failed` when the owner has no delegate property.

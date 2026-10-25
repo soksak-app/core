@@ -176,9 +176,11 @@ void sp_input_reference(void *pointer, const char *action, const char *expected,
             reference.completion = done;
             reference.context = context;
             __block SPInputReference *timerReference = reference;
-            reference.timer = [NSTimer scheduledTimerWithTimeInterval:5 repeats:NO block:^(NSTimer *timer) {
+            reference.timer = sp_observe_timer("input.reference.timeout", SP_OBSERVE_RECORD, 5, NO,
+                @"input reference document wait", ^(NSTimer *timer) {
                 [timerReference finish:[NSString stringWithFormat:@"input reference did not reach the expected unmarked document within 5 seconds: %@", [timerReference snapshot]]];
-            }];
+            });
+            if (!reference.timer) [reference finish:@"input reference timeout registration failed"];
             [reference checkDocument];
         } @finally {
             [reference release];

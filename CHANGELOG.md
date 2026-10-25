@@ -4055,3 +4055,12 @@ Library validation on 2026-09-08: `make verify` passed, including 310/310 tests,
   H22 complete their functional migrations with owner Red/Green evidence.
   Measurements remain under P27.4, E25, P49.2 and H23. Publication gates remain
   under P29/P31, E26-1, P68-1 and H29-1. No plugin source changed.
+- F239-69: Register the input-reference timeout through `sp_observe_timer` so
+  native observer events include the registration and the counted delivery
+  before the timeout handler runs. The owning `input_reference_test` reproduced
+  the missing events on direct `NSTimer` registration and passes 1/1 after the
+  correction; its five-second timeout and single-reply assertions remain intact.
+  The timer entrance rejects off-main-thread calls and invalid arguments with an
+  explicit failure event. `make docs-check` and `make events-check` pass. `make census-check` no longer
+  reports this registration and still reports 30 findings outside this item. No
+  IME input was sent.

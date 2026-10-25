@@ -1,6 +1,8 @@
 // The input reference owns its state and lifetime without activating or inserting native keys.
 #import <Cocoa/Cocoa.h>
+#import "event_ring.h"
 #import "input_reference.h"
+#import "support/records.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -41,6 +43,8 @@ static void drain(void) {
     while ([limit timeIntervalSinceNow] > 0) [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:limit];
 }
 int main(void) { @autoreleasepool {
+    const int8_t allLevels[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(allLevels), @"the policy stores every level for the timer event assertions");
     [NSApplication sharedApplication];
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 640, 480)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -100,11 +104,26 @@ int main(void) { @autoreleasepool {
     [reference(other) setString:@"other"];
     check([request(window, "read", NULL).value[@"document"] isEqual:@""] &&
         [request(other, "read", NULL).value[@"document"] isEqual:@"other"], @"separate windows own independent reference documents");
-    SPReferenceReply *timed = request(other, "wait", "never");
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:6];
-    while (!timed.count && deadline.timeIntervalSinceNow > 0)
-        [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
+    __block SPReferenceReply *timed = nil;
+    NSArray<NSDictionary *> *timeoutEvents = capturedEvents(^{
+        timed = request(other, "wait", "never");
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:6];
+        while (!timed.count && deadline.timeIntervalSinceNow > 0)
+            [NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:deadline];
+    });
     check(timed.count == 1 && [timed.failure containsString:@"within 5 seconds"], @"an unmet document fails within the declared wait bound");
+    NSArray<NSDictionary *> *timeoutRegistrations = [timeoutEvents filteredArrayUsingPredicate:
+        [NSPredicate predicateWithFormat:@"name == 'native.observe.registered' AND fields.source == 'input.reference.timeout'"]];
+    NSArray<NSDictionary *> *timeoutDeliveries = [timeoutEvents filteredArrayUsingPredicate:
+        [NSPredicate predicateWithFormat:@"name == 'native.observe.delivered' AND fields.source == 'input.reference.timeout'"]];
+    NSDictionary *timeoutRegistration = timeoutRegistrations.count == 1 ? timeoutRegistrations[0][@"fields"] : @{};
+    // Four earlier waits registered the same source; this controlled phase registers it a fifth time.
+    check(timeoutRegistrations.count == 1 && [timeoutRegistration[@"kind"] isEqual:@"timer"]
+        && [timeoutRegistration[@"target"] isEqual:@"input reference document wait"]
+        && [timeoutRegistration[@"mode"] isEqual:@"record"] && [timeoutRegistration[@"registrations"] intValue] == 5
+        && timeoutDeliveries.count == 1 && [timeoutDeliveries[0][@"fields"][@"count"] intValue] == 1
+        && [timeoutEvents indexOfObject:timeoutRegistrations[0]] < [timeoutEvents indexOfObject:timeoutDeliveries[0]],
+        [NSString stringWithFormat:@"the wait timer registration and delivery are recorded: %@", timeoutEvents]);
     [reference(other) setString:@"never"];
     drain();
     check(timed.count == 1, @"a timed-out wait never completes a second time");
