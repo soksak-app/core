@@ -4,6 +4,15 @@
 
 ## 미배포
 
+- F239-151: `host.window.presented` 같은 창 AppKit reference의 각 key와 document
+  확인 뒤, 다음 key를 보내기 전에 기다린다. 이 대기는 reference 입력 사이에
+  application window가 presentation update를 거치게 하지만 AppKit text view의 paint나
+  물리적 scanout을 증명하지 않는다. 제어된 owner는 presentation 전에 두 번째 key가
+  시작되어 실패했다(`/tmp/F239-151-reference-step-red-01.log`). Checkpoint를 추가한 뒤
+  같은 owner가 1/1 통과했다(`/tmp/F239-151-reference-step-green-01.log`). 기존 capture,
+  frame identity, 600-frame 및 33 ms acceptance 기준은 그대로 유지하며 runtime
+  acceptance는 남아 있다.
+
 - F239-150: Stop-boundary wait 뒤, start completion 대기 또는 stream stop
   요청 전에 sample queue fence에서 ScreenCaptureKit sample intake를 닫는다.
   Fence 전에 queue에 들어온 callback은 처리하고 이후 callback은 원래 attempt에

@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-151: Wait for `host.window.presented` after each same-window AppKit
+  reference key and document check before sending the next key. This gives the
+  application window a presentation update between reference inputs without
+  treating it as proof that the AppKit text view painted or that physical
+  scanout occurred. The controlled owner fails because the second key starts
+  before presentation (`/tmp/F239-151-reference-step-red-01.log`) and passes
+  1/1 after the checkpoint (`/tmp/F239-151-reference-step-green-01.log`). The
+  existing capture, frame identity, 600-frame and 33 ms acceptance requirements
+  remain unchanged; runtime acceptance is pending.
+
 - F239-150: Seal ScreenCaptureKit sample intake on the sample-queue fence
   after the stop-boundary wait and before waiting for start completion or
   requesting stream stop. Preserve callbacks queued before the fence and

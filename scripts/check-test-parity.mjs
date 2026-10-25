@@ -6066,6 +6066,13 @@ const FEATURE_LINKS = [
     levels: ["native"],
   },
   {
+    id: "F239-151",
+    implementation: [{ file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function runReferenceSteps(" }],
+    tests: [{ file: "e2e/activation/ime-reference-steps.test.mjs", id: "the next AppKit reference key waits for the prior presentation checkpoint" }],
+    expected: "Each reference key waits for the preceding document check and window presentation checkpoint.",
+    levels: ["unit"],
+  },
+  {
     id: "F239-98-4",
     implementation: [{ file: "e2e/activation/ime-visual-capture.mjs", symbol: "function evaluateTagScopedStage(" }],
     tests: [{ file: "e2e/activation/ime-visual-capture.test.mjs", id: "tag-scoped proof evaluates an exact issued target when unrelated source state is incomplete" }],

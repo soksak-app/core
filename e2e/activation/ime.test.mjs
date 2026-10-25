@@ -19,6 +19,7 @@ import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexAcc
   attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources,
   sealTerminalSequenceEndBoundary, startImeCapture }
   from "./ime-visual-capture.mjs";
+import { runReferenceSteps } from "./ime-reference-steps.mjs";
 import {
   assertInputTraceDelivery,
   inputTraceTransactions,
@@ -655,27 +656,31 @@ for (const app of Object.values(APPS)) {
       "ㅏ".repeat(7),
       `${"ㅏ".repeat(7)} `,
     ];
-    for (let index = 0; index < manifest.sequence.length; index++) {
-      const key = manifest.sequence[index];
-      const sent = key === "Space" ? "Space" : key;
-      const started = performance.now();
-      await s.press(sent);
-      const acknowledged = performance.now();
-      const step = { group: "reference", index: index + 1, key, started, acknowledged, state: null };
-      manifest.steps.push({ group: step.group, index: step.index, key, started, acknowledged });
-      persist(`reference-${String(index + 1).padStart(2, "0")}.json`, step);
-      persist("manifest.json", manifest);
-      const state = await s.request("diagnostics.input.reference", { action: "read" });
-      step.state = state;
-      referenceStates.push(state);
-      persist(`reference-${String(index + 1).padStart(2, "0")}.json`, step);
-      assert.equal(state.open, true, "the same-window AppKit reference closed during input");
-      assert.equal(state.focused, true, `reference input ${index + 1} lost native focus`);
-      assertReferenceRanges(state, `reference input ${index + 1}`);
-      assert.equal(state.document, expectedReferenceDocuments[index],
-        `reference input ${index + 1} ${key} produced an unexpected AppKit document`);
-      t.diagnostic(`${app.name}: REFERENCE ${JSON.stringify(step)}`);
-    }
+    let step;
+    await runReferenceSteps(manifest.sequence, {
+      async press(key, index) {
+        const started = performance.now();
+        await s.press(key === "Space" ? "Space" : key);
+        const acknowledged = performance.now();
+        step = { group: "reference", index: index + 1, key, started, acknowledged, state: null };
+        manifest.steps.push({ group: step.group, index: step.index, key, started, acknowledged });
+        persist(`reference-${String(index + 1).padStart(2, "0")}.json`, step);
+        persist("manifest.json", manifest);
+      },
+      read: () => s.request("diagnostics.input.reference", { action: "read" }),
+      verify(state, key, index) {
+        step.state = state;
+        referenceStates.push(state);
+        persist(`reference-${String(index + 1).padStart(2, "0")}.json`, step);
+        assert.equal(state.open, true, "the same-window AppKit reference closed during input");
+        assert.equal(state.focused, true, `reference input ${index + 1} lost native focus`);
+        assertReferenceRanges(state, `reference input ${index + 1}`);
+        assert.equal(state.document, expectedReferenceDocuments[index],
+          `reference input ${index + 1} ${key} produced an unexpected AppKit document`);
+        t.diagnostic(`${app.name}: REFERENCE ${JSON.stringify(step)}`);
+      },
+      presented: () => s.presented(),
+    });
     const referenceFinal = await s.request("diagnostics.input.reference", { action: "read" });
     persist("reference-final.json", referenceFinal);
     assert.equal(referenceFinal.open, true, "the same-window AppKit reference closed before final validation");
