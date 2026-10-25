@@ -799,6 +799,8 @@ struct Process {
     persistent: Option<PersistentConnection>,
     /// The surfaces that sent a request to this process. They are the surfaces to which a failure is reported.
     surfaces: HashSet<String>,
+    /// Sessions closed after native-view removal, whose later messages are discarded while a persistent owner remains.
+    closed_surfaces: HashSet<String>,
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
@@ -847,6 +849,8 @@ struct State<O> {
     // after the project of the window changed, requests and closes of an already opened surface are sent with this
     // root.
     roots: HashMap<String, String>,
+    /// Layout surfaces opened by a persistent service, including while the native view is absent.
+    persistent_surfaces: HashSet<String>,
     stopped: bool,
     // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
     // pending_closes: buffers the close messages of the surfaces of each sidecar (surface → close message).
@@ -1073,6 +1077,7 @@ impl<O: Owner> Sidecars<O> {
                     closing_changed: None,
                     owners: HashMap::new(),
                     roots: HashMap::new(),
+                    persistent_surfaces: HashSet::new(),
                     stopped: false,
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
@@ -1524,6 +1529,12 @@ impl<O: Owner> Sidecars<O> {
             .outbox
             .try_send(Outgoing::Line(QueuedLine::new(line)))
             .map_err(|_| format!("sidecar {name} is not keeping up"));
+        if delivered.is_ok() {
+            process.closed_surfaces.remove(surface);
+            if process.persistent.is_some() {
+                state.persistent_surfaces.insert(surface.to_string());
+            }
+        }
         if delivered.is_ok() && !cids.is_empty() {
             for _ in 0..state
                 .requests
@@ -1605,10 +1616,24 @@ impl<O: Owner> Sidecars<O> {
         self.close_owned(owner, &|surface| !alive(surface))
     }
 
+    /// Removes native views while keeping sessions that belong to persistent sidecars.
+    pub fn native_views_removed(&self, owner: &O, removed: &HashSet<String>) -> Result<(), String> {
+        self.close_owned_mode(owner, &|surface| removed.contains(surface), true)
+    }
+
     /// Closes the surfaces that owner holds and for which selected returns true, with the close of each running sidecar
     /// (docs/spec/sidecars.md#messages). A plugin session ends this way with its host, its project or its window
     /// (docs/plans/plugin-host-routes.md rule 7).
     pub fn close_owned(&self, owner: &O, selected: &dyn Fn(&str) -> bool) -> Result<(), String> {
+        self.close_owned_mode(owner, selected, false)
+    }
+
+    fn close_owned_mode(
+        &self,
+        owner: &O,
+        selected: &dyn Fn(&str) -> bool,
+        native_view: bool,
+    ) -> Result<(), String> {
         let mut state = self
             .core
             .state
@@ -1626,8 +1651,14 @@ impl<O: Owner> Sidecars<O> {
 
         let mut closed_any = false;
         for surface in gone {
-            state.owners.remove(&surface);
-            let root = state.roots.remove(&surface);
+            let keep_persistent = native_view && state.persistent_surfaces.contains(&surface);
+            let root = if keep_persistent {
+                state.roots.get(&surface).cloned()
+            } else {
+                state.owners.remove(&surface);
+                state.persistent_surfaces.remove(&surface);
+                state.roots.remove(&surface)
+            };
 
             let mut line = serde_json::to_vec(&Request {
                 surface: &surface,
@@ -1643,9 +1674,19 @@ impl<O: Owner> Sidecars<O> {
             let names: Vec<String> = state
                 .running
                 .iter()
-                .filter(|(_, process)| process.surfaces.contains(&surface))
+                .filter(|(_, process)| {
+                    process.surfaces.contains(&surface)
+                        && !(keep_persistent && process.persistent.is_some())
+                })
                 .map(|(name, _)| name.clone())
                 .collect();
+            if keep_persistent {
+                for name in &names {
+                    if let Some(process) = state.running.get_mut(name) {
+                        process.closed_surfaces.insert(surface.clone());
+                    }
+                }
+            }
             for name in &names {
                 *state
                     .closing
@@ -1907,10 +1948,36 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Closes the sessions of this application in each persistent service that are not in surfaces (surface, root), and
-    /// returns the number of closed sessions (docs/spec/persistent-services.md). A surface to which this process already
-    /// sent a message is kept even if it is not in the list. When no service is running and there is no endpoint, there
-    /// is no session, so it is skipped.
+    /// returns the number of closed sessions (docs/spec/persistent-services.md). It removes previously known omitted layout
+    /// surfaces before starting a service; a session newly accepted while preparing the retain request is included in that
+    /// request. When no service is running and there is no endpoint, there is no session, so it is skipped.
     pub fn retain_sessions(&self, surfaces: &[(String, String)]) -> Result<usize, String> {
+        let listed: HashSet<&str> = surfaces
+            .iter()
+            .map(|(surface, _)| surface.as_str())
+            .collect();
+        {
+            let mut state = self
+                .core
+                .state
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            let stale: Vec<String> = state
+                .roots
+                .keys()
+                .filter(|surface| {
+                    !listed.contains(surface.as_str())
+                        && crate::plugin_host_sidecar::parse_session(surface).is_none()
+                        && crate::plugin_host_sidecar::parse_state_session(surface).is_none()
+                })
+                .cloned()
+                .collect();
+            for surface in stale {
+                state.roots.remove(&surface);
+                state.owners.remove(&surface);
+                state.persistent_surfaces.remove(&surface);
+            }
+        }
         let mut total = 0;
         let mut names: Vec<String> = self
             .core
@@ -1990,11 +2057,10 @@ impl<O: Owner> Sidecars<O> {
                     .iter()
                     .map(|(surface, root)| serde_json::json!({"surface": surface, "root": root}))
                     .collect();
-                keep.extend(
-                    state.roots.iter().map(
-                        |(surface, root)| serde_json::json!({"surface": surface, "root": root}),
-                    ),
-                );
+                keep.extend(state.roots.iter().filter_map(|(surface, root)| {
+                    (!listed.contains(surface.as_str()))
+                        .then(|| serde_json::json!({"surface": surface, "root": root}))
+                }));
                 let process = state
                     .running
                     .get(&name)
@@ -2548,6 +2614,7 @@ impl<O: Owner> Core<O> {
                 writing,
                 persistent: None,
                 surfaces: HashSet::new(),
+                closed_surfaces: HashSet::new(),
             },
             threads,
         })
@@ -3168,6 +3235,7 @@ impl<O: Owner> Core<O> {
                 outbox: tx,
                 writing,
                 surfaces: HashSet::new(),
+                closed_surfaces: HashSet::new(),
                 persistent: Some(PersistentConnection {
                     version,
                     close_waiters,
@@ -3496,7 +3564,18 @@ fn relay<O: Owner>(
                     .stopping
                     .get(sidecar)
                     .is_some_and(|stopping| stopping.surfaces.contains(&event.surface));
-            (state.owners.get(&event.surface).cloned(), addressed)
+            let closed = state
+                .running
+                .get(sidecar)
+                .is_some_and(|process| process.closed_surfaces.contains(&event.surface));
+            (
+                if closed {
+                    None
+                } else {
+                    state.owners.get(&event.surface).cloned()
+                },
+                addressed,
+            )
         };
         // A message for a surface that was never sent to this process is a protocol violation. A surface that was sent
         // to and has no owning window sent its message after it closed, so the message is discarded
@@ -4060,3 +4139,7 @@ mod lock_test;
 #[cfg(test)]
 #[path = "sidecars_closed_image_test.rs"]
 mod closed_image_test;
+
+#[cfg(test)]
+#[path = "sidecars_session_retention_test.rs"]
+mod session_retention_test;

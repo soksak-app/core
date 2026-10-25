@@ -102,17 +102,31 @@
 
 - F239-95: Pump AppKit events while the view-focus check waits for activation. The previous `waitFor` used `NSRunLoop` without dequeuing and sending queued `NSEvent` instances. Red: the controlled app-defined event was not dispatched inside `waitFor`; the exact owner target failed only that assertion (0.500 s). Green: the same target dispatches the event and passes 18 assertions (1/1, 0.391 s) using AppKit’s event queue. One targeted activation run then reached active application and key window, but returned `SP_ACTIVATE_PENDING` because the visible web view did not complete its activity-state update within the 5-second timeout; the captured frontmost PID 935 was restored. AppKit event pumping is corrected; the activation acceptance remains open at web view activity-state completion.
 
-- F239-85: Register the authoritative surface-placement consumer after the
-  initial project context and startup presentation, then publish the current
-  compositor record. F84 showed that an early startup list could omit a
-  retained terminal, which the host correctly removed before the session
-  reopened with a new identity. The unchanged owner case reproduced registration
-  and publication before controlled context and presentation barriers. A second
-  owner case showed `page.presented()` did not distinguish a failed layout from
-  a completed presentation. The corrected path registers and publishes only
-  after both barriers succeed and leaves the consumer inactive after a reported
-  layout failure. Focused placement, tab-state readiness and layout-failure
-  tests pass 13/13. Same-session reload acceptance on both hosts remains pending.
+- F239-85: Keep persistent sidecar sessions through native-view removal and
+  authoritative layout retention. Runtime evidence showed native-view removal
+  sent `closed:true` while the logical surface remained in a project layout;
+  stale roots also kept surfaces absent from every layout in later retain
+  requests. The retain keep list contains authoritative layout surfaces, host-managed
+  plugin/state sessions, and sessions accepted during request preparation;
+  previously known ordinary surfaces absent from the layout are excluded. Tauri Red showed that an
+  ordinary surface accepted during retain startup was omitted from the keep
+  list; the Wails counterpart passed with the same fixture order. Workbench Red
+  showed that retain failure was reported but `keep()` resolved successfully.
+  Green: both hosts preserve persistent owners during native-view removal while
+  closing stdio sessions, remove omitted owners, keep plugin/state sessions,
+  and include sessions accepted during retain startup. Workbench sends the full
+  remaining layout and propagates retain failure. The speculative startup
+  consumer barrier was removed; the initial compositor consumer keeps its
+  synchronous registration. `page.presented()` returns false for a failed
+  layout. Focused retain checks pass: Wails transport 3/3 and source 7/7; Tauri
+  transport 4/4 and library 3/3. Placement owners pass 6/6, page-layout
+  failure/success owners 2/2, and Workbench dropped-tab/failure 1/1.
+  Same-session hidden reload passes on Wails and Tauri (1/1 each): session
+  identity stayed stable while attachment generation advanced 2→7 and 2→8;
+  both audits passed (3.841 s and 3.441 s). `make e2e-check`, `make docs-check`,
+  focused Rust formatting, and JavaScript syntax checks pass. Parity finds no
+  uncovered implementations or tests and accepts F85; unrelated feature-link
+  errors remain.
 
 - F239-89: Keep an image region focused through the release paired with an
   in-region click-through press. The F84 trace reported focus loss on mouseup

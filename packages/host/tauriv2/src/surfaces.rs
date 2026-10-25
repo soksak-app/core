@@ -987,7 +987,7 @@ pub(crate) fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurf
         // root and the watch of that session.
         window
             .state::<WindowSidecars>()
-            .retain(window, &|id: &str| !removed_ids.contains(id))?;
+            .native_views_removed(window, &removed_ids)?;
         if !close_failures.is_empty() {
             return Err(format!("surface close: {}", close_failures.join("; ")));
         }

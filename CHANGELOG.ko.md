@@ -92,15 +92,28 @@
 - F239-95: view-focus check가 activation을 기다리는 동안 AppKit event를 pump한다. 기존 `waitFor`는 `NSRunLoop`를 실행하면서 대기 중인 `NSEvent`를 dequeue하고 전달하지 않았다. Red: 제어된 application-defined event가 `waitFor` 안에서 전달되지 않아 정확한 owner target의 해당 assertion만 실패했다 (0.500s). Green: 같은 target이 AppKit event queue로 event를 전달하고 assertion 18개와 함께 1/1 (0.391s) 통과한다. Targeted activation 실행 1회는 application 활성화와 key window에 도달했지만, 보이는 web view가 5초 제한 시간 안에 activity-state update를 완료하지 않아 `SP_ACTIVATE_PENDING`을 반환했다. 저장된 frontmost PID 935는 복원됐다. AppKit event pump는 수정했으며 activation 수용 기준은 web view activity-state 완료 단계에서 계속 열린 상태다.
 
 
-- F239-85: Initial project context와 startup presentation 후 authoritative
-  surface-placement consumer를 등록하고 현재 compositor record를 발행한다. F84에서
-  이른 startup 목록이 보존된 terminal을 누락해 host가 제거한 뒤 session이 다른
-  identity로 다시 열렸다. 변경 전 owner case는 test-controlled context와 presentation
-  barrier 전에 등록·발행하는 일을 재현했다. 두 번째 owner case는 layout 실패 뒤
-  `page.presented()`가 실패와 완료를 구분하지 못함을 확인했다. 수정 후 경로는 두
-  barrier가 성공해야 consumer를 등록·발행하며, 이미 보고된 layout 실패 뒤에는 consumer를
-  활성화하지 않는다. 집중 placement, tab-state readiness, layout-failure test가 13/13
-  통과한다. 두 host의 동일 session reload acceptance는 남아 있다.
+- F239-85: Native-view 제거와 authoritative layout retain 중 persistent
+  sidecar session을 보존한다. Runtime evidence는 logical surface가 project layout에
+  남아 있어도 native-view 제거가 `closed:true`를 보내고, 모든 layout에서 빠진
+  surface의 stale root가 뒤이은 retain 요청에 남는 것을 보였다. Retain keep 목록은 authoritative layout surface, host-managed plugin/state
+  session, request preparation 중 허용된 session을 포함하고, layout에 없는 이전의
+  일반 surface는 제외한다. Tauri Red는 retain 시작 중 허용된 일반 surface가 keep 목록에서 빠짐을
+  보였고, 같은 fixture 순서의 Wails 대응 사례는 통과했다. Workbench Red는 retain
+  오류를 보고한 뒤 `keep()`가 성공으로 resolve됨을 확인했다. Green: 두 host는
+  native-view 제거 중 persistent owner를 보존하고 stdio session을 닫으며, 누락 owner를
+  제거하고 plugin/state session 및 retain 시작 중 허용된 session을 유지한다.
+  Workbench는 남은 전체 layout을 보내고 retain 오류를 caller에게 전파한다.
+  Speculative startup consumer barrier를 제거했고 초기 compositor consumer는 동기
+  등록을 유지한다. `page.presented()`는 layout 실패에 false를 반환한다. 집중 retain
+  검사는 Wails transport 3/3 및 source 7/7, Tauri transport 4/4 및 library 3/3으로
+  통과한다. Placement owner 6/6, page-layout failure/success 2/2, Workbench
+  dropped-tab/failure 1/1도 통과한다. Wails와 Tauri same-session hidden reload가 각각
+  1/1 통과했다. Session identity는 유지되고 attachment generation은 2→7, 2→8로
+  증가했으며 두 audit가 통과했다(3.841초, 3.441초). `make e2e-check`,
+  `make docs-check`, focused Rust formatting, JavaScript syntax가 통과한다. Parity에는
+  미연결 implementation/test가 없고 F85 link가 허용되며 무관한 feature-link 오류는
+  남아 있다.
+
 - F239-89: Region 내부 click-through press와 짝이 되는 release까지 image-region
   focus를 유지한다. F84 trace는 page focus command 뒤 mouseup에서 focus loss를
   기록했다. 변경 전 owning activation test에서 같은 실패가 재현됐다. 수정 후 같은

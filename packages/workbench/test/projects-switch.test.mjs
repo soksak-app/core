@@ -36,10 +36,15 @@ mock.module("../page-log.js", {
   namedExports: { flushEvents: async () => {}, emitEvent: () => {} },
 });
 const retained = [];
+let retentionFailure = null;
 mock.module("../host.js", {
   namedExports: {
     log: () => {},
-    retainSidecarSessions: async (surfaces) => { retained.push(surfaces); return { closed: 0 }; },
+    retainSidecarSessions: async (surfaces) => {
+      retained.push(surfaces);
+      if (retentionFailure) throw retentionFailure;
+      return { closed: 0 };
+    },
     windowSidecar: () => null,
     documents: null,
     report: () => {},
@@ -409,9 +414,21 @@ test("closing a tab removes its session file after the layout write, and the sta
   assert.deepEqual(puts, [["tab-gone", null]], "the start kept the session file of a tab in no layout");
   await projects.activate("prj-one");
   puts.length = 0;
+  retained.length = 0;
   plane.layout = layout("tab-b");
   await projects.keep();
   assert.deepEqual(puts, [["tab-a", null]], "closing a tab left its session file");
+  assert.deepEqual(retained, [[{ surface: "tab-b", root: "/work/one" }]],
+    "closing the last layout occurrence did not retain only the remaining project surfaces");
+  await projects.flush();
+
+  reported.length = 0;
+  retentionFailure = new Error("fixture retain failure");
+  plane.layout = layout("tab-c");
+  await assert.rejects(projects.keep(), /fixture retain failure/,
+    "a rejected retain operation was reported as a successful layout save");
+  assert.deepEqual(reported, ["fixture retain failure"], "the retain failure was not reported exactly once");
+  retentionFailure = null;
   await projects.flush();
 });
 

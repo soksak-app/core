@@ -466,9 +466,14 @@ fn invalid_json_closes_connection() {
 | `sidecars.close-owner.sends-closed-per-surface` | 창의 소유를 닫으면 각 표면의 closed 알림을 보낸다. | both |
 | `sidecars.close.reaches-holding-sidecar` | surface를 닫으면 그 surface에 요청을 보낸 사이드카 프로세스에만 closed 알림을 보낸다. 그 surface의 session을 갖지 않은 다른 사이드카는 알림을 받지 않는다. | both |
 | `sidecars.close.keeps-other-sessions` | 제거된 surface를 닫으면 그 surface에만 closed 알림을 보낸다. surface가 아닌 plugin 상태 session을 포함한 창의 다른 session은 열린 채로 남고, 창의 project가 해제된 뒤에도 첫 요청의 root를 유지한다. | both |
-| `sidecars.retain.sends-layout-and-known-surfaces` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다, 주어진 레이아웃 표면과 이 프로세스가 보낸 모든 표면(없으면 빈 배열)을 담은 `retain` 요청 하나를 보내고 서비스가 닫은 수를 반환한다. | both |
+| `sidecars.native-view-removal.closes-stdio-session` | Logical surface가 project layout에 남아 있어도 native view를 제거하면 요청을 받은 표준 입출력 sidecar에 `closed`를 보낸다. | both |
+| `sidecars.native-view-removal.retains-persistent-layout-session` | Logical surface가 project layout에 남아 있을 때 native view를 제거해도 persistent service에는 `closed` 메시지를 보내지 않는다. | both |
+| `sidecars.retain.sends-authoritative-layout` | retain은 실행 중이거나 엔드포인트가 게시된 영속 서비스마다 authoritative layout 표면과 host가 관리하는 plugin/state session, request preparation 중 허용된 session을 담은 요청을 보낸다. 이전에 알려진 일반 surface 중 layout에 없는 항목은 제외하며 남은 항목이 없으면 빈 keep 목록을 보낸다. 서비스가 닫은 수를 반환한다. | both |
 | `sidecars.retain.reports-service-failure` | `ok: false`인 `retained` 응답은 서비스의 사유를 담은 오류로 반환한다. | both |
 | `sidecars.retain.skips-service-without-endpoint` | 실행 중인 서비스와 그 엔드포인트 파일이 없으면 retain은 서비스를 시작하지 않고 아무것도 닫지 않는다. | both |
+| `sidecars.retain.keeps-session-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 plugin 및 state session도 해당 retain에 포함된다. | both |
+| `sidecars.retain.keeps-surface-first-sent-during-start` | Persistent service가 시작된 뒤 keep 목록을 모으기 전에 처음 보낸 일반 surface session도 해당 retain에 포함된다. | both |
+| `sidecars.retain.closes-sessions-absent-from-layout` | 이전에 알려진 일반 surface를 retain에서 생략하면 stale owner와 root를 제거하고 persistent service에 그 surface가 없는 keep 목록을 보낸다. | both |
 | `sidecars.retain.keeps-session-first-sent-during-start` | retain의 서비스가 시작되는 동안 처음 보내진 session은 그 retain의 keep 목록에 든다. keep 목록은 서비스가 시작된 뒤에 읽기 때문이다. | both |
 | `sidecars.retain.keeps-session-first-sent-during-start` | persistent service가 시작된 뒤 유지할 표면을 모으기 전에 처음 보낸 plugin session도 해당 retain에 포함된다. | both |
 | `sidecars.close-owned.selects-the-closed-surfaces` | project를 release하면 그 소유자가 가진 해당 project의 plugin session만 닫고, 같은 소유자가 계속 보유한 다른 project의 session은 유지한다. | both |

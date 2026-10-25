@@ -292,10 +292,11 @@ fn closing_surfaces(sidecars: &Sidecars<TestOwner>) -> Vec<String> {
 
 // A plugin session first sent while the service of a retain starts is kept by that retain (docs/plans/plugin-host-routes.md
 // rule 7, F229-7). The hook runs after the service started, and it sends the session before the sessions to keep are read.
-// contract: plugin-host.sidecar.retain-during-start
+// contract: plugin-host.sidecar.retain-during-start, sidecars.retain.keeps-session-first-sent-during-start
 #[test]
 fn a_retain_keeps_a_session_first_sent_during_its_start() {
     const SESSION: &str = "plugin:probe:project-a:fixture-sidecar";
+    const STATE_SESSION: &str = "state:probe:project-a";
     let executable = Folder::new();
     let config = Folder::new();
     let (received, thread) = service(config.path());
@@ -310,6 +311,16 @@ fn a_retain_keeps_a_session_first_sent_during_its_start() {
             .as_ref()
             .expect("the sidecars are set before the retain");
         open_session(sidecars, &owner("window-a"), SESSION, ROOT);
+        sidecars
+            .send_plugin_with_cids(
+                &owner("window-a"),
+                SIDECAR,
+                STATE_SESSION,
+                ROOT,
+                &raw(r#"{"operation":"open"}"#),
+                &[],
+            )
+            .unwrap();
     });
     let sidecars = Arc::new(sidecars);
     *slot.lock().unwrap() = Some(sidecars.clone());
@@ -323,18 +334,131 @@ fn a_retain_keeps_a_session_first_sent_during_its_start() {
         .iter()
         .find(|request| request["operation"] == "retain")
         .expect("the retain line reached the service");
-    assert_eq!(
-        retain["surfaces"],
-        serde_json::json!([
-            {"surface": "listed", "root": "/project"},
-            {"surface": SESSION, "root": ROOT}
-        ]),
-        "the retain keeps the layout surface and the session first sent during the start"
-    );
+    let kept = retain["surfaces"].as_array().unwrap();
+    for item in [
+        serde_json::json!({"surface": "listed", "root": "/project"}),
+        serde_json::json!({"surface": SESSION, "root": ROOT}),
+        serde_json::json!({"surface": STATE_SESSION, "root": ROOT}),
+    ] {
+        assert!(
+            kept.contains(&item),
+            "retain surfaces {kept:?} omitted {item}"
+        );
+    }
     // The hook holds the sidecars; clearing it breaks that reference before the stop.
     slot.lock().unwrap().take();
     sidecars.stop();
     thread.join().unwrap();
+}
+
+// A surface session first sent while retain starts a persistent service is included in the service's keep list.
+// contract: sidecars.retain.keeps-surface-first-sent-during-start
+#[test]
+fn a_retain_keeps_an_ordinary_surface_first_sent_during_its_start() {
+    const SURFACE: &str = "tab-during-retain-start";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (received, thread) = service(config.path());
+    let slot: Arc<Mutex<Option<Arc<Sidecars<TestOwner>>>>> = Arc::new(Mutex::new(None));
+    let hook_slot = slot.clone();
+    let sidecars = declared(executable.path(), config.path()).with_retain_sending(move |name| {
+        if name != SIDECAR {
+            return;
+        }
+        let guard = hook_slot.lock().unwrap();
+        let sidecars = guard
+            .as_ref()
+            .expect("the sidecars are set before the retain");
+        sidecars
+            .send_with_cids(
+                &owner("window-a"),
+                SIDECAR,
+                SURFACE,
+                &raw(r#"{"operation":"open"}"#),
+                &[],
+            )
+            .unwrap();
+    });
+    let sidecars = Arc::new(sidecars);
+    *slot.lock().unwrap() = Some(sidecars.clone());
+
+    let closed = sidecars
+        .retain_sessions(&[("listed".to_string(), "/project".to_string())])
+        .unwrap();
+    assert_eq!(closed, 0, "the service's closed count");
+    let requests: Vec<serde_json::Value> = received.try_iter().collect();
+    let retain = requests
+        .iter()
+        .find(|request| request["operation"] == "retain")
+        .expect("the retain line reached the service");
+    let kept = retain["surfaces"].as_array().unwrap();
+    assert!(kept.contains(&serde_json::json!({"surface": "listed", "root": "/project"})));
+    assert!(
+        kept.contains(&serde_json::json!({"surface": SURFACE, "root": ROOT})),
+        "retain surfaces {kept:?} omitted the ordinary session sent during start"
+    );
+    slot.lock().unwrap().take();
+    sidecars.stop();
+    thread.join().unwrap();
+}
+
+// contract: sidecars.native-view-removal.retains-persistent-layout-session
+#[test]
+fn native_view_removal_does_not_close_a_persistent_layout_session() {
+    use std::collections::HashSet;
+
+    const SURFACE: &str = "tab-retained";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (received, thread) = service(config.path());
+    let sidecars = declared(executable.path(), config.path());
+    let window = owner("window-a");
+    open_session(&sidecars, &window, SURFACE, ROOT);
+    let _hello = received.recv().unwrap();
+    let open = received.recv().unwrap();
+    assert_eq!(open["surface"], SURFACE);
+
+    sidecars
+        .native_views_removed(&window, &HashSet::from([SURFACE.to_string()]))
+        .unwrap();
+    let closes: Vec<_> = received
+        .try_iter()
+        .filter(|request| request["closed"] == true)
+        .collect();
+    sidecars.stop();
+    thread.join().unwrap();
+    assert!(
+        closes.is_empty(),
+        "native view removal closed the persistent session: {closes:?}"
+    );
+}
+
+// contract: sidecars.retain.closes-sessions-absent-from-layout
+#[test]
+fn logical_retain_closes_a_persistent_session_absent_from_the_layout() {
+    const SURFACE: &str = "tab-removed";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let (received, thread) = service(config.path());
+    let sidecars = declared(executable.path(), config.path());
+    let window = owner("window-a");
+    open_session(&sidecars, &window, SURFACE, ROOT);
+    let _hello = received.recv().unwrap();
+    let _open = received.recv().unwrap();
+
+    sidecars.retain_sessions(&[]).unwrap();
+    let requests: Vec<_> = received.try_iter().collect();
+    sidecars.stop();
+    thread.join().unwrap();
+    let retain = requests
+        .iter()
+        .find(|request| request["operation"] == "retain")
+        .expect("the persistent service received retain");
+    assert_eq!(
+        retain["surfaces"],
+        serde_json::json!([]),
+        "logical retain included tab-removed after its layout ended"
+    );
 }
 
 // Releasing a project closes the plugin sessions of that project that the holding window owns, and keeps the sessions of the

@@ -146,6 +146,7 @@ func TestSurfaceSidecarSendRefusesThePluginSessions(t *testing.T) {
 // contract: plugin-host.sidecar.retain-during-start, sidecars.retain.keeps-session-first-sent-during-start
 func TestRetainKeepsASessionFirstSentDuringTheStart(t *testing.T) {
 	const session = "plugin:probe:project-a:fixture-sidecar"
+	const stateSession = "state:probe:project-a"
 	s := sidecarSessionSurfaces(t)
 	c := s.sidecars
 	c.stopped = false
@@ -156,6 +157,7 @@ func TestRetainKeepsASessionFirstSentDuringTheStart(t *testing.T) {
 	c.RetainSending = func(string) {
 		c.mu.Lock()
 		c.roots[session] = "/fixture/root"
+		c.roots[stateSession] = "/fixture/root"
 		c.mu.Unlock()
 	}
 	done := make(chan error, 1)
@@ -178,12 +180,157 @@ func TestRetainKeepsASessionFirstSentDuringTheStart(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("retain: %v", err)
 	}
-	for _, item := range sent.Surfaces {
-		if item.Surface == session {
-			return
+	for _, surface := range []string{session, stateSession} {
+		found := false
+		for _, item := range sent.Surfaces {
+			found = found || item.Surface == surface
+		}
+		if !found {
+			t.Fatalf("the retain keeps %v, want pseudo session %s", sent.Surfaces, surface)
 		}
 	}
-	t.Fatalf("the retain keeps %v, want the session %s that was first sent during the start", sent.Surfaces, session)
+}
+
+// contract: sidecars.retain.keeps-surface-first-sent-during-start
+func TestRetainKeepsAnOrdinarySurfaceFirstSentDuringTheStart(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	c.persistent["fixture-sidecar"] = true
+	const surface = "tab-during-retain-start"
+	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	c.running[service.name] = service
+	c.RetainSending = func(name string) {
+		if name != service.name {
+			return
+		}
+		if err := c.Send(s, service.name, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+			t.Errorf("send ordinary surface during retain: %v", err)
+		}
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Retain([]RetainedSurface{{Surface: "listed", Root: "/fixture/listed"}})
+		done <- err
+	}()
+	<-service.outbox // open request emitted by RetainSending
+	line := <-service.outbox
+	var request struct {
+		Request  string            `json:"request"`
+		Surfaces []RetainedSurface `json:"surfaces"`
+	}
+	if err := json.Unmarshal(line.bytes, &request); err != nil {
+		t.Fatalf("retain request: %v", err)
+	}
+	keepsSurface := false
+	for _, item := range request.Surfaces {
+		if item.Surface == surface && item.Root == "/fixture/root" {
+			keepsSurface = true
+		}
+	}
+	c.mu.Lock()
+	waiter := service.closeWaiters[request.Request]
+	service.retained[request.Request] = 0
+	c.mu.Unlock()
+	if waiter == nil {
+		t.Fatal("retain request did not register its answer")
+	}
+	waiter <- nil
+	if err := <-done; err != nil {
+		t.Fatalf("retain: %v", err)
+	}
+	if !keepsSurface {
+		t.Fatalf("retain surfaces %v omitted the ordinary session sent during start", request.Surfaces)
+	}
+}
+
+// contract: sidecars.native-view-removal.retains-persistent-layout-session
+func TestNativeViewRemovalRetainsPersistentSession(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	const persistentName = "fixture-persistent"
+	const persistentSurface = "tab-retained"
+	c.declared[persistentName] = "build/persistent-worker"
+	c.persistent[persistentName] = true
+	c.running[persistentName] = &sidecar{name: persistentName, persistent: true,
+		outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{},
+		surfaces: map[string]bool{persistentSurface: true}}
+	c.persistentSurfaces = map[string]bool{persistentSurface: true}
+	c.owners[persistentSurface] = s
+	c.roots[persistentSurface] = "/fixture/root"
+
+	s.closeRemovedSurface(persistentSurface)
+
+	if got := len(c.running[persistentName].outbox); got != 0 {
+		t.Fatalf("persistent service received %d native-removal messages, want none", got)
+	}
+	if c.owners[persistentSurface] != s || c.roots[persistentSurface] != "/fixture/root" {
+		t.Fatalf("persistent owner/root after native removal: owner=%v root=%q", c.owners[persistentSurface], c.roots[persistentSurface])
+	}
+}
+
+// contract: sidecars.retain.closes-sessions-absent-from-layout
+func TestRetainClosesPersistentSessionAbsentFromTheLayout(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	c.persistent["fixture-persistent"] = true
+	service := &sidecar{name: "fixture-persistent", persistent: true, outbox: make(chan queuedLine, 4),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{"tab-removed": true}}
+	c.running[service.name] = service
+	c.owners["tab-removed"] = s
+	c.roots["tab-removed"] = "/fixture/root"
+
+	type retainResult struct {
+		closed int
+		err    error
+	}
+	done := make(chan retainResult, 1)
+	go func() {
+		closed, err := c.Retain([]RetainedSurface{})
+		done <- retainResult{closed: closed, err: err}
+	}()
+	line := <-service.outbox
+	var request struct {
+		Request  string            `json:"request"`
+		Surfaces []RetainedSurface `json:"surfaces"`
+	}
+	if err := json.Unmarshal(line.bytes, &request); err != nil {
+		t.Fatalf("retain request: %v", err)
+	}
+	keepsRemoved := false
+	for _, item := range request.Surfaces {
+		if item.Surface == "tab-removed" {
+			keepsRemoved = true
+		}
+	}
+	c.mu.Lock()
+	waiter := service.closeWaiters[request.Request]
+	if !keepsRemoved {
+		service.retained[request.Request] = 1
+	}
+	c.mu.Unlock()
+	if waiter == nil {
+		t.Fatal("retain request did not register its answer")
+	}
+	waiter <- nil
+	result := <-done
+	if result.err != nil {
+		t.Fatalf("retain: %v", result.err)
+	}
+	if keepsRemoved {
+		t.Fatal("retain kept tab-removed even though no project layout contains it")
+	}
+	if got := result.closed; got != 1 {
+		t.Fatalf("persistent service closed %d removed sessions, want 1", got)
+	}
+	if _, ok := c.owners["tab-removed"]; ok {
+		t.Fatal("logical retain kept the owner of tab-removed")
+	}
+	if _, ok := c.roots["tab-removed"]; ok {
+		t.Fatal("logical retain kept the root of tab-removed")
+	}
 }
 
 // Releasing a project closes the plugin sessions of that project that the holding window owns, and keeps the sessions of the

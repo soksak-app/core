@@ -1041,9 +1041,9 @@ fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
     );
 }
 
-// contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
+// contract: sidecars.retain.sends-authoritative-layout, sidecars.retain.reports-service-failure
 #[test]
-fn persistent_retain_sends_layout_and_known_surfaces() {
+fn persistent_retain_sends_only_layout_surfaces() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
@@ -1128,10 +1128,9 @@ fn persistent_retain_sends_layout_and_known_surfaces() {
     assert_eq!(
         request["surfaces"],
         serde_json::json!([
-            {"surface": "listed", "root": "/project"},
-            {"surface": "sent", "root": "/live"}
+            {"surface": "listed", "root": "/project"}
         ]),
-        "the layout surfaces and the surfaces this process sent"
+        "only the authoritative layout surfaces"
     );
     let error = sidecars.retain_sessions(&[]).unwrap_err();
     assert!(error.contains("retain failed in the service"), "{error}");

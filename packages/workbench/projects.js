@@ -351,7 +351,13 @@ export function keep(path) {
   // The entries of the dropped tabs are removed only after the layout write is confirmed (docs/spec/projects.md#persistence).
   const after = projectTabs(project);
   const dropped = [...before].filter((tab) => !after.has(tab));
-  if (dropped.length) writing = Promise.all([tabStates.removeAfter(writing, dropped), tabSessions.removeAfter(writing, dropped)]);
+  if (dropped.length) {
+    writing = Promise.all([tabStates.removeAfter(writing, dropped), tabSessions.removeAfter(writing, dropped)]);
+    const retained = layoutSurfaces();
+    const retainedWrite = writing.then(() => retainSidecarSessions(retained));
+    writing = retainedWrite.then(() => undefined, failed);
+    return retainedWrite;
+  }
   return writing;
 }
 

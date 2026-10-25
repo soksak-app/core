@@ -124,6 +124,8 @@ type sidecar struct {
 	retained map[string]int
 	// surfaces are the surfaces that sent requests to this process. They are the surfaces to tell about a failure. c.mu protects it.
 	surfaces map[string]bool
+	// closedSurfaces marks sessions this process must no longer deliver after native-view removal. c.mu protects it.
+	closedSurfaces map[string]bool
 	// stopClosing is a close of this process that Stop removed from the closing list. A sidecar on standard input and output replies to this close while it ends,
 	// so that reply is not a failure (docs/spec/sidecars.md#messages). c.mu protects it.
 	stopClosing map[string]int
@@ -158,7 +160,9 @@ type Sidecars struct {
 	// versions holds the version that installed.json records for each declared sidecar.
 	versions   map[string]string
 	persistent map[string]bool
-	running    map[string]*sidecar
+	// persistentSurfaces records layout surface sessions owned by a persistent service, including while it is disconnected.
+	persistentSurfaces map[string]bool
+	running            map[string]*sidecar
 	// starting is a sidecar that is starting. The start happens outside the lock, and when it ends, the channel is closed.
 	starting map[string]chan struct{}
 	// closing holds, for each sidecar, the surfaces whose closed was sent and not answered, with the number of those
@@ -364,6 +368,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		displayNames:        map[string]string{},
 		versions:            map[string]string{},
 		persistent:          map[string]bool{},
+		persistentSurfaces:  map[string]bool{},
 		running:             map[string]*sidecar{},
 		starting:            map[string]chan struct{}{},
 		closing:             map[string]map[string]int{},
@@ -634,6 +639,15 @@ func (c *Sidecars) send(owner SidecarOwner, name, surface, project string, body 
 	// Sends to the channel without blocking. When the channel is full, it returns the "is not keeping up" error.
 	select {
 	case process.outbox <- queue(line):
+		if process.closedSurfaces != nil {
+			delete(process.closedSurfaces, surface)
+		}
+		if process.persistent {
+			if c.persistentSurfaces == nil {
+				c.persistentSurfaces = map[string]bool{}
+			}
+			c.persistentSurfaces[surface] = true
+		}
 		if len(cids) > 0 {
 			for range c.requests.add(name, surface, cids, monotonicNanos()) {
 				recordBufferDrop("sidecar reply ledger", 0, fmt.Sprintf("%d requests", pendingRequestLimit))
@@ -755,17 +769,33 @@ func (c *Sidecars) Close(surface string) {
 	c.replaceIdle()
 }
 
+// NativeViewRemoved closes stdio sessions of a removed native view while keeping a persistent session whose surface remains in its layout.
+func (c *Sidecars) NativeViewRemoved(surface string) {
+	if c.closeSurfaceMode(surface, true) {
+		c.closingChanged()
+	}
+	c.replaceIdle()
+}
+
 // closeSurface sends closed for surface to the running sidecars that received a request for it, and returns true when it recorded a
 // surface that waits for a reply. A sidecar that never received the surface holds no session of it and gets no closed notice.
 func (c *Sidecars) closeSurface(surface string) bool {
+	return c.closeSurfaceMode(surface, false)
+}
+
+func (c *Sidecars) closeSurfaceMode(surface string, nativeView bool) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, ok := c.owners[surface]; !ok {
 		return false
 	}
-	delete(c.owners, surface)
 	root := c.roots[surface]
-	delete(c.roots, surface)
+	keepPersistent := nativeView && c.persistentSurfaces[surface]
+	if !keepPersistent {
+		delete(c.owners, surface)
+		delete(c.roots, surface)
+		delete(c.persistentSurfaces, surface)
+	}
 
 	line, err := json.Marshal(sidecarRequest{Surface: surface, Root: root, Closed: true})
 	if err != nil {
@@ -779,7 +809,16 @@ func (c *Sidecars) closeSurface(surface string) bool {
 		if !process.surfaces[surface] {
 			continue
 		}
+		if keepPersistent && process.persistent {
+			continue
+		}
 		addressed = true
+		if keepPersistent {
+			if process.closedSurfaces == nil {
+				process.closedSurfaces = map[string]bool{}
+			}
+			process.closedSurfaces[surface] = true
+		}
 		if c.closing[process.name] == nil {
 			c.closing[process.name] = map[string]int{}
 		}
@@ -1115,17 +1154,33 @@ type RetainedSurface struct {
 const retainTimeout = 10 * time.Second
 
 // Retain closes, in each persistent service, the sessions of this application that are not in surfaces, and returns the number of closed sessions.
-// It keeps a surface to which this process already sent a message even when it is not in the list. When the service is not running and there is no
-// endpoint, there are no sessions, so it skips the service.
+// It removes previously known omitted layout surfaces before starting the service; a session newly accepted while preparing the retain request is
+// included in that request. When the service is not running and there is no endpoint, there are no sessions, so it skips the service.
 func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 	if surfaces == nil {
 		return 0, errors.New("retain requires a surfaces list")
 	}
+	listed := make(map[string]bool, len(surfaces))
 	for _, item := range surfaces {
 		if item.Surface == "" || item.Root == "" {
 			return 0, fmt.Errorf("retain surface entry is invalid: %+v", item)
 		}
+		listed[item.Surface] = true
 	}
+	// The supplied list is the complete set of layout surface sessions. Retire stale owners before building each service's keep list;
+	// plugin-host and state sessions use their own explicit close paths and are not project layout surfaces.
+	c.mu.Lock()
+	for surface := range c.roots {
+		_, pluginSession := parsePluginSession(surface)
+		_, stateSession := parseStateSession(surface)
+		if listed[surface] || pluginSession || stateSession {
+			continue
+		}
+		delete(c.roots, surface)
+		delete(c.owners, surface)
+		delete(c.persistentSurfaces, surface)
+	}
+	c.mu.Unlock()
 	c.declarations.RLock()
 	names := make([]string, 0, len(c.persistent))
 	for name, persistent := range c.persistent {
@@ -1182,6 +1237,9 @@ func (c *Sidecars) Retain(surfaces []RetainedSurface) (int, error) {
 		// Starts from a non-nil slice so that an empty list is also sent as a JSON array.
 		keep := append(make([]RetainedSurface, 0, len(surfaces)+len(c.roots)), surfaces...)
 		for surface, root := range c.roots {
+			if listed[surface] {
+				continue
+			}
 			keep = append(keep, RetainedSurface{Surface: surface, Root: root})
 		}
 		for _, item := range keep {
@@ -1866,6 +1924,9 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		addressed := process.surfaces[event.Surface]
+		if process.closedSurfaces[event.Surface] {
+			owner = nil
+		}
 		c.mu.Unlock()
 		// A message of a surface that was never sent to this process is a protocol violation. When it was sent and there is no owner window, the message was sent by the sidecar
 		// after the surface closed, so it is discarded (docs/spec/sidecars.md#messages).

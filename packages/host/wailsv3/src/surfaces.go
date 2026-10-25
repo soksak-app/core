@@ -770,7 +770,7 @@ func (s *Surfaces) SyncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	prepared.Chrome = outcome.chrome
 	// Tells the sidecars and the exposure registration of the main page about the removed surfaces. Call it outside the main thread.
 	for _, id := range gone {
-		s.sidecars.Close(id)
+		s.closeRemovedSurface(id)
 	}
 	s.surfacesClosed(gone)
 	// A continuous frame updates only the native position. If the image raster were rebuilt
@@ -1035,6 +1035,11 @@ func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Document
 		return errors.New(strings.Join(failures, "; "))
 	}
 	return nil
+}
+
+// closeRemovedSurface closes the sidecar sessions associated with a native surface removed by a complete placement.
+func (s *Surfaces) closeRemovedSurface(id string) {
+	s.sidecars.NativeViewRemoved(id)
 }
 
 func createLogicalSurface(create func() (unsafe.Pointer, error), owner *Surfaces, id string) (*nativeWebview, error) {

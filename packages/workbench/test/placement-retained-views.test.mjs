@@ -3,51 +3,10 @@ import { mock, test } from "node:test";
 import { JSDOM } from "jsdom";
 import { clockAnswer } from "./support/records.mjs";
 import { createMemorySaver } from "../memory-saver.js";
-import { activateInitialPlacement, memoryPlacement } from "../memory-placement.js";
+import { memoryPlacement } from "../memory-placement.js";
 import { setSurfaceTextSize } from "../text-size.js";
 
 setSurfaceTextSize(() => 1);
-
-test("initial placement publishes the restored project record after startup presentation", async () => {
-  let resolveContext;
-  const context = new Promise((resolve) => { resolveContext = resolve; });
-  let resolvePresented;
-  const presented = new Promise((resolve) => { resolvePresented = resolve; });
-  let current = { surfaces: [], drawn: false };
-  let registered = false;
-  const published = [];
-  const startup = activateInitialPlacement({
-    context, presented: () => presented,
-    register: () => { registered = true; },
-    publish: () => { published.push(current); },
-  });
-
-  await Promise.resolve();
-  assert.equal(registered, false, "startup registered an authoritative placement consumer before project context");
-  assert.deepEqual(published, [], "startup published its incomplete initial surface list");
-  resolveContext();
-  current = { surfaces: [{ id: "retained-terminal" }], drawn: true };
-  await Promise.resolve();
-  assert.equal(registered, false, "startup registered before the restored layout was presented");
-  assert.deepEqual(published, [], "startup published before the restored layout was presented");
-  resolvePresented(true);
-  await startup;
-  assert.equal(registered, true, "startup did not register the normal placement consumer");
-  assert.deepEqual(published, [current], "startup did not publish the complete restored surface record");
-});
-
-test("initial placement does not publish after a failed startup presentation", async () => {
-  let registered = false;
-  let published = false;
-  const activated = await activateInitialPlacement({
-    context: Promise.resolve(), presented: async () => false,
-    register: () => { registered = true; },
-    publish: () => { published = true; },
-  });
-  assert.equal(activated, false, "failed startup presentation reported an active placement consumer");
-  assert.equal(registered, false, "startup registered a placement consumer after layout failure");
-  assert.equal(published, false, "startup published after layout failure");
-});
 
 test("a host placement retains mounted dormant views and excludes cold dormant views", async (t) => {
   const dom = new JSDOM('<div id="plane"></div>', { url: "https://example.test/" });

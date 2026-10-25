@@ -867,8 +867,8 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 	sidecars.Stop()
 }
 
-// contract: sidecars.retain.sends-layout-and-known-surfaces, sidecars.retain.reports-service-failure
-func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
+// contract: sidecars.retain.sends-authoritative-layout, sidecars.retain.reports-service-failure
+func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 	root := t.TempDir()
 	socketDirectory := socketParent(t)
 	socket := filepath.Join(socketDirectory, "s.sock")
@@ -949,9 +949,9 @@ func TestPersistentRetainSendsLayoutAndKnownSurfaces(t *testing.T) {
 	}
 	request := <-requests
 	got, _ := json.Marshal(request["surfaces"])
-	want := `[{"root":"/project","surface":"listed"},{"root":"/live","surface":"sent"}]`
+	want := `[{"root":"/project","surface":"listed"}]`
 	if string(got) != want {
-		t.Fatalf("retained surfaces = %s, want %s: the layout surfaces and the surfaces this process sent", got, want)
+		t.Fatalf("retained surfaces = %s, want %s: only the authoritative layout surfaces", got, want)
 	}
 	if _, err := sidecars.Retain([]host.RetainedSurface{}); err == nil || !strings.Contains(err.Error(), "retain failed in the service") {
 		t.Fatalf("a failed retain was not reported: %v", err)
