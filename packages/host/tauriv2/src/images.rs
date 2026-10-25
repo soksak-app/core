@@ -850,6 +850,16 @@ impl Images {
 
     /// Waits until all visible image regions present the current raster or the time limit ends.
     pub fn wait_current(&self, timeout: Duration) -> Result<(), String> {
+        self.wait_current_observed(timeout, || {})
+    }
+
+    /// Signals the first pending check under the owner lock so tests can order the next frame before wakeup.
+    fn wait_current_observed(
+        &self,
+        timeout: Duration,
+        waiting: impl FnOnce(),
+    ) -> Result<(), String> {
+        let mut waiting = Some(waiting);
         let deadline = Instant::now() + timeout;
         let mut inner = self.lock();
         loop {
@@ -866,6 +876,9 @@ impl Images {
             let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
                 return Err("presentationTimeout".to_string());
             };
+            if let Some(waiting) = waiting.take() {
+                waiting();
+            }
             let (next, result) = self
                 .shared
                 .changed
@@ -1697,3 +1710,7 @@ pub(crate) fn present_on_ui(
 #[cfg(test)]
 #[path = "../tests/images/presentation_queue_test.rs"]
 mod presentation_queue_test;
+
+#[cfg(test)]
+#[path = "../tests/images/wait_boundary_test.rs"]
+mod wait_boundary_test;

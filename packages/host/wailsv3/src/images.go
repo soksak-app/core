@@ -562,6 +562,11 @@ func (i *Images) WaitCurrent(timeout time.Duration) bool {
 
 // WaitCurrentError waits for the current raster or returns its exact failure.
 func (i *Images) WaitCurrentError(timeout time.Duration) error {
+	return i.waitCurrentObserved(timeout, nil)
+}
+
+// waitCurrentObserved signals the first pending check under the owner lock so tests can order the next frame before wakeup.
+func (i *Images) waitCurrentObserved(timeout time.Duration, waiting func()) error {
 	deadline := time.Now().Add(timeout)
 	for {
 		i.mu.Lock()
@@ -577,6 +582,10 @@ func (i *Images) WaitCurrentError(timeout time.Duration) error {
 			return nil
 		}
 		changed := i.changed
+		if waiting != nil {
+			waiting()
+			waiting = nil
+		}
 		i.mu.Unlock()
 
 		remaining := time.Until(deadline)

@@ -1,5 +1,7 @@
 # Surface composition
 
+
+An image presentation wait follows the latest accepted frame until completion. Freezing its sequence when the wait begins would let a settled commit finish while a later accepted frame remains pending; a later accepted frame therefore keeps the wait pending even when an earlier frame completed before its arrival.
 [한국어](surface-composition.ko.md)
 
 This specification defines the ownership boundary between a surface page and native content. It is the canonical contract for the native regions and overlays of a view surface. [Native surface layout](native-surfaces.md) defines placement of the outer surface.

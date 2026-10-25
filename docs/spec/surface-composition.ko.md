@@ -1,5 +1,7 @@
 # 표면 합성
 
+
+이미지 표시 대기는 완료될 때까지 가장 최근 수락된 frame을 따른다. 대기 시작 시 sequence를 고정하면 후속 수락 frame이 미표시인 상태에서 settled commit이 끝날 수 있으므로, 이전 frame이 후속 수신 전에 완료되었더라도 후속 수락 frame이 대기를 계속 미완료로 유지한다.
 [English](surface-composition.md)
 
 이 명세는 표면 페이지와 네이티브 콘텐츠 사이의 소유 경계를 정의한다. view 표면의 네이티브 영역과 오버레이의 기준 명세다. 바깥 표면의 배치는 [네이티브 표면 배치](native-surfaces.ko.md)가 정의한다.

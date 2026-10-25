@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-165: 가장 최근 수락된 frame을 이미지 대기의 완료 조건으로 유지한다. 제어된 owner는 이전 frame이 완료되고 waiter가 깨어나기 전에 후속 frame을 받는 순서를 검사하며 양 host는 미완료를 유지해야 한다. Settled consumer가 최신 frame 미표시 상태에서 끝날 수 있으므로 진입 시 고정한 sequence를 거부한다. 동시성 owner 두 개, 기존 raster/visibility owner 두 개 및 현재 frame 알림 owner가 통과한다. 최초 실패 기대값은 product Red가 아니며 이 감사는 drag 지연을 해결하지 않는다.
+
 - F239-164: Tauri 이미지 표시를 framework event lock 밖의 기존 native UI queue에서 실행한다. Sidecar에 응답하기 전에 native 결과를 기다리고 enqueue 및 표시 실패를 유지한다. 제어된 잠금 경계 owner는 수정 전 실패하고 수정 후 통과하며 queue/result owner 세 개 및 image-envelope owner 31개가 모두 통과한다. 양 diagnostic host가 빌드된다. 해당 Tauri drag error-log 감사는 통과하지만 capture 간격 34.193 ms가 변경하지 않은 33 ms 기준을 초과하여 drag 승인은 남는다.
 
 - F239-163: 준비된 Tauri surface frame을 하나의 main-thread turn에서 읽고 순서, visibility 및 읽기 오류를 유지한다. 제어된 reader는 수정 전 반복 dispatch를 재현하며 수정 후 reader owner 세 개 및 layout 순서 owner 네 개가 통과한다. 양 diagnostic host가 빌드된다. 해당 drag 검사는 error-log 감사를 통과하지만 양 host가 변경하지 않은 33 ms 기록 기준에 실패하여 drag 승인은 남는다. Selector를 확인한 뒤 native inventory를 이미 lock된 Tao 0.37.2로 바로잡았으며 의존성은 변경하지 않았다.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -101,5 +102,61 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 	}
 	if _, ok := images.PresentedFrame(key); ok {
 		t.Fatal("retired frame became presented")
+	}
+}
+
+func TestPendingNewerFrameIsRequiredAfterTheWaitBegins(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "surface", Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	config, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || config == nil {
+		t.Fatalf("configure raster: %+v, %v", config, err)
+	}
+	images.mu.Lock()
+	images.states[key].LastSequence = 1
+	images.mu.Unlock()
+	began := time.Now()
+	timeout := 500 * time.Millisecond
+	started := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- images.waitCurrentObserved(timeout, func() { close(started) }) }()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("image wait did not begin")
+	}
+	// Hold the owner lock across presentation and the next arrival so the waiter wakes after both.
+	images.mu.Lock()
+	state := images.states[key]
+	state.PresentedRaster = config.Raster
+	state.PresentedSequence = 1
+	state.LastSequence = 2
+	images.changedLocked()
+	elapsed := time.Since(began)
+	images.mu.Unlock()
+	var outcome error
+	select {
+	case outcome = <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("image wait did not end")
+	}
+	if elapsed >= timeout {
+		t.Fatalf("controlled arrival missed the active wait deadline: %v", elapsed)
+	}
+	if outcome == nil || outcome.Error() != "presentationTimeout" {
+		t.Fatalf("pending newer frame did not remain required: %v", outcome)
+	}
+	if images.CurrentPresented() {
+		t.Fatal("instantaneous status omitted the pending newer frame")
+	}
+	if images.WaitCurrent(0) {
+		t.Fatal("new wait omitted the already accepted second frame")
 	}
 }
