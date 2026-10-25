@@ -4,6 +4,11 @@
 
 ## Unreleased
 
+- F239-114: Complete the fallback audit after its JavaScript, TypeScript,
+  Rust and Objective-C corrections are committed. The fallback owner passes
+  10/10 and the enabled-rule census owner passes 1/1; independent runtime
+  acceptance remains open.
+
 - F239-115: State the caller-visible reason at each of the 11 Objective-C
   `m.error-return` sites in process identity, capture, image matching, image
   regions and input activation. Red: the preserved Node run reported all 11

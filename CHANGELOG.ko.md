@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F239-114: JavaScript, TypeScript, Rust, Objective-C 수정 커밋 이후
+  fallback audit을 완료한다. Fallback owner는 10/10, enabled-rule census
+  owner는 1/1 통과하며 별도 runtime acceptance는 열린 상태로 유지한다.
+
 - F239-115: process identity, capture, image matching, image regions, input
   activation의 Objective-C `m.error-return` 11곳에 caller가 관찰하는 이유를
   기록한다. Red: 보존된 Node 실행이 이유 없는 11개 지점을 보고했다
