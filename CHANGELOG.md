@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+- F239-119: Require the project member in Tauri ProjectShown while
+  preserving explicit `null`. The production `Argument<ProjectShown>` decoder
+  Red accepted `{}` as `None`; the same MockRuntime owner case now passes 1/1,
+  rejecting omission without state mutation and accepting `{"project":null}`.
+  The focused Go and Tauri project, starter, view and sidecar cases pass; the
+  unrelated Tauri `sok` process-wait parity finding remains open.
+
 - F239-122: Update the Tauri null-result and null-event fixtures with their
   required page generation fields, and expect the current `soksak` scheme in
   the start-document fixture. The three argument tests and start-owner test

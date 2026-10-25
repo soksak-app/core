@@ -3,6 +3,107 @@
 use super::*;
 use serde_json::json;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tauri::{
+    State,
+    ipc::{CallbackFn, InvokeBody},
+    test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets},
+    webview::{InvokeRequest, WebviewWindowBuilder},
+};
+
+#[tauri::command]
+fn project_shown_decoder_fixture(
+    data: State<'_, Arc<WindowData>>,
+    request: crate::arguments::Argument<ProjectShown>,
+) -> Result<(), String> {
+    commit_project_shown(data.inner().as_ref(), request.0.project.as_ref(), |_| Ok(()), || Ok(()))
+}
+
+// contract: host-calls.decode.messages
+// contract: projects.shown.requires-project-field
+#[test]
+fn malformed_project_shown_arguments_are_rejected_before_committing_project_state() {
+    let data = Arc::new(WindowData::default());
+    *data.shown.lock().unwrap() = "project-old".into();
+    *data.root.lock().unwrap() = "/projects/old".into();
+    data.projects
+        .lock()
+        .unwrap()
+        .insert("project-next".into(), "/projects/next".into());
+    data.staged_projects
+        .lock()
+        .unwrap()
+        .insert("project-next".into());
+    let app = mock_builder()
+        .manage(data.clone())
+        .invoke_handler(tauri::generate_handler![project_shown_decoder_fixture])
+        .build(mock_context(noop_assets()))
+        .unwrap();
+    let window = WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+
+    for (index, (request, expected)) in [
+        (
+            json!(true),
+            "argument request must be an object, not a boolean",
+        ),
+        (json!({}), "argument request.project is missing"),
+        (
+            json!({
+                "project": {"id": 5, "root": "/projects/next", "title": "Next"}
+            }),
+            "argument request.project.id must be a string, not a number",
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let response = get_ipc_response(
+            &window,
+            InvokeRequest {
+                cmd: "project_shown_decoder_fixture".into(),
+                callback: CallbackFn((index * 2) as u32),
+                error: CallbackFn((index * 2 + 1) as u32),
+                url: "tauri://localhost".parse().unwrap(),
+                body: InvokeBody::Json(json!({"request": request})),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.into(),
+            },
+        );
+        assert_eq!(response.unwrap_err(), json!(expected));
+        assert_eq!(*data.shown.lock().unwrap(), "project-old");
+        assert_eq!(*data.root.lock().unwrap(), "/projects/old");
+        assert_eq!(
+            data.projects
+                .lock()
+                .unwrap()
+                .get("project-next")
+                .map(String::as_str),
+            Some("/projects/next")
+        );
+        assert!(data.staged_projects.lock().unwrap().contains("project-next"));
+    }
+
+    let response = get_ipc_response(
+        &window,
+        InvokeRequest {
+            cmd: "project_shown_decoder_fixture".into(),
+            callback: CallbackFn(6),
+            error: CallbackFn(7),
+            url: "tauri://localhost".parse().unwrap(),
+            body: InvokeBody::Json(json!({"request": {"project": null}})),
+            headers: Default::default(),
+            invoke_key: INVOKE_KEY.into(),
+        },
+    );
+    assert!(
+        response.is_ok(),
+        "explicit null is a valid no-project selection: {response:?}"
+    );
+    assert!(data.shown.lock().unwrap().is_empty());
+    assert!(data.root.lock().unwrap().is_empty());
+}
 
 // contract: projects.open-does-not-publish-before-page-selection
 #[test]

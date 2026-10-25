@@ -697,6 +697,7 @@ fn invalid_json_closes_connection() {
 | `quit.request.begins-the-quit-state` | quit 요청은 준비된 창이 있든 없든 quit을 실행하기 전에 종료 상태를 시작하므로, 그 종료 중의 page process 종료는 오류 줄을 쓰지 않는다. | both |
 | `project-removal.ask.waits-for-the-owner-answer` | 프로젝트의 제거 요청은 그 프로젝트를 보이는 창의 답으로 이행한다. 요청이 대기 중인 프로젝트에 대한 두 번째 요청, 요청 없는 답, 올바르지 않은 project id는 오류로 실패하고, 요청을 받은 창이 끝나면 제거해도 된다고 답한 것으로 본다. | both |
 | `project-removal.abandon.records-each-allowed-removal` | 제거에 대한 질문을 받은 창이 끝나면 제거를 허용하고, 그 요청마다 `window`와 `project`를 가진 event `host.project.removal_allowed`를 저장한다. 다른 창의 요청에는 저장하지 않는다. | both |
+| `projects.shown.requires-project-field` | Project-shown 요청에는 `project` member가 필요하다. 명시적 `null`은 표시 project를 지우며, member를 생략하면 상태 변경 전에 거부한다. | both |
 | `debug.record.writes-the-state-file` | 기록은 주어진 상태와 UTC `time` `YYYYMMDDTHHMMSSZ`를 담은 `logs/state-<time>.json`을 쓰고 그 상대 경로로 답한다. | both |
 | `debug.record.keeps-the-newest-20-state-files` | 상태 파일을 쓴 뒤 host는 시각으로 가장 새 20개를 넘는 `logs/state-<time>.json` 파일을 지우고 `logs/`의 다른 파일은 둔다. | both |
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails 또는 tauri>`를 쓴다. | both |

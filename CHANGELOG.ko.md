@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F239-119: 명시적 null 의미는 유지하면서 Tauri ProjectShown의 project
+  member를 필수로 요구한다. Production `Argument<ProjectShown>` decoder Red는
+  `{}`를 `None`으로 허용했다. 같은 MockRuntime owner case는 이제 1/1 통과하며,
+  member 생략은 상태를 바꾸지 않고 거부하고 `{"project":null}`은 허용한다.
+  집중 Go/Tauri project, starter, view, sidecar case가 통과했다. 무관한 Tauri
+  `sok` process-wait parity finding은 남아 있다.
+
 - F239-122: Tauri null-result 및 null-event fixture에 필수 page generation
   field를 추가하고 start-document fixture가 현재 `soksak` scheme을 기대하게
   수정한다. 세 argument test와 start-owner test가 `make rust-repeat`에서 각각

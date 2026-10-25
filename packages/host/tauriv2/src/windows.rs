@@ -921,9 +921,51 @@ pub(crate) struct OpenProject {
 }
 
 /// The project that a page has selected after loading its project data context.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug)]
 pub(crate) struct ProjectShown {
     project: Option<ShownProject>,
+}
+
+impl<'de> Deserialize<'de> for ProjectShown {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ProjectShownVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for ProjectShownVisitor {
+            type Value = ProjectShown;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a project-shown request object")
+            }
+
+            fn visit_map<M>(self, mut fields: M) -> Result<Self::Value, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                let mut project = None;
+                let mut has_project = false;
+                while let Some(key) = fields.next_key::<String>()? {
+                    if key == "project" {
+                        if has_project {
+                            return Err(serde::de::Error::duplicate_field("project"));
+                        }
+                        project = fields.next_value::<Option<ShownProject>>()?;
+                        has_project = true;
+                    } else {
+                        fields.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+                if !has_project {
+                    return Err(serde::de::Error::missing_field("project"));
+                }
+                Ok(ProjectShown { project })
+            }
+        }
+
+        deserializer.deserialize_map(ProjectShownVisitor)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
