@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F239-104: Record raw Mach bounds for image matching and optional frame-identity
+  decoding in each callback-status record. Preserve decimal-string ticks, explicit
+  nulls for stages that did not run, and the callback timebase. Red: three owner
+  assertions failed against the unchanged implementation. Green: after rebuilding
+  the target, `capture_metadata_test` passed 1/1 in 1.426 seconds, including the
+  no-code decode result. A runner-only attempt used a stale binary and is classified
+  as setup failure. The passing binary included an in-progress matcher source
+  version; current combined-source validation and runtime measurement remain
+  pending. The 33 ms limit and asynchronous writer behavior are unchanged.
+
 - F239-105: Remove the duplicate plugin-only row for `sidecars.retain.keeps-session-first-sent-during-start` and test the checked-in English and Korean tables for unique case IDs. Red: the owner test failed on
   the duplicate ID in the canonical table. Green: it parses both real tables,
   confirms unique IDs and matching case sets, and passes 1/1.

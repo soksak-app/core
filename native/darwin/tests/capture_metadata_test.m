@@ -7,10 +7,11 @@
 #include <sys/stat.h>
 
 static int failures;
-static uint64_t controlledTimes[3];
+static uint64_t controlledTimes[7];
 static int controlledTimeIndex;
+static int controlledTimeLimit = 3;
 static uint64_t controlledRawClock(void) {
-    if (controlledTimeIndex >= 3) return 0;
+    if (controlledTimeIndex >= controlledTimeLimit) return 0;
     return controlledTimes[controlledTimeIndex++];
 }
 static kern_return_t failedTimebase(mach_timebase_info_data_t *timebase) {
@@ -484,8 +485,11 @@ int main(void) { @autoreleasepool {
     [measuredMetadata release];
     controlledTimes[0] = 100;
     controlledTimes[1] = 200;
-    controlledTimes[2] = 250;
+    controlledTimes[2] = 210;
+    controlledTimes[3] = 230;
+    controlledTimes[4] = 250;
     controlledTimeIndex = 0;
+    controlledTimeLimit = 5;
     uint64_t (*originalClock)(void) = captureRawClock;
     captureRawClock = controlledRawClock;
     SCStream *testStream = (SCStream *)[NSObject new];
@@ -507,16 +511,20 @@ int main(void) { @autoreleasepool {
     NSDictionary *measuredCallback = used.callbackStatusTrace.firstObject;
     mach_timebase_info_data_t measuredTimebase = {};
     kern_return_t measuredTimebaseResult = mach_timebase_info(&measuredTimebase);
-    check(controlledTimeIndex == 3
+    check(controlledTimeIndex == 5
         && [measuredCallback[@"callbackTime"] isEqual:@"100"]
         && [measuredCallback[@"writeStartTime"] isEqual:@"200"]
+        && [measuredCallback[@"imageMatchStartTime"] isEqual:@"210"]
+        && [measuredCallback[@"imageMatchCompleteTime"] isEqual:@"230"]
+        && measuredCallback[@"frameIdentityDecodeStartTime"] == [NSNull null]
+        && measuredCallback[@"frameIdentityDecodeCompleteTime"] == [NSNull null]
         && [measuredCallback[@"writeCompleteTime"] isEqual:@"250"]
         && [measuredCallback[@"machTimebaseNumerator"] unsignedIntValue] == measuredTimebase.numer
         && [measuredCallback[@"machTimebaseDenominator"] unsignedIntValue] == measuredTimebase.denom
         && measuredTimebaseResult == KERN_SUCCESS
         && [measuredCallback[@"displayTime"] isEqual:@"987654321"]
         && [measuredCallback[@"frame"] isEqual:@"frame-0001.bgra"],
-        @"the real delegate path records controlled raw arrival, processing bounds, the system timebase, display time and exact frame marker");
+        @"the real delegate path records callback and image-match raw bounds, absent identity-stage ticks, the timebase, display time and frame marker");
     check(writeCaptureCallbackStatusTrace(used), @"the measured callback metadata is written as JSONL");
     NSString *measuredTraceText = [NSString stringWithContentsOfFile:
         [directory stringByAppendingPathComponent:kCaptureCallbackStatusFile] encoding:NSUTF8StringEncoding error:nil];
@@ -524,10 +532,113 @@ int main(void) { @autoreleasepool {
         [measuredTraceText dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     check([measuredJSON[@"callbackTime"] isEqual:@"100"]
         && [measuredJSON[@"writeStartTime"] isEqual:@"200"]
+        && [measuredJSON[@"imageMatchStartTime"] isEqual:@"210"]
+        && [measuredJSON[@"imageMatchCompleteTime"] isEqual:@"230"]
+        && measuredJSON[@"frameIdentityDecodeStartTime"] == [NSNull null]
+        && measuredJSON[@"frameIdentityDecodeCompleteTime"] == [NSNull null]
         && [measuredJSON[@"writeCompleteTime"] isEqual:@"250"]
         && [measuredJSON[@"machTimebaseNumerator"] unsignedIntValue] == measuredTimebase.numer
         && [measuredJSON[@"machTimebaseDenominator"] unsignedIntValue] == measuredTimebase.denom,
-        @"the callback artifact preserves the raw timing values and actual mach timebase");
+        @"the callback artifact preserves stage ticks as decimal strings, absent stages as null, and the actual mach timebase");
+
+    NSString *identityTimingDirectory = [directory stringByAppendingPathComponent:@"identity-timing"];
+    check([[NSFileManager defaultManager] createDirectoryAtPath:identityTimingDirectory
+        withIntermediateDirectories:YES attributes:nil error:nil], @"the identity timing fixture directory is created");
+    sp_image_capture_match_begin(identityTimingDirectory.fileSystemRepresentation, captureWriter);
+    char *identityTimingError = NULL;
+    BOOL identityTimingStarted = sp_image_capture_match_identity_session_begin(&identityTimingError);
+    check(identityTimingStarted, [NSString stringWithFormat:@"the identity timing session starts (%s)",
+        identityTimingError ?: ""]);
+    free(identityTimingError); identityTimingError = NULL;
+    const size_t identityWidth = 200, identityHeight = 200, identityStride = identityWidth * 4;
+    NSMutableData *identitySourcePixels = [NSMutableData dataWithLength:identityStride * identityHeight];
+    for (size_t offset = 3; offset < identitySourcePixels.length; offset += 4)
+        ((uint8_t *)identitySourcePixels.mutableBytes)[offset] = 255;
+    uint8_t identityRegionToken[16] = { 1, 2, 3, 4 };
+    sp_image_capture_identity identitySource = { 17, 19, 23 };
+    NSString *identityPayload = nil;
+    BOOL identitySourceReady = identityTimingStarted
+        && sp_image_capture_match_identity_issue(identityRegionToken, identitySource, &identityPayload, &identityTimingError)
+        && sp_image_capture_match_retain(identitySource, identitySourcePixels.bytes, identityWidth, identityHeight,
+            identityStride, CGRectMake(0, 0, identityWidth, identityHeight), 1, "kCGColorSpaceSRGB");
+    check(identitySourceReady, [NSString stringWithFormat:@"the identity timing source is issued and retained (%s)",
+        identityTimingError ?: ""]);
+    free(identityTimingError); identityTimingError = NULL;
+    [identityPayload release];
+
+    CVPixelBufferRef identityBuffer = NULL;
+    CMVideoFormatDescriptionRef identityFormat = NULL;
+    CMSampleBufferRef identityFrame = NULL;
+    CVReturn identityBufferResult = CVPixelBufferCreate(NULL, identityWidth, identityHeight,
+        kCVPixelFormatType_32BGRA, NULL, &identityBuffer);
+    BOOL identityBufferReady = identityBufferResult == kCVReturnSuccess && identityBuffer != NULL;
+    if (identityBufferReady) {
+        identityBufferReady = CVPixelBufferLockBaseAddress(identityBuffer, 0) == kCVReturnSuccess;
+        if (identityBufferReady) {
+            uint8_t *base = (uint8_t *)CVPixelBufferGetBaseAddress(identityBuffer);
+            size_t bufferStride = CVPixelBufferGetBytesPerRow(identityBuffer);
+            for (size_t row = 0; row < identityHeight; row++)
+                memcpy(base + row * bufferStride, (const uint8_t *)identitySourcePixels.bytes + row * identityStride,
+                    identityStride);
+            identityBufferReady = CVPixelBufferUnlockBaseAddress(identityBuffer, 0) == kCVReturnSuccess;
+        }
+    }
+    CGRect identityRectValue = CGRectMake(0, 0, identityWidth, identityHeight);
+    NSDictionary *identityRect = [(NSDictionary *)CGRectCreateDictionaryRepresentation(identityRectValue) autorelease];
+    NSDictionary *identityMetadata = @{
+        SCStreamFrameInfoStatus: @(SCFrameStatusComplete),
+        SCStreamFrameInfoDisplayTime: @987654323,
+        SCStreamFrameInfoContentRect: identityRect,
+        SCStreamFrameInfoScreenRect: identityRect,
+        SCStreamFrameInfoContentScale: @1,
+        SCStreamFrameInfoScaleFactor: @1,
+    };
+    CMSampleTimingInfo identityTiming = {kCMTimeInvalid, kCMTimeZero, kCMTimeInvalid};
+    if (identityBufferReady && CMVideoFormatDescriptionCreateForImageBuffer(NULL, identityBuffer, &identityFormat) == noErr)
+        CMSampleBufferCreateReadyWithImageBuffer(NULL, identityBuffer, identityFormat, &identityTiming, &identityFrame);
+    if (identityFormat) CFRelease(identityFormat);
+    if (identityBuffer) CVPixelBufferRelease(identityBuffer);
+    if (identityFrame) {
+        CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(identityFrame, true);
+        if (attachments && CFArrayGetCount(attachments) == 1) {
+            CFMutableDictionaryRef values = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachments, 0);
+            for (NSString *key in identityMetadata) CFDictionarySetValue(values, (__bridge CFStringRef)key,
+                (__bridge CFTypeRef)identityMetadata[key]);
+        }
+    }
+    check(identityFrame != NULL, @"the identity timing sample has complete frame metadata and a BGRA buffer");
+    controlledTimes[0] = 300;
+    controlledTimes[1] = 310;
+    controlledTimes[2] = 320;
+    controlledTimes[3] = 330;
+    controlledTimes[4] = 340;
+    controlledTimes[5] = 350;
+    controlledTimes[6] = 360;
+    controlledTimeIndex = 0;
+    controlledTimeLimit = 7;
+    originalClock = captureRawClock;
+    captureRawClock = controlledRawClock;
+    if (identityFrame) [used write:identityFrame callbackTime:captureRawClock()];
+    captureRawClock = originalClock;
+    if (identityFrame) CFRelease(identityFrame);
+    dispatch_sync(captureWriter, ^{});
+    NSDictionary *identityTimedCallback = used.callbackStatusTrace.lastObject;
+    NSString *identityDecodeTracePath = [identityTimingDirectory stringByAppendingPathComponent:
+        @"frame-identities/decoded-frames.jsonl"];
+    NSString *identityDecodeTrace = [NSString stringWithContentsOfFile:identityDecodeTracePath
+        encoding:NSUTF8StringEncoding error:nil];
+    check(identitySourceReady && controlledTimeIndex == 7
+        && [identityTimedCallback[@"callbackTime"] isEqual:@"300"]
+        && [identityTimedCallback[@"writeStartTime"] isEqual:@"310"]
+        && [identityTimedCallback[@"imageMatchStartTime"] isEqual:@"320"]
+        && [identityTimedCallback[@"imageMatchCompleteTime"] isEqual:@"330"]
+        && [identityTimedCallback[@"frameIdentityDecodeStartTime"] isEqual:@"340"]
+        && [identityTimedCallback[@"frameIdentityDecodeCompleteTime"] isEqual:@"350"]
+        && [identityTimedCallback[@"writeCompleteTime"] isEqual:@"360"]
+        && [identityDecodeTrace containsString:@"no-code"]
+        && [NSString stringWithUTF8String:sp_capture_error()].length == 0,
+        @"the active identity callback records exact match/decode helper bounds and completes its no-code result without errors");
+    sp_image_capture_match_end();
 
     sp_image_capture_match_begin(directory.fileSystemRepresentation, captureWriter);
     check(finalizeCaptureArtifacts(used), @"the stopped recording finalizes its source manifest and callback trace");

@@ -645,6 +645,10 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         @"writeStartTime": [NSString stringWithFormat:@"%llu", (unsigned long long)writeStartTime],
         @"machTimebaseNumerator": @(timebase.numer),
         @"machTimebaseDenominator": @(timebase.denom),
+        @"imageMatchStartTime": [NSNull null],
+        @"imageMatchCompleteTime": [NSNull null],
+        @"frameIdentityDecodeStartTime": [NSNull null],
+        @"frameIdentityDecodeCompleteTime": [NSNull null],
         @"writeCompleteTime": [NSNull null],
         @"frame": [NSNull null],
     }]];
@@ -860,12 +864,22 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
     const char *colorName = CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA
         && captureColorName && CFStringGetCString(captureColorName, colorNameBuffer,
             sizeof(colorNameBuffer), kCFStringEncodingUTF8) ? colorNameBuffer : NULL;
-    CFTimeInterval matchBegan = CACurrentMediaTime();
-    sp_image_capture_match_result match = sp_image_capture_match_sample(copy + sizeof(head) + sizeof(info),
-        width, height, stride, rect, hasScreenRect ? screen : CGRectZero,
-        contentScale, scaleFactor, colorName, shown);
-    double matchMilliseconds = (CACurrentMediaTime() - matchBegan) * 1000;
     NSMutableDictionary *callbackRecord = (NSMutableDictionary *)self.callbackStatusTrace.lastObject;
+    CFTimeInterval matchBegan = CACurrentMediaTime();
+    uint64_t imageMatchStartTime = captureRawClock();
+    sp_image_capture_match_result match = {0};
+    @try {
+        match = sp_image_capture_match_sample(copy + sizeof(head) + sizeof(info),
+            width, height, stride, rect, hasScreenRect ? screen : CGRectZero,
+            contentScale, scaleFactor, colorName, shown);
+    } @finally {
+        uint64_t imageMatchCompleteTime = captureRawClock();
+        callbackRecord[@"imageMatchStartTime"] = [NSString stringWithFormat:@"%llu",
+            (unsigned long long)imageMatchStartTime];
+        callbackRecord[@"imageMatchCompleteTime"] = [NSString stringWithFormat:@"%llu",
+            (unsigned long long)imageMatchCompleteTime];
+    }
+    double matchMilliseconds = (CACurrentMediaTime() - matchBegan) * 1000;
     callbackRecord[@"imageMatch"] = imageMatchRecord(match, matchMilliseconds, width, height, stride,
         rect, screen, hasScreenRect, contentScale, scaleFactor, CVPixelBufferGetPixelFormatType(buffer), colorName);
     sp_image_capture_match_result_dispose(&match);
@@ -886,9 +900,21 @@ static void reportPixelBufferFailure(int number, NSString *operation, CVReturn r
         if (capturedBytes) CFRelease(capturedBytes);
         NSArray<NSDictionary *> *identityRecords = nil;
         char *identityError = NULL;
-        BOOL decoded = capturedImage && sp_image_capture_match_identity_decode_frame(capturedImage,
-            width, height, rect, hasScreenRect ? screen : CGRectZero, contentScale, scaleFactor,
-            (uint64_t)number, shown, &identityRecords, &identityError);
+        BOOL decoded = NO;
+        if (capturedImage) {
+            uint64_t frameIdentityDecodeStartTime = captureRawClock();
+            @try {
+                decoded = sp_image_capture_match_identity_decode_frame(capturedImage,
+                    width, height, rect, hasScreenRect ? screen : CGRectZero, contentScale, scaleFactor,
+                    (uint64_t)number, shown, &identityRecords, &identityError);
+            } @finally {
+                uint64_t frameIdentityDecodeCompleteTime = captureRawClock();
+                callbackRecord[@"frameIdentityDecodeStartTime"] = [NSString stringWithFormat:@"%llu",
+                    (unsigned long long)frameIdentityDecodeStartTime];
+                callbackRecord[@"frameIdentityDecodeCompleteTime"] = [NSString stringWithFormat:@"%llu",
+                    (unsigned long long)frameIdentityDecodeCompleteTime];
+            }
+        }
         if (capturedImage) CGImageRelease(capturedImage);
         if (!decoded) {
             NSString *message = [NSString stringWithUTF8String:identityError
