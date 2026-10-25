@@ -6641,6 +6641,28 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F212.7d",
+    implementation: [
+      { file: "e2e/view-theme.test.mjs", symbol: "const expected =" },
+    ],
+    tests: [
+      { file: "e2e/view-theme.test.mjs", id: "a newly created view paints the card theme throughout its first presentation" },
+    ],
+    expected: "Complete dark and light view-creation recordings retain the declared card theme token at three document background points in every decoded frame.",
+    levels: ["application"],
+  },
+  {
+    id: "F212.7d-1",
+    implementation: [
+      { file: "e2e/view-theme.test.mjs", symbol: "const expected =" },
+    ],
+    tests: [
+      { file: "e2e/view-theme.test.mjs", id: "a newly created view paints the card theme throughout its first presentation" },
+    ],
+    expected: "Complete dark and light view-creation recordings retain the declared card theme token at three document background points in every decoded frame.",
+    levels: ["application"],
+  },
+  {
     id: "F212.7c",
     implementation: [{ file: "e2e/outside.test.mjs", symbol: "function assertAligned(" }],
     tests: [

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F212.7d-1: Dark 및 light mode에서 새 view 생성을 녹화하고 모든 decoded frame의 document 배경 지점 세 곳을 선언된 card token과 비교한다. macOS arm64의 두 host가 전체 녹화, error 감사 및 정상 종료를 통과한다. F212.7d-1과 first-script theme 구현 상위 F212.7d를 완료한다.
+
 - F212.7b-1: Fullscreen card의 양방향 tab 전환을 녹화하고 각 presentation 완료 뒤 선택된 native surface만 양의 크기로 표시되는지 요구한다. Decode한 전체 frame 수 일치와 녹화 overflow 부재를 검증한다. 양 host fullscreen 및 tab 검사, error 감사와 정상 종료가 통과한다. F212.7b-1과 구현이 완료된 상위 F212.7b를 완료하며 초기 checker 속성 오류를 product 근거와 구분해 보존한다.
 
 - F239-78: 연속 capture 검사에서 lifecycle debug를 켜고 녹화마다 연결된 start request, start completion, first sample을 한 건씩 요구하며 failed lifecycle event를 거부한다. macOS arm64 두 host가 각각 녹화 세 회, error 감사 및 정상 종료를 통과하고 제어된 native callback owner가 1/1 통과한다. 원래 간헐적인 startup 지연 조사는 진행 상태로 유지한다.
