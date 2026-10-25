@@ -10,11 +10,20 @@
   Darwin test는 2/2 통과했고 Linux/Windows target은 cross-compile했지만 실행하지
   않았다. Platform 구현은 변경하지 않았다.
 
+- F239-47-40-7: Tauri `ProjectShown` 및 `ShownProject`가 공통 host-call contract에 따라
+  선언되지 않은 field를 무시하게 한다. Red: 집중 owner test는
+  알 수 없는 outer 또는 nested field를 각각 거부했다. `deny_unknown_fields`
+  선언을 제거한 뒤 두 exact test가 각각 1/1 통과한다. parity inventory가 구조체와
+  test를 연결하며 `make parity-check`는 lane 101개, 구현 파일 704개, test 파일
+  1005개로 통과한다.
+
 - F239-47-40-6: Wails `ProjectShown` 및 nested `ShownProject` 인자를 표준 host
   argument decoder로 디코딩한다. Red: 변경 전 binding test와 새 owner case는
   직접 JSON decoding이 잘못된 request 형태와 nested field에 비표준 오류를
   반환해 실패했다. Green: binding test가 1/1, 집중 project owner test가 2/2
   통과하며 unknown field 무시와 명시적 `project:null` 처리를 확인한다.
+  parity inventory가 구현과 owner test를 연결하며 `make parity-check`는 lane
+  101개, 구현 파일 704개, test 파일 1005개로 통과한다.
 - F239-47-40-5: Wails private view 기록 테스트를 `src`로 옮기고 일치하는
   source generation과 `Documents` view channel을 등록한다. call/reply 및
   `view.error` 기록 assertion은 `ViewMessage`를 통해 유지한다. Red: 두 외부

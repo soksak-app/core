@@ -10,12 +10,22 @@
   process-wait test helper. Darwin tests pass 2/2; Linux and Windows targets
   cross-compile but were not executed. No platform implementation changed.
 
+- F239-47-40-7: Make Tauri `ProjectShown` and `ShownProject` ignore
+  undeclared fields as required by the shared host-call contract. Red: the
+  focused owner tests each rejected an unknown outer or nested field. Green:
+  after removing `deny_unknown_fields`, both exact tests pass 1/1. The parity
+  inventory links the structs and tests; `make parity-check` passes with 101
+  lanes, 704 implementation files, and 1005 test files.
+
 - F239-47-40-6: Decode Wails `ProjectShown` and nested `ShownProject`
   arguments with the standard host argument decoder. Red: the unchanged
   binding test and new owner cases failed because direct JSON decoding
   returned nonstandard errors for invalid request shapes and nested fields.
   Green: the binding test passes 1/1 and the focused project owner tests pass
   2/2, including ignored unknown fields and explicit `project:null` handling.
+  The parity inventory links the implementation and owner tests, and
+  `make parity-check` passes with 101 lanes, 704 implementation files, and
+  1005 test files.
 - F239-47-40-5: Move the private Wails view record tests into `src` and
   register the matching source generation and `Documents` view channel. Keep
   the call/reply and `view.error` log assertions through `ViewMessage`. Red:
