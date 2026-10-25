@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 static int failures;
 static atomic_uint identityDecodeHookCount;
@@ -529,6 +531,118 @@ static void frameIdentityDecodeDoesNotBlockSampleQueue(void) {
         error:&removeError], [NSString stringWithFormat:@"the callback queue fixture is removed (%@)", removeError]);
 }
 
+static NSArray<NSNumber *> *identityDecodedFrameNumbers(NSString *path) {
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    NSString *text = data ? [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease] : nil;
+    NSMutableArray<NSNumber *> *frames = [NSMutableArray array];
+    for (NSString *line in [text componentsSeparatedByString:@"\n"]) {
+        if (!line.length) continue;
+        NSData *lineData = [line dataUsingEncoding:NSUTF8StringEncoding];
+        NSDictionary *record = lineData ? [NSJSONSerialization JSONObjectWithData:lineData options:0 error:nil] : nil;
+        if ([record[@"frame"] respondsToSelector:@selector(unsignedLongLongValue)])
+            [frames addObject:record[@"frame"]];
+    }
+    return frames;
+}
+
+static BOOL identityFramesAreOrdered(NSArray<NSNumber *> *frames, NSUInteger expectedCount) {
+    if (frames.count != expectedCount) return NO;
+    for (NSUInteger index = 0; index < expectedCount; index++)
+        if ([frames[index] unsignedLongLongValue] != index + 1) return NO;
+    return YES;
+}
+
+static void frameIdentityCommitDoesNotWaitForArtifactWriter(void) {
+    char directoryTemplate[] = "/tmp/soksak-frame-identity-commit-XXXXXX";
+    char *directory = mkdtemp(directoryTemplate);
+    NSString *directoryPath = directory ? [NSString stringWithUTF8String:directory] : nil;
+    NSString *identityDirectory = [directoryPath stringByAppendingPathComponent:@"frame-identities"];
+    NSString *decodedPath = [identityDirectory stringByAppendingPathComponent:@"decoded-frames.jsonl"];
+    NSError *directoryError = nil;
+    BOOL prepared = directoryPath && [[NSFileManager defaultManager] createDirectoryAtPath:identityDirectory
+        withIntermediateDirectories:YES attributes:nil error:&directoryError];
+    int decodedFD = prepared ? open(decodedPath.fileSystemRepresentation, O_CREAT | O_RDWR, 0600) : -1;
+    dispatch_queue_t writer = dispatch_queue_create("test.frame-identity.blocked-artifacts", DISPATCH_QUEUE_SERIAL);
+    dispatch_semaphore_t writerEntered = dispatch_semaphore_create(0);
+    dispatch_semaphore_t writerRelease = dispatch_semaphore_create(0);
+    dispatch_semaphore_t rowsReady = dispatch_semaphore_create(0);
+    dispatch_semaphore_t sourceCancelled = dispatch_semaphore_create(0);
+    __block NSUInteger requestedRows = 8;
+    __block BOOL rowsNotified = NO;
+    dispatch_source_t rowsSource = decodedFD >= 0
+        ? dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, (uintptr_t)decodedFD, DISPATCH_VNODE_WRITE,
+            dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0)) : NULL;
+    check(prepared && decodedFD >= 0 && rowsSource != NULL,
+        [NSString stringWithFormat:@"the ordered-commit fixture prepares a decoded-row file watcher (%@)",
+            directoryError.localizedDescription ?: @"no directory error"]);
+    if (rowsSource) {
+        dispatch_source_set_event_handler(rowsSource, ^{
+            NSArray<NSNumber *> *frames = identityDecodedFrameNumbers(decodedPath);
+            if (frames.count >= requestedRows && !rowsNotified) {
+                rowsNotified = YES;
+                dispatch_semaphore_signal(rowsReady);
+            }
+        });
+        dispatch_source_set_cancel_handler(rowsSource, ^{
+            if (decodedFD >= 0) close(decodedFD);
+            dispatch_semaphore_signal(sourceCancelled);
+        });
+        dispatch_resume(rowsSource);
+    } else if (decodedFD >= 0) {
+        close(decodedFD);
+        decodedFD = -1;
+    }
+
+    const uint8_t sample[4 * 4 * 4] = { 0 };
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    char *error = NULL;
+    sp_image_capture_match_begin(directory, writer);
+    BOOL sessionStarted = sp_image_capture_match_identity_session_begin(&error) && error == NULL;
+    check(sessionStarted, @"the ordered-commit fixture starts an identity session");
+    free(error); error = NULL;
+    dispatch_async(writer, ^{
+        dispatch_semaphore_signal(writerEntered);
+        dispatch_semaphore_wait(writerRelease, DISPATCH_TIME_FOREVER);
+    });
+    long writerWait = dispatch_semaphore_wait(writerEntered, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+    check(writerWait == 0, @"the controlled artifact writer is held before identity rows are enqueued");
+
+    BOOL admittedEight = sessionStarted && colorSpace != NULL && writerWait == 0 && rowsSource != NULL;
+    for (uint64_t frame = 1; frame <= 8 && admittedEight; frame++) {
+        error = NULL;
+        BOOL accepted = sp_image_capture_match_identity_enqueue_frame(sample, 4, 4, 16, colorSpace,
+            CGRectMake(0, 0, 4, 4), CGRectMake(0, 0, 4, 4), 1, 1, frame, frame * 1000, &error);
+        admittedEight = accepted && error == NULL;
+        free(error); error = NULL;
+    }
+    check(admittedEight, @"eight ordered identity rows are admitted while artifact output is blocked");
+    long rowsWait = rowsSource && admittedEight
+        ? dispatch_semaphore_wait(rowsReady, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC)) : -1;
+    NSArray<NSNumber *> *blockedWriterFrames = identityDecodedFrameNumbers(decodedPath);
+    BOOL committedWhileBlocked = rowsWait == 0 && identityFramesAreOrdered(blockedWriterFrames, 8);
+    check(committedWhileBlocked,
+        @"eight decoded JSONL rows commit in order while the shared raw/source artifact writer remains blocked");
+
+    dispatch_semaphore_signal(writerRelease);
+    sp_image_capture_match_identity_session_end();
+    NSArray<NSNumber *> *drainedFrames = identityDecodedFrameNumbers(decodedPath);
+    check(identityFramesAreOrdered(drainedFrames, 8),
+        @"writer release drains every accepted decoded row exactly once in sample order");
+    sp_image_capture_match_end();
+    if (rowsSource) {
+        dispatch_source_cancel(rowsSource);
+        dispatch_semaphore_wait(sourceCancelled, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC));
+        dispatch_release(rowsSource);
+    }
+    if (colorSpace) CGColorSpaceRelease(colorSpace);
+    dispatch_release(writerEntered); dispatch_release(writerRelease); dispatch_release(rowsReady);
+    dispatch_release(sourceCancelled); dispatch_release(writer);
+    NSError *removeError = nil;
+    check(directoryPath && [[NSFileManager defaultManager] removeItemAtPath:directoryPath error:&removeError],
+        [NSString stringWithFormat:@"the ordered-commit fixture removes its files (%@)",
+            removeError.localizedDescription ?: @"no removal error"]);
+}
+
 static void frameIdentityRetentionEvictionChecks(void) {
     const uint8_t regionToken[16] = { 3, 1, 4, 1, 5, 9 };
     const uint8_t sourcePixel[4] = { 0, 0, 0, 255 };
@@ -707,6 +821,7 @@ int main(void) { @autoreleasepool {
     frameIdentityArtifactChecks();
     frameIdentityCropByteBoundChecks();
     frameIdentityDecodeDoesNotBlockSampleQueue();
+    frameIdentityCommitDoesNotWaitForArtifactWriter();
     frameIdentityRetentionEvictionChecks();
     fprintf(stderr, "%s: native image capture identity matching\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;

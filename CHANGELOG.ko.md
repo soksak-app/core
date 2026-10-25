@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-148: Decoded frame identity row를 기존 serial identity lane에서 sample 순서대로 append한다. JSONL append가 끝난 뒤 admitted job을 해제해 공유 raw/source artifact writer와 독립적으로 처리한다. 8-job 및 64 MiB limit은 유지한다. Red: matcher owner는 blocked-writer row-commit assertion에서 실패했다(`/tmp/F239-148-image-match-red.log`). Green: 같은 owner가 0.873초에 1/1 통과했고 artifact writer가 멈춘 동안 순서가 맞는 row 8개를 확인한 뒤 writer 해제 후 8개 모두 drain됨을 검증했다(`/tmp/F239-148-image-match-green-final.log`). `make docs-check`도 통과했다(`/tmp/F239-148-docs-check-final.log`).
+
 - F239-149: Expected ROI 경계를 넘는 QR이 감지되면 기존 canonical helper reason `code-outside-expected-roi`를 반환한다. Matcher는 이미 이를 `cropped`로 매핑하며 issued set에 없는 valid payload는 계속 `unissued`다. Red: `capture_frame_identity_test`는 측정된 네 clipped edge에서 동의어 `cropped-code-in-expected-roi`를 보고했다(`/tmp/F239-149-capture-frame-identity-helper-red-01.log`). Green: 같은 owner가 0.444초에 1/1 통과한다(`/tmp/F239-149-capture-frame-identity-helper-green-01.log`).
 
 - F239-146: 보존된 recording이 기존 8-job Vision backlog 상한에 도달한 뒤 frame-identity QR decoder를 고정된 ZXing-C++ v3.1.1로 교체한다. Source release SHA-256을 확인하고 QR 전용 C API를 기존 macOS static library에 빌드하며 두 app bundle에 Apache-2.0 license를 포함한다. Exact payload, ROI, ambiguity, error, artifact ordering, resource bound 및 raw-frame 동작을 유지한다. Focused native owner 5개와 pkg-config owner가 통과했고 bundle preparation은 두 host 모두에서 license를 확인했다. 두 host build와 full-recording cadence acceptance는 남아 있다.

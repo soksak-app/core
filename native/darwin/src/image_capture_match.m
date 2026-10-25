@@ -807,8 +807,7 @@ static NSString *identityDecodeReason(NSString *helperReason) {
     return @"unissued";
 }
 
-static BOOL queueIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_t frame_number,
-    dispatch_block_t completion, char **error) {
+static BOOL appendIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_t frame_number, char **error) {
     if (error) *error = NULL;
     if (!error) return NO; // silent: the public decoder validates its required error output before calling this helper.
     NSMutableData *lines = [NSMutableData data];
@@ -822,47 +821,44 @@ static BOOL queueIdentityDecodeRecords(NSArray<NSDictionary *> *records, uint64_
     }
     initializeHistory();
     [historyLock lock];
-    dispatch_queue_t queue = artifactWriterQueue;
+    BOOL writerAvailable = artifactWriterQueue != NULL;
     NSString *directory = [artifactDirectory copy];
-    if (queue) dispatch_retain(queue);
     [historyLock unlock];
-    if (!queue || !directory) {
-        if (queue) dispatch_release(queue);
+    if (!writerAvailable || !directory) {
         [directory release];
         return identityFailure(error, "decoded frame identity writer is unavailable");
     }
     NSData *ownedLines = [lines copy];
-    NSArray *ownedRecords = [records retain];
-    dispatch_async(queue, ^{
-        NSString *identityDirectory = [directory stringByAppendingPathComponent:@"frame-identities"];
-        NSString *path = [identityDirectory stringByAppendingPathComponent:@"decoded-frames.jsonl"];
-        NSError *writeError = nil;
-        BOOL created = [NSFileManager.defaultManager createDirectoryAtPath:identityDirectory
-            withIntermediateDirectories:YES attributes:nil error:&writeError];
-        FILE *file = created ? fopen(path.fileSystemRepresentation, "ab") : NULL;
-        BOOL written = file && fwrite(ownedLines.bytes, ownedLines.length, 1, file) == 1;
-        int savedErrno = errno;
-        BOOL closed = file ? fclose(file) == 0 : NO;
-        if (written && !closed) { written = NO; savedErrno = errno; }
-        [historyLock lock];
-        if (written) {
-            identityDecodedFrameCount++;
-            identityDecodedRecordCount += ownedRecords.count;
-        } else {
-            identityDecodedWriteFailures++;
-            NSString *reason = writeError.localizedDescription ?: [NSString stringWithFormat:@"decoded identity frame %llu could not be appended: %s",
-                (unsigned long long)frame_number, strerror(savedErrno)];
-            if (!identitySessionFailure) identitySessionFailure = [[NSString alloc] initWithFormat:@"frame identity decode artifact write failed: %@", reason];
-            atomic_store(&identitySessionEnabled, false);
-        }
-        [historyLock broadcast];
-        [historyLock unlock];
-        [ownedLines release];
-        [ownedRecords release];
-        if (completion) completion();
-        [directory release];
-        dispatch_release(queue);
-    });
+    NSString *identityDirectory = [directory stringByAppendingPathComponent:@"frame-identities"];
+    NSString *path = [identityDirectory stringByAppendingPathComponent:@"decoded-frames.jsonl"];
+    NSError *writeError = nil;
+    BOOL created = [NSFileManager.defaultManager createDirectoryAtPath:identityDirectory
+        withIntermediateDirectories:YES attributes:nil error:&writeError];
+    FILE *file = created ? fopen(path.fileSystemRepresentation, "ab") : NULL;
+    BOOL written = file && fwrite(ownedLines.bytes, ownedLines.length, 1, file) == 1;
+    int savedErrno = errno;
+    BOOL closed = file ? fclose(file) == 0 : NO;
+    if (written && !closed) { written = NO; savedErrno = errno; }
+    [historyLock lock];
+    if (written) {
+        identityDecodedFrameCount++;
+        identityDecodedRecordCount += records.count;
+    } else {
+        identityDecodedWriteFailures++;
+    }
+    [historyLock broadcast];
+    [historyLock unlock];
+    NSString *failureReason = written ? nil : [(writeError.localizedDescription
+        ?: [NSString stringWithFormat:@"decoded identity frame %llu could not be appended: %s",
+            (unsigned long long)frame_number, strerror(savedErrno)]) copy];
+    [ownedLines release];
+    [directory release];
+    if (!written) {
+        BOOL failed = identityFailure(error, failureReason.UTF8String
+            ?: "decoded frame identity artifact could not be appended");
+        [failureReason release];
+        return failed;
+    }
     return YES;
 }
 
@@ -1179,15 +1175,14 @@ static void commitIdentityDecodeJob(SPIdentityDecodeJob *job, NSOperation *opera
         return;
     }
     char *error = NULL;
-    BOOL queued = queueIdentityDecodeRecords(job.decodedRecords, job.frame,
-        ^{ finishIdentityDecodePendingJob(); }, &error);
-    if (!queued) {
+    BOOL appended = appendIdentityDecodeRecords(job.decodedRecords, job.frame, &error);
+    if (!appended) {
         char *failure = NULL;
         sp_image_capture_match_identity_session_fail(error
-            ?: "decoded frame identity records could not be queued", &failure);
+            ?: "decoded frame identity records could not be appended", &failure);
         free(failure);
-        finishIdentityDecodePendingJob();
     }
+    finishIdentityDecodePendingJob();
     free(error);
 }
 
