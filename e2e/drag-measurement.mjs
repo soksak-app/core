@@ -41,6 +41,9 @@ export function assertRoundTrips(positions, times) {
  * cannot be measured and fails.
  */
 export function pointerLag(samples, ticks, boundary) {
+  assert.ok(Array.isArray(samples) && samples.length > 0 && samples.every((sample) =>
+    sample && Number.isFinite(sample.time) && Number.isFinite(sample.position)),
+  "drag samples are missing or contain non-finite time or position");
   assert.ok(Array.isArray(ticks) && ticks.length > 0, "the host reported no step times");
   assert.equal(boundary?.length, ticks.length + 1,
     `the page reported ${boundary?.length} boundary positions for ${ticks.length} steps`);
@@ -65,8 +68,8 @@ export function pointerLag(samples, ticks, boundary) {
     if (lag > worst.lag) worst = { lag, time, shown, step: k, sent };
   }
   lags.sort((a, b) => a - b);
-  // default: when no frame is measured, there is no lag (0).
-  const at = (fraction) => lags[Math.min(lags.length - 1, Math.floor(lags.length * fraction))] ?? 0;
+  assert.ok(lags.length > 0, "drag measurement has no captured frame at or after the first input");
+  const at = (fraction) => lags[Math.min(lags.length - 1, Math.floor(lags.length * fraction))];
   return { ...worst, median: at(0.5), p90: at(0.9) };
 }
 

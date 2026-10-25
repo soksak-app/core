@@ -317,7 +317,7 @@ The review rejected fixed cell-percentage bands because glyph strokes can extend
 - Such drawing does not use a coordinate system that scales with its element. That coordinate system fits the previous drawing to the new box, which moves it before the cards move.
 - A layout that is replaced before it is presented does not reach the screen, so a position that the pointer holds for less than one presentation, such as the start position between two fast round trips, may be absent from a recording. A drag recording starts and ends at the start position and reaches the far end in every round trip.
 - Drag input completes at the requested rate and recording includes the complete drag. Recording starts before input. A controlled test stops recording only after the capture contains the final geometry; a presentation callback or frame timestamp alone is insufficient.
-- A run must fail if it records too few frames or cannot identify the surface and card in most frames.
+- A run must fail if it records too few frames or cannot identify the surface and card in most frames. Drag latency requires finite capture times and positions and at least one measured frame at or after the first input; absent measurements are an error, not zero latency.
 - Continuous input must continue to update the displayed layout; postponing all rendering until release does not satisfy this specification.
 - Surface creation, replacement, hiding, window resizing, and document reload must preserve these requirements.
 - A document region stays on its element when its surface moves or resizes, receives native scroll input without application activation, and closes with its surface.

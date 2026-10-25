@@ -4,6 +4,11 @@
 
 ## 미배포
 
+- F239-153: 누락되거나 유한하지 않은 drag capture sample과 입력 이후 측정
+  부재를 거부한다. 수정 전 negative owner 세 case가 실패하고 수정 후에는
+  positive 계산을 유지하면서 focused test 다섯 개가 통과한다. 누락된
+  F239-76 runtime test 연결을 등록한다. View-drag runtime recording은 열어 둔다.
+
 - F239-76: 보존된 Wails와 Tauri check-shell trace에서 terminal focus helper의
   선행조건을 검증한다. 양 host는 document 10단계를 완료하기 전에 active key
   window, focus된 terminal cursor와 image region, 일치하는 native responder를

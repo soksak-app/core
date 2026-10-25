@@ -6073,6 +6073,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F239-153",
+    implementation: [{ file: "e2e/drag-measurement.mjs", symbol: "export function pointerLag(" }],
+    tests: [{ file: "e2e/test/drag-measurement.test.mjs", id: "pointer lag rejects only frames before input" }],
+    expected: "Unavailable drag measurements fail instead of reporting zero latency.",
+    levels: ["unit"],
+  },
+  {
+    id: "F239-76",
+    implementation: [{ file: "e2e/activation/ime.test.mjs", symbol: 'await s.run("terminal.focus", {}, surface)' }],
+    tests: [{ file: "e2e/activation/ime.test.mjs", id: "eight Korean vowels and one Backspace retain an exact input trace" }],
+    expected: "The declared terminal focus command establishes focus before the input trace.",
+    levels: ["application"],
+  },
+  {
     id: "F239-152",
     implementation: [{ file: "e2e/activation/terminal-ime-document.mjs", symbol: "export function terminalInputBaselineAfterReference(" }],
     tests: [{ file: "e2e/activation/terminal-ime-document.test.mjs", id: "the first terminal key compares against the prompt redrawn after reference focus" }],

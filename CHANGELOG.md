@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F239-153: Reject missing or non-finite drag capture samples and absent
+  post-input measurements. Three negative owner cases fail before the fix;
+  all five focused tests pass afterward with the positive calculation
+  unchanged. Register the omitted F239-76 runtime test link. View-drag
+  runtime recording remains open.
+
 - F239-76: Verify the terminal focus helper precondition from preserved
   Wails and Tauri check-shell traces. Both hosts report an active key window,
   focused terminal cursor and image region, and the matching native responder
