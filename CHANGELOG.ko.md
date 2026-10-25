@@ -9,7 +9,9 @@
   종료한다. Red: test-controlled 교체와 native post 거부 후 정상 process-ended
   처리가 받을 call이 남지 않았다. Green: `make go-repeat`의 집중 7-test owner
   set이 성공, stale, 거부 및 peer-ended reply 경로를 포함해 통과한다. Contract는
-  실패하거나 오래된 post 뒤 call을 열린 상태로 둔다고 명시한다.
+  실패하거나 오래된 post 뒤 call을 열린 상태로 둔다고 명시한다. `make parity-check`는
+  lane 101개, 구현 파일 703개, test 파일 1004개로 통과하고 `make docs-check`도
+  통과한다.
 
 - F239-48-3-12: 정확한 view-record test 배치 차이를 기록한다. Go test는 private fixture state에 접근하기 위해 `package host`가 필요하고 Rust 대응 test는 public `ViewChannels` API를 사용해 private module 배치가 필요하지 않다. 양쪽 logging assertion을 유지한다. Focused owner assertion은 1/1 통과하며 네 경로만 허용하고 미등록 sibling은 거부한다. Host audit은 finding 9개에서 5개로 줄었고 `make parity-check`, `make docs-check`가 통과했다. Host 동작은 바뀌지 않았다.
 
