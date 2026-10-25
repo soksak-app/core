@@ -46,6 +46,16 @@
 
 
 
+- F239-98-2: rows-only terminal status에서 visual input text를 투영한다.
+  `terminal.screen` status에는 frame identity가 없지만 consumer가 해당 rows를
+  strict framed `terminal.screen.read` helper에 전달했다. Red: 실제 rows-only
+  status와 exported projection을 사용한 owner integration이 실패했다
+  (`/tmp/F239-98-2-rows-only-screen-red-01.log`). Green: rows-only projection은
+  통과하고 framed wrapper의 엄격 검증은 유지한다. Visual consumer와 terminal
+  document suite는 각각 19/19, 38/38 통과한다
+  (`/tmp/F239-98-2-visual-index-green-01.log`,
+  `/tmp/F239-98-2-terminal-document-green-01.log`).
+
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar
   reader가 window 파괴 전에 조회한 owner를 보유할 수 있으므로, 사라진 owner는
   닫힌 window 오류를 기록하는 대신 shared message dispatcher를 통해 기존

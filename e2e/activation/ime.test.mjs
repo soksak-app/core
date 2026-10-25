@@ -934,7 +934,7 @@ for (const app of Object.values(APPS)) {
     let visualMeasurements;
     try {
       persist("visual-stage-inputs.json", visualStageInputs);
-      frameStatus = indexFrameStatus(observedStateEvents, prompt, visibleInputBeforeCursor);
+      frameStatus = indexFrameStatus(observedStateEvents, prompt);
       visualStages = visualStageInputs.map((stage) => ({
         ...planVisualStage({ ...stage, frameStatus }),
         clockDomain: stage.clockDomain,

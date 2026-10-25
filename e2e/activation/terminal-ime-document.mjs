@@ -429,12 +429,17 @@ export async function startTerminalStatusObserver(session, surface, onEvent = ()
   };
 }
 
+function assertRowsCursor(rows, cursor, label) {
+  assert.ok(Array.isArray(rows), `${label}: terminal screen rows are missing`);
+  assert.ok(Number.isInteger(cursor?.row) && Number.isInteger(cursor?.col), `${label}: terminal cursor is invalid`);
+  assert.ok(cursor.row >= 0 && cursor.row < rows.length, `${label}: terminal cursor row is out of bounds`);
+}
+
 function assertScreenCursor(screen, cursor, label) {
   assert.ok(screen && Array.isArray(screen.rows), `${label}: terminal.screen.read rows are missing`);
   assert.ok(screen.frame && Number.isInteger(screen.frame.generation) && Number.isInteger(screen.frame.raster)
     && Number.isInteger(screen.frame.sequence), `${label}: terminal.screen.read frame is invalid`);
-  assert.ok(Number.isInteger(cursor?.row) && Number.isInteger(cursor?.col), `${label}: terminal cursor is invalid`);
-  assert.ok(cursor.row >= 0 && cursor.row < screen.rows.length, `${label}: terminal cursor row is out of bounds`);
+  assertRowsCursor(screen.rows, cursor, label);
 }
 
 function appendCellRange(cells, start, end, label) {
@@ -464,14 +469,14 @@ export function terminalLineBeforeCursor(screen, cursor, label = "terminal scree
   return appendCellRange(cells, 0, cursor.col, label);
 }
 
-export function visibleInputBeforeCursor(screen, cursor, prompt, preedit, label = "terminal input") {
-  assertScreenCursor(screen, cursor, label);
+export function visibleInputFromRows(rows, cursor, prompt, preedit, label = "terminal input") {
+  assertRowsCursor(rows, cursor, label);
   assert.ok(Number.isInteger(prompt?.row) && Number.isInteger(prompt?.col) && typeof prompt?.text === "string",
     `${label}: terminal prompt position is invalid`);
   assert.ok(prompt.row >= 0 && prompt.row <= cursor.row, `${label}: terminal prompt row is after the cursor`);
   let committed = "";
   for (let row = prompt.row; row <= cursor.row; row++) {
-    const cells = screen.rows[row];
+    const cells = rows[row];
     assert.ok(Array.isArray(cells), `${label}: terminal row ${row} is missing`);
     const totalWidth = cells.reduce((width, cell) => {
       assert.ok(Number.isInteger(cell.width) && cell.width >= 0, `${label}: terminal cell width is invalid`);
@@ -484,6 +489,11 @@ export function visibleInputBeforeCursor(screen, cursor, prompt, preedit, label 
   assert.ok(committed.startsWith(prompt.text),
     `${label}: committed prompt prefix changed: ${JSON.stringify(committed)}`);
   return committed.slice(prompt.text.length) + preedit;
+}
+
+export function visibleInputBeforeCursor(screen, cursor, prompt, preedit, label = "terminal input") {
+  assertScreenCursor(screen, cursor, label);
+  return visibleInputFromRows(screen.rows, cursor, prompt, preedit, label);
 }
 
 function rowText(rows) {

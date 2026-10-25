@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { compositionFrameCandidates, measureRenderedCell } from "./terminal-ime-visual.mjs";
-import { terminalComposeMatchesPreedit, visibleInputBeforeCursor } from "./terminal-ime-document.mjs";
+import { terminalComposeMatchesPreedit, visibleInputBeforeCursor, visibleInputFromRows }
+  from "./terminal-ime-document.mjs";
 
 const BGRA_PIXEL_FORMAT = 0x42475241;
 export const MAXIMUM_IME_FRAME_GAP_MS = 33;
@@ -383,7 +384,7 @@ export function persistThenRequireVisualProof(measurements, record, persist, lab
 }
 
 /** Indexes frame-bound cursor metadata with only the latest earlier screen rows observed on the active status stream. */
-export function indexFrameStatus(events, prompt, visibleInputBeforeCursor) {
+export function indexFrameStatus(events, prompt) {
   const states = new Map();
   const rejections = [];
   let compose = null;
@@ -430,10 +431,9 @@ export function indexFrameStatus(events, prompt, visibleInputBeforeCursor) {
       rejections.push({ frame: key, eventIndex: screenStatus.index, reason: "screen-rows-are-invalid" });
       continue;
     }
-    const screen = { rows };
     let document;
     try {
-      document = visibleInputBeforeCursor(screen, cursor, prompt, compose.text, `source frame ${key}`);
+      document = visibleInputFromRows(rows, cursor, prompt, compose.text, `source frame ${key}`);
     } catch (error) {
       rejections.push({ frame: key, eventIndex: index, reason: "screen-state-cannot-be-read",
         error: error.message });

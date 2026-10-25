@@ -52,6 +52,16 @@
 
 
 
+- F239-98-2: Project visual input text from rows-only terminal status. The
+  `terminal.screen` status has no frame identity; the consumer incorrectly
+  passed those rows through the strict framed `terminal.screen.read` helper.
+  Red: the owner integration with actual rows-only status and the exported
+  projection failed (`/tmp/F239-98-2-rows-only-screen-red-01.log`). Green: the
+  rows-only projection passes, the framed wrapper remains strict, and the
+  visual consumer and terminal document suites pass 19/19 and 38/38
+  (`/tmp/F239-98-2-visual-index-green-01.log`,
+  `/tmp/F239-98-2-terminal-document-green-01.log`).
+
 - F239-90: Answer a transfer image after its window owner is retired. The
   sidecar reader can hold an owner resolved before window destruction; the
   retired owner now returns the existing `closed` image response through the

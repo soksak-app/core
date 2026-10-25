@@ -6,6 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import renderFixture from "./fixtures/screen-render.json" with { type: "json" };
+import { visibleInputBeforeCursor, visibleInputFromRows } from "./terminal-ime-document.mjs";
 import {
   captureFromCallback,
   attachImeFrameIdentities,
@@ -247,15 +248,36 @@ testWithTimeout("cursor frame state uses prior screen rows and the exact cursor 
     { name: "terminal.screen", value: [[{ ch: "$", width: 1 }]] },
     { name: "terminal.cursor", value: cursor },
   ];
-  const states = indexFrameStatus(events, { row: 0, col: 0, text: "$" }, () => "ㅏ");
+  const states = indexFrameStatus(events, { row: 0, col: 0, text: "$" });
   assert.equal(states.get("1/2/3").semantic.document, "ㅏ");
-  const missingScreen = indexFrameStatus([events[0], events[2]], { row: 0, col: 0, text: "$" }, () => "ㅏ");
+  const missingScreen = indexFrameStatus([events[0], events[2]], { row: 0, col: 0, text: "$" });
   assert.equal(missingScreen.size, 0);
   assert.deepEqual(missingScreen.rejections, [{ frame: "1/2/3", eventIndex: 1,
     reason: "prior-screen-status-is-missing" }]);
   assert.equal(indexFrameStatus([events[0], events[1], { ...events[2], value: {
     ...cursor, frame: { ...frame, sequence: frame.sequence + 1 },
-  } }], { row: 0, col: 0, text: "$" }, () => "ㅏ").size, 0);
+  } }], { row: 0, col: 0, text: "$" }).size, 0);
+});
+
+testWithTimeout("visual indexing projects rows-only screen status without inventing a screen frame", () => {
+  const frame = renderFixture.frame;
+  const preedit = { text: "ㅏ", markedRange: { location: 0, length: 1 },
+    selectedRange: { location: 1, length: 0 }, replacementRange: null, attributed: true };
+  const rows = [[{ ch: "$", width: 1 }, { ch: " ", width: 1 }]];
+  const cursor = { row: 0, col: 2, focused: true, frame, render: renderFixture, preedit };
+  const events = [
+    { name: "terminal.screen", value: rows },
+    { name: "terminal.compose", value: preedit },
+    { name: "terminal.cursor", value: cursor },
+  ];
+  assert.equal(visibleInputFromRows(rows, cursor, { row: 0, col: 0, text: "$ " }, preedit.text), "ㅏ");
+  assert.throws(() => visibleInputBeforeCursor({ rows }, cursor,
+    { row: 0, col: 0, text: "$ " }, preedit.text), /terminal\.screen\.read frame is invalid/);
+  const states = indexFrameStatus(events, { row: 0, col: 0, text: "$ " });
+  assert.equal(states.get("1/2/3")?.semantic.document, "ㅏ");
+  assert.deepEqual(states.get("1/2/3")?.rows, rows);
+  assert.deepEqual(states.get("1/2/3")?.eventIndexes, { screen: 0, cursor: 2 });
+  assert.deepEqual(states.rejections, []);
 });
 
 testWithTimeout("indexes an advanced cursor frame against prior rows when identical rows suppress screen status", () => {
@@ -271,7 +293,7 @@ testWithTimeout("indexes an advanced cursor frame against prior rows when identi
     { name: "terminal.cursor", value: cursor },
   ];
 
-  const states = indexFrameStatus(events, { row: 0, col: 0, text: "$ " }, () => "ㅏ");
+  const states = indexFrameStatus(events, { row: 0, col: 0, text: "$ " });
   assert.equal(states.get("1/2/3")?.semantic.document, "ㅏ");
   assert.deepEqual(states.get("1/2/3")?.eventIndexes, { screen: 0, cursor: 2 });
   assert.equal(states.get("1/2/3")?.screenRowsReused, true);
@@ -296,7 +318,7 @@ testWithTimeout("rejects future rows but reuses identical rows across a frame ge
     { name: "terminal.compose", value: compose },
     { name: "terminal.cursor", value: changedCursor },
     { name: "terminal.screen", value: rows },
-  ], prompt, () => "ㅏ");
+  ], prompt);
   assert.equal(noPriorRows.size, 0, "future screen rows cannot source an earlier cursor event");
   assert.equal(noPriorRows.rejections[0].reason, "prior-screen-status-is-missing");
 
@@ -306,7 +328,7 @@ testWithTimeout("rejects future rows but reuses identical rows across a frame ge
     { name: "terminal.cursor", value: priorCursor },
     { name: "terminal.compose", value: compose },
     { name: "terminal.cursor", value: changedCursor },
-  ], prompt, () => "ㅏ");
+  ], prompt);
   const advancedKey = `${advanced.generation}/${advanced.raster}/${advanced.sequence}`;
   assert.equal(changedGeneration.get(advancedKey)?.semantic.document, "ㅏ");
   assert.deepEqual(changedGeneration.get(advancedKey)?.eventIndexes, { screen: 0, cursor: 4 });
@@ -317,7 +339,7 @@ testWithTimeout("rejects future rows but reuses identical rows across a frame ge
     { name: "terminal.compose", value: empty },
     { name: "terminal.cursor", value: priorCursor },
     { name: "terminal.cursor", value: cursorFor({ ...frame, sequence: frame.sequence - 1 }, empty) },
-  ], prompt, () => "");
+  ], prompt);
   assert.equal(regressed.has(`${frame.generation}/${frame.raster}/${frame.sequence - 1}`), false);
   assert.equal(regressed.rejections.at(-1).reason, "cursor-frame-sequence-regressed");
 });
