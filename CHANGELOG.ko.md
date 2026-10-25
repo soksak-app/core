@@ -29,6 +29,14 @@
   통과한다. 두 host visual acceptance는 남아 있으며 application 실행과 bundle
   build는 하지 않았다.
 
+- F239-98-1: 기존 33 ms 최대 frame gap을 검사하기 전에 IME visual 증거 전체를
+  저장한다. 이전 assertion은 callback identity 연결과 visual 평가 전에 중단됐다.
+  Red: 소유 helper는 측정된 visual 결과가 있어도 34 ms gap을 거부하지 않았고,
+  visual/cadence 동시 실패도 보고하지 못했다(`/tmp/F239-98-1-cadence-red-01.log`).
+  Green: 같은 test가 cadence 거부 전 저장과 두 실패를 포함한 `AggregateError`를
+  검증하며 helper가 18/18 통과한다(`/tmp/F239-98-1-cadence-green-02.log`).
+  33 ms 기준은 바뀌지 않았다. 두 host visual acceptance는 F239-98에서 계속 추적한다.
+
 
 
 - F239-90: Window owner가 사라진 뒤 도착한 transfer image에 응답한다. Sidecar

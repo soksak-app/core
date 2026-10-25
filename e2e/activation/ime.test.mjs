@@ -14,7 +14,8 @@ import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "../fixture.mjs";
 import { frames, pixel, readFrame } from "@soksak/window-check/frame.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil, textLines } from "../terminal-screen.mjs";
-import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFrameStatus, persistThenRequireVisualProof,
+import { capturesByInputStage, evaluateVisualStages, hostClockBoundary, indexFrameStatus,
+  MAXIMUM_IME_FRAME_GAP_MS, persistThenRequireVisualProof,
   attachImeFrameIdentities, planVisualStage, readImeFrameIdentities, readRetainedSources, startImeCapture }
   from "./ime-visual-capture.mjs";
 import {
@@ -889,7 +890,6 @@ for (const app of Object.values(APPS)) {
       frameFiles: framePaths.map((path) => basename(path)),
       frameGaps, longestFrameGap, frameCount: decoded.length, callbackStatus: preservedCallbackStatus,
       sourceCallbackStatus: recording.callbackStatus });
-    assert.ok(longestFrameGap <= 33, `${app.name}: capture has a ${longestFrameGap}ms frame gap`);
     assert.equal(recording.callbackStatus, join(capture.frames, "callback-status.jsonl"),
       `${app.name}: stop did not identify the recording callback trace`);
     const callbackText = readFileSync(recording.callbackStatus, "utf8");
@@ -954,8 +954,16 @@ for (const app of Object.values(APPS)) {
         criteria: { colorDistance: 32, minimumGlyphPixels: 2, minimumUnderlineCoverage: 0.75 },
       })[0]);
     } catch (error) {
+      const cadence = { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps };
+      const collectionFailure = { name: error.name, error: error.message };
+      const cadenceFailure = longestFrameGap > MAXIMUM_IME_FRAME_GAP_MS
+        ? { name: "AssertionError", error: `${app.name}: capture has a ${longestFrameGap}ms frame gap; ` +
+          `maximum is ${MAXIMUM_IME_FRAME_GAP_MS}ms` }
+        : null;
       persist("visual-measurements.json", {
         collectionError: { name: error.name, error: error.message },
+        cadence,
+        failures: [collectionFailure, cadenceFailure].filter(Boolean),
         inputStages: visualStageInputs,
         targetStages: visualStages.map(({ key, frame, cells, glyphs, semantic }) =>
           ({ key, frame, cells, glyphs, semantic })),
@@ -964,6 +972,8 @@ for (const app of Object.values(APPS)) {
         sourceStatusRejections: frameStatus?.rejections ?? [],
         callbackStatus: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       });
+      if (cadenceFailure) throw new AggregateError([error, new Error(cadenceFailure.error)],
+        `${app.name}: visual collection and capture cadence both failed`);
       throw error;
     }
     const visualRecord = {
@@ -974,11 +984,13 @@ for (const app of Object.values(APPS)) {
       missingSourceStates: missingStates,
       sourceStatusRejections: frameStatus.rejections,
       sampleCount: frameCallbacks.length,
+      cadence: { longestFrameGap, maximumFrameGap: MAXIMUM_IME_FRAME_GAP_MS, frameGaps },
       imageMatch: callbackStatus.map(({ frame, imageMatch }) => ({ frame, imageMatch })),
       visualMeasurements,
     };
     persistThenRequireVisualProof(visualMeasurements, visualRecord,
-      (record) => persist("visual-measurements.json", record), app.name);
+      (record) => persist("visual-measurements.json", record), app.name,
+      { longestFrameGap, frameGaps });
     assert.equal(visualStages.length, 10, `${app.name}: visual calculator omitted an input stage`);
     persist("recording.json", { ...recording, frames: preservedCaptureDir, sourceFrames: capture.frames,
       frameFiles: framePaths.map((path) => basename(path)), frameGaps, longestFrameGap, frameCount: decoded.length,

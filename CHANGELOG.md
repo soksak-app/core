@@ -32,6 +32,16 @@
   passes. Two-host visual acceptance remains pending; no application or bundle
   was run.
 
+- F239-98-1: Persist complete IME visual evidence before enforcing the existing
+  33 ms maximum frame gap. The earlier assertion stopped before callback
+  identity joins and visual evaluation. Red: the owning helper did not reject a
+  34 ms gap after measured visual results and did not report simultaneous
+  visual and cadence failures (`/tmp/F239-98-1-cadence-red-01.log`). Green: the
+  same test verifies persistence before rejection and an `AggregateError` with
+  both failures; the helper passes 18/18
+  (`/tmp/F239-98-1-cadence-green-02.log`). The 33 ms bound is unchanged.
+  Two-host visual acceptance remains pending under F239-98.
+
 
 
 - F239-90: Answer a transfer image after its window owner is retired. The
