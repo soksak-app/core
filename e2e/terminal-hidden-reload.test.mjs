@@ -75,9 +75,6 @@ for (const app of Object.values(APPS)) {
     const headless = rows.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
       && row.event.fields.mode === "headless");
     assert.ok(background && headless, "the replacement page did not open the hidden session headless");
-    const replacementSession = await s.until("terminal.session", (state) => state?.sessionId === beforeSession.sessionId,
-      "the page reload replaced the terminal session", { surface });
-    assert.equal(replacementSession.sessionId, beforeSession.sessionId);
 
     rows = await waitForRows(s, since, (items) => {
       const headlessMode = items.find((row) => row.event.event === "sidecar.vt.surface_mode" && row.event.surface === surface
@@ -98,8 +95,12 @@ for (const app of Object.values(APPS)) {
     const newRegion = attached.regions.find((item) => item.surface === surface && item.name === "view");
     assert.ok(newRegion.presented.generation > oldGeneration,
       `terminal ${surface} attachment generation did not increase from ${oldGeneration}: ${JSON.stringify(newRegion.presented)}`);
-    assert.equal((await s.get("terminal.session", surface)).sessionId, beforeSession.sessionId,
-      "revealing the terminal replaced its sidecar session");
+    await s.until("core.surfaces", (items) => items.some((item) => item.surface === surface && item.visible
+      && item.exposes.includes("status terminal.session")),
+    `visible terminal ${surface} did not register status terminal.session after reload`);
+    const replacementSession = await s.until("terminal.session", (state) => state?.sessionId === beforeSession.sessionId,
+      "the page reload replaced the terminal session", { surface });
+    assert.equal(replacementSession.sessionId, beforeSession.sessionId);
 
     await s.flushLog();
     rows = await allRows(s, { channel: "all", since });

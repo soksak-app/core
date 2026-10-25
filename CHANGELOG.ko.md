@@ -4,6 +4,13 @@
 
 ## 미배포
 
+- F212.10-core-5-6-1: reveal된 terminal의 declared status를 기다린 뒤
+  `core.surfaces`에서 선언할 때까지 기다린 뒤 `terminal.session`을 읽는다.
+  Wails와 Tauri runtime 시도에서 hidden background open 직후 status를
+  읽자 endpoint error 1002가 반환됐지만, 두 host 모두 background open과
+  headless sidecar mode를 이미 기록했다. Product session 실패 증거가 아니라
+  E2E readiness 순서 실패다. Syntax, `make e2e-check`, `make docs-check`가
+  통과하며 runtime 재실행은 대기 중이다.
 - F212.10-core-5-6: hidden terminal reload window check를 추가한다. Replacement
   page start, 유지된 session의 headless open, 숨기기 전 old presented attachment
   generation, reload 뒤 sidecar의 같은 writer에서 headless→image mode 전환,

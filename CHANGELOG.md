@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- F212.10-core-5-6-1: Wait until the revealed terminal declares
+  `status terminal.session` in `core.surfaces` before reading `terminal.session`.
+  Wails and Tauri runtime attempts returned endpoint error 1002 when the check
+  read the status immediately after the hidden background open; both had
+  already recorded the background open and headless sidecar mode. This was an
+  E2E readiness-order failure, not evidence of a product session failure.
+  Syntax, `make e2e-check`, and `make docs-check` pass; the runtime rerun remains
+  pending.
 - F212.10-core-5-6: Add a focused hidden-terminal reload window check. It observes
   the old presented attachment generation, replacement page start, retained
   session opening headless, the sidecar's same-writer headless-to-image mode
