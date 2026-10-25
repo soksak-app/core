@@ -9,6 +9,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { frames, readFrame } from "@soksak/window-check/frame.mjs";
 import { fresh } from "../../fixture.mjs";
+import { compareAppKitReference } from "../ime-reference-steps.mjs";
 import { ensureTerminals, presentedScreen, readScreenUntil } from "../../terminal-screen.mjs";
 import { assertInputTraceDelivery, inputTraceTransactions, terminalInputReceiptMatches,
   terminalLineBeforeCursor, visibleInputBeforeCursor, readTerminalObservationSnapshot,
@@ -48,24 +49,6 @@ async function startInputTrace(s, surface) {
   };
 }
 
-async function compareAppKitReference(s, keys, expected) {
-  const window = s.window;
-  await s.request("diagnostics.input.reference", { window, action: "open" });
-  s.cleanup(() => s.request("diagnostics.input.reference", { window, action: "close" }));
-  await s.request("diagnostics.input.reference", { window, action: "focus" });
-  for (const step of keys) {
-    if (typeof step === "string") await s.press(step);
-    else if (step.source) {
-      assert.equal((await s.request("diagnostics.input.source", { select: step.source })).current, step.source);
-    } else await s.press(step.key);
-  }
-  const reference = await s.request("diagnostics.input.reference", { window, action: "wait", document: expected });
-  assert.equal(reference.document, expected, "the AppKit reference document differs from the expected text");
-  assert.equal(reference.marked, null, "the AppKit reference still has marked text after the sequence");
-  assert.deepEqual(reference.selected, { location: expected.length, length: 0 },
-    "the AppKit reference selection is not at the expected document end");
-  await s.request("diagnostics.input.reference", { window, action: "close" });
-}
 
 async function preserveInputSource(s) {
   const original = (await s.request("diagnostics.input.source")).current;
@@ -126,7 +109,7 @@ for (const app of Object.values(APPS)) {
       await compareAppKitReference(s, [
         { source: ABC }, { key: "d" }, { key: "d" }, { key: "d" }, { source: KOREAN_2SET },
         { key: "g" }, { key: "k" }, { key: "s" }, { key: "r" }, { key: "m" }, { key: "f" }, { key: "Space" },
-      ], "ddd한글 ");
+      ], "ddd한글 ", ["", "d", "dd", "ddd", "ddd", "dddㅎ", "ddd하", "ddd한", "ddd한ㄱ", "ddd한그", "ddd한글", "ddd한글 "]);
       await focusedTerminal(s, surface);
       const stopTrace = await startInputTrace(s, surface);
 
@@ -157,7 +140,7 @@ for (const app of Object.values(APPS)) {
     await preserveInputSource(s);
     await focusedTerminal(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
-    await compareAppKitReference(s, ["g", "k", "s", "k", "Space", "Enter"], "하나 \n");
+    await compareAppKitReference(s, ["g", "k", "s", "k", "Space", "Enter"], "하나 \n", ["ㅎ", "하", "한", "하나", "하나 ", "하나 \n"]);
     await focusedTerminal(s, surface);
     assert.equal((await s.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
     const stopTrace = await startInputTrace(s, surface);
@@ -219,7 +202,8 @@ for (const app of Object.values(APPS)) {
         await preserveInputSource(lifecycle);
         await focusedTerminal(lifecycle, surface);
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
-        await compareAppKitReference(lifecycle, [...Array(8).fill("k"), "Backspace", "Space"], `${"ㅏ".repeat(7)} `);
+        await compareAppKitReference(lifecycle, [...Array(8).fill("k"), "Backspace", "Space"], `${"ㅏ".repeat(7)} `,
+          [...Array.from({ length: 8 }, (_, index) => "ㅏ".repeat(index + 1)), "ㅏ".repeat(7), `${"ㅏ".repeat(7)} `]);
         await focusedTerminal(lifecycle, surface);
         assert.equal((await lifecycle.request("diagnostics.input.source", { select: KOREAN_2SET })).current, KOREAN_2SET);
         const baselineScreen = await presentedScreen(lifecycle, surface);

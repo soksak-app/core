@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-181: Lifecycle AppKit 비교를 reference-step 소유 module로 옮기고 키별 presentation checkpoint를 재사용한다. 모든 단계의 예상 document를 요구하고 reference focus 상실을 거부하며 단계별 상태를 검사 출력에 보존한다. 제어된 assertion 세 개가 각각 수정 전 실패하고 수정 후 owner 네 개가 모두 통과한다. 엄격한 Wails cycle 06/09 및 Tauri cycle 06이 오류 없는 감사, 입력 상태 복원과 정상 종료를 통과한다. 과거 reference 누락의 미분류 원인과 별도 활성화 거부 finding은 유지한다.
+
 - F239-180: Lifecycle 검사에서 coherent terminal observation과 event 기반 document 대기를 재사용하고 완전한 AppKit 결과가 도착할 때까지 중간 읽기를 보존한다. 실행마다 새 artifact directory를 사용하며 보존 frame 전체를 finalized count와 대조해 decode한다. 최초 cycle 05는 끝의 Space 없이 실패했고 수정 후 observation owner 46개 및 양 host cycle이 오류 없는 감사와 정상 종료를 포함해 통과한다. 별도 reference 입력 및 baseline 활성화 실패는 미완료로 유지한다.
 
 - F239-47-36: macOS arm64 두 host에서 고정 zsh ZLE의 연속 모음 및 Backspace acceptance를 완료한다. AppKit/terminal document 열 단계와 glyph/underline 검증이 전체 189/242-frame capture, 오류 없는 감사, 입력기 및 baseline 복원과 정상 종료를 포함해 통과한다. F239-175에 따라 cadence는 별도 측정으로 유지하며 개인 shell 구성은 포함하지 않는다.

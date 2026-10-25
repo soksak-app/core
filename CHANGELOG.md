@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-181: Move lifecycle AppKit comparison into the reference-step owner and reuse per-key presentation checkpoints. Require expected documents for every step, reject lost reference focus and retain each step state in the check output. Three controlled assertions fail before their corrections; all four owner cases pass afterward. Strict Wails cycles 06/09 and Tauri cycle 06 pass with clean error audits, restored input state and normal shutdown. Preserve the unclassified cause of earlier reference loss and the separate activation-refusal finding.
+
 - F239-180: Reuse coherent terminal observations and the event-backed document wait in the lifecycle check, preserving intermediate reads until the complete AppKit result arrives. Give each execution a fresh artifact directory and decode every preserved frame against the finalized count. The original cycle 05 fails without trailing Space; all 46 observation owners and the corrected two-host cycle pass with clean error audits and normal shutdown. Keep the separate reference-input and baseline-activation failures open.
 
 - F239-47-36: Complete fixed zsh ZLE repeated-vowel and Backspace acceptance on both macOS arm64 hosts. All ten AppKit/terminal documents and glyph/underline stages pass with complete 189/242-frame captures, clean error audits, restored input source and baseline, and normal shutdown. Retain cadence as a separate measurement under F239-175; no personal shell configuration is covered.

@@ -654,6 +654,20 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F239-181",
+    implementation: [
+      { file: "e2e/activation/ime-reference-steps.mjs", symbol: "export async function compareAppKitReference(" },
+    ],
+    tests: [
+      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input finishes each presentation before the next key" },
+      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects lost reference focus before sending another key" },
+      { file: "e2e/activation/ime-reference-steps.test.mjs", id: "lifecycle reference input rejects a stale intermediate document before the next key" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F239-47-33 lifecycle cycle ${cycleLabel} closes and reopens the project after the approved IME gesture" },
+    ],
+    expected: "Lifecycle reference input checks each expected document and focus before the next presentation checkpoint and preserves failures at their first input step.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-81",
     implementation: [
       { file: "native/darwin/src/capture.m", symbol: "captureStream != stream" },
