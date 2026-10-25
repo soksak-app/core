@@ -3,6 +3,14 @@
 [English](CHANGELOG.md)
 
 ## 미배포
+
+- F239-91: macOS IME document helper가 현재 순서가 있는 native input
+  transaction을 읽도록 한다. 기존 helper는 image region의 transaction
+  envelope를 거부해 순서가 있는 insert와 Backspace action의 document를
+  반환하지 못했다. 현재 형식 전용 reader는 range와 preedit snapshot을
+  검증하고 activation consumer는 transaction actions와 최종 preedit을
+  읽는다. Owner test가 assertion 15개를 통과한다. 이전 activation 실패는
+  해결되지 않았으며 이 변경은 runtime acceptance를 주장하지 않는다.
 - F239-86: 선언된 TypeScript compiler로 activation fixture의 unresolved identifier를
   검사한다. F84에서 `applyTerminalInput`이 block scope의 `promptPrefix`를 사용해
   실패했고 visual measurement에는 선언되지 않은 `frameCallbacks`와 `missingStates`를

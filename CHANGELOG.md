@@ -3,6 +3,14 @@
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+
+- F239-91: Read current ordered native input transactions in the macOS IME
+  document helper. The old helper rejected the image region's transaction
+  envelope and returned no document for ordered insert and Backspace actions.
+  The current-only reader validates ranges and preedit snapshots, and the
+  activation consumer reads transaction actions and final preedit. The owner
+  test passes 15 assertions. The prior activation failure remains unresolved;
+  this change does not claim runtime acceptance.
 - F239-86: Check activation fixtures for unresolved identifiers with the
   declared TypeScript compiler. F84 failed at `applyTerminalInput` because
   `promptPrefix` was block-scoped; visual measurement also referenced

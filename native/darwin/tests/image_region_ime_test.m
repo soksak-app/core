@@ -299,9 +299,37 @@ static void closeTraceWindow(NSWindow *window, void *region, void *mainSurface) 
 static NSArray *valuesOfType(NSString *type, NSUInteger from) {
     NSMutableArray *values = [NSMutableArray array];
     for (NSUInteger i = from; i < events.count; i++) {
-        if ([events[i][@"type"] isEqual:type]) [values addObject:events[i][@"text"] ?: NSNull.null];
+        NSDictionary *transaction = events[i];
+        if (![transaction[@"type"] isEqual:@"input"]) continue;
+        if ([type isEqual:@"insert"]) {
+            for (NSDictionary *action in transaction[@"actions"]) {
+                if ([action[@"type"] isEqual:@"insert"])
+                    [values addObject:action[@"text"] ?: NSNull.null];
+            }
+        } else if ([type isEqual:@"compose"]) {
+            NSDictionary *preedit = transaction[@"preedit"];
+            if ([preedit isKindOfClass:NSDictionary.class]) [values addObject:preedit[@"text"] ?: NSNull.null];
+        }
     }
     return values;
+}
+
+static NSArray<NSDictionary *> *inputActionsFrom(NSUInteger from) {
+    NSMutableArray<NSDictionary *> *actions = [NSMutableArray array];
+    for (NSUInteger i = from; i < events.count; i++) {
+        NSDictionary *transaction = events[i];
+        if (![transaction[@"type"] isEqual:@"input"]) continue;
+        for (NSDictionary *action in transaction[@"actions"])
+            [actions addObject:action];
+    }
+    return actions;
+}
+
+static NSUInteger indexOfInputAction(NSString *type, NSString *field, NSString *value, NSUInteger from) {
+    NSArray<NSDictionary *> *actions = inputActionsFrom(from);
+    return [actions indexOfObjectPassingTest:^BOOL(NSDictionary *action, NSUInteger index, BOOL *stop) {
+        return [action[@"type"] isEqual:type] && [action[field] isEqual:value];
+    }];
 }
 
 // Types the order reported by the user. Types ddd with the English input source, switches to Korean 2-set, and types Hangul (g k s r m f) and
@@ -868,8 +896,8 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     selectSource(KOREAN_2SET, context);
     for (NSString *key in @[@"g", @"k", @"s", @"Backspace"]) typeKey(window, key, regionAnswered);
     NSUInteger (^keyCount)(NSString *) = ^NSUInteger(NSString *name) {
-        return [events indexesOfObjectsPassingTest:^BOOL(NSDictionary *event, NSUInteger index, BOOL *stop) {
-            return [event[@"type"] isEqual:@"key"] && [event[@"key"] isEqual:name];
+        return [inputActionsFrom(0) indexesOfObjectsPassingTest:^BOOL(NSDictionary *action, NSUInteger index, BOOL *stop) {
+            return [action[@"type"] isEqual:@"key"] && [action[@"key"] isEqual:name];
         }].count;
     };
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
@@ -879,8 +907,9 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
             preedit, committed, events]);
     typeKey(window, @"Enter", regionAnswered);
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
-    NSDictionary *enter = events.lastObject;
-    check([committed isEqual:@"하"] && [enter[@"key"] isEqual:@"Enter"] && keyCount(@"Enter") == 1,
+    NSDictionary *enter = inputActionsFrom(0).lastObject;
+    check([committed isEqual:@"하"] && [enter[@"type"] isEqual:@"key"]
+            && [enter[@"key"] isEqual:@"Enter"] && keyCount(@"Enter") == 1,
         [NSString stringWithFormat:@"image region: Enter commits the edited syllable once and is reported after it (committed '%@', events %@)", committed, events]);
     // Without composition, Backspace is reported as a key.
     [events removeAllObjects];
@@ -893,12 +922,8 @@ static int runIME(sp_ime_cli_mode mode) { @autoreleasepool {
     selectSource(KOREAN_2SET, context);
     for (NSString *key in @[@"g", @"k", @"s", @"Escape"]) typeKey(window, key, regionAnswered);
     committed = [valuesOfType(@"insert", 0) componentsJoinedByString:@""];
-    NSUInteger inserted = [events indexOfObjectPassingTest:^BOOL(NSDictionary *event, NSUInteger index, BOOL *stop) {
-        return [event[@"type"] isEqual:@"insert"];
-    }];
-    NSUInteger escaped = [events indexOfObjectPassingTest:^BOOL(NSDictionary *event, NSUInteger index, BOOL *stop) {
-        return [event[@"type"] isEqual:@"key"] && [event[@"key"] isEqual:@"Escape"];
-    }];
+    NSUInteger inserted = indexOfInputAction(@"insert", @"text", @"한", 0);
+    NSUInteger escaped = indexOfInputAction(@"key", @"key", @"Escape", 0);
     check([committed isEqual:@"한"] && keyCount(@"Escape") == 1 && inserted < escaped,
         [NSString stringWithFormat:@"image region: Escape during a composition commits it once and is reported after it (committed '%@', events %@)",
             committed, events]);
