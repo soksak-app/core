@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- F239-171-1: 기존 application-wide watcher 경로로 Wails sidecar status notification을 window-registry UI invalidation 전에 enqueue한다. Registry lock을 제어하는 실제 host owner가 notification 누락에서 통과로 바뀐다. Producer snapshot 순서와 two-host terminal close acceptance는 열린 상태다.
+
 - F239-170: 기존 balanced scanner로 중첩 인자 call과 closure block의 안전하지 않은 Rust condition wait를 탐지한다. string, comment, 회수한 guard와 빈 process wait를 올바르게 분류한다. Red case 세 개가 Green이 되고 예외 없이 checker owner 33개, core event 검사와 현재 VT full census가 통과한다.
 
 - F239-169: Rust owner compile 또는 metadata discovery 실패 시 capture한 Cargo stdout을 보고한다. 진단 누락 Red case 두 개는 compiler JSON과 plain metadata detail을 보존하고 실패를 유지하며 test를 시작하지 않게 한 뒤 통과한다. 선택, feature, doctest, deployment 설정과 timeout을 유지하며 runner owner 14개가 모두 통과한다.

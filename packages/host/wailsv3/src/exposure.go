@@ -1607,17 +1607,11 @@ func (b hostBackend) sidecarsState() map[string]any {
 
 // sidecarsChanged sends the new value to the connections that watch host.sidecars.
 func (h *Host) sidecarsChanged() {
+	if h.endpoint != nil {
+		value := (hostBackend{h}).sidecarsState()
+		h.endpoint.NotifyWatchers("host.sidecars", value)
+	}
 	h.notifySidecars()
-	if h.endpoint == nil {
-		return
-	}
-	backend := hostBackend{h}
-	value := backend.sidecarsState()
-	for _, entry := range backend.Windows() {
-		if h.endpoint.Watching(entry.Window, "host.sidecars") {
-			h.endpoint.StatusChanged(entry.Window, "host.sidecars", "", value)
-		}
-	}
 }
 
 func (h *Host) windowsChanged() {

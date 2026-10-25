@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- F239-171-1: Enqueue Wails sidecar status notifications before window-registry UI invalidation using the existing application-wide watcher path. The controlled actual-host owner changes from missing notification to passing while the registry lock is held. Producer snapshot ordering and two-host terminal close acceptance remain open.
+
 - F239-170: Detect unsafe Rust condition waits across nested argument calls and closure blocks using the existing balanced scanner. Keep strings, comments, recovered guards and empty process waits correctly classified. Three Red cases become Green; all 33 checker owners, core event checks and the current VT full census pass without exemptions.
 
 - F239-169: Report captured Cargo stdout when Rust owner compilation or metadata discovery fails. Both missing-diagnostic Red cases pass after preserving compiler JSON and plain metadata detail while retaining failure and starting no tests. All 14 runner owners pass with selection, features, doctests, deployment settings and timeouts unchanged.

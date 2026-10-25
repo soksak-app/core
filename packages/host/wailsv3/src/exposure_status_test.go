@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -84,5 +85,50 @@ func TestRelayedViewRegistrationRefusalsRecordNothing(t *testing.T) {
 		if len(s.registrations["probe-surface"]) != 0 {
 			t.Fatalf("%s %s recorded %v, want nothing", test.kind, test.name, s.registrations["probe-surface"])
 		}
+	}
+}
+
+// contract: sidecars.close.answer-ends-closing
+func TestSidecarStatusNotificationDoesNotWaitForWindowRegistry(t *testing.T) {
+	endpoint := NewEndpoint(nil)
+	conn := &endpointConn{topics: map[topic]bool{}, out: make(chan []byte, 4), done: make(chan struct{})}
+	endpoint.conns[conn] = true
+	endpoint.subscribe(conn, topic{"main", "host.sidecars", ""}, true)
+	c := sidecarSessionSurfaces(t).sidecars
+	c.closing["fixture-sidecar"] = map[string]int{"s1": 1}
+	h := &Host{endpoint: endpoint, sidecars: c}
+	// Window registry work must not defer the application-wide state notification.
+	h.mu.Lock()
+	done := make(chan struct{})
+	go func() {
+		h.sidecarsChanged()
+		close(done)
+	}()
+	t.Cleanup(func() {
+		h.mu.Unlock()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("sidecar status notification did not finish after registry release")
+		}
+	})
+	select {
+	case data := <-conn.out:
+		var got struct {
+			Method string
+			Params struct {
+				Name  string
+				Value struct{ Closing []ClosingSurface }
+			}
+		}
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Method != "status.changed" || got.Params.Name != "host.sidecars" ||
+			len(got.Params.Value.Closing) != 1 || got.Params.Value.Closing[0].Surface != "s1" {
+			t.Fatalf("closing transition notification = %s", data)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("closing transition notification waited for the window registry")
 	}
 }
