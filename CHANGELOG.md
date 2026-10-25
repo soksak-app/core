@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- F212.12-3: Enable existing supplier frame records in the drag consumer
+  and report draw durations before alignment judgment. Preserve traced,
+  untraced and sampled failure evidence separately. Supplier drawing takes
+  a few milliseconds in these runs; trace-off recording still fails and
+  sampling interferes with capture. Keep drag acceptance open.
+
 - F239-160: Release the copied IOSurface nonce after authentication.
   The earlier borrowed-value interpretation leaked one retain for both
   accepted and refused frames. A native owner reproduces the increasing

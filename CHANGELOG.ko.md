@@ -4,6 +4,12 @@
 
 ## 미배포
 
+- F212.12-3: Drag consumer에서 기존 supplier frame 기록을 활성화하고 정렬
+  판정 전에 draw duration을 보고한다. Trace 실행, trace를 끈 실행 및 sampling
+  실패 증거를 구분하여 보존한다. 해당 실행의 supplier 그리기는 수 ms이며
+  trace를 꺼도 녹화가 실패하고 sampling은 capture에 영향을 준다. Drag
+  acceptance는 열어 둔다.
+
 - F239-160: 인증 후 복사한 IOSurface nonce를 해제한다. 이전 borrowed-value
   해석은 수락 및 거부 frame 모두에서 retain 하나를 누수시켰다. Native owner는
   수정 전 증가하는 retain count를 재현하고 수정 후 잘못된 nonce, 잘못된 크기
