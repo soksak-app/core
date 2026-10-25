@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- F212.12-4: Preserve surface command forwarding across view generations,
+  restore public registrations and propagate declaration errors. Retain
+  executing macOS document callbacks until they return when a callback
+  closes its document. Owning Red/Green cases cover generation registration,
+  rejection and all four repeating callback lifetimes; 39 owner cases pass.
+  Both rebuilt diagnostic hosts pass restart, saved-state restoration,
+  fourth-failure stop and same-tab unload/reopen checks, 2/2 on macOS arm64.
+  Captures decode without frame-limit truncation, fixture state is removed,
+  and the log audit finds no unexpected errors among deliberate faults.
+
 - F212.10-core-5: Record current two-host editor and HWP window results,
   4/4 with a passing log audit after the placement corrections. Editor
   opening, editing, saving, expected save errors and modified-close

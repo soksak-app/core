@@ -1,6 +1,7 @@
 //! The external document webview inside a surface document. The implementation is document_view.m of native/darwin.
 
 use std::ffi::{CStr, CString, c_char, c_void};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::super::{CoreRootResolver, Handle, Insets};
@@ -84,11 +85,12 @@ unsafe extern "C" {
 }
 
 /// The state receiver of each document handle. It is used only on the main thread.
-struct Receiver(Box<dyn Fn(String)>);
-struct EventReceiver(Box<dyn Fn(String) + Send>);
-struct EndedReceiver(Box<dyn Fn() + Send>);
+/// Each invocation retains its callback so document close cannot release an executing closure.
+struct Receiver(Rc<dyn Fn(String)>);
+struct EventReceiver(Rc<dyn Fn(String) + Send>);
+struct EndedReceiver(Rc<dyn Fn() + Send>);
 
-struct ResponsivenessReceiver(Box<dyn Fn(bool) + Send>);
+struct ResponsivenessReceiver(Rc<dyn Fn(bool) + Send>);
 
 thread_local! {
     static RECEIVERS: std::cell::RefCell<std::collections::HashMap<Handle, *mut Receiver>> =
@@ -109,12 +111,14 @@ thread_local! {
 
 extern "C" fn ended(context: *mut c_void) {
     let receiver = unsafe { &*(context as *const EndedReceiver) };
-    (receiver.0)();
+    let callback = receiver.0.clone();
+    callback();
 }
 
 extern "C" fn responsiveness(context: *mut c_void, responsive: bool) {
     let receiver = unsafe { &*(context as *const ResponsivenessReceiver) };
-    (receiver.0)(responsive);
+    let callback = receiver.0.clone();
+    callback(responsive);
 }
 
 extern "C" fn changed(context: *mut c_void, state: *const c_char) {
@@ -122,7 +126,8 @@ extern "C" fn changed(context: *mut c_void, state: *const c_char) {
     let state = unsafe { CStr::from_ptr(state) }
         .to_string_lossy()
         .into_owned();
-    (receiver.0)(state);
+    let callback = receiver.0.clone();
+    callback(state);
 }
 
 extern "C" fn event(context: *mut c_void, value: *const c_char) {
@@ -130,7 +135,8 @@ extern "C" fn event(context: *mut c_void, value: *const c_char) {
     let value = unsafe { CStr::from_ptr(value) }
         .to_string_lossy()
         .into_owned();
-    (receiver.0)(value);
+    let callback = receiver.0.clone();
+    callback(value);
 }
 
 /// Creates a hidden document webview inside the surface webview. Call it on the main thread.
@@ -149,7 +155,7 @@ pub fn create(
         .map(CString::new)
         .transpose()
         .map_err(|e| e.to_string())?;
-    let receiver = Box::into_raw(Box::new(Receiver(receive)));
+    let receiver = Box::into_raw(Box::new(Receiver(receive.into())));
     let document = unsafe {
         sp_document_create(
             surface as *mut c_void,
@@ -198,7 +204,7 @@ pub fn create_plugin_host(
     let folder = CString::new(folder).map_err(|e| e.to_string())?;
     let plugin = CString::new(plugin).map_err(|e| e.to_string())?;
     let channel = CString::new(channel).map_err(|e| e.to_string())?;
-    let receiver = Box::into_raw(Box::new(Receiver(receive)));
+    let receiver = Box::into_raw(Box::new(Receiver(receive.into())));
     let host = unsafe {
         sp_plugin_host_create(
             window as *mut c_void,
@@ -275,7 +281,7 @@ pub fn zoom(document: Handle, zoom: f64) -> bool {
 }
 
 pub fn set_event(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
-    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive.into())));
     unsafe { sp_document_set_event(document as *mut c_void, event, receiver as *mut c_void) };
     EVENTS.with(|all| all.borrow_mut().insert(document, receiver));
     Ok(())
@@ -349,7 +355,7 @@ extern "C" fn core_root(
 }
 
 pub fn set_message(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
-    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive.into())));
     unsafe { sp_document_set_message(document as *mut c_void, event, receiver as *mut c_void) };
     MESSAGES.with(|all| all.borrow_mut().insert(document, receiver));
     Ok(())
@@ -357,7 +363,7 @@ pub fn set_message(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Res
 
 /// Receives the stream messages of the document as {"stream", "message"}.
 pub fn set_stream(document: Handle, receive: Box<dyn Fn(String) + Send>) -> Result<(), String> {
-    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive.into())));
     unsafe { sp_document_set_stream(document as *mut c_void, event, receiver as *mut c_void) };
     STREAMS.with(|all| all.borrow_mut().insert(document, receiver));
     Ok(())
@@ -411,6 +417,10 @@ pub fn appearance(document: Handle, dark: bool) {
 /// Removes the document webview and releases the state receiver.
 pub fn close(document: Handle) {
     unsafe { sp_document_close(document as *mut c_void) };
+    release_receivers(document);
+}
+
+fn release_receivers(document: Handle) {
     if let Some(receiver) = RECEIVERS.with(|all| all.borrow_mut().remove(&document)) {
         drop(unsafe { Box::from_raw(receiver) });
     }
@@ -478,7 +488,7 @@ pub fn set_view_responsiveness(
     document: Handle,
     receive: Box<dyn Fn(bool) + Send>,
 ) -> Result<(), String> {
-    let receiver = Box::into_raw(Box::new(ResponsivenessReceiver(receive)));
+    let receiver = Box::into_raw(Box::new(ResponsivenessReceiver(receive.into())));
     unsafe {
         sp_document_set_view_responsiveness(
             document as *mut c_void,
@@ -497,7 +507,7 @@ pub fn set_view_responsiveness(
 /// Receives the end of the WebContent process of a view. A receiver that is set again replaces the earlier one, which the native
 /// layer no longer calls. Call it on the main thread before the view loads a page.
 pub fn set_view_ended(document: Handle, receive: Box<dyn Fn() + Send>) -> Result<(), String> {
-    let receiver = Box::into_raw(Box::new(EndedReceiver(receive)));
+    let receiver = Box::into_raw(Box::new(EndedReceiver(receive.into())));
     unsafe { sp_document_set_view_ended(document as *mut c_void, ended, receiver as *mut c_void) };
     if let Some(earlier) = VIEW_ENDS.with(|all| all.borrow_mut().insert(document, receiver)) {
         drop(unsafe { Box::from_raw(earlier) });
@@ -511,7 +521,7 @@ pub fn set_view_message(
     document: Handle,
     receive: Box<dyn Fn(String) + Send>,
 ) -> Result<(), String> {
-    let receiver = Box::into_raw(Box::new(EventReceiver(receive)));
+    let receiver = Box::into_raw(Box::new(EventReceiver(receive.into())));
     unsafe {
         sp_document_set_view_message(document as *mut c_void, event, receiver as *mut c_void)
     };

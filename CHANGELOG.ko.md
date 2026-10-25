@@ -4,6 +4,16 @@
 
 ## 미배포
 
+- F212.12-4: View generation이 바뀌어도 surface command forwarding을
+  유지하고 public 등록을 복원하며 선언 오류를 전달한다. macOS document
+  callback이 자신의 document를 닫아도 실행 중인 callback을 반환까지 보존한다.
+  Owner Red/Green은 generation 등록, 거부 및 네 종류의 반복 callback lifetime을
+  검증하고 39 case가 통과한다. macOS arm64에서 재빌드한 양 diagnostic host의
+  restart, 저장 state 복원, 네 번째 failure 정지 및 같은 tab의 unload/reopen
+  검사가 2/2 통과한다. Capture를 frame-limit 잘림 없이 decode하고 fixture
+  state를 제거하며 log 감사는 의도한 fault 외에 예상하지 않은 오류가 없음을
+  확인한다.
+
 - F212.10-core-5: Placement 수정 이후 현재 양 host의 editor 및 HWP window
   결과를 기록한다. 4/4 및 log 감사가 통과하고 editor 열기, 편집, 저장, 의도한
   저장 오류와 수정 문서 닫기 확인이 통과한다. 과거 exposure 분류와 HWP

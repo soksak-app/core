@@ -157,6 +157,9 @@ View surface mount는 native view 생성을 시작하는 composition을 선언�
 
 페이지는 구독을 한 번만 등록한다. 같은 name이나 id의 두 번째 call은 다시 등록하지 않고 `null`로 답한다. 페이지는 구독한 view document의 generation을 사용해 각 event를 `viewEvent {surface, generation, event, data}`로 보낸다. Restart는 해당 document의 구독을 끝내며, 그 document의 pending 또는 늦은 callback은 취소 상태를 유지하고 replacement generation으로 이름을 바꾸지 않는다. 호스트는 current generation의 event만 받아들이고 generation을 `sok-view`에 노출하지 않은 채 `{sok: 1, event, data}`를 ready 문서에 post한다. current view에 ready 문서가 없으면 `<surface> has no ready document`로 실패하고, 페이지가 그 오류를 application log에 쓴다. 재시작한 view는 다시 구독한다. view는 event 이름의 listener에 각 event를 전달하고, listener가 없는 event는 무시한다.
 - **view command.** view는 시작할 때 자기가 제공하는 각 command를 `runtime.command.register`(`{name}`) call로 선언한다.
+
+  Command 등록은 하나의 view source generation에 속한다. 교체된 각 document는 새 generation에서 command를 한 번씩 등록하고 동일 generation의 두 번째 등록은 오류다. Surface는 등록된 command마다 전달 handler 하나를 유지하며 현재 view command layer로 보낸다.
+
   1. 페이지는 등록을 exposure의 registry로 적용한다. plugin의 `exposes`가 선언하지 않은 name이나 다른 plugin의 name은 registry 오류로 거부되며, call은 그 오류로 답한다.
   2. core exposure의 command 요청이 페이지에 도착하면, 페이지는 `viewRequest {surface, id, command, params}`를 보낸다. `id`는 exposure 요청의 id이고 `params`는 그 params다. 요청이 `cids` 멤버를 가지면 페이지는 이를 함께 보낸다. 이는 요청을 일으킨 작업이나 입력의 상관 식별자다([작업 사슬](logging.ko.md#작업-사슬)). 명령 요청을 시작하는 실행은 이 식별자를 요청의 `cids`로 넘긴다(exposure registry의 `run(name, params, surface, cids)`와 `runOwned(name, params, owner, cids)`). 빈 목록은 식별자가 없는 것이다. 호스트는 `{sok: 1, id, command, params}`를 view의 ready 문서에 post하며, 요청이 `cids`를 가지면 그 멤버도 함께 보낸다. 한 줄에 담을 수 없는 목록(빈 식별자, 또는 따옴표, 역슬래시, 제어 문자가 있는 식별자)은 exposure registry가 view에 닿기 전에 코드 `-32602`로 거부하며, 호스트도 그런 목록의 `viewRequest`를 오류로 거부해 어떤 view에도 post하지 않는다. ready 문서가 없는 view에 대한 요청은 `<surface> has no ready document`로 실패한다.
   3. view는 `sok-view`로 `{sok: 1, reply: id, result}` 또는 `{sok: 1, reply: id, error: {code, message}}`로 답한다. view는 `command`의 handler를 첫 번째 인자 `params`와 두 번째 인자 context `{cids}`로 실행한다. `cids`는 요청의 목록이며, 요청이 없으면 멤버가 없다. handler가 `context.log.<level>(event, fields, {cids: context.cids})`로 남기는 기록이나 `context.cids`로 보내는 sidecar 요청은 원인의 사슬에 이어진다. handler가 던진 오류가 응답의 error가 된다. view가 등록하지 않은 command의 요청은 `{code: 1002, message: "view command <command> is not registered"}` 오류로 답한다.
@@ -195,6 +198,8 @@ plugin host는 manifest가 선언하는 plugin의 숨은 web view로, 창에 붙
 - **그림 영역**: 바깥 사이드카가 만들며, 공유 이미지를 네이티브 표면으로 공급한다.
 
 ### Region lifetime
+
+Native document callback은 자신의 document를 닫거나 교체하더라도 호출이 반환될 때까지 closure를 유지한다. Close는 저장된 receiver를 즉시 해제하지만 실행 중인 closure는 해제하지 않는다.
 
 Page는 retained-view 준비부터 host placement와 page 쪽 release까지 각 placement를 직렬화한다. 이전 placement가 아직 mount를 release할 수 있는 동안 다음 placement는 mount를 준비하지 않는다. 거부된 placement는 caller에게 오류를 보고하고 다음 placement의 실행을 막지 않는다.
 

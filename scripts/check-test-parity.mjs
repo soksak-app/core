@@ -6094,6 +6094,20 @@ const FEATURE_LINKS = [
     levels: ["application"],
   },
   {
+    id: "F212.12-4",
+    implementation: [
+      { file: "packages/workbench/surface-modules.js", symbol: "const registeredViewCommands = new Map();" },
+      { file: "packages/host/tauriv2/src/platform/darwin/document.rs", symbol: "struct EndedReceiver(Rc<dyn Fn() + Send>);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a replacement view registers its command once in its own source generation" },
+      { file: "packages/host/tauriv2/src/platform/darwin/document_test.rs", id: "callback_lifetime_ended_survives_document_retirement" },
+      { file: "e2e/view-restart.test.mjs", id: "a view restores state, stops after four failures and reopens after unload" },
+    ],
+    expected: "Replacement view generations register their commands without duplicates and active callbacks survive document retirement; restart, stop and reopen are measured through the application.",
+    levels: ["unit", "application"],
+  },
+  {
     id: "F239-157",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function placeSurfaces(" }],
     tests: [{ file: "packages/workbench/test/surface-view-path.test.mjs", id: "a later retained mount waits for the preceding placement release" }],

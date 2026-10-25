@@ -376,6 +376,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   // The native view is created by declaring the composition below, so its first source generation may not exist yet.
   // Listener installation is synchronous; the ordered registration event makes the generation available before calls arrive.
   let viewGeneration = sourceOrigin(surface.pluginId, surface.surfaceId);
+  const registeredViewCommands = new Map();
   let viewCommands;
   let forgetCommands;
   const installViewCommands = (generation) => {
@@ -458,7 +459,24 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       },
       command: {
         // The command is declared through the exposure of the surface, so the registry checks its declaration and owner.
-        register: (name) => context.exposure.command(name, (params, cause) => viewCommands.run(name, params, cause.cids)),
+        register: async (name) => {
+          const generation = viewGeneration;
+          const previous = registeredViewCommands.get(name);
+          if (previous === generation) throw new Error(`command ${name} is already registered`);
+          registeredViewCommands.set(name, generation);
+          try {
+            // The surface keeps its forwarding handler; each replacement restores its public registration.
+            if (previous === undefined) {
+              await context.exposure.command(name, (params, cause) => viewCommands.run(name, params, cause.cids));
+            } else registry.registered({ surface: surface.surfaceId, kind: "command", name });
+          } catch (error) {
+            if (registeredViewCommands.get(name) === generation) {
+              if (previous === undefined) registeredViewCommands.delete(name);
+              else registeredViewCommands.set(name, previous);
+            }
+            throw error;
+          }
+        },
       },
       exposure: {
         // A status or dom registration of the view: the registry validates the declaration and applies it, then the host

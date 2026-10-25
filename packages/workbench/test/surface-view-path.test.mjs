@@ -6,7 +6,7 @@ import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
 import { registerPlugin } from "../registry.js";
 import { openTabStates } from "../tab-state.js";
-import { seedSourceOrigins } from "../source-origins.js";
+import { endSourceOrigin, registerSourceOrigin, seedSourceOrigins } from "../source-origins.js";
 
 // The tab state store of the memory saver is opened by projects.initialise; this file opens it over a fake store.
 const UNLOAD = { format: 2, maxBytes: 64 };
@@ -51,9 +51,9 @@ async function harness(t) {
   const modules = await import(`../surface-modules.js?view-path-${++instance}`);
   let nextId = 1;
   // Sends one view call and resolves with the reply that the view receives.
-  const viewCall = async (command, params) => {
+  const viewCall = async (command, params, generation = 1) => {
     const id = nextId++;
-    for (const listener of listeners.get("view-call") ?? []) listener({ id, command, params, generation: 1 });
+    for (const listener of listeners.get("view-call") ?? []) listener({ id, command, params, generation });
     for (let turn = 0; turn < 100; turn += 1) {
       const reply = calls.find((call) => call.name === "viewReply" && call.payload.id === id);
       if (reply) return reply.payload;
@@ -220,6 +220,62 @@ test("a rejected placement reports its error and allows the next placement", { t
     assert.equal(await following, "next placed");
   } finally {
     await Promise.allSettled([rejected, following]);
+    h.close();
+  }
+});
+
+
+test("a replacement view registers its command once in its own source generation", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { recordOrigin } = await import("../tab-reports.js");
+  const id = "view-restarted-command";
+  const command = "fixture-plain.run";
+  const { registry } = await import("../exposure.js");
+  const registrations = [];
+  const registered = registry.registered;
+  t.mock.method(registry, "registered", (fields) => {
+    registrations.push(fields);
+    return registered(fields);
+  });
+  registry.declare("fixture-plain", { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], dom: [] });
+  recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  h.modules.authorizeSurface(id);
+  await h.modules.mountSurface(h.slot, { ...viewOf(id, "fixture-plain", false),
+    declarations: { status: [], commands: [{ name: command, description: "Runs the fixture command.", params: { type: "object" }, result: { type: "null" } }], dom: [] },
+  });
+  try {
+    assert.deepEqual(await h.viewCall("runtime.command.register", { name: command }), expectedReply(h, 1, null));
+    assert.match((await h.viewCall("runtime.command.register", { name: command })).error.message, /already registered/);
+    assert.equal(endSourceOrigin("fixture-plain", id, 1), true);
+    assert.equal(registerSourceOrigin("fixture-plain", id, 2), true);
+    assert.deepEqual(await h.viewCall("runtime.command.register", { name: command }, 2),
+      { id: 3, result: null, page: h.page, generation: 2 });
+    assert.match((await h.viewCall("runtime.command.register", { name: command }, 2)).error.message, /already registered/);
+    assert.equal(registrations.filter((fields) => fields.kind === "command" && fields.name === command).length, 2,
+      "the replacement did not restore the command's public registration");
+  } finally {
+    await h.modules.disposeSurface(id);
+    h.close();
+  }
+});
+
+
+test("a failed view command registration returns its declaration error", { timeout: 5000 }, async (t) => {
+  const h = await harness(t);
+  const { recordOrigin } = await import("../tab-reports.js");
+  const id = "view-invalid-command-registration";
+  recordOrigin(id, null, "test fixture");
+  seedSourceOrigins({ floor: 1, pluginHosts: {}, views: { [id]: 1 } });
+  h.modules.authorizeSurface(id);
+  await h.modules.mountSurface(h.slot, viewOf(id, "fixture-plain", false));
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const reply = await h.viewCall("runtime.command.register", { name: "fixture-plain.undeclared" });
+      assert.match(reply.error?.message ?? "registration incorrectly succeeded", /not declared/);
+    }
+  } finally {
+    await h.modules.disposeSurface(id);
     h.close();
   }
 });
